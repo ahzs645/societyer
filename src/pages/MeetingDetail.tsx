@@ -7,8 +7,8 @@ import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { formatDateTime } from "../lib/format";
-import { useState } from "react";
-import { Sparkles, ArrowLeft, FileText, Save, Mic, FileDown, Gavel, ClipboardCheck } from "lucide-react";
+import { useRef, useState } from "react";
+import { Sparkles, ArrowLeft, FileText, Save, Mic, FileDown, Gavel, ClipboardCheck, Upload } from "lucide-react";
 import { MotionEditor, Motion } from "../components/MotionEditor";
 import { Checkbox } from "../components/Controls";
 import { exportWordDoc, renderMinutesHtml } from "../lib/exportWord";
@@ -21,6 +21,10 @@ export function MeetingDetailPage() {
   const society = useSociety();
   const meeting = useQuery(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
   const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const transcriptRecord = useQuery(
+    api.transcripts.getByMeeting,
+    id ? { meetingId: id as Id<"meetings"> } : "skip",
+  );
   const directors = useQuery(
     api.directors.list,
     society ? { societyId: society._id } : "skip",
@@ -29,32 +33,82 @@ export function MeetingDetailPage() {
   const generate = useMutation(api.minutes.generateDraft);
   const updateMeeting = useMutation(api.meetings.update);
   const updateMinutes = useMutation(api.minutes.update);
+  const saveTranscriptText = useMutation(api.transcripts.saveText);
+  const importVtt = useMutation(api.transcripts.importVtt);
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const runPipeline = useAction(api.transcripts.runPipeline);
   const transcriptionJob = useQuery(
     api.transcripts.jobForMeeting,
     id ? { meetingId: id as Id<"meetings"> } : "skip",
   );
   const toast = useToast();
+  const vttInputRef = useRef<HTMLInputElement | null>(null);
+  const audioInputRef = useRef<HTMLInputElement | null>(null);
   const [transcript, setTranscript] = useState("");
   const [busy, setBusy] = useState(false);
   const [pipelineBusy, setPipelineBusy] = useState(false);
   const [transcriptEdit, setTranscriptEdit] = useState<string | null>(null);
   const [savingTranscript, setSavingTranscript] = useState(false);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
   if (!meeting) return <div className="page">Loading…</div>;
 
   const agenda: string[] = meeting.agendaJson ? JSON.parse(meeting.agendaJson) : [];
+  const transcriptOnFile = transcriptRecord?.text ?? minutes?.draftTranscript ?? "";
+  const transcriptProvider = transcriptOnFile
+    ? transcriptRecord?.provider ?? (minutes?.draftTranscript ? "manual" : null)
+    : null;
+  const transcriptStatusTone =
+    transcriptionJob?.status === "complete"
+      ? "success"
+      : transcriptionJob?.status === "failed"
+      ? "danger"
+      : "warn";
 
   const runGenerate = async () => {
-    if (!transcript.trim()) return;
+    const sourceTranscript = transcript.trim() || transcriptOnFile.trim();
+    if (!sourceTranscript) return;
     setBusy(true);
     try {
-      await generate({ meetingId: meeting._id, transcript });
+      await generate({ meetingId: meeting._id, transcript: sourceTranscript });
       setTranscript("");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const uploadAudioAndRun = async (draftMinutes: boolean) => {
+    if (!audioFile) {
+      toast.error("Choose an audio or video file first.");
+      return;
+    }
+    setPipelineBusy(true);
+    try {
+      const uploadUrl = await generateUploadUrl({});
+      const uploadRes = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": audioFile.type || "application/octet-stream" },
+        body: audioFile,
+      });
+      if (!uploadRes.ok) throw new Error("Audio upload failed.");
+      const { storageId } = await uploadRes.json();
+      await runPipeline({
+        societyId: meeting.societyId,
+        meetingId: meeting._id,
+        storageId,
+        sourceFileName: audioFile.name,
+        sourceMimeType: audioFile.type || undefined,
+        draftMinutes,
+      });
+      setAudioFile(null);
+      if (audioInputRef.current) audioInputRef.current.value = "";
+      toast.success(draftMinutes ? "Transcribed and drafted minutes." : "Transcript saved from audio.");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Pipeline failed");
+    } finally {
+      setPipelineBusy(false);
     }
   };
 
@@ -205,79 +259,174 @@ export function MeetingDetailPage() {
             </div>
           )}
 
-          {minutes && (
-            <div className="card">
-              <div className="card__head">
-                <h2 className="card__title">
-                  <Mic size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />
-                  Transcript
-                </h2>
-                <span className="card__subtitle">
-                  {minutes.draftTranscript
-                    ? `${minutes.draftTranscript.length.toLocaleString()} characters on file`
-                    : "No transcript saved yet."}
-                </span>
-                <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
-                  {transcriptEdit === null ? (
+          <div className="card">
+            <div className="card__head">
+              <h2 className="card__title">
+                <Mic size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />
+                Transcript
+              </h2>
+              <span className="card__subtitle">
+                {transcriptOnFile
+                  ? `${transcriptOnFile.length.toLocaleString()} characters on file`
+                  : "Transcript is optional. Add one from pasted text, a .vtt file, or a transcribed recording."}
+              </span>
+              {transcriptProvider && <Badge tone="info">{transcriptProvider}</Badge>}
+              {transcriptionJob && (
+                <Badge tone={transcriptStatusTone}>
+                  {transcriptionJob.status} ({transcriptionJob.provider})
+                </Badge>
+              )}
+              <div style={{ marginLeft: "auto", display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {transcriptEdit === null ? (
+                  <>
                     <button
                       className="btn-action"
-                      onClick={() => setTranscriptEdit(minutes.draftTranscript ?? "")}
+                      disabled={savingTranscript || pipelineBusy}
+                      onClick={() => setTranscriptEdit(transcriptOnFile)}
                     >
-                      {minutes.draftTranscript ? "Edit" : "Add transcript"}
+                      {transcriptOnFile ? "Edit" : "Add transcript"}
                     </button>
+                    <button
+                      className="btn-action"
+                      disabled={savingTranscript || pipelineBusy}
+                      onClick={() => vttInputRef.current?.click()}
+                    >
+                      <Upload size={12} /> Import VTT
+                    </button>
+                    <button
+                      className="btn-action"
+                      disabled={savingTranscript || pipelineBusy}
+                      onClick={() => audioInputRef.current?.click()}
+                    >
+                      <Upload size={12} /> {audioFile ? "Change audio" : "Choose audio"}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button className="btn-action" onClick={() => setTranscriptEdit(null)}>
+                      Cancel
+                    </button>
+                    <button
+                      className="btn-action btn-action--primary"
+                      disabled={savingTranscript}
+                      onClick={async () => {
+                        setSavingTranscript(true);
+                        try {
+                          await saveTranscriptText({
+                            societyId: meeting.societyId,
+                            meetingId: meeting._id,
+                            text: transcriptEdit ?? "",
+                            provider: "manual",
+                          });
+                          setTranscriptEdit(null);
+                          toast.success((transcriptEdit ?? "").trim() ? "Transcript saved." : "Transcript cleared.");
+                        } catch (err: any) {
+                          toast.error(err?.message ?? "Transcript save failed");
+                        } finally {
+                          setSavingTranscript(false);
+                        }
+                      }}
+                    >
+                      <Save size={12} /> {savingTranscript ? "Saving…" : "Save"}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+            <input
+              ref={vttInputRef}
+              type="file"
+              accept=".vtt,text/vtt"
+              style={{ display: "none" }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setSavingTranscript(true);
+                try {
+                  await importVtt({
+                    societyId: meeting.societyId,
+                    meetingId: meeting._id,
+                    vttText: await file.text(),
+                  });
+                  toast.success(`Transcript imported from ${file.name}.`);
+                } catch (err: any) {
+                  toast.error(err?.message ?? "VTT import failed");
+                } finally {
+                  setSavingTranscript(false);
+                  if (vttInputRef.current) vttInputRef.current.value = "";
+                }
+              }}
+            />
+            <input
+              ref={audioInputRef}
+              type="file"
+              accept="audio/*,video/*"
+              style={{ display: "none" }}
+              onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)}
+            />
+            <div className="card__body">
+              {transcriptEdit !== null ? (
+                <textarea
+                  className="textarea"
+                  style={{ minHeight: 200, fontFamily: "var(--font-mono)", fontSize: "var(--fs-sm)" }}
+                  value={transcriptEdit}
+                  onChange={(e) => setTranscriptEdit(e.target.value)}
+                  placeholder="Paste the raw meeting transcript here. It stays linked to this meeting and any minutes."
+                />
+              ) : transcriptOnFile ? (
+                <pre
+                  style={{
+                    margin: 0,
+                    whiteSpace: "pre-wrap",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "var(--fs-sm)",
+                    color: "var(--text-secondary)",
+                    maxHeight: 280,
+                    overflow: "auto",
+                  }}
+                >
+                  {transcriptOnFile}
+                </pre>
+              ) : (
+                <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  No transcript added yet. Meetings can exist without one, and you can add it later.
+                </div>
+              )}
+
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+                <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 8 }}>
+                  Import a `.vtt` caption file, or upload audio/video to transcribe it. Transcription can save the
+                  transcript by itself or draft minutes in one step.
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  {audioFile ? (
+                    <Badge tone="info">{audioFile.name}</Badge>
                   ) : (
-                    <>
-                      <button className="btn-action" onClick={() => setTranscriptEdit(null)}>
-                        Cancel
-                      </button>
-                      <button
-                        className="btn-action btn-action--primary"
-                        disabled={savingTranscript}
-                        onClick={async () => {
-                          setSavingTranscript(true);
-                          try {
-                            await updateMinutes({ id: minutes._id, patch: { draftTranscript: transcriptEdit } });
-                            setTranscriptEdit(null);
-                          } finally {
-                            setSavingTranscript(false);
-                          }
-                        }}
-                      >
-                        <Save size={12} /> {savingTranscript ? "Saving…" : "Save"}
-                      </button>
-                    </>
+                    <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>No audio file selected.</span>
+                  )}
+                  <button className="btn-action" onClick={() => audioInputRef.current?.click()}>
+                    <Upload size={12} /> {audioFile ? "Change file" : "Choose file"}
+                  </button>
+                  <button
+                    className="btn-action btn-action--primary"
+                    disabled={!audioFile || pipelineBusy}
+                    onClick={() => uploadAudioAndRun(false)}
+                  >
+                    <Mic size={12} /> {pipelineBusy ? "Transcribing…" : "Transcribe audio"}
+                  </button>
+                  {!minutes && (
+                    <button
+                      className="btn-action"
+                      disabled={!audioFile || pipelineBusy}
+                      onClick={() => uploadAudioAndRun(true)}
+                    >
+                      <Sparkles size={12} /> {pipelineBusy ? "Running…" : "Transcribe + draft minutes"}
+                    </button>
                   )}
                 </div>
               </div>
-              {transcriptEdit !== null ? (
-                <div className="card__body">
-                  <textarea
-                    className="textarea"
-                    style={{ minHeight: 200, fontFamily: "var(--font-mono)", fontSize: "var(--fs-sm)" }}
-                    value={transcriptEdit}
-                    onChange={(e) => setTranscriptEdit(e.target.value)}
-                    placeholder="Paste the raw meeting transcript here. It stays linked to these minutes."
-                  />
-                </div>
-              ) : minutes.draftTranscript ? (
-                <div className="card__body">
-                  <pre
-                    style={{
-                      margin: 0,
-                      whiteSpace: "pre-wrap",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "var(--fs-sm)",
-                      color: "var(--text-secondary)",
-                      maxHeight: 280,
-                      overflow: "auto",
-                    }}
-                  >
-                    {minutes.draftTranscript}
-                  </pre>
-                </div>
-              ) : null}
             </div>
-          )}
+          </div>
 
           {minutes ? (
             <div className="card">
@@ -347,7 +496,11 @@ export function MeetingDetailPage() {
             <div className="card">
               <div className="card__head">
                 <h2 className="card__title">Generate minutes</h2>
-                <span className="card__subtitle">Paste a rough transcript or notes — the AI helper will structure them.</span>
+                <span className="card__subtitle">
+                  {transcriptOnFile
+                    ? "Use the saved transcript below, or paste rough notes to override it for this draft."
+                    : "Paste a rough transcript or notes — the AI helper will structure them."}
+                </span>
               </div>
               <div className="card__body">
                 <Field label="Raw transcript / rough notes">
@@ -359,68 +512,15 @@ export function MeetingDetailPage() {
                     placeholder="e.g.&#10;Meeting opened at 7:02pm by Elena. Quorum met.&#10;Treasurer reported Q1 revenue up 8%.&#10;Motion by Jordan to approve Q1 statements, seconded by Priya. Carried 6-0.&#10;Action: Amara to draft fundraising plan by March 1."
                   />
                 </Field>
-                <button className="btn btn--accent" disabled={!transcript.trim() || busy} onClick={runGenerate}>
-                  <Sparkles size={14} /> {busy ? "Generating…" : "Generate draft minutes"}
+                <button
+                  className="btn btn--accent"
+                  disabled={(!transcript.trim() && !transcriptOnFile.trim()) || busy}
+                  onClick={runGenerate}
+                >
+                  <Sparkles size={14} /> {busy ? "Generating…" : transcriptOnFile && !transcript.trim() ? "Generate from saved transcript" : "Generate draft minutes"}
                 </button>
                 <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 8 }}>
                   Demo uses a heuristic parser. Wire to an LLM in <code className="mono">convex/minutes.ts</code> for production.
-                </div>
-
-                <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
-                  <h3 style={{ margin: "0 0 6px", fontSize: "var(--fs-md)" }}>
-                    <Mic size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
-                    AI minutes pipeline
-                  </h3>
-                  <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 8 }}>
-                    Transcribe an audio recording and draft structured minutes in one step. Demo mode uses a
-                    canned transcript so the flow runs end-to-end without API keys.
-                  </div>
-                  <input
-                    type="file"
-                    accept="audio/*,video/*"
-                    style={{ marginBottom: 8, fontSize: "var(--fs-sm)" }}
-                    onChange={() => {
-                      /* Audio bytes are ignored in demo — the pipeline uses the seeded transcript.
-                         In live mode beginUpload/recordUploadedVersion move the file to RustFS first. */
-                    }}
-                  />
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <button
-                      className="btn btn--accent"
-                      disabled={pipelineBusy}
-                      onClick={async () => {
-                        if (!meeting) return;
-                        setPipelineBusy(true);
-                        try {
-                          await runPipeline({
-                            societyId: meeting.societyId,
-                            meetingId: meeting._id,
-                          });
-                          toast.success("Transcribed and drafted minutes.");
-                        } catch (err: any) {
-                          toast.error(err?.message ?? "Pipeline failed");
-                        } finally {
-                          setPipelineBusy(false);
-                        }
-                      }}
-                    >
-                      <Sparkles size={14} />
-                      {pipelineBusy ? "Running pipeline…" : "Transcribe + draft minutes"}
-                    </button>
-                    {transcriptionJob && (
-                      <Badge
-                        tone={
-                          transcriptionJob.status === "complete"
-                            ? "success"
-                            : transcriptionJob.status === "failed"
-                            ? "danger"
-                            : "warn"
-                        }
-                      >
-                        {transcriptionJob.status} ({transcriptionJob.provider})
-                      </Badge>
-                    )}
-                  </div>
                 </div>
               </div>
             </div>
