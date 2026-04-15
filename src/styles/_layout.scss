@@ -1,0 +1,406 @@
+/* Layout — flex so we can animate the sidebar width directly (more reliable than grid-template-columns) */
+.app-shell {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Floating re-open button shown only when collapsed */
+.sidebar-peek {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 20;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-6px);
+  transition: opacity var(--anim-normal) var(--anim-ease), transform var(--anim-normal) var(--anim-ease);
+}
+.app-shell.is-collapsed .sidebar-peek {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+  transition-delay: 0.12s;
+}
+.sidebar-peek:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.sidebar-peek svg { width: 14px; height: 14px; }
+
+/* Sidebar */
+.sidebar {
+  background: var(--bg-app);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex-shrink: 0;
+  width: var(--sidebar-w);
+  transition: width var(--anim-normal) var(--anim-ease);
+  position: relative;
+  overflow: hidden;
+}
+.app-shell.is-collapsed .sidebar {
+  width: 0;
+  border-right-width: 0;
+}
+/* Main grows into the space the sidebar vacates */
+.main {
+  flex: 1;
+  min-width: 0;
+}
+.sidebar__brand,
+.sidebar__footer {
+  white-space: nowrap;
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+}
+/* The nav is the scrolling region. It must (a) fill remaining height so the
+ * brand stays pinned at the top and (b) have a min-height of 0 so overflow-y
+ * actually scrolls inside a flex column instead of overflowing the viewport. */
+.sidebar__nav {
+  white-space: nowrap;
+  width: var(--sidebar-w);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Hairline scrollbar so it doesn't distract — uses the existing global
+   * scrollbar rules plus a narrower width just here. */
+  scrollbar-width: thin;
+}
+.sidebar__nav::-webkit-scrollbar { width: 6px; }
+.sidebar__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-shell.is-collapsed .sidebar {
+  width: var(--sidebar-w-collapsed);
+}
+
+/* When collapsed, labels, counts, sections, brand name and footer text fade out */
+.sidebar__label,
+.sidebar__count,
+.sidebar__section,
+.sidebar__brand-name,
+.sidebar__brand-workspace,
+.sidebar__footer-text {
+  transition: opacity var(--anim-fast) var(--anim-ease);
+}
+.app-shell.is-collapsed .sidebar__label,
+.app-shell.is-collapsed .sidebar__count,
+.app-shell.is-collapsed .sidebar__section,
+.app-shell.is-collapsed .sidebar__brand-name,
+.app-shell.is-collapsed .sidebar__brand-workspace,
+.app-shell.is-collapsed .sidebar__footer-text {
+  opacity: 0;
+  pointer-events: none;
+}
+/* Fully hidden when collapsed — nothing inside needs to be repositioned */
+.app-shell.is-collapsed .sidebar {
+  transform: translateX(-8px);
+  pointer-events: none;
+}
+
+/* Collapse toggle is now inside the sidebar brand row */
+.sidebar__toggle svg { transform: rotate(0deg); transition: transform var(--anim-fast) ease; }
+.app-shell.is-collapsed .sidebar__toggle svg { transform: rotate(180deg); }
+
+.sidebar__brand {
+  padding: 10px 10px 4px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  height: var(--topbar-h);
+  flex-shrink: 0;
+}
+.sidebar__workspace {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--r-sm);
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  transition: background 0.08s ease;
+  border: 1px solid transparent;
+}
+.sidebar__workspace:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+.sidebar__brand-logo {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: #5b3a29;
+  color: #f5dcc5;
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.sidebar__brand-name {
+  font-weight: 500;
+  font-size: var(--fs-md);
+  letter-spacing: -0.1px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar__brand-workspace {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+}
+.sidebar__brand-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.sidebar__icon-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  color: var(--text-tertiary);
+  transition: background 0.08s ease, color 0.08s ease;
+}
+.sidebar__icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.app-shell.is-collapsed .sidebar__workspace {
+  justify-content: center;
+  padding: 4px;
+}
+.app-shell.is-collapsed .sidebar__brand-actions {
+  display: none;
+}
+.sidebar__section {
+  padding: var(--s-3) var(--s-2) var(--s-1);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  padding-left: var(--s-4);
+}
+.sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  padding: var(--s-1) var(--s-2);
+  gap: 1px;
+}
+.sidebar__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--r-sm);
+  color: var(--text-secondary);
+  font-size: var(--fs-md);
+  font-weight: 500;
+  line-height: 1;
+  transition: background 0.08s ease, color 0.08s ease;
+  border: 1px solid transparent;
+}
+.sidebar__item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.sidebar__item.is-active {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  border-color: var(--border);
+  box-shadow: var(--shadow-xs);
+}
+.sidebar__icon-chip {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border: 1px solid;
+}
+.sidebar__icon-chip svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+}
+.sidebar__item.is-active .sidebar__icon-chip {
+  box-shadow: 0 0 0 1.5px var(--bg-base);
+}
+/* Color variants mimicking Twenty's palette */
+.icon-chip-blue      { background: #e8efff; border-color: #c9d6ff; color: #3b5bdb; }
+.icon-chip-red       { background: #ffe8ea; border-color: #ffc7cd; color: #c9264a; }
+.icon-chip-turquoise { background: #e0f7f3; border-color: #b7ece3; color: #0a8f7a; }
+.icon-chip-gray      { background: #eeeeee; border-color: #dddddd; color: #555555; }
+.icon-chip-orange    { background: #fff1dd; border-color: #ffd8a5; color: #a86400; }
+.icon-chip-purple    { background: #efe8ff; border-color: #d8c9ff; color: #6f42c1; }
+.icon-chip-green     { background: #e4f6ea; border-color: #c2e9cf; color: #0a8f4e; }
+.icon-chip-pink      { background: #ffe7f2; border-color: #ffc5dd; color: #be185d; }
+.icon-chip-yellow    { background: #fff8d4; border-color: #ffe88a; color: #8a6d00; }
+.dark .icon-chip-blue      { background: #1d2440; border-color: #2a3668; color: #97a4ff; }
+.dark .icon-chip-red       { background: #3a1a24; border-color: #5a2234; color: #ff8095; }
+.dark .icon-chip-turquoise { background: #0f2f2b; border-color: #194a44; color: #6ee0cc; }
+.dark .icon-chip-gray      { background: #2a2a31; border-color: #3a3a42; color: #c0c0c6; }
+.dark .icon-chip-orange    { background: #3a2a12; border-color: #5a4220; color: #ffb55a; }
+.dark .icon-chip-purple    { background: #2a1e45; border-color: #40306a; color: #b49bff; }
+.dark .icon-chip-green     { background: #0f2e1e; border-color: #1c4a30; color: #5de09a; }
+.dark .icon-chip-pink      { background: #3a1830; border-color: #5a2450; color: #ff7fb8; }
+.dark .icon-chip-yellow    { background: #302a10; border-color: #50421f; color: #ffd966; }
+.sidebar__count {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  background: var(--bg-subtle);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.sidebar__footer {
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  padding: var(--s-3) var(--s-4);
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+/* Topbar */
+.topbar {
+  height: var(--topbar-h);
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 0 var(--s-4);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.topbar__crumb {
+  color: var(--text-secondary);
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+.topbar__crumb-sep {
+  color: var(--text-tertiary);
+}
+.topbar__spacer {
+  flex: 1;
+}
+.topbar__search {
+  position: relative;
+  width: 280px;
+}
+.topbar__search input {
+  width: 100%;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 0 var(--s-2) 0 28px;
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+}
+.topbar__search input::placeholder {
+  color: var(--text-placeholder);
+}
+.topbar__search svg {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: var(--text-tertiary);
+}
+.topbar__kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  padding: 2px 5px;
+  border-radius: 3px;
+  margin-left: var(--s-1);
+}
+
+/* Main */
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+.page {
+  overflow: auto;
+  padding: var(--s-6) var(--s-8);
+  background: var(--bg-app);
+  flex: 1;
+}
+.page--flush {
+  padding: 0;
+}
+.page__header {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-5);
+  min-height: 32px;
+}
+.page__icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.page__title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.page__title-sub {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+.page__subtitle {
+  margin: 2px 0 0;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+}
+.page__actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}

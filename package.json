@@ -1,0 +1,34 @@
+{
+  "name": "societyer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "convex": "convex dev",
+    "convex:seed": "convex run seed:run",
+    "convex:reset": "convex run seed:reset",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f backend",
+    "docker:admin-key": "./scripts/convex-admin-key.sh"
+  },
+  "dependencies": {
+    "convex": "^1.17.4",
+    "date-fns": "^3.6.0",
+    "lucide-react": "^0.469.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "sass": "^1.99.0",
+    "typescript": "~5.6.3",
+    "vite": "^5.4.11"
+  }
+}

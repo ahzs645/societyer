@@ -1,0 +1,69 @@
+# Local Convex backend + dashboard for Societyer.
+#
+# Images come from the official get-convex/convex-backend project:
+#   https://github.com/get-convex/convex-backend
+#
+# Usage:
+#   docker compose up -d
+#   ./scripts/convex-admin-key.sh    # prints an admin key; paste into .env.local
+#   npx convex dev                   # pushes schema + functions to localhost:3210
+
+services:
+  backend:
+    image: ghcr.io/get-convex/convex-backend:latest
+    container_name: societyer-convex-backend
+    ports:
+      - "3220:3210" # client API (what the Vite app talks to)
+      - "3221:3211" # site proxy (http actions)
+    environment:
+      # Instance name is an arbitrary local identifier.
+      - INSTANCE_NAME=societyer-local
+      # Generated once on first boot and persisted in the volume.
+      - INSTANCE_SECRET=${CONVEX_INSTANCE_SECRET:-4361726e6974617320636f6e766578206c6f63616c20736f6369657479657200}
+      # Must match the host URL the browser will use.
+      - CONVEX_CLOUD_ORIGIN=http://127.0.0.1:3220
+      - CONVEX_SITE_ORIGIN=http://127.0.0.1:3221
+      - DISABLE_BEACON=true
+      - REDACT_LOGS_TO_CLIENT=false
+    volumes:
+      - convex-data:/convex/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:3210/version || wget -qO- http://127.0.0.1:3210/version"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  dashboard:
+    image: ghcr.io/get-convex/convex-dashboard:latest
+    container_name: societyer-convex-dashboard
+    ports:
+      - "6792:6791"
+    environment:
+      - NEXT_PUBLIC_DEPLOYMENT_URL=http://127.0.0.1:3220
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # S3-compatible object storage for society documents.
+  # Alpha, Apache 2.0 licensed, drop-in MinIO replacement.
+  # Console: http://127.0.0.1:9791 (default admin/admin for local dev only).
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: societyer-rustfs
+    ports:
+      - "9790:9000" # S3 API
+      - "9791:9001" # Web console
+    environment:
+      - RUSTFS_ROOT_USER=${RUSTFS_ROOT_USER:-societyer}
+      - RUSTFS_ROOT_PASSWORD=${RUSTFS_ROOT_PASSWORD:-societyer-dev-secret}
+    volumes:
+      - rustfs-data:/data
+      - rustfs-logs:/logs
+    restart: unless-stopped
+
+volumes:
+  convex-data:
+  rustfs-data:
+  rustfs-logs:

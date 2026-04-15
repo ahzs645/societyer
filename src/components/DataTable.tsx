@@ -1,0 +1,303 @@
+import { ReactNode, useMemo, useRef, useState } from "react";
+import { Search } from "lucide-react";
+import { ViewBar } from "./primitives";
+import {
+  AppliedFilter,
+  FilterChips,
+  FilterField,
+  FilterPopover,
+  applyFilters,
+} from "./FilterBar";
+
+export type Column<T> = {
+  id: string;
+  header: ReactNode;
+  /** Returns a primitive used for sorting and for the default search match. */
+  accessor?: (row: T) => string | number | boolean | null | undefined;
+  /** Cell renderer. If omitted, the accessor's value is rendered as text. */
+  render?: (row: T) => ReactNode;
+  width?: number | string;
+  align?: "left" | "right" | "center";
+  sortable?: boolean;
+  className?: string;
+};
+
+export type SortState = { columnId: string; dir: "asc" | "desc" } | null;
+
+export function DataTable<T extends { _id?: string } & Record<string, any>>({
+  label,
+  icon,
+  data,
+  columns,
+  filterFields,
+  rowKey,
+  onRowClick,
+  searchPlaceholder,
+  emptyMessage = "No rows.",
+  defaultSort,
+  searchExtraFields,
+  renderRowActions,
+}: {
+  label: string;
+  icon?: ReactNode;
+  data: T[];
+  columns: Column<T>[];
+  filterFields?: FilterField<T>[];
+  rowKey: (row: T) => string;
+  onRowClick?: (row: T) => void;
+  searchPlaceholder?: string;
+  emptyMessage?: string;
+  defaultSort?: SortState;
+  /** Extra row getters searched alongside column accessors. */
+  searchExtraFields?: ((row: T) => string | undefined | null)[];
+  /** Rendered in a trailing action column. */
+  renderRowActions?: (row: T) => ReactNode;
+}) {
+  const [q, setQ] = useState("");
+  const [filters, setFilters] = useState<AppliedFilter[]>([]);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
+  const [sort, setSort] = useState<SortState>(defaultSort ?? null);
+  const filterBtnRef = useRef<HTMLButtonElement>(null);
+  const sortBtnRef = useRef<HTMLButtonElement>(null);
+
+  const filtered = useMemo(() => {
+    let rows = data;
+    if (filterFields && filters.length > 0) {
+      rows = applyFilters(rows, filters, filterFields);
+    }
+    if (q.trim()) {
+      const ql = q.toLowerCase();
+      rows = rows.filter((r) => {
+        const pieces = [
+          ...columns.map((c) => c.accessor?.(r)),
+          ...(searchExtraFields?.map((fn) => fn(r)) ?? []),
+        ];
+        return pieces.some((p) => String(p ?? "").toLowerCase().includes(ql));
+      });
+    }
+    if (sort) {
+      const col = columns.find((c) => c.id === sort.columnId);
+      if (col?.accessor) {
+        rows = [...rows].sort((a, b) => {
+          const av = col.accessor!(a);
+          const bv = col.accessor!(b);
+          if (av == null && bv == null) return 0;
+          if (av == null) return 1;
+          if (bv == null) return -1;
+          if (typeof av === "number" && typeof bv === "number") {
+            return sort.dir === "asc" ? av - bv : bv - av;
+          }
+          const as = String(av);
+          const bs = String(bv);
+          return sort.dir === "asc" ? as.localeCompare(bs) : bs.localeCompare(as);
+        });
+      }
+    }
+    return rows;
+  }, [data, filters, q, sort, columns, filterFields, searchExtraFields]);
+
+  const toggleSort = (columnId: string) => {
+    const col = columns.find((c) => c.id === columnId);
+    if (!col?.sortable) return;
+    setSort((s) =>
+      !s || s.columnId !== columnId
+        ? { columnId, dir: "asc" }
+        : s.dir === "asc"
+          ? { columnId, dir: "desc" }
+          : null,
+    );
+  };
+
+  return (
+    <div className="table-wrap" style={{ position: "relative" }}>
+      <ViewBar
+        label={label}
+        count={filtered.length}
+        icon={icon}
+        filterBtnRef={filterBtnRef}
+        onFilter={filterFields?.length ? () => setFilterOpen((v) => !v) : undefined}
+        onSort={() => setSortOpen((v) => !v)}
+      />
+      {filterFields && (
+        <FilterChips
+          filters={filters}
+          fields={filterFields}
+          onRemove={(i) => setFilters(filters.filter((_, idx) => idx !== i))}
+        />
+      )}
+      {filterOpen && filterFields && (
+        <FilterPopover
+          fields={filterFields}
+          anchorRef={filterBtnRef as any}
+          onAdd={(f) => setFilters([...filters, f])}
+          onClose={() => setFilterOpen(false)}
+        />
+      )}
+      {sortOpen && (
+        <SortPopover
+          columns={columns.filter((c) => c.sortable)}
+          anchorRef={sortBtnRef as any}
+          current={sort}
+          onPick={(s) => {
+            setSort(s);
+            setSortOpen(false);
+          }}
+          onClose={() => setSortOpen(false)}
+        />
+      )}
+
+      <div className="table-toolbar">
+        <div className="table-toolbar__search">
+          <Search />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={searchPlaceholder ?? "Search…"}
+          />
+        </div>
+        <button
+          ref={sortBtnRef}
+          className="view-bar__btn"
+          onClick={() => setSortOpen((v) => !v)}
+          style={{ marginLeft: 4 }}
+        >
+          {sort
+            ? `Sort: ${columns.find((c) => c.id === sort.columnId)?.id ?? ""} ${sort.dir === "asc" ? "↑" : "↓"}`
+            : "Sort"}
+        </button>
+        <div className="muted" style={{ marginLeft: "auto", fontSize: "var(--fs-sm)" }}>
+          {filtered.length} of {data.length}
+        </div>
+      </div>
+
+      <table className="table">
+        <thead>
+          <tr>
+            {columns.map((col) => (
+              <th
+                key={col.id}
+                className={col.sortable ? "is-sortable" : undefined}
+                onClick={col.sortable ? () => toggleSort(col.id) : undefined}
+                style={{
+                  width: col.width,
+                  textAlign: col.align,
+                }}
+              >
+                {col.header}
+                {sort?.columnId === col.id && (
+                  <span className="table__sort-indicator">{sort.dir === "asc" ? "▲" : "▼"}</span>
+                )}
+              </th>
+            ))}
+            {renderRowActions && <th style={{ width: 1 }} />}
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map((row) => (
+            <tr
+              key={rowKey(row)}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              style={{ cursor: onRowClick ? "pointer" : undefined }}
+            >
+              {columns.map((col) => (
+                <td
+                  key={col.id}
+                  className={col.className}
+                  style={{ textAlign: col.align }}
+                >
+                  {col.render ? col.render(row) : String(col.accessor?.(row) ?? "")}
+                </td>
+              ))}
+              {renderRowActions && (
+                <td
+                  className="table__actions"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="table__actions-inner">
+                    {renderRowActions(row)}
+                  </div>
+                </td>
+              )}
+            </tr>
+          ))}
+          {filtered.length === 0 && (
+            <tr>
+              <td
+                colSpan={columns.length + (renderRowActions ? 1 : 0)}
+                className="muted"
+                style={{ textAlign: "center", padding: 24 }}
+              >
+                {data.length === 0 ? emptyMessage : "No rows match the current filters."}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SortPopover<T>({
+  columns,
+  anchorRef,
+  current,
+  onPick,
+  onClose,
+}: {
+  columns: Column<T>[];
+  anchorRef: React.RefObject<HTMLElement>;
+  current: SortState;
+  onPick: (s: SortState) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useMemo(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!ref.current) return;
+      if (ref.current.contains(e.target as Node)) return;
+      if (anchorRef.current?.contains(e.target as Node)) return;
+      onClose();
+    };
+    setTimeout(() => document.addEventListener("mousedown", onDoc), 0);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [onClose, anchorRef]);
+
+  const rect = anchorRef.current?.getBoundingClientRect();
+  const POPOVER_W = 240;
+  const margin = 8;
+  const style = rect
+    ? {
+        top: Math.min(rect.bottom + 4, window.innerHeight - 280),
+        left: Math.max(margin, Math.min(rect.left, window.innerWidth - POPOVER_W - margin)),
+      }
+    : { top: 48, left: 16 };
+
+  return (
+    <div className="popover" ref={ref} style={style}>
+      <div className="popover__section">Sort by</div>
+      {columns.map((c) => (
+        <div key={c.id} className="popover__item" onClick={() => onPick({ columnId: c.id, dir: "asc" })}>
+          {typeof c.header === "string" ? c.header : c.id} ↑
+        </div>
+      ))}
+      {columns.map((c) => (
+        <div
+          key={c.id + "-d"}
+          className="popover__item"
+          onClick={() => onPick({ columnId: c.id, dir: "desc" })}
+        >
+          {typeof c.header === "string" ? c.header : c.id} ↓
+        </div>
+      ))}
+      {current && (
+        <>
+          <div className="popover__section">Current</div>
+          <div className="popover__item" onClick={() => onPick(null)}>
+            Clear sort
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

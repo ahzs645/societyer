@@ -1,0 +1,114 @@
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ConvexProvider } from "convex/react";
+import { convex } from "./lib/convex";
+import { Layout } from "./components/Layout";
+import { ConfirmProvider, PromptProvider } from "./components/Modal";
+import { ToastProvider } from "./components/Toast";
+import { Dashboard } from "./pages/Dashboard";
+import { SocietyPage } from "./pages/Society";
+import { MembersPage } from "./pages/Members";
+import { DirectorsPage } from "./pages/Directors";
+import { MeetingsPage } from "./pages/Meetings";
+import { MeetingDetailPage } from "./pages/MeetingDetail";
+import { MinutesPage } from "./pages/Minutes";
+import { FilingsPage } from "./pages/Filings";
+import { DeadlinesPage } from "./pages/Deadlines";
+import { DocumentsPage } from "./pages/Documents";
+import { ConflictsPage } from "./pages/Conflicts";
+import { FinancialsPage } from "./pages/Financials";
+import { PrivacyPage } from "./pages/Privacy";
+import { SettingsPage } from "./pages/Settings";
+import { CommitteesPage } from "./pages/Committees";
+import { CommitteeDetailPage } from "./pages/CommitteeDetail";
+import { GoalsPage } from "./pages/Goals";
+import { GoalDetailPage } from "./pages/GoalDetail";
+import { TasksPage } from "./pages/Tasks";
+import { TimelinePage } from "./pages/Timeline";
+import { NotificationsPage } from "./pages/Notifications";
+import { UsersPage } from "./pages/Users";
+import { AuditLogPage } from "./pages/AuditLog";
+import { MembershipPage } from "./pages/Membership";
+import { InspectionsPage } from "./pages/Inspections";
+import { AttestationsPage } from "./pages/Attestations";
+import { RetentionPage } from "./pages/Retention";
+import { InsurancePage } from "./pages/Insurance";
+import { PipaTrainingPage } from "./pages/PipaTraining";
+import { ProxiesPage } from "./pages/Proxies";
+import { AuditorsPage } from "./pages/Auditors";
+import { MemberProposalsPage } from "./pages/MemberProposals";
+import { ReceiptsPage } from "./pages/Receipts";
+import { EmployeesPage } from "./pages/Employees";
+import { CourtOrdersPage } from "./pages/CourtOrders";
+import { WrittenResolutionsPage } from "./pages/WrittenResolutions";
+import { AgmWorkflowPage } from "./pages/AgmWorkflow";
+import { FilingPreFillPage } from "./pages/FilingPreFill";
+import { BylawDiffPage } from "./pages/BylawDiff";
+import { BylawsHistoryPage } from "./pages/BylawsHistory";
+import { ReconciliationPage } from "./pages/Reconciliation";
+import { LandingPage } from "./pages/Landing";
+import "./theme/tokens.css";
+import "./styles/index.scss";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <ConvexProvider client={convex}>
+      <ToastProvider>
+        <ConfirmProvider>
+          <PromptProvider>
+      <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/app" element={<Layout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="society" element={<SocietyPage />} />
+            <Route path="members" element={<MembersPage />} />
+            <Route path="directors" element={<DirectorsPage />} />
+            <Route path="meetings" element={<MeetingsPage />} />
+            <Route path="meetings/:id" element={<MeetingDetailPage />} />
+            <Route path="minutes" element={<MinutesPage />} />
+            <Route path="filings" element={<FilingsPage />} />
+            <Route path="deadlines" element={<DeadlinesPage />} />
+            <Route path="documents" element={<DocumentsPage />} />
+            <Route path="conflicts" element={<ConflictsPage />} />
+            <Route path="financials" element={<FinancialsPage />} />
+            <Route path="privacy" element={<PrivacyPage />} />
+            <Route path="committees" element={<CommitteesPage />} />
+            <Route path="committees/:id" element={<CommitteeDetailPage />} />
+            <Route path="goals" element={<GoalsPage />} />
+            <Route path="goals/:id" element={<GoalDetailPage />} />
+            <Route path="tasks" element={<TasksPage />} />
+            <Route path="timeline" element={<TimelinePage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="users" element={<UsersPage />} />
+            <Route path="audit" element={<AuditLogPage />} />
+            <Route path="membership" element={<MembershipPage />} />
+            <Route path="inspections" element={<InspectionsPage />} />
+            <Route path="attestations" element={<AttestationsPage />} />
+            <Route path="retention" element={<RetentionPage />} />
+            <Route path="insurance" element={<InsurancePage />} />
+            <Route path="pipa-training" element={<PipaTrainingPage />} />
+            <Route path="proxies" element={<ProxiesPage />} />
+            <Route path="auditors" element={<AuditorsPage />} />
+            <Route path="proposals" element={<MemberProposalsPage />} />
+            <Route path="receipts" element={<ReceiptsPage />} />
+            <Route path="employees" element={<EmployeesPage />} />
+            <Route path="court-orders" element={<CourtOrdersPage />} />
+            <Route path="written-resolutions" element={<WrittenResolutionsPage />} />
+            <Route path="meetings/:id/agm" element={<AgmWorkflowPage />} />
+            <Route path="filings/prefill" element={<FilingPreFillPage />} />
+            <Route path="bylaw-diff" element={<BylawDiffPage />} />
+            <Route path="bylaws-history" element={<BylawsHistoryPage />} />
+            <Route path="reconciliation" element={<ReconciliationPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </HashRouter>
+          </PromptProvider>
+        </ConfirmProvider>
+      </ToastProvider>
+    </ConvexProvider>
+  </React.StrictMode>,
+);

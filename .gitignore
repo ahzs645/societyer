@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+.env.local
+.env.*.local
+.DS_Store
+*.log
+# Convex regenerates these on `npx convex dev`. Stubs are committed so the
+# project compiles before the user has run convex dev.
+# convex/_generated

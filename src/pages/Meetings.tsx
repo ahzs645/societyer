@@ -1,0 +1,217 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { useSociety } from "../hooks/useSociety";
+import { SeedPrompt, PageHeader } from "./_helpers";
+import { Badge, Drawer, Field } from "../components/ui";
+import { DataTable } from "../components/DataTable";
+import { FilterField } from "../components/FilterBar";
+import { Select } from "../components/Select";
+import { DateTimeInput } from "../components/DateTimeInput";
+import { Toggle } from "../components/Controls";
+import { useToast } from "../components/Toast";
+import { Plus, Calendar, Tag, AlertTriangle } from "lucide-react";
+import { formatDateTime } from "../lib/format";
+
+const OVERLAP_WINDOW_MS = 2 * 60 * 60 * 1000; // within 2 hours counts as concurrent
+
+function computeConflicts(meetings: any[]): Map<string, string[]> {
+  const byTime = meetings
+    .filter((m) => m.status !== "Cancelled")
+    .map((m) => ({ id: m._id, title: m.title, ts: new Date(m.scheduledAt).getTime() }))
+    .sort((a, b) => a.ts - b.ts);
+  const out = new Map<string, string[]>();
+  for (let i = 0; i < byTime.length; i++) {
+    for (let j = i + 1; j < byTime.length; j++) {
+      if (byTime[j].ts - byTime[i].ts > OVERLAP_WINDOW_MS) break;
+      out.set(byTime[i].id, [...(out.get(byTime[i].id) ?? []), byTime[j].title]);
+      out.set(byTime[j].id, [...(out.get(byTime[j].id) ?? []), byTime[i].title]);
+    }
+  }
+  return out;
+}
+
+const MEETING_FIELDS: FilterField<any>[] = [
+  { id: "title", label: "Title", icon: <Tag size={14} />, match: (m, q) => m.title.toLowerCase().includes(q.toLowerCase()) },
+  { id: "type", label: "Type", icon: <Tag size={14} />, options: ["Board", "Committee", "AGM", "SGM"], match: (m, q) => m.type === q },
+  { id: "status", label: "Status", icon: <Tag size={14} />, options: ["Scheduled", "Held", "Cancelled"], match: (m, q) => m.status === q },
+  { id: "electronic", label: "Electronic", options: ["Yes", "No"], match: (m, q) => (m.electronic ? "Yes" : "No") === q },
+  { id: "location", label: "Location", icon: <Tag size={14} />, match: (m, q) => (m.location ?? "").toLowerCase().includes(q.toLowerCase()) },
+  { id: "year", label: "Scheduled in year", icon: <Calendar size={14} />, match: (m, q) => (m.scheduledAt ?? "").startsWith(q) },
+];
+
+export function MeetingsPage() {
+  const society = useSociety();
+  const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
+  const create = useMutation(api.meetings.create);
+  const navigate = useNavigate();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<any>(null);
+
+  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === null) return <SeedPrompt />;
+
+  const conflicts = computeConflicts(meetings ?? []);
+
+  const openNew = () => {
+    setForm({
+      type: "Board", title: "",
+      scheduledAt: new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 16),
+      location: "", electronic: true, quorumRequired: 4, status: "Scheduled", attendeeIds: [],
+    });
+    setOpen(true);
+  };
+  const save = async () => {
+    await create({ societyId: society._id, ...form });
+    setOpen(false);
+    toast.success("Meeting scheduled", form.title);
+  };
+
+  return (
+    <div className="page">
+      <PageHeader
+        title="Meetings"
+        icon={<Calendar size={16} />}
+        iconColor="orange"
+        subtitle="Board meetings, committee meetings, and general meetings (AGM/SGM)."
+        actions={
+          <button className="btn-action btn-action--primary" onClick={openNew}>
+            <Plus size={12} /> New meeting
+          </button>
+        }
+      />
+
+      <DataTable
+        label="All meetings"
+        icon={<Calendar size={14} />}
+        data={(meetings ?? []) as any[]}
+        rowKey={(r) => r._id}
+        filterFields={MEETING_FIELDS}
+        searchPlaceholder="Search meetings…"
+        defaultSort={{ columnId: "scheduledAt", dir: "desc" }}
+        onRowClick={(row) => navigate(`/app/meetings/${row._id}`)}
+        columns={[
+          { id: "title", header: "Title", sortable: true, accessor: (r) => r.title, render: (r) => <strong>{r.title}</strong> },
+          {
+            id: "type", header: "Type", sortable: true,
+            accessor: (r) => r.type,
+            render: (r) => <Badge tone={r.type === "AGM" ? "accent" : r.type === "SGM" ? "warn" : "info"}>{r.type}</Badge>,
+          },
+          {
+            id: "scheduledAt", header: "When", sortable: true,
+            accessor: (r) => r.scheduledAt,
+            render: (r) => {
+              const overlap = conflicts.get(r._id);
+              return (
+                <span>
+                  <span className="mono">{formatDateTime(r.scheduledAt)}</span>
+                  {overlap && (
+                    <span
+                      title={`Overlaps with: ${overlap.join(", ")}`}
+                      style={{ marginLeft: 6, display: "inline-flex", alignItems: "center" }}
+                    >
+                      <Badge tone="warn">
+                        <AlertTriangle size={10} style={{ marginRight: 3, verticalAlign: -1 }} />
+                        {overlap.length} concurrent
+                      </Badge>
+                    </span>
+                  )}
+                </span>
+              );
+            },
+          },
+          {
+            id: "location", header: "Location", sortable: true,
+            accessor: (r) => r.location ?? "",
+            render: (r) => (
+              <span>
+                {r.location ?? "—"} {r.electronic && <Badge tone="info">Electronic</Badge>}
+              </span>
+            ),
+          },
+          {
+            id: "status", header: "Status", sortable: true,
+            accessor: (r) => r.status,
+            render: (r) => <Badge tone={r.status === "Held" ? "success" : r.status === "Cancelled" ? "danger" : "warn"}>{r.status}</Badge>,
+          },
+          {
+            id: "minutes", header: "Minutes",
+            render: (r) => r.minutesId ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>,
+          },
+        ]}
+      />
+
+      <Drawer
+        open={open} onClose={() => setOpen(false)} title="Schedule meeting"
+        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save}>Schedule</button></>}
+      >
+        {form && (
+          <div>
+            <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Type">
+                <Select
+                  value={form.type}
+                  onChange={(v) => setForm({ ...form, type: v })}
+                  options={["Board", "Committee", "AGM", "SGM"].map((t) => ({ value: t, label: t }))}
+                />
+              </Field>
+              <Field label="Scheduled">
+                <DateTimeInput value={form.scheduledAt} onChange={(v) => setForm({ ...form, scheduledAt: v })} />
+              </Field>
+            </div>
+            <Field label="Location"><input className="input" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></Field>
+            <Toggle
+              checked={form.electronic}
+              onChange={(v) => setForm({ ...form, electronic: v })}
+              label="Electronic participation permitted"
+            />
+            <Field label="Quorum required">
+              <input className="input" type="number" value={form.quorumRequired} onChange={(e) => setForm({ ...form, quorumRequired: Number(e.target.value) })} />
+            </Field>
+            <Field label="Notes"><textarea className="textarea" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+            {form.type === "AGM" && (
+              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                Reminder: AGM notice must be sent 14–60 days in advance. Financial statements must be presented.
+              </div>
+            )}
+            {(() => {
+              const draftTs = form.scheduledAt ? new Date(form.scheduledAt).getTime() : NaN;
+              if (!Number.isFinite(draftTs)) return null;
+              const overlaps = (meetings ?? []).filter(
+                (m) =>
+                  m.status !== "Cancelled" &&
+                  Math.abs(new Date(m.scheduledAt).getTime() - draftTs) <= OVERLAP_WINDOW_MS,
+              );
+              if (overlaps.length === 0) return null;
+              return (
+                <div
+                  style={{
+                    marginTop: 8,
+                    padding: 10,
+                    border: "1px solid var(--border)",
+                    borderRadius: 6,
+                    background: "var(--bg-subtle)",
+                    fontSize: 13,
+                  }}
+                >
+                  <AlertTriangle size={12} style={{ verticalAlign: -1, color: "var(--warn, #c78b00)", marginRight: 4 }} />
+                  <strong>Schedule conflict:</strong> {overlaps.length} other meeting{overlaps.length === 1 ? "" : "s"} within 2h of this time:
+                  <ul style={{ margin: "4px 0 0 20px" }}>
+                    {overlaps.map((m) => (
+                      <li key={m._id} className="muted">
+                        {m.title} — {formatDateTime(m.scheduledAt)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </Drawer>
+    </div>
+  );
+}

@@ -1,0 +1,36 @@
+// ============================================================
+// Societyer styles — entry point
+//
+// Partials are loaded in their original source order so the CSS
+// cascade is identical to the previous single-file index.css.
+//
+// Note: design tokens (../theme/tokens.css) are imported separately
+// from main.tsx — Sass `@use` doesn't load plain CSS files, and
+// `@import` is deprecated.
+// ============================================================
+
+// Base reset, typography, scrollbar, focus.
+@use "base";
+
+// App shell: sidebar, brand, topbar, main column, color palette.
+@use "layout";
+
+// Page chrome: view bar, filter chips, popovers, buttons, badges, cards,
+// stat grid, data table.
+@use "chrome";
+
+// Forms & misc overlays: drawer, input/select/textarea/field/lock,
+// command palette (kbar), demo banner, notifications, user picker, bot run.
+@use "forms";
+
+// View-level styling: compliance flags, meeting detail, tabs, progress,
+// kanban, priority dots, timeline, activity feed, segmented, action items.
+@use "views";
+
+// Component library: Select, DatePicker, Modal, Toast, TextInput,
+// Tooltip, Checkbox/Toggle/Radio, IconPicker, ColorPicker, DateTime,
+// Menu actions.
+@use "components";
+
+// Marketing / landing page (/marketing). Standalone — does not use Layout.
+@use "landing";

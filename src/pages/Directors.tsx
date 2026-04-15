@@ -1,0 +1,231 @@
+import { useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { useSociety } from "../hooks/useSociety";
+import { SeedPrompt, PageHeader } from "./_helpers";
+import { Badge, Drawer, Field, Flag } from "../components/ui";
+import { DataTable } from "../components/DataTable";
+import { FilterField } from "../components/FilterBar";
+import { Select } from "../components/Select";
+import { DatePicker } from "../components/DatePicker";
+import { Checkbox } from "../components/Controls";
+import { useConfirm } from "../components/Modal";
+import { useToast } from "../components/Toast";
+import { Plus, Trash2, UserCog, Tag, MapPin, CheckCircle2, CircleUser } from "lucide-react";
+import { formatDate, initials } from "../lib/format";
+
+const DIRECTOR_FIELDS: FilterField<any>[] = [
+  { id: "name", label: "Name", icon: <CircleUser size={14} />, match: (d, q) => `${d.firstName} ${d.lastName}`.toLowerCase().includes(q.toLowerCase()) },
+  { id: "position", label: "Position", icon: <Tag size={14} />, options: ["President", "Vice President", "Treasurer", "Secretary", "Director"], match: (d, q) => d.position === q },
+  { id: "status", label: "Status", icon: <Tag size={14} />, options: ["Active", "Resigned", "Removed"], match: (d, q) => d.status === q },
+  { id: "bc", label: "BC resident", icon: <MapPin size={14} />, options: ["Yes", "No"], match: (d, q) => (d.isBCResident ? "Yes" : "No") === q },
+  { id: "consent", label: "Consent on file", icon: <CheckCircle2 size={14} />, options: ["Yes", "No"], match: (d, q) => (d.consentOnFile ? "Yes" : "No") === q },
+];
+
+export function DirectorsPage() {
+  const society = useSociety();
+  const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
+  const create = useMutation(api.directors.create);
+  const update = useMutation(api.directors.update);
+  const remove = useMutation(api.directors.remove);
+  const confirm = useConfirm();
+  const toast = useToast();
+  const [selected, setSelected] = useState<any>(null);
+  const [open, setOpen] = useState(false);
+
+  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === null) return <SeedPrompt />;
+
+  const active = (directors ?? []).filter((d: any) => d.status === "Active");
+  const bcResidents = active.filter((d: any) => d.isBCResident).length;
+  const missingConsent = active.filter((d: any) => !d.consentOnFile);
+
+  const openNew = () => {
+    setSelected({
+      firstName: "", lastName: "", email: "",
+      position: "Director", isBCResident: true,
+      termStart: new Date().toISOString().slice(0, 10),
+      consentOnFile: false, status: "Active",
+    });
+    setOpen(true);
+  };
+
+  const save = async () => {
+    if (!selected) return;
+    if (selected._id) {
+      const { _id, _creationTime, societyId, ...patch } = selected;
+      await update({ id: _id, patch });
+    } else {
+      await create({ societyId: society._id, ...selected });
+    }
+    setOpen(false);
+  };
+
+  return (
+    <div className="page">
+      <PageHeader
+        title="Directors"
+        icon={<UserCog size={16} />}
+        iconColor="blue"
+        subtitle="Register of directors under s.20. Act requires ≥ 3 directors, ≥ 1 BC resident (regular societies)."
+        actions={
+          <button className="btn-action btn-action--primary" onClick={openNew}>
+            <Plus size={12} /> New director
+          </button>
+        }
+      />
+
+      <div className="stat-grid">
+        <div className="stat">
+          <div className="stat__label">Active directors</div>
+          <div className="stat__value" style={{ color: active.length < 3 && !society.isMemberFunded ? "var(--danger)" : undefined }}>{active.length}</div>
+          <div className="stat__sub">Minimum 3 for regular societies.</div>
+        </div>
+        <div className="stat">
+          <div className="stat__label">BC residents</div>
+          <div className="stat__value" style={{ color: bcResidents < 1 ? "var(--danger)" : undefined }}>{bcResidents}</div>
+          <div className="stat__sub">At least one BC resident required.</div>
+        </div>
+        <div className="stat">
+          <div className="stat__label">Consent on file</div>
+          <div className="stat__value" style={{ color: missingConsent.length ? "var(--warn)" : undefined }}>{active.length - missingConsent.length}/{active.length}</div>
+          <div className="stat__sub">Written consent required to act.</div>
+        </div>
+        <div className="stat">
+          <div className="stat__label">Change of directors</div>
+          <div className="stat__value">30d</div>
+          <div className="stat__sub">File within 30 days via Societies Online.</div>
+        </div>
+      </div>
+
+      {(active.length < 3 || bcResidents < 1 || missingConsent.length > 0) && (
+        <div className="col" style={{ marginBottom: 16, gap: 6 }}>
+          {active.length < 3 && !society.isMemberFunded && <Flag level="err">Fewer than 3 active directors — regular societies must have at least 3.</Flag>}
+          {bcResidents < 1 && <Flag level="err">No BC-resident director. At least one is required.</Flag>}
+          {missingConsent.length > 0 && <Flag level="warn">{missingConsent.length} director(s) without consent on file.</Flag>}
+        </div>
+      )}
+
+      <DataTable
+        label="All directors"
+        icon={<UserCog size={14} />}
+        data={(directors ?? []) as any[]}
+        rowKey={(r) => r._id}
+        filterFields={DIRECTOR_FIELDS}
+        searchPlaceholder="Search directors…"
+        defaultSort={{ columnId: "name", dir: "asc" }}
+        onRowClick={(row) => { setSelected(row); setOpen(true); }}
+        columns={[
+          {
+            id: "name", header: "Name", sortable: true,
+            accessor: (r) => `${r.firstName} ${r.lastName}`,
+            render: (r) => (
+              <span className="cell-chip">
+                <span className="cell-chip__avatar">{initials(r.firstName, r.lastName)}</span>
+                <span className="cell-chip__name">{r.firstName} {r.lastName}</span>
+              </span>
+            ),
+          },
+          {
+            id: "position", header: "Position", sortable: true,
+            accessor: (r) => r.position,
+            render: (r) => <span className="cell-tag">{r.position}</span>,
+          },
+          {
+            id: "termStart", header: "Term start", sortable: true,
+            accessor: (r) => r.termStart,
+            render: (r) => <span className="mono">{formatDate(r.termStart)}</span>,
+          },
+          {
+            id: "bc", header: "BC resident", sortable: true,
+            accessor: (r) => (r.isBCResident ? 1 : 0),
+            render: (r) => r.isBCResident ? <Badge tone="success">Yes</Badge> : <Badge tone="warn">No</Badge>,
+          },
+          {
+            id: "consent", header: "Consent", sortable: true,
+            accessor: (r) => (r.consentOnFile ? 1 : 0),
+            render: (r) => r.consentOnFile ? <Badge tone="success">On file</Badge> : <Badge tone="danger">Missing</Badge>,
+          },
+          {
+            id: "status", header: "Status", sortable: true,
+            accessor: (r) => r.status,
+            render: (r) => <Badge tone={r.status === "Active" ? "success" : "warn"}>{r.status}</Badge>,
+          },
+        ]}
+        renderRowActions={(r) => (
+          <button
+            className="btn btn--ghost btn--sm btn--icon"
+            onClick={async () => {
+              const ok = await confirm({
+                title: "Remove director?",
+                message: `${r.firstName} ${r.lastName} will be removed from the director register.`,
+                confirmLabel: "Remove",
+                tone: "danger",
+              });
+              if (!ok) return;
+              await remove({ id: r._id });
+              toast.success("Director removed");
+            }}
+          >
+            <Trash2 size={12} />
+          </button>
+        )}
+      />
+
+      <Drawer
+        open={open}
+        onClose={() => setOpen(false)}
+        title={selected?._id ? "Edit director" : "Add director"}
+        footer={
+          <>
+            <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
+            <button className="btn btn--accent" onClick={save}>Save</button>
+          </>
+        }
+      >
+        {selected && (
+          <div>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="First name"><input className="input" value={selected.firstName} onChange={(e) => setSelected({ ...selected, firstName: e.target.value })} /></Field>
+              <Field label="Last name"><input className="input" value={selected.lastName} onChange={(e) => setSelected({ ...selected, lastName: e.target.value })} /></Field>
+            </div>
+            <Field label="Email"><input className="input" value={selected.email ?? ""} onChange={(e) => setSelected({ ...selected, email: e.target.value })} /></Field>
+            <Field label="Position">
+              <Select
+                value={selected.position}
+                onChange={(v) => setSelected({ ...selected, position: v })}
+                options={["President", "Vice President", "Treasurer", "Secretary", "Director"].map((p) => ({ value: p, label: p }))}
+              />
+            </Field>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Term start">
+                <DatePicker value={selected.termStart} onChange={(v) => setSelected({ ...selected, termStart: v })} />
+              </Field>
+              <Field label="Term end">
+                <DatePicker value={selected.termEnd ?? ""} onChange={(v) => setSelected({ ...selected, termEnd: v })} />
+              </Field>
+              <Field label="Status">
+                <Select
+                  value={selected.status}
+                  onChange={(v) => setSelected({ ...selected, status: v })}
+                  options={["Active", "Resigned", "Removed"].map((s) => ({ value: s, label: s }))}
+                />
+              </Field>
+            </div>
+            <Checkbox
+              checked={!!selected.isBCResident}
+              onChange={(v) => setSelected({ ...selected, isBCResident: v })}
+              label="BC resident"
+            />
+            <Checkbox
+              checked={!!selected.consentOnFile}
+              onChange={(v) => setSelected({ ...selected, consentOnFile: v })}
+              label="Written consent to act on file"
+            />
+            <Field label="Notes"><textarea className="textarea" value={selected.notes ?? ""} onChange={(e) => setSelected({ ...selected, notes: e.target.value })} /></Field>
+          </div>
+        )}
+      </Drawer>
+    </div>
+  );
+}
