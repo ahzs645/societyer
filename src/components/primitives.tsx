@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { List, Filter, ArrowUpDown, MoreHorizontal, ChevronDown } from "lucide-react";
+import { Pill, TintedIconTile } from "./ui";
 
 export function ViewBar({
   label,
@@ -10,6 +11,7 @@ export function ViewBar({
   onOptions,
   extra,
   filterBtnRef,
+  sortBtnRef,
 }: {
   label: string;
   count?: number;
@@ -19,13 +21,20 @@ export function ViewBar({
   onOptions?: () => void;
   extra?: ReactNode;
   filterBtnRef?: React.RefObject<HTMLButtonElement>;
+  sortBtnRef?: React.RefObject<HTMLButtonElement>;
 }) {
   return (
     <div className="view-bar">
       <button className="view-pill">
-        {icon ?? <List size={14} />}
+        <TintedIconTile tone="gray" size="sm" className="view-pill__icon">
+          {icon ?? <List size={14} />}
+        </TintedIconTile>
         <span>{label}</span>
-        {count != null && <span className="view-pill__count">· {count}</span>}
+        {count != null && (
+          <Pill size="sm" className="view-pill__count">
+            {count}
+          </Pill>
+        )}
         <ChevronDown size={12} style={{ color: "var(--text-tertiary)" }} />
       </button>
       <div className="view-bar__sep" />
@@ -34,7 +43,7 @@ export function ViewBar({
           <Filter size={12} style={{ marginRight: 4, verticalAlign: -2 }} />
           Filter
         </button>
-        <button className="view-bar__btn" onClick={onSort}>
+        <button className="view-bar__btn" onClick={onSort} ref={sortBtnRef}>
           <ArrowUpDown size={12} style={{ marginRight: 4, verticalAlign: -2 }} />
           Sort
         </button>
@@ -73,7 +82,7 @@ export function Tabs<T extends string>({
         >
           {it.icon}
           {it.label}
-          {it.count != null && <span className="tab__count">{it.count}</span>}
+          {it.count != null && <Pill size="sm" className="tab__count">{it.count}</Pill>}
         </button>
       ))}
     </div>

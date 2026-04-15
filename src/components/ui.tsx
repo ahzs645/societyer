@@ -1,6 +1,9 @@
-import { ReactNode, useEffect, useState } from "react";
+import { MouseEvent as ReactMouseEvent, ReactNode, useEffect, useId, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, AlertTriangle, CheckCircle2, Info, Lock, Unlock } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useConfirm } from "./Modal";
+import { useInspectorPanel } from "./InspectorPanel";
 
 export function EmptyState({
   icon,
@@ -34,6 +37,177 @@ export function Badge({
   return <span className={klass}>{children}</span>;
 }
 
+export function Pill({
+  tone = "neutral",
+  size = "md",
+  className,
+  children,
+}: {
+  tone?: "neutral" | "success" | "warn" | "danger" | "info" | "accent";
+  size?: "sm" | "md";
+  className?: string;
+  children: ReactNode;
+}) {
+  const classes = ["pill", `pill--${size}`];
+  if (tone !== "neutral") classes.push(`pill--${tone}`);
+  if (className) classes.push(className);
+  return <span className={classes.join(" ")}>{children}</span>;
+}
+
+export function TintedIconTile({
+  tone = "gray",
+  size = "md",
+  className,
+  children,
+}: {
+  tone?: "blue" | "red" | "turquoise" | "gray" | "orange" | "purple" | "green" | "pink" | "yellow";
+  size?: "sm" | "md" | "lg";
+  className?: string;
+  children: ReactNode;
+}) {
+  const classes = ["tinted-icon-tile", `tinted-icon-tile--${size}`, `icon-chip-${tone}`];
+  if (className) classes.push(className);
+  return <span className={classes.join(" ")}>{children}</span>;
+}
+
+export function MenuSectionLabel({ children }: { children: ReactNode }) {
+  return <div className="menu__section-label">{children}</div>;
+}
+
+export function MenuRow({
+  icon,
+  label,
+  hint,
+  right,
+  active = false,
+  disabled = false,
+  destructive = false,
+  subtle = false,
+  role,
+  ariaSelected,
+  onMouseEnter,
+  onClick,
+}: {
+  icon?: ReactNode;
+  label: ReactNode;
+  hint?: ReactNode;
+  right?: ReactNode;
+  active?: boolean;
+  disabled?: boolean;
+  destructive?: boolean;
+  subtle?: boolean;
+  role?: string;
+  ariaSelected?: boolean;
+  onMouseEnter?: () => void;
+  onClick?: () => void;
+}) {
+  const classes = ["menu__item"];
+  if (active) classes.push("is-active");
+  if (disabled) classes.push("is-disabled");
+  if (destructive) classes.push("menu__item--destructive");
+  if (subtle) classes.push("menu__item--clear");
+
+  return (
+    <button
+      type="button"
+      role={role}
+      aria-selected={ariaSelected}
+      aria-disabled={disabled || undefined}
+      className={classes.join(" ")}
+      disabled={disabled}
+      onMouseEnter={onMouseEnter}
+      onClick={onClick}
+    >
+      <span className="menu__item-main">
+        {icon && <span className="menu__item-icon">{icon}</span>}
+        <span className="menu__item-label">
+          {label}
+          {hint && <span className="menu__item-hint"> · {hint}</span>}
+        </span>
+      </span>
+      {right && <span className="menu__item-right">{right}</span>}
+    </button>
+  );
+}
+
+export function RecordChip({
+  avatar,
+  label,
+  meta,
+  tone = "gray",
+  to,
+  onClick,
+  className,
+}: {
+  avatar?: ReactNode;
+  label: ReactNode;
+  meta?: ReactNode;
+  tone?: "blue" | "red" | "turquoise" | "gray" | "orange" | "purple" | "green" | "pink" | "yellow";
+  to?: string;
+  onClick?: (event: ReactMouseEvent<HTMLElement>) => void;
+  className?: string;
+}) {
+  const classes = ["record-chip"];
+  if (to || onClick) classes.push("record-chip--interactive");
+  if (className) classes.push(className);
+
+  const content = (
+    <>
+      {avatar != null && (
+        <TintedIconTile tone={tone} size="sm" className="record-chip__avatar">
+          {avatar}
+        </TintedIconTile>
+      )}
+      <span className="record-chip__content">
+        <span className="record-chip__label">{label}</span>
+        {meta && <span className="record-chip__meta">{meta}</span>}
+      </span>
+    </>
+  );
+
+  if (to) {
+    return (
+      <Link to={to} className={classes.join(" ")} onClick={onClick}>
+        {content}
+      </Link>
+    );
+  }
+
+  if (onClick) {
+    return (
+      <button type="button" className={classes.join(" ")} onClick={onClick}>
+        {content}
+      </button>
+    );
+  }
+
+  return <span className={classes.join(" ")}>{content}</span>;
+}
+
+export function InspectorNote({
+  tone = "info",
+  title,
+  children,
+}: {
+  tone?: "info" | "warn" | "danger";
+  title?: ReactNode;
+  children: ReactNode;
+}) {
+  const Icon = tone === "info" ? Info : AlertTriangle;
+
+  return (
+    <div className={`inspector-note inspector-note--${tone}`}>
+      <div className="inspector-note__icon">
+        <Icon size={14} />
+      </div>
+      <div className="inspector-note__content">
+        {title && <div className="inspector-note__title">{title}</div>}
+        <div className="inspector-note__body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export function Avatar({ label }: { label: string }) {
   return <span className="avatar">{label.slice(0, 2).toUpperCase()}</span>;
 }
@@ -51,14 +225,42 @@ export function Drawer({
   children: ReactNode;
   footer?: ReactNode;
 }) {
+  const inspector = useInspectorPanel();
+  const panelId = useId();
+
   useEffect(() => {
+    if (inspector) return;
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, onClose, inspector]);
+
+  useEffect(() => {
+    if (!open || !inspector) return;
+    inspector.activate(panelId, onClose);
+    return () => inspector.deactivate(panelId);
+  }, [open, onClose, inspector, panelId]);
 
   if (!open) return null;
+  if (inspector?.portalTarget) {
+    return createPortal(
+      <div className="inspector-panel" role="dialog" aria-label={title}>
+        <div className="drawer__head inspector-panel__head">
+          <h2 className="drawer__title">{title}</h2>
+          <div style={{ flex: 1 }} />
+          <button className="btn btn--ghost btn--icon" onClick={onClose}>
+            <X />
+          </button>
+        </div>
+        <div className="drawer__body inspector-panel__body">{children}</div>
+        {footer && <div className="drawer__footer inspector-panel__footer">{footer}</div>}
+      </div>,
+      inspector.portalTarget,
+    );
+  }
+  if (inspector) return null;
+
   return (
     <>
       <div className="drawer-backdrop" onClick={onClose} />

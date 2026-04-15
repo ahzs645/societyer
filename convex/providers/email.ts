@@ -38,6 +38,48 @@ export async function sendEmail(args: {
     };
   }
 
-  // Live Resend call stub.
-  throw new Error("Live email send requires RESEND_API_KEY plus action-context fetch.");
+  const apiKey = (globalThis as any)?.process?.env?.RESEND_API_KEY;
+  const from =
+    (globalThis as any)?.process?.env?.RESEND_FROM_EMAIL ??
+    (globalThis as any)?.process?.env?.RESEND_FROM ??
+    "Societyer <noreply@example.com>";
+  const endpoint =
+    (globalThis as any)?.process?.env?.RESEND_API_BASE_URL ??
+    "https://api.resend.com/emails";
+
+  if (!apiKey) {
+    throw new Error("Live email send requires RESEND_API_KEY.");
+  }
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from,
+      to: [args.to],
+      subject: args.subject,
+      html: args.html,
+      text: args.text,
+      tags: args.tag ? [{ name: "kind", value: args.tag }] : undefined,
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = (await response.text().catch(() => "")).trim();
+    throw new Error(detail || `Resend request failed with status ${response.status}.`);
+  }
+
+  const data = await response.json().catch(() => ({}));
+  return {
+    provider: "resend" as const,
+    accepted: true,
+    id: String((data as any)?.id ?? `resend-${Date.now()}`),
+    to: args.to,
+    subject: args.subject,
+    bodyPreview,
+    sentAtISO,
+  };
 }

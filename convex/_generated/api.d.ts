@@ -15,6 +15,7 @@ import type * as auditors from "../auditors.js";
 import type * as bylawAmendments from "../bylawAmendments.js";
 import type * as bylawRules from "../bylawRules.js";
 import type * as committees from "../committees.js";
+import type * as communications from "../communications.js";
 import type * as conflicts from "../conflicts.js";
 import type * as courtOrders from "../courtOrders.js";
 import type * as crons from "../crons.js";
@@ -32,6 +33,8 @@ import type * as filings from "../filings.js";
 import type * as financialHub from "../financialHub.js";
 import type * as financials from "../financials.js";
 import type * as goals from "../goals.js";
+import type * as grants from "../grants.js";
+import type * as http from "../http.js";
 import type * as inspections from "../inspections.js";
 import type * as insurance from "../insurance.js";
 import type * as lib_bylawRules from "../lib/bylawRules.js";
@@ -46,9 +49,11 @@ import type * as providers_billing from "../providers/billing.js";
 import type * as providers_email from "../providers/email.js";
 import type * as providers_env from "../providers/env.js";
 import type * as providers_llm from "../providers/llm.js";
+import type * as providers_sms from "../providers/sms.js";
 import type * as providers_storage from "../providers/storage.js";
 import type * as providers_transcription from "../providers/transcription.js";
 import type * as proxies from "../proxies.js";
+import type * as publicPortal from "../publicPortal.js";
 import type * as receipts from "../receipts.js";
 import type * as reconciliation from "../reconciliation.js";
 import type * as recordsLocation from "../recordsLocation.js";
@@ -60,7 +65,9 @@ import type * as society from "../society.js";
 import type * as subscriptions from "../subscriptions.js";
 import type * as tasks from "../tasks.js";
 import type * as transcripts from "../transcripts.js";
+import type * as transparency from "../transparency.js";
 import type * as users from "../users.js";
+import type * as volunteers from "../volunteers.js";
 import type * as writtenResolutions from "../writtenResolutions.js";
 
 import type {
@@ -77,6 +84,7 @@ declare const fullApi: ApiFromModules<{
   bylawAmendments: typeof bylawAmendments;
   bylawRules: typeof bylawRules;
   committees: typeof committees;
+  communications: typeof communications;
   conflicts: typeof conflicts;
   courtOrders: typeof courtOrders;
   crons: typeof crons;
@@ -94,6 +102,8 @@ declare const fullApi: ApiFromModules<{
   financialHub: typeof financialHub;
   financials: typeof financials;
   goals: typeof goals;
+  grants: typeof grants;
+  http: typeof http;
   inspections: typeof inspections;
   insurance: typeof insurance;
   "lib/bylawRules": typeof lib_bylawRules;
@@ -108,9 +118,11 @@ declare const fullApi: ApiFromModules<{
   "providers/email": typeof providers_email;
   "providers/env": typeof providers_env;
   "providers/llm": typeof providers_llm;
+  "providers/sms": typeof providers_sms;
   "providers/storage": typeof providers_storage;
   "providers/transcription": typeof providers_transcription;
   proxies: typeof proxies;
+  publicPortal: typeof publicPortal;
   receipts: typeof receipts;
   reconciliation: typeof reconciliation;
   recordsLocation: typeof recordsLocation;
@@ -122,7 +134,9 @@ declare const fullApi: ApiFromModules<{
   subscriptions: typeof subscriptions;
   tasks: typeof tasks;
   transcripts: typeof transcripts;
+  transparency: typeof transparency;
   users: typeof users;
+  volunteers: typeof volunteers;
   writtenResolutions: typeof writtenResolutions;
 }>;
 

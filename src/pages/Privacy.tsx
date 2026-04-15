@@ -1,3 +1,6 @@
+import { Link } from "react-router-dom";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Flag } from "../components/ui";
@@ -7,17 +10,43 @@ import { useBylawRules } from "../hooks/useBylawRules";
 export function PrivacyPage() {
   const society = useSociety();
   const { rules } = useBylawRules();
+  const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
+  const training = useQuery(
+    api.pipaTraining.list,
+    society ? { societyId: society._id } : "skip",
+  );
+  const prefs = useQuery(
+    api.communications.listMemberPrefs,
+    society ? { societyId: society._id } : "skip",
+  );
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
 
   const hasPolicy = !!society.privacyPolicyDocId;
   const hasOfficer = !!society.privacyOfficerName && !!society.privacyOfficerEmail;
+  const activeMembers = (members ?? []).filter((member) => member.status === "Active");
+  const prefCoverage = activeMembers.filter((member) =>
+    (prefs ?? []).some((pref) => String(pref.memberId) === String(member._id)),
+  ).length;
+  const missingPrefCoverage = activeMembers.length > 0 && prefCoverage < activeMembers.length;
+  const recentTraining = (training ?? []).filter((item) => {
+    const completedAt = item.completedAtISO ? new Date(item.completedAtISO).getTime() : 0;
+    return completedAt >= Date.now() - 365 * 864e5;
+  });
+  const caslTrainingCount = recentTraining.filter((item) =>
+    ["CASL", "Privacy-refresh", "PIPA"].includes(item.topic),
+  ).length;
 
   return (
     <div className="page">
       <PageHeader
         title="Privacy (PIPA)"
         subtitle="BC's Personal Information Protection Act applies to non-profits. Adopt a privacy policy, designate a privacy officer, train staff, and comply with CASL."
+        actions={
+          <Link className="btn-action" to="/app/communications">
+            Manage consent
+          </Link>
+        }
       />
 
       <div className="two-col">
@@ -34,7 +63,16 @@ export function PrivacyPage() {
               "No privacy officer designated. Add one on the Society page."
             )}
           </Flag>
-          <Flag level="warn">Annual staff/volunteer privacy & CASL training not recorded in this build.</Flag>
+          <Flag level={missingPrefCoverage ? "warn" : "ok"}>
+            {missingPrefCoverage
+              ? `${prefCoverage}/${activeMembers.length} active member communication preference records are on file.`
+              : "Communication preference records are on file for active members."}
+          </Flag>
+          <Flag level={caslTrainingCount > 0 ? "ok" : "warn"}>
+            {caslTrainingCount > 0
+              ? `${caslTrainingCount} privacy/CASL training record${caslTrainingCount === 1 ? "" : "s"} logged in the last 12 months.`
+              : "No privacy/CASL training records logged in the last 12 months."}
+          </Flag>
 
           <div className="card">
             <div className="card__head">
@@ -47,6 +85,7 @@ export function PrivacyPage() {
               <Item>Retention period and secure disposal practices.</Item>
               <Item>Contact details for the privacy officer.</Item>
               <Item>CASL compliance for electronic communications (consent, identification, unsubscribe).</Item>
+              <Item>Member notice preferences should be recorded before newsletters or bulk updates are sent.</Item>
             </div>
           </div>
         </div>
@@ -69,6 +108,7 @@ export function PrivacyPage() {
           <Item>Public may inspect financial statements and auditor's reports on request.</Item>
           <Item>{rules?.inspectionCopiesAllowed ? "Copies are allowed under the active rule set." : "Copies are restricted under the active rule set."}</Item>
           <Item>Non-members may be charged up to $10/day for inspection and $0.50/page ($0.10 electronic) for copies.</Item>
+          <Item>Keep a current consent log for notices, newsletters, and electronic reminders.</Item>
         </div>
       </div>
       </div>

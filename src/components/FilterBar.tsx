@@ -1,5 +1,6 @@
 import { ReactNode, useRef, useState, useEffect } from "react";
 import { X } from "lucide-react";
+import { MenuRow, MenuSectionLabel } from "./ui";
 
 export type FilterField<T = any> = {
   id: string;
@@ -74,56 +75,60 @@ export function FilterPopover<T>({
     <div className="popover" ref={ref} style={style}>
       {!picked ? (
         <>
-          <div className="popover__section">Filter by field</div>
+          <MenuSectionLabel>Filter by field</MenuSectionLabel>
           {fields.map((f) => (
-            <div
+            <MenuRow
               key={f.id}
-              className="popover__item"
+              icon={f.icon}
+              label={f.label}
               onClick={() => {
                 setPicked(f);
                 setValue("");
               }}
-            >
-              {f.icon}
-              {f.label}
-            </div>
+            />
           ))}
         </>
       ) : (
         <>
-          <div className="popover__section">{picked.label} contains</div>
+          <MenuSectionLabel>{picked.label}{picked.options ? "" : " contains"}</MenuSectionLabel>
           {picked.options ? (
-            <select
-              className="popover__input"
-              autoFocus
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-            >
-              <option value="">— any —</option>
-              {picked.options.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
+            <>
+              {picked.options.map((option) => (
+                <MenuRow
+                  key={option}
+                  label={option}
+                  onClick={() => {
+                    onAdd({ fieldId: picked.id, value: option });
+                    onClose();
+                  }}
+                />
               ))}
-            </select>
+              <div className="popover__footer">
+                <button className="btn-action" onClick={() => setPicked(null)}>
+                  Back
+                </button>
+              </div>
+            </>
           ) : (
-            <input
-              className="popover__input"
-              autoFocus
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && commit()}
-              placeholder="Type and press Enter"
-            />
+            <>
+              <input
+                className="popover__input"
+                autoFocus
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && commit()}
+                placeholder="Type and press Enter"
+              />
+              <div className="popover__footer">
+                <button className="btn-action" onClick={() => setPicked(null)}>
+                  Back
+                </button>
+                <button className="btn-action btn-action--primary" onClick={commit}>
+                  Apply
+                </button>
+              </div>
+            </>
           )}
-          <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-            <button className="btn-action" onClick={() => setPicked(null)}>
-              Back
-            </button>
-            <button className="btn-action btn-action--primary" onClick={commit}>
-              Apply
-            </button>
-          </div>
         </>
       )}
     </div>

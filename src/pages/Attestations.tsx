@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field, Flag } from "../components/ui";
+import { Badge, Drawer, Field, Flag, InspectorNote, RecordChip } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { ShieldCheck, PenLine, Tag } from "lucide-react";
 import { formatDate, initials } from "../lib/format";
@@ -92,10 +92,11 @@ export function AttestationsPage() {
             id: "name", header: "Director", sortable: true,
             accessor: (r) => r.name,
             render: (r) => (
-              <span className="cell-chip">
-                <span className="cell-chip__avatar">{initials(r.director.firstName, r.director.lastName)}</span>
-                <span className="cell-chip__name">{r.name}</span>
-              </span>
+              <RecordChip
+                tone="blue"
+                avatar={initials(r.director.firstName, r.director.lastName)}
+                label={r.name}
+              />
             ),
           },
           { id: "position", header: "Position", sortable: true, accessor: (r) => r.position, render: (r) => <span className="cell-tag">{r.position}</span> },
@@ -132,9 +133,10 @@ export function AttestationsPage() {
       >
         {form && (
           <div>
-            <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 8 }}>
-              By signing, the director confirms each of the following statements is true as of today.
-            </div>
+            <InspectorNote tone="warn" title="Qualification check">
+              By signing, the director confirms each statement is true as of today and that the
+              society can rely on this attestation in its governance records.
+            </InspectorNote>
             <label className="checkbox"><input type="checkbox" checked={form.isAtLeast18} onChange={(e) => setForm({ ...form, isAtLeast18: e.target.checked })} /> I am at least 18 years old (or 16–17 and bylaws permit).</label>
             <label className="checkbox"><input type="checkbox" checked={form.notBankrupt} onChange={(e) => setForm({ ...form, notBankrupt: e.target.checked })} /> I am not an undischarged bankrupt.</label>
             <label className="checkbox"><input type="checkbox" checked={form.notDisqualified} onChange={(e) => setForm({ ...form, notDisqualified: e.target.checked })} /> I have not been convicted of an offence that disqualifies me under s.44 of the Societies Act.</label>

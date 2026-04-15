@@ -36,35 +36,39 @@
 /* Tabs */
 .tabs {
   display: flex;
-  gap: 0;
-  border-bottom: 1px solid var(--border);
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, #ffffff 18%);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.56);
   margin-bottom: var(--s-4);
 }
 .tab {
-  padding: 8px 12px;
+  padding: 7px 12px;
   font-size: var(--fs-md);
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  border: 1px solid transparent;
+  border-radius: 999px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: color 0.08s ease, border-color 0.08s ease;
+  transition: color 0.08s ease, border-color 0.08s ease, background 0.08s ease;
 }
-.tab:hover { color: var(--text-primary); }
+.tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.72);
+}
 .tab.is-active {
   color: var(--text-primary);
-  border-bottom-color: var(--accent);
+  border-color: color-mix(in srgb, var(--border) 82%, #ffffff 18%);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 18px rgba(52, 37, 15, 0.08);
 }
 .tab__count {
-  font-size: var(--fs-xs);
-  color: var(--text-tertiary);
-  background: var(--bg-muted);
-  padding: 1px 6px;
-  border-radius: 10px;
-  font-variant-numeric: tabular-nums;
+  margin-left: 2px;
 }
 
 /* Progress */
@@ -192,9 +196,10 @@
 }
 .activity-item:last-child { border-bottom: none; }
 .activity-item__avatar {
-  width: 24px; height: 24px;
+  width: 26px; height: 26px;
   border-radius: 50%;
-  background: var(--bg-muted);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid color-mix(in srgb, var(--border) 82%, #ffffff 18%);
   color: var(--text-secondary);
   font-size: 10px;
   font-weight: 600;
@@ -232,23 +237,23 @@
 /* Segmented control */
 .segmented {
   display: inline-flex;
-  background: var(--bg-subtle);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 2px;
-  gap: 2px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid color-mix(in srgb, var(--border) 82%, #ffffff 18%);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 3px;
 }
 .segmented__btn {
-  padding: 4px 10px;
+  padding: 5px 12px;
   font-size: var(--fs-sm);
   color: var(--text-secondary);
-  border-radius: 3px;
+  border-radius: 999px;
   font-weight: 500;
 }
 .segmented__btn.is-active {
-  background: var(--bg-panel);
+  background: rgba(255, 255, 255, 0.96);
   color: var(--text-primary);
-  box-shadow: var(--shadow-xs);
+  box-shadow: 0 8px 18px rgba(52, 37, 15, 0.08);
 }
 
 /* Action items */

@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Check, Search } from "lucide-react";
+import { MenuRow } from "./ui";
 
 export type SelectOption<T extends string = string> = {
   value: T;
@@ -205,23 +206,20 @@ export function Select<T extends string>({
                   const isSelected = o.value === value;
                   const isClear = "_clear" in o;
                   return (
-                    <div
+                    <MenuRow
                       key={`${o.value}-${i}`}
                       role="option"
-                      aria-selected={isSelected}
-                      className={`menu__item${isActive ? " is-active" : ""}${
-                        !isClear && o.disabled ? " is-disabled" : ""
-                      }${isClear ? " menu__item--clear" : ""}`}
+                      ariaSelected={isSelected}
+                      icon={!isClear ? o.icon : undefined}
+                      label={o.label}
+                      hint={!isClear ? o.hint : undefined}
+                      right={isSelected ? <Check size={12} className="menu__item-check" /> : undefined}
+                      active={isActive}
+                      disabled={!isClear && o.disabled}
+                      subtle={isClear}
                       onMouseEnter={() => setActiveIdx(i)}
                       onClick={() => commit(i)}
-                    >
-                      {!isClear && o.icon && <span className="menu__item-icon">{o.icon}</span>}
-                      <span className="menu__item-label">
-                        {o.label}
-                        {!isClear && o.hint && <span className="menu__item-hint"> · {o.hint}</span>}
-                      </span>
-                      {isSelected && <Check size={12} className="menu__item-check" />}
-                    </div>
+                    />
                   );
                 })}
               </div>

@@ -6,11 +6,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { authClient, BetterAuthSession } from "../lib/authClient";
 import { getAuthMode, type AuthMode } from "../lib/authMode";
 import { setStoredUserId } from "../hooks/useCurrentUser";
+import { useSociety } from "../hooks/useSociety";
 
 type AuthContextValue = {
   mode: AuthMode;
@@ -25,7 +26,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const mode = getAuthMode();
   const sessionState = authClient.useSession();
-  const society = useQuery(api.society.get, {});
+  const society = useSociety();
   const resolveAuthSession = useMutation(api.users.resolveAuthSession);
   const syncKeyRef = useRef<string | null>(null);
   const [syncPending, setSyncPending] = useState(false);

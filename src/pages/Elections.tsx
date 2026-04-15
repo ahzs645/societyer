@@ -19,6 +19,10 @@ export function ElectionsPage() {
     api.elections.list,
     society ? { societyId: society._id } : "skip",
   );
+  const users = useQuery(
+    api.users.list,
+    society ? { societyId: society._id } : "skip",
+  );
   const myElections = useQuery(
     api.elections.listMine,
     society ? { societyId: society._id, userId: actingUserId } : "skip",
@@ -28,6 +32,7 @@ export function ElectionsPage() {
   const addQuestion = useMutation(api.elections.addQuestion);
   const snapshotEligibleVoters = useMutation(api.elections.snapshotEligibleVoters);
   const closeElection = useMutation(api.elections.close);
+  const tallyElection = useMutation(api.elections.tallyElection);
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
@@ -48,6 +53,11 @@ export function ElectionsPage() {
       description: "",
       opensAtISO: now.toISOString().slice(0, 16),
       closesAtISO: closes.toISOString().slice(0, 16),
+      nominationsOpenAtISO: now.toISOString().slice(0, 16),
+      nominationsCloseAtISO: new Date(now.getTime() + 3 * 86_400_000)
+        .toISOString()
+        .slice(0, 16),
+      scrutineerUserIds: [],
       questionTitle: "Election of directors",
       candidateLines: "",
     });
@@ -61,6 +71,13 @@ export function ElectionsPage() {
       description: form.description || undefined,
       opensAtISO: new Date(form.opensAtISO).toISOString(),
       closesAtISO: new Date(form.closesAtISO).toISOString(),
+      nominationsOpenAtISO: form.nominationsOpenAtISO
+        ? new Date(form.nominationsOpenAtISO).toISOString()
+        : undefined,
+      nominationsCloseAtISO: form.nominationsCloseAtISO
+        ? new Date(form.nominationsCloseAtISO).toISOString()
+        : undefined,
+      scrutineerUserIds: form.scrutineerUserIds,
       actingUserId,
     });
     const options = form.candidateLines
@@ -202,20 +219,22 @@ export function ElectionsPage() {
                     </Link>
                     {canManage && (
                       <>
-                        <button
-                          className="btn btn--ghost btn--sm"
-                          onClick={async () => {
-                            const result = await snapshotEligibleVoters({
-                              electionId: election._id,
-                              actingUserId,
-                            });
-                            toast.success(
-                              `Snapshotted ${result.eligibleCount} eligible voter(s)`,
-                            );
-                          }}
-                        >
-                          <Users size={12} /> Snapshot
-                        </button>
+                        {election.status === "Draft" && (
+                          <button
+                            className="btn btn--ghost btn--sm"
+                            onClick={async () => {
+                              const result = await snapshotEligibleVoters({
+                                electionId: election._id,
+                                actingUserId,
+                              });
+                              toast.success(
+                                `Snapshotted ${result.eligibleCount} eligible voter(s) and opened voting`,
+                              );
+                            }}
+                          >
+                            <Users size={12} /> Snapshot + open
+                          </button>
+                        )}
                         {election.status === "Open" && (
                           <button
                             className="btn btn--ghost btn--sm"
@@ -228,6 +247,20 @@ export function ElectionsPage() {
                             }}
                           >
                             <CheckCircle2 size={12} /> Close
+                          </button>
+                        )}
+                        {election.status === "Closed" && (
+                          <button
+                            className="btn btn--ghost btn--sm"
+                            onClick={async () => {
+                              await tallyElection({
+                                electionId: election._id,
+                                actingUserId,
+                              });
+                              toast.success("Results published");
+                            }}
+                          >
+                            <CheckCircle2 size={12} /> Publish results
                           </button>
                         )}
                       </>
@@ -296,6 +329,48 @@ export function ElectionsPage() {
                 />
               </Field>
             </div>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Nominations open">
+                <input
+                  className="input"
+                  type="datetime-local"
+                  value={form.nominationsOpenAtISO}
+                  onChange={(e) => setForm({ ...form, nominationsOpenAtISO: e.target.value })}
+                />
+              </Field>
+              <Field label="Nominations close">
+                <input
+                  className="input"
+                  type="datetime-local"
+                  value={form.nominationsCloseAtISO}
+                  onChange={(e) => setForm({ ...form, nominationsCloseAtISO: e.target.value })}
+                />
+              </Field>
+            </div>
+            <Field label="Scrutineers">
+              <div style={{ display: "grid", gap: 6 }}>
+                {(users ?? []).map((user) => {
+                  const checked = form.scrutineerUserIds.includes(user._id);
+                  return (
+                    <label key={user._id} className="checkbox">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          setForm((current: any) => ({
+                            ...current,
+                            scrutineerUserIds: checked
+                              ? current.scrutineerUserIds.filter((id: string) => id !== user._id)
+                              : [...current.scrutineerUserIds, user._id],
+                          }))
+                        }
+                      />
+                      {user.displayName} <span className="muted">({user.role})</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </Field>
             <Field label="Ballot question">
               <input
                 className="input"

@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Badge, Drawer, Field, RecordChip } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { Select } from "../components/Select";
@@ -115,10 +115,11 @@ export function MembersPage() {
             sortable: true,
             accessor: (r) => `${r.firstName} ${r.lastName}`,
             render: (r) => (
-              <span className="cell-chip">
-                <span className="cell-chip__avatar">{initials(r.firstName, r.lastName)}</span>
-                <span className="cell-chip__name">{r.firstName} {r.lastName}</span>
-              </span>
+              <RecordChip
+                tone="blue"
+                avatar={initials(r.firstName, r.lastName)}
+                label={`${r.firstName} ${r.lastName}`}
+              />
             ),
           },
           {

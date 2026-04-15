@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Badge, Drawer, Field, InspectorNote, RecordChip } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { Plus, Users, Trash2, Tag } from "lucide-react";
@@ -68,10 +68,11 @@ export function EmployeesPage() {
           {
             id: "lastName", header: "Name", sortable: true, accessor: (r) => `${r.firstName} ${r.lastName}`,
             render: (r) => (
-              <span className="cell-chip">
-                <span className="cell-chip__avatar">{initials(r.firstName, r.lastName)}</span>
-                <span className="cell-chip__name">{r.firstName} {r.lastName}</span>
-              </span>
+              <RecordChip
+                tone="blue"
+                avatar={initials(r.firstName, r.lastName)}
+                label={`${r.firstName} ${r.lastName}`}
+              />
             ),
           },
           { id: "role", header: "Role", sortable: true, accessor: (r) => r.role, render: (r) => <span className="cell-tag">{r.role}</span> },
@@ -95,6 +96,10 @@ export function EmployeesPage() {
       >
         {form && (
           <div>
+            <InspectorNote title="Payroll recordkeeping">
+              Keep remuneration, exemptions, and work status accurate here so year-end slips and
+              disclosure thresholds stay consistent.
+            </InspectorNote>
             <div className="row" style={{ gap: 12 }}>
               <Field label="First name"><input className="input" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></Field>
               <Field label="Last name"><input className="input" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></Field>

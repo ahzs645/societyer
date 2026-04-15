@@ -129,13 +129,21 @@ export const scanUpcoming = internalMutation({
     for (const s of societies) {
       if (!s) continue;
 
-      const [deadlines, filings, recent] = await Promise.all([
+      const [deadlines, filings, grantReports, screenings, recent] = await Promise.all([
         ctx.db
           .query("deadlines")
           .withIndex("by_society", (q) => q.eq("societyId", s._id))
           .collect(),
         ctx.db
           .query("filings")
+          .withIndex("by_society", (q) => q.eq("societyId", s._id))
+          .collect(),
+        ctx.db
+          .query("grantReports")
+          .withIndex("by_society", (q) => q.eq("societyId", s._id))
+          .collect(),
+        ctx.db
+          .query("volunteerScreenings")
           .withIndex("by_society", (q) => q.eq("societyId", s._id))
           .collect(),
         ctx.db
@@ -183,6 +191,48 @@ export const scanUpcoming = internalMutation({
             ? `Filing overdue as of ${f.dueDate}.`
             : `Filing due ${f.dueDate}.`,
           linkHref: "/filings",
+          createdAtISO: new Date().toISOString(),
+        });
+      }
+
+      for (const report of grantReports) {
+        if (report.status === "Submitted") continue;
+        const due = new Date(report.dueAtISO).getTime();
+        if (due > cutoff) continue;
+        const overdue = due < now;
+        const key = `general:/grants:${report.title}`;
+        if (alreadyNotified.has(key)) continue;
+        await ctx.db.insert("notifications", {
+          societyId: s._id,
+          kind: "general",
+          severity: overdue ? "err" : "warn",
+          title: overdue ? `Grant report overdue: ${report.title}` : `Grant report due soon: ${report.title}`,
+          body: overdue
+            ? `Grant reporting deadline passed on ${report.dueAtISO}.`
+            : `Grant reporting deadline is ${report.dueAtISO}.`,
+          linkHref: "/grants",
+          createdAtISO: new Date().toISOString(),
+        });
+      }
+
+      for (const screening of screenings) {
+        if (!screening.expiresAtISO) continue;
+        const due = new Date(screening.expiresAtISO).getTime();
+        if (due > cutoff) continue;
+        const overdue = due < now;
+        const key = `general:/volunteers:${screening.kind}`;
+        if (alreadyNotified.has(key)) continue;
+        await ctx.db.insert("notifications", {
+          societyId: s._id,
+          kind: "general",
+          severity: overdue ? "err" : "warn",
+          title: overdue
+            ? `Volunteer screening expired: ${screening.kind}`
+            : `Volunteer screening expiring soon: ${screening.kind}`,
+          body: overdue
+            ? `A volunteer screening deadline passed on ${screening.expiresAtISO}.`
+            : `A volunteer screening expires on ${screening.expiresAtISO}.`,
+          linkHref: "/volunteers",
           createdAtISO: new Date().toISOString(),
         });
       }

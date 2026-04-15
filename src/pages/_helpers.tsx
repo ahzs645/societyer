@@ -1,6 +1,6 @@
 import { Sparkles } from "lucide-react";
 import { ReactNode } from "react";
-import { EmptyState } from "../components/ui";
+import { EmptyState, TintedIconTile } from "../components/ui";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 
@@ -39,14 +39,17 @@ export function PageHeader({
 }) {
   return (
     <div className="page__header">
-      {icon && (
-        <span className={`page__icon icon-chip-${iconColor}`}>
-          {icon}
-        </span>
-      )}
-      <div className="page__intro">
-        <h1 className="page__title">{title}</h1>
-        {subtitle && <p className="page__subtitle">{subtitle}</p>}
+      <div className="page__header-main">
+        {icon && (
+          <TintedIconTile tone={iconColor} size="md" className="page__icon">
+            {icon}
+          </TintedIconTile>
+        )}
+        <div className="page__intro">
+          <div className="page__eyebrow">Workspace view</div>
+          <h1 className="page__title">{title}</h1>
+          {subtitle && <p className="page__subtitle">{subtitle}</p>}
+        </div>
       </div>
       {actions && <div className="page__actions">{actions}</div>}
     </div>

@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
-import { requireRole } from "./users";
+import { canActAs, requireRole } from "./users";
 import { getActiveBylawRuleSet } from "./lib/bylawRules";
 
 function fullName(member: { firstName: string; lastName: string }) {
@@ -38,8 +38,11 @@ export const list = query({
 });
 
 export const get = query({
-  args: { id: v.id("elections") },
-  handler: async (ctx, { id }) => {
+  args: {
+    id: v.id("elections"),
+    actingUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, { id, actingUserId }) => {
     const election = await ctx.db.get(id);
     if (!election) return null;
     const [questions, eligible, ballots, audit] = await Promise.all([
@@ -60,13 +63,51 @@ export const get = query({
         .withIndex("by_election", (q) => q.eq("electionId", id))
         .collect(),
     ]);
+    const actor = actingUserId ? await ctx.db.get(actingUserId) : null;
+    const canSeeSensitive =
+      !!actor &&
+      actor.societyId === election.societyId &&
+      canActAs(actor.role as any, "Director");
+    const viewerEligibility =
+      actor?.memberId && !canSeeSensitive
+        ? eligible.filter((row) => row.memberId === actor.memberId)
+        : [];
     return {
       election,
       questions: questions.sort((a, b) => a.order - b.order),
-      eligible,
-      ballots,
-      audit: audit.sort((a, b) => b.createdAtISO.localeCompare(a.createdAtISO)),
+      eligible: canSeeSensitive ? eligible : viewerEligibility,
+      ballots: canSeeSensitive ? ballots : [],
+      ballotCount: ballots.length,
+      audit: canSeeSensitive ? audit.sort((a, b) => b.createdAtISO.localeCompare(a.createdAtISO)) : [],
+      canSeeSensitive,
     };
+  },
+});
+
+export const listNominations = query({
+  args: {
+    electionId: v.id("elections"),
+    actingUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, { electionId, actingUserId }) => {
+    const election = await ctx.db.get(electionId);
+    if (!election) return [];
+    const actor = actingUserId ? await ctx.db.get(actingUserId) : null;
+    const canManage =
+      !!actor &&
+      actor.societyId === election.societyId &&
+      canActAs(actor.role as any, "Director");
+    const rows = await ctx.db
+      .query("electionNominations")
+      .withIndex("by_election", (q) => q.eq("electionId", electionId))
+      .collect();
+    const visible = canManage
+      ? rows
+      : rows.filter(
+          (row) =>
+            row.submittedByUserId === actingUserId || row.status === "OnBallot",
+        );
+    return visible.sort((a, b) => b.submittedAtISO.localeCompare(a.submittedAtISO));
   },
 });
 
@@ -103,7 +144,10 @@ export const create = mutation({
     description: v.optional(v.string()),
     opensAtISO: v.string(),
     closesAtISO: v.string(),
+    nominationsOpenAtISO: v.optional(v.string()),
+    nominationsCloseAtISO: v.optional(v.string()),
     eligibilityCutoffISO: v.optional(v.string()),
+    scrutineerUserIds: v.optional(v.array(v.id("users"))),
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
@@ -122,8 +166,11 @@ export const create = mutation({
       status: "Draft",
       opensAtISO: args.opensAtISO,
       closesAtISO: args.closesAtISO,
+      nominationsOpenAtISO: args.nominationsOpenAtISO,
+      nominationsCloseAtISO: args.nominationsCloseAtISO,
       eligibilityCutoffISO: args.eligibilityCutoffISO,
       anonymousBallot: rules.ballotIsAnonymous,
+      scrutineerUserIds: args.scrutineerUserIds,
       createdByUserId: args.actingUserId,
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
@@ -137,6 +184,41 @@ export const create = mutation({
       detail: args.title,
     });
     return id;
+  },
+});
+
+export const updateSettings = mutation({
+  args: {
+    electionId: v.id("elections"),
+    nominationsOpenAtISO: v.optional(v.string()),
+    nominationsCloseAtISO: v.optional(v.string()),
+    scrutineerUserIds: v.optional(v.array(v.id("users"))),
+    resultsSummary: v.optional(v.string()),
+    evidenceDocumentId: v.optional(v.id("documents")),
+    actingUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const election = await ctx.db.get(args.electionId);
+    if (!election) throw new Error("Election not found.");
+    const { user } = await requireRole(ctx, {
+      actingUserId: args.actingUserId,
+      societyId: election.societyId,
+      required: "Director",
+    });
+    await ctx.db.patch(args.electionId, {
+      nominationsOpenAtISO: args.nominationsOpenAtISO,
+      nominationsCloseAtISO: args.nominationsCloseAtISO,
+      scrutineerUserIds: args.scrutineerUserIds,
+      resultsSummary: args.resultsSummary,
+      evidenceDocumentId: args.evidenceDocumentId,
+      updatedAtISO: new Date().toISOString(),
+    });
+    await logAudit(ctx, {
+      societyId: election.societyId,
+      electionId: args.electionId,
+      actorName: user?.displayName ?? "System",
+      action: "settings-updated",
+    });
   },
 });
 
@@ -185,6 +267,130 @@ export const addQuestion = mutation({
       detail: args.title,
     });
     return id;
+  },
+});
+
+export const submitNomination = mutation({
+  args: {
+    electionId: v.id("elections"),
+    questionId: v.optional(v.id("electionQuestions")),
+    nomineeName: v.string(),
+    nomineeEmail: v.optional(v.string()),
+    statement: v.optional(v.string()),
+    actingUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const election = await ctx.db.get(args.electionId);
+    if (!election) throw new Error("Election not found.");
+    if (!args.actingUserId) throw new Error("A signed-in member is required.");
+    const actor = await ctx.db.get(args.actingUserId);
+    if (!actor?.memberId) throw new Error("Only confirmed members can submit nominations.");
+    const nowISO = new Date().toISOString();
+    if (election.nominationsOpenAtISO && nowISO < election.nominationsOpenAtISO) {
+      throw new Error("Nominations are not open yet.");
+    }
+    if (election.nominationsCloseAtISO && nowISO > election.nominationsCloseAtISO) {
+      throw new Error("Nominations are closed.");
+    }
+    const id = await ctx.db.insert("electionNominations", {
+      societyId: election.societyId,
+      electionId: args.electionId,
+      questionId: args.questionId,
+      memberId: actor.memberId,
+      nomineeName: args.nomineeName,
+      nomineeEmail: args.nomineeEmail,
+      statement: args.statement,
+      status: "Submitted",
+      submittedByUserId: args.actingUserId,
+      submittedAtISO: nowISO,
+    });
+    await logAudit(ctx, {
+      societyId: election.societyId,
+      electionId: args.electionId,
+      actorName: actor.displayName,
+      action: "nomination-submitted",
+      detail: args.nomineeName,
+    });
+    return id;
+  },
+});
+
+export const reviewNomination = mutation({
+  args: {
+    id: v.id("electionNominations"),
+    status: v.string(),
+    actingUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, { id, status, actingUserId }) => {
+    const nomination = await ctx.db.get(id);
+    if (!nomination) throw new Error("Nomination not found.");
+    const { user } = await requireRole(ctx, {
+      actingUserId,
+      societyId: nomination.societyId,
+      required: "Director",
+    });
+    await ctx.db.patch(id, {
+      status,
+      reviewedByUserId: actingUserId,
+      reviewedAtISO: new Date().toISOString(),
+    });
+    await logAudit(ctx, {
+      societyId: nomination.societyId,
+      electionId: nomination.electionId,
+      actorName: user?.displayName ?? "System",
+      action: "nomination-reviewed",
+      detail: `${nomination.nomineeName}: ${status}`,
+    });
+  },
+});
+
+export const publishNominationToBallot = mutation({
+  args: {
+    id: v.id("electionNominations"),
+    questionId: v.id("electionQuestions"),
+    actingUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, { id, questionId, actingUserId }) => {
+    const nomination = await ctx.db.get(id);
+    if (!nomination) throw new Error("Nomination not found.");
+    const question = await ctx.db.get(questionId);
+    if (!question || question.electionId !== nomination.electionId) {
+      throw new Error("Election question not found.");
+    }
+    const { user } = await requireRole(ctx, {
+      actingUserId,
+      societyId: nomination.societyId,
+      required: "Director",
+    });
+    const optionId = `nomination-${id}`;
+    const hasOption = question.options.some((option) => option.id === optionId);
+    if (!hasOption) {
+      await ctx.db.patch(questionId, {
+        options: [
+          ...question.options,
+          {
+            id: optionId,
+            label: nomination.nomineeName,
+            memberId: nomination.memberId,
+            statement: nomination.statement,
+          },
+        ],
+      });
+    }
+    await ctx.db.patch(id, {
+      questionId,
+      status: "OnBallot",
+      reviewedByUserId: actingUserId,
+      reviewedAtISO: new Date().toISOString(),
+      addedToBallotAtISO: new Date().toISOString(),
+    });
+    await logAudit(ctx, {
+      societyId: nomination.societyId,
+      electionId: nomination.electionId,
+      actorName: user?.displayName ?? "System",
+      action: "nomination-added-to-ballot",
+      detail: nomination.nomineeName,
+    });
   },
 });
 
@@ -379,9 +585,58 @@ export const close = mutation({
   },
 });
 
+export const tallyElection = mutation({
+  args: {
+    electionId: v.id("elections"),
+    resultsSummary: v.optional(v.string()),
+    evidenceDocumentId: v.optional(v.id("documents")),
+    actingUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, { electionId, resultsSummary, evidenceDocumentId, actingUserId }) => {
+    const election = await ctx.db.get(electionId);
+    if (!election) throw new Error("Election not found.");
+    const { user } = await requireRole(ctx, {
+      actingUserId,
+      societyId: election.societyId,
+      required: "Director",
+    });
+    if (election.status === "Open") {
+      throw new Error("Close the election before publishing results.");
+    }
+    await ctx.db.patch(electionId, {
+      status: "Tallied",
+      talliedAtISO: new Date().toISOString(),
+      resultsPublishedAtISO: new Date().toISOString(),
+      resultsSummary,
+      evidenceDocumentId,
+      updatedAtISO: new Date().toISOString(),
+    });
+    await logAudit(ctx, {
+      societyId: election.societyId,
+      electionId,
+      actorName: user?.displayName ?? "System",
+      action: "tallied",
+      detail: "Election results marked as published.",
+    });
+  },
+});
+
 export const tally = query({
-  args: { electionId: v.id("elections") },
-  handler: async (ctx, { electionId }) => {
+  args: {
+    electionId: v.id("elections"),
+    actingUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, { electionId, actingUserId }) => {
+    const election = await ctx.db.get(electionId);
+    if (!election) return [];
+    const actor = actingUserId ? await ctx.db.get(actingUserId) : null;
+    const canSeeLiveResults =
+      !!actor &&
+      actor.societyId === election.societyId &&
+      canActAs(actor.role as any, "Director");
+    if (election.status === "Open" && !canSeeLiveResults) {
+      return [];
+    }
     const [questions, ballots] = await Promise.all([
       ctx.db
         .query("electionQuestions")

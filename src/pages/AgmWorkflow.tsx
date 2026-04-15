@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
+import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import {
@@ -40,7 +41,8 @@ export function AgmWorkflowPage() {
   const deliveries = useQuery(api.agm.noticeDeliveries, id ? { meetingId: id as Id<"meetings"> } : "skip");
   const init = useMutation(api.agm.init);
   const markStep = useMutation(api.agm.markStep);
-  const queueNotice = useMutation(api.agm.queueNoticeToAllVotingMembers);
+  const sendMeetingNotice = useAction(api.communications.sendMeetingNotice);
+  const actingUserId = useCurrentUserId() ?? undefined;
   const { rules } = useBylawRules();
 
   const [noticeChannel, setNoticeChannel] = useState<"email" | "mail" | "in-person">("email");
@@ -150,8 +152,13 @@ export function AgmWorkflowPage() {
                           <option value="in-person">In person</option>
                         </select>
                         <button className="btn-action btn-action--primary" onClick={async () => {
-                          const res = await queueNotice({ societyId: society._id, meetingId: meeting._id, channel: noticeChannel });
-                          await advance("notice", { noticeSentAt: new Date().toISOString(), noticeRecipientCount: res.queued });
+                          const res = await sendMeetingNotice({
+                            societyId: society._id,
+                            meetingId: meeting._id,
+                            channel: noticeChannel,
+                            actingUserId,
+                          });
+                          await advance("notice", { noticeSentAt: new Date().toISOString(), noticeRecipientCount: res.deliveredCount });
                         }}>
                           <Send size={12} /> Send notice to all voting members
                         </button>

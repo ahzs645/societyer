@@ -30,7 +30,7 @@ export function MeetingDetailPage() {
     society ? { societyId: society._id } : "skip",
   );
   const directorNames = (directors ?? []).map((d: any) => `${d.firstName} ${d.lastName}`);
-  const generate = useMutation(api.minutes.generateDraft);
+  const generate = useAction(api.minutes.generateDraft);
   const updateMeeting = useMutation(api.meetings.update);
   const updateMinutes = useMutation(api.minutes.update);
   const saveTranscriptText = useMutation(api.transcripts.saveText);

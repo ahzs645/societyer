@@ -16,7 +16,10 @@ function env(name: string): string | undefined {
 
 export const providers = {
   storage(): Provider<"rustfs" | "demo"> {
-    const live = !!env("RUSTFS_ENDPOINT") && !!env("RUSTFS_ACCESS_KEY");
+    const live =
+      !!env("RUSTFS_ENDPOINT") &&
+      !!env("RUSTFS_ACCESS_KEY") &&
+      !!env("RUSTFS_SECRET_KEY");
     return { id: live ? "rustfs" : "demo", live };
   },
   transcription(): Provider<"whisper" | "demo"> {

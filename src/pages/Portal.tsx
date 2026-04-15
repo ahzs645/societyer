@@ -4,7 +4,7 @@ import { api } from "../../convex/_generated/api";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useAuth } from "../auth/AuthProvider";
-import { ArrowLeft, Calendar, Vote, UserRound } from "lucide-react";
+import { ArrowLeft, Calendar, Vote, UserRound, HandHeart, BadgeDollarSign } from "lucide-react";
 
 export function PortalPage() {
   const auth = useAuth();
@@ -124,6 +124,38 @@ export function PortalPage() {
               ))}
             </div>
           </div>
+
+          {society.publicSlug && (
+            <div className="two-col" style={{ marginTop: 24 }}>
+              <div className="card">
+                <div className="card__head">
+                  <h2 className="card__title">Volunteer intake</h2>
+                </div>
+                <div className="card__body" style={{ display: "grid", gap: 10 }}>
+                  <div className="muted" style={{ fontSize: 13 }}>
+                    Submit volunteer interest directly into the society intake queue.
+                  </div>
+                  <Link to={`/public/${society.publicSlug}/volunteer-apply`} className="btn btn--accent">
+                    <HandHeart size={14} /> Apply to volunteer
+                  </Link>
+                </div>
+              </div>
+
+              <div className="card">
+                <div className="card__head">
+                  <h2 className="card__title">Funding intake</h2>
+                </div>
+                <div className="card__body" style={{ display: "grid", gap: 10 }}>
+                  <div className="muted" style={{ fontSize: 13 }}>
+                    Submit a grant or funding request without leaving the member portal flow.
+                  </div>
+                  <Link to={`/public/${society.publicSlug}/grant-apply`} className="btn btn--accent">
+                    <BadgeDollarSign size={14} /> Submit funding request
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </section>
     </div>

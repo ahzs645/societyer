@@ -99,6 +99,20 @@ Societyer now supports two identity modes:
 npm run dev:full
 ```
 
+## New operating modules
+
+- **Communications**: `/app/communications` adds reusable templates, campaign history, member contact preferences, AGM notice delivery proofs, and live email sending when Resend is configured.
+- **Volunteers**: `/app/volunteers` adds volunteer intake, committee alignment, screening expiry tracking, and annual renewal dates.
+- **Grants**: `/app/grants` adds grant pipeline stages, report deadlines, linked restricted-purpose tracking, and board-facing summaries.
+- **Public transparency**: `/app/transparency` manages what is published; `/public/:slug` renders the public-facing transparency page without exposing the private app.
+
+## Live integrations
+
+- **Resend**: set `RESEND_API_KEY` plus `RESEND_FROM_EMAIL` to turn digest emails and communications into real outbound email.
+- **Stripe**: set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` to enable real hosted checkout. Point Stripe webhooks at Convex HTTP route `/stripe/webhook`.
+- **Wave**: set `WAVE_ACCESS_TOKEN` and `WAVE_BUSINESS_ID` to switch the accounting sync from demo data to live GraphQL fetches.
+- **Filing evidence**: BC still has no public Societies Online filing API. This build improves the manual path by storing submission method, confirmation number, fee paid, and linked receipt/evidence documents when a filing is marked filed.
+
 Auth mode uses a small SQLite auth database configured by `AUTH_DB_PATH`, and maps signed-in identities into the existing Convex `users` / `members` records.
 
 ---

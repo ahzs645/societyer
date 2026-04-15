@@ -1,5 +1,4 @@
 // Accounting adapter — Wave in live mode, demo-seeded data otherwise.
-// Wave's API is GraphQL; the live branch is a clearly marked stub.
 import { providers } from "./env";
 
 export type WaveAccount = {
@@ -53,10 +52,114 @@ const DEMO_TX: WaveTransaction[] = [
   { externalId: "tx_1010", accountExternalId: "acc_chk_01", date: daysAgo(25), description: "Staff laptops (2)", amountCents: -2_240_00, category: "Facilities & utilities" },
 ];
 
+function env(name: string): string | undefined {
+  try {
+    return (globalThis as any)?.process?.env?.[name];
+  } catch {
+    return undefined;
+  }
+}
+
+async function waveGraphQL<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+  const endpoint = env("WAVE_GRAPHQL_ENDPOINT") ?? "https://gql.waveapps.com/graphql/public";
+  const token = env("WAVE_ACCESS_TOKEN");
+  if (!token) {
+    throw new Error("Live Wave sync requires WAVE_ACCESS_TOKEN.");
+  }
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+
+  if (!response.ok) {
+    const detail = (await response.text().catch(() => "")).trim();
+    throw new Error(detail || `Wave request failed with status ${response.status}.`);
+  }
+
+  const data = await response.json();
+  if ((data as any)?.errors?.length) {
+    throw new Error((data as any).errors.map((row: any) => row.message).join("; "));
+  }
+  return (data as any).data as T;
+}
+
 export async function waveListAccounts(): Promise<{ provider: "wave" | "demo"; accounts: WaveAccount[] }> {
   const p = providers.accounting();
   if (p.id === "demo") return { provider: "demo", accounts: DEMO_ACCOUNTS };
-  throw new Error("Live Wave sync requires WAVE_ACCESS_TOKEN + WAVE_BUSINESS_ID and a GraphQL action.");
+  const businessId = env("WAVE_BUSINESS_ID");
+  if (!businessId) {
+    throw new Error("Live Wave sync requires WAVE_BUSINESS_ID.");
+  }
+
+  const query = `
+    query($businessId: ID!, $page: Int!, $pageSize: Int!) {
+      business(id: $businessId) {
+        accounts(page: $page, pageSize: $pageSize) {
+          pageInfo {
+            currentPage
+            totalPages
+          }
+          edges {
+            node {
+              id
+              name
+              type {
+                value
+              }
+              subtype {
+                value
+              }
+              balance
+              balanceInBusinessCurrency
+              normalBalanceType
+              isArchived
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const rows: WaveAccount[] = [];
+  let page = 1;
+  let totalPages = 1;
+  do {
+    const data = await waveGraphQL<any>(query, { businessId, page, pageSize: 100 });
+    const connection = data?.business?.accounts;
+    totalPages = connection?.pageInfo?.totalPages ?? page;
+    for (const edge of connection?.edges ?? []) {
+      const node = edge?.node;
+      if (!node || node.isArchived) continue;
+      rows.push({
+        externalId: node.id,
+        name: node.name,
+        currency: "CAD",
+        accountType:
+          node.type?.value === "BANK"
+            ? "Bank"
+            : node.type?.value === "CREDIT_CARD"
+            ? "Credit"
+            : node.type?.value === "INCOME"
+            ? "Income"
+            : node.type?.value === "EXPENSE"
+            ? "Expense"
+            : "Asset",
+        balanceCents: Math.round(
+          Number(node.balanceInBusinessCurrency ?? node.balance ?? 0) * 100,
+        ),
+        isRestricted: /grant|restricted|deferred/i.test(`${node.name} ${node.subtype?.value ?? ""}`),
+        restrictedPurpose: /grant|restricted/i.test(node.name) ? node.name : undefined,
+      });
+    }
+    page += 1;
+  } while (page <= totalPages);
+
+  return { provider: "wave", accounts: rows };
 }
 
 export async function waveListTransactions(args?: {
@@ -69,7 +172,73 @@ export async function waveListTransactions(args?: {
       : DEMO_TX;
     return { provider: "demo", transactions: filtered };
   }
-  throw new Error("Live Wave sync requires WAVE_ACCESS_TOKEN + WAVE_BUSINESS_ID and a GraphQL action.");
+  const businessId = env("WAVE_BUSINESS_ID");
+  if (!businessId) {
+    throw new Error("Live Wave sync requires WAVE_BUSINESS_ID.");
+  }
+
+  const query = `
+    query($businessId: ID!, $page: Int!, $pageSize: Int!) {
+      business(id: $businessId) {
+        invoices(page: $page, pageSize: $pageSize) {
+          pageInfo {
+            currentPage
+            totalPages
+          }
+          edges {
+            node {
+              id
+              title
+              invoiceDate
+              status
+              customer {
+                name
+              }
+              total {
+                value
+              }
+              amountPaid {
+                value
+              }
+              items {
+                account {
+                  id
+                  name
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const rows: WaveTransaction[] = [];
+  let page = 1;
+  let totalPages = 1;
+  do {
+    const data = await waveGraphQL<any>(query, { businessId, page, pageSize: 100 });
+    const connection = data?.business?.invoices;
+    totalPages = connection?.pageInfo?.totalPages ?? page;
+    for (const edge of connection?.edges ?? []) {
+      const node = edge?.node;
+      if (!node?.invoiceDate) continue;
+      if (args?.sinceISO && node.invoiceDate < args.sinceISO) continue;
+      const paidValue = Number(node.amountPaid?.value ?? node.total?.value ?? 0);
+      rows.push({
+        externalId: node.id,
+        accountExternalId: node.items?.[0]?.account?.id ?? "wave-income",
+        date: node.invoiceDate,
+        description: node.title || `Invoice ${node.id}`,
+        amountCents: Math.round(paidValue * 100),
+        category: node.items?.[0]?.account?.name ?? "Invoice",
+        counterparty: node.customer?.name,
+      });
+    }
+    page += 1;
+  } while (page <= totalPages);
+
+  return { provider: "wave", transactions: rows };
 }
 
 export function waveOAuthUrl(args: { redirectUri: string; state: string }): string {

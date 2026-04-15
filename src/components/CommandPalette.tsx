@@ -18,6 +18,10 @@ import {
   Target,
   ListTodo,
   CalendarClock,
+  Mail,
+  HandHeart,
+  BadgeDollarSign,
+  Globe,
 } from "lucide-react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -35,9 +39,13 @@ const ITEMS = [
   { label: "Minutes", to: "/app/minutes", icon: FileText, kind: "Navigate" },
   { label: "Filings", to: "/app/filings", icon: ClipboardList, kind: "Navigate" },
   { label: "Deadlines", to: "/app/deadlines", icon: Calendar, kind: "Navigate" },
+  { label: "Communications", to: "/app/communications", icon: Mail, kind: "Navigate" },
   { label: "Documents", to: "/app/documents", icon: FolderOpen, kind: "Navigate" },
+  { label: "Volunteers", to: "/app/volunteers", icon: HandHeart, kind: "Navigate" },
   { label: "Conflicts of interest", to: "/app/conflicts", icon: AlertTriangle, kind: "Navigate" },
   { label: "Financials", to: "/app/financials", icon: PiggyBank, kind: "Navigate" },
+  { label: "Grants", to: "/app/grants", icon: BadgeDollarSign, kind: "Navigate" },
+  { label: "Public transparency", to: "/app/transparency", icon: Globe, kind: "Navigate" },
   { label: "Privacy (PIPA)", to: "/app/privacy", icon: Shield, kind: "Navigate" },
   { label: "Settings", to: "/app/settings", icon: Settings, kind: "Navigate" },
 ];

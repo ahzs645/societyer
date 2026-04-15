@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { Plus, UserCheck, Trash2, Tag } from "lucide-react";
@@ -100,6 +100,10 @@ export function ProxiesPage() {
       >
         {form && (
           <div>
+            <InspectorNote tone="warn" title="Proxy rules come from your bylaws">
+              Confirm the meeting, holder eligibility, and appointment limits before saving. This
+              record should match the signed proxy form kept with meeting materials.
+            </InspectorNote>
             <Field label="Meeting">
               <select className="input" value={form.meetingId ?? ""} onChange={(e) => setForm({ ...form, meetingId: e.target.value })}>
                 {(meetings ?? []).map((m: any) => <option key={m._id} value={m._id}>{m.title}</option>)}

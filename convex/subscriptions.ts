@@ -1,9 +1,15 @@
+// @ts-nocheck
 import { v } from "convex/values";
 import { query, mutation, action } from "./_generated/server";
 import { api } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { requireRole } from "./users";
 import { createCheckoutSession, simulateWebhookFromCheckout } from "./providers/billing";
+
+function frontendAppUrl(path: string) {
+  const base = (globalThis as any)?.process?.env?.APP_BASE_URL ?? "http://localhost:5173";
+  return `${base.replace(/\/$/, "")}/#${path.startsWith("/") ? path : `/${path}`}`;
+}
 
 export const plans = query({
   args: { societyId: v.id("societies") },
@@ -114,12 +120,18 @@ export const beginCheckout = action({
       priceCents: plan.priceCents,
       currency: plan.currency,
       interval: plan.interval as any,
-      successUrl: "http://localhost:5173/membership/success",
-      cancelUrl: "http://localhost:5173/membership",
+      successUrl:
+        (globalThis as any)?.process?.env?.STRIPE_SUCCESS_URL ??
+        frontendAppUrl("/app/membership?checkout=success"),
+      cancelUrl:
+        (globalThis as any)?.process?.env?.STRIPE_CANCEL_URL ??
+        frontendAppUrl("/app/membership?checkout=cancel"),
       email: args.email,
+      priceId: plan.stripePriceId,
       metadata: {
-        societyId: args.societyId,
-        planId: args.planId,
+        societyId: String(args.societyId),
+        planId: String(args.planId),
+        fullName: args.fullName,
       },
     });
 
@@ -225,5 +237,162 @@ export const simulateActivation = mutation({
       linkHref: "/membership",
       createdAtISO: new Date().toISOString(),
     });
+  },
+});
+
+export const handleStripeEvent = mutation({
+  args: {
+    type: v.string(),
+    payload: v.string(),
+  },
+  handler: async (ctx, { type, payload }) => {
+    const object = JSON.parse(payload);
+
+    if (type === "checkout.session.completed") {
+      const metadata = object?.metadata ?? {};
+      const societyId = metadata.societyId as Id<"societies"> | undefined;
+      const planId = metadata.planId as Id<"subscriptionPlans"> | undefined;
+      const email = object?.customer_email ?? object?.customer_details?.email;
+      if (!societyId || !planId || !email) return;
+      const plan = await ctx.db.get(planId);
+      if (!plan) return;
+
+      const pending = await ctx.db
+        .query("memberSubscriptions")
+        .withIndex("by_email", (q) => q.eq("email", email))
+        .collect();
+      const match = pending.find(
+        (row) => row.societyId === societyId && row.planId === planId && row.status === "pending",
+      );
+      const members = await ctx.db
+        .query("members")
+        .withIndex("by_society", (q) => q.eq("societyId", societyId))
+        .collect();
+      const member = members.find(
+        (row) => row.email?.toLowerCase() === String(email).toLowerCase(),
+      );
+
+      const payloadPatch = {
+        memberId: member?._id,
+        status: "active",
+        stripeCustomerId: object?.customer ?? undefined,
+        stripeSubscriptionId: object?.subscription ?? undefined,
+        lastPaymentAtISO: new Date().toISOString(),
+        lastPaymentCents: typeof object?.amount_total === "number" ? object.amount_total : plan.priceCents,
+        currentPeriodEndISO:
+          plan.interval === "one_time"
+            ? undefined
+            : new Date(
+                Date.now() + (plan.interval === "year" ? 365 : 31) * 24 * 60 * 60 * 1000,
+              ).toISOString(),
+      };
+
+      if (match) {
+        await ctx.db.patch(match._id, payloadPatch);
+      } else {
+        await ctx.db.insert("memberSubscriptions", {
+          societyId,
+          planId,
+          memberId: member?._id,
+          email,
+          fullName:
+            metadata.fullName ??
+            object?.customer_details?.name ??
+            object?.customer_email,
+          startedAtISO: new Date().toISOString(),
+          demo: false,
+          ...payloadPatch,
+        });
+      }
+
+      await ctx.db.insert("notifications", {
+        societyId,
+        kind: "billing",
+        severity: "success",
+        title: `Stripe checkout completed: ${plan.name}`,
+        body: `${email} activated a ${plan.interval} subscription.`,
+        linkHref: "/membership",
+        createdAtISO: new Date().toISOString(),
+      });
+      return;
+    }
+
+    if (type === "invoice.paid" || type === "invoice.payment_failed") {
+      const subscriptionId = object?.subscription;
+      if (!subscriptionId) return;
+      const subscriptions = await ctx.db.query("memberSubscriptions").collect();
+      const match = subscriptions.find(
+        (row) => row.stripeSubscriptionId === subscriptionId,
+      );
+      if (!match) return;
+      const patch: Record<string, unknown> = {
+        lastPaymentAtISO: new Date().toISOString(),
+      };
+      if (typeof object?.amount_paid === "number") {
+        patch.lastPaymentCents = object.amount_paid;
+      }
+      if (type === "invoice.payment_failed") {
+        patch.status = "past_due";
+      } else if (match.status !== "canceled") {
+        patch.status = "active";
+      }
+      const linePeriodEnd = object?.lines?.data?.[0]?.period?.end;
+      if (typeof linePeriodEnd === "number") {
+        patch.currentPeriodEndISO = new Date(linePeriodEnd * 1000).toISOString();
+      }
+      await ctx.db.patch(match._id, patch);
+      await ctx.db.insert("notifications", {
+        societyId: match.societyId,
+        kind: "billing",
+        severity: type === "invoice.payment_failed" ? "warn" : "success",
+        title:
+          type === "invoice.payment_failed"
+            ? `Subscription payment failed`
+            : `Subscription payment received`,
+        body:
+          type === "invoice.payment_failed"
+            ? `${match.fullName} is now past due.`
+            : `${match.fullName} payment recorded.`,
+        linkHref: "/membership",
+        createdAtISO: new Date().toISOString(),
+      });
+      return;
+    }
+
+    if (
+      type === "customer.subscription.deleted" ||
+      type === "customer.subscription.updated"
+    ) {
+      const subscriptionId = object?.id;
+      if (!subscriptionId) return;
+      const subscriptions = await ctx.db.query("memberSubscriptions").collect();
+      const match = subscriptions.find(
+        (row) => row.stripeSubscriptionId === subscriptionId,
+      );
+      if (!match) return;
+      const status =
+        type === "customer.subscription.deleted"
+          ? "canceled"
+          : object?.status === "past_due"
+          ? "past_due"
+          : object?.status ?? match.status;
+      await ctx.db.patch(match._id, {
+        status,
+        canceledAtISO:
+          status === "canceled" ? new Date().toISOString() : match.canceledAtISO,
+      });
+      await ctx.db.insert("notifications", {
+        societyId: match.societyId,
+        kind: "billing",
+        severity: status === "canceled" ? "warn" : "info",
+        title:
+          status === "canceled"
+            ? "Stripe subscription canceled"
+            : "Stripe subscription updated",
+        body: `${match.fullName} is now ${status}.`,
+        linkHref: "/membership",
+        createdAtISO: new Date().toISOString(),
+      });
+    }
   },
 });

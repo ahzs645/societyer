@@ -1,4 +1,4 @@
-import { ReactNode, useMemo, useRef, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { ViewBar } from "./primitives";
 import {
@@ -8,6 +8,7 @@ import {
   FilterPopover,
   applyFilters,
 } from "./FilterBar";
+import { MenuRow, MenuSectionLabel, Pill } from "./ui";
 
 export type Column<T> = {
   id: string;
@@ -60,6 +61,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   const [sort, setSort] = useState<SortState>(defaultSort ?? null);
   const filterBtnRef = useRef<HTMLButtonElement>(null);
   const sortBtnRef = useRef<HTMLButtonElement>(null);
+  const sortColumn = sort ? columns.find((column) => column.id === sort.columnId) : null;
 
   const filtered = useMemo(() => {
     let rows = data;
@@ -116,6 +118,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
         count={filtered.length}
         icon={icon}
         filterBtnRef={filterBtnRef}
+        sortBtnRef={sortBtnRef}
         onFilter={filterFields?.length ? () => setFilterOpen((v) => !v) : undefined}
         onSort={() => setSortOpen((v) => !v)}
       />
@@ -156,17 +159,15 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
             placeholder={searchPlaceholder ?? "Search…"}
           />
         </div>
-        <button
-          ref={sortBtnRef}
-          className="view-bar__btn"
-          onClick={() => setSortOpen((v) => !v)}
-          style={{ marginLeft: 4 }}
-        >
-          {sort
-            ? `Sort: ${columns.find((c) => c.id === sort.columnId)?.id ?? ""} ${sort.dir === "asc" ? "↑" : "↓"}`
-            : "Sort"}
-        </button>
-        <div className="muted" style={{ marginLeft: "auto", fontSize: "var(--fs-sm)" }}>
+        {sortColumn && (
+          <div className="table-toolbar__state">
+            <span className="muted">Sorted by</span>
+            <Pill size="sm">
+              {typeof sortColumn.header === "string" ? sortColumn.header : sortColumn.id} {sort?.dir === "asc" ? "↑" : "↓"}
+            </Pill>
+          </div>
+        )}
+        <div className="muted table-toolbar__summary">
           {filtered.length} of {data.length}
         </div>
       </div>
@@ -197,6 +198,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
           {filtered.map((row) => (
             <tr
               key={rowKey(row)}
+              className={renderRowActions ? "table__row--actions" : undefined}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               style={{ cursor: onRowClick ? "pointer" : undefined }}
             >
@@ -225,8 +227,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
             <tr>
               <td
                 colSpan={columns.length + (renderRowActions ? 1 : 0)}
-                className="muted"
-                style={{ textAlign: "center", padding: 24 }}
+                className="table__empty"
               >
                 {data.length === 0 ? emptyMessage : "No rows match the current filters."}
               </td>
@@ -252,7 +253,7 @@ function SortPopover<T>({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  useMemo(() => {
+  useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (!ref.current) return;
       if (ref.current.contains(e.target as Node)) return;
@@ -275,27 +276,32 @@ function SortPopover<T>({
 
   return (
     <div className="popover" ref={ref} style={style}>
-      <div className="popover__section">Sort by</div>
+      <MenuSectionLabel>Sort ascending</MenuSectionLabel>
       {columns.map((c) => (
-        <div key={c.id} className="popover__item" onClick={() => onPick({ columnId: c.id, dir: "asc" })}>
-          {typeof c.header === "string" ? c.header : c.id} ↑
-        </div>
+        <MenuRow
+          key={c.id}
+          label={typeof c.header === "string" ? c.header : c.id}
+          hint="Ascending"
+          right={current?.columnId === c.id && current?.dir === "asc" ? <Pill size="sm">Current</Pill> : null}
+          onClick={() => onPick({ columnId: c.id, dir: "asc" })}
+        />
       ))}
+      <div className="menu__separator" />
+      <MenuSectionLabel>Sort descending</MenuSectionLabel>
       {columns.map((c) => (
-        <div
+        <MenuRow
           key={c.id + "-d"}
-          className="popover__item"
+          label={typeof c.header === "string" ? c.header : c.id}
+          hint="Descending"
+          right={current?.columnId === c.id && current?.dir === "desc" ? <Pill size="sm">Current</Pill> : null}
           onClick={() => onPick({ columnId: c.id, dir: "desc" })}
-        >
-          {typeof c.header === "string" ? c.header : c.id} ↓
-        </div>
+        />
       ))}
       {current && (
         <>
-          <div className="popover__section">Current</div>
-          <div className="popover__item" onClick={() => onPick(null)}>
-            Clear sort
-          </div>
+          <div className="menu__separator" />
+          <MenuSectionLabel>Current</MenuSectionLabel>
+          <MenuRow label="Clear sort" subtle onClick={() => onPick(null)} />
         </>
       )}
     </div>

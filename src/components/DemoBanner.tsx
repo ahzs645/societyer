@@ -1,14 +1,15 @@
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { isDemoMode } from "../lib/demoMode";
 import { Sparkles, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { useConfirm } from "./Modal";
 import { useToast } from "./Toast";
+import { useSociety } from "../hooks/useSociety";
 
 export function DemoBanner() {
   const demo = isDemoMode();
-  const society = useQuery(api.society.get, {});
+  const society = useSociety();
   const seed = useMutation(api.seed.run);
   const reset = useMutation(api.seed.reset);
   const confirm = useConfirm();

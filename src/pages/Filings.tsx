@@ -2,13 +2,13 @@ import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useSociety } from "../hooks/useSociety";
+import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Drawer, Field } from "../components/ui";
+import { Drawer, Field, InspectorNote } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
-import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Plus, Check, ClipboardList, Tag, Calendar, Bot } from "lucide-react";
 import { formatDate, money } from "../lib/format";
@@ -33,14 +33,20 @@ const FILING_FIELDS: FilterField<any>[] = [
 
 export function FilingsPage() {
   const society = useSociety();
-  const filings = useQuery(api.filings.list, society ? { societyId: society._id } : "skip");
-  const create = useMutation(api.filings.create);
-  const markFiled = useMutation(api.filings.markFiled);
-  const prompt = usePrompt();
-  const toast = useToast();
+  const actingUserId = useCurrentUserId() ?? undefined;
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [botFor, setBotFor] = useState<{ id: any; label: string } | null>(null);
+  const [completeDraft, setCompleteDraft] = useState<any | null>(null);
+  const filings = useQuery(api.filings.list, society ? { societyId: society._id } : "skip");
+  const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
+  const filingGuidance = useQuery(
+    api.filings.guidance,
+    completeDraft?.kind ? { kind: completeDraft.kind } : "skip",
+  );
+  const create = useMutation(api.filings.create);
+  const markFiled = useMutation(api.filings.markFiled);
+  const toast = useToast();
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -49,7 +55,7 @@ export function FilingsPage() {
     setForm({ kind: "AnnualReport", periodLabel: "", dueDate: new Date().toISOString().slice(0, 10), status: "Upcoming" });
     setOpen(true);
   };
-  const save = async () => { await create({ societyId: society._id, ...form }); setOpen(false); };
+  const save = async () => { await create({ societyId: society._id, ...form, submittedByUserId: actingUserId }); setOpen(false); };
 
   return (
     <div className="page">
@@ -79,6 +85,7 @@ export function FilingsPage() {
           { id: "dueDate", header: "Due", sortable: true, accessor: (r) => r.dueDate, render: (r) => <span className="mono">{formatDate(r.dueDate)}</span> },
           { id: "filedAt", header: "Filed", sortable: true, accessor: (r) => r.filedAt ?? "", render: (r) => <span className="mono">{r.filedAt ? formatDate(r.filedAt) : "—"}</span> },
           { id: "confirmationNumber", header: "Confirmation #", accessor: (r) => r.confirmationNumber ?? "", render: (r) => <span className="mono">{r.confirmationNumber ?? "—"}</span> },
+          { id: "submissionMethod", header: "Method", sortable: true, accessor: (r) => r.submissionMethod ?? "", render: (r) => <span className="muted">{r.submissionMethod ?? "—"}</span> },
           { id: "fee", header: "Fee", sortable: true, align: "right", accessor: (r) => r.feePaidCents ?? 0, render: (r) => <span className="mono">{money(r.feePaidCents)}</span> },
           { id: "status", header: "Status", sortable: true, accessor: (r) => r.status, render: (r) => renderFilingStatus(r) },
         ]}
@@ -96,21 +103,21 @@ export function FilingsPage() {
               )}
               <button
                 className="btn btn--sm"
-                onClick={async () => {
-                  const conf = await prompt({
-                    title: "Mark filing as filed",
-                    message: "Enter the confirmation number from Societies Online / CRA (optional).",
-                    placeholder: "e.g. SO-2026-A12345",
-                    confirmLabel: "Mark filed",
-                  });
-                  if (conf === null) return;
-                  await markFiled({
+                onClick={() =>
+                  setCompleteDraft({
                     id: r._id,
+                    kind: r.kind,
                     filedAt: new Date().toISOString().slice(0, 10),
-                    confirmationNumber: conf || undefined,
-                  });
-                  toast.success("Filing marked as filed");
-                }}
+                    submissionMethod: r.submissionMethod ?? "ManualPortal",
+                    confirmationNumber: r.confirmationNumber ?? "",
+                    feePaidCents: r.feePaidCents ?? "",
+                    receiptDocumentId: r.receiptDocumentId ?? "",
+                    stagedPacketDocumentId: r.stagedPacketDocumentId ?? "",
+                    evidenceNotes: r.evidenceNotes ?? "",
+                    submissionChecklist: r.submissionChecklist ?? [],
+                    registryUrl: r.registryUrl ?? "",
+                  })
+                }
               >
                 <Check size={12} /> Mark filed
               </button>
@@ -125,6 +132,10 @@ export function FilingsPage() {
       >
         {form && (
           <div>
+            <InspectorNote title="Create the obligation first">
+              Use this when a filing obligation exists and you want it tracked in the workspace
+              before submission evidence is available.
+            </InspectorNote>
             <Field label="Kind">
               <Select
                 value={form.kind}
@@ -148,6 +159,100 @@ export function FilingsPage() {
         societyId={society._id}
         filingLabel={botFor?.label ?? ""}
       />
+
+      <Drawer
+        open={!!completeDraft}
+        onClose={() => setCompleteDraft(null)}
+        title="Mark filing as filed"
+        footer={
+          <>
+            <button className="btn" onClick={() => setCompleteDraft(null)}>Cancel</button>
+            <button
+              className="btn btn--accent"
+              onClick={async () => {
+                await markFiled({
+                  id: completeDraft.id,
+                  filedAt: completeDraft.filedAt,
+                  submissionMethod: completeDraft.submissionMethod || undefined,
+                  submittedByUserId: actingUserId,
+                  confirmationNumber: completeDraft.confirmationNumber || undefined,
+                  feePaidCents: completeDraft.feePaidCents ? Number(completeDraft.feePaidCents) : undefined,
+                  receiptDocumentId: completeDraft.receiptDocumentId || undefined,
+                  stagedPacketDocumentId: completeDraft.stagedPacketDocumentId || undefined,
+                  evidenceNotes: completeDraft.evidenceNotes || undefined,
+                  submissionChecklist: completeDraft.submissionChecklist?.filter(Boolean) ?? undefined,
+                  attestedByUserId: actingUserId,
+                });
+                toast.success("Filing marked as filed");
+                setCompleteDraft(null);
+              }}
+            >
+              Save
+            </button>
+          </>
+        }
+      >
+        {completeDraft && (
+          <div>
+            <InspectorNote tone="warn" title="Only mark filed with evidence">
+              Capture the filed date, method, confirmation number, and receipt once the submission
+              is actually complete so audit trails stay defensible.
+            </InspectorNote>
+            {(completeDraft.registryUrl || filingGuidance?.registryUrl) && (
+              <div className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
+                Registry / filing portal:{" "}
+                <a href={completeDraft.registryUrl || filingGuidance?.registryUrl} target="_blank" rel="noreferrer">
+                  {completeDraft.registryUrl || filingGuidance?.registryUrl}
+                </a>
+              </div>
+            )}
+            <Field label="Filed date"><input className="input" type="date" value={completeDraft.filedAt} onChange={(e) => setCompleteDraft({ ...completeDraft, filedAt: e.target.value })} /></Field>
+            <Field label="Submission method">
+              <select className="input" value={completeDraft.submissionMethod ?? ""} onChange={(e) => setCompleteDraft({ ...completeDraft, submissionMethod: e.target.value })}>
+                <option value="ManualPortal">Manual portal</option>
+                <option value="BotAssisted">Bot-assisted</option>
+                <option value="CRAOnline">CRA online</option>
+              </select>
+            </Field>
+            <Field label="Submission checklist" hint="One step per line">
+              <textarea
+                className="textarea"
+                rows={5}
+                value={(completeDraft.submissionChecklist?.length ? completeDraft.submissionChecklist : filingGuidance?.checklist ?? []).join("\n")}
+                onChange={(e) => setCompleteDraft({
+                  ...completeDraft,
+                  submissionChecklist: e.target.value.split("\n").map((row) => row.trim()).filter(Boolean),
+                })}
+              />
+            </Field>
+            <Field label="Confirmation number"><input className="input" value={completeDraft.confirmationNumber ?? ""} onChange={(e) => setCompleteDraft({ ...completeDraft, confirmationNumber: e.target.value })} /></Field>
+            <Field label="Fee paid (cents)"><input className="input" type="number" value={completeDraft.feePaidCents ?? ""} onChange={(e) => setCompleteDraft({ ...completeDraft, feePaidCents: e.target.value })} /></Field>
+            <Field label="Staged packet / pre-fill document">
+              <select className="input" value={completeDraft.stagedPacketDocumentId ?? ""} onChange={(e) => setCompleteDraft({ ...completeDraft, stagedPacketDocumentId: e.target.value })}>
+                <option value="">None</option>
+                {(documents ?? []).map((document) => (
+                  <option key={document._id} value={document._id}>
+                    {document.title}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Receipt / evidence document">
+              <select className="input" value={completeDraft.receiptDocumentId ?? ""} onChange={(e) => setCompleteDraft({ ...completeDraft, receiptDocumentId: e.target.value })}>
+                <option value="">None</option>
+                {(documents ?? []).map((document) => (
+                  <option key={document._id} value={document._id}>
+                    {document.title}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Evidence notes">
+              <textarea className="textarea" value={completeDraft.evidenceNotes ?? ""} onChange={(e) => setCompleteDraft({ ...completeDraft, evidenceNotes: e.target.value })} />
+            </Field>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { MenuRow, MenuSectionLabel } from "./ui";
 
 export type MenuItem = {
   id: string;
@@ -123,28 +124,24 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
     let runningIdx = 0;
     return sections.map((section, sIdx) => (
       <div key={section.id} className="menu__section">
-        {section.label && <div className="menu__section-label">{section.label}</div>}
+        {section.label && <MenuSectionLabel>{section.label}</MenuSectionLabel>}
         {section.items.map((item) => {
           const isEnabled = !item.disabled;
           const myIdx = isEnabled ? runningIdx++ : -1;
           const isActive = isEnabled && myIdx === activeIdx;
           return (
-            <div
+            <MenuRow
               key={item.id}
               role="menuitem"
-              aria-disabled={item.disabled || undefined}
-              className={`menu__item${isActive ? " is-active" : ""}${
-                item.disabled ? " is-disabled" : ""
-              }${item.destructive ? " menu__item--destructive" : ""}`}
+              icon={item.icon}
+              label={item.label}
+              hint={item.hint}
+              active={isActive}
+              disabled={item.disabled}
+              destructive={item.destructive}
               onMouseEnter={() => isEnabled && setActiveIdx(myIdx)}
               onClick={() => select(item)}
-            >
-              {item.icon && <span className="menu__item-icon">{item.icon}</span>}
-              <span className="menu__item-label">
-                {item.label}
-                {item.hint && <span className="menu__item-hint"> · {item.hint}</span>}
-              </span>
-            </div>
+            />
           );
         })}
         {sIdx < sections.length - 1 && <div className="menu__separator" />}

@@ -55,6 +55,13 @@ import { BylawRulesPage } from "./pages/BylawRules";
 import { ElectionsPage } from "./pages/Elections";
 import { ElectionDetailPage } from "./pages/ElectionDetail";
 import { PortalPage } from "./pages/Portal";
+import { CommunicationsPage } from "./pages/Communications";
+import { VolunteersPage } from "./pages/Volunteers";
+import { GrantsPage } from "./pages/Grants";
+import { TransparencyPage } from "./pages/Transparency";
+import { PublicTransparencyPage } from "./pages/PublicTransparency";
+import { VolunteerApplyPage } from "./pages/VolunteerApply";
+import { GrantApplyPage } from "./pages/GrantApply";
 import "./theme/tokens.css";
 import "./styles/index.scss";
 
@@ -71,6 +78,16 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 <Routes>
                   <Route path="/" element={<LandingPage />} />
                   <Route path="/login" element={<LoginPage />} />
+                  <Route path="/public" element={<PublicTransparencyPage />} />
+                  <Route path="/public/:slug" element={<PublicTransparencyPage />} />
+                  <Route
+                    path="/public/:slug/volunteer-apply"
+                    element={<VolunteerApplyPage />}
+                  />
+                  <Route
+                    path="/public/:slug/grant-apply"
+                    element={<GrantApplyPage />}
+                  />
                   <Route
                     path="/portal"
                     element={
@@ -99,9 +116,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                     <Route path="documents" element={<DocumentsPage />} />
                     <Route path="conflicts" element={<ConflictsPage />} />
                     <Route path="financials" element={<FinancialsPage />} />
+                    <Route path="grants" element={<GrantsPage />} />
                     <Route path="privacy" element={<PrivacyPage />} />
+                    <Route path="communications" element={<CommunicationsPage />} />
                     <Route path="committees" element={<CommitteesPage />} />
                     <Route path="committees/:id" element={<CommitteeDetailPage />} />
+                    <Route path="volunteers" element={<VolunteersPage />} />
                     <Route path="goals" element={<GoalsPage />} />
                     <Route path="goals/:id" element={<GoalDetailPage />} />
                     <Route path="tasks" element={<TasksPage />} />
@@ -133,6 +153,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                     <Route path="elections" element={<ElectionsPage />} />
                     <Route path="elections/:id" element={<ElectionDetailPage />} />
                     <Route path="reconciliation" element={<ReconciliationPage />} />
+                    <Route path="transparency" element={<TransparencyPage />} />
                     <Route path="settings" element={<SettingsPage />} />
                   </Route>
                   <Route path="*" element={<Navigate to="/" replace />} />

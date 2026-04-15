@@ -58,10 +58,17 @@ export const logNoticeDelivery = mutation({
   args: {
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
+    campaignId: v.optional(v.id("communicationCampaigns")),
     recipientName: v.string(),
     recipientEmail: v.optional(v.string()),
     memberId: v.optional(v.id("members")),
     channel: v.string(),
+    provider: v.optional(v.string()),
+    providerMessageId: v.optional(v.string()),
+    subject: v.optional(v.string()),
+    proofOfNotice: v.optional(v.string()),
+    errorMessage: v.optional(v.string()),
+    bouncedAtISO: v.optional(v.string()),
     status: v.string(),
   },
   handler: async (ctx, args) =>
@@ -98,11 +105,15 @@ export const queueNoticeToAllVotingMembers = mutation({
       await ctx.db.insert("noticeDeliveries", {
         societyId,
         meetingId,
+        campaignId: undefined,
         recipientName: `${m.firstName} ${m.lastName}`,
         recipientEmail: m.email,
         memberId: m._id,
         channel,
+        provider: channel === "email" ? "demo" : "manual",
+        subject: undefined,
         sentAtISO: now,
+        proofOfNotice: channel === "email" ? `demo:queued:${now}` : `${channel}:${now}`,
         status: "sent",
       });
     }

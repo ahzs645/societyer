@@ -6,9 +6,10 @@ import { Bell, CheckCircle2, AlertTriangle, Info, XCircle } from "lucide-react";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { Link } from "react-router-dom";
 import { formatDateTime } from "../lib/format";
+import { useSociety } from "../hooks/useSociety";
 
 export function NotificationBell() {
-  const society = useQuery(api.society.get, {});
+  const society = useSociety();
   const userId = useCurrentUserId() ?? undefined;
   const notifications = useQuery(
     api.notifications.list,

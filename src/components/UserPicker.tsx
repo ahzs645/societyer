@@ -7,13 +7,14 @@ import {
   useCurrentUser,
   setStoredUserId,
 } from "../hooks/useCurrentUser";
+import { useSociety } from "../hooks/useSociety";
 import { ChevronDown, LogOut, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 
 export function UserPicker() {
   const auth = useAuth();
-  const society = useQuery(api.society.get, {});
+  const society = useSociety();
   const users = useQuery(
     api.users.list,
     society ? { societyId: society._id } : "skip",
@@ -52,7 +53,8 @@ export function UserPicker() {
   }, [open]);
 
   useEffect(() => {
-    if (currentId || !users || users.length === 0) return;
+    if (!users || users.length === 0) return;
+    if (currentId && users.some((u: any) => u._id === currentId)) return;
     const owner = users.find((u: any) => u.role === "Owner") ?? users[0];
     if (owner) setStoredUserId(owner._id);
   }, [currentId, users]);

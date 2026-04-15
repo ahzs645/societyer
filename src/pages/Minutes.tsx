@@ -1,10 +1,10 @@
 import { useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge } from "../components/ui";
+import { Badge, RecordChip } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { formatDate } from "../lib/format";
@@ -72,10 +72,13 @@ export function MinutesPage() {
             accessor: (r) => r._meetingTitle,
             render: (r) => (
               <>
-                <Link to={`/app/meetings/${r.meetingId}`} className="cell-chip" onClick={(e) => e.stopPropagation()}>
-                  <span className="cell-chip__avatar">{(r._meetingType || "MT").slice(0, 2).toUpperCase()}</span>
-                  <span className="cell-chip__name"><strong>{r._meetingTitle || "Meeting"}</strong></span>
-                </Link>{" "}
+                <RecordChip
+                  to={`/app/meetings/${r.meetingId}`}
+                  onClick={(e) => e.stopPropagation()}
+                  tone={r._meetingType === "AGM" ? "purple" : r._meetingType === "Committee" ? "turquoise" : "gray"}
+                  avatar={(r._meetingType || "MT").slice(0, 2).toUpperCase()}
+                  label={<strong>{r._meetingTitle || "Meeting"}</strong>}
+                />{" "}
                 <Badge tone={r._meetingType === "AGM" ? "accent" : "info"}>{r._meetingType}</Badge>
               </>
             ),

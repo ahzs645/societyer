@@ -21,6 +21,13 @@ export default defineSchema({
     boardCadenceDayOfWeek: v.optional(v.string()),
     boardCadenceTime: v.optional(v.string()),
     boardCadenceNotes: v.optional(v.string()),
+    publicSlug: v.optional(v.string()),
+    publicSummary: v.optional(v.string()),
+    publicContactEmail: v.optional(v.string()),
+    publicTransparencyEnabled: v.optional(v.boolean()),
+    publicShowBoard: v.optional(v.boolean()),
+    publicShowBylaws: v.optional(v.boolean()),
+    publicShowFinancials: v.optional(v.boolean()),
     demoMode: v.optional(v.boolean()),
     updatedAt: v.number(),
   }),
@@ -83,6 +90,109 @@ export default defineSchema({
     kind: v.string(), // deadline | filing | minutes | billing | bot | general | all
     enabled: v.boolean(),
   }).index("by_user", ["userId"]),
+
+  memberCommunicationPrefs: defineTable({
+    societyId: v.id("societies"),
+    memberId: v.id("members"),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    postalAddress: v.optional(v.string()),
+    transactionalEmailEnabled: v.boolean(),
+    noticeEmailEnabled: v.boolean(),
+    newsletterEmailEnabled: v.boolean(),
+    smsEnabled: v.boolean(),
+    mailEnabled: v.optional(v.boolean()),
+    preferredChannel: v.string(), // email | sms | mail
+    newsletterConsentAtISO: v.optional(v.string()),
+    smsConsentAtISO: v.optional(v.string()),
+    unsubscribedAtISO: v.optional(v.string()),
+    unsubscribeReason: v.optional(v.string()),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_member", ["memberId"]),
+
+  communicationSegments: defineTable({
+    societyId: v.id("societies"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    includeAudience: v.string(), // all_members | voting_members | directors | overdue_subscribers | volunteers | custom
+    memberStatus: v.optional(v.string()),
+    membershipClass: v.optional(v.string()),
+    votingRightsOnly: v.optional(v.boolean()),
+    hasEmail: v.optional(v.boolean()),
+    hasPhone: v.optional(v.boolean()),
+    volunteerStatus: v.optional(v.string()),
+    updatedAtISO: v.string(),
+  }).index("by_society", ["societyId"]),
+
+  communicationTemplates: defineTable({
+    societyId: v.id("societies"),
+    name: v.string(),
+    slug: v.string(),
+    kind: v.string(), // notice | renewal | digest | newsletter | reminder
+    channel: v.string(), // email | inApp | sms
+    audience: v.string(), // all_members | voting_members | directors | overdue_subscribers
+    subject: v.string(),
+    bodyText: v.string(),
+    bodyHtml: v.optional(v.string()),
+    system: v.boolean(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_slug", ["societyId", "slug"]),
+
+  communicationCampaigns: defineTable({
+    societyId: v.id("societies"),
+    templateId: v.optional(v.id("communicationTemplates")),
+    segmentId: v.optional(v.id("communicationSegments")),
+    meetingId: v.optional(v.id("meetings")),
+    kind: v.string(),
+    channel: v.string(),
+    audience: v.string(),
+    customAudienceLabel: v.optional(v.string()),
+    subject: v.string(),
+    bodyText: v.string(),
+    status: v.string(), // draft | sending | sent | partial | failed
+    memberCount: v.number(),
+    deliveredCount: v.number(),
+    openedCount: v.number(),
+    bouncedCount: v.number(),
+    createdByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+    sentAtISO: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_meeting", ["meetingId"]),
+
+  communicationDeliveries: defineTable({
+    societyId: v.id("societies"),
+    campaignId: v.optional(v.id("communicationCampaigns")),
+    templateId: v.optional(v.id("communicationTemplates")),
+    meetingId: v.optional(v.id("meetings")),
+    memberId: v.optional(v.id("members")),
+    recipientName: v.string(),
+    recipientEmail: v.optional(v.string()),
+    recipientPhone: v.optional(v.string()),
+    recipientAddress: v.optional(v.string()),
+    channel: v.string(),
+    provider: v.string(),
+    providerMessageId: v.optional(v.string()),
+    subject: v.optional(v.string()),
+    status: v.string(), // queued | sent | opened | bounced | failed | skipped | unsubscribed
+    proofOfNotice: v.optional(v.string()),
+    errorMessage: v.optional(v.string()),
+    providerEventType: v.optional(v.string()),
+    providerPayload: v.optional(v.string()),
+    sentAtISO: v.string(),
+    openedAtISO: v.optional(v.string()),
+    bouncedAtISO: v.optional(v.string()),
+    unsubscribedAtISO: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_campaign", ["campaignId"])
+    .index("by_meeting", ["meetingId"])
+    .index("by_provider_message", ["provider", "providerMessageId"]),
 
   financialConnections: defineTable({
     societyId: v.id("societies"),
@@ -305,6 +415,72 @@ export default defineSchema({
     .index("by_committee", ["committeeId"])
     .index("by_society", ["societyId"]),
 
+  volunteers: defineTable({
+    societyId: v.id("societies"),
+    memberId: v.optional(v.id("members")),
+    committeeId: v.optional(v.id("committees")),
+    publicApplicationId: v.optional(v.id("volunteerApplications")),
+    firstName: v.string(),
+    lastName: v.string(),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    status: v.string(), // Prospect | Applied | Active | Paused | Inactive | Declined
+    roleWanted: v.optional(v.string()),
+    availability: v.optional(v.string()),
+    interests: v.array(v.string()),
+    screeningRequired: v.boolean(),
+    orientationCompletedAtISO: v.optional(v.string()),
+    trainingStatus: v.optional(v.string()), // Pending | InProgress | Complete
+    applicationReceivedAtISO: v.optional(v.string()),
+    approvedAtISO: v.optional(v.string()),
+    renewalDueAtISO: v.optional(v.string()),
+    intakeSource: v.optional(v.string()), // public | portal | admin
+    notes: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_member", ["memberId"])
+    .index("by_committee", ["committeeId"]),
+
+  volunteerApplications: defineTable({
+    societyId: v.id("societies"),
+    memberId: v.optional(v.id("members")),
+    linkedVolunteerId: v.optional(v.id("volunteers")),
+    firstName: v.string(),
+    lastName: v.string(),
+    email: v.string(),
+    phone: v.optional(v.string()),
+    roleWanted: v.optional(v.string()),
+    availability: v.optional(v.string()),
+    interests: v.array(v.string()),
+    notes: v.optional(v.string()),
+    source: v.string(), // public | portal | admin
+    status: v.string(), // Submitted | Reviewing | Approved | Declined | Converted
+    submittedAtISO: v.string(),
+    reviewedAtISO: v.optional(v.string()),
+    reviewedByUserId: v.optional(v.id("users")),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_status", ["societyId", "status"]),
+
+  volunteerScreenings: defineTable({
+    societyId: v.id("societies"),
+    volunteerId: v.id("volunteers"),
+    kind: v.string(), // Orientation | ReferenceCheck | CriminalRecordCheck | PolicyAttestation | Training
+    status: v.string(), // needed | requested | clear | failed | expired | waived
+    provider: v.optional(v.string()), // BC_CRRP | Manual | Other
+    portalUrl: v.optional(v.string()),
+    requestedAtISO: v.optional(v.string()),
+    completedAtISO: v.optional(v.string()),
+    expiresAtISO: v.optional(v.string()),
+    referenceNumber: v.optional(v.string()),
+    consentDocumentId: v.optional(v.id("documents")),
+    resultDocumentId: v.optional(v.id("documents")),
+    verifiedByUserId: v.optional(v.id("users")),
+    notes: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_volunteer", ["volunteerId"]),
+
   meetings: defineTable({
     societyId: v.id("societies"),
     committeeId: v.optional(v.id("committees")),
@@ -367,13 +543,104 @@ export default defineSchema({
     periodLabel: v.optional(v.string()),
     dueDate: v.string(),
     filedAt: v.optional(v.string()),
+    submissionMethod: v.optional(v.string()),
+    submittedByUserId: v.optional(v.id("users")),
     confirmationNumber: v.optional(v.string()),
     feePaidCents: v.optional(v.number()),
+    receiptDocumentId: v.optional(v.id("documents")),
+    stagedPacketDocumentId: v.optional(v.id("documents")),
+    submissionChecklist: v.optional(v.array(v.string())),
+    registryUrl: v.optional(v.string()),
+    evidenceNotes: v.optional(v.string()),
+    attestedByUserId: v.optional(v.id("users")),
+    attestedAtISO: v.optional(v.string()),
     status: v.string(),
     notes: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
     .index("by_society_due", ["societyId", "dueDate"]),
+
+  grants: defineTable({
+    societyId: v.id("societies"),
+    committeeId: v.optional(v.id("committees")),
+    boardOwnerUserId: v.optional(v.id("users")),
+    linkedFinancialAccountId: v.optional(v.id("financialAccounts")),
+    publicDescription: v.optional(v.string()),
+    allowPublicApplications: v.optional(v.boolean()),
+    applicationInstructions: v.optional(v.string()),
+    title: v.string(),
+    funder: v.string(),
+    program: v.optional(v.string()),
+    status: v.string(), // Prospecting | Drafting | Submitted | Awarded | Declined | Active | Closed
+    amountRequestedCents: v.optional(v.number()),
+    amountAwardedCents: v.optional(v.number()),
+    restrictedPurpose: v.optional(v.string()),
+    applicationDueDate: v.optional(v.string()),
+    submittedAtISO: v.optional(v.string()),
+    decisionAtISO: v.optional(v.string()),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    nextReportDueAtISO: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  grantApplications: defineTable({
+    societyId: v.id("societies"),
+    grantId: v.optional(v.id("grants")),
+    memberId: v.optional(v.id("members")),
+    linkedGrantId: v.optional(v.id("grants")),
+    applicantName: v.string(),
+    organizationName: v.optional(v.string()),
+    email: v.string(),
+    phone: v.optional(v.string()),
+    amountRequestedCents: v.optional(v.number()),
+    projectTitle: v.string(),
+    projectSummary: v.string(),
+    proposedUseOfFunds: v.optional(v.string()),
+    expectedOutcomes: v.optional(v.string()),
+    source: v.string(), // public | portal | admin
+    status: v.string(), // Submitted | Reviewing | Shortlisted | Approved | Declined | Converted
+    submittedAtISO: v.string(),
+    reviewedAtISO: v.optional(v.string()),
+    reviewedByUserId: v.optional(v.id("users")),
+    notes: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_grant", ["grantId"])
+    .index("by_status", ["societyId", "status"]),
+
+  grantReports: defineTable({
+    societyId: v.id("societies"),
+    grantId: v.id("grants"),
+    title: v.string(),
+    dueAtISO: v.string(),
+    submittedAtISO: v.optional(v.string()),
+    status: v.string(), // Upcoming | Due | Submitted | Overdue
+    spendingToDateCents: v.optional(v.number()),
+    outcomeSummary: v.optional(v.string()),
+    documentId: v.optional(v.id("documents")),
+    submittedByUserId: v.optional(v.id("users")),
+    notes: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_grant", ["grantId"]),
+
+  grantTransactions: defineTable({
+    societyId: v.id("societies"),
+    grantId: v.id("grants"),
+    financialTransactionId: v.optional(v.id("financialTransactions")),
+    documentId: v.optional(v.id("documents")),
+    date: v.string(),
+    direction: v.string(), // inflow | outflow | commitment | adjustment
+    amountCents: v.number(),
+    description: v.string(),
+    notes: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_grant", ["grantId"]),
 
   deadlines: defineTable({
     societyId: v.id("societies"),
@@ -404,6 +671,22 @@ export default defineSchema({
     flaggedForDeletion: v.boolean(),
     tags: v.array(v.string()),
   }).index("by_society", ["societyId"]).index("by_committee", ["committeeId"]),
+
+  publications: defineTable({
+    societyId: v.id("societies"),
+    title: v.string(),
+    summary: v.optional(v.string()),
+    category: v.string(), // AnnualReport | Bylaws | AGM | Policy | Notice | Resource | Custom
+    documentId: v.optional(v.id("documents")),
+    url: v.optional(v.string()),
+    publishedAtISO: v.optional(v.string()),
+    status: v.string(), // Draft | Published | Archived
+    reviewStatus: v.optional(v.string()), // Draft | InReview | Approved
+    approvedByUserId: v.optional(v.id("users")),
+    approvedAtISO: v.optional(v.string()),
+    featured: v.optional(v.boolean()),
+    createdAtISO: v.string(),
+  }).index("by_society", ["societyId"]),
 
   conflicts: defineTable({
     societyId: v.id("societies"),
@@ -609,12 +892,19 @@ export default defineSchema({
   noticeDeliveries: defineTable({
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
+    campaignId: v.optional(v.id("communicationCampaigns")),
     recipientName: v.string(),
     recipientEmail: v.optional(v.string()),
     memberId: v.optional(v.id("members")),
     channel: v.string(), // email | mail | in-person
+    provider: v.optional(v.string()),
+    providerMessageId: v.optional(v.string()),
+    subject: v.optional(v.string()),
     sentAtISO: v.string(),
     openedAtISO: v.optional(v.string()),
+    bouncedAtISO: v.optional(v.string()),
+    proofOfNotice: v.optional(v.string()),
+    errorMessage: v.optional(v.string()),
     status: v.string(), // queued | sent | bounced | failed
   })
     .index("by_society", ["societyId"])
@@ -637,6 +927,8 @@ export default defineSchema({
 
   pipaTrainings: defineTable({
     societyId: v.id("societies"),
+    participantUserId: v.optional(v.id("users")),
+    participantMemberId: v.optional(v.id("members")),
     participantName: v.string(),
     role: v.string(), // Director | Staff | Volunteer
     participantEmail: v.optional(v.string()),
@@ -644,6 +936,7 @@ export default defineSchema({
     completedAtISO: v.string(),
     nextDueAtISO: v.optional(v.string()),
     trainer: v.optional(v.string()),
+    documentId: v.optional(v.id("documents")),
     notes: v.optional(v.string()),
   }).index("by_society", ["societyId"]),
 
@@ -698,12 +991,18 @@ export default defineSchema({
     status: v.string(), // Draft | Open | Closed | Tallied | Cancelled
     opensAtISO: v.string(),
     closesAtISO: v.string(),
+    nominationsOpenAtISO: v.optional(v.string()),
+    nominationsCloseAtISO: v.optional(v.string()),
     eligibilityCutoffISO: v.optional(v.string()),
     anonymousBallot: v.boolean(),
+    scrutineerUserIds: v.optional(v.array(v.id("users"))),
     createdByUserId: v.optional(v.id("users")),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
     talliedAtISO: v.optional(v.string()),
+    resultsPublishedAtISO: v.optional(v.string()),
+    evidenceDocumentId: v.optional(v.id("documents")),
+    resultsSummary: v.optional(v.string()),
     notes: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
@@ -714,7 +1013,9 @@ export default defineSchema({
     electionId: v.id("elections"),
     title: v.string(),
     description: v.optional(v.string()),
+    kind: v.optional(v.string()), // single_choice | multi_choice
     maxSelections: v.number(),
+    seatsAvailable: v.optional(v.number()),
     options: v.array(
       v.object({
         id: v.string(),
@@ -761,6 +1062,24 @@ export default defineSchema({
   })
     .index("by_election", ["electionId"])
     .index("by_receipt", ["electionId", "receiptCode"]),
+
+  electionNominations: defineTable({
+    societyId: v.id("societies"),
+    electionId: v.id("elections"),
+    questionId: v.optional(v.id("electionQuestions")),
+    memberId: v.optional(v.id("members")),
+    nomineeName: v.string(),
+    nomineeEmail: v.optional(v.string()),
+    statement: v.optional(v.string()),
+    status: v.string(), // Submitted | Accepted | Rejected | Withdrawn | OnBallot
+    submittedByUserId: v.optional(v.id("users")),
+    submittedAtISO: v.string(),
+    reviewedByUserId: v.optional(v.id("users")),
+    reviewedAtISO: v.optional(v.string()),
+    addedToBallotAtISO: v.optional(v.string()),
+  })
+    .index("by_election", ["electionId"])
+    .index("by_society", ["societyId"]),
 
   electionAuditEvents: defineTable({
     societyId: v.id("societies"),
