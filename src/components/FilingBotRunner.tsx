@@ -68,7 +68,7 @@ export function FilingBotRunner({
         </>
       }
     >
-      <div className="muted" style={{ marginBottom: 12, fontSize: 13 }}>
+      <div className="muted" style={{ marginBottom: 12, fontSize: "var(--fs-md)" }}>
         The Societies Online portal has no public API — auto-submission isn't
         permitted. The bot gathers and validates everything, pre-fills Form 11,
         stages signatures, then deep-links you to <a href="https://www.bcregistry.ca/societies/" target="_blank" rel="noreferrer">bcregistry.ca/societies <ExternalLink size={11} /></a>{" "}
@@ -78,7 +78,7 @@ export function FilingBotRunner({
       {packet && (
         <div className="card" style={{ marginBottom: 12 }}>
           <div className="card__head">
-            <h3 className="card__title" style={{ fontSize: 13 }}>
+            <h3 className="card__title" style={{ fontSize: "var(--fs-md)" }}>
               <FileText size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
               Filing packet preview
             </h3>
@@ -87,7 +87,7 @@ export function FilingBotRunner({
             <pre
               style={{
                 margin: 0,
-                fontSize: 11,
+                fontSize: "var(--fs-sm)",
                 lineHeight: 1.4,
                 whiteSpace: "pre-wrap",
                 fontFamily: "var(--font-mono)",
@@ -105,7 +105,7 @@ export function FilingBotRunner({
       {(active || last) && (
         <div>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-            <strong style={{ fontSize: 13 }}>
+            <strong style={{ fontSize: "var(--fs-md)" }}>
               Last run
             </strong>
             {(active ?? last) && (
@@ -122,7 +122,7 @@ export function FilingBotRunner({
               </Badge>
             )}
             <div style={{ flex: 1 }} />
-            <span className="muted mono" style={{ fontSize: 11 }}>
+            <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
               {(active ?? last).demo ? "demo" : "live"} · {formatDateTime((active ?? last).startedAtISO)}
             </span>
           </div>
@@ -157,13 +157,13 @@ export function FilingBotRunner({
                   <div style={{ flex: 1 }}>
                     <div>{s.label}</div>
                     {s.note && (
-                      <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+                      <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>
                         {s.note}
                       </div>
                     )}
                   </div>
                   {s.atISO && (
-                    <span className="muted mono" style={{ fontSize: 10 }}>
+                    <span className="muted mono" style={{ fontSize: "var(--fs-xs)" }}>
                       {new Date(s.atISO).toLocaleTimeString()}
                     </span>
                   )}
@@ -178,7 +178,7 @@ export function FilingBotRunner({
                 marginTop: 12,
                 padding: 10,
                 background: "var(--accent-soft)",
-                borderRadius: 6,
+                borderRadius: "var(--r-sm)",
               }}
             >
               <strong>Confirmation #</strong>{" "}

@@ -6,6 +6,7 @@ import { convex } from "./lib/convex";
 import { AuthProvider } from "./auth/AuthProvider";
 import { AuthGate } from "./components/AuthGate";
 import { Layout } from "./components/Layout";
+import { ModuleGate } from "./components/ModuleGate";
 import { ConfirmProvider, PromptProvider } from "./components/Modal";
 import { ToastProvider } from "./components/Toast";
 import { Dashboard } from "./pages/Dashboard";
@@ -65,6 +66,10 @@ import { GrantApplyPage } from "./pages/GrantApply";
 import "./theme/tokens.css";
 import "./styles/index.scss";
 
+function withModule(moduleKey: React.ComponentProps<typeof ModuleGate>["moduleKey"], element: React.ReactNode) {
+  return <ModuleGate moduleKey={moduleKey}>{element}</ModuleGate>;
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ConvexProvider client={convex}>
@@ -116,12 +121,21 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                     <Route path="documents" element={<DocumentsPage />} />
                     <Route path="conflicts" element={<ConflictsPage />} />
                     <Route path="financials" element={<FinancialsPage />} />
-                    <Route path="grants" element={<GrantsPage />} />
+                    <Route
+                      path="grants"
+                      element={withModule("grants", <GrantsPage />)}
+                    />
                     <Route path="privacy" element={<PrivacyPage />} />
-                    <Route path="communications" element={<CommunicationsPage />} />
+                    <Route
+                      path="communications"
+                      element={withModule("communications", <CommunicationsPage />)}
+                    />
                     <Route path="committees" element={<CommitteesPage />} />
                     <Route path="committees/:id" element={<CommitteeDetailPage />} />
-                    <Route path="volunteers" element={<VolunteersPage />} />
+                    <Route
+                      path="volunteers"
+                      element={withModule("volunteers", <VolunteersPage />)}
+                    />
                     <Route path="goals" element={<GoalsPage />} />
                     <Route path="goals/:id" element={<GoalDetailPage />} />
                     <Route path="tasks" element={<TasksPage />} />
@@ -129,31 +143,82 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                     <Route path="notifications" element={<NotificationsPage />} />
                     <Route path="users" element={<UsersPage />} />
                     <Route path="audit" element={<AuditLogPage />} />
-                    <Route path="membership" element={<MembershipPage />} />
-                    <Route path="inspections" element={<InspectionsPage />} />
-                    <Route path="attestations" element={<AttestationsPage />} />
-                    <Route path="retention" element={<RetentionPage />} />
-                    <Route path="insurance" element={<InsurancePage />} />
-                    <Route path="pipa-training" element={<PipaTrainingPage />} />
-                    <Route path="proxies" element={<ProxiesPage />} />
-                    <Route path="auditors" element={<AuditorsPage />} />
-                    <Route path="proposals" element={<MemberProposalsPage />} />
-                    <Route path="receipts" element={<ReceiptsPage />} />
-                    <Route path="employees" element={<EmployeesPage />} />
-                    <Route path="court-orders" element={<CourtOrdersPage />} />
+                    <Route
+                      path="membership"
+                      element={withModule("membershipBilling", <MembershipPage />)}
+                    />
+                    <Route
+                      path="inspections"
+                      element={withModule("recordsInspection", <InspectionsPage />)}
+                    />
+                    <Route
+                      path="attestations"
+                      element={withModule("attestations", <AttestationsPage />)}
+                    />
+                    <Route
+                      path="retention"
+                      element={withModule("recordsInspection", <RetentionPage />)}
+                    />
+                    <Route
+                      path="insurance"
+                      element={withModule("insurance", <InsurancePage />)}
+                    />
+                    <Route
+                      path="pipa-training"
+                      element={withModule("pipaTraining", <PipaTrainingPage />)}
+                    />
+                    <Route
+                      path="proxies"
+                      element={withModule("voting", <ProxiesPage />)}
+                    />
+                    <Route
+                      path="auditors"
+                      element={withModule("auditors", <AuditorsPage />)}
+                    />
+                    <Route
+                      path="proposals"
+                      element={withModule("voting", <MemberProposalsPage />)}
+                    />
+                    <Route
+                      path="receipts"
+                      element={withModule("donationReceipts", <ReceiptsPage />)}
+                    />
+                    <Route
+                      path="employees"
+                      element={withModule("employees", <EmployeesPage />)}
+                    />
+                    <Route
+                      path="court-orders"
+                      element={withModule("courtOrders", <CourtOrdersPage />)}
+                    />
                     <Route
                       path="written-resolutions"
-                      element={<WrittenResolutionsPage />}
+                      element={withModule("voting", <WrittenResolutionsPage />)}
                     />
                     <Route path="meetings/:id/agm" element={<AgmWorkflowPage />} />
-                    <Route path="filings/prefill" element={<FilingPreFillPage />} />
+                    <Route
+                      path="filings/prefill"
+                      element={withModule("filingPrefill", <FilingPreFillPage />)}
+                    />
                     <Route path="bylaw-diff" element={<BylawDiffPage />} />
                     <Route path="bylaw-rules" element={<BylawRulesPage />} />
                     <Route path="bylaws-history" element={<BylawsHistoryPage />} />
-                    <Route path="elections" element={<ElectionsPage />} />
-                    <Route path="elections/:id" element={<ElectionDetailPage />} />
-                    <Route path="reconciliation" element={<ReconciliationPage />} />
-                    <Route path="transparency" element={<TransparencyPage />} />
+                    <Route
+                      path="elections"
+                      element={withModule("voting", <ElectionsPage />)}
+                    />
+                    <Route
+                      path="elections/:id"
+                      element={withModule("voting", <ElectionDetailPage />)}
+                    />
+                    <Route
+                      path="reconciliation"
+                      element={withModule("reconciliation", <ReconciliationPage />)}
+                    />
+                    <Route
+                      path="transparency"
+                      element={withModule("transparency", <TransparencyPage />)}
+                    />
                     <Route path="settings" element={<SettingsPage />} />
                   </Route>
                   <Route path="*" element={<Navigate to="/" replace />} />

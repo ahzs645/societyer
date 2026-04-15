@@ -36,7 +36,7 @@ export function SignaturePanel({
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <div className="card__head">
-        <h3 className="card__title" style={{ fontSize: 14 }}>
+        <h3 className="card__title" style={{ fontSize: "var(--fs-md)" }}>
           <Pen size={13} style={{ verticalAlign: -1, marginRight: 6 }} />
           {title ?? "Signatures"}
         </h3>
@@ -46,7 +46,7 @@ export function SignaturePanel({
       </div>
       <div className="card__body">
         {(signatures ?? []).length === 0 && (
-          <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
+          <div className="muted" style={{ fontSize: "var(--fs-md)", marginBottom: 8 }}>
             Nobody has signed yet. Type your full name below and click Sign.
           </div>
         )}
@@ -67,7 +67,7 @@ export function SignaturePanel({
             <Badge tone="info">{s.method}</Badge>
             {s.demo && <Badge>demo</Badge>}
             <div style={{ flex: 1 }} />
-            <span className="muted mono" style={{ fontSize: 11 }}>
+            <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
               {formatDateTime(s.signedAtISO)}
             </span>
             <button

@@ -82,10 +82,10 @@ export function NotificationBell() {
               top: -2,
               right: -2,
               background: "var(--danger)",
-              color: "#fff",
-              borderRadius: 10,
+              color: "var(--text-inverse)",
+              borderRadius: "var(--r-pill)",
               padding: "0 5px",
-              fontSize: 10,
+              fontSize: "var(--fs-xs)",
               lineHeight: "14px",
               minWidth: 14,
               textAlign: "center",
@@ -109,8 +109,8 @@ export function NotificationBell() {
               overflow: "auto",
               background: "var(--bg-panel)",
               border: "1px solid var(--border)",
-              borderRadius: 8,
-              boxShadow: "var(--shadow-lg, 0 12px 32px rgba(0,0,0,0.25))",
+              borderRadius: "var(--r-md)",
+              boxShadow: "var(--shadow-lg)",
               zIndex: 1000,
               color: "var(--text-primary)",
             }}
@@ -124,7 +124,7 @@ export function NotificationBell() {
                 background: "var(--bg-panel)",
               }}
             >
-              <strong style={{ fontSize: 13 }}>Notifications</strong>
+              <strong style={{ fontSize: "var(--fs-md)" }}>Notifications</strong>
               <div style={{ flex: 1 }} />
               <button
                 className="btn btn--ghost btn--sm"
@@ -157,7 +157,7 @@ export function NotificationBell() {
                   : n.severity === "err"
                   ? "var(--danger)"
                   : n.severity === "warn"
-                  ? "var(--warn, #c78b00)"
+                  ? "var(--warn)"
                   : "var(--text-secondary)";
               const body = (
                 <div
@@ -176,18 +176,18 @@ export function NotificationBell() {
                 >
                   <Icon size={14} style={{ color, flexShrink: 0, marginTop: 2 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500 }}>{n.title}</div>
+                    <div style={{ fontSize: "var(--fs-md)", fontWeight: 500 }}>{n.title}</div>
                     {n.body && (
                       <div
                         className="muted"
-                        style={{ fontSize: 12, marginTop: 2 }}
+                        style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}
                       >
                         {n.body}
                       </div>
                     )}
                     <div
                       className="muted mono"
-                      style={{ fontSize: 10, marginTop: 4 }}
+                      style={{ fontSize: "var(--fs-xs)", marginTop: 4 }}
                     >
                       {formatDateTime(n.createdAtISO)}
                     </div>

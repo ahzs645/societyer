@@ -40,7 +40,7 @@ select {
 
 :focus-visible {
   outline: 2px solid var(--border-focus);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
 ::selection {
@@ -55,7 +55,7 @@ select {
 }
 ::-webkit-scrollbar-thumb {
   background: var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   border: 2px solid var(--bg-app);
 }
 ::-webkit-scrollbar-track {

@@ -195,7 +195,7 @@
 
 /* Demo banner */
 .demo-banner {
-  background: linear-gradient(90deg, var(--accent-soft), transparent);
+  background: var(--accent-soft);
   border-bottom: 1px solid var(--border);
   padding: 6px 16px;
   display: flex;
@@ -227,8 +227,8 @@
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  border-radius: 6px;
-  background: var(--bg-soft);
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
   font-size: var(--fs-sm);
   cursor: pointer;
   border: 1px solid transparent;
@@ -242,8 +242,8 @@
   gap: 8px;
   align-items: center;
   padding: 6px 10px;
-  border-radius: 6px;
-  background: var(--bg-soft);
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
   font-size: var(--fs-sm);
 }
 .bot-step--running { background: var(--accent-soft); }

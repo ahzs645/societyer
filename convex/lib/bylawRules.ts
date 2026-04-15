@@ -10,9 +10,6 @@ export const DEFAULT_BYLAW_RULES: BylawRuleSetLike = {
   societyId: "placeholder" as Id<"societies">,
   version: 1,
   status: "Active",
-  effectiveFromISO: undefined,
-  sourceBylawDocumentId: undefined,
-  sourceAmendmentId: undefined,
   generalNoticeMinDays: 14,
   generalNoticeMaxDays: 60,
   allowElectronicMeetings: true,
@@ -64,7 +61,7 @@ export async function getActiveBylawRuleSet(
     .collect();
   return (
     active.sort((a, b) => b.version - a.version)[0] ??
-    ({ ...getDefaultBylawRules(societyId), _id: undefined } as const)
+    getDefaultBylawRules(societyId)
   );
 }
 

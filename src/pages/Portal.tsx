@@ -5,11 +5,15 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useAuth } from "../auth/AuthProvider";
 import { ArrowLeft, Calendar, Vote, UserRound, HandHeart, BadgeDollarSign } from "lucide-react";
+import { useModuleEnabled } from "../hooks/useModules";
 
 export function PortalPage() {
   const auth = useAuth();
   const society = useSociety();
   const currentUser = useCurrentUser();
+  const votingEnabled = useModuleEnabled("voting");
+  const volunteersEnabled = useModuleEnabled("volunteers");
+  const grantsEnabled = useModuleEnabled("grants");
   const member = useQuery(
     api.members.get,
     currentUser?.memberId ? { id: currentUser.memberId } : "skip",
@@ -20,7 +24,9 @@ export function PortalPage() {
   );
   const myElections = useQuery(
     api.elections.listMine,
-    society && currentUser ? { societyId: society._id, userId: currentUser._id } : "skip",
+    society && currentUser && votingEnabled
+      ? { societyId: society._id, userId: currentUser._id }
+      : "skip",
   );
 
   if (auth.mode !== "better-auth") {
@@ -75,32 +81,34 @@ export function PortalPage() {
               </div>
             </div>
 
-            <div className="card">
-              <div className="card__head">
-                <h2 className="card__title">Ballots</h2>
+            {votingEnabled && (
+              <div className="card">
+                <div className="card__head">
+                  <h2 className="card__title">Ballots</h2>
+                </div>
+                <div className="card__body" style={{ display: "grid", gap: 10 }}>
+                  {(myElections ?? []).length === 0 && (
+                    <div className="muted">No active or assigned elections right now.</div>
+                  )}
+                  {(myElections ?? []).map((row: any) => (
+                    <Link
+                      key={row.election._id}
+                      to={`/app/elections/${row.election._id}`}
+                      className="panel"
+                      style={{ padding: 12, borderRadius: 8 }}
+                    >
+                      <div className="row">
+                        <strong>{row.election.title}</strong>
+                        <Vote size={14} />
+                      </div>
+                      <div className="muted" style={{ fontSize: 13 }}>
+                        Status: {row.eligibility?.status ?? "Eligible"}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
               </div>
-              <div className="card__body" style={{ display: "grid", gap: 10 }}>
-                {(myElections ?? []).length === 0 && (
-                  <div className="muted">No active or assigned elections right now.</div>
-                )}
-                {(myElections ?? []).map((row: any) => (
-                  <Link
-                    key={row.election._id}
-                    to={`/app/elections/${row.election._id}`}
-                    className="panel"
-                    style={{ padding: 12, borderRadius: 8 }}
-                  >
-                    <div className="row">
-                      <strong>{row.election.title}</strong>
-                      <Vote size={14} />
-                    </div>
-                    <div className="muted" style={{ fontSize: 13 }}>
-                      Status: {row.eligibility?.status ?? "Eligible"}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
+            )}
           </div>
 
           <div className="card" style={{ marginTop: 24 }}>
@@ -125,35 +133,39 @@ export function PortalPage() {
             </div>
           </div>
 
-          {society.publicSlug && (
+          {society.publicSlug && (volunteersEnabled || grantsEnabled) && (
             <div className="two-col" style={{ marginTop: 24 }}>
-              <div className="card">
-                <div className="card__head">
-                  <h2 className="card__title">Volunteer intake</h2>
-                </div>
-                <div className="card__body" style={{ display: "grid", gap: 10 }}>
-                  <div className="muted" style={{ fontSize: 13 }}>
-                    Submit volunteer interest directly into the society intake queue.
+              {volunteersEnabled && (
+                <div className="card">
+                  <div className="card__head">
+                    <h2 className="card__title">Volunteer intake</h2>
                   </div>
-                  <Link to={`/public/${society.publicSlug}/volunteer-apply`} className="btn btn--accent">
-                    <HandHeart size={14} /> Apply to volunteer
-                  </Link>
+                  <div className="card__body" style={{ display: "grid", gap: 10 }}>
+                    <div className="muted" style={{ fontSize: 13 }}>
+                      Submit volunteer interest directly into the society intake queue.
+                    </div>
+                    <Link to={`/public/${society.publicSlug}/volunteer-apply`} className="btn btn--accent">
+                      <HandHeart size={14} /> Apply to volunteer
+                    </Link>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div className="card">
-                <div className="card__head">
-                  <h2 className="card__title">Funding intake</h2>
-                </div>
-                <div className="card__body" style={{ display: "grid", gap: 10 }}>
-                  <div className="muted" style={{ fontSize: 13 }}>
-                    Submit a grant or funding request without leaving the member portal flow.
+              {grantsEnabled && (
+                <div className="card">
+                  <div className="card__head">
+                    <h2 className="card__title">Funding intake</h2>
                   </div>
-                  <Link to={`/public/${society.publicSlug}/grant-apply`} className="btn btn--accent">
-                    <BadgeDollarSign size={14} /> Submit funding request
-                  </Link>
+                  <div className="card__body" style={{ display: "grid", gap: 10 }}>
+                    <div className="muted" style={{ fontSize: 13 }}>
+                      Submit a grant or funding request without leaving the member portal flow.
+                    </div>
+                    <Link to={`/public/${society.publicSlug}/grant-apply`} className="btn btn--accent">
+                      <BadgeDollarSign size={14} /> Submit funding request
+                    </Link>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>

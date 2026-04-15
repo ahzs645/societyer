@@ -25,8 +25,16 @@ import {
 } from "lucide-react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { useSociety } from "../hooks/useSociety";
+import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 
-const ITEMS = [
+const ITEMS: Array<{
+  label: string;
+  to: string;
+  icon: any;
+  kind: "Navigate";
+  module?: ModuleKey;
+}> = [
   { label: "Go to Dashboard", to: "/app", icon: LayoutDashboard, kind: "Navigate" },
   { label: "Timeline", to: "/app/timeline", icon: CalendarClock, kind: "Navigate" },
   { label: "Society profile", to: "/app/society", icon: Building2, kind: "Navigate" },
@@ -39,13 +47,13 @@ const ITEMS = [
   { label: "Minutes", to: "/app/minutes", icon: FileText, kind: "Navigate" },
   { label: "Filings", to: "/app/filings", icon: ClipboardList, kind: "Navigate" },
   { label: "Deadlines", to: "/app/deadlines", icon: Calendar, kind: "Navigate" },
-  { label: "Communications", to: "/app/communications", icon: Mail, kind: "Navigate" },
+  { label: "Communications", to: "/app/communications", icon: Mail, kind: "Navigate", module: "communications" },
   { label: "Documents", to: "/app/documents", icon: FolderOpen, kind: "Navigate" },
-  { label: "Volunteers", to: "/app/volunteers", icon: HandHeart, kind: "Navigate" },
+  { label: "Volunteers", to: "/app/volunteers", icon: HandHeart, kind: "Navigate", module: "volunteers" },
   { label: "Conflicts of interest", to: "/app/conflicts", icon: AlertTriangle, kind: "Navigate" },
   { label: "Financials", to: "/app/financials", icon: PiggyBank, kind: "Navigate" },
-  { label: "Grants", to: "/app/grants", icon: BadgeDollarSign, kind: "Navigate" },
-  { label: "Public transparency", to: "/app/transparency", icon: Globe, kind: "Navigate" },
+  { label: "Grants", to: "/app/grants", icon: BadgeDollarSign, kind: "Navigate", module: "grants" },
+  { label: "Public transparency", to: "/app/transparency", icon: Globe, kind: "Navigate", module: "transparency" },
   { label: "Privacy (PIPA)", to: "/app/privacy", icon: Shield, kind: "Navigate" },
   { label: "Settings", to: "/app/settings", icon: Settings, kind: "Navigate" },
 ];
@@ -56,6 +64,7 @@ export function CommandPalette() {
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const society = useSociety();
   const seed = useMutation(api.seed.run);
 
   useEffect(() => {
@@ -84,13 +93,13 @@ export function CommandPalette() {
 
   const items = useMemo(() => {
     const base = [
-      ...ITEMS,
+      ...ITEMS.filter((item) => !item.module || isModuleEnabled(society, item.module)),
       { label: "Seed demo society", to: "__seed__", icon: Sparkles, kind: "Action" },
     ];
     if (!q) return base;
     const ql = q.toLowerCase();
     return base.filter((i) => i.label.toLowerCase().includes(ql));
-  }, [q]);
+  }, [q, society]);
 
   if (!open) return null;
 

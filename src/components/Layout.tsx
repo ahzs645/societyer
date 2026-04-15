@@ -54,6 +54,7 @@ import { setStoredSocietyId, useSocietySelection } from "../hooks/useSociety";
 import { UserPicker } from "./UserPicker";
 import { InspectorHost, InspectorProvider } from "./InspectorPanel";
 import { Pill, TintedIconTile } from "./ui";
+import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 
 const MOBILE_SIDEBAR_BREAKPOINT = 980;
 
@@ -92,69 +93,144 @@ function OfflineBellFallback() {
   );
 }
 
-type NavEntry =
-  | { section: string }
-  | {
-      to: string;
-      label: string;
-      icon: ComponentType<{ size?: number | string }>;
-      color: "blue" | "red" | "turquoise" | "gray" | "orange" | "purple" | "green" | "pink" | "yellow";
-      end?: boolean;
-    };
+type NavItem = {
+  to: string;
+  label: string;
+  icon: ComponentType<{ size?: number | string }>;
+  color: "blue" | "red" | "turquoise" | "gray" | "orange" | "purple" | "green" | "pink" | "yellow";
+  end?: boolean;
+  module?: ModuleKey;
+};
 
-const NAV: NavEntry[] = [
-  { section: "Overview" },
-  { to: "/app", label: "Dashboard", icon: LayoutDashboard, color: "gray", end: true },
-  { to: "/app/society", label: "Society", icon: Building2, color: "blue" },
-  { to: "/app/timeline", label: "Timeline", icon: CalendarClock, color: "purple" },
-  { section: "People" },
-  { to: "/app/members", label: "Members", icon: Users, color: "blue" },
-  { to: "/app/directors", label: "Directors", icon: UserCog, color: "blue" },
-  { to: "/app/committees", label: "Committees", icon: UsersRound, color: "pink" },
-  { to: "/app/volunteers", label: "Volunteers", icon: HandHeart, color: "pink" },
-  { section: "Work" },
-  { to: "/app/goals", label: "Goals", icon: Target, color: "red" },
-  { to: "/app/tasks", label: "Tasks", icon: ListTodo, color: "turquoise" },
-  { section: "Governance" },
-  { to: "/app/meetings", label: "Meetings", icon: Calendar, color: "orange" },
-  { to: "/app/minutes", label: "Minutes", icon: FileText, color: "turquoise" },
-  { to: "/app/proposals", label: "Member proposals", icon: Vote, color: "purple" },
-  { to: "/app/elections", label: "Elections", icon: Vote, color: "purple" },
-  { to: "/app/written-resolutions", label: "Written resolutions", icon: PenLine, color: "purple" },
-  { to: "/app/proxies", label: "Proxies", icon: UserCheck, color: "purple" },
-  { to: "/app/conflicts", label: "Conflicts of interest", icon: AlertTriangle, color: "red" },
-  { to: "/app/attestations", label: "Director attestations", icon: ShieldCheck, color: "red" },
-  { to: "/app/auditors", label: "Auditors", icon: Calculator, color: "green" },
-  { to: "/app/court-orders", label: "Court orders", icon: Gavel, color: "red" },
-  { section: "Compliance" },
-  { to: "/app/filings", label: "Filings", icon: ClipboardList, color: "orange" },
-  { to: "/app/filings/prefill", label: "Filing pre-fill", icon: FileCog, color: "orange" },
-  { to: "/app/deadlines", label: "Deadlines", icon: Calendar, color: "yellow" },
-  { to: "/app/communications", label: "Communications", icon: Mail, color: "orange" },
-  { to: "/app/documents", label: "Documents", icon: FolderOpen, color: "gray" },
-  { to: "/app/retention", label: "Records retention", icon: Archive, color: "gray" },
-  { to: "/app/inspections", label: "Records inspections", icon: Eye, color: "gray" },
-  { to: "/app/privacy", label: "Privacy (PIPA)", icon: Shield, color: "green" },
-  { to: "/app/pipa-training", label: "PIPA training", icon: ShieldCheck, color: "green" },
-  { to: "/app/insurance", label: "Insurance", icon: Shield, color: "green" },
-  { to: "/app/bylaw-rules", label: "Bylaw rules", icon: Scale, color: "purple" },
-  { to: "/app/bylaw-diff", label: "Bylaw redline", icon: GitCompare, color: "purple" },
-  { to: "/app/bylaws-history", label: "Bylaws history", icon: BookOpen, color: "purple" },
-  { section: "Finance" },
-  { to: "/app/financials", label: "Financials", icon: PiggyBank, color: "green" },
-  { to: "/app/grants", label: "Grants", icon: BadgeDollarSign, color: "green" },
-  { to: "/app/reconciliation", label: "Reconciliation", icon: Scale, color: "green" },
-  { to: "/app/receipts", label: "Donation receipts", icon: Receipt, color: "pink" },
-  { to: "/app/employees", label: "Employees", icon: Users, color: "blue" },
-  { to: "/app/membership", label: "Membership & billing", icon: CreditCard, color: "turquoise" },
-  { section: "System" },
-  { to: "/app/transparency", label: "Public transparency", icon: Globe, color: "blue" },
-  { to: "/app/notifications", label: "Notifications", icon: Bell, color: "orange" },
-  { to: "/app/users", label: "Users & roles", icon: UserCog, color: "blue" },
-  { to: "/app/audit", label: "Audit log", icon: ShieldCheck, color: "red" },
+type NavGroup = {
+  id: string;
+  label: string;
+  defaultOpen?: boolean;
+  items: NavItem[];
+};
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    id: "workspace",
+    label: "Workspace",
+    defaultOpen: true,
+    items: [
+      { to: "/app", label: "Dashboard", icon: LayoutDashboard, color: "gray", end: true },
+      { to: "/app/society", label: "Society", icon: Building2, color: "blue" },
+      { to: "/app/timeline", label: "Timeline", icon: CalendarClock, color: "purple" },
+    ],
+  },
+  {
+    id: "people",
+    label: "People",
+    defaultOpen: true,
+    items: [
+      { to: "/app/members", label: "Members", icon: Users, color: "blue" },
+      { to: "/app/directors", label: "Directors", icon: UserCog, color: "blue" },
+      { to: "/app/committees", label: "Committees", icon: UsersRound, color: "pink" },
+      { to: "/app/volunteers", label: "Volunteers", icon: HandHeart, color: "pink", module: "volunteers" },
+      { to: "/app/employees", label: "Employees", icon: Users, color: "blue", module: "employees" },
+    ],
+  },
+  {
+    id: "work",
+    label: "Work",
+    defaultOpen: true,
+    items: [
+      { to: "/app/goals", label: "Goals", icon: Target, color: "red" },
+      { to: "/app/tasks", label: "Tasks", icon: ListTodo, color: "turquoise" },
+      { to: "/app/deadlines", label: "Deadlines", icon: Calendar, color: "yellow" },
+      { to: "/app/documents", label: "Documents", icon: FolderOpen, color: "gray" },
+      { to: "/app/communications", label: "Communications", icon: Mail, color: "orange", module: "communications" },
+    ],
+  },
+  {
+    id: "meetings",
+    label: "Meetings & votes",
+    items: [
+      { to: "/app/meetings", label: "Meetings", icon: Calendar, color: "orange" },
+      { to: "/app/minutes", label: "Minutes", icon: FileText, color: "turquoise" },
+      { to: "/app/proposals", label: "Member proposals", icon: Vote, color: "purple", module: "voting" },
+      { to: "/app/elections", label: "Elections", icon: Vote, color: "purple", module: "voting" },
+      { to: "/app/written-resolutions", label: "Written resolutions", icon: PenLine, color: "purple", module: "voting" },
+      { to: "/app/proxies", label: "Proxies", icon: UserCheck, color: "purple", module: "voting" },
+    ],
+  },
+  {
+    id: "records",
+    label: "Governance records",
+    items: [
+      { to: "/app/conflicts", label: "Conflicts of interest", icon: AlertTriangle, color: "red" },
+      { to: "/app/attestations", label: "Director attestations", icon: ShieldCheck, color: "red", module: "attestations" },
+      { to: "/app/auditors", label: "Auditors", icon: Calculator, color: "green", module: "auditors" },
+      { to: "/app/court-orders", label: "Court orders", icon: Gavel, color: "red", module: "courtOrders" },
+      { to: "/app/bylaw-rules", label: "Bylaw rules", icon: Scale, color: "purple" },
+      { to: "/app/bylaw-diff", label: "Bylaw redline", icon: GitCompare, color: "purple" },
+      { to: "/app/bylaws-history", label: "Bylaws history", icon: BookOpen, color: "purple" },
+    ],
+  },
+  {
+    id: "compliance",
+    label: "Compliance",
+    items: [
+      { to: "/app/filings", label: "Filings", icon: ClipboardList, color: "orange" },
+      { to: "/app/filings/prefill", label: "Filing pre-fill", icon: FileCog, color: "orange", module: "filingPrefill" },
+      { to: "/app/retention", label: "Records retention", icon: Archive, color: "gray", module: "recordsInspection" },
+      { to: "/app/inspections", label: "Records inspections", icon: Eye, color: "gray", module: "recordsInspection" },
+      { to: "/app/privacy", label: "Privacy (PIPA)", icon: Shield, color: "green" },
+      { to: "/app/pipa-training", label: "PIPA training", icon: ShieldCheck, color: "green", module: "pipaTraining" },
+      { to: "/app/insurance", label: "Insurance", icon: Shield, color: "green", module: "insurance" },
+      { to: "/app/transparency", label: "Public transparency", icon: Globe, color: "blue", module: "transparency" },
+    ],
+  },
+  {
+    id: "finance",
+    label: "Finance",
+    items: [
+      { to: "/app/financials", label: "Financials", icon: PiggyBank, color: "green" },
+      { to: "/app/grants", label: "Grants", icon: BadgeDollarSign, color: "green", module: "grants" },
+      { to: "/app/reconciliation", label: "Reconciliation", icon: Scale, color: "green", module: "reconciliation" },
+      { to: "/app/receipts", label: "Donation receipts", icon: Receipt, color: "pink", module: "donationReceipts" },
+      { to: "/app/membership", label: "Membership & billing", icon: CreditCard, color: "turquoise", module: "membershipBilling" },
+    ],
+  },
+  {
+    id: "administration",
+    label: "Administration",
+    items: [
+      { to: "/app/notifications", label: "Notifications", icon: Bell, color: "orange" },
+      { to: "/app/users", label: "Users & roles", icon: UserCog, color: "blue" },
+      { to: "/app/audit", label: "Audit log", icon: ShieldCheck, color: "red" },
+    ],
+  },
 ];
 
 const PINNED_ROUTES = ["/app", "/app/tasks", "/app/deadlines", "/app/meetings", "/app/documents"];
+const PINNED_ROUTE_SET = new Set(PINNED_ROUTES);
+const ALL_NAV_ITEMS = NAV_GROUPS.flatMap((group) => group.items);
+const PINNED_NAV = PINNED_ROUTES
+  .map((route) => ALL_NAV_ITEMS.find((item) => item.to === route))
+  .filter((item): item is NavItem => Boolean(item));
+const GROUPED_NAV = NAV_GROUPS
+  .map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !PINNED_ROUTE_SET.has(item.to)),
+  }))
+  .filter((group) => group.items.length > 0);
+
+function isNavItemActive(item: NavItem, pathname: string) {
+  if (item.end) return pathname === item.to;
+  return pathname === item.to || pathname.startsWith(`${item.to}/`);
+}
+
+function getInitialOpenGroups(pathname: string) {
+  return Object.fromEntries(
+    GROUPED_NAV.map((group) => [
+      group.id,
+      Boolean(group.defaultOpen || group.items.some((item) => isNavItemActive(item, pathname))),
+    ]),
+  ) as Record<string, boolean>;
+}
 
 const COLLAPSE_KEY = "societyer.sidebar.collapsed";
 
@@ -167,6 +243,9 @@ export function Layout() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(COLLAPSE_KEY) === "1",
+  );
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(
+    () => getInitialOpenGroups(window.location.pathname),
   );
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspaceAnchor, setWorkspaceAnchor] = useState<{
@@ -211,6 +290,14 @@ export function Layout() {
   }, [isMobileNav, loc.pathname]);
 
   useEffect(() => {
+    const activeGroup = GROUPED_NAV.find((group) =>
+      group.items.some((item) => isNavItemActive(item, loc.pathname)),
+    );
+    if (!activeGroup) return;
+    setOpenGroups((prev) => (prev[activeGroup.id] ? prev : { ...prev, [activeGroup.id]: true }));
+  }, [loc.pathname]);
+
+  useEffect(() => {
     if (!workspaceOpen) return;
     const place = () => {
       const rect = workspaceButtonRef.current?.getBoundingClientRect();
@@ -238,12 +325,17 @@ export function Layout() {
   }, [workspaceOpen]);
 
   const counts = useQuery(api.dashboard.summary, society ? { societyId: society._id } : "skip");
-  const pinnedNav = useMemo(
+  const visiblePinnedNav = useMemo(
+    () => PINNED_NAV.filter((item) => !item.module || isModuleEnabled(society, item.module)),
+    [society],
+  );
+  const visibleGroupedNav = useMemo(
     () =>
-      PINNED_ROUTES.map((route) => NAV.find((item): item is Exclude<NavEntry, { section: string }> => "to" in item && item.to === route)).filter(
-        (item): item is Exclude<NavEntry, { section: string }> => Boolean(item),
-      ),
-    [],
+      GROUPED_NAV.map((group) => ({
+        ...group,
+        items: group.items.filter((item) => !item.module || isModuleEnabled(society, item.module)),
+      })).filter((group) => group.items.length > 0),
+    [society],
   );
   const isSidebarCollapsed = isMobileNav ? !mobileSidebarOpen : collapsed;
   const shellClassName = useMemo(() => {
@@ -345,20 +437,36 @@ export function Layout() {
               <span>Favorites</span>
               <span className="sidebar__section-meta">Pinned</span>
             </div>
-            {pinnedNav.map((item) => renderNavItem(item, counts, collapsed, isMobileNav))}
+            {visiblePinnedNav.map((item) => renderNavItem(item, counts, collapsed, isMobileNav))}
             <div className="sidebar__section sidebar__section--compact">
               <span>All records</span>
-              <span className="sidebar__section-meta">Workspace</span>
+              <span className="sidebar__section-meta">Grouped</span>
             </div>
-            {NAV.map((item, i) => {
-              if ("section" in item) {
-                return (
-                  <div className="sidebar__section" key={`s-${i}`}>
-                    {item.section}
-                  </div>
-                );
-              }
-              return renderNavItem(item, counts, collapsed, isMobileNav);
+            {visibleGroupedNav.map((group) => {
+              const isOpen = openGroups[group.id] ?? false;
+              const hasActiveItem = group.items.some((item) => isNavItemActive(item, loc.pathname));
+
+              return (
+                <div className={`sidebar__group${isOpen ? " is-open" : ""}`} key={group.id}>
+                  <button
+                    type="button"
+                    className={`sidebar__section sidebar__group-toggle${hasActiveItem ? " is-active" : ""}`}
+                    onClick={() => setOpenGroups((prev) => ({ ...prev, [group.id]: !isOpen }))}
+                    aria-expanded={isOpen}
+                  >
+                    <span>{group.label}</span>
+                    <span className="sidebar__group-trailing">
+                      <span className="sidebar__group-meta">{group.items.length}</span>
+                      <ChevronDown size={12} className="sidebar__group-chevron" />
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="sidebar__group-items">
+                      {group.items.map((item) => renderNavItem(item, counts, collapsed, isMobileNav))}
+                    </div>
+                  )}
+                </div>
+              );
             })}
             <div className="sidebar__section sidebar__section--compact">
               <span>Resources</span>
@@ -399,15 +507,15 @@ export function Layout() {
               width: workspaceAnchor.width,
               background: "var(--bg-panel)",
               border: "1px solid var(--border)",
-              borderRadius: 8,
-              boxShadow: "var(--shadow-lg, 0 12px 32px rgba(0,0,0,0.25))",
+              borderRadius: "var(--r-md)",
+              boxShadow: "var(--shadow-lg)",
               zIndex: 1000,
               overflow: "hidden",
               color: "var(--text-primary)",
             }}
           >
             <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)" }}>
-              <strong style={{ fontSize: 13 }}>Workspaces</strong>
+              <strong style={{ fontSize: "var(--fs-md)" }}>Workspaces</strong>
             </div>
             {societies.map((s: any) => {
               const active = s._id === society?._id;
@@ -436,11 +544,11 @@ export function Layout() {
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <strong style={{ fontSize: 13, flex: 1 }}>{s.name}</strong>
+                    <strong style={{ fontSize: "var(--fs-md)", flex: 1 }}>{s.name}</strong>
                     {active && <Pill size="sm">Active</Pill>}
                   </div>
                   {s.incorporationNumber && (
-                    <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+                    <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>
                       {s.incorporationNumber}
                     </div>
                   )}
@@ -448,7 +556,7 @@ export function Layout() {
               );
             })}
             {(!societies || societies.length === 0) && (
-              <div className="muted" style={{ padding: 12, fontSize: 12 }}>
+              <div className="muted" style={{ padding: 12, fontSize: "var(--fs-sm)" }}>
                 No societies available yet.
               </div>
             )}
@@ -475,7 +583,7 @@ export function Layout() {
 }
 
 function renderNavItem(
-  item: Exclude<NavEntry, { section: string }>,
+  item: NavItem,
   counts: any,
   collapsed: boolean,
   isMobileNav: boolean,

@@ -38,6 +38,7 @@ import type * as http from "../http.js";
 import type * as inspections from "../inspections.js";
 import type * as insurance from "../insurance.js";
 import type * as lib_bylawRules from "../lib/bylawRules.js";
+import type * as lib_moduleSettings from "../lib/moduleSettings.js";
 import type * as meetings from "../meetings.js";
 import type * as memberProposals from "../memberProposals.js";
 import type * as members from "../members.js";
@@ -107,6 +108,7 @@ declare const fullApi: ApiFromModules<{
   inspections: typeof inspections;
   insurance: typeof insurance;
   "lib/bylawRules": typeof lib_bylawRules;
+  "lib/moduleSettings": typeof lib_moduleSettings;
   meetings: typeof meetings;
   memberProposals: typeof memberProposals;
   members: typeof members;

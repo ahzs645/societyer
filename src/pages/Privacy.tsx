@@ -6,18 +6,21 @@ import { SeedPrompt, PageHeader } from "./_helpers";
 import { Flag } from "../components/ui";
 import { Shield } from "lucide-react";
 import { useBylawRules } from "../hooks/useBylawRules";
+import { useModuleEnabled } from "../hooks/useModules";
 
 export function PrivacyPage() {
   const society = useSociety();
   const { rules } = useBylawRules();
+  const communicationsEnabled = useModuleEnabled("communications");
+  const trainingEnabled = useModuleEnabled("pipaTraining");
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const training = useQuery(
     api.pipaTraining.list,
-    society ? { societyId: society._id } : "skip",
+    society && trainingEnabled ? { societyId: society._id } : "skip",
   );
   const prefs = useQuery(
     api.communications.listMemberPrefs,
-    society ? { societyId: society._id } : "skip",
+    society && communicationsEnabled ? { societyId: society._id } : "skip",
   );
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -42,11 +45,11 @@ export function PrivacyPage() {
       <PageHeader
         title="Privacy (PIPA)"
         subtitle="BC's Personal Information Protection Act applies to non-profits. Adopt a privacy policy, designate a privacy officer, train staff, and comply with CASL."
-        actions={
+        actions={communicationsEnabled ? (
           <Link className="btn-action" to="/app/communications">
             Manage consent
           </Link>
-        }
+        ) : undefined}
       />
 
       <div className="two-col">
@@ -63,15 +66,19 @@ export function PrivacyPage() {
               "No privacy officer designated. Add one on the Society page."
             )}
           </Flag>
-          <Flag level={missingPrefCoverage ? "warn" : "ok"}>
-            {missingPrefCoverage
-              ? `${prefCoverage}/${activeMembers.length} active member communication preference records are on file.`
-              : "Communication preference records are on file for active members."}
+          <Flag level={!communicationsEnabled || missingPrefCoverage ? "warn" : "ok"}>
+            {!communicationsEnabled
+              ? "Communications module is disabled, so member consent preferences are not being tracked in-app."
+              : missingPrefCoverage
+                ? `${prefCoverage}/${activeMembers.length} active member communication preference records are on file.`
+                : "Communication preference records are on file for active members."}
           </Flag>
-          <Flag level={caslTrainingCount > 0 ? "ok" : "warn"}>
-            {caslTrainingCount > 0
-              ? `${caslTrainingCount} privacy/CASL training record${caslTrainingCount === 1 ? "" : "s"} logged in the last 12 months.`
-              : "No privacy/CASL training records logged in the last 12 months."}
+          <Flag level={!trainingEnabled || caslTrainingCount > 0 ? "ok" : "warn"}>
+            {!trainingEnabled
+              ? "PIPA training module is disabled, so training records are being handled outside this workspace."
+              : caslTrainingCount > 0
+                ? `${caslTrainingCount} privacy/CASL training record${caslTrainingCount === 1 ? "" : "s"} logged in the last 12 months.`
+                : "No privacy/CASL training records logged in the last 12 months."}
           </Flag>
 
           <div className="card">

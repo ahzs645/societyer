@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { formatDateTime, formatDate } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
+import { useModuleEnabled } from "../hooks/useModules";
 
 type Step = "notice" | "held" | "financialsPresented" | "electionsHeld" | "minutesApproved" | "annualReportFiled";
 
@@ -44,6 +45,7 @@ export function AgmWorkflowPage() {
   const sendMeetingNotice = useAction(api.communications.sendMeetingNotice);
   const actingUserId = useCurrentUserId() ?? undefined;
   const { rules } = useBylawRules();
+  const communicationsEnabled = useModuleEnabled("communications");
 
   const [noticeChannel, setNoticeChannel] = useState<"email" | "mail" | "in-person">("email");
 
@@ -146,22 +148,38 @@ export function AgmWorkflowPage() {
                   <div className="row" style={{ gap: 6, marginTop: 8 }}>
                     {s.id === "notice" && (
                       <>
-                        <select className="input" style={{ height: 24, fontSize: 12 }} value={noticeChannel} onChange={(e) => setNoticeChannel(e.target.value as any)}>
-                          <option value="email">Email</option>
-                          <option value="mail">Postal mail</option>
-                          <option value="in-person">In person</option>
-                        </select>
-                        <button className="btn-action btn-action--primary" onClick={async () => {
-                          const res = await sendMeetingNotice({
-                            societyId: society._id,
-                            meetingId: meeting._id,
-                            channel: noticeChannel,
-                            actingUserId,
-                          });
-                          await advance("notice", { noticeSentAt: new Date().toISOString(), noticeRecipientCount: res.deliveredCount });
-                        }}>
-                          <Send size={12} /> Send notice to all voting members
-                        </button>
+                        {communicationsEnabled ? (
+                          <>
+                            <select className="input" style={{ height: 24, fontSize: 12 }} value={noticeChannel} onChange={(e) => setNoticeChannel(e.target.value as any)}>
+                              <option value="email">Email</option>
+                              <option value="mail">Postal mail</option>
+                              <option value="in-person">In person</option>
+                            </select>
+                            <button className="btn-action btn-action--primary" onClick={async () => {
+                              const res = await sendMeetingNotice({
+                                societyId: society._id,
+                                meetingId: meeting._id,
+                                channel: noticeChannel,
+                                actingUserId,
+                              });
+                              await advance("notice", { noticeSentAt: new Date().toISOString(), noticeRecipientCount: res.deliveredCount });
+                            }}>
+                              <Send size={12} /> Send notice to all voting members
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="btn-action"
+                            onClick={() =>
+                              advance("notice", {
+                                noticeSentAt: new Date().toISOString(),
+                                noticeRecipientCount: 0,
+                              })
+                            }
+                          >
+                            <CheckCircle2 size={12} /> Mark notice handled outside Societyer
+                          </button>
+                        )}
                       </>
                     )}
                     {s.id === "held" && (
@@ -219,7 +237,11 @@ export function AgmWorkflowPage() {
               </tr>
             ))}
             {(deliveries ?? []).length === 0 && (
-              <tr><td colSpan={4} className="muted" style={{ textAlign: "center", padding: 24 }}>No deliveries logged yet.</td></tr>
+              <tr><td colSpan={4} className="muted" style={{ textAlign: "center", padding: 24 }}>
+                {communicationsEnabled
+                  ? "No deliveries logged yet."
+                  : "Communications module is disabled, so notice delivery is being tracked outside Societyer."}
+              </td></tr>
             )}
           </tbody>
         </table>

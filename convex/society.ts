@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { disabledModulesValidator } from "./lib/moduleSettings";
 
 export const get = query({
   args: {},
@@ -50,5 +51,19 @@ export const upsert = mutation({
       return id;
     }
     return await ctx.db.insert("societies", payload);
+  },
+});
+
+export const updateModules = mutation({
+  args: {
+    societyId: v.id("societies"),
+    disabledModules: disabledModulesValidator,
+  },
+  handler: async (ctx, { societyId, disabledModules }) => {
+    await ctx.db.patch(societyId, {
+      disabledModules,
+      updatedAt: Date.now(),
+    });
+    return societyId;
   },
 });

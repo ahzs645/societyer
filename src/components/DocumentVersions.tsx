@@ -166,7 +166,7 @@ export function DocumentVersionsDrawer({
               border: v.isCurrent
                 ? "1px solid var(--accent)"
                 : "1px solid var(--border)",
-              borderRadius: 6,
+              borderRadius: "var(--r-sm)",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -174,23 +174,23 @@ export function DocumentVersionsDrawer({
               {v.isCurrent && <Badge tone="success">Current</Badge>}
               <Badge tone="info">{v.storageProvider}</Badge>
               <div style={{ flex: 1 }} />
-              <span className="muted mono" style={{ fontSize: 11 }}>
+              <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
                 {formatDate(v.uploadedAtISO)}
               </span>
             </div>
-            <div style={{ fontSize: 12, marginTop: 4 }}>
+            <div style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>
               <span className="mono">{v.fileName}</span>
               {v.fileSizeBytes != null && (
                 <span className="muted"> · {formatBytes(v.fileSizeBytes)}</span>
               )}
             </div>
             {v.uploadedByName && (
-              <div className="muted" style={{ fontSize: 11 }}>
+              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
                 by {v.uploadedByName}
               </div>
             )}
             {v.changeNote && (
-              <div style={{ fontSize: 12, marginTop: 4 }}>{v.changeNote}</div>
+              <div style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{v.changeNote}</div>
             )}
             <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
               <button

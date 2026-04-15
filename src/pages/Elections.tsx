@@ -7,9 +7,23 @@ import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
-import { Vote, Plus, Users, CheckCircle2 } from "lucide-react";
+import { Vote, Plus, Users, CheckCircle2, Trash2 } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { isBetterAuthMode } from "../lib/authMode";
+
+type ElectionCreateForm = {
+  title: string;
+  description: string;
+  opensAtISO: string;
+  closesAtISO: string;
+  nominationsOpenAtISO: string;
+  nominationsCloseAtISO: string;
+  scrutineerUserIds: string[];
+  questionTitle: string;
+  optionLabels: string[];
+};
+
+const EMPTY_OPTION_LABELS = ["", ""];
 
 export function ElectionsPage() {
   const society = useSociety();
@@ -35,7 +49,7 @@ export function ElectionsPage() {
   const tallyElection = useMutation(api.elections.tallyElection);
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<any>(null);
+  const [form, setForm] = useState<ElectionCreateForm | null>(null);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -59,12 +73,14 @@ export function ElectionsPage() {
         .slice(0, 16),
       scrutineerUserIds: [],
       questionTitle: "Election of directors",
-      candidateLines: "",
+      optionLabels: [...EMPTY_OPTION_LABELS],
     });
     setOpen(true);
   };
 
   const save = async () => {
+    if (!form) return;
+
     const electionId = await create({
       societyId: society._id,
       title: form.title,
@@ -80,11 +96,10 @@ export function ElectionsPage() {
       scrutineerUserIds: form.scrutineerUserIds,
       actingUserId,
     });
-    const options = form.candidateLines
-      .split("\n")
-      .map((line: string) => line.trim())
+    const options = form.optionLabels
+      .map((label) => label.trim())
       .filter(Boolean)
-      .map((label: string, index: number) => ({
+      .map((label, index) => ({
         id: `candidate-${index + 1}`,
         label,
       }));
@@ -99,6 +114,32 @@ export function ElectionsPage() {
     }
     toast.success("Election created");
     setOpen(false);
+  };
+
+  const updateOptionLabel = (index: number, label: string) => {
+    setForm((current) => {
+      if (!current) return current;
+      const optionLabels = [...current.optionLabels];
+      optionLabels[index] = label;
+      return { ...current, optionLabels };
+    });
+  };
+
+  const addOptionField = () => {
+    setForm((current) =>
+      current ? { ...current, optionLabels: [...current.optionLabels, ""] } : current,
+    );
+  };
+
+  const removeOptionField = (index: number) => {
+    setForm((current) => {
+      if (!current) return current;
+      const optionLabels = current.optionLabels.filter((_, optionIndex) => optionIndex !== index);
+      return {
+        ...current,
+        optionLabels: optionLabels.length > 0 ? optionLabels : [""],
+      };
+    });
   };
 
   return (
@@ -378,12 +419,35 @@ export function ElectionsPage() {
                 onChange={(e) => setForm({ ...form, questionTitle: e.target.value })}
               />
             </Field>
-            <Field label="Candidates or options" hint="One option per line">
-              <textarea
-                className="textarea"
-                value={form.candidateLines}
-                onChange={(e) => setForm({ ...form, candidateLines: e.target.value })}
-              />
+            <Field
+              label="Candidates or options"
+              hint="Add each ballot choice as its own option. Blank rows are ignored."
+            >
+              <div style={{ display: "grid", gap: 8 }}>
+                {form.optionLabels.map((label, index) => (
+                  <div key={index} className="row" style={{ gap: 8, alignItems: "center" }}>
+                    <input
+                      className="input"
+                      value={label}
+                      placeholder={`Option ${index + 1}`}
+                      onChange={(e) => updateOptionLabel(index, e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm"
+                      onClick={() => removeOptionField(index)}
+                      aria-label={`Remove option ${index + 1}`}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+                <div>
+                  <button type="button" className="btn btn--ghost btn--sm" onClick={addOptionField}>
+                    <Plus size={12} /> Add option
+                  </button>
+                </div>
+              </div>
             </Field>
           </div>
         )}

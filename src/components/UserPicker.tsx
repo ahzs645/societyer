@@ -66,7 +66,7 @@ export function UserPicker() {
       <div
         style={{
           border: "1px solid var(--border)",
-          borderRadius: 8,
+          borderRadius: "var(--r-md)",
           padding: "10px 12px",
           background: "var(--bg-panel)",
           display: "grid",
@@ -81,9 +81,9 @@ export function UserPicker() {
           {current?.role && (
             <span
               style={{
-                fontSize: 10,
+                fontSize: "var(--fs-xs)",
                 padding: "1px 5px",
-                borderRadius: 10,
+                borderRadius: "var(--r-pill)",
                 background: "var(--accent-soft)",
                 color: "var(--accent)",
               }}
@@ -92,7 +92,7 @@ export function UserPicker() {
             </span>
           )}
         </div>
-        <div className="muted" style={{ fontSize: 11 }}>
+        <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
           Signed in through Better Auth. Member eligibility and staff permissions
           resolve into the society workspace from here.
         </div>
@@ -152,8 +152,8 @@ export function UserPicker() {
               width: anchor.width,
               background: "var(--bg-panel)",
               border: "1px solid var(--border)",
-              borderRadius: 6,
-              boxShadow: "var(--shadow-md, 0 8px 24px rgba(0,0,0,0.2))",
+              borderRadius: "var(--r-md)",
+              boxShadow: "var(--shadow-md)",
               zIndex: 1000,
               overflow: "hidden",
               color: "var(--text-primary)",
@@ -168,7 +168,7 @@ export function UserPicker() {
                 }}
                 style={{
                   padding: "8px 10px",
-                  fontSize: 13,
+                  fontSize: "var(--fs-md)",
                   display: "flex",
                   alignItems: "center",
                   gap: 8,
@@ -185,11 +185,11 @@ export function UserPicker() {
                 }
               >
                 <span style={{ flex: 1 }}>{u.displayName}</span>
-                <span className="muted" style={{ fontSize: 11 }}>{u.role}</span>
+                <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{u.role}</span>
               </div>
             ))}
             {(users ?? []).length === 0 && (
-              <div className="muted" style={{ padding: 12, fontSize: 12 }}>
+              <div className="muted" style={{ padding: 12, fontSize: "var(--fs-sm)" }}>
                 Add users under Users & roles, or click Reseed in the demo banner.
               </div>
             )}

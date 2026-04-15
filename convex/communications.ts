@@ -4,6 +4,7 @@ import { action, mutation, query } from "./_generated/server";
 import { api } from "./_generated/api";
 import { sendEmail } from "./providers/email";
 import { sendSms } from "./providers/sms";
+import { requireEnabledModule } from "./lib/moduleSettings";
 
 const DEFAULT_TEMPLATE_SLUGS = [
   {
@@ -992,8 +993,9 @@ export const sendCampaign = action({
     customMessage: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
-  handler: async (ctx, args) =>
-    sendCampaignInternal(ctx, {
+  handler: async (ctx, args) => {
+    await requireEnabledModule(ctx, args.societyId, "communications");
+    return sendCampaignInternal(ctx, {
       societyId: args.societyId as any,
       templateId: args.templateId as any,
       actingUserId: args.actingUserId as any,
@@ -1003,7 +1005,8 @@ export const sendCampaign = action({
       subject: args.subject,
       bodyText: args.bodyText,
       customMessage: args.customMessage,
-    }),
+    });
+  },
 });
 
 export const sendMeetingNotice = action({
@@ -1014,6 +1017,7 @@ export const sendMeetingNotice = action({
     actingUserId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
+    await requireEnabledModule(ctx, args.societyId, "communications");
     const templates = await ctx.runQuery(api.communications.listTemplates, {
       societyId: args.societyId,
     });

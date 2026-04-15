@@ -1,10 +1,12 @@
+// @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireRole } from "./users";
+import { isSocietyModuleEnabled } from "./lib/moduleSettings";
 
 export const listPublications = query({
   args: { societyId: v.id("societies") },
-  handler: async (ctx, { societyId }) =>
+  handler: async (ctx, { societyId }): Promise<any[]> =>
     ctx.db
       .query("publications")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -24,7 +26,7 @@ export const upsertPublication = mutation({
     status: v.string(),
     actingUserId: v.optional(v.id("users")),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<any> => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
       societyId: args.societyId,
@@ -35,17 +37,20 @@ export const upsertPublication = mutation({
       await ctx.db.patch(id, rest);
       return id;
     }
-    return await ctx.db.insert("publications", {
+    const payload: any = {
       ...rest,
       createdAtISO: new Date().toISOString(),
+    };
+    return await ctx.db.insert("publications", {
+      ...payload,
     });
   },
 });
 
 export const removePublication = mutation({
   args: { id: v.id("publications"), actingUserId: v.optional(v.id("users")) },
-  handler: async (ctx, { id, actingUserId }) => {
-    const publication = await ctx.db.get(id);
+  handler: async (ctx, { id, actingUserId }): Promise<void> => {
+    const publication: any = await ctx.db.get(id);
     if (!publication) return;
     await requireRole(ctx, {
       actingUserId,
@@ -58,13 +63,19 @@ export const removePublication = mutation({
 
 export const publicCenter = query({
   args: { slug: v.optional(v.string()) },
-  handler: async (ctx, { slug }) => {
-    const societies = await ctx.db.query("societies").collect();
+  handler: async (ctx, { slug }): Promise<any> => {
+    const societies: any[] = await ctx.db.query("societies").collect();
     const matching = slug
       ? societies.find((society) => society.publicSlug === slug)
       : societies.find((society) => society.publicTransparencyEnabled);
     const society = matching ?? null;
-    if (!society || !society.publicTransparencyEnabled) return null;
+    if (
+      !society ||
+      !society.publicTransparencyEnabled ||
+      !isSocietyModuleEnabled(society, "transparency")
+    ) {
+      return null;
+    }
 
     const [directors, publications, documents, grants] = await Promise.all([
       society.publicShowBoard
@@ -87,10 +98,12 @@ export const publicCenter = query({
         .collect(),
     ]);
 
-    const documentById = new Map(documents.map((document) => [String(document._id), document]));
+    const documentById = new Map(
+      documents.map((document: any) => [String(document._id), document]),
+    );
     const publishedRows = await Promise.all(
       publications
-        .filter((publication) => {
+        .filter((publication: any) => {
           if (publication.status !== "Published") return false;
           if (!society.publicShowBylaws && publication.category === "Bylaws") {
             return false;
@@ -100,7 +113,7 @@ export const publicCenter = query({
           }
           return true;
         })
-        .map(async (publication) => {
+        .map(async (publication: any) => {
           const document = publication.documentId
             ? documentById.get(String(publication.documentId))
             : null;
@@ -130,10 +143,12 @@ export const publicCenter = query({
         purposes: society.purposes,
         incorporationNumber: society.incorporationNumber,
         volunteerApplyPath: society.publicSlug
+          && isSocietyModuleEnabled(society, "volunteers")
           ? `/public/${society.publicSlug}/volunteer-apply`
           : undefined,
         grantApplyPath:
           society.publicSlug &&
+          isSocietyModuleEnabled(society, "grants") &&
           grants.some((grant) => grant.allowPublicApplications)
             ? `/public/${society.publicSlug}/grant-apply`
             : undefined,

@@ -1,67 +1,75 @@
-/* Design tokens inspired by Twenty (twenty-ui) — monochrome UI with a blue accent.
-   These are purpose-matched equivalents, not the Twenty file verbatim. */
+/* Design tokens matching Twenty's design language — cool neutral monochrome
+   with whisper-soft transparent blue accents. Radii, shadows, and typography
+   follow twenty-ui/theme-constants. */
 
 :root,
 .light {
-  /* Neutrals */
+  /* Neutrals — cool near-white to soft grays (no warm tint) */
   --bg-base: #ffffff;
-  --bg-app: #fafafa;
+  --bg-app: #fcfcfc;
   --bg-panel: #ffffff;
-  --bg-subtle: #f5f5f5;
+  --bg-subtle: #f7f7f7;
   --bg-muted: #efefef;
-  --bg-hover: #f0f0f0;
-  --bg-active: #e8e8e8;
-  --bg-inverse: #1a1a1a;
+  --bg-hover: #f1f1f1;
+  --bg-active: #ebebeb;
+  --bg-inverse: #333333;
 
   /* Borders */
-  --border: #e6e6e6;
-  --border-strong: #d4d4d4;
-  --border-focus: #3b5bdb;
+  --border: #ededed;
+  --border-strong: #d6d6d6;
+  --border-focus: rgba(0, 71, 241, 0.45);
 
   /* Text */
-  --text-primary: #141414;
-  --text-secondary: #555555;
-  --text-tertiary: #8a8a8a;
-  --text-placeholder: #b4b4b4;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --text-tertiary: #999999;
+  --text-placeholder: #b3b3b3;
   --text-inverse: #ffffff;
 
-  /* Accent (blue) */
-  --accent: #3b5bdb;
-  --accent-hover: #2f4bc5;
-  --accent-soft: #edf0ff;
+  /* Accent — muted p3-equivalent blue; soft background is transparent tint */
+  --accent: #4058c6;
+  --accent-hover: #334aa8;
+  --accent-soft: rgba(0, 71, 241, 0.07);
+  --accent-soft-strong: rgba(0, 71, 241, 0.12);
   --accent-on: #ffffff;
 
-  /* Semantic */
-  --success: #0a8f4e;
-  --success-soft: #e6f7ee;
-  --warn: #a86400;
-  --warn-soft: #fff6e3;
-  --danger: #c9264a;
-  --danger-soft: #fde9ee;
-  --info: #1e6fd9;
-  --info-soft: #e6f0fc;
+  /* Semantic — desaturated to fit monochrome palette */
+  --success: #4ca277;
+  --success-soft: rgba(0, 164, 51, 0.1);
+  --warn: #cc7a00;
+  --warn-soft: rgba(255, 156, 0, 0.12);
+  --danger: #d45450;
+  --danger-soft: rgba(243, 0, 13, 0.08);
+  --info: #4058c6;
+  --info-soft: rgba(0, 71, 241, 0.07);
 
   /* Typography */
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  --fs-xs: 11px;
-  --fs-sm: 12px;
-  --fs-md: 13px;
-  --fs-lg: 15px;
-  --fs-xl: 18px;
-  --fs-2xl: 22px;
-  --fs-3xl: 28px;
+  /* Font scale — rem-based to match Twenty */
+  --fs-xs: 0.625rem;   /* 10px */
+  --fs-sm: 0.75rem;    /* 12px */
+  --fs-md: 0.875rem;   /* 14px */
+  --fs-lg: 1rem;       /* 16px */
+  --fs-xl: 1.23rem;    /* ~20px */
+  --fs-2xl: 1.54rem;   /* ~25px */
+  --fs-3xl: 1.85rem;   /* ~30px */
 
-  /* Radii */
-  --r-xs: 3px;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+
+  /* Radii — Twenty scale: 2 / 4 / 8 / 20 / 40 */
+  --r-xs: 2px;
   --r-sm: 4px;
-  --r-md: 6px;
-  --r-lg: 10px;
-  --r-xl: 14px;
+  --r-md: 8px;
+  --r-lg: 20px;
+  --r-xl: 40px;
+  --r-pill: 999px;
 
-  /* Spacing */
+  /* Spacing — 4px grid */
   --s-0: 0;
   --s-1: 4px;
   --s-2: 8px;
@@ -69,14 +77,19 @@
   --s-4: 16px;
   --s-5: 20px;
   --s-6: 24px;
+  --s-7: 28px;
   --s-8: 32px;
   --s-10: 40px;
 
-  /* Shadows */
-  --shadow-xs: 0 1px 0 rgba(0, 0, 0, 0.04);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  /* Shadows — multi-layer, neutral black only */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.04),
+    0 0 4px rgba(0, 0, 0, 0.06);
+  --shadow-md: 2px 4px 16px rgba(0, 0, 0, 0.08),
+    0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 0 8px rgba(0, 0, 0, 0.12),
+    0 8px 32px rgba(0, 0, 0, 0.16),
+    0 24px 48px rgba(0, 0, 0, 0.06);
 
   /* Layout */
   --sidebar-w: 240px;
@@ -88,26 +101,28 @@
 }
 
 .dark {
-  --bg-base: #0e0e10;
-  --bg-app: #141417;
-  --bg-panel: #18181c;
-  --bg-subtle: #1e1e23;
-  --bg-muted: #26262c;
-  --bg-hover: #222228;
-  --bg-active: #2c2c33;
-  --bg-inverse: #ffffff;
-  --border: #2a2a31;
-  --border-strong: #3a3a42;
-  --text-primary: #f0f0f2;
-  --text-secondary: #b4b4b8;
-  --text-tertiary: #7a7a80;
-  --text-placeholder: #55555c;
-  --text-inverse: #141414;
-  --accent: #7a8bff;
-  --accent-hover: #97a4ff;
-  --accent-soft: #1b1f3a;
-  --success-soft: #0d2a1c;
-  --warn-soft: #2a2211;
-  --danger-soft: #2c1520;
-  --info-soft: #13233a;
+  --bg-base: #1a1a1a;
+  --bg-app: #141414;
+  --bg-panel: #1e1e1e;
+  --bg-subtle: #222222;
+  --bg-muted: #2a2a2a;
+  --bg-hover: #262626;
+  --bg-active: #303030;
+  --bg-inverse: #f0f0f0;
+  --border: #2e2e2e;
+  --border-strong: #404040;
+  --border-focus: rgba(122, 153, 255, 0.5);
+  --text-primary: #ededed;
+  --text-secondary: #b3b3b3;
+  --text-tertiary: #808080;
+  --text-placeholder: #555555;
+  --text-inverse: #1a1a1a;
+  --accent: #7a99ff;
+  --accent-hover: #94adff;
+  --accent-soft: rgba(122, 153, 255, 0.12);
+  --accent-soft-strong: rgba(122, 153, 255, 0.2);
+  --success-soft: rgba(76, 162, 119, 0.16);
+  --warn-soft: rgba(204, 122, 0, 0.18);
+  --danger-soft: rgba(212, 84, 80, 0.16);
+  --info-soft: rgba(122, 153, 255, 0.14);
 }

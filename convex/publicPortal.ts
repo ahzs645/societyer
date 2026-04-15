@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { query } from "./_generated/server";
 import { v } from "convex/values";
+import { isSocietyModuleEnabled } from "./lib/moduleSettings";
 
 export const getSocietyBySlug = query({
   args: { slug: v.string() },
@@ -24,7 +25,7 @@ export const volunteerIntakeContext = query({
   handler: async (ctx, { slug }) => {
     const societies = await ctx.db.query("societies").collect();
     const society = societies.find((row) => row.publicSlug === slug) ?? null;
-    if (!society) return null;
+    if (!society || !isSocietyModuleEnabled(society, "volunteers")) return null;
 
     const committees = await ctx.db
       .query("committees")
@@ -52,7 +53,7 @@ export const grantIntakeContext = query({
   handler: async (ctx, { slug }) => {
     const societies = await ctx.db.query("societies").collect();
     const society = societies.find((row) => row.publicSlug === slug) ?? null;
-    if (!society) return null;
+    if (!society || !isSocietyModuleEnabled(society, "grants")) return null;
 
     const grants = await ctx.db
       .query("grants")

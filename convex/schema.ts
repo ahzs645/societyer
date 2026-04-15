@@ -28,6 +28,7 @@ export default defineSchema({
     publicShowBoard: v.optional(v.boolean()),
     publicShowBylaws: v.optional(v.boolean()),
     publicShowFinancials: v.optional(v.boolean()),
+    disabledModules: v.optional(v.array(v.string())),
     demoMode: v.optional(v.boolean()),
     updatedAt: v.number(),
   }),

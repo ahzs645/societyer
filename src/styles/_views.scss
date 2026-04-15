@@ -39,9 +39,9 @@
   gap: 6px;
   flex-wrap: wrap;
   padding: 4px;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, #ffffff 18%);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-subtle);
   margin-bottom: var(--s-4);
 }
 .tab {
@@ -51,7 +51,7 @@
   color: var(--text-secondary);
   cursor: pointer;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--r-sm);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -59,13 +59,13 @@
 }
 .tab:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--bg-hover);
 }
 .tab.is-active {
   color: var(--text-primary);
-  border-color: color-mix(in srgb, var(--border) 82%, #ffffff 18%);
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 8px 18px rgba(52, 37, 15, 0.08);
+  border-color: var(--border);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-xs);
 }
 .tab__count {
   margin-left: 2px;
@@ -152,7 +152,7 @@
 /* Priority dots */
 .priority-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
 .priority-Urgent { background: var(--danger); }
-.priority-High { background: #d17a00; }
+.priority-High { background: var(--warn); }
 .priority-Medium { background: var(--accent); }
 .priority-Low { background: var(--text-tertiary); }
 
@@ -198,8 +198,8 @@
 .activity-item__avatar {
   width: 26px; height: 26px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid color-mix(in srgb, var(--border) 82%, #ffffff 18%);
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
   color: var(--text-secondary);
   font-size: 10px;
   font-weight: 600;
@@ -237,9 +237,9 @@
 /* Segmented control */
 .segmented {
   display: inline-flex;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid color-mix(in srgb, var(--border) 82%, #ffffff 18%);
-  border-radius: 999px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
   padding: 3px;
   gap: 3px;
 }
@@ -247,13 +247,13 @@
   padding: 5px 12px;
   font-size: var(--fs-sm);
   color: var(--text-secondary);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   font-weight: 500;
 }
 .segmented__btn.is-active {
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--bg-panel);
   color: var(--text-primary);
-  box-shadow: 0 8px 18px rgba(52, 37, 15, 0.08);
+  box-shadow: var(--shadow-xs);
 }
 
 /* Action items */

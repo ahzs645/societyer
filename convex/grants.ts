@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireRole } from "./users";
+import { requireEnabledModule } from "./lib/moduleSettings";
 
 function isoNow() {
   return new Date().toISOString();
@@ -135,6 +136,7 @@ export const submitApplication = mutation({
     source: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireEnabledModule(ctx, args.societyId, "grants");
     return await ctx.db.insert("grantApplications", {
       ...args,
       source: args.source ?? "public",
