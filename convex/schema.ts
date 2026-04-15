@@ -30,15 +30,19 @@ export default defineSchema({
     email: v.string(),
     displayName: v.string(),
     role: v.string(), // Owner | Admin | Director | Member | Viewer
+    authProvider: v.optional(v.string()),
+    authSubject: v.optional(v.string()),
     memberId: v.optional(v.id("members")),
     directorId: v.optional(v.id("directors")),
     status: v.string(), // Active | Invited | Disabled
     avatarColor: v.optional(v.string()),
     createdAtISO: v.string(),
+    emailVerifiedAtISO: v.optional(v.string()),
     lastLoginAtISO: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
-    .index("by_email", ["email"]),
+    .index("by_email", ["email"])
+    .index("by_auth_subject", ["authSubject"]),
 
   documentVersions: defineTable({
     societyId: v.id("societies"),
@@ -433,6 +437,44 @@ export default defineSchema({
     statementsDocId: v.optional(v.id("documents")),
   }).index("by_society", ["societyId"]),
 
+  bylawRuleSets: defineTable({
+    societyId: v.id("societies"),
+    version: v.number(),
+    status: v.string(), // Draft | Active | Archived
+    effectiveFromISO: v.optional(v.string()),
+    sourceBylawDocumentId: v.optional(v.id("documents")),
+    sourceAmendmentId: v.optional(v.id("bylawAmendments")),
+    generalNoticeMinDays: v.number(),
+    generalNoticeMaxDays: v.number(),
+    allowElectronicMeetings: v.boolean(),
+    allowHybridMeetings: v.boolean(),
+    allowElectronicVoting: v.boolean(),
+    allowProxyVoting: v.boolean(),
+    proxyHolderMustBeMember: v.boolean(),
+    proxyLimitPerGrantorPerMeeting: v.number(),
+    quorumType: v.string(), // fixed | percentage
+    quorumValue: v.number(),
+    memberProposalThresholdPct: v.number(),
+    memberProposalMinSignatures: v.number(),
+    memberProposalLeadDays: v.number(),
+    requisitionMeetingThresholdPct: v.number(),
+    annualReportDueDaysAfterMeeting: v.number(),
+    requireAgmFinancialStatements: v.boolean(),
+    requireAgmElections: v.boolean(),
+    ballotIsAnonymous: v.boolean(),
+    voterMustBeMemberAtRecordDate: v.boolean(),
+    inspectionMemberRegisterByMembers: v.boolean(),
+    inspectionMemberRegisterByPublic: v.boolean(),
+    inspectionDirectorRegisterByMembers: v.boolean(),
+    inspectionCopiesAllowed: v.boolean(),
+    ordinaryResolutionThresholdPct: v.number(),
+    specialResolutionThresholdPct: v.number(),
+    unanimousWrittenSpecialResolution: v.boolean(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
+
   goals: defineTable({
     societyId: v.id("societies"),
     committeeId: v.optional(v.id("committees")),
@@ -647,6 +689,89 @@ export default defineSchema({
     status: v.string(), // Submitted | MeetsThreshold | Rejected | Included
     notes: v.optional(v.string()),
   }).index("by_society", ["societyId"]),
+
+  elections: defineTable({
+    societyId: v.id("societies"),
+    meetingId: v.optional(v.id("meetings")),
+    title: v.string(),
+    description: v.optional(v.string()),
+    status: v.string(), // Draft | Open | Closed | Tallied | Cancelled
+    opensAtISO: v.string(),
+    closesAtISO: v.string(),
+    eligibilityCutoffISO: v.optional(v.string()),
+    anonymousBallot: v.boolean(),
+    createdByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+    talliedAtISO: v.optional(v.string()),
+    notes: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_meeting", ["meetingId"]),
+
+  electionQuestions: defineTable({
+    societyId: v.id("societies"),
+    electionId: v.id("elections"),
+    title: v.string(),
+    description: v.optional(v.string()),
+    maxSelections: v.number(),
+    options: v.array(
+      v.object({
+        id: v.string(),
+        label: v.string(),
+        memberId: v.optional(v.id("members")),
+        statement: v.optional(v.string()),
+      }),
+    ),
+    order: v.number(),
+  })
+    .index("by_election", ["electionId"])
+    .index("by_society", ["societyId"]),
+
+  electionEligibleVoters: defineTable({
+    societyId: v.id("societies"),
+    electionId: v.id("elections"),
+    memberId: v.id("members"),
+    userId: v.optional(v.id("users")),
+    email: v.optional(v.string()),
+    fullName: v.string(),
+    status: v.string(), // Eligible | Confirmed | Voted | Revoked
+    eligibilityReason: v.optional(v.string()),
+    confirmedAtISO: v.optional(v.string()),
+    votedAtISO: v.optional(v.string()),
+    revokedAtISO: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_election", ["electionId"])
+    .index("by_member", ["memberId"])
+    .index("by_election_member", ["electionId", "memberId"]),
+
+  electionBallots: defineTable({
+    societyId: v.id("societies"),
+    electionId: v.id("elections"),
+    receiptCode: v.string(),
+    submittedAtISO: v.string(),
+    choices: v.array(
+      v.object({
+        questionId: v.id("electionQuestions"),
+        optionIds: v.array(v.string()),
+      }),
+    ),
+    spoiledAtISO: v.optional(v.string()),
+  })
+    .index("by_election", ["electionId"])
+    .index("by_receipt", ["electionId", "receiptCode"]),
+
+  electionAuditEvents: defineTable({
+    societyId: v.id("societies"),
+    electionId: v.id("elections"),
+    actorName: v.string(),
+    action: v.string(),
+    detail: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_election", ["electionId"])
+    .index("by_society", ["societyId"]),
 
   donationReceipts: defineTable({
     societyId: v.id("societies"),

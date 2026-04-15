@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { getActiveBylawRuleSet } from "./lib/bylawRules";
 
 export const list = query({
   args: { societyId: v.id("societies") },
@@ -19,20 +20,42 @@ export const create = mutation({
     submittedByName: v.string(),
     submittedAtISO: v.string(),
     signatureCount: v.number(),
-    thresholdPercent: v.number(),
+    thresholdPercent: v.optional(v.number()),
     eligibleVotersAtSubmission: v.optional(v.number()),
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // Evaluate threshold on insert
-    const meets =
+    const rules = await getActiveBylawRuleSet(ctx, args.societyId);
+    const thresholdPercent =
+      args.thresholdPercent ?? rules.memberProposalThresholdPct;
+    const signatureThresholdCount =
       args.eligibleVotersAtSubmission && args.eligibleVotersAtSubmission > 0
-        ? args.signatureCount / args.eligibleVotersAtSubmission >= args.thresholdPercent / 100
-        : false;
+        ? Math.ceil(args.eligibleVotersAtSubmission * (thresholdPercent / 100))
+        : 0;
+    const requiredSignatureCount = Math.max(
+      rules.memberProposalMinSignatures,
+      signatureThresholdCount,
+    );
+    // Evaluate threshold on insert
+    const meets = args.signatureCount >= requiredSignatureCount;
+
+    let status = meets ? "MeetsThreshold" : "Submitted";
+    if (args.meetingId) {
+      const meeting = await ctx.db.get(args.meetingId);
+      if (meeting?.noticeSentAt) {
+        const leadMs = rules.memberProposalLeadDays * 86_400_000;
+        const receivedTs = new Date(args.submittedAtISO).getTime();
+        const noticeTs = new Date(meeting.noticeSentAt).getTime();
+        if (receivedTs > noticeTs - leadMs) {
+          status = "Rejected";
+        }
+      }
+    }
     return ctx.db.insert("memberProposals", {
       ...args,
+      thresholdPercent,
       includedInAgenda: false,
-      status: meets ? "MeetsThreshold" : "Submitted",
+      status,
     });
   },
 });

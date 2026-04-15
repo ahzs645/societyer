@@ -44,7 +44,7 @@ export function PageHeader({
           {icon}
         </span>
       )}
-      <div style={{ flex: "0 0 auto", minWidth: 0 }}>
+      <div className="page__intro">
         <h1 className="page__title">{title}</h1>
         {subtitle && <p className="page__subtitle">{subtitle}</p>}
       </div>

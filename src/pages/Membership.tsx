@@ -105,7 +105,7 @@ export function MembershipPage() {
           <h2 className="card__title">Plans</h2>
           <span className="card__subtitle">Shown on the self-serve signup page.</span>
         </div>
-        <div className="card__body" style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
+        <div className="card__body" style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 240px), 1fr))" }}>
           {(plans ?? []).map((p) => (
             <div
               key={p._id}

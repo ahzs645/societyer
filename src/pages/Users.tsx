@@ -8,11 +8,13 @@ import { Select } from "../components/Select";
 import { UserCog, PlusCircle, Trash2, KeyRound } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "../components/Toast";
+import { useAuth } from "../auth/AuthProvider";
 
 const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"];
 
 export function UsersPage() {
   const society = useSociety();
+  const auth = useAuth();
   const users = useQuery(
     api.users.list,
     society ? { societyId: society._id } : "skip",
@@ -33,7 +35,11 @@ export function UsersPage() {
         title="Users & roles"
         icon={<UserCog size={16} />}
         iconColor="blue"
-        subtitle="Role-based access controls every write in the app. Demo mode treats unauthenticated actors as Owner."
+        subtitle={
+          auth.mode === "better-auth"
+            ? "Role-based access controls every write in the app. Better Auth resolves a real session into this workspace user table."
+            : "Role-based access controls every write in the app. No-auth mode uses the local acting-user picker."
+        }
         actions={
           <button
             className="btn-action btn-action--primary"
@@ -96,6 +102,7 @@ export function UsersPage() {
                       setStoredUserId(u._id);
                       toast.success(`Now acting as ${u.displayName}`);
                     }}
+                    disabled={auth.mode === "better-auth"}
                     title="Act as this user"
                   >
                     <KeyRound size={12} /> Act as

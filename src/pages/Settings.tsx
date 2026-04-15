@@ -6,9 +6,11 @@ import { useState } from "react";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Toggle } from "../components/Controls";
+import { getAuthMode } from "../lib/authMode";
 
 export function SettingsPage() {
   const [demo, setDemo] = useState(isDemoMode());
+  const authMode = getAuthMode();
   const seed = useMutation(api.seed.run);
   const reset = useMutation(api.seed.reset);
   const confirm = useConfirm();
@@ -65,6 +67,19 @@ export function SettingsPage() {
             >
               Wipe all data
             </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head"><h2 className="card__title">Authentication</h2></div>
+        <div className="card__body col">
+          <div className="muted">
+            Auth mode: <code className="mono">{authMode}</code>
+          </div>
+          <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+            Set <code className="mono">VITE_AUTH_MODE</code> and <code className="mono">AUTH_MODE</code> to <code className="mono">better-auth</code> for real login,
+            or leave them as <code className="mono">none</code> to keep the local no-auth workflow.
           </div>
         </div>
       </div>

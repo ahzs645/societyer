@@ -88,6 +88,19 @@ npm run dev
 - Append `?demo=0` to any URL to suppress it, `?demo=1` to force it on.
 - The seeded society is **Riverside Community Society** — a fictional BC charity with 7 directors, 15 members, two past meetings (a 2025 AGM and a Q4 board meeting), minutes with motions/decisions/action items, filed and upcoming filings (annual report, T3010, T4, GST/HST, bylaw amendment, change of directors), recurring deadlines, a disclosed conflict of interest, FY2024-25 financials with remuneration disclosure, and a document repository with retention flags.
 
+## Auth modes
+
+Societyer now supports two identity modes:
+
+- **`VITE_AUTH_MODE=none` / `AUTH_MODE=none`** — keep the current local/demo workflow. The user picker remains available and no auth server is required.
+- **`VITE_AUTH_MODE=better-auth` / `AUTH_MODE=better-auth`** — enable Better Auth for real login/session handling. Start the auth sidecar alongside Vite:
+
+```bash
+npm run dev:full
+```
+
+Auth mode uses a small SQLite auth database configured by `AUTH_DB_PATH`, and maps signed-in identities into the existing Convex `users` / `members` records.
+
 ---
 
 ## What's in it
@@ -100,11 +113,13 @@ npm run dev
 | People | `/directors` | Register of directors with BC-resident & consent-on-file checks, warnings when Act thresholds aren't met |
 | Governance | `/meetings` | Board / Committee / AGM / SGM scheduling; AGM reminder about 14–60 day notice |
 | Governance | `/meetings/:id` | Agenda, minutes (discussion, motions with vote counts, decisions, action items), AGM checklist, **mock AI minute generator** from raw transcript |
+| Governance | `/elections` | Verified member elections with anonymous ballot storage, voter snapshots, and tallies |
 | Governance | `/minutes` | All minutes across meetings, quorum and action status |
 | Governance | `/conflicts` | s.56 disclosures with "left room" / "abstained" tracking |
 | Compliance | `/filings` | Societies Online + CRA: AnnualReport, ChangeOfDirectors, ChangeOfAddress, BylawAmendment, T2, T1044, T3010, T4, GST/HST — mark filed with confirmation # and fee |
 | Compliance | `/deadlines` | Rolling calendar; recurrence (Monthly/Quarterly/Annual); categories (Governance / Tax / Payroll / Privacy / Other) |
 | Compliance | `/documents` | Constitution, bylaws, minutes, policies, financial statements; retention years; "flag for deletion" after 10-year threshold |
+| Compliance | `/bylaw-rules` | Active bylaw rule set that drives notice windows, proxies, voting, proposal thresholds, quorum, and inspection defaults |
 | Compliance | `/privacy` | PIPA checklist and records-inspection rules |
 | Finance | `/financials` | Annual statements with revenue / expenses / net assets / restricted funds / audit status / board approval; remuneration disclosure ≥ $75k |
 | System | `/settings` | Theme (light/dark), demo mode, seed/reset, Convex deployment info |

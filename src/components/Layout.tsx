@@ -47,6 +47,8 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { setStoredUserId } from "../hooks/useCurrentUser";
 import { UserPicker } from "./UserPicker";
 
+const MOBILE_SIDEBAR_BREAKPOINT = 980;
+
 function NotificationBellSafe() {
   return (
     <ErrorBoundary label="NotificationBell" fallback={<OfflineBellFallback />}>
@@ -102,6 +104,7 @@ const NAV: NavEntry[] = [
   { to: "/app/meetings", label: "Meetings", icon: Calendar, color: "orange" },
   { to: "/app/minutes", label: "Minutes", icon: FileText, color: "turquoise" },
   { to: "/app/proposals", label: "Member proposals", icon: Vote, color: "purple" },
+  { to: "/app/elections", label: "Elections", icon: Vote, color: "purple" },
   { to: "/app/written-resolutions", label: "Written resolutions", icon: PenLine, color: "purple" },
   { to: "/app/proxies", label: "Proxies", icon: UserCheck, color: "purple" },
   { to: "/app/conflicts", label: "Conflicts of interest", icon: AlertTriangle, color: "red" },
@@ -118,6 +121,7 @@ const NAV: NavEntry[] = [
   { to: "/app/privacy", label: "Privacy (PIPA)", icon: Shield, color: "green" },
   { to: "/app/pipa-training", label: "PIPA training", icon: ShieldCheck, color: "green" },
   { to: "/app/insurance", label: "Insurance", icon: Shield, color: "green" },
+  { to: "/app/bylaw-rules", label: "Bylaw rules", icon: Scale, color: "purple" },
   { to: "/app/bylaw-diff", label: "Bylaw redline", icon: GitCompare, color: "purple" },
   { to: "/app/bylaws-history", label: "Bylaws history", icon: BookOpen, color: "purple" },
   { section: "Finance" },
@@ -137,6 +141,10 @@ const COLLAPSE_KEY = "societyer.sidebar.collapsed";
 export function Layout() {
   const society = useQuery(api.society.get, {});
   const loc = useLocation();
+  const [isMobileNav, setIsMobileNav] = useState(() =>
+    window.matchMedia(`(max-width: ${MOBILE_SIDEBAR_BREAKPOINT}px)`).matches,
+  );
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(COLLAPSE_KEY) === "1",
   );
@@ -146,27 +154,76 @@ export function Layout() {
   }, [collapsed]);
 
   useEffect(() => {
+    const media = window.matchMedia(`(max-width: ${MOBILE_SIDEBAR_BREAKPOINT}px)`);
+    const onChange = (event: MediaQueryListEvent) => setIsMobileNav(event.matches);
+    setIsMobileNav(media.matches);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
         e.preventDefault();
-        setCollapsed((v) => !v);
+        if (isMobileNav) {
+          setMobileSidebarOpen((v) => !v);
+        } else {
+          setCollapsed((v) => !v);
+        }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [isMobileNav]);
+
+  useEffect(() => {
+    if (isMobileNav) {
+      setMobileSidebarOpen(false);
+    }
+  }, [isMobileNav, loc.pathname]);
 
   const counts = useQuery(api.dashboard.summary, society ? { societyId: society._id } : "skip");
+  const isSidebarCollapsed = isMobileNav ? !mobileSidebarOpen : collapsed;
+  const shellClassName = useMemo(() => {
+    let value = "app-shell";
+    if (isSidebarCollapsed) value += " is-collapsed";
+    if (isMobileNav) value += " is-mobile";
+    if (isMobileNav && mobileSidebarOpen) value += " is-mobile-nav-open";
+    return value;
+  }, [isMobileNav, isSidebarCollapsed, mobileSidebarOpen]);
+
+  const openSidebar = () => {
+    if (isMobileNav) {
+      setMobileSidebarOpen(true);
+    } else {
+      setCollapsed(false);
+    }
+  };
+
+  const toggleSidebar = () => {
+    if (isMobileNav) {
+      setMobileSidebarOpen((v) => !v);
+    } else {
+      setCollapsed((v) => !v);
+    }
+  };
 
   return (
     <>
       <CommandPalette />
-      <div className={`app-shell${collapsed ? " is-collapsed" : ""}`}>
+      <div className={shellClassName}>
+        {isMobileNav && mobileSidebarOpen && (
+          <button
+            className="sidebar-backdrop"
+            onClick={() => setMobileSidebarOpen(false)}
+            aria-label="Close navigation"
+          />
+        )}
         <button
           className="sidebar-peek"
-          onClick={() => setCollapsed(false)}
-          title="Open sidebar (⌘\)"
-          aria-label="Open sidebar"
+          onClick={openSidebar}
+          title={isMobileNav ? "Open navigation" : "Open sidebar (⌘\\)"}
+          aria-label={isMobileNav ? "Open navigation" : "Open sidebar"}
         >
           <PanelLeftOpen size={14} />
         </button>
@@ -192,8 +249,8 @@ export function Layout() {
               </button>
               <button
                 className="sidebar__icon-btn sidebar__toggle"
-                onClick={() => setCollapsed((v) => !v)}
-                title={`${collapsed ? "Expand" : "Collapse"} sidebar (⌘\\)`}
+                onClick={toggleSidebar}
+                title={`${isSidebarCollapsed ? "Expand" : "Collapse"} ${isMobileNav ? "navigation" : "sidebar"} (⌘\\)`}
               >
                 <PanelLeftClose size={14} />
               </button>
@@ -220,7 +277,7 @@ export function Layout() {
                   to={item.to}
                   end={item.end}
                   className={({ isActive }) => `sidebar__item${isActive ? " is-active" : ""}`}
-                  title={collapsed ? item.label : undefined}
+                  title={!isMobileNav && collapsed ? item.label : undefined}
                 >
                   <span className={`sidebar__icon-chip icon-chip-${item.color}`}>
                     <Icon size={14} />
@@ -234,7 +291,7 @@ export function Layout() {
             <NavLink
               to="/app/settings"
               className={({ isActive }) => `sidebar__item${isActive ? " is-active" : ""}`}
-              title={collapsed ? "Settings" : undefined}
+              title={!isMobileNav && collapsed ? "Settings" : undefined}
             >
               <span className="sidebar__icon-chip icon-chip-gray">
                 <Settings size={14} />
@@ -246,7 +303,7 @@ export function Layout() {
               href="https://www2.gov.bc.ca/gov/content/employment-business/non-profits-sector/not-for-profit-organizations"
               target="_blank"
               rel="noreferrer"
-              title={collapsed ? "Documentation" : undefined}
+              title={!isMobileNav && collapsed ? "Documentation" : undefined}
             >
               <span className="sidebar__icon-chip icon-chip-gray">
                 <HelpCircle size={14} />

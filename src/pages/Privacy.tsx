@@ -2,9 +2,11 @@ import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Flag } from "../components/ui";
 import { Shield } from "lucide-react";
+import { useBylawRules } from "../hooks/useBylawRules";
 
 export function PrivacyPage() {
   const society = useSociety();
+  const { rules } = useBylawRules();
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
 
@@ -50,14 +52,25 @@ export function PrivacyPage() {
         </div>
 
         <div className="card">
-          <div className="card__head"><h2 className="card__title">Records inspection rules</h2></div>
-          <div className="card__body col">
-            <Item>Members and directors may inspect most records; bylaws may restrict accounting records and directors' minutes.</Item>
-            <Item>Members' register is <strong>not</strong> available to the public.</Item>
-            <Item>Public may inspect financial statements and auditor's reports on request.</Item>
-            <Item>Non-members may be charged up to $10/day for inspection and $0.50/page ($0.10 electronic) for copies.</Item>
-          </div>
+        <div className="card__head"><h2 className="card__title">Records inspection rules</h2></div>
+        <div className="card__body col">
+          <Item>Members and directors may inspect most records; bylaws may restrict accounting records and directors' minutes.</Item>
+          <Item>
+            Members' register is{" "}
+            {rules?.inspectionMemberRegisterByPublic ? <strong>available</strong> : <strong>not</strong>}{" "}
+            available to the public under the active rule set.
+          </Item>
+          <Item>
+            Members may inspect the member register: <strong>{rules?.inspectionMemberRegisterByMembers ? "yes" : "no"}</strong>.
+          </Item>
+          <Item>
+            Members may inspect the director register: <strong>{rules?.inspectionDirectorRegisterByMembers ? "yes" : "no"}</strong>.
+          </Item>
+          <Item>Public may inspect financial statements and auditor's reports on request.</Item>
+          <Item>{rules?.inspectionCopiesAllowed ? "Copies are allowed under the active rule set." : "Copies are restricted under the active rule set."}</Item>
+          <Item>Non-members may be charged up to $10/day for inspection and $0.50/page ($0.10 electronic) for copies.</Item>
         </div>
+      </div>
       </div>
     </div>
   );

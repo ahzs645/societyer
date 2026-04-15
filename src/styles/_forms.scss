@@ -11,8 +11,8 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: 520px;
-  max-width: 96vw;
+  width: min(520px, 100vw);
+  max-width: 100vw;
   background: var(--bg-panel);
   border-left: 1px solid var(--border);
   box-shadow: var(--shadow-lg);
@@ -55,6 +55,7 @@
   flex-direction: column;
   gap: 4px;
   margin-bottom: var(--s-3);
+  min-width: 0;
 }
 .field__label {
   font-size: var(--fs-sm);
@@ -152,15 +153,15 @@
   z-index: 100;
   display: grid;
   place-items: flex-start center;
-  padding-top: 14vh;
+  padding: max(18px, env(safe-area-inset-top)) 16px 16px;
 }
 .kbar {
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-lg);
-  width: 560px;
-  max-width: 92vw;
+  width: min(560px, 100%);
+  max-width: 100%;
   overflow: hidden;
 }
 .kbar__input {
@@ -255,7 +256,9 @@
 }
 
 /* Misc */
-.row { display: flex; align-items: center; gap: var(--s-2); }
+.row { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.row > * { min-width: 0; }
+.row > .field { flex: 1 1 180px; }
 .col { display: flex; flex-direction: column; gap: var(--s-2); }
 .muted { color: var(--text-tertiary); }
 .mono { font-family: var(--font-mono); font-size: var(--fs-sm); }
@@ -264,3 +267,53 @@
 .hr { height: 1px; background: var(--border); margin: var(--s-3) 0; }
 .tag-list { display: flex; flex-wrap: wrap; gap: 4px; }
 
+@media (max-width: 760px) {
+  .drawer {
+    width: 100vw;
+  }
+
+  .drawer__head,
+  .drawer__body,
+  .drawer__footer {
+    padding-left: var(--s-3);
+    padding-right: var(--s-3);
+  }
+
+  .drawer__footer {
+    flex-wrap: wrap;
+    justify-content: stretch;
+  }
+
+  .drawer__footer > * {
+    flex: 1 1 140px;
+  }
+
+  .drawer__body .row {
+    flex-wrap: wrap;
+  }
+
+  .drawer__body .row > .field {
+    flex-basis: 100%;
+  }
+
+  .kbar {
+    border-radius: var(--r-md);
+  }
+
+  .kbar__list {
+    max-height: calc(100dvh - 160px);
+  }
+
+  .demo-banner {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .demo-banner__spacer {
+    display: none;
+  }
+
+  .row {
+    flex-wrap: wrap;
+  }
+}

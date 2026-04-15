@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactNode } from "react";
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -18,10 +18,12 @@ import {
   Command,
   Zap,
   Moon,
+  Sun,
   CheckCircle2,
   AlertTriangle,
   Github,
 } from "lucide-react";
+import { isBetterAuthMode } from "../lib/authMode";
 
 const FEATURE_GROUPS = [
   {
@@ -95,6 +97,26 @@ const HIGHLIGHTS = [
 ];
 
 export function LandingPage() {
+  const authEnabled = isBetterAuthMode();
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    document.documentElement.classList.contains("dark") ? "dark" : "light",
+  );
+
+  useEffect(() => {
+    document.documentElement.classList.remove("light", "dark");
+    document.documentElement.classList.add(theme);
+  }, [theme]);
+
+  const appHref = authEnabled ? "/login" : "/app";
+  const navCtaLabel = authEnabled ? "Sign in" : "Open app";
+  const primaryCtaLabel = authEnabled
+    ? "Sign in to the demo"
+    : "Open the demo society";
+  const authMeta = authEnabled
+    ? "Optional Better Auth login for staff and members"
+    : "No login wall in demo mode";
+  const sourceHref = "https://github.com/ahzs645/societyer";
+
   return (
     <div className="landing">
       <header className="landing__nav">
@@ -109,9 +131,23 @@ export function LandingPage() {
             <a href="#built-for" onClick={scrollTo("built-for")}>Who it's for</a>
             <a href="#stack" onClick={scrollTo("stack")}>Stack</a>
           </nav>
-          <div className="landing__nav-cta">
-            <Link to="/app" className="landing__btn landing__btn--primary">
-              Open the app <ArrowRight size={14} />
+          <div className="landing__nav-actions">
+            <button
+              type="button"
+              className="landing__btn landing__btn--ghost landing__theme-toggle"
+              onClick={() =>
+                setTheme((current) => (current === "dark" ? "light" : "dark"))
+              }
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            >
+              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+              <span className="landing__theme-label">
+                {theme === "dark" ? "Light" : "Dark"}
+              </span>
+            </button>
+            <Link to={appHref} className="landing__btn landing__btn--primary">
+              {navCtaLabel} <ArrowRight size={14} />
             </Link>
           </div>
         </div>
@@ -123,18 +159,17 @@ export function LandingPage() {
             <ShieldCheck size={12} /> BC Societies Act compliance, end-to-end
           </div>
           <h1 className="landing__h1">
-            Run your society like the
-            <br />
+            Run your society like the{" "}
             <span className="landing__h1-accent">law actually expects.</span>
           </h1>
           <p className="landing__lede">
             Societyer is a governance and compliance workspace for British Columbia nonprofit
-            societies. Directors, members, meetings, minutes, filings, bylaws and PIPA — all in one
-            live-reactive register, with the Societies Act checks running in the background.
+            societies. Directors, members, meetings, minutes, filings, bylaws and PIPA stay in
+            one live workspace, with the Societies Act checks running in the background.
           </p>
           <div className="landing__cta-row">
-            <Link to="/app" className="landing__btn landing__btn--primary landing__btn--lg">
-              Open the demo society <ArrowRight size={16} />
+            <Link to={appHref} className="landing__btn landing__btn--primary landing__btn--lg">
+              {primaryCtaLabel} <ArrowRight size={16} />
             </Link>
             <a
               href="#features"
@@ -147,7 +182,7 @@ export function LandingPage() {
           <div className="landing__hero-meta">
             <span><CheckCircle2 size={12} /> Pre-seeded with Riverside Community Society</span>
             <span><CheckCircle2 size={12} /> Self-host with Convex or run locally</span>
-            <span><CheckCircle2 size={12} /> No login wall on the demo</span>
+            <span><CheckCircle2 size={12} /> {authMeta}</span>
           </div>
         </div>
 
@@ -220,7 +255,7 @@ export function LandingPage() {
               <li><Lock size={14} /> PIPA records inspection rules and privacy officer documented</li>
             </ul>
             <div className="landing__cta-row">
-              <Link to="/app" className="landing__btn landing__btn--primary">
+              <Link to={appHref} className="landing__btn landing__btn--primary">
                 Try the compliance dashboard <ArrowRight size={14} />
               </Link>
             </div>
@@ -312,14 +347,22 @@ export function LandingPage() {
       <section className="landing__cta">
         <div className="landing__container">
           <h2>Stop reconstructing the registers the night before the AGM.</h2>
-          <p>Open the demo society — it's pre-seeded with realistic data so you can poke every page.</p>
+          <p>
+            Explore the seeded society with realistic data, or inspect the code and run it
+            locally.
+          </p>
           <div className="landing__cta-row landing__cta-row--center">
-            <Link to="/app" className="landing__btn landing__btn--primary landing__btn--lg">
-              Open the demo society <ArrowRight size={16} />
+            <Link to={appHref} className="landing__btn landing__btn--primary landing__btn--lg">
+              {primaryCtaLabel} <ArrowRight size={16} />
             </Link>
-            <Link to="/app/settings" className="landing__btn landing__btn--ghost landing__btn--lg">
-              Reset or reseed data
-            </Link>
+            <a
+              href={sourceHref}
+              className="landing__btn landing__btn--ghost landing__btn--lg"
+              target="_blank"
+              rel="noreferrer"
+            >
+              View the source <Github size={16} />
+            </a>
           </div>
         </div>
       </section>
@@ -332,7 +375,7 @@ export function LandingPage() {
           </div>
           <div className="landing__footer-meta">
             <span>BC Societies Act compliance workspace</span>
-            <a href="https://github.com" className="landing__footer-link" target="_blank" rel="noreferrer">
+            <a href={sourceHref} className="landing__footer-link" target="_blank" rel="noreferrer">
               <Github size={12} /> Source
             </a>
           </div>

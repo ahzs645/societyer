@@ -1,15 +1,18 @@
 import { useQuery } from "convex/react";
 import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import {
   useCurrentUserId,
   useCurrentUser,
   setStoredUserId,
 } from "../hooks/useCurrentUser";
-import { ChevronDown, User } from "lucide-react";
+import { ChevronDown, LogOut, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "../auth/AuthProvider";
 
 export function UserPicker() {
+  const auth = useAuth();
   const society = useQuery(api.society.get, {});
   const users = useQuery(
     api.users.list,
@@ -55,6 +58,58 @@ export function UserPicker() {
   }, [currentId, users]);
 
   if (!society) return null;
+
+  if (auth.mode === "better-auth") {
+    return (
+      <div
+        style={{
+          border: "1px solid var(--border)",
+          borderRadius: 8,
+          padding: "10px 12px",
+          background: "var(--bg-panel)",
+          display: "grid",
+          gap: 10,
+        }}
+      >
+        <div className="row" style={{ gap: 8, alignItems: "center" }}>
+          <User size={12} />
+          <span style={{ fontWeight: 500, flex: 1 }}>
+            {current?.displayName ?? auth.session?.user.name ?? auth.session?.user.email}
+          </span>
+          {current?.role && (
+            <span
+              style={{
+                fontSize: 10,
+                padding: "1px 5px",
+                borderRadius: 10,
+                background: "var(--accent-soft)",
+                color: "var(--accent)",
+              }}
+            >
+              {current.role}
+            </span>
+          )}
+        </div>
+        <div className="muted" style={{ fontSize: 11 }}>
+          Signed in through Better Auth. Member eligibility and staff permissions
+          resolve into the society workspace from here.
+        </div>
+        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+          {current?.memberId && (
+            <Link to="/portal" className="btn btn--ghost btn--sm">
+              Member portal
+            </Link>
+          )}
+          <button
+            className="btn btn--ghost btn--sm"
+            onClick={() => auth.signOut()}
+          >
+            <LogOut size={12} /> Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>

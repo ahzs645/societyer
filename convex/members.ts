@@ -10,6 +10,11 @@ export const list = query({
       .collect(),
 });
 
+export const get = query({
+  args: { id: v.id("members") },
+  handler: async (ctx, { id }) => ctx.db.get(id),
+});
+
 export const create = mutation({
   args: {
     societyId: v.id("societies"),

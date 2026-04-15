@@ -13,6 +13,7 @@ import { Toggle } from "../components/Controls";
 import { useToast } from "../components/Toast";
 import { Plus, Calendar, Tag, AlertTriangle } from "lucide-react";
 import { formatDateTime } from "../lib/format";
+import { useBylawRules } from "../hooks/useBylawRules";
 
 const OVERLAP_WINDOW_MS = 2 * 60 * 60 * 1000; // within 2 hours counts as concurrent
 
@@ -43,6 +44,7 @@ const MEETING_FIELDS: FilterField<any>[] = [
 
 export function MeetingsPage() {
   const society = useSociety();
+  const { rules } = useBylawRules();
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.meetings.create);
   const navigate = useNavigate();
@@ -59,7 +61,11 @@ export function MeetingsPage() {
     setForm({
       type: "Board", title: "",
       scheduledAt: new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 16),
-      location: "", electronic: true, quorumRequired: 4, status: "Scheduled", attendeeIds: [],
+      location: "",
+      electronic: !!rules?.allowElectronicMeetings,
+      quorumRequired: rules?.quorumType === "fixed" ? rules.quorumValue : undefined,
+      status: "Scheduled",
+      attendeeIds: [],
     });
     setOpen(true);
   };
@@ -75,7 +81,7 @@ export function MeetingsPage() {
         title="Meetings"
         icon={<Calendar size={16} />}
         iconColor="orange"
-        subtitle="Board meetings, committee meetings, and general meetings (AGM/SGM)."
+        subtitle={`Board meetings, committee meetings, and general meetings (AGM/SGM). Active notice rule: ${rules?.generalNoticeMinDays ?? 14}–${rules?.generalNoticeMaxDays ?? 60} days.`}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew}>
             <Plus size={12} /> New meeting
@@ -166,6 +172,7 @@ export function MeetingsPage() {
             <Toggle
               checked={form.electronic}
               onChange={(v) => setForm({ ...form, electronic: v })}
+              disabled={!rules?.allowElectronicMeetings}
               label="Electronic participation permitted"
             />
             <Field label="Quorum required">
@@ -174,7 +181,9 @@ export function MeetingsPage() {
             <Field label="Notes"><textarea className="textarea" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
             {form.type === "AGM" && (
               <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                Reminder: AGM notice must be sent 14–60 days in advance. Financial statements must be presented.
+                Reminder: AGM notice must be sent {rules?.generalNoticeMinDays ?? 14}–{rules?.generalNoticeMaxDays ?? 60} days in advance.
+                {rules?.requireAgmFinancialStatements ? " Financial statements must be presented." : ""}
+                {rules?.requireAgmElections ? " Elections are expected under the active rule set." : ""}
               </div>
             )}
             {(() => {

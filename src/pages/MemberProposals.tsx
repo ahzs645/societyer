@@ -8,6 +8,7 @@ import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { Plus, Vote, Trash2, Tag } from "lucide-react";
 import { formatDate } from "../lib/format";
+import { useBylawRules } from "../hooks/useBylawRules";
 
 const FIELDS: FilterField<any>[] = [
   { id: "status", label: "Status", icon: <Tag size={14} />, options: ["Submitted", "MeetsThreshold", "Rejected", "Included"], match: (r, q) => r.status === q },
@@ -16,6 +17,7 @@ const FIELDS: FilterField<any>[] = [
 
 export function MemberProposalsPage() {
   const society = useSociety();
+  const { rules } = useBylawRules();
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
   const items = useQuery(api.memberProposals.list, society ? { societyId: society._id } : "skip");
@@ -37,7 +39,7 @@ export function MemberProposalsPage() {
       submittedByName: "",
       submittedAtISO: new Date().toISOString().slice(0, 10),
       signatureCount: 1,
-      thresholdPercent: 5,
+      thresholdPercent: rules?.memberProposalThresholdPct ?? 5,
       eligibleVotersAtSubmission: eligibleVoters,
     });
     setOpen(true);
@@ -53,7 +55,7 @@ export function MemberProposalsPage() {
         title="Member proposals"
         icon={<Vote size={16} />}
         iconColor="purple"
-        subtitle={`Proposals from members — need signatures of at least 5% of voting members (or lower if bylaws permit) and must be received ≥ 7 days before the AGM notice is sent. Current voting members: ${eligibleVoters}.`}
+        subtitle={`Proposals from members — active rule set requires at least ${rules?.memberProposalThresholdPct ?? 5}% of voting members, subject to a floor of ${rules?.memberProposalMinSignatures ?? 1}, and receipt at least ${rules?.memberProposalLeadDays ?? 7} days before AGM notice. Current voting members: ${eligibleVoters}.`}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew}>
             <Plus size={12} /> New proposal
@@ -76,7 +78,10 @@ export function MemberProposalsPage() {
           {
             id: "signatures", header: "Signatures", sortable: true, accessor: (r) => r.signatureCount,
             render: (r) => {
-              const req = Math.max(1, Math.ceil((r.eligibleVotersAtSubmission ?? 0) * (r.thresholdPercent / 100)));
+              const req = Math.max(
+                rules?.memberProposalMinSignatures ?? 1,
+                Math.ceil((r.eligibleVotersAtSubmission ?? 0) * (r.thresholdPercent / 100)),
+              );
               return <span><strong>{r.signatureCount}</strong><span className="muted"> / {req} req ({r.thresholdPercent}%)</span></span>;
             },
           },

@@ -18,6 +18,7 @@ import {
   FileDown,
 } from "lucide-react";
 import { formatDateTime, formatDate } from "../lib/format";
+import { useBylawRules } from "../hooks/useBylawRules";
 
 type Step = "notice" | "held" | "financialsPresented" | "electionsHeld" | "minutesApproved" | "annualReportFiled";
 
@@ -27,7 +28,7 @@ const STEP_ORDER: { id: Step; label: string; sub: string; icon: any }[] = [
   { id: "financialsPresented", label: "Present financial statements", sub: "Board-approved FS + auditor's report if applicable", icon: FileText },
   { id: "electionsHeld", label: "Hold elections", sub: "If bylaws require elections at AGM", icon: ClipboardCheck },
   { id: "minutesApproved", label: "Approve minutes", sub: "Usually at next meeting; then circulate to members", icon: Flag },
-  { id: "annualReportFiled", label: "File annual report", sub: "Within 30 days of AGM via Societies Online ($40)", icon: FileDown },
+  { id: "annualReportFiled", label: "File annual report", sub: "Within the configured post-AGM filing window via Societies Online", icon: FileDown },
 ];
 
 export function AgmWorkflowPage() {
@@ -40,6 +41,7 @@ export function AgmWorkflowPage() {
   const init = useMutation(api.agm.init);
   const markStep = useMutation(api.agm.markStep);
   const queueNotice = useMutation(api.agm.queueNoticeToAllVotingMembers);
+  const { rules } = useBylawRules();
 
   const [noticeChannel, setNoticeChannel] = useState<"email" | "mail" | "in-person">("email");
 
@@ -90,8 +92,18 @@ export function AgmWorkflowPage() {
         <div className="card__head"><h2 className="card__title">Compliance posture</h2></div>
         <div className="card__body col" style={{ gap: 8 }}>
           <Item label="Notice window"
-            value={daysToMeeting >= 14 && daysToMeeting <= 60 ? "Within 14–60 day range" : "Outside the 14–60 day range"}
-            tone={daysToMeeting >= 14 && daysToMeeting <= 60 ? "success" : "warn"}
+            value={
+              daysToMeeting >= (rules?.generalNoticeMinDays ?? 14) &&
+              daysToMeeting <= (rules?.generalNoticeMaxDays ?? 60)
+                ? `Within ${rules?.generalNoticeMinDays ?? 14}–${rules?.generalNoticeMaxDays ?? 60} day range`
+                : `Outside the ${rules?.generalNoticeMinDays ?? 14}–${rules?.generalNoticeMaxDays ?? 60} day range`
+            }
+            tone={
+              daysToMeeting >= (rules?.generalNoticeMinDays ?? 14) &&
+              daysToMeeting <= (rules?.generalNoticeMaxDays ?? 60)
+                ? "success"
+                : "warn"
+            }
           />
           <Item label="Meeting electronic"
             value={meeting.electronic ? "Yes — notice must explain how to participate" : "No"}
@@ -169,7 +181,7 @@ export function AgmWorkflowPage() {
                       <>
                         <Link to="/app/filings" className="btn-action">Go to filings</Link>
                         <button className="btn-action btn-action--primary" onClick={() => advance("annualReportFiled", { annualReportFiledAt: new Date().toISOString() })}>
-                          <Flag size={12} /> Mark annual report filed
+                          <Flag size={12} /> Mark annual report filed ({rules?.annualReportDueDaysAfterMeeting ?? 30} day rule)
                         </button>
                       </>
                     )}

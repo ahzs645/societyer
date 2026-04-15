@@ -2,6 +2,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { useEffect, useState } from "react";
+import { getAuthMode } from "../lib/authMode";
 
 const KEY = "societyer.currentUserId";
 
@@ -45,6 +46,10 @@ const RANK: Record<string, number> = {
 };
 
 export function hasRole(role: string | undefined | null, required: string): boolean {
-  if (!role) return true; // demo: unauthenticated acts as owner
+  if (!role) return false;
   return (RANK[role] ?? 0) >= (RANK[required] ?? 0);
+}
+
+export function isRealAuthEnabled() {
+  return getAuthMode() === "better-auth";
 }

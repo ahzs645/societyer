@@ -50,7 +50,7 @@ export function CommitteesPage() {
         }
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 320px), 1fr))", gap: 16 }}>
         {committees?.map((c: any) => {
           const tasks = (allTasks ?? []).filter((t: any) => t.committeeId === c._id);
           const open = tasks.filter((t: any) => t.status !== "Done").length;

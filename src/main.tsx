@@ -3,6 +3,8 @@ import ReactDOM from "react-dom/client";
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ConvexProvider } from "convex/react";
 import { convex } from "./lib/convex";
+import { AuthProvider } from "./auth/AuthProvider";
+import { AuthGate } from "./components/AuthGate";
 import { Layout } from "./components/Layout";
 import { ConfirmProvider, PromptProvider } from "./components/Modal";
 import { ToastProvider } from "./components/Toast";
@@ -48,67 +50,98 @@ import { BylawDiffPage } from "./pages/BylawDiff";
 import { BylawsHistoryPage } from "./pages/BylawsHistory";
 import { ReconciliationPage } from "./pages/Reconciliation";
 import { LandingPage } from "./pages/Landing";
+import { LoginPage } from "./pages/Login";
+import { BylawRulesPage } from "./pages/BylawRules";
+import { ElectionsPage } from "./pages/Elections";
+import { ElectionDetailPage } from "./pages/ElectionDetail";
+import { PortalPage } from "./pages/Portal";
 import "./theme/tokens.css";
 import "./styles/index.scss";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ConvexProvider client={convex}>
-      <ToastProvider>
-        <ConfirmProvider>
-          <PromptProvider>
-      <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/app" element={<Layout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="society" element={<SocietyPage />} />
-            <Route path="members" element={<MembersPage />} />
-            <Route path="directors" element={<DirectorsPage />} />
-            <Route path="meetings" element={<MeetingsPage />} />
-            <Route path="meetings/:id" element={<MeetingDetailPage />} />
-            <Route path="minutes" element={<MinutesPage />} />
-            <Route path="filings" element={<FilingsPage />} />
-            <Route path="deadlines" element={<DeadlinesPage />} />
-            <Route path="documents" element={<DocumentsPage />} />
-            <Route path="conflicts" element={<ConflictsPage />} />
-            <Route path="financials" element={<FinancialsPage />} />
-            <Route path="privacy" element={<PrivacyPage />} />
-            <Route path="committees" element={<CommitteesPage />} />
-            <Route path="committees/:id" element={<CommitteeDetailPage />} />
-            <Route path="goals" element={<GoalsPage />} />
-            <Route path="goals/:id" element={<GoalDetailPage />} />
-            <Route path="tasks" element={<TasksPage />} />
-            <Route path="timeline" element={<TimelinePage />} />
-            <Route path="notifications" element={<NotificationsPage />} />
-            <Route path="users" element={<UsersPage />} />
-            <Route path="audit" element={<AuditLogPage />} />
-            <Route path="membership" element={<MembershipPage />} />
-            <Route path="inspections" element={<InspectionsPage />} />
-            <Route path="attestations" element={<AttestationsPage />} />
-            <Route path="retention" element={<RetentionPage />} />
-            <Route path="insurance" element={<InsurancePage />} />
-            <Route path="pipa-training" element={<PipaTrainingPage />} />
-            <Route path="proxies" element={<ProxiesPage />} />
-            <Route path="auditors" element={<AuditorsPage />} />
-            <Route path="proposals" element={<MemberProposalsPage />} />
-            <Route path="receipts" element={<ReceiptsPage />} />
-            <Route path="employees" element={<EmployeesPage />} />
-            <Route path="court-orders" element={<CourtOrdersPage />} />
-            <Route path="written-resolutions" element={<WrittenResolutionsPage />} />
-            <Route path="meetings/:id/agm" element={<AgmWorkflowPage />} />
-            <Route path="filings/prefill" element={<FilingPreFillPage />} />
-            <Route path="bylaw-diff" element={<BylawDiffPage />} />
-            <Route path="bylaws-history" element={<BylawsHistoryPage />} />
-            <Route path="reconciliation" element={<ReconciliationPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </HashRouter>
-          </PromptProvider>
-        </ConfirmProvider>
-      </ToastProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <ConfirmProvider>
+            <PromptProvider>
+              <HashRouter
+                future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+              >
+                <Routes>
+                  <Route path="/" element={<LandingPage />} />
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route
+                    path="/portal"
+                    element={
+                      <AuthGate>
+                        <PortalPage />
+                      </AuthGate>
+                    }
+                  />
+                  <Route
+                    path="/app"
+                    element={
+                      <AuthGate>
+                        <Layout />
+                      </AuthGate>
+                    }
+                  >
+                    <Route index element={<Dashboard />} />
+                    <Route path="society" element={<SocietyPage />} />
+                    <Route path="members" element={<MembersPage />} />
+                    <Route path="directors" element={<DirectorsPage />} />
+                    <Route path="meetings" element={<MeetingsPage />} />
+                    <Route path="meetings/:id" element={<MeetingDetailPage />} />
+                    <Route path="minutes" element={<MinutesPage />} />
+                    <Route path="filings" element={<FilingsPage />} />
+                    <Route path="deadlines" element={<DeadlinesPage />} />
+                    <Route path="documents" element={<DocumentsPage />} />
+                    <Route path="conflicts" element={<ConflictsPage />} />
+                    <Route path="financials" element={<FinancialsPage />} />
+                    <Route path="privacy" element={<PrivacyPage />} />
+                    <Route path="committees" element={<CommitteesPage />} />
+                    <Route path="committees/:id" element={<CommitteeDetailPage />} />
+                    <Route path="goals" element={<GoalsPage />} />
+                    <Route path="goals/:id" element={<GoalDetailPage />} />
+                    <Route path="tasks" element={<TasksPage />} />
+                    <Route path="timeline" element={<TimelinePage />} />
+                    <Route path="notifications" element={<NotificationsPage />} />
+                    <Route path="users" element={<UsersPage />} />
+                    <Route path="audit" element={<AuditLogPage />} />
+                    <Route path="membership" element={<MembershipPage />} />
+                    <Route path="inspections" element={<InspectionsPage />} />
+                    <Route path="attestations" element={<AttestationsPage />} />
+                    <Route path="retention" element={<RetentionPage />} />
+                    <Route path="insurance" element={<InsurancePage />} />
+                    <Route path="pipa-training" element={<PipaTrainingPage />} />
+                    <Route path="proxies" element={<ProxiesPage />} />
+                    <Route path="auditors" element={<AuditorsPage />} />
+                    <Route path="proposals" element={<MemberProposalsPage />} />
+                    <Route path="receipts" element={<ReceiptsPage />} />
+                    <Route path="employees" element={<EmployeesPage />} />
+                    <Route path="court-orders" element={<CourtOrdersPage />} />
+                    <Route
+                      path="written-resolutions"
+                      element={<WrittenResolutionsPage />}
+                    />
+                    <Route path="meetings/:id/agm" element={<AgmWorkflowPage />} />
+                    <Route path="filings/prefill" element={<FilingPreFillPage />} />
+                    <Route path="bylaw-diff" element={<BylawDiffPage />} />
+                    <Route path="bylaw-rules" element={<BylawRulesPage />} />
+                    <Route path="bylaws-history" element={<BylawsHistoryPage />} />
+                    <Route path="elections" element={<ElectionsPage />} />
+                    <Route path="elections/:id" element={<ElectionDetailPage />} />
+                    <Route path="reconciliation" element={<ReconciliationPage />} />
+                    <Route path="settings" element={<SettingsPage />} />
+                  </Route>
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </HashRouter>
+            </PromptProvider>
+          </ConfirmProvider>
+        </ToastProvider>
+      </AuthProvider>
     </ConvexProvider>
   </React.StrictMode>,
 );

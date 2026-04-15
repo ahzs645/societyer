@@ -1,10 +1,11 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
+import { getActiveBylawRuleSet } from "./lib/bylawRules";
 
 export const summary = query({
   args: { societyId: v.id("societies") },
   handler: async (ctx, { societyId }) => {
-    const [society, members, directors, meetings, filings, deadlines, conflicts, committees, goals, tasks] = await Promise.all([
+    const [society, members, directors, meetings, filings, deadlines, conflicts, committees, goals, tasks, rules] = await Promise.all([
       ctx.db.get(societyId),
       ctx.db.query("members").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
       ctx.db.query("directors").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
@@ -15,6 +16,7 @@ export const summary = query({
       ctx.db.query("committees").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
       ctx.db.query("goals").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
       ctx.db.query("tasks").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      getActiveBylawRuleSet(ctx, societyId),
     ]);
 
     const now = Date.now();
@@ -52,7 +54,7 @@ export const summary = query({
       upcomingMeetings: upcomingMeetings.slice(0, 3),
       upcomingFilings: upcomingFilings.slice(0, 5),
       overdueFilings,
-      complianceFlags: buildFlags({ society, activeDirectors, bcResidents, members }),
+      complianceFlags: buildFlags({ society, activeDirectors, bcResidents, members, rules }),
     };
   },
 });
@@ -62,6 +64,7 @@ function buildFlags(args: {
   activeDirectors: any[];
   bcResidents: number;
   members: any[];
+  rules: any;
 }) {
   const flags: { level: "ok" | "warn" | "err"; text: string }[] = [];
   const { society, activeDirectors, bcResidents } = args;
@@ -82,6 +85,11 @@ function buildFlags(args: {
     flags.push({ level: "warn", text: "Constitution not uploaded." });
   if (!society.bylawsDocId)
     flags.push({ level: "warn", text: "Bylaws not uploaded." });
+  if (!args.rules?._id)
+    flags.push({
+      level: "warn",
+      text: "Bylaw rule set not configured — governance workflows are using BC defaults.",
+    });
   if (flags.length === 0)
     flags.push({ level: "ok", text: "No compliance issues detected." });
   return flags;

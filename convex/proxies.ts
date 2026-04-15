@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { getActiveBylawRuleSet } from "./lib/bylawRules";
 
 export const list = query({
   args: { societyId: v.id("societies") },
@@ -30,7 +31,38 @@ export const create = mutation({
     instructions: v.optional(v.string()),
     signedAtISO: v.string(),
   },
-  handler: async (ctx, args) => ctx.db.insert("proxies", args),
+  handler: async (ctx, args) => {
+    const rules = await getActiveBylawRuleSet(ctx, args.societyId);
+    if (!rules.allowProxyVoting) {
+      throw new Error(
+        "Proxy voting is disabled by the active bylaw rule set.",
+      );
+    }
+    if (rules.proxyHolderMustBeMember && !args.proxyHolderMemberId) {
+      throw new Error(
+        "The proxy holder must be linked to a member under the active bylaw rule set.",
+      );
+    }
+
+    const existing = await ctx.db
+      .query("proxies")
+      .withIndex("by_meeting", (q) => q.eq("meetingId", args.meetingId))
+      .collect();
+    const activeForGrantor = existing.filter((proxy) => {
+      if (proxy.revokedAtISO) return false;
+      if (args.grantorMemberId && proxy.grantorMemberId) {
+        return proxy.grantorMemberId === args.grantorMemberId;
+      }
+      return proxy.grantorName.trim().toLowerCase() === args.grantorName.trim().toLowerCase();
+    });
+    if (activeForGrantor.length >= rules.proxyLimitPerGrantorPerMeeting) {
+      throw new Error(
+        `A grantor may only appoint ${rules.proxyLimitPerGrantorPerMeeting} proxy holder(s) for a meeting under the active bylaw rule set.`,
+      );
+    }
+
+    return ctx.db.insert("proxies", args);
+  },
 });
 
 export const revoke = mutation({

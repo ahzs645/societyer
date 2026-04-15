@@ -38,6 +38,7 @@
   -webkit-backdrop-filter: saturate(180%) blur(12px);
   border-bottom: 1px solid var(--border);
 }
+.dark .landing__nav { background: rgba(14, 14, 16, 0.88); }
 .landing__nav-inner {
   max-width: 1120px;
   margin: 0 auto;
@@ -84,6 +85,12 @@
   a:hover { color: var(--text-primary); }
 }
 .landing__nav-cta { margin-left: auto; }
+.landing__nav-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-left: auto;
+}
 
 // ---- Buttons -------------------------------------------------
 .landing__btn {
@@ -113,8 +120,9 @@
   color: var(--text-inverse);
 }
 .landing__btn--primary:hover {
-  background: #000;
-  border-color: #000;
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: var(--accent-on);
 }
 
 .landing__btn--ghost {
@@ -164,10 +172,21 @@
   margin-bottom: var(--s-5);
 }
 .landing__h1-accent {
+  display: block;
   background: linear-gradient(120deg, var(--accent), #7a8bff);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+.landing__theme-toggle {
+  min-width: 32px;
+  justify-content: center;
+  padding: 0 var(--s-2);
+}
+
+.landing__theme-label {
+  @media (max-width: 540px) { display: none; }
 }
 
 .landing__lede {

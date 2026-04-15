@@ -21,7 +21,7 @@ export function NotificationBell() {
   const markRead = useMutation(api.notifications.markRead);
   const markAllRead = useMutation(api.notifications.markAllRead);
   const [open, setOpen] = useState(false);
-  const [anchor, setAnchor] = useState<{ top: number; left: number } | null>(null);
+  const [anchor, setAnchor] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
@@ -30,14 +30,20 @@ export function NotificationBell() {
     const place = () => {
       const rect = btnRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const panelWidth = 340;
+      const gutter = 8;
+      const panelWidth = Math.min(340, window.innerWidth - gutter * 2);
+      const panelMaxHeight = Math.min(440, Math.max(180, window.innerHeight - rect.bottom - gutter * 2));
       // Anchor to the right edge of the button, but keep the panel on-screen.
       let left = rect.right - panelWidth;
-      if (left < 8) left = 8;
-      if (left + panelWidth > window.innerWidth - 8) {
-        left = window.innerWidth - panelWidth - 8;
+      if (left < gutter) left = gutter;
+      if (left + panelWidth > window.innerWidth - gutter) {
+        left = window.innerWidth - panelWidth - gutter;
       }
-      setAnchor({ top: rect.bottom + 6, left });
+      let top = rect.bottom + 6;
+      if (top + panelMaxHeight > window.innerHeight - gutter) {
+        top = Math.max(gutter, window.innerHeight - panelMaxHeight - gutter);
+      }
+      setAnchor({ top, left, width: panelWidth, maxHeight: panelMaxHeight });
     };
     place();
     const h = (e: MouseEvent) => {
@@ -97,8 +103,8 @@ export function NotificationBell() {
               position: "fixed",
               top: anchor.top,
               left: anchor.left,
-              width: 340,
-              maxHeight: 440,
+              width: anchor.width,
+              maxHeight: anchor.maxHeight,
               overflow: "auto",
               background: "var(--bg-panel)",
               border: "1px solid var(--border)",

@@ -5,23 +5,32 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:full": "concurrently -k \"npm run auth:server\" \"npm run dev\"",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "convex": "convex dev",
     "convex:seed": "convex run seed:run",
     "convex:reset": "convex run seed:reset",
+    "convex:codegen": "npx convex codegen",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f backend",
-    "docker:admin-key": "./scripts/convex-admin-key.sh"
+    "docker:admin-key": "./scripts/convex-admin-key.sh",
+    "auth:server": "tsx server/auth-server.ts"
   },
   "dependencies": {
+    "@types/express": "^5.0.6",
+    "better-auth": "^1.6.3",
+    "concurrently": "^9.2.1",
     "convex": "^1.17.4",
     "date-fns": "^3.6.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
     "lucide-react": "^0.469.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.0"
+    "react-router-dom": "^6.28.0",
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
