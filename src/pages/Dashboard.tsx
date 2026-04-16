@@ -72,7 +72,7 @@ export function Dashboard() {
 
           <div className="card">
             <div className="card__head">
-              <h2 className="card__title">Upcoming filings</h2>
+              <h2 className="card__title">Filings requiring attention</h2>
               <Link to="/app/filings" className="card__subtitle row" style={{ marginLeft: "auto" }}>
                 View all <ArrowRight size={12} />
               </Link>
@@ -87,18 +87,26 @@ export function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {overdueFilings.concat(upcomingFilings).slice(0, 6).map((f: any) => (
-                  <tr key={f._id}>
-                    <td>{kindLabel(f.kind)}</td>
-                    <td className="table__cell--muted">{f.periodLabel ?? "—"}</td>
-                    <td className="table__cell--mono">{formatDate(f.dueDate)}</td>
-                    <td>{renderFilingStatus(f)}</td>
+                {overdueFilings.length > 0 && (
+                  <tr>
+                    <td colSpan={4} className="table__cell--muted" style={{ background: "var(--danger-soft)", color: "var(--danger)", fontWeight: 700 }}>
+                      Overdue · {overdueFilings.length}
+                    </td>
                   </tr>
-                ))}
+                )}
+                {overdueFilings.slice(0, 4).map((f: any) => renderFilingRow(f))}
+                {upcomingFilings.length > 0 && (
+                  <tr>
+                    <td colSpan={4} className="table__cell--muted" style={{ background: "var(--bg-subtle)", fontWeight: 700 }}>
+                      Upcoming · {upcomingFilings.length}
+                    </td>
+                  </tr>
+                )}
+                {upcomingFilings.slice(0, overdueFilings.length > 0 ? 4 : 6).map((f: any) => renderFilingRow(f))}
                 {overdueFilings.length + upcomingFilings.length === 0 && (
                   <tr>
                     <td colSpan={4} className="table__cell--muted" style={{ textAlign: "center", padding: 24 }}>
-                      Nothing upcoming.
+                      No overdue or upcoming filings.
                     </td>
                   </tr>
                 )}
@@ -270,6 +278,17 @@ function Stat({
       </div>
       {sub && <div className="stat__sub">{sub}</div>}
     </div>
+  );
+}
+
+function renderFilingRow(f: any) {
+  return (
+    <tr key={f._id}>
+      <td>{kindLabel(f.kind)}</td>
+      <td className="table__cell--muted">{f.periodLabel ?? "—"}</td>
+      <td className="table__cell--mono">{formatDate(f.dueDate)}</td>
+      <td>{renderFilingStatus(f)}</td>
+    </tr>
   );
 }
 

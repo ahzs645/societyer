@@ -64,10 +64,11 @@ export function RetentionPage() {
         renderRowActions={(r) => (
           <>
             <button className="btn btn--ghost btn--sm" onClick={() => flag({ id: r._id as any, flagged: !r.flagged })}>
-              {r.flagged ? "Keep" : "Confirm purge"}
+              {r.flagged ? "Keep record" : "Flag for purge review"}
             </button>
             <button
               className="btn btn--ghost btn--sm btn--icon"
+              aria-label={`Delete ${r.title}`}
               onClick={async () => {
                 const ok = await confirm({
                   title: "Delete document?",

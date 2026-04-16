@@ -82,7 +82,7 @@ export function EmployeesPage() {
           { id: "annualSalaryCents", header: "Salary (annual)", sortable: true, align: "right", accessor: (r) => r.annualSalaryCents ?? 0, render: (r) => r.annualSalaryCents ? <span className="mono">{money(r.annualSalaryCents)}</span> : r.hourlyWageCents ? <span className="mono">{money(r.hourlyWageCents)}/hr</span> : <span className="muted">—</span> },
         ]}
         renderRowActions={(r) => (
-          <button className="btn btn--ghost btn--sm btn--icon" onClick={() => remove({ id: r._id })}>
+          <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete employee ${r.name}`} onClick={() => remove({ id: r._id })}>
             <Trash2 size={12} />
           </button>
         )}

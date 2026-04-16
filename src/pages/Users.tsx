@@ -109,6 +109,7 @@ export function UsersPage() {
                   </button>
                   <button
                     className="btn btn--ghost btn--sm btn--icon"
+                    aria-label={`Remove user ${u.name ?? u.email}`}
                     onClick={() => remove({ id: u._id, actingUserId })}
                   >
                     <Trash2 size={12} />

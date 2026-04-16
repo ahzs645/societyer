@@ -156,6 +156,7 @@ export function DirectorsPage() {
         renderRowActions={(r) => (
           <button
             className="btn btn--ghost btn--sm btn--icon"
+            aria-label={`Remove ${r.firstName} ${r.lastName}`}
             onClick={async () => {
               const ok = await confirm({
                 title: "Remove director?",

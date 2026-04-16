@@ -72,6 +72,7 @@ export function SignaturePanel({
             </span>
             <button
               className="btn btn--ghost btn--sm btn--icon"
+              aria-label={`Revoke signature from ${s.signerName}`}
               onClick={() => revoke({ id: s._id })}
               title="Revoke"
             >

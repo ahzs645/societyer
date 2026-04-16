@@ -278,6 +278,7 @@ export function GrantsPage() {
             </button>
             <button
               className="btn btn--ghost btn--sm btn--icon"
+              aria-label={`Delete grant ${row.title}`}
               onClick={async () => {
                 await removeGrant({ id: row._id, actingUserId });
                 toast.success("Grant removed");
@@ -312,6 +313,7 @@ export function GrantsPage() {
             </button>
             <button
               className="btn btn--ghost btn--sm btn--icon"
+              aria-label={`Delete ledger entry for ${row.description}`}
               onClick={async () => {
                 await removeTransaction({ id: row._id, actingUserId });
                 toast.success("Ledger entry removed");
@@ -353,6 +355,7 @@ export function GrantsPage() {
             </button>
             <button
               className="btn btn--ghost btn--sm btn--icon"
+              aria-label={`Delete report ${row.title}`}
               onClick={async () => {
                 await removeReport({ id: row._id, actingUserId });
                 toast.success("Report removed");

@@ -161,6 +161,7 @@ export function MembersPage() {
         renderRowActions={(r) => (
           <button
             className="btn btn--ghost btn--sm btn--icon"
+            aria-label={`Remove ${r.firstName} ${r.lastName}`}
             onClick={() => confirmRemove(r)}
           >
             <Trash2 size={12} />

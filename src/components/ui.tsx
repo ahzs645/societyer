@@ -1,4 +1,15 @@
-import { MouseEvent as ReactMouseEvent, ReactNode, useEffect, useId, useState } from "react";
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  MouseEvent as ReactMouseEvent,
+  ReactElement,
+  ReactNode,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { X, AlertTriangle, CheckCircle2, Info, Lock, Unlock } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -22,6 +33,43 @@ export function EmptyState({
       <div className="empty-state__title">{title}</div>
       {children && <div style={{ marginBottom: 12 }}>{children}</div>}
       {action}
+    </div>
+  );
+}
+
+export type ErrorSummaryItem = {
+  fieldId?: string;
+  label: string;
+  message: string;
+};
+
+export function ErrorSummary({
+  title = "Fix the following before continuing",
+  errors,
+}: {
+  title?: string;
+  errors: ErrorSummaryItem[];
+}) {
+  if (errors.length === 0) return null;
+
+  return (
+    <div className="error-summary" role="alert" tabIndex={-1}>
+      <div className="error-summary__title">{title}</div>
+      <ul className="error-summary__list">
+        {errors.map((error) => (
+          <li key={`${error.fieldId ?? error.label}-${error.message}`}>
+            {error.fieldId ? (
+              <a href={`#${error.fieldId}`}>
+                <strong>{error.label}:</strong> {error.message}
+              </a>
+            ) : (
+              <span>
+                <strong>{error.label}:</strong> {error.message}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -227,14 +275,8 @@ export function Drawer({
 }) {
   const inspector = useInspectorPanel();
   const panelId = useId();
-
-  useEffect(() => {
-    if (inspector) return;
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose, inspector]);
+  const titleId = useStableDomId("drawer-title");
+  const dialogRef = useDialogFocus<HTMLDivElement>(open, onClose);
 
   useEffect(() => {
     if (!open || !inspector) return;
@@ -245,11 +287,17 @@ export function Drawer({
   if (!open) return null;
   if (inspector?.portalTarget) {
     return createPortal(
-      <div className="inspector-panel" role="dialog" aria-label={title}>
+      <div
+        className="inspector-panel"
+        role="dialog"
+        aria-labelledby={titleId}
+        ref={dialogRef}
+        tabIndex={-1}
+      >
         <div className="drawer__head inspector-panel__head">
-          <h2 className="drawer__title">{title}</h2>
+          <h2 className="drawer__title" id={titleId}>{title}</h2>
           <div style={{ flex: 1 }} />
-          <button className="btn btn--ghost btn--icon" onClick={onClose}>
+          <button className="btn btn--ghost btn--icon" onClick={onClose} aria-label="Close drawer">
             <X />
           </button>
         </div>
@@ -264,11 +312,18 @@ export function Drawer({
   return (
     <>
       <div className="drawer-backdrop" onClick={onClose} />
-      <div className="drawer" role="dialog" aria-modal>
+      <div
+        className="drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        ref={dialogRef}
+        tabIndex={-1}
+      >
         <div className="drawer__head">
-          <h2 className="drawer__title">{title}</h2>
+          <h2 className="drawer__title" id={titleId}>{title}</h2>
           <div style={{ flex: 1 }} />
-          <button className="btn btn--ghost btn--icon" onClick={onClose}>
+          <button className="btn btn--ghost btn--icon" onClick={onClose} aria-label="Close drawer">
             <X />
           </button>
         </div>
@@ -282,17 +337,33 @@ export function Drawer({
 export function Field({
   label,
   hint,
+  error,
+  required,
+  id,
   children,
 }: {
   label: string;
   hint?: string;
+  error?: ReactNode;
+  required?: boolean;
+  id?: string;
   children: ReactNode;
 }) {
+  const generatedId = useStableDomId("field");
+  const fieldId = id ?? getFirstChildId(children) ?? generatedId;
+  const hintId = hint ? `${fieldId}-hint` : undefined;
+  const errorId = error ? `${fieldId}-error` : undefined;
+  const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined;
+
   return (
     <div className="field">
-      <label className="field__label">{label}</label>
-      {children}
-      {hint && <div className="field__hint">{hint}</div>}
+      <label className="field__label" htmlFor={fieldId}>
+        {label}
+        {required && <span className="field__required" aria-hidden="true"> *</span>}
+      </label>
+      {enhanceFieldChildren(children, fieldId, describedBy, Boolean(error))}
+      {hint && <div className="field__hint" id={hintId}>{hint}</div>}
+      {error && <div className="field__error" id={errorId}>{error}</div>}
     </div>
   );
 }
@@ -312,6 +383,9 @@ export function LockedField({
 }) {
   const [locked, setLocked] = useState(true);
   const confirm = useConfirm();
+  const generatedId = useStableDomId("field");
+  const fieldId = generatedId;
+  const hintId = hint ? `${fieldId}-hint` : undefined;
 
   const onUnlock = async () => {
     const ok = await confirm({
@@ -331,7 +405,7 @@ export function LockedField({
   return (
     <div className="field">
       <div className="field__label-row">
-        <label className="field__label">{label}</label>
+        <label className="field__label" htmlFor={fieldId}>{label}</label>
         {locked ? (
           <button className="field__lock" onClick={onUnlock} type="button" title={reason}>
             <Lock /> Locked
@@ -347,8 +421,8 @@ export function LockedField({
           </button>
         )}
       </div>
-      {children(locked)}
-      {hint && <div className="field__hint">{hint}</div>}
+      {enhanceFieldChildren(children(locked), fieldId, hintId, false)}
+      {hint && <div className="field__hint" id={hintId}>{hint}</div>}
     </div>
   );
 }
@@ -367,4 +441,121 @@ export function Flag({
       <div>{children}</div>
     </div>
   );
+}
+
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "textarea:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+function useStableDomId(prefix: string) {
+  const id = useId();
+  return `${prefix}-${id.replace(/:/g, "")}`;
+}
+
+function useDialogFocus<T extends HTMLElement>(open: boolean, onClose: () => void) {
+  const ref = useRef<T | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusTimer = window.setTimeout(() => {
+      const first = ref.current?.querySelector<HTMLElement>("[autofocus]") ?? getFocusable(ref.current)[0];
+      (first ?? ref.current)?.focus();
+    }, 0);
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = getFocusable(ref.current);
+      if (focusable.length === 0) {
+        event.preventDefault();
+        ref.current?.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      if (event.shiftKey && (active === first || !ref.current?.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKey);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener("keydown", onKey);
+      previouslyFocused?.focus();
+    };
+  }, [open]);
+
+  return ref;
+}
+
+function getFocusable(root: HTMLElement | null) {
+  if (!root) return [];
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (element) =>
+      !element.hasAttribute("disabled") &&
+      element.getAttribute("aria-hidden") !== "true" &&
+      element.offsetParent !== null,
+  );
+}
+
+function getFirstChildId(children: ReactNode): string | undefined {
+  let found: string | undefined;
+  Children.forEach(children, (child) => {
+    if (found || !isValidElement(child)) return;
+    const props = child.props as { id?: string };
+    if (props.id) found = props.id;
+  });
+  return found;
+}
+
+function enhanceFieldChildren(
+  children: ReactNode,
+  id: string,
+  describedBy: string | undefined,
+  invalid: boolean,
+) {
+  let applied = false;
+  return Children.map(children, (child) => {
+    if (applied || !isValidElement(child)) return child;
+    const childProps = child.props as {
+      id?: string;
+      "aria-describedby"?: string;
+      "aria-invalid"?: boolean;
+    };
+    const nextProps: Record<string, unknown> = {};
+    if (!childProps.id) nextProps.id = id;
+    if (describedBy) {
+      nextProps["aria-describedby"] = [childProps["aria-describedby"], describedBy]
+        .filter(Boolean)
+        .join(" ");
+    }
+    if (invalid) nextProps["aria-invalid"] = true;
+    applied = true;
+    return cloneElement(child as ReactElement, nextProps);
+  });
 }

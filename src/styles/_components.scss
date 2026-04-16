@@ -162,8 +162,20 @@
 /* ============================================================
    DatePicker
    ============================================================ */
+.date-trigger-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 100%;
+}
+.date-trigger-wrap.has-clear .date-trigger {
+  padding-right: 28px;
+}
 .date-trigger .select-trigger__label { gap: 6px; }
 .date-trigger__clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-grid;
   place-items: center;
   width: 16px;
@@ -171,12 +183,21 @@
   border-radius: 3px;
   color: var(--text-tertiary);
   opacity: 0.7;
+  border: 0;
+  background: transparent;
   transition: background 0.08s ease, opacity 0.08s ease;
+}
+.select-trigger--sm + .date-trigger__clear {
+  right: 4px;
 }
 .date-trigger__clear:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
   opacity: 1;
+}
+.date-trigger__clear:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
 }
 
 .calendar {

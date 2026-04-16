@@ -241,6 +241,15 @@
 .btn:hover {
   background: var(--bg-hover);
 }
+.btn:disabled,
+.btn-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn:disabled:hover,
+.btn-action:disabled:hover {
+  background: var(--bg-base);
+}
 .btn--primary {
   background: var(--bg-inverse);
   color: var(--text-inverse);
@@ -477,8 +486,23 @@
   vertical-align: middle;
   height: 32px;
 }
-.table thead th.is-sortable { cursor: pointer; }
+.table thead th.is-sortable { padding: 0; }
 .table thead th.is-sortable:hover { background: var(--bg-hover); color: var(--text-primary); }
+.table__sort-button {
+  width: 100%;
+  min-height: 38px;
+  padding: 10px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+}
+.table__sort-button:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
 .table__sort-indicator {
   display: inline-block;
   margin-left: 4px;
@@ -547,6 +571,11 @@
 .table tbody tr:hover {
   background: var(--bg-hover);
 }
+.table tbody tr[role="button"]:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+  background: var(--bg-hover);
+}
 .table tbody tr:last-child td {
   border-bottom: none;
 }
@@ -576,7 +605,8 @@
   transform: translateX(2px);
 }
 .table tbody tr:hover .table__actions-inner,
-.table tbody tr:focus-within .table__actions-inner {
+.table tbody tr:focus-within .table__actions-inner,
+.table tbody tr[role="button"]:focus-visible .table__actions-inner {
   opacity: 1;
   transform: translateX(0);
 }

@@ -7,6 +7,7 @@ import { Badge, Drawer, Field, Flag, InspectorNote, RecordChip } from "../compon
 import { DataTable } from "../components/DataTable";
 import { ShieldCheck, PenLine, Tag } from "lucide-react";
 import { formatDate, initials } from "../lib/format";
+import { DIRECTOR_ATTESTATION_COPY, LEGAL_COPY_REVIEWED } from "../lib/legalCopy";
 
 export function AttestationsPage() {
   const society = useSociety();
@@ -69,7 +70,7 @@ export function AttestationsPage() {
         title={`Director attestations · ${year}`}
         icon={<ShieldCheck size={16} />}
         iconColor="red"
-        subtitle="Annual renewal confirming each director still meets the Societies Act qualifications (age ≥ 18 unless bylaws permit 16–17, not an undischarged bankrupt, not disqualified)."
+        subtitle={`${DIRECTOR_ATTESTATION_COPY.subtitle} ${LEGAL_COPY_REVIEWED}.`}
       />
 
       {missing && missing.length > 0 && (
@@ -134,13 +135,12 @@ export function AttestationsPage() {
         {form && (
           <div>
             <InspectorNote tone="warn" title="Qualification check">
-              By signing, the director confirms each statement is true as of today and that the
-              society can rely on this attestation in its governance records.
+              {DIRECTOR_ATTESTATION_COPY.note}
             </InspectorNote>
-            <label className="checkbox"><input type="checkbox" checked={form.isAtLeast18} onChange={(e) => setForm({ ...form, isAtLeast18: e.target.checked })} /> I am at least 18 years old (or 16–17 and bylaws permit).</label>
-            <label className="checkbox"><input type="checkbox" checked={form.notBankrupt} onChange={(e) => setForm({ ...form, notBankrupt: e.target.checked })} /> I am not an undischarged bankrupt.</label>
-            <label className="checkbox"><input type="checkbox" checked={form.notDisqualified} onChange={(e) => setForm({ ...form, notDisqualified: e.target.checked })} /> I have not been convicted of an offence that disqualifies me under s.44 of the Societies Act.</label>
-            <label className="checkbox"><input type="checkbox" checked={form.stillResidentOrEligible} onChange={(e) => setForm({ ...form, stillResidentOrEligible: e.target.checked })} /> My residency and other eligibility criteria remain accurate.</label>
+            <label className="checkbox"><input type="checkbox" checked={form.isAtLeast18} onChange={(e) => setForm({ ...form, isAtLeast18: e.target.checked })} /> {DIRECTOR_ATTESTATION_COPY.statements.age}</label>
+            <label className="checkbox"><input type="checkbox" checked={form.notBankrupt} onChange={(e) => setForm({ ...form, notBankrupt: e.target.checked })} /> {DIRECTOR_ATTESTATION_COPY.statements.bankruptcy}</label>
+            <label className="checkbox"><input type="checkbox" checked={form.notDisqualified} onChange={(e) => setForm({ ...form, notDisqualified: e.target.checked })} /> {DIRECTOR_ATTESTATION_COPY.statements.disqualification}</label>
+            <label className="checkbox"><input type="checkbox" checked={form.stillResidentOrEligible} onChange={(e) => setForm({ ...form, stillResidentOrEligible: e.target.checked })} /> {DIRECTOR_ATTESTATION_COPY.statements.residency}</label>
             <Field label="Notes (optional)"><textarea className="textarea" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
           </div>
         )}

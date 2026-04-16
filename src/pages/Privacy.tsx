@@ -7,6 +7,11 @@ import { Flag } from "../components/ui";
 import { Shield } from "lucide-react";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { useModuleEnabled } from "../hooks/useModules";
+import {
+  LEGAL_COPY_REVIEWED,
+  PIPA_POLICY_REQUIREMENTS,
+  RECORDS_INSPECTION_GUIDANCE,
+} from "../lib/legalCopy";
 
 export function PrivacyPage() {
   const society = useSociety();
@@ -44,7 +49,7 @@ export function PrivacyPage() {
     <div className="page">
       <PageHeader
         title="Privacy (PIPA)"
-        subtitle="BC's Personal Information Protection Act applies to non-profits. Adopt a privacy policy, designate a privacy officer, train staff, and comply with CASL."
+        subtitle={`Privacy operations, member consent coverage, and records-inspection guidance. ${LEGAL_COPY_REVIEWED}.`}
         actions={communicationsEnabled ? (
           <Link className="btn-action" to="/app/communications">
             Manage consent
@@ -86,13 +91,7 @@ export function PrivacyPage() {
               <h2 className="card__title"><Shield size={14} /> What your policy must cover</h2>
             </div>
             <div className="card__body col">
-              <Item>Why personal information is collected and how it will be used and disclosed.</Item>
-              <Item>How information is stored and who can access it.</Item>
-              <Item>How individuals can request access to or correction of their information.</Item>
-              <Item>Retention period and secure disposal practices.</Item>
-              <Item>Contact details for the privacy officer.</Item>
-              <Item>CASL compliance for electronic communications (consent, identification, unsubscribe).</Item>
-              <Item>Member notice preferences should be recorded before newsletters or bulk updates are sent.</Item>
+              {PIPA_POLICY_REQUIREMENTS.map((item) => <Item key={item}>{item}</Item>)}
             </div>
           </div>
         </div>
@@ -100,7 +99,7 @@ export function PrivacyPage() {
         <div className="card">
         <div className="card__head"><h2 className="card__title">Records inspection rules</h2></div>
         <div className="card__body col">
-          <Item>Members and directors may inspect most records; bylaws may restrict accounting records and directors' minutes.</Item>
+          {RECORDS_INSPECTION_GUIDANCE.map((item) => <Item key={item}>{item}</Item>)}
           <Item>
             Members' register is{" "}
             {rules?.inspectionMemberRegisterByPublic ? <strong>available</strong> : <strong>not</strong>}{" "}
@@ -112,10 +111,7 @@ export function PrivacyPage() {
           <Item>
             Members may inspect the director register: <strong>{rules?.inspectionDirectorRegisterByMembers ? "yes" : "no"}</strong>.
           </Item>
-          <Item>Public may inspect financial statements and auditor's reports on request.</Item>
           <Item>{rules?.inspectionCopiesAllowed ? "Copies are allowed under the active rule set." : "Copies are restricted under the active rule set."}</Item>
-          <Item>Non-members may be charged up to $10/day for inspection and $0.50/page ($0.10 electronic) for copies.</Item>
-          <Item>Keep a current consent log for notices, newsletters, and electronic reminders.</Item>
         </div>
       </div>
       </div>

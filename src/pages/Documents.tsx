@@ -155,6 +155,7 @@ export function DocumentsPage() {
             </button>
             <button
               className="btn btn--ghost btn--sm btn--icon"
+              aria-label={`Delete ${r.title}`}
               onClick={async () => {
                 const ok = await confirm({
                   title: "Delete document?",

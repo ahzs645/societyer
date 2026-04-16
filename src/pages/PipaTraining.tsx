@@ -78,7 +78,7 @@ export function PipaTrainingPage() {
           { id: "trainer", header: "Trainer", accessor: (r) => r.trainer ?? "", render: (r) => <span className="muted">{r.trainer ?? "—"}</span> },
         ]}
         renderRowActions={(r) => (
-          <button className="btn btn--ghost btn--sm btn--icon" onClick={() => remove({ id: r._id })}>
+          <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete training record for ${r.personName}`} onClick={() => remove({ id: r._id })}>
             <Trash2 size={12} />
           </button>
         )}

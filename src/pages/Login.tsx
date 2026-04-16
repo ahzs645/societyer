@@ -76,6 +76,7 @@ export function LoginPage() {
                   className="input"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  autoComplete="name"
                   required
                 />
               </label>
@@ -88,6 +89,7 @@ export function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
                 required
               />
             </label>
@@ -100,12 +102,15 @@ export function LoginPage() {
                 minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
                 required
               />
             </label>
 
             {error && (
               <div
+                role="alert"
+                aria-live="assertive"
                 style={{
                   border: "1px solid var(--danger)",
                   borderRadius: 8,
@@ -136,6 +141,14 @@ export function LoginPage() {
                 ? "Need an account? Sign up"
                 : "Already have an account? Sign in"}
             </button>
+            {mode === "sign-in" && (
+              <a
+                className="landing__btn landing__btn--ghost"
+                href="mailto:?subject=Societyer%20password%20reset"
+              >
+                Forgot password? Request a reset
+              </a>
+            )}
           </form>
         </div>
       </section>

@@ -199,6 +199,7 @@ export function CommitteeDetailPage() {
                   <td className="table__actions">
                     <button
                       className="btn btn--ghost btn--sm btn--icon"
+                      aria-label={`Remove ${m.name} from committee`}
                       onClick={async () => {
                         const ok = await confirm({
                           title: "Remove member?",

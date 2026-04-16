@@ -13,6 +13,11 @@ type Props = {
   /** 12 or 24-hour clock. Default 24. */
   clock?: 12 | 24;
   step?: 1 | 5 | 10 | 15 | 30; // minute step
+  className?: string;
+  style?: React.CSSProperties;
+  id?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean;
 };
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -46,6 +51,11 @@ export function DateTimeInput({
   size = "md",
   clock = 24,
   step = 5,
+  className,
+  style,
+  id,
+  "aria-describedby": ariaDescribedBy,
+  "aria-invalid": ariaInvalid,
 }: Props) {
   const parsed = parse(value);
   const today = new Date();
@@ -149,21 +159,31 @@ export function DateTimeInput({
 
   return (
     <>
-      <button
-        ref={triggerRef}
-        type="button"
-        className={`select-trigger date-trigger${size === "sm" ? " select-trigger--sm" : ""}${open ? " is-open" : ""}`}
-        onClick={() => !disabled && setOpen((o) => !o)}
-        disabled={disabled}
+      <span
+        className={`date-trigger-wrap${parsed.date && clearable && !disabled ? " has-clear" : ""}`}
+        style={style}
       >
-        <CalIcon size={size === "sm" ? 12 : 14} className="select-trigger__icon" />
-        <span className="select-trigger__label">
-          {display ?? <span className="select-trigger__placeholder">{placeholder}</span>}
-        </span>
+        <button
+          ref={triggerRef}
+          type="button"
+          id={id}
+          className={`select-trigger date-trigger${size === "sm" ? " select-trigger--sm" : ""}${open ? " is-open" : ""}${className ? ` ${className}` : ""}`}
+          onClick={() => !disabled && setOpen((o) => !o)}
+          disabled={disabled}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={ariaInvalid}
+        >
+          <CalIcon size={size === "sm" ? 12 : 14} className="select-trigger__icon" />
+          <span className="select-trigger__label">
+            {display ?? <span className="select-trigger__placeholder">{placeholder}</span>}
+          </span>
+        </button>
         {parsed.date && clearable && !disabled && (
-          <span
-            role="button"
-            aria-label="Clear"
+          <button
+            type="button"
+            aria-label="Clear date and time"
             className="date-trigger__clear"
             onClick={(e) => {
               e.stopPropagation();
@@ -171,9 +191,9 @@ export function DateTimeInput({
             }}
           >
             <X size={12} />
-          </span>
+          </button>
         )}
-      </button>
+      </span>
       {open && pos
         ? createPortal(
             <div ref={popRef} className="calendar calendar--with-time" style={{ top: pos.top, left: pos.left }}>

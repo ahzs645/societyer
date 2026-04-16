@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useRef,
   useState,
 } from "react";
@@ -31,14 +32,8 @@ export function Modal({
   width = 480,
   dismissOnBackdrop = true,
 }: ModalProps) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  const titleId = useStableDomId("modal-title");
+  const dialogRef = useDialogFocus<HTMLDivElement>(open, onClose);
 
   if (!open) return null;
   return createPortal(
@@ -47,9 +42,17 @@ export function Modal({
         className="modal-backdrop"
         onClick={() => dismissOnBackdrop && onClose()}
       />
-      <div className="modal" role="dialog" aria-modal style={{ maxWidth: width }}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        ref={dialogRef}
+        tabIndex={-1}
+        style={{ maxWidth: width }}
+      >
         <div className="modal__head">
-          <h2 className="modal__title">{title}</h2>
+          <h2 className="modal__title" id={titleId}>{title}</h2>
           <button className="btn btn--ghost btn--icon" onClick={onClose} aria-label="Close">
             <X />
           </button>
@@ -249,4 +252,84 @@ export function usePrompt() {
   const ctx = useContext(PromptCtx);
   if (!ctx) throw new Error("usePrompt must be used inside <PromptProvider>");
   return ctx;
+}
+
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "textarea:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+function useStableDomId(prefix: string) {
+  const id = useId();
+  return `${prefix}-${id.replace(/:/g, "")}`;
+}
+
+function useDialogFocus<T extends HTMLElement>(open: boolean, onClose: () => void) {
+  const ref = useRef<T | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusTimer = window.setTimeout(() => {
+      const first = ref.current?.querySelector<HTMLElement>("[autofocus]") ?? getFocusable(ref.current)[0];
+      (first ?? ref.current)?.focus();
+    }, 0);
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = getFocusable(ref.current);
+      if (focusable.length === 0) {
+        event.preventDefault();
+        ref.current?.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      if (event.shiftKey && (active === first || !ref.current?.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKey);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener("keydown", onKey);
+      previouslyFocused?.focus();
+    };
+  }, [open]);
+
+  return ref;
+}
+
+function getFocusable(root: HTMLElement | null) {
+  if (!root) return [];
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (element) =>
+      !element.hasAttribute("disabled") &&
+      element.getAttribute("aria-hidden") !== "true" &&
+      element.offsetParent !== null,
+  );
 }

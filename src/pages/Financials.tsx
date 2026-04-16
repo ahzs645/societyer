@@ -218,6 +218,7 @@ export function FinancialsPage() {
                     <td style={{ textAlign: "right" }}>
                       <button
                         className="btn btn--ghost btn--sm btn--icon"
+                        aria-label={`Delete budget ${b.name}`}
                         onClick={() => removeBudget({ id: b._id, actingUserId })}
                       >
                         <Trash2 size={12} />

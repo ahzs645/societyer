@@ -77,7 +77,7 @@ export function InspectionsPage() {
           { id: "copies", header: "Copies", align: "right", render: (r) => r.copyPages ? <span className="mono">{r.copyPages} pg · {money(r.copyFeeCents)}</span> : <span className="muted">—</span> },
         ]}
         renderRowActions={(r) => (
-          <button className="btn btn--ghost btn--sm btn--icon" onClick={() => remove({ id: r._id })}>
+          <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete inspection by ${r.inspectorName}`} onClick={() => remove({ id: r._id })}>
             <Trash2 size={12} />
           </button>
         )}

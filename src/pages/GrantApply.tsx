@@ -1,10 +1,20 @@
-import { useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
+import { ErrorSummary, Field, InspectorNote, type ErrorSummaryItem } from "../components/ui";
+import { PIPA_INTAKE_NOTICE } from "../lib/legalCopy";
 import { ArrowLeft, BadgeDollarSign } from "lucide-react";
+
+const FIELD_IDS = {
+  applicantName: "grant-applicant-name",
+  email: "grant-email",
+  amountRequestedDollars: "grant-requested-amount",
+  projectTitle: "grant-project-title",
+  projectSummary: "grant-project-summary",
+} as const;
 
 export function GrantApplyPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -12,13 +22,14 @@ export function GrantApplyPage() {
   const currentUser = useCurrentUser();
   const submitApplication = useMutation(api.grants.submitApplication);
   const toast = useToast();
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     grantId: "",
     applicantName: currentUser?.displayName ?? "",
     organizationName: "",
     email: currentUser?.email ?? "",
     phone: "",
-    amountRequestedCents: "",
+    amountRequestedDollars: "",
     projectTitle: "",
     projectSummary: "",
     proposedUseOfFunds: "",
@@ -29,6 +40,30 @@ export function GrantApplyPage() {
     () => (context?.grants ?? []).find((grant) => String(grant._id) === form.grantId) ?? null,
     [context?.grants, form.grantId],
   );
+  const errors = useMemo(() => {
+    const next: ErrorSummaryItem[] = [];
+    const amount = Number(form.amountRequestedDollars);
+    if (!form.applicantName.trim()) {
+      next.push({ fieldId: FIELD_IDS.applicantName, label: "Applicant name", message: "Enter the applicant name." });
+    }
+    if (!form.email.trim()) {
+      next.push({ fieldId: FIELD_IDS.email, label: "Email", message: "Enter an email address." });
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      next.push({ fieldId: FIELD_IDS.email, label: "Email", message: "Enter a valid email address." });
+    }
+    if (!form.amountRequestedDollars.trim()) {
+      next.push({ fieldId: FIELD_IDS.amountRequestedDollars, label: "Requested amount", message: "Enter the amount requested in dollars." });
+    } else if (!Number.isFinite(amount) || amount <= 0) {
+      next.push({ fieldId: FIELD_IDS.amountRequestedDollars, label: "Requested amount", message: "Enter a positive dollar amount." });
+    }
+    if (!form.projectTitle.trim()) {
+      next.push({ fieldId: FIELD_IDS.projectTitle, label: "Project title", message: "Enter a project title." });
+    }
+    if (!form.projectSummary.trim()) {
+      next.push({ fieldId: FIELD_IDS.projectSummary, label: "Project summary", message: "Summarize the project." });
+    }
+    return next;
+  }, [form.amountRequestedDollars, form.applicantName, form.email, form.projectSummary, form.projectTitle]);
 
   if (context === undefined) return <div className="page">Loading…</div>;
   if (!context) {
@@ -41,34 +76,41 @@ export function GrantApplyPage() {
     );
   }
 
-  const submit = async () => {
-    await submitApplication({
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (errors.length > 0) return;
+    setSubmitting(true);
+    try {
+      await submitApplication({
       societyId: context.society._id,
       grantId: form.grantId ? (form.grantId as any) : undefined,
       memberId: currentUser?.memberId ?? undefined,
-      applicantName: form.applicantName,
+      applicantName: form.applicantName.trim(),
       organizationName: form.organizationName || undefined,
-      email: form.email,
+      email: form.email.trim(),
       phone: form.phone || undefined,
-      amountRequestedCents: form.amountRequestedCents
-        ? Number(form.amountRequestedCents)
-        : undefined,
-      projectTitle: form.projectTitle,
-      projectSummary: form.projectSummary,
+      amountRequestedCents: Math.round(Number(form.amountRequestedDollars) * 100),
+      projectTitle: form.projectTitle.trim(),
+      projectSummary: form.projectSummary.trim(),
       proposedUseOfFunds: form.proposedUseOfFunds || undefined,
       expectedOutcomes: form.expectedOutcomes || undefined,
       source: currentUser?.memberId ? "portal" : "public",
-    });
-    toast.success("Grant application submitted");
-    setForm((current) => ({
-      ...current,
-      phone: "",
-      amountRequestedCents: "",
-      projectTitle: "",
-      projectSummary: "",
-      proposedUseOfFunds: "",
-      expectedOutcomes: "",
-    }));
+      });
+      toast.success("Grant application submitted");
+      setForm((current) => ({
+        ...current,
+        phone: "",
+        amountRequestedDollars: "",
+        projectTitle: "",
+        projectSummary: "",
+        proposedUseOfFunds: "",
+        expectedOutcomes: "",
+      }));
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not submit funding request");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -89,8 +131,13 @@ export function GrantApplyPage() {
             instead of being re-entered by hand later.
           </p>
 
-          <div className="card" style={{ marginTop: 24 }}>
+          <form className="card" style={{ marginTop: 24 }} onSubmit={submit} noValidate>
             <div className="card__body" style={{ display: "grid", gap: 12 }}>
+              <ErrorSummary errors={errors} title="Complete these fields to submit" />
+              <InspectorNote title={PIPA_INTAKE_NOTICE.title}>
+                {PIPA_INTAKE_NOTICE.body} Published privacy records, when available, appear in the{" "}
+                <Link to={`/public/${context.society.publicSlug}`}>public center</Link>.
+              </InspectorNote>
               {context.grants.length > 0 && (
                 <Field label="Program or opportunity">
                   <select className="input" value={form.grantId} onChange={(e) => setForm({ ...form, grantId: e.target.value })}>
@@ -113,25 +160,25 @@ export function GrantApplyPage() {
                   {selectedGrant.applicationInstructions}
                 </div>
               )}
-              <Field label="Applicant name">
-                <input className="input" value={form.applicantName} onChange={(e) => setForm({ ...form, applicantName: e.target.value })} />
+              <Field label="Applicant name" id={FIELD_IDS.applicantName} required error={fieldError(errors, "Applicant name")}>
+                <input className="input" value={form.applicantName} onChange={(e) => setForm({ ...form, applicantName: e.target.value })} autoComplete="name" />
               </Field>
               <Field label="Organization name">
                 <input className="input" value={form.organizationName} onChange={(e) => setForm({ ...form, organizationName: e.target.value })} />
               </Field>
-              <Field label="Email">
-                <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <Field label="Email" id={FIELD_IDS.email} required error={fieldError(errors, "Email")}>
+                <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="email" />
               </Field>
               <Field label="Phone">
-                <input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                <input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} autoComplete="tel" />
               </Field>
-              <Field label="Requested amount (cents)">
-                <input className="input" type="number" value={form.amountRequestedCents} onChange={(e) => setForm({ ...form, amountRequestedCents: e.target.value })} />
+              <Field label="Requested amount" id={FIELD_IDS.amountRequestedDollars} required hint="Enter dollars, e.g. 2500.00. The app stores this as cents internally." error={fieldError(errors, "Requested amount")}>
+                <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.amountRequestedDollars} onChange={(e) => setForm({ ...form, amountRequestedDollars: e.target.value })} />
               </Field>
-              <Field label="Project title">
+              <Field label="Project title" id={FIELD_IDS.projectTitle} required error={fieldError(errors, "Project title")}>
                 <input className="input" value={form.projectTitle} onChange={(e) => setForm({ ...form, projectTitle: e.target.value })} />
               </Field>
-              <Field label="Project summary">
+              <Field label="Project summary" id={FIELD_IDS.projectSummary} required error={fieldError(errors, "Project summary")}>
                 <textarea className="textarea" rows={5} value={form.projectSummary} onChange={(e) => setForm({ ...form, projectSummary: e.target.value })} />
               </Field>
               <Field label="Proposed use of funds">
@@ -140,22 +187,17 @@ export function GrantApplyPage() {
               <Field label="Expected outcomes">
                 <textarea className="textarea" rows={4} value={form.expectedOutcomes} onChange={(e) => setForm({ ...form, expectedOutcomes: e.target.value })} />
               </Field>
-              <button className="btn btn--accent" onClick={submit}>
-                Submit funding request
+              <button className="btn btn--accent" type="submit" disabled={errors.length > 0 || submitting}>
+                {submitting ? "Submitting…" : "Submit funding request"}
               </button>
             </div>
-          </div>
+          </form>
         </div>
       </section>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: "grid", gap: 6 }}>
-      <span className="muted" style={{ fontSize: 13 }}>{label}</span>
-      {children}
-    </label>
-  );
+function fieldError(errors: { label: string; message: string }[], label: string) {
+  return errors.find((error) => error.label === label)?.message;
 }

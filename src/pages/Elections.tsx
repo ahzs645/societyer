@@ -161,9 +161,9 @@ export function ElectionsPage() {
       {!isBetterAuthMode() && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card__body">
-            `AUTH_MODE=better-auth` is required for real anonymous member voting.
-            In no-auth mode you can still design and administer elections, but the
-            member voting flow stays disabled.
+            Real anonymous member voting requires authenticated member accounts.
+            You can still design and administer elections here, but the member
+            ballot flow stays disabled until authentication is enabled.
           </div>
         </div>
       )}

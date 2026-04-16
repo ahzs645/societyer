@@ -157,6 +157,7 @@ export function MembershipPage() {
                 </button>
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Delete membership plan ${p.name}`}
                   onClick={() => removePlan({ id: p._id, actingUserId })}
                 >
                   <Trash2 size={12} />

@@ -271,6 +271,7 @@ export function VolunteersPage() {
             </button>
             <button
               className="btn btn--ghost btn--sm btn--icon"
+              aria-label={`Delete volunteer ${row.firstName} ${row.lastName}`}
               onClick={async () => {
                 await removeVolunteer({ id: row._id, actingUserId });
                 toast.success("Volunteer removed");
@@ -318,6 +319,7 @@ export function VolunteersPage() {
             </button>
             <button
               className="btn btn--ghost btn--sm btn--icon"
+              aria-label={`Delete screening check for ${row.volunteerName}`}
               onClick={async () => {
                 await removeScreening({ id: row._id, actingUserId });
                 toast.success("Screening removed");

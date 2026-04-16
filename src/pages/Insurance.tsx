@@ -86,7 +86,7 @@ export function InsurancePage() {
           { id: "status", header: "Status", sortable: true, accessor: (r) => r.status, render: (r) => <Badge tone={r.status === "Active" ? "success" : "warn"}>{r.status}</Badge> },
         ]}
         renderRowActions={(r) => (
-          <button className="btn btn--ghost btn--sm btn--icon" onClick={() => remove({ id: r._id })}>
+          <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete insurance policy ${r.policyNumber ?? r.provider}`} onClick={() => remove({ id: r._id })}>
             <Trash2 size={12} />
           </button>
         )}

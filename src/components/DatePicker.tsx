@@ -13,6 +13,9 @@ type Props = {
   size?: "md" | "sm";
   className?: string;
   style?: React.CSSProperties;
+  id?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean;
 };
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -52,6 +55,9 @@ export function DatePicker({
   size = "md",
   className,
   style,
+  id,
+  "aria-describedby": ariaDescribedBy,
+  "aria-invalid": ariaInvalid,
 }: Props) {
   const selected = parseISO(value);
   const today = new Date();
@@ -145,31 +151,38 @@ export function DatePicker({
 
   return (
     <>
-      <button
-        ref={triggerRef}
-        type="button"
-        className={triggerClass}
-        onClick={() => !disabled && setOpen((o) => !o)}
-        disabled={disabled}
-        aria-haspopup="dialog"
-        aria-expanded={open}
+      <span
+        className={`date-trigger-wrap${selected && clearable && !disabled ? " has-clear" : ""}`}
         style={style}
       >
-        <CalIcon size={size === "sm" ? 12 : 14} className="select-trigger__icon" />
-        <span className="select-trigger__label">
-          {selected ? formatDisplay(selected) : <span className="select-trigger__placeholder">{placeholder}</span>}
-        </span>
+        <button
+          ref={triggerRef}
+          type="button"
+          id={id}
+          className={triggerClass}
+          onClick={() => !disabled && setOpen((o) => !o)}
+          disabled={disabled}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={ariaInvalid}
+        >
+          <CalIcon size={size === "sm" ? 12 : 14} className="select-trigger__icon" />
+          <span className="select-trigger__label">
+            {selected ? formatDisplay(selected) : <span className="select-trigger__placeholder">{placeholder}</span>}
+          </span>
+        </button>
         {selected && clearable && !disabled && (
-          <span
-            role="button"
+          <button
+            type="button"
             aria-label="Clear date"
             className="date-trigger__clear"
             onClick={clear}
           >
             <X size={12} />
-          </span>
+          </button>
         )}
-      </button>
+      </span>
       {open && pos
         ? createPortal(
             <div ref={popRef} className="calendar" style={{ top: pos.top, left: pos.left }}>

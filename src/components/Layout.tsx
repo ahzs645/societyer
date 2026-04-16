@@ -462,6 +462,7 @@ export function Layout() {
                 className="sidebar__icon-btn"
                 onClick={() => window.dispatchEvent(new Event("kbar:open"))}
                 title={`${t("common.search")} (⌘K)`}
+                aria-label={t("common.search")}
               >
                 <Search size={14} />
               </button>
@@ -469,6 +470,7 @@ export function Layout() {
                 className="sidebar__icon-btn sidebar__toggle"
                 onClick={toggleSidebar}
                 title={`${isSidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")} ${isMobileNav ? t("sidebar.navigation") : t("sidebar.sidebar")} (⌘\\)`}
+                aria-label={`${isSidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")} ${isMobileNav ? t("sidebar.navigation") : t("sidebar.sidebar")}`}
               >
                 <PanelLeftClose size={14} />
               </button>

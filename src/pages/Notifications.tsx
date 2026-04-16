@@ -9,6 +9,7 @@ import { formatDateTime } from "../lib/format";
 import { useToast } from "../components/Toast";
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { useConfirm } from "../components/Modal";
 
 export function NotificationsPage() {
   const society = useSociety();
@@ -20,6 +21,7 @@ export function NotificationsPage() {
   const markAllRead = useMutation(api.notifications.markAllRead);
   const sendDigest = useAction(api.notifications.sendDigest);
   const toast = useToast();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
 
   if (society === undefined) return <div className="page">Loading…</div>;
@@ -36,8 +38,15 @@ export function NotificationsPage() {
           <>
             <button
               className="btn-action"
+              title="Send a digest email to members who have opted in to notification emails."
               disabled={busy}
               onClick={async () => {
+                const ok = await confirm({
+                  title: "Send notification digest?",
+                  message: "This queues digest emails for members who have opted in to notification emails for this society.",
+                  confirmLabel: "Send digest",
+                });
+                if (!ok) return;
                 setBusy(true);
                 try {
                   const { sent } = await sendDigest({ societyId: society._id });

@@ -166,6 +166,7 @@ export function TransparencyPage() {
             </button>
             <button
               className="btn btn--ghost btn--sm btn--icon"
+              aria-label={`Delete publication ${row.title}`}
               onClick={async () => {
                 await removePublication({ id: row._id, actingUserId });
                 toast.success("Publication removed");

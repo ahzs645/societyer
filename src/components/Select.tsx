@@ -26,6 +26,9 @@ type SelectProps<T extends string> = {
   /** Min width of the popup menu in px. Defaults to the trigger width. */
   menuMinWidth?: number;
   style?: React.CSSProperties;
+  id?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean;
 };
 
 export function Select<T extends string>({
@@ -41,6 +44,9 @@ export function Select<T extends string>({
   clearLabel = "— none —",
   menuMinWidth,
   style,
+  id,
+  "aria-describedby": ariaDescribedBy,
+  "aria-invalid": ariaInvalid,
 }: SelectProps<T>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -154,11 +160,14 @@ export function Select<T extends string>({
         ref={triggerRef}
         type="button"
         className={triggerClass}
+        id={id}
         onClick={() => !disabled && setOpen((o) => !o)}
         onKeyDown={onTriggerKey}
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-describedby={ariaDescribedBy}
+        aria-invalid={ariaInvalid}
         style={style}
       >
         <span className="select-trigger__label">

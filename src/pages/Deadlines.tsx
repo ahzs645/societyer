@@ -115,7 +115,7 @@ export function DeadlinesPage() {
           },
         ]}
         renderRowActions={(r) => (
-          <button className="btn btn--ghost btn--sm btn--icon" onClick={() => remove({ id: r._id })}>
+          <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete deadline ${r.title}`} onClick={() => remove({ id: r._id })}>
             <Trash2 size={12} />
           </button>
         )}

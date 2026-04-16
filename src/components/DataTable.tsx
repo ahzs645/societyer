@@ -38,6 +38,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   defaultSort,
   searchExtraFields,
   renderRowActions,
+  rowActionLabel,
 }: {
   label: string;
   icon?: ReactNode;
@@ -53,6 +54,8 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   searchExtraFields?: ((row: T) => string | undefined | null)[];
   /** Rendered in a trailing action column. */
   renderRowActions?: (row: T) => ReactNode;
+  /** Accessible label for clickable rows. */
+  rowActionLabel?: (row: T) => string;
 }) {
   const [q, setQ] = useState("");
   const [filters, setFilters] = useState<AppliedFilter[]>([]);
@@ -157,6 +160,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={searchPlaceholder ?? "Search…"}
+            aria-label={`${label} search`}
           />
         </div>
         {sortColumn && (
@@ -179,15 +183,35 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
               <th
                 key={col.id}
                 className={col.sortable ? "is-sortable" : undefined}
-                onClick={col.sortable ? () => toggleSort(col.id) : undefined}
+                aria-sort={
+                  col.sortable
+                    ? sort?.columnId === col.id
+                      ? sort.dir === "asc"
+                        ? "ascending"
+                        : "descending"
+                      : "none"
+                    : undefined
+                }
                 style={{
                   width: col.width,
                   textAlign: col.align,
                 }}
               >
-                {col.header}
-                {sort?.columnId === col.id && (
-                  <span className="table__sort-indicator">{sort.dir === "asc" ? "▲" : "▼"}</span>
+                {col.sortable ? (
+                  <button
+                    type="button"
+                    className="table__sort-button"
+                    onClick={() => toggleSort(col.id)}
+                  >
+                    <span>{col.header}</span>
+                    {sort?.columnId === col.id && (
+                      <span className="table__sort-indicator" aria-hidden="true">
+                        {sort.dir === "asc" ? "▲" : "▼"}
+                      </span>
+                    )}
+                  </button>
+                ) : (
+                  col.header
                 )}
               </th>
             ))}
@@ -200,6 +224,18 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
               key={rowKey(row)}
               className={renderRowActions ? "table__row--actions" : undefined}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
+              onKeyDown={
+                onRowClick
+                  ? (event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      onRowClick(row);
+                    }
+                  : undefined
+              }
+              tabIndex={onRowClick ? 0 : undefined}
+              role={onRowClick ? "button" : undefined}
+              aria-label={onRowClick ? rowActionLabel?.(row) ?? `Open ${label} row` : undefined}
               style={{ cursor: onRowClick ? "pointer" : undefined }}
             >
               {columns.map((col) => (

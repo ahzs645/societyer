@@ -125,7 +125,7 @@ export function ReceiptsPage() {
                 Void
               </button>
             )}
-            <button className="btn btn--ghost btn--sm btn--icon" onClick={() => remove({ id: r._id })}><Trash2 size={12} /></button>
+            <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete receipt for ${r.donorName}`} onClick={() => remove({ id: r._id })}><Trash2 size={12} /></button>
           </>
         )}
       />

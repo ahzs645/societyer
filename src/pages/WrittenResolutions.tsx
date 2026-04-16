@@ -110,7 +110,7 @@ export function WrittenResolutionsPage() {
             {r.status === "Circulating" && (
               <button className="btn btn--ghost btn--sm" onClick={() => markFailed({ id: r._id })}>Mark failed</button>
             )}
-            <button className="btn btn--ghost btn--sm btn--icon" onClick={() => remove({ id: r._id })}><Trash2 size={12} /></button>
+            <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete written resolution ${r.title}`} onClick={() => remove({ id: r._id })}><Trash2 size={12} /></button>
           </>
         )}
       />

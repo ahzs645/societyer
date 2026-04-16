@@ -135,12 +135,24 @@ export function PublicTransparencyPage() {
                   </div>
                   <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                     {publication.downloadUrl && (
-                      <a className="btn-action btn-action--primary" href={publication.downloadUrl} target="_blank" rel="noreferrer">
+                      <a
+                        className="btn-action btn-action--primary"
+                        href={publication.downloadUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`Open file for ${publication.title}`}
+                      >
                         Open file
                       </a>
                     )}
                     {publication.url && (
-                      <a className="btn-action" href={publication.url} target="_blank" rel="noreferrer">
+                      <a
+                        className="btn-action"
+                        href={publication.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`Open link for ${publication.title}`}
+                      >
                         Open link
                       </a>
                     )}

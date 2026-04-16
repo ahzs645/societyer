@@ -11,6 +11,7 @@ import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
 import { Plus, AlertTriangle, Tag, CheckCircle2 } from "lucide-react";
 import { formatDate } from "../lib/format";
+import { useToast } from "../components/Toast";
 
 type Augmented = any & { _directorName: string };
 
@@ -28,6 +29,7 @@ export function ConflictsPage() {
   const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.conflicts.create);
   const resolve = useMutation(api.conflicts.resolve);
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
 
@@ -41,6 +43,10 @@ export function ConflictsPage() {
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    if (!directors || directors.length === 0) {
+      toast.error("Add a director before recording a conflict disclosure.");
+      return;
+    }
     setForm({
       directorId: directors?.[0]?._id,
       declaredAt: new Date().toISOString().slice(0, 10),

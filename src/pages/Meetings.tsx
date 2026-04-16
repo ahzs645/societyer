@@ -51,6 +51,8 @@ export function MeetingsPage() {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
+  const noticeMaxDays = rules?.generalNoticeMaxDays ?? 60;
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -60,7 +62,7 @@ export function MeetingsPage() {
   const openNew = () => {
     setForm({
       type: "Board", title: "",
-      scheduledAt: new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 16),
+      scheduledAt: toDateTimeLocalValue(new Date(Date.now() + noticeMinDays * 864e5)),
       location: "",
       electronic: !!rules?.allowElectronicMeetings,
       quorumRequired: rules?.quorumType === "fixed" ? rules.quorumValue : undefined,
@@ -70,6 +72,10 @@ export function MeetingsPage() {
     setOpen(true);
   };
   const save = async () => {
+    if (form && isGeneralMeeting(form.type) && !meetsNoticeWindow(form.scheduledAt, noticeMinDays, noticeMaxDays)) {
+      toast.error(`General meetings need ${noticeMinDays}–${noticeMaxDays} days of notice.`);
+      return;
+    }
     await create({ societyId: society._id, ...form });
     setOpen(false);
     toast.success("Meeting scheduled", form.title);
@@ -81,7 +87,7 @@ export function MeetingsPage() {
         title="Meetings"
         icon={<Calendar size={16} />}
         iconColor="orange"
-        subtitle={`Board meetings, committee meetings, and general meetings (AGM/SGM). Active notice rule: ${rules?.generalNoticeMinDays ?? 14}–${rules?.generalNoticeMaxDays ?? 60} days.`}
+        subtitle={`Board meetings, committee meetings, and general meetings (AGM/SGM). Active notice rule: ${noticeMinDays}–${noticeMaxDays} days.`}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew}>
             <Plus size={12} /> New meeting
@@ -155,6 +161,14 @@ export function MeetingsPage() {
       >
         {form && (
           <div>
+            {isGeneralMeeting(form.type) && !meetsNoticeWindow(form.scheduledAt, noticeMinDays, noticeMaxDays) && (
+              <div className="flag flag--warn" style={{ marginBottom: 12 }}>
+                <AlertTriangle />
+                <div>
+                  General meetings should be scheduled with {noticeMinDays}–{noticeMaxDays} days of notice under the active rule set.
+                </div>
+              </div>
+            )}
             <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Type">
@@ -181,7 +195,7 @@ export function MeetingsPage() {
             <Field label="Notes"><textarea className="textarea" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
             {form.type === "AGM" && (
               <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                Reminder: AGM notice must be sent {rules?.generalNoticeMinDays ?? 14}–{rules?.generalNoticeMaxDays ?? 60} days in advance.
+                Reminder: AGM notice must be sent {noticeMinDays}–{noticeMaxDays} days in advance.
                 {rules?.requireAgmFinancialStatements ? " Financial statements must be presented." : ""}
                 {rules?.requireAgmElections ? " Elections are expected under the active rule set." : ""}
               </div>
@@ -223,4 +237,26 @@ export function MeetingsPage() {
       </Drawer>
     </div>
   );
+}
+
+function isGeneralMeeting(type: string) {
+  return type === "AGM" || type === "SGM";
+}
+
+function meetsNoticeWindow(value: string, minDays: number, maxDays: number) {
+  const scheduled = new Date(value).getTime();
+  if (!Number.isFinite(scheduled)) return false;
+  const now = Date.now();
+  const min = now + minDays * 864e5;
+  const max = now + maxDays * 864e5;
+  return scheduled >= min && scheduled <= max;
+}
+
+function toDateTimeLocalValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
