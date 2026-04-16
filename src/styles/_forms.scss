@@ -49,6 +49,13 @@
   justify-content: flex-end;
 }
 
+.signature-form-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  margin-top: 12px;
+}
+
 /* Form */
 .field {
   display: flex;
@@ -334,6 +341,25 @@
     flex-basis: 100%;
   }
 
+  .signature-list-row {
+    align-items: flex-start !important;
+    flex-wrap: wrap;
+  }
+
+  .signature-list-row__spacer {
+    display: none;
+  }
+
+  .signature-form-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .signature-form-row .btn {
+    justify-content: center;
+    width: 100%;
+  }
+
   .kbar {
     border-radius: var(--r-md);
   }
@@ -345,6 +371,8 @@
   .demo-banner {
     align-items: flex-start;
     flex-wrap: wrap;
+    min-height: 42px;
+    padding-left: 50px;
   }
 
   .demo-banner__spacer {

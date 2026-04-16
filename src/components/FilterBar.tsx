@@ -57,10 +57,11 @@ export function FilterPopover<T>({
 
   const rect = anchorRef.current?.getBoundingClientRect();
   const POPOVER_W = 240;
+  const POPOVER_H = 260;
   const margin = 8;
   const style = rect
     ? {
-        top: Math.min(rect.bottom + 4, window.innerHeight - 260),
+        top: Math.max(margin, Math.min(rect.bottom + 4, window.innerHeight - POPOVER_H - margin)),
         left: Math.max(margin, Math.min(rect.left, window.innerWidth - POPOVER_W - margin)),
       }
     : { top: 48, left: 16 };

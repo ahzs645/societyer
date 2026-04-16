@@ -96,7 +96,7 @@ export function TreasurerPage() {
         <SummaryCard label="Net" value={pnl?.netCents ?? 0} icon={<DollarSign size={14} />} color={pnl && pnl.netCents < 0 ? "red" : "green"} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: 12 }}>
         <div className="card">
           <div className="card__head"><h2 className="card__title">Income by category</h2></div>
           <div className="card__body col" style={{ gap: 4 }}>

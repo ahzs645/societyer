@@ -197,6 +197,8 @@
   border-radius: var(--r-md);
   box-shadow: var(--shadow-md);
   min-width: 220px;
+  max-height: min(320px, calc(100dvh - 16px));
+  overflow-y: auto;
   padding: 6px;
 }
 .popover__item {
@@ -341,6 +343,7 @@
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-xs);
+  min-width: 0;
 }
 .card__head {
   padding: var(--s-4);
@@ -363,6 +366,7 @@
 }
 .card__body {
   padding: var(--s-4);
+  min-width: 0;
 }
 .card__footer {
   padding: var(--s-3) var(--s-4);
@@ -418,6 +422,9 @@
   grid-template-columns: 2fr 1fr;
   gap: var(--s-4);
 }
+.two-col > * {
+  min-width: 0;
+}
 @media (max-width: 1100px) {
   .two-col { grid-template-columns: 1fr; }
 }
@@ -432,6 +439,13 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
 }
+.card > .table {
+  width: 100%;
+  min-width: 100%;
+}
+.card__body > table {
+  max-width: 100%;
+}
 @media (max-width: 760px) {
   .card__head {
     align-items: flex-start;
@@ -445,6 +459,18 @@
     border-left: 0;
     border-right: 0;
     border-radius: 0;
+  }
+  .card > .table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  .card__body > table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
   }
   .table-toolbar__summary {
     width: 100%;
@@ -662,6 +688,12 @@
 .table tbody tr[role="button"]:focus-visible .table__actions-inner {
   opacity: 1;
   transform: translateX(0);
+}
+@media (hover: none), (pointer: coarse) {
+  .table__actions-inner {
+    opacity: 1;
+    transform: none;
+  }
 }
 .table__empty {
   text-align: center;

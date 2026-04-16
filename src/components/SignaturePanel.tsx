@@ -53,6 +53,7 @@ export function SignaturePanel({
 
         {(signatures ?? []).map((s) => (
           <div
+            className="signature-list-row"
             key={s._id}
             style={{
               display: "flex",
@@ -66,7 +67,7 @@ export function SignaturePanel({
             {s.signerRole && <span className="muted">· {s.signerRole}</span>}
             <Badge tone="info">{s.method}</Badge>
             {s.demo && <Badge>demo</Badge>}
-            <div style={{ flex: 1 }} />
+            <div className="signature-list-row__spacer" style={{ flex: 1 }} />
             <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
               {formatDateTime(s.signedAtISO)}
             </span>
@@ -82,7 +83,7 @@ export function SignaturePanel({
         ))}
 
         {!already && (
-          <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginTop: 12 }}>
+          <div className="signature-form-row">
             <Field label="Type your full name to sign">
               <input
                 className="input"

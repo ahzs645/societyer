@@ -44,6 +44,12 @@
   transform: translateX(0);
   transition-delay: 0.12s;
 }
+.app-shell.is-mobile:has(.inspector-host.is-open) .sidebar-peek {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition-delay: 0s;
+}
 .sidebar-peek:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
@@ -632,6 +638,10 @@
     border-right-width: 1px;
   }
 
+  .app-shell.is-mobile.is-mobile-nav-open .sidebar-backdrop {
+    left: min(320px, calc(100vw - 56px));
+  }
+
   .app-shell.is-mobile.is-collapsed .sidebar {
     width: min(320px, calc(100vw - 56px));
     border-right-width: 1px;
@@ -685,6 +695,7 @@
     top: 10px;
     right: 10px;
     bottom: 10px;
+    height: auto;
     width: min(420px, calc(100vw - 20px));
     border: 1px solid var(--border);
     border-radius: var(--r-md);

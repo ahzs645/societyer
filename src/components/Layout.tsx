@@ -310,6 +310,7 @@ export function Layout() {
     top: number;
     left: number;
     width: number;
+    maxHeight: number;
   } | null>(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
   const mainRef = useRef<HTMLDivElement | null>(null);
@@ -384,11 +385,21 @@ export function Layout() {
     const place = () => {
       const rect = workspaceButtonRef.current?.getBoundingClientRect();
       if (!rect) return;
+      const margin = 8;
+      const gap = 6;
       const width = Math.min(320, window.innerWidth - 16);
+      const maxHeight = Math.min(
+        360,
+        Math.max(180, window.innerHeight - margin * 2),
+      );
+      let top = rect.bottom + gap;
+      if (top + maxHeight > window.innerHeight - margin) {
+        top = Math.max(margin, window.innerHeight - maxHeight - margin);
+      }
       let left = rect.left;
-      if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
-      if (left < 8) left = 8;
-      setWorkspaceAnchor({ top: rect.bottom + 6, left, width });
+      if (left + width > window.innerWidth - margin) left = window.innerWidth - width - margin;
+      if (left < margin) left = margin;
+      setWorkspaceAnchor({ top, left, width, maxHeight });
     };
     place();
     const onDown = (e: MouseEvent) => {
@@ -586,55 +597,60 @@ export function Layout() {
               boxShadow: "var(--shadow-lg)",
               zIndex: 1000,
               overflow: "hidden",
+              maxHeight: workspaceAnchor.maxHeight,
               color: "var(--text-primary)",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
-            <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)" }}>
+            <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
               <strong style={{ fontSize: "var(--fs-md)" }}>{t("sidebar.workspaces")}</strong>
             </div>
-            {societies.map((s: any) => {
-              const active = s._id === society?._id;
-              return (
-                <button
-                  key={s._id}
-                  type="button"
-                  onClick={() => {
-                    setStoredSocietyId(s._id);
-                    setWorkspaceOpen(false);
-                  }}
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "10px 12px",
-                    border: "none",
-                    background: active ? "var(--bg-subtle)" : "var(--bg-panel)",
-                    color: "inherit",
-                    cursor: "pointer",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!active) e.currentTarget.style.background = "var(--bg-hover)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = active ? "var(--bg-subtle)" : "var(--bg-panel)";
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <strong style={{ fontSize: "var(--fs-md)", flex: 1 }}>{s.name}</strong>
-                    {active && <Pill size="sm">{t("sidebar.activeWorkspace")}</Pill>}
-                  </div>
-                  {s.incorporationNumber && (
-                    <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>
-                      {s.incorporationNumber}
+            <div style={{ overflowY: "auto", minHeight: 0 }}>
+              {societies.map((s: any) => {
+                const active = s._id === society?._id;
+                return (
+                  <button
+                    key={s._id}
+                    type="button"
+                    onClick={() => {
+                      setStoredSocietyId(s._id);
+                      setWorkspaceOpen(false);
+                    }}
+                    style={{
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "10px 12px",
+                      border: "none",
+                      background: active ? "var(--bg-subtle)" : "var(--bg-panel)",
+                      color: "inherit",
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!active) e.currentTarget.style.background = "var(--bg-hover)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = active ? "var(--bg-subtle)" : "var(--bg-panel)";
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <strong style={{ fontSize: "var(--fs-md)", flex: 1 }}>{s.name}</strong>
+                      {active && <Pill size="sm">{t("sidebar.activeWorkspace")}</Pill>}
                     </div>
-                  )}
-                </button>
-              );
-            })}
-            {(!societies || societies.length === 0) && (
-              <div className="muted" style={{ padding: 12, fontSize: "var(--fs-sm)" }}>
-                {t("sidebar.noSocieties")}
-              </div>
-            )}
+                    {s.incorporationNumber && (
+                      <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>
+                        {s.incorporationNumber}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+              {(!societies || societies.length === 0) && (
+                <div className="muted" style={{ padding: 12, fontSize: "var(--fs-sm)" }}>
+                  {t("sidebar.noSocieties")}
+                </div>
+              )}
+            </div>
           </div>,
           document.body,
         )}

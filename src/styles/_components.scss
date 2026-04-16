@@ -301,6 +301,7 @@
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
   animation: modalIn 0.14s ease-out;
 }
 @keyframes modalIn {
@@ -337,6 +338,41 @@
   background: var(--bg-app);
   border-bottom-left-radius: var(--r-lg);
   border-bottom-right-radius: var(--r-lg);
+}
+
+@media (max-width: 560px) {
+  .modal-backdrop {
+    background: rgba(0, 0, 0, 0.28);
+  }
+
+  .modal {
+    top: auto;
+    left: max(8px, env(safe-area-inset-left));
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    width: auto;
+    max-width: none !important;
+    max-height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom)));
+    transform: none;
+    border-radius: var(--r-md);
+    animation-name: modalInMobile;
+  }
+
+  @keyframes modalInMobile {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .modal__foot {
+    flex-wrap: wrap;
+    justify-content: stretch;
+    border-bottom-left-radius: var(--r-md);
+    border-bottom-right-radius: var(--r-md);
+  }
+
+  .modal__foot > * {
+    flex: 1 1 140px;
+  }
 }
 .confirm-body {
   display: flex;

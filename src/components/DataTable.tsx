@@ -178,6 +178,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
       </div>
 
       <table className="table">
+        <caption className="sr-only">{label}</caption>
         <thead>
           <tr>
             {columns.map((col) => (
@@ -302,16 +303,20 @@ function SortPopover<T>({
       if (anchorRef.current?.contains(e.target as Node)) return;
       onClose();
     };
-    setTimeout(() => document.addEventListener("mousedown", onDoc), 0);
-    return () => document.removeEventListener("mousedown", onDoc);
+    const timer = window.setTimeout(() => document.addEventListener("mousedown", onDoc), 0);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("mousedown", onDoc);
+    };
   }, [onClose, anchorRef]);
 
   const rect = anchorRef.current?.getBoundingClientRect();
   const POPOVER_W = 240;
+  const POPOVER_H = 280;
   const margin = 8;
   const style = rect
     ? {
-        top: Math.min(rect.bottom + 4, window.innerHeight - 280),
+        top: Math.max(margin, Math.min(rect.bottom + 4, window.innerHeight - POPOVER_H - margin)),
         left: Math.max(margin, Math.min(rect.left, window.innerWidth - POPOVER_W - margin)),
       }
     : { top: 48, left: 16 };

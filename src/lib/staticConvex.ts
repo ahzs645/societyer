@@ -420,14 +420,19 @@ const goals = [
     societyId: SOCIETY_ID,
     title: "Prepare AGM package",
     description: "Publish board materials, financials, and member notices.",
-    status: "InProgress",
-    dueDate: "2026-05-20",
+    category: "Governance",
+    status: "OnTrack",
+    startDate: "2026-04-01",
+    targetDate: "2026-05-20",
+    progressPercent: 35,
+    ownerName: "Mina Patel",
     ownerUserId: USER_SECRETARY_ID,
     milestones: [
       { title: "Draft agenda", done: true },
       { title: "Publish notice", done: false },
       { title: "Finalize annual report", done: false },
     ],
+    keyResults: [],
   },
 ];
 
