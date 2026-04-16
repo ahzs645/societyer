@@ -23,6 +23,8 @@ export function GrantApplyPage() {
   const submitApplication = useMutation(api.grants.submitApplication);
   const toast = useToast();
   const [submitting, setSubmitting] = useState(false);
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [completed, setCompleted] = useState(false);
   const [form, setForm] = useState({
     grantId: "",
     applicantName: currentUser?.displayName ?? "",
@@ -78,6 +80,7 @@ export function GrantApplyPage() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    setAttemptedSubmit(true);
     if (errors.length > 0) return;
     setSubmitting(true);
     try {
@@ -106,12 +109,14 @@ export function GrantApplyPage() {
         proposedUseOfFunds: "",
         expectedOutcomes: "",
       }));
+      setCompleted(true);
     } catch (error: any) {
       toast.error(error?.message ?? "Could not submit funding request");
     } finally {
       setSubmitting(false);
     }
   };
+  const visibleErrors = attemptedSubmit ? errors : [];
 
   return (
     <div className="landing" style={{ minHeight: "100vh" }}>
@@ -131,9 +136,22 @@ export function GrantApplyPage() {
             instead of being re-entered by hand later.
           </p>
 
+          {completed ? (
+            <div className="card" style={{ marginTop: 24 }}>
+              <div className="card__body" style={{ display: "grid", gap: 10 }}>
+                <h2 className="card__title" style={{ margin: 0 }}>Funding request submitted</h2>
+                <div className="muted">
+                  {context.society.name} received the request. Keep a copy of any follow-up messages you receive for your records.
+                </div>
+                <Link className="btn btn--accent" to={`/public/${context.society.publicSlug}`}>
+                  Back to public center
+                </Link>
+              </div>
+            </div>
+          ) : (
           <form className="card" style={{ marginTop: 24 }} onSubmit={submit} noValidate>
             <div className="card__body" style={{ display: "grid", gap: 12 }}>
-              <ErrorSummary errors={errors} title="Complete these fields to submit" />
+              <ErrorSummary errors={visibleErrors} title="Complete these fields to submit" />
               <InspectorNote title={PIPA_INTAKE_NOTICE.title}>
                 {PIPA_INTAKE_NOTICE.body} Published privacy records, when available, appear in the{" "}
                 <Link to={`/public/${context.society.publicSlug}`}>public center</Link>.
@@ -160,25 +178,25 @@ export function GrantApplyPage() {
                   {selectedGrant.applicationInstructions}
                 </div>
               )}
-              <Field label="Applicant name" id={FIELD_IDS.applicantName} required error={fieldError(errors, "Applicant name")}>
+              <Field label="Applicant name" id={FIELD_IDS.applicantName} required error={fieldError(visibleErrors, "Applicant name")}>
                 <input className="input" value={form.applicantName} onChange={(e) => setForm({ ...form, applicantName: e.target.value })} autoComplete="name" />
               </Field>
               <Field label="Organization name">
                 <input className="input" value={form.organizationName} onChange={(e) => setForm({ ...form, organizationName: e.target.value })} />
               </Field>
-              <Field label="Email" id={FIELD_IDS.email} required error={fieldError(errors, "Email")}>
+              <Field label="Email" id={FIELD_IDS.email} required error={fieldError(visibleErrors, "Email")}>
                 <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="email" />
               </Field>
               <Field label="Phone">
                 <input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} autoComplete="tel" />
               </Field>
-              <Field label="Requested amount" id={FIELD_IDS.amountRequestedDollars} required hint="Enter dollars, e.g. 2500.00. The app stores this as cents internally." error={fieldError(errors, "Requested amount")}>
+              <Field label="Requested amount" id={FIELD_IDS.amountRequestedDollars} required hint="Enter dollars, e.g. 2500.00. The app stores this as cents internally." error={fieldError(visibleErrors, "Requested amount")}>
                 <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.amountRequestedDollars} onChange={(e) => setForm({ ...form, amountRequestedDollars: e.target.value })} />
               </Field>
-              <Field label="Project title" id={FIELD_IDS.projectTitle} required error={fieldError(errors, "Project title")}>
+              <Field label="Project title" id={FIELD_IDS.projectTitle} required error={fieldError(visibleErrors, "Project title")}>
                 <input className="input" value={form.projectTitle} onChange={(e) => setForm({ ...form, projectTitle: e.target.value })} />
               </Field>
-              <Field label="Project summary" id={FIELD_IDS.projectSummary} required error={fieldError(errors, "Project summary")}>
+              <Field label="Project summary" id={FIELD_IDS.projectSummary} required error={fieldError(visibleErrors, "Project summary")}>
                 <textarea className="textarea" rows={5} value={form.projectSummary} onChange={(e) => setForm({ ...form, projectSummary: e.target.value })} />
               </Field>
               <Field label="Proposed use of funds">
@@ -187,11 +205,12 @@ export function GrantApplyPage() {
               <Field label="Expected outcomes">
                 <textarea className="textarea" rows={4} value={form.expectedOutcomes} onChange={(e) => setForm({ ...form, expectedOutcomes: e.target.value })} />
               </Field>
-              <button className="btn btn--accent" type="submit" disabled={errors.length > 0 || submitting}>
+              <button className="btn btn--accent" type="submit" disabled={submitting}>
                 {submitting ? "Submitting…" : "Submit funding request"}
               </button>
             </div>
           </form>
+          )}
         </div>
       </section>
     </div>

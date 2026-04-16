@@ -8,7 +8,7 @@ import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { BadgeDollarSign, FileText, Plus, Trash2, Inbox } from "lucide-react";
 import { useToast } from "../components/Toast";
-import { formatDate, money } from "../lib/format";
+import { centsToDollarInput, dollarInputToCents, formatDate, money } from "../lib/format";
 
 export function GrantsPage() {
   const society = useSociety();
@@ -95,7 +95,7 @@ export function GrantsPage() {
                   grantId: grants?.[0]?._id ?? "",
                   date: new Date().toISOString().slice(0, 10),
                   direction: "outflow",
-                  amountCents: "",
+                  amountDollars: "",
                   description: "",
                 })
               }
@@ -273,7 +273,17 @@ export function GrantsPage() {
         ]}
         renderRowActions={(row) => (
           <>
-            <button className="btn btn--ghost btn--sm" onClick={() => setGrantDraft({ ...row, id: row._id })}>
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() =>
+                setGrantDraft({
+                  ...row,
+                  id: row._id,
+                  amountRequestedDollars: centsToDollarInput(row.amountRequestedCents),
+                  amountAwardedDollars: centsToDollarInput(row.amountAwardedCents),
+                })
+              }
+            >
               Edit
             </button>
             <button
@@ -308,7 +318,7 @@ export function GrantsPage() {
         ]}
         renderRowActions={(row) => (
           <>
-            <button className="btn btn--ghost btn--sm" onClick={() => setTxnDraft({ ...row, id: row._id })}>
+            <button className="btn btn--ghost btn--sm" onClick={() => setTxnDraft({ ...row, id: row._id, amountDollars: centsToDollarInput(row.amountCents) })}>
               Edit
             </button>
             <button
@@ -350,7 +360,7 @@ export function GrantsPage() {
         ]}
         renderRowActions={(row) => (
           <>
-            <button className="btn btn--ghost btn--sm" onClick={() => setReportDraft({ ...row, id: row._id })}>
+            <button className="btn btn--ghost btn--sm" onClick={() => setReportDraft({ ...row, id: row._id, spendingToDateDollars: centsToDollarInput(row.spendingToDateCents) })}>
               Edit
             </button>
             <button
@@ -396,8 +406,8 @@ export function GrantsPage() {
                   endDate: grantDraft.endDate || undefined,
                   nextReportDueAtISO: grantDraft.nextReportDueAtISO || undefined,
                   notes: grantDraft.notes || undefined,
-                  amountRequestedCents: grantDraft.amountRequestedCents ? Number(grantDraft.amountRequestedCents) : undefined,
-                  amountAwardedCents: grantDraft.amountAwardedCents ? Number(grantDraft.amountAwardedCents) : undefined,
+                  amountRequestedCents: dollarInputToCents(grantDraft.amountRequestedDollars),
+                  amountAwardedCents: dollarInputToCents(grantDraft.amountAwardedDollars),
                   actingUserId,
                 });
                 toast.success("Grant saved");
@@ -439,8 +449,8 @@ export function GrantsPage() {
               </Field>
             </div>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Requested (cents)"><input className="input" type="number" value={grantDraft.amountRequestedCents ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, amountRequestedCents: e.target.value })} /></Field>
-              <Field label="Awarded (cents)"><input className="input" type="number" value={grantDraft.amountAwardedCents ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, amountAwardedCents: e.target.value })} /></Field>
+              <Field label="Requested" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountRequestedDollars ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, amountRequestedDollars: e.target.value })} /></Field>
+              <Field label="Awarded" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountAwardedDollars ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, amountAwardedDollars: e.target.value })} /></Field>
             </div>
             <Field label="Restricted purpose"><textarea className="textarea" value={grantDraft.restrictedPurpose ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, restrictedPurpose: e.target.value })} /></Field>
             <label className="checkbox"><input type="checkbox" checked={!!grantDraft.allowPublicApplications} onChange={(e) => setGrantDraft({ ...grantDraft, allowPublicApplications: e.target.checked })} /> Accept public applications</label>
@@ -492,7 +502,7 @@ export function GrantsPage() {
                   grantId: txnDraft.grantId,
                   financialTransactionId: txnDraft.financialTransactionId || undefined,
                   documentId: txnDraft.documentId || undefined,
-                  amountCents: Number(txnDraft.amountCents),
+                  amountCents: dollarInputToCents(txnDraft.amountDollars) ?? 0,
                   notes: txnDraft.notes || undefined,
                   actingUserId,
                 });
@@ -523,7 +533,7 @@ export function GrantsPage() {
                 </select>
               </Field>
             </div>
-            <Field label="Amount (cents)"><input className="input" type="number" value={txnDraft.amountCents ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, amountCents: e.target.value })} /></Field>
+            <Field label="Amount" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={txnDraft.amountDollars ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, amountDollars: e.target.value })} /></Field>
             <Field label="Description"><input className="input" value={txnDraft.description ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, description: e.target.value })} /></Field>
             <Field label="Evidence document">
               <select className="input" value={txnDraft.documentId ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, documentId: e.target.value })}>
@@ -551,7 +561,7 @@ export function GrantsPage() {
                   societyId: society._id,
                   grantId: reportDraft.grantId,
                   submittedAtISO: reportDraft.submittedAtISO || undefined,
-                  spendingToDateCents: reportDraft.spendingToDateCents ? Number(reportDraft.spendingToDateCents) : undefined,
+                  spendingToDateCents: dollarInputToCents(reportDraft.spendingToDateDollars),
                   outcomeSummary: reportDraft.outcomeSummary || undefined,
                   documentId: reportDraft.documentId || undefined,
                   submittedByUserId: reportDraft.submittedAtISO ? actingUserId : undefined,
@@ -587,7 +597,7 @@ export function GrantsPage() {
               <Field label="Due"><input className="input" type="date" value={reportDraft.dueAtISO ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, dueAtISO: e.target.value })} /></Field>
             </div>
             <Field label="Submitted"><input className="input" type="date" value={reportDraft.submittedAtISO ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, submittedAtISO: e.target.value })} /></Field>
-            <Field label="Spending to date (cents)"><input className="input" type="number" value={reportDraft.spendingToDateCents ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, spendingToDateCents: e.target.value })} /></Field>
+            <Field label="Spending to date" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={reportDraft.spendingToDateDollars ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, spendingToDateDollars: e.target.value })} /></Field>
             <Field label="Outcome summary"><textarea className="textarea" value={reportDraft.outcomeSummary ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, outcomeSummary: e.target.value })} /></Field>
             <Field label="Report document">
               <select className="input" value={reportDraft.documentId ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, documentId: e.target.value })}>

@@ -21,6 +21,7 @@ import {
 import { formatDateTime, formatDate } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { useModuleEnabled } from "../hooks/useModules";
+import { useConfirm } from "../components/Modal";
 
 type Step = "notice" | "held" | "financialsPresented" | "electionsHeld" | "minutesApproved" | "annualReportFiled";
 
@@ -46,6 +47,7 @@ export function AgmWorkflowPage() {
   const actingUserId = useCurrentUserId() ?? undefined;
   const { rules } = useBylawRules();
   const communicationsEnabled = useModuleEnabled("communications");
+  const confirm = useConfirm();
 
   const [noticeChannel, setNoticeChannel] = useState<"email" | "mail" | "in-person">("email");
 
@@ -74,6 +76,16 @@ export function AgmWorkflowPage() {
     } else {
       await markStep({ id: currentId, step, patch: patch as any });
     }
+  };
+  const advanceWithReview = async (step: Step, patch: Record<string, any>, message: string) => {
+    const ok = await confirm({
+      title: "Complete AGM step?",
+      message,
+      confirmLabel: "Complete step",
+      tone: "warn",
+    });
+    if (!ok) return;
+    await advance(step, patch);
   };
 
   const daysToMeeting = Math.floor(
@@ -156,6 +168,13 @@ export function AgmWorkflowPage() {
                               <option value="in-person">In person</option>
                             </select>
                             <button className="btn-action btn-action--primary" onClick={async () => {
+                              const ok = await confirm({
+                                title: "Send AGM notice?",
+                                message: `This will send AGM notice by ${noticeChannel}. Confirm the notice window, participation details, agenda, and member recipient list are correct.`,
+                                confirmLabel: "Send notice",
+                                tone: "warn",
+                              });
+                              if (!ok) return;
                               const res = await sendMeetingNotice({
                                 societyId: society._id,
                                 meetingId: meeting._id,
@@ -171,10 +190,10 @@ export function AgmWorkflowPage() {
                           <button
                             className="btn-action"
                             onClick={() =>
-                              advance("notice", {
+                              advanceWithReview("notice", {
                                 noticeSentAt: new Date().toISOString(),
                                 noticeRecipientCount: 0,
-                              })
+                              }, "Record this only after the AGM notice, recipient list, delivery method, and any non-email evidence are saved outside Societyer.")
                             }
                           >
                             <CheckCircle2 size={12} /> Mark notice handled outside Societyer
@@ -183,29 +202,29 @@ export function AgmWorkflowPage() {
                       </>
                     )}
                     {s.id === "held" && (
-                      <button className="btn-action" onClick={() => advance("held", { quorumCheckedAtISO: new Date().toISOString() })}>
+                      <button className="btn-action" onClick={() => advanceWithReview("held", { quorumCheckedAtISO: new Date().toISOString() }, "Confirm attendance, quorum, chair, voting rights, and electronic participation details have been recorded in the minutes.")}>
                         <CheckCircle2 size={12} /> Mark meeting held
                       </button>
                     )}
                     {s.id === "financialsPresented" && (
-                      <button className="btn-action" onClick={() => advance("financialsPresented", { financialsPresentedAt: new Date().toISOString() })}>
+                      <button className="btn-action" onClick={() => advanceWithReview("financialsPresented", { financialsPresentedAt: new Date().toISOString() }, "Confirm the financial statements and any auditor or reviewer report were presented and are attached or referenced in the AGM record.")}>
                         <FileText size={12} /> Mark financials presented
                       </button>
                     )}
                     {s.id === "electionsHeld" && (
-                      <button className="btn-action" onClick={() => advance("electionsHeld", { electionsCompletedAt: new Date().toISOString() })}>
+                      <button className="btn-action" onClick={() => advanceWithReview("electionsHeld", { electionsCompletedAt: new Date().toISOString() }, "Confirm election results, acclamations, vacancies, and director eligibility evidence are captured before completing this step.")}>
                         <ClipboardCheck size={12} /> Mark elections complete
                       </button>
                     )}
                     {s.id === "minutesApproved" && (
-                      <button className="btn-action" onClick={() => advance("minutesApproved", { minutesApprovedAt: new Date().toISOString() })}>
+                      <button className="btn-action" onClick={() => advanceWithReview("minutesApproved", { minutesApprovedAt: new Date().toISOString() }, "Confirm the approved AGM minutes are saved with approval evidence or the approving meeting reference.")}>
                         <Flag size={12} /> Mark minutes approved
                       </button>
                     )}
                     {s.id === "annualReportFiled" && (
                       <>
                         <Link to="/app/filings" className="btn-action">Go to filings</Link>
-                        <button className="btn-action btn-action--primary" onClick={() => advance("annualReportFiled", { annualReportFiledAt: new Date().toISOString() })}>
+                        <button className="btn-action btn-action--primary" onClick={() => advanceWithReview("annualReportFiled", { annualReportFiledAt: new Date().toISOString() }, `Only complete this after the annual report filing record has the filed date, confirmation number or evidence, and the ${rules?.annualReportDueDaysAfterMeeting ?? 30}-day post-AGM deadline has been checked.`)}>
                           <Flag size={12} /> Mark annual report filed ({rules?.annualReportDueDaysAfterMeeting ?? 30} day rule)
                         </button>
                       </>

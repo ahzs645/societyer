@@ -206,6 +206,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/app/notifications", label: "Notifications", icon: Bell, color: "orange" },
       { to: "/app/users", label: "Users & roles", icon: UserCog, color: "blue" },
+      { to: "/app/settings", label: "Settings", icon: Settings, color: "gray" },
       { to: "/app/audit", label: "Audit log", icon: ShieldCheck, color: "red" },
       { to: "/app/exports", label: "Data export", icon: Download, color: "blue" },
     ],
@@ -285,6 +286,7 @@ const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   "Membership & billing": "nav.membership",
   Notifications: "nav.notifications",
   "Users & roles": "nav.users",
+  Settings: "nav.settings",
   "Audit log": "nav.auditLog",
   "Data export": "nav.dataExport",
 };
@@ -309,6 +311,8 @@ export function Layout() {
     left: number;
     width: number;
   } | null>(null);
+  const sidebarRef = useRef<HTMLElement | null>(null);
+  const mainRef = useRef<HTMLDivElement | null>(null);
   const workspaceButtonRef = useRef<HTMLButtonElement | null>(null);
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -345,6 +349,27 @@ export function Layout() {
       setMobileSidebarOpen(false);
     }
   }, [isMobileNav, loc.pathname]);
+
+  useEffect(() => {
+    if (!isMobileNav || !mobileSidebarOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const main = mainRef.current as (HTMLDivElement & { inert?: boolean }) | null;
+    main?.setAttribute("aria-hidden", "true");
+    if (main) main.inert = true;
+    setTimeout(() => {
+      sidebarRef.current?.querySelector<HTMLElement>("button, a")?.focus();
+    }, 0);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileSidebarOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      main?.removeAttribute("aria-hidden");
+      if (main) main.inert = false;
+      previousFocus?.focus?.();
+    };
+  }, [isMobileNav, mobileSidebarOpen]);
 
   useEffect(() => {
     const activeGroup = GROUPED_NAV.find((group) =>
@@ -439,7 +464,7 @@ export function Layout() {
         >
           <PanelLeftOpen size={14} />
         </button>
-        <aside className="sidebar">
+        <aside className="sidebar" ref={sidebarRef} aria-label={t("sidebar.navigation")}>
           <div className="sidebar__brand">
             <button
               ref={workspaceButtonRef}
@@ -532,16 +557,6 @@ export function Layout() {
               <span>{t("nav.resources")}</span>
               <span className="sidebar__section-meta">{t("sidebar.reference")}</span>
             </div>
-            <NavLink
-              to="/app/settings"
-              className={({ isActive }) => `sidebar__item${isActive ? " is-active" : ""}`}
-              title={!isMobileNav && collapsed ? t("nav.settings") : undefined}
-            >
-              <TintedIconTile tone="gray" size="sm" className="sidebar__icon-chip">
-                <Settings size={14} />
-              </TintedIconTile>
-              <span className="sidebar__label">{t("nav.settings")}</span>
-            </NavLink>
             <a
               className="sidebar__item"
               href="https://www2.gov.bc.ca/gov/content/employment-business/non-profits-sector/not-for-profit-organizations"
@@ -624,7 +639,7 @@ export function Layout() {
           document.body,
         )}
 
-        <div className="main">
+        <div className="main" ref={mainRef}>
           <div className="workbench">
             <div className="workbench__panel">
               <DemoBanner />

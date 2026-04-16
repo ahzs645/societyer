@@ -25,11 +25,11 @@ export function PublicTransparencyPage() {
 
   const { society, directors, publications } = data;
   const statusLabels = [
-    society.publicTransparencyEnabled ? ["Public page live", "success"] : ["Draft-only page", "warn"],
-    society.publicShowBoard ? ["Board visible", "info"] : ["Board hidden", "warn"],
-    society.publicShowBylaws ? ["Bylaws visible", "info"] : ["Bylaws hidden", "warn"],
-    society.publicShowFinancials ? ["Financials visible", "info"] : ["Financials hidden", "warn"],
-  ] as const;
+    { label: "Public page live", tone: "success" },
+    society.publicShowBoard ? { label: "Board roster published", tone: "info" } : null,
+    society.publicShowBylaws ? { label: "Governance records published", tone: "info" } : null,
+    society.publicShowFinancials ? { label: "Financial records published", tone: "info" } : null,
+  ].filter((row): row is { label: string; tone: string } => row !== null);
 
   return (
     <div className="landing" style={{ minHeight: "100vh" }}>
@@ -48,7 +48,7 @@ export function PublicTransparencyPage() {
             <span>{publications.length} published item{publications.length === 1 ? "" : "s"}</span>
           </div>
           <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 18 }}>
-            {statusLabels.map(([label, tone]) => (
+            {statusLabels.map(({ label, tone }) => (
               <Badge key={label} tone={tone as any}>{label}</Badge>
             ))}
           </div>
@@ -72,7 +72,7 @@ export function PublicTransparencyPage() {
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card__head">
               <h2 className="card__title">At a glance</h2>
-              <span className="card__subtitle">Public access, governance, and disclosure settings</span>
+              <span className="card__subtitle">Published contact and records information</span>
             </div>
             <div className="card__body" style={{ display: "grid", gap: 10 }}>
               <div className="row" style={{ justifyContent: "space-between", gap: 12 }}>
@@ -81,7 +81,13 @@ export function PublicTransparencyPage() {
               </div>
               <div className="row" style={{ justifyContent: "space-between", gap: 12 }}>
                 <span className="muted">Board roster</span>
-                <span>{society.publicShowBoard ? `${directors.length} active director${directors.length === 1 ? "" : "s"}` : "Hidden"}</span>
+                <span>
+                  {society.publicShowBoard
+                    ? `${directors.length} active director${directors.length === 1 ? "" : "s"}`
+                    : society.publicContactEmail
+                      ? "Available by records request"
+                      : "Contact society"}
+                </span>
               </div>
               <div className="row" style={{ justifyContent: "space-between", gap: 12 }}>
                 <span className="muted">Public records</span>

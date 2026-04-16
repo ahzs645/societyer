@@ -182,6 +182,9 @@ export function LandingPage() {
             <span><CheckCircle2 size={12} /> Static walkthrough lives at <code>/demo</code></span>
             <span><CheckCircle2 size={12} /> {authMeta}</span>
           </div>
+          <p className="landing__fineprint">
+            Societyer helps organize compliance work; it is not legal advice and does not replace advice from a lawyer, accountant, or the BC Registry.
+          </p>
         </div>
 
         <div className="landing__hero-preview">

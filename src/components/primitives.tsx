@@ -25,7 +25,7 @@ export function ViewBar({
 }) {
   return (
     <div className="view-bar">
-      <button className="view-pill">
+      <button className="view-pill" type="button">
         <TintedIconTile tone="gray" size="sm" className="view-pill__icon">
           {icon ?? <List size={14} />}
         </TintedIconTile>
@@ -37,21 +37,31 @@ export function ViewBar({
         )}
         <ChevronDown size={12} style={{ color: "var(--text-tertiary)" }} />
       </button>
-      <div className="view-bar__sep" />
-      <div className="view-bar__group">
-        <button className="view-bar__btn" onClick={onFilter} ref={filterBtnRef}>
-          <Filter size={12} style={{ marginRight: 4, verticalAlign: -2 }} />
-          Filter
-        </button>
-        <button className="view-bar__btn" onClick={onSort} ref={sortBtnRef}>
-          <ArrowUpDown size={12} style={{ marginRight: 4, verticalAlign: -2 }} />
-          Sort
-        </button>
-        <button className="view-bar__btn" onClick={onOptions}>
-          <MoreHorizontal size={12} style={{ marginRight: 4, verticalAlign: -2 }} />
-          Options
-        </button>
-      </div>
+      {(onFilter || onSort || onOptions) && (
+        <>
+          <div className="view-bar__sep" />
+          <div className="view-bar__group">
+            {onFilter && (
+              <button className="view-bar__btn" type="button" onClick={onFilter} ref={filterBtnRef}>
+                <Filter size={12} style={{ marginRight: 4, verticalAlign: -2 }} />
+                Filter
+              </button>
+            )}
+            {onSort && (
+              <button className="view-bar__btn" type="button" onClick={onSort} ref={sortBtnRef}>
+                <ArrowUpDown size={12} style={{ marginRight: 4, verticalAlign: -2 }} />
+                Sort
+              </button>
+            )}
+            {onOptions && (
+              <button className="view-bar__btn" type="button" onClick={onOptions}>
+                <MoreHorizontal size={12} style={{ marginRight: 4, verticalAlign: -2 }} />
+                Options
+              </button>
+            )}
+          </div>
+        </>
+      )}
       {extra && (
         <>
           <div className="view-bar__sep" />

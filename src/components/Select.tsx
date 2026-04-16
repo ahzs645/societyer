@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Check, Search } from "lucide-react";
 import { MenuRow } from "./ui";
@@ -53,6 +53,8 @@ export function Select<T extends string>({
   const [activeIdx, setActiveIdx] = useState(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const generatedId = useId();
+  const controlId = id ?? generatedId;
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const selected = options.find((o) => o.value === value);
@@ -108,6 +110,7 @@ export function Select<T extends string>({
     }
     const currentIdx = visibleItems.findIndex((o) => o.value === value);
     setActiveIdx(currentIdx >= 0 ? currentIdx : 0);
+    if (!searchable) setTimeout(() => menuRef.current?.focus(), 0);
   }, [open, value, visibleItems]);
 
   const commit = (idx: number) => {
@@ -166,6 +169,7 @@ export function Select<T extends string>({
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-controls={open ? `${controlId}-menu` : undefined}
         aria-describedby={ariaDescribedBy}
         aria-invalid={ariaInvalid}
         style={style}
@@ -186,6 +190,7 @@ export function Select<T extends string>({
         ? createPortal(
             <div
               ref={menuRef}
+              id={`${controlId}-menu`}
               className="menu"
               role="listbox"
               tabIndex={-1}

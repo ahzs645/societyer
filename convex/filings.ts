@@ -100,6 +100,17 @@ export const markFiled = mutation({
   handler: async (ctx, { id, ...rest }) => {
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Filing not found.");
+    if (!rest.filedAt || !rest.submissionMethod) {
+      throw new Error("Filed date and submission method are required.");
+    }
+    const hasEvidence =
+      !!rest.confirmationNumber ||
+      !!rest.receiptDocumentId ||
+      !!rest.stagedPacketDocumentId ||
+      !!rest.evidenceNotes?.trim();
+    if (!hasEvidence) {
+      throw new Error("Add a confirmation number, evidence document, packet, or evidence note before marking filed.");
+    }
     await ctx.db.patch(id, {
       ...rest,
       registryUrl: existing.registryUrl ?? filingDefaults(existing.kind).registryUrl,

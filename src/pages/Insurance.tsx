@@ -7,7 +7,7 @@ import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { Plus, Shield, Trash2, Tag } from "lucide-react";
-import { formatDate, money } from "../lib/format";
+import { dollarInputToCents, formatDate, money } from "../lib/format";
 
 const KINDS = ["DirectorsOfficers", "GeneralLiability", "PropertyCasualty", "CyberLiability", "Other"];
 const FIELDS: FilterField<any>[] = [
@@ -35,7 +35,8 @@ export function InsurancePage() {
       kind: "DirectorsOfficers",
       insurer: "",
       policyNumber: "",
-      coverageCents: 500000_00,
+      coverageDollars: "500000.00",
+      premiumDollars: "",
       startDate: new Date().toISOString().slice(0, 10),
       renewalDate: new Date(Date.now() + 365 * 864e5).toISOString().slice(0, 10),
       status: "Active",
@@ -43,7 +44,13 @@ export function InsurancePage() {
     setOpen(true);
   };
   const save = async () => {
-    await create({ societyId: society._id, ...form });
+    const { coverageDollars, premiumDollars, ...rest } = form;
+    await create({
+      societyId: society._id,
+      ...rest,
+      coverageCents: dollarInputToCents(coverageDollars) ?? 0,
+      premiumCents: dollarInputToCents(premiumDollars),
+    });
     setOpen(false);
   };
 
@@ -108,8 +115,8 @@ export function InsurancePage() {
             <Field label="Insurer"><input className="input" value={form.insurer} onChange={(e) => setForm({ ...form, insurer: e.target.value })} /></Field>
             <Field label="Policy number"><input className="input" value={form.policyNumber} onChange={(e) => setForm({ ...form, policyNumber: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Coverage (cents)"><input className="input" type="number" value={form.coverageCents} onChange={(e) => setForm({ ...form, coverageCents: Number(e.target.value) })} /></Field>
-              <Field label="Premium (cents)"><input className="input" type="number" value={form.premiumCents ?? 0} onChange={(e) => setForm({ ...form, premiumCents: Number(e.target.value) })} /></Field>
+              <Field label="Coverage" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.coverageDollars} onChange={(e) => setForm({ ...form, coverageDollars: e.target.value })} /></Field>
+              <Field label="Premium" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.premiumDollars ?? ""} onChange={(e) => setForm({ ...form, premiumDollars: e.target.value })} /></Field>
             </div>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Start"><input className="input" type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></Field>

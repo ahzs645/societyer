@@ -41,6 +41,8 @@ export const upsert = mutation({
     publicShowBoard: v.optional(v.boolean()),
     publicShowBylaws: v.optional(v.boolean()),
     publicShowFinancials: v.optional(v.boolean()),
+    publicVolunteerIntakeEnabled: v.optional(v.boolean()),
+    publicGrantIntakeEnabled: v.optional(v.boolean()),
     demoMode: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {

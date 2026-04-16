@@ -11,7 +11,7 @@ import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { useToast } from "../components/Toast";
 import { Plus, Check, ClipboardList, Tag, Calendar, Bot } from "lucide-react";
-import { formatDate, money } from "../lib/format";
+import { centsToDollarInput, dollarInputToCents, formatDate, money } from "../lib/format";
 import { kindLabel, renderFilingStatus } from "./Dashboard";
 import { FilingBotRunner } from "../components/FilingBotRunner";
 
@@ -110,7 +110,7 @@ export function FilingsPage() {
                     filedAt: new Date().toISOString().slice(0, 10),
                     submissionMethod: r.submissionMethod ?? "ManualPortal",
                     confirmationNumber: r.confirmationNumber ?? "",
-                    feePaidCents: r.feePaidCents ?? "",
+                    feePaidDollars: centsToDollarInput(r.feePaidCents),
                     receiptDocumentId: r.receiptDocumentId ?? "",
                     stagedPacketDocumentId: r.stagedPacketDocumentId ?? "",
                     evidenceNotes: r.evidenceNotes ?? "",
@@ -170,13 +170,22 @@ export function FilingsPage() {
             <button
               className="btn btn--accent"
               onClick={async () => {
+                const hasEvidence =
+                  !!completeDraft.confirmationNumber?.trim() ||
+                  !!completeDraft.receiptDocumentId ||
+                  !!completeDraft.stagedPacketDocumentId ||
+                  !!completeDraft.evidenceNotes?.trim();
+                if (!completeDraft.filedAt || !completeDraft.submissionMethod || !hasEvidence) {
+                  toast.error("Add filed date, method, and at least one evidence item before marking filed");
+                  return;
+                }
                 await markFiled({
                   id: completeDraft.id,
                   filedAt: completeDraft.filedAt,
                   submissionMethod: completeDraft.submissionMethod || undefined,
                   submittedByUserId: actingUserId,
                   confirmationNumber: completeDraft.confirmationNumber || undefined,
-                  feePaidCents: completeDraft.feePaidCents ? Number(completeDraft.feePaidCents) : undefined,
+                  feePaidCents: dollarInputToCents(completeDraft.feePaidDollars),
                   receiptDocumentId: completeDraft.receiptDocumentId || undefined,
                   stagedPacketDocumentId: completeDraft.stagedPacketDocumentId || undefined,
                   evidenceNotes: completeDraft.evidenceNotes || undefined,
@@ -226,7 +235,17 @@ export function FilingsPage() {
               />
             </Field>
             <Field label="Confirmation number"><input className="input" value={completeDraft.confirmationNumber ?? ""} onChange={(e) => setCompleteDraft({ ...completeDraft, confirmationNumber: e.target.value })} /></Field>
-            <Field label="Fee paid (cents)"><input className="input" type="number" value={completeDraft.feePaidCents ?? ""} onChange={(e) => setCompleteDraft({ ...completeDraft, feePaidCents: e.target.value })} /></Field>
+            <Field label="Fee paid" hint="Dollars">
+              <input
+                className="input"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                value={completeDraft.feePaidDollars ?? ""}
+                onChange={(e) => setCompleteDraft({ ...completeDraft, feePaidDollars: e.target.value })}
+              />
+            </Field>
             <Field label="Staged packet / pre-fill document">
               <select className="input" value={completeDraft.stagedPacketDocumentId ?? ""} onChange={(e) => setCompleteDraft({ ...completeDraft, stagedPacketDocumentId: e.target.value })}>
                 <option value="">None</option>

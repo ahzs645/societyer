@@ -279,6 +279,13 @@ export function BylawDiffPage() {
                     <button
                       className="btn-action btn-action--primary"
                       onClick={async () => {
+                        const ok = await confirm({
+                          title: "Mark bylaw amendment as filed?",
+                          message: "Confirm the special resolution, final bylaw text, and registry filing evidence are captured in filings or documents before marking this amendment filed.",
+                          confirmLabel: "Mark filed",
+                          tone: "warn",
+                        });
+                        if (!ok) return;
                         await markFiled({ id: selected._id });
                         toast.success("Marked as filed");
                       }}

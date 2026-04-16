@@ -6,7 +6,7 @@ import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
-import { usePrompt } from "../components/Modal";
+import { useConfirm, usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Scale, Link2, Undo2, Tag } from "lucide-react";
 import { formatDate, money } from "../lib/format";
@@ -46,6 +46,7 @@ export function ReconciliationPage() {
   const markManualM = useMutation(api.reconciliation.markManual);
   const unmatchM = useMutation(api.reconciliation.unmatch);
   const prompt = usePrompt();
+  const confirm = useConfirm();
   const toast = useToast();
 
   const [selected, setSelected] = useState<string | null>(null);
@@ -62,12 +63,23 @@ export function ReconciliationPage() {
   if (society === null) return <SeedPrompt />;
 
   const autoMatchAllHighConfidence = async () => {
+    const candidates = rows
+      .filter((r: any) => !r.txn.reconciledAtISO)
+      .map((r: any) => ({ row: r, top: r.candidates[0] }))
+      .filter(({ top }: any) => top && top.score >= 110);
+    if (candidates.length === 0) {
+      toast.info("No high-confidence matches to apply");
+      return;
+    }
+    const ok = await confirm({
+      title: "Auto-match transactions?",
+      message: `This will reconcile ${candidates.length} transaction${candidates.length === 1 ? "" : "s"} using the current top high-confidence suggestions. Review the unmatched rows after it finishes.`,
+      confirmLabel: "Auto-match",
+      tone: "warn",
+    });
+    if (!ok) return;
     let count = 0;
-    for (const r of rows) {
-      if (r.txn.reconciledAtISO) continue;
-      const top = r.candidates[0];
-      if (!top) continue;
-      if (top.score < 110) continue; // high-confidence only
+    for (const { row: r, top } of candidates) {
       await matchM({
         txnId: r.txn._id,
         matchedKind: top.kind,

@@ -7,7 +7,7 @@ import { Badge, Drawer, Field, InspectorNote, RecordChip } from "../components/u
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { Plus, Users, Trash2, Tag } from "lucide-react";
-import { formatDate, money, initials } from "../lib/format";
+import { dollarInputToCents, formatDate, money, initials } from "../lib/format";
 
 const FIELDS: FilterField<any>[] = [
   { id: "type", label: "Type", icon: <Tag size={14} />, options: ["FullTime", "PartTime", "Casual", "Contractor"], match: (r, q) => r.employmentType === q },
@@ -38,7 +38,13 @@ export function EmployeesPage() {
     setOpen(true);
   };
   const save = async () => {
-    await create({ societyId: society._id, ...form });
+    const { annualSalaryDollars, hourlyWageDollars, ...rest } = form;
+    await create({
+      societyId: society._id,
+      ...rest,
+      annualSalaryCents: dollarInputToCents(annualSalaryDollars),
+      hourlyWageCents: dollarInputToCents(hourlyWageDollars),
+    });
     setOpen(false);
   };
 
@@ -116,8 +122,8 @@ export function EmployeesPage() {
               <Field label="End"><input className="input" type="date" value={form.endDate ?? ""} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></Field>
             </div>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Annual salary (cents)"><input className="input" type="number" value={form.annualSalaryCents ?? 0} onChange={(e) => setForm({ ...form, annualSalaryCents: Number(e.target.value) })} /></Field>
-              <Field label="Hourly wage (cents)"><input className="input" type="number" value={form.hourlyWageCents ?? 0} onChange={(e) => setForm({ ...form, hourlyWageCents: Number(e.target.value) })} /></Field>
+              <Field label="Annual salary" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.annualSalaryDollars ?? ""} onChange={(e) => setForm({ ...form, annualSalaryDollars: e.target.value })} /></Field>
+              <Field label="Hourly wage" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.hourlyWageDollars ?? ""} onChange={(e) => setForm({ ...form, hourlyWageDollars: e.target.value })} /></Field>
             </div>
             <Field label="WorkSafeBC #"><input className="input" value={form.worksafeBCNumber ?? ""} onChange={(e) => setForm({ ...form, worksafeBCNumber: e.target.value })} /></Field>
             <label className="checkbox"><input type="checkbox" checked={form.cppExempt} onChange={(e) => setForm({ ...form, cppExempt: e.target.checked })} /> CPP exempt</label>

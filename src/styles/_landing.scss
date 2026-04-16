@@ -237,6 +237,14 @@
   svg { color: var(--success); }
 }
 
+.landing__fineprint {
+  max-width: 720px;
+  margin: var(--s-3) auto 0;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
 @media (max-width: 540px) {
   .landing__container {
     padding: 0 var(--s-4);

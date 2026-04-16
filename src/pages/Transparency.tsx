@@ -9,6 +9,7 @@ import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { Globe, Plus, Save, Trash2, Copy } from "lucide-react";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
 import { formatDate } from "../lib/format";
 
 export function TransparencyPage() {
@@ -26,6 +27,7 @@ export function TransparencyPage() {
   const upsertPublication = useMutation(api.transparency.upsertPublication);
   const removePublication = useMutation(api.transparency.removePublication);
   const toast = useToast();
+  const confirm = useConfirm();
   const publicHref = useMemo(
     () => (society?.publicSlug ? `/public/${society.publicSlug}` : "/public"),
     [society?.publicSlug],
@@ -93,6 +95,8 @@ export function TransparencyPage() {
                 publicShowBoard: society.publicShowBoard ?? true,
                 publicShowBylaws: society.publicShowBylaws ?? true,
                 publicShowFinancials: society.publicShowFinancials ?? true,
+                publicVolunteerIntakeEnabled: society.publicVolunteerIntakeEnabled ?? false,
+                publicGrantIntakeEnabled: society.publicGrantIntakeEnabled ?? false,
                 demoMode: society.demoMode,
               })}
             >
@@ -108,12 +112,13 @@ export function TransparencyPage() {
                   category: "AnnualReport",
                   documentId: "",
                   url: "",
-                  status: "Published",
-                  publishedAtISO: new Date().toISOString().slice(0, 10),
+                  status: "Draft",
+                  reviewStatus: "Draft",
+                  publishedAtISO: "",
                 })
               }
             >
-              <Plus size={12} /> Publish item
+              <Plus size={12} /> New draft
             </button>
           </>
         }
@@ -131,6 +136,8 @@ export function TransparencyPage() {
             <Badge tone={society.publicShowBoard ? "success" : "warn"}>{society.publicShowBoard ? "Board visible" : "Board hidden"}</Badge>
             <Badge tone={society.publicShowBylaws ? "success" : "warn"}>{society.publicShowBylaws ? "Bylaws visible" : "Bylaws hidden"}</Badge>
             <Badge tone={society.publicShowFinancials ? "success" : "warn"}>{society.publicShowFinancials ? "Financials visible" : "Financials hidden"}</Badge>
+            <Badge tone={society.publicVolunteerIntakeEnabled ? "success" : "warn"}>{society.publicVolunteerIntakeEnabled ? "Volunteer intake on" : "Volunteer intake off"}</Badge>
+            <Badge tone={society.publicGrantIntakeEnabled ? "success" : "warn"}>{society.publicGrantIntakeEnabled ? "Grant intake on" : "Grant intake off"}</Badge>
           </div>
           <div className="muted" style={{ whiteSpace: "pre-wrap" }}>
             {society.publicSummary ?? "No public summary yet."}
@@ -168,6 +175,13 @@ export function TransparencyPage() {
               className="btn btn--ghost btn--sm btn--icon"
               aria-label={`Delete publication ${row.title}`}
               onClick={async () => {
+                const ok = await confirm({
+                  title: "Remove publication",
+                  message: `"${row.title}" will be removed from the internal publication list and the public page if it is live.`,
+                  confirmLabel: "Remove",
+                  tone: "danger",
+                });
+                if (!ok) return;
                 await removePublication({ id: row._id, actingUserId });
                 toast.success("Publication removed");
               }}
@@ -212,6 +226,8 @@ export function TransparencyPage() {
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowBoard} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowBoard: e.target.checked })} /> Show board roster</label>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowBylaws} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowBylaws: e.target.checked })} /> Show bylaws and governance records</label>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowFinancials} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowFinancials: e.target.checked })} /> Show financial publications</label>
+            <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicVolunteerIntakeEnabled} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicVolunteerIntakeEnabled: e.target.checked })} /> Allow public volunteer applications</label>
+            <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicGrantIntakeEnabled} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicGrantIntakeEnabled: e.target.checked })} /> Allow public grant applications</label>
           </div>
         )}
       </Drawer>
@@ -226,13 +242,38 @@ export function TransparencyPage() {
             <button
               className="btn btn--accent"
               onClick={async () => {
+                if (publicationDraft.status === "Published") {
+                  if (!publicationDraft.title?.trim()) {
+                    toast.error("Add a title before publishing");
+                    return;
+                  }
+                  if (!publicationDraft.documentId && !publicationDraft.url) {
+                    toast.error("Attach a document or public URL before publishing");
+                    return;
+                  }
+                  const ok = await confirm({
+                    title: "Publish this item?",
+                    message: `This will make "${publicationDraft.title}" visible on the public transparency page. Review the title, category, date, and attached evidence before continuing.`,
+                    confirmLabel: "Publish",
+                  });
+                  if (!ok) return;
+                }
                 await upsertPublication({
                   ...publicationDraft,
                   societyId: society._id,
                   summary: publicationDraft.summary || undefined,
                   documentId: publicationDraft.documentId || undefined,
                   url: publicationDraft.url || undefined,
-                  publishedAtISO: publicationDraft.publishedAtISO || undefined,
+                  publishedAtISO:
+                    publicationDraft.status === "Published"
+                      ? publicationDraft.publishedAtISO || new Date().toISOString().slice(0, 10)
+                      : publicationDraft.publishedAtISO || undefined,
+                  reviewStatus:
+                    publicationDraft.status === "Published"
+                      ? "Approved"
+                      : publicationDraft.reviewStatus || "Draft",
+                  approvedByUserId: publicationDraft.status === "Published" ? actingUserId : undefined,
+                  approvedAtISO: publicationDraft.status === "Published" ? new Date().toISOString() : undefined,
                   actingUserId,
                 });
                 toast.success("Publication saved");

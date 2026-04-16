@@ -8,6 +8,7 @@ import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { Mail, Plus, Send, Settings2 } from "lucide-react";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
 import { formatDateTime } from "../lib/format";
 
 type AudiencePreset =
@@ -207,6 +208,7 @@ export function CommunicationsPage() {
   const upsertPref = useMutation(api.communications.upsertMemberPref);
   const sendCampaign = useAction(api.communications.sendCampaign);
   const toast = useToast();
+  const confirm = useConfirm();
   const [templateDraft, setTemplateDraft] = useState<any | null>(null);
   const [segmentDraft, setSegmentDraft] = useState<any | null>(null);
   const [prefDraft, setPrefDraft] = useState<any | null>(null);
@@ -799,6 +801,18 @@ export function CommunicationsPage() {
                 !sendDraft.audienceTarget
               }
               onClick={async () => {
+                const recipientCount = audiencePreview ?? 0;
+                if (!sendDraft.subject.trim() || !sendDraft.bodyText.trim()) {
+                  toast.error("Add a subject and body before sending");
+                  return;
+                }
+                const ok = await confirm({
+                  title: "Send campaign?",
+                  message: `This will send a ${sendDraft.channel} ${sendDraft.kind} campaign to about ${recipientCount} recipient${recipientCount === 1 ? "" : "s"} using audience "${buildAudienceValue(sendDraft)}". Review the subject and body before continuing.`,
+                  confirmLabel: "Send campaign",
+                  tone: "warn",
+                });
+                if (!ok) return;
                 const result = await sendCampaign({
                   societyId: society._id,
                   templateId: sendDraft.templateId || undefined,

@@ -9,7 +9,7 @@ import { FilterField } from "../components/FilterBar";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
-import { useConfirm } from "../components/Modal";
+import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Plus, Users, Trash2, Mail, Tag, CircleUser, Vote } from "lucide-react";
 import { formatDate, initials } from "../lib/format";
@@ -27,38 +27,31 @@ export function MembersPage() {
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.members.create);
   const update = useMutation(api.members.update);
-  const remove = useMutation(api.members.remove);
-  const confirm = useConfirm();
+  const prompt = usePrompt();
   const toast = useToast();
   const [selected, setSelected] = useState<any>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const confirmRemove = async (r: any) => {
-    if (!society) return;
-    // Optimistic delete with undo — feels fast and gives a safety net via the
-    // toast action. The snapshot lets us re-create the row if the user regrets.
-    const snapshot = {
-      firstName: r.firstName,
-      lastName: r.lastName,
-      email: r.email,
-      phone: r.phone,
-      address: r.address,
-      membershipClass: r.membershipClass,
-      status: r.status,
-      joinedAt: r.joinedAt,
-      votingRights: r.votingRights,
-      notes: r.notes,
-    };
-    await remove({ id: r._id });
-    const societyId = society._id;
-    toast.success(`Removed ${r.firstName} ${r.lastName}`, {
-      description: "They were taken off the member register.",
-      action: {
-        label: "Undo",
-        onClick: () => {
-          create({ societyId, ...snapshot });
-        },
+    const reason = await prompt({
+      title: "Archive member record",
+      message: `${r.firstName} ${r.lastName} will stay in the register as inactive instead of being deleted.`,
+      placeholder: "Reason (required)",
+      confirmLabel: "Archive member",
+      required: true,
+    });
+    if (!reason) return;
+    await update({
+      id: r._id,
+      patch: {
+        status: "Inactive",
+        leftAt: new Date().toISOString().slice(0, 10),
+        votingRights: false,
+        notes: [r.notes, `Archived: ${reason}`].filter(Boolean).join("\n\n"),
       },
+    });
+    toast.success(`Archived ${r.firstName} ${r.lastName}`, {
+      description: "The member record remains available for audit and retention.",
     });
   };
 

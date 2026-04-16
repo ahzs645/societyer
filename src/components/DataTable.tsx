@@ -65,6 +65,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   const filterBtnRef = useRef<HTMLButtonElement>(null);
   const sortBtnRef = useRef<HTMLButtonElement>(null);
   const sortColumn = sort ? columns.find((column) => column.id === sort.columnId) : null;
+  const sortableColumns = useMemo(() => columns.filter((c) => c.sortable), [columns]);
 
   const filtered = useMemo(() => {
     let rows = data;
@@ -123,7 +124,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
         filterBtnRef={filterBtnRef}
         sortBtnRef={sortBtnRef}
         onFilter={filterFields?.length ? () => setFilterOpen((v) => !v) : undefined}
-        onSort={() => setSortOpen((v) => !v)}
+        onSort={sortableColumns.length ? () => setSortOpen((v) => !v) : undefined}
       />
       {filterFields && (
         <FilterChips
@@ -142,7 +143,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
       )}
       {sortOpen && (
         <SortPopover
-          columns={columns.filter((c) => c.sortable)}
+          columns={sortableColumns}
           anchorRef={sortBtnRef as any}
           current={sort}
           onPick={(s) => {
@@ -224,29 +225,34 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
               key={rowKey(row)}
               className={renderRowActions ? "table__row--actions" : undefined}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
-              onKeyDown={
-                onRowClick
-                  ? (event) => {
-                      if (event.key !== "Enter" && event.key !== " ") return;
-                      event.preventDefault();
-                      onRowClick(row);
-                    }
-                  : undefined
-              }
-              tabIndex={onRowClick ? 0 : undefined}
-              role={onRowClick ? "button" : undefined}
-              aria-label={onRowClick ? rowActionLabel?.(row) ?? `Open ${label} row` : undefined}
               style={{ cursor: onRowClick ? "pointer" : undefined }}
             >
-              {columns.map((col) => (
+              {columns.map((col, index) => {
+                const cell = col.render ? col.render(row) : String(col.accessor?.(row) ?? "");
+                return (
                 <td
                   key={col.id}
                   className={col.className}
                   style={{ textAlign: col.align }}
                 >
-                  {col.render ? col.render(row) : String(col.accessor?.(row) ?? "")}
+                  {onRowClick && index === 0 ? (
+                    <button
+                      type="button"
+                      className="table__cell-button"
+                      aria-label={rowActionLabel?.(row) ?? `Open ${label} row`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onRowClick(row);
+                      }}
+                    >
+                      {cell}
+                    </button>
+                  ) : (
+                    cell
+                  )}
                 </td>
-              ))}
+                );
+              })}
               {renderRowActions && (
                 <td
                   className="table__actions"

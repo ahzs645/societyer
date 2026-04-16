@@ -40,6 +40,8 @@ const society = {
   publicShowBoard: true,
   publicShowBylaws: true,
   publicShowFinancials: true,
+  publicVolunteerIntakeEnabled: true,
+  publicGrantIntakeEnabled: true,
   privacyPolicyDocId: DOCUMENT_POLICY_ID,
   constitutionDocId: "static_document_constitution",
   bylawsDocId: DOCUMENT_BYLAWS_ID,
@@ -786,6 +788,7 @@ const tables: Record<string, any[]> = {
       title: "Current bylaws",
       category: "Bylaws",
       status: "Published",
+      reviewStatus: "Approved",
       documentId: DOCUMENT_BYLAWS_ID,
       publishedAtISO: "2025-06-25",
     },
@@ -1045,9 +1048,24 @@ function electionTally(args: StaticArgs) {
     }));
 }
 
-function publicCenter() {
+function publicCenter(args?: StaticArgs) {
+  if (!args?.slug || args.slug !== society.publicSlug || !society.publicTransparencyEnabled) {
+    return null;
+  }
   return {
-    society,
+    society: {
+      ...society,
+      volunteerApplyPath:
+        society.publicVolunteerIntakeEnabled && society.publicSlug
+          ? `/public/${society.publicSlug}/volunteer-apply`
+          : undefined,
+      grantApplyPath:
+        society.publicGrantIntakeEnabled &&
+        society.publicSlug &&
+        tables.grants.some((grant) => grant.allowPublicApplications)
+          ? `/public/${society.publicSlug}/grant-apply`
+          : undefined,
+    },
     directors: directors.filter((director) => director.status === "Active"),
     publications: tables.transparency.filter((row) => row.status === "Published"),
     documents: documents.filter((document) => document.public),
@@ -1148,7 +1166,10 @@ function queryResult(name: string, args: StaticArgs) {
     case "publicPortal:getSocietyBySlug":
       return society.publicSlug === args?.slug ? society : null;
     case "publicPortal:grantIntakeContext":
+      if (args?.slug !== society.publicSlug || !society.publicTransparencyEnabled || !society.publicGrantIntakeEnabled) return null;
+      return { society, grants: tables.grants.filter((grant) => grant.allowPublicApplications), committees };
     case "publicPortal:volunteerIntakeContext":
+      if (args?.slug !== society.publicSlug || !society.publicTransparencyEnabled || !society.publicVolunteerIntakeEnabled) return null;
       return { society, grants: tables.grants, committees };
     case "retention:expiredForSociety":
     case "signatures:listForEntity":
@@ -1165,7 +1186,7 @@ function queryResult(name: string, args: StaticArgs) {
     case "transparency:listPublications":
       return tables.transparency;
     case "transparency:publicCenter":
-      return publicCenter();
+      return publicCenter(args);
     case "treasury:budgetVariance":
       return budgetVariance();
     case "treasury:profitAndLoss":

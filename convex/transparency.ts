@@ -24,6 +24,10 @@ export const upsertPublication = mutation({
     url: v.optional(v.string()),
     publishedAtISO: v.optional(v.string()),
     status: v.string(),
+    reviewStatus: v.optional(v.string()),
+    approvedByUserId: v.optional(v.id("users")),
+    approvedAtISO: v.optional(v.string()),
+    featured: v.optional(v.boolean()),
     actingUserId: v.optional(v.id("users")),
   },
   handler: async (ctx, args): Promise<any> => {
@@ -33,6 +37,9 @@ export const upsertPublication = mutation({
       required: "Director",
     });
     const { id, actingUserId, ...rest } = args;
+    if (rest.status === "Published" && rest.reviewStatus !== "Approved") {
+      throw new Error("Publication must be reviewed and approved before it goes live.");
+    }
     if (id) {
       await ctx.db.patch(id, rest);
       return id;
@@ -64,10 +71,9 @@ export const removePublication = mutation({
 export const publicCenter = query({
   args: { slug: v.optional(v.string()) },
   handler: async (ctx, { slug }): Promise<any> => {
+    if (!slug) return null;
     const societies: any[] = await ctx.db.query("societies").collect();
-    const matching = slug
-      ? societies.find((society) => society.publicSlug === slug)
-      : societies.find((society) => society.publicTransparencyEnabled);
+    const matching = societies.find((society) => society.publicSlug === slug);
     const society = matching ?? null;
     if (
       !society ||
@@ -140,14 +146,18 @@ export const publicCenter = query({
         publicShowBoard: society.publicShowBoard ?? true,
         publicShowBylaws: society.publicShowBylaws ?? true,
         publicShowFinancials: society.publicShowFinancials ?? true,
+        publicVolunteerIntakeEnabled: society.publicVolunteerIntakeEnabled ?? false,
+        publicGrantIntakeEnabled: society.publicGrantIntakeEnabled ?? false,
         purposes: society.purposes,
         incorporationNumber: society.incorporationNumber,
         volunteerApplyPath: society.publicSlug
+          && society.publicVolunteerIntakeEnabled
           && isSocietyModuleEnabled(society, "volunteers")
           ? `/public/${society.publicSlug}/volunteer-apply`
           : undefined,
         grantApplyPath:
           society.publicSlug &&
+          society.publicGrantIntakeEnabled &&
           isSocietyModuleEnabled(society, "grants") &&
           grants.some((grant) => grant.allowPublicApplications)
             ? `/public/${society.publicSlug}/grant-apply`

@@ -1,3 +1,15 @@
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Twenty-style compact action button */
 .btn-action {
   display: inline-flex;
@@ -336,6 +348,7 @@
   display: flex;
   align-items: center;
   gap: var(--s-3);
+  min-width: 0;
 }
 .card__title {
   font-size: var(--fs-md);
@@ -345,6 +358,8 @@
 .card__subtitle {
   font-size: var(--fs-sm);
   color: var(--text-tertiary);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .card__body {
   padding: var(--s-4);
@@ -388,7 +403,7 @@
 .stat__value {
   font-size: var(--fs-xl);
   font-weight: 700;
-  letter-spacing: -0.3px;
+  letter-spacing: 0;
   font-variant-numeric: tabular-nums;
   line-height: 1.15;
 }
@@ -416,6 +431,30 @@
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
+}
+@media (max-width: 760px) {
+  .card__head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .stat-grid {
+    grid-template-columns: 1fr;
+  }
+  .table-wrap {
+    margin-inline: calc(var(--s-4) * -1);
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+  }
+  .table-toolbar__summary {
+    width: 100%;
+    margin-left: 0;
+  }
+  .table tbody td,
+  .table thead th {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
 }
 .table-toolbar {
   display: flex;
@@ -509,6 +548,20 @@
   color: var(--accent);
   font-size: 9px;
   vertical-align: 1px;
+}
+.table__cell-button {
+  display: inline-flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-start;
+  color: inherit;
+  text-align: left;
+}
+.table__cell-button:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
 }
 
 /* Twenty-style record chip used for the first cell in record tables */

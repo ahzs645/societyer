@@ -4,9 +4,9 @@ import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge } from "../components/ui";
 import { DataTable } from "../components/DataTable";
-import { Trash2, Archive } from "lucide-react";
+import { Archive } from "lucide-react";
 import { formatDate } from "../lib/format";
-import { useConfirm } from "../components/Modal";
+import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
 
 export function RetentionPage() {
@@ -16,8 +16,8 @@ export function RetentionPage() {
     society ? { societyId: society._id } : "skip",
   );
   const flag = useMutation(api.documents.flagForDeletion);
-  const remove = useMutation(api.documents.remove);
-  const confirm = useConfirm();
+  const archive = useMutation(api.documents.archive);
+  const prompt = usePrompt();
   const toast = useToast();
 
   if (society === undefined) return <div className="page">Loading…</div>;
@@ -68,20 +68,21 @@ export function RetentionPage() {
             </button>
             <button
               className="btn btn--ghost btn--sm btn--icon"
-              aria-label={`Delete ${r.title}`}
+              aria-label={`Archive ${r.title}`}
               onClick={async () => {
-                const ok = await confirm({
-                  title: "Delete document?",
-                  message: `"${r.title}" will be permanently removed. This cannot be undone.`,
-                  confirmLabel: "Delete",
-                  tone: "danger",
+                const reason = await prompt({
+                  title: "Archive retained document",
+                  message: `"${r.title}" will stay in the audit trail as archived instead of being permanently deleted.`,
+                  placeholder: "Reason (required)",
+                  confirmLabel: "Archive",
+                  required: true,
                 });
-                if (!ok) return;
-                await remove({ id: r._id as any });
-                toast.success("Document deleted");
+                if (!reason) return;
+                await archive({ id: r._id as any, reason });
+                toast.success("Document archived");
               }}
             >
-              <Trash2 size={12} />
+              <Archive size={12} />
             </button>
           </>
         )}

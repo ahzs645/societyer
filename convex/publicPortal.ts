@@ -31,7 +31,14 @@ export const volunteerIntakeContext = query({
       .query("societies")
       .withIndex("by_public_slug", (q) => q.eq("publicSlug", slug))
       .first();
-    if (!society || !isSocietyModuleEnabled(society, "volunteers")) return null;
+    if (
+      !society ||
+      !society.publicTransparencyEnabled ||
+      !society.publicVolunteerIntakeEnabled ||
+      !isSocietyModuleEnabled(society, "volunteers")
+    ) {
+      return null;
+    }
 
     const committees = await ctx.db
       .query("committees")
@@ -61,12 +68,22 @@ export const grantIntakeContext = query({
       .query("societies")
       .withIndex("by_public_slug", (q) => q.eq("publicSlug", slug))
       .first();
-    if (!society || !isSocietyModuleEnabled(society, "grants")) return null;
+    if (
+      !society ||
+      !society.publicTransparencyEnabled ||
+      !society.publicGrantIntakeEnabled ||
+      !isSocietyModuleEnabled(society, "grants")
+    ) {
+      return null;
+    }
 
     const grants = await ctx.db
       .query("grants")
       .withIndex("by_society", (q) => q.eq("societyId", society._id))
       .collect();
+
+    const openGrants = grants.filter((grant) => grant.allowPublicApplications);
+    if (openGrants.length === 0) return null;
 
     return {
       society: {
@@ -75,8 +92,7 @@ export const grantIntakeContext = query({
         publicSlug: society.publicSlug,
         publicContactEmail: society.publicContactEmail ?? society.privacyOfficerEmail,
       },
-      grants: grants
-        .filter((grant) => grant.allowPublicApplications)
+      grants: openGrants
         .map((grant) => ({
           _id: grant._id,
           title: grant.title,

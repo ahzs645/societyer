@@ -37,6 +37,17 @@ export const flagForDeletion = mutation({
   },
 });
 
+export const archive = mutation({
+  args: { id: v.id("documents"), reason: v.string() },
+  handler: async (ctx, { id, reason }) => {
+    await ctx.db.patch(id, {
+      archivedAtISO: new Date().toISOString(),
+      archivedReason: reason,
+      flaggedForDeletion: false,
+    });
+  },
+});
+
 export const remove = mutation({
   args: { id: v.id("documents") },
   handler: async (ctx, { id }) => {

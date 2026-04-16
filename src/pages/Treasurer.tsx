@@ -14,10 +14,19 @@ function cents(value: number): string {
 
 function getFiscalYearBounds(fyEnd: string | undefined) {
   const now = new Date();
-  const year = now.getFullYear();
-  const from = `${year}-01-01`;
-  const to = fyEnd ? `${year}-${fyEnd.slice(5)}` : `${year}-12-31`;
-  return { from, to, fy: String(year) };
+  const [monthRaw, dayRaw] = (fyEnd?.match(/^\d{4}-\d{2}-\d{2}$/)
+    ? fyEnd.slice(5)
+    : fyEnd ?? "12-31"
+  ).split("-");
+  const month = Math.min(12, Math.max(1, Number(monthRaw) || 12));
+  const day = Math.min(31, Math.max(1, Number(dayRaw) || 31));
+  let endYear = now.getFullYear();
+  const thisYearEnd = new Date(endYear, month - 1, day, 23, 59, 59, 999);
+  if (now.getTime() > thisYearEnd.getTime()) endYear += 1;
+  const end = new Date(endYear, month - 1, day);
+  const start = new Date(endYear - 1, month - 1, day + 1);
+  const iso = (date: Date) => date.toISOString().slice(0, 10);
+  return { from: iso(start), to: iso(end), fy: String(endYear) };
 }
 
 export function TreasurerPage() {

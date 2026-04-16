@@ -6,8 +6,8 @@ import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
-import { Plus, Receipt, Trash2, Tag, FileDown } from "lucide-react";
-import { formatDate, money } from "../lib/format";
+import { Plus, Receipt, Tag, FileDown } from "lucide-react";
+import { dollarInputToCents, formatDate, money } from "../lib/format";
 import { exportWordDoc, escapeHtml } from "../lib/exportWord";
 import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
@@ -22,7 +22,6 @@ export function ReceiptsPage() {
   const items = useQuery(api.receipts.list, society ? { societyId: society._id } : "skip");
   const issue = useMutation(api.receipts.issue);
   const voidR = useMutation(api.receipts.voidReceipt);
-  const remove = useMutation(api.receipts.remove);
   const prompt = usePrompt();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -37,8 +36,8 @@ export function ReceiptsPage() {
       donorName: "",
       donorEmail: "",
       donorAddress: "",
-      amountCents: 0,
-      eligibleAmountCents: 0,
+      amountDollars: "",
+      eligibleAmountDollars: "",
       receivedOnISO: new Date().toISOString().slice(0, 10),
       location: society.registeredOfficeAddress ?? "Vancouver, BC",
       isNonCash: false,
@@ -46,7 +45,14 @@ export function ReceiptsPage() {
     setOpen(true);
   };
   const save = async () => {
-    await issue({ societyId: society._id, ...form });
+    const amountCents = dollarInputToCents(form.amountDollars);
+    const eligibleAmountCents = dollarInputToCents(form.eligibleAmountDollars);
+    if (!amountCents || !eligibleAmountCents) {
+      toast.error("Enter receipt amounts in dollars before issuing");
+      return;
+    }
+    const { amountDollars, eligibleAmountDollars, ...rest } = form;
+    await issue({ societyId: society._id, ...rest, amountCents, eligibleAmountCents });
     setOpen(false);
   };
 
@@ -125,7 +131,6 @@ export function ReceiptsPage() {
                 Void
               </button>
             )}
-            <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete receipt for ${r.donorName}`} onClick={() => remove({ id: r._id })}><Trash2 size={12} /></button>
           </>
         )}
       />
@@ -143,8 +148,34 @@ export function ReceiptsPage() {
             <Field label="Donor email"><input className="input" value={form.donorEmail} onChange={(e) => setForm({ ...form, donorEmail: e.target.value })} /></Field>
             <Field label="Donor address"><textarea className="textarea" value={form.donorAddress} onChange={(e) => setForm({ ...form, donorAddress: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Amount (cents)"><input className="input" type="number" value={form.amountCents} onChange={(e) => setForm({ ...form, amountCents: Number(e.target.value), eligibleAmountCents: Number(e.target.value) })} /></Field>
-              <Field label="Eligible amount (cents)"><input className="input" type="number" value={form.eligibleAmountCents} onChange={(e) => setForm({ ...form, eligibleAmountCents: Number(e.target.value) })} /></Field>
+              <Field label="Amount" hint="Dollars">
+                <input
+                  className="input"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={form.amountDollars}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      amountDollars: e.target.value,
+                      eligibleAmountDollars: form.eligibleAmountDollars || e.target.value,
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Eligible amount" hint="Dollars">
+                <input
+                  className="input"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={form.eligibleAmountDollars}
+                  onChange={(e) => setForm({ ...form, eligibleAmountDollars: e.target.value })}
+                />
+              </Field>
               <Field label="Received on"><input className="input" type="date" value={form.receivedOnISO} onChange={(e) => setForm({ ...form, receivedOnISO: e.target.value })} /></Field>
             </div>
             <Field label="Location issued"><input className="input" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></Field>

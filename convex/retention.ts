@@ -14,6 +14,7 @@ export const flagExpired = internalMutation({
     const now = Date.now();
     const perSociety = new Map<string, number>();
     for (const d of all) {
+      if (d.archivedAtISO) continue;
       if (d.flaggedForDeletion) continue;
       if (!d.retentionYears || d.retentionYears >= 99) continue;
       const createdMs = new Date(d.createdAtISO).getTime();
@@ -85,6 +86,7 @@ export const expiredForSociety = query({
       })
       .filter(
         (r) =>
+          !r.doc.archivedAtISO &&
           r.daysOverdue != null &&
           (r.daysOverdue >= 0 || r.doc.flaggedForDeletion),
       )

@@ -29,6 +29,18 @@ export function money(cents?: number) {
   }).format(cents / 100);
 }
 
+export function centsToDollarInput(cents?: number | null) {
+  if (cents == null) return "";
+  return (cents / 100).toFixed(2);
+}
+
+export function dollarInputToCents(value: string | number | undefined | null) {
+  if (value == null || value === "") return undefined;
+  const amount = typeof value === "number" ? value : Number(String(value).replace(/[$,\s]/g, ""));
+  if (!Number.isFinite(amount)) return undefined;
+  return Math.round(amount * 100);
+}
+
 export function initials(first?: string, last?: string) {
   return `${(first || "?")[0]}${(last || "")[0] || ""}`.toUpperCase();
 }

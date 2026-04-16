@@ -9,6 +9,7 @@ import { UserCog, PlusCircle, Trash2, KeyRound } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "../components/Toast";
 import { useAuth } from "../auth/AuthProvider";
+import { useConfirm } from "../components/Modal";
 
 const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"];
 
@@ -25,6 +26,7 @@ export function UsersPage() {
   const actingUserId = useCurrentUserId() ?? undefined;
   const [draft, setDraft] = useState<any>(null);
   const toast = useToast();
+  const confirm = useConfirm();
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -85,7 +87,17 @@ export function UsersPage() {
                 <td>
                   <Select
                     value={u.role}
-                    onChange={(v) => setRole({ id: u._id, role: v, actingUserId })}
+                    onChange={async (v) => {
+                      const ok = await confirm({
+                        title: "Change user role?",
+                        message: `${u.displayName} will change from ${u.role} to ${v}. Review whether this affects access to governance, finance, or public publishing workflows.`,
+                        confirmLabel: "Change role",
+                        tone: "warn",
+                      });
+                      if (!ok) return;
+                      await setRole({ id: u._id, role: v, actingUserId });
+                      toast.success("Role updated");
+                    }}
                     options={ROLES.map((r) => ({ value: r, label: r }))}
                   />
                 </td>
@@ -110,7 +122,17 @@ export function UsersPage() {
                   <button
                     className="btn btn--ghost btn--sm btn--icon"
                     aria-label={`Remove user ${u.name ?? u.email}`}
-                    onClick={() => remove({ id: u._id, actingUserId })}
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: "Remove user access?",
+                        message: `${u.displayName} will be removed from this workspace user table. This does not delete related member, director, or audit records.`,
+                        confirmLabel: "Remove access",
+                        tone: "danger",
+                      });
+                      if (!ok) return;
+                      await remove({ id: u._id, actingUserId });
+                      toast.success("User access removed");
+                    }}
                   >
                     <Trash2 size={12} />
                   </button>

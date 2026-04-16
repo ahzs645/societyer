@@ -25,6 +25,8 @@ export function VolunteerApplyPage() {
   const submitApplication = useMutation(api.volunteers.submitApplication);
   const toast = useToast();
   const [submitting, setSubmitting] = useState(false);
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [completed, setCompleted] = useState(false);
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -67,6 +69,7 @@ export function VolunteerApplyPage() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    setAttemptedSubmit(true);
     if (errors.length > 0) return;
     setSubmitting(true);
     try {
@@ -95,12 +98,14 @@ export function VolunteerApplyPage() {
         interests: "",
         notes: "",
       }));
+      setCompleted(true);
     } catch (error: any) {
       toast.error(error?.message ?? "Could not submit application");
     } finally {
       setSubmitting(false);
     }
   };
+  const visibleErrors = attemptedSubmit ? errors : [];
 
   return (
     <div className="landing" style={{ minHeight: "100vh" }}>
@@ -120,26 +125,39 @@ export function VolunteerApplyPage() {
             and track screening and onboarding from there.
           </p>
 
+          {completed ? (
+            <div className="card" style={{ marginTop: 24 }}>
+              <div className="card__body" style={{ display: "grid", gap: 10 }}>
+                <h2 className="card__title" style={{ margin: 0 }}>Application submitted</h2>
+                <div className="muted">
+                  {context.society.name} received the volunteer application. Keep a copy of any follow-up messages you receive for your records.
+                </div>
+                <Link className="btn btn--accent" to={`/public/${context.society.publicSlug}`}>
+                  Back to public center
+                </Link>
+              </div>
+            </div>
+          ) : (
           <form className="card" style={{ marginTop: 24 }} onSubmit={submit} noValidate>
             <div className="card__body" style={{ display: "grid", gap: 12 }}>
-              <ErrorSummary errors={errors} title="Complete these fields to submit" />
+              <ErrorSummary errors={visibleErrors} title="Complete these fields to submit" />
               <InspectorNote title={PIPA_INTAKE_NOTICE.title}>
                 {PIPA_INTAKE_NOTICE.body} Published privacy records, when available, appear in the{" "}
                 <Link to={`/public/${context.society.publicSlug}`}>public center</Link>.
               </InspectorNote>
-              <Field label="First name" id={FIELD_IDS.firstName} required error={fieldError(errors, "First name")}>
+              <Field label="First name" id={FIELD_IDS.firstName} required error={fieldError(visibleErrors, "First name")}>
                 <input className="input" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} autoComplete="given-name" />
               </Field>
-              <Field label="Last name" id={FIELD_IDS.lastName} required error={fieldError(errors, "Last name")}>
+              <Field label="Last name" id={FIELD_IDS.lastName} required error={fieldError(visibleErrors, "Last name")}>
                 <input className="input" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} autoComplete="family-name" />
               </Field>
-              <Field label="Email" id={FIELD_IDS.email} required error={fieldError(errors, "Email")}>
+              <Field label="Email" id={FIELD_IDS.email} required error={fieldError(visibleErrors, "Email")}>
                 <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="email" />
               </Field>
               <Field label="Phone">
                 <input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} autoComplete="tel" />
               </Field>
-              <Field label="Role or area of interest" id={FIELD_IDS.roleWanted} required error={fieldError(errors, "Role or area of interest")}>
+              <Field label="Role or area of interest" id={FIELD_IDS.roleWanted} required error={fieldError(visibleErrors, "Role or area of interest")}>
                 <input className="input" value={form.roleWanted} onChange={(e) => setForm({ ...form, roleWanted: e.target.value })} />
               </Field>
               <Field label="Availability">
@@ -151,11 +169,12 @@ export function VolunteerApplyPage() {
               <Field label="Anything else the society should know?">
                 <textarea className="textarea" rows={5} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
               </Field>
-              <button className="btn btn--accent" type="submit" disabled={errors.length > 0 || submitting}>
+              <button className="btn btn--accent" type="submit" disabled={submitting}>
                 {submitting ? "Submitting…" : "Submit application"}
               </button>
             </div>
           </form>
+          )}
 
           {context.committees.length > 0 && (
             <div className="card" style={{ marginTop: 18 }}>

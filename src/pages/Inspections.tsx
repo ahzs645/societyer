@@ -7,7 +7,7 @@ import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { Plus, Eye, Trash2, Tag } from "lucide-react";
-import { formatDate, money } from "../lib/format";
+import { dollarInputToCents, formatDate, money } from "../lib/format";
 
 const FIELDS: FilterField<any>[] = [
   { id: "inspector", label: "Inspector", icon: <Tag size={14} />, match: (r, q) => r.inspectorName.toLowerCase().includes(q.toLowerCase()) },
@@ -34,14 +34,20 @@ export function InspectionsPage() {
       recordsRequested: "",
       inspectedAtISO: new Date().toISOString().slice(0, 10),
       deliveryMethod: "in-person",
-      feeCents: 0,
+      feeDollars: "",
       copyPages: 0,
-      copyFeeCents: 0,
+      copyFeeDollars: "",
     });
     setOpen(true);
   };
   const save = async () => {
-    await create({ societyId: society._id, ...form });
+    const { feeDollars, copyFeeDollars, ...rest } = form;
+    await create({
+      societyId: society._id,
+      ...rest,
+      feeCents: dollarInputToCents(feeDollars) ?? 0,
+      copyFeeCents: dollarInputToCents(copyFeeDollars) ?? 0,
+    });
     setOpen(false);
   };
 
@@ -121,14 +127,14 @@ export function InspectionsPage() {
               </Field>
             </div>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Inspection fee (cents)">
-                <input className="input" type="number" value={form.feeCents} onChange={(e) => setForm({ ...form, feeCents: Number(e.target.value) })} />
+              <Field label="Inspection fee" hint="Dollars">
+                <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.feeDollars} onChange={(e) => setForm({ ...form, feeDollars: e.target.value })} />
               </Field>
               <Field label="Copies (pages)">
                 <input className="input" type="number" value={form.copyPages} onChange={(e) => setForm({ ...form, copyPages: Number(e.target.value) })} />
               </Field>
-              <Field label="Copy fee (cents)">
-                <input className="input" type="number" value={form.copyFeeCents} onChange={(e) => setForm({ ...form, copyFeeCents: Number(e.target.value) })} />
+              <Field label="Copy fee" hint="Dollars">
+                <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.copyFeeDollars} onChange={(e) => setForm({ ...form, copyFeeDollars: e.target.value })} />
               </Field>
             </div>
             <Field label="Notes"><textarea className="textarea" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
