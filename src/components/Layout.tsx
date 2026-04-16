@@ -56,7 +56,6 @@ import { UserPicker } from "./UserPicker";
 import { InspectorHost, InspectorProvider } from "./InspectorPanel";
 import { Pill, TintedIconTile } from "./ui";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
-import { LocaleSwitcher } from "./LocaleSwitcher";
 import { useTranslation } from "react-i18next";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 
@@ -241,6 +240,54 @@ function getInitialOpenGroups(pathname: string) {
 }
 
 const COLLAPSE_KEY = "societyer.sidebar.collapsed";
+const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
+  Dashboard: "nav.dashboard",
+  Society: "nav.society",
+  Timeline: "nav.timeline",
+  Members: "nav.members",
+  Directors: "nav.directors",
+  Committees: "nav.committees",
+  Volunteers: "nav.volunteers",
+  Employees: "nav.employees",
+  Goals: "nav.goals",
+  Tasks: "nav.tasks",
+  Deadlines: "nav.deadlines",
+  Documents: "nav.documents",
+  Communications: "nav.communications",
+  "Meetings": "nav.meetingsItem",
+  "Agendas": "nav.agenda",
+  "Motion library": "nav.motionLibrary",
+  Minutes: "nav.minutes",
+  "Member proposals": "nav.memberProposals",
+  Elections: "nav.elections",
+  "Written resolutions": "nav.writtenResolutions",
+  Proxies: "nav.proxies",
+  "Conflicts of interest": "nav.conflicts",
+  "Director attestations": "nav.attestations",
+  Auditors: "nav.auditors",
+  "Court orders": "nav.courtOrders",
+  "Bylaw rules": "nav.bylawRules",
+  "Bylaw redline": "nav.bylawRedline",
+  "Bylaws history": "nav.bylawsHistory",
+  Filings: "nav.filings",
+  "Filing pre-fill": "nav.filingPrefill",
+  "Records retention": "nav.recordsRetention",
+  "Records inspections": "nav.recordsInspections",
+  "Privacy (PIPA)": "nav.privacy",
+  "PIPA training": "nav.pipaTraining",
+  Insurance: "nav.insurance",
+  "Public transparency": "nav.transparency",
+  Financials: "nav.financials",
+  Treasurer: "nav.treasurer",
+  Grants: "nav.grants",
+  Reconciliation: "nav.reconciliation",
+  "Donation receipts": "nav.donationReceipts",
+  "Membership & billing": "nav.membership",
+  Notifications: "nav.notifications",
+  "Users & roles": "nav.users",
+  "Audit log": "nav.auditLog",
+  "Data export": "nav.dataExport",
+};
 
 export function Layout() {
   const { society, societies } = useSocietySelection();
@@ -347,6 +394,7 @@ export function Layout() {
       })).filter((group) => group.items.length > 0),
     [society],
   );
+  const getNavItemLabel = (item: NavItem) => t(NAV_ITEM_LABEL_KEYS[item.label] ?? item.label, item.label);
   const isSidebarCollapsed = isMobileNav ? !mobileSidebarOpen : collapsed;
   const shellClassName = useMemo(() => {
     let value = "app-shell";
@@ -380,14 +428,14 @@ export function Layout() {
           <button
             className="sidebar-backdrop"
             onClick={() => setMobileSidebarOpen(false)}
-            aria-label="Close navigation"
+            aria-label={t("sidebar.closeNavigation")}
           />
         )}
         <button
           className="sidebar-peek"
           onClick={openSidebar}
-          title={isMobileNav ? "Open navigation" : "Open sidebar (⌘\\)"}
-          aria-label={isMobileNav ? "Open navigation" : "Open sidebar"}
+          title={isMobileNav ? t("sidebar.openNavigation") : `${t("sidebar.openSidebar")} (⌘\\)`}
+          aria-label={isMobileNav ? t("sidebar.openNavigation") : t("sidebar.openSidebar")}
         >
           <PanelLeftOpen size={14} />
         </button>
@@ -397,13 +445,13 @@ export function Layout() {
               ref={workspaceButtonRef}
               className="sidebar__workspace"
               type="button"
-              title={society?.name ?? "Select workspace"}
+              title={society?.name ?? t("sidebar.selectWorkspace")}
               onClick={() => setWorkspaceOpen((v) => !v)}
             >
               <div className="sidebar__brand-logo">
                 {(society?.name ?? "S")[0].toUpperCase()}
               </div>
-              <span className="sidebar__brand-name">{society?.name ?? "Select workspace"}</span>
+              <span className="sidebar__brand-name">{society?.name ?? t("sidebar.selectWorkspace")}</span>
               <span className="sidebar__brand-workspace">
                 <ChevronDown size={12} />
               </span>
@@ -413,14 +461,14 @@ export function Layout() {
               <button
                 className="sidebar__icon-btn"
                 onClick={() => window.dispatchEvent(new Event("kbar:open"))}
-                title="Search (⌘K)"
+                title={`${t("common.search")} (⌘K)`}
               >
                 <Search size={14} />
               </button>
               <button
                 className="sidebar__icon-btn sidebar__toggle"
                 onClick={toggleSidebar}
-                title={`${isSidebarCollapsed ? "Expand" : "Collapse"} ${isMobileNav ? "navigation" : "sidebar"} (⌘\\)`}
+                title={`${isSidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")} ${isMobileNav ? t("sidebar.navigation") : t("sidebar.sidebar")} (⌘\\)`}
               >
                 <PanelLeftClose size={14} />
               </button>
@@ -429,31 +477,28 @@ export function Layout() {
           <div className="sidebar__identity">
             <UserPickerSafe />
           </div>
-          <div className="sidebar__identity" style={{ padding: "4px 12px" }}>
-            <LocaleSwitcher compact />
-          </div>
           <div className="sidebar__spotlight">
-            <div className="sidebar__spotlight-label">Operations desk</div>
-            <div className="sidebar__spotlight-title">{society?.name ?? "Societyer workspace"}</div>
+            <div className="sidebar__spotlight-label">{t("sidebar.operationsDesk")}</div>
+            <div className="sidebar__spotlight-title">{society?.name ?? t("sidebar.defaultWorkspace")}</div>
             <div className="sidebar__spotlight-meta">
-              <span>Open tasks</span>
+              <span>{t("sidebar.openTasks")}</span>
               <Pill size="sm">{counts?.counts.openTasks ?? 0}</Pill>
             </div>
             <div className="sidebar__spotlight-meta">
-              <span>Upcoming deadlines</span>
+              <span>{t("sidebar.upcomingDeadlines")}</span>
               <Pill size="sm">{counts?.counts.openDeadlines ?? 0}</Pill>
             </div>
           </div>
 
           <nav className="sidebar__nav">
             <div className="sidebar__section sidebar__section--compact">
-              <span>Favorites</span>
-              <span className="sidebar__section-meta">Pinned</span>
+              <span>{t("nav.favorites")}</span>
+              <span className="sidebar__section-meta">{t("sidebar.pinned")}</span>
             </div>
-            {visiblePinnedNav.map((item) => renderNavItem(item, counts, collapsed, isMobileNav))}
+            {visiblePinnedNav.map((item) => renderNavItem(item, counts, collapsed, isMobileNav, getNavItemLabel))}
             <div className="sidebar__section sidebar__section--compact">
-              <span>All records</span>
-              <span className="sidebar__section-meta">Grouped</span>
+              <span>{t("nav.allRecords")}</span>
+              <span className="sidebar__section-meta">{t("sidebar.grouped")}</span>
             </div>
             {visibleGroupedNav.map((group) => {
               const isOpen = openGroups[group.id] ?? false;
@@ -467,7 +512,7 @@ export function Layout() {
                     onClick={() => setOpenGroups((prev) => ({ ...prev, [group.id]: !isOpen }))}
                     aria-expanded={isOpen}
                   >
-                    <span>{group.label}</span>
+                    <span>{t(`nav.${group.id}`, group.label)}</span>
                     <span className="sidebar__group-trailing">
                       <span className="sidebar__group-meta">{group.items.length}</span>
                       <ChevronDown size={12} className="sidebar__group-chevron" />
@@ -475,37 +520,37 @@ export function Layout() {
                   </button>
                   {isOpen && (
                     <div className="sidebar__group-items">
-                      {group.items.map((item) => renderNavItem(item, counts, collapsed, isMobileNav))}
+                      {group.items.map((item) => renderNavItem(item, counts, collapsed, isMobileNav, getNavItemLabel))}
                     </div>
                   )}
                 </div>
               );
             })}
             <div className="sidebar__section sidebar__section--compact">
-              <span>Resources</span>
-              <span className="sidebar__section-meta">Reference</span>
+              <span>{t("nav.resources")}</span>
+              <span className="sidebar__section-meta">{t("sidebar.reference")}</span>
             </div>
             <NavLink
               to="/app/settings"
               className={({ isActive }) => `sidebar__item${isActive ? " is-active" : ""}`}
-              title={!isMobileNav && collapsed ? "Settings" : undefined}
+              title={!isMobileNav && collapsed ? t("nav.settings") : undefined}
             >
               <TintedIconTile tone="gray" size="sm" className="sidebar__icon-chip">
                 <Settings size={14} />
               </TintedIconTile>
-              <span className="sidebar__label">Settings</span>
+              <span className="sidebar__label">{t("nav.settings")}</span>
             </NavLink>
             <a
               className="sidebar__item"
               href="https://www2.gov.bc.ca/gov/content/employment-business/non-profits-sector/not-for-profit-organizations"
               target="_blank"
               rel="noreferrer"
-              title={!isMobileNav && collapsed ? "Documentation" : undefined}
+              title={!isMobileNav && collapsed ? t("nav.documentation") : undefined}
             >
               <TintedIconTile tone="gray" size="sm" className="sidebar__icon-chip">
                 <HelpCircle size={14} />
               </TintedIconTile>
-              <span className="sidebar__label">Documentation</span>
+              <span className="sidebar__label">{t("nav.documentation")}</span>
             </a>
           </nav>
         </aside>
@@ -528,7 +573,7 @@ export function Layout() {
             }}
           >
             <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)" }}>
-              <strong style={{ fontSize: "var(--fs-md)" }}>Workspaces</strong>
+              <strong style={{ fontSize: "var(--fs-md)" }}>{t("sidebar.workspaces")}</strong>
             </div>
             {societies.map((s: any) => {
               const active = s._id === society?._id;
@@ -558,7 +603,7 @@ export function Layout() {
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <strong style={{ fontSize: "var(--fs-md)", flex: 1 }}>{s.name}</strong>
-                    {active && <Pill size="sm">Active</Pill>}
+                    {active && <Pill size="sm">{t("sidebar.activeWorkspace")}</Pill>}
                   </div>
                   {s.incorporationNumber && (
                     <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>
@@ -570,7 +615,7 @@ export function Layout() {
             })}
             {(!societies || societies.length === 0) && (
               <div className="muted" style={{ padding: 12, fontSize: "var(--fs-sm)" }}>
-                No societies available yet.
+                {t("sidebar.noSocieties")}
               </div>
             )}
           </div>,
@@ -600,9 +645,11 @@ function renderNavItem(
   counts: any,
   collapsed: boolean,
   isMobileNav: boolean,
+  getLabel: (item: NavItem) => string,
 ) {
   const Icon = item.icon;
   const count = getCount(item.to, counts);
+  const label = getLabel(item);
 
   return (
     <NavLink
@@ -610,12 +657,12 @@ function renderNavItem(
       to={item.to}
       end={item.end}
       className={({ isActive }) => `sidebar__item${isActive ? " is-active" : ""}`}
-      title={!isMobileNav && collapsed ? item.label : undefined}
+      title={!isMobileNav && collapsed ? label : undefined}
     >
       <TintedIconTile tone={item.color} size="sm" className="sidebar__icon-chip">
         <Icon size={14} />
       </TintedIconTile>
-      <span className="sidebar__label">{item.label}</span>
+      <span className="sidebar__label">{label}</span>
       {count != null && (
         <Pill size="sm" className="sidebar__count">
           {count}

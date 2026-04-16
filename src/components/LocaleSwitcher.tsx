@@ -3,7 +3,10 @@ import { SUPPORTED_LOCALES, setLocale, type Locale } from "../i18n";
 
 export function LocaleSwitcher({ compact = false }: { compact?: boolean }) {
   const { i18n, t } = useTranslation();
-  const current = (i18n.language?.slice(0, 2) as Locale) ?? "en";
+  const activeLanguage = (i18n.resolvedLanguage || i18n.language || "en").slice(0, 2);
+  const current = SUPPORTED_LOCALES.includes(activeLanguage as Locale)
+    ? (activeLanguage as Locale)
+    : "en";
 
   return (
     <label

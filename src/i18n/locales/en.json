@@ -77,11 +77,34 @@
   "sidebar": {
     "openNavigation": "Open navigation",
     "closeNavigation": "Close navigation",
+    "openSidebar": "Open sidebar",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "navigation": "navigation",
+    "sidebar": "sidebar",
     "selectWorkspace": "Select workspace",
     "workspaces": "Workspaces",
+    "defaultWorkspace": "Societyer workspace",
     "openTasks": "Open tasks",
     "upcomingDeadlines": "Upcoming deadlines",
-    "operationsDesk": "Operations desk"
+    "operationsDesk": "Operations desk",
+    "pinned": "Pinned",
+    "grouped": "Grouped",
+    "reference": "Reference",
+    "activeWorkspace": "Active",
+    "noSocieties": "No societies available yet."
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Workspace-level preferences and demo data controls.",
+    "languageTitle": "Language",
+    "languageSubtitle": "Choose the interface language for this browser.",
+    "appearanceTitle": "Appearance",
+    "lightTheme": "Light",
+    "darkTheme": "Dark",
+    "modulesTitle": "Modules",
+    "modulesSubtitle": "Enable only the parts this organization actually uses.",
+    "modulesHint": "Disabling a module hides its navigation, command-palette entries, public entry points, and guarded routes. Existing data stays in place and becomes available again if you re-enable the module later."
   },
   "locale": {
     "en": "English",

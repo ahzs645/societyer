@@ -6,8 +6,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Toggle } from "../components/Controls";
+import { LocaleSwitcher } from "../components/LocaleSwitcher";
 import { getAuthMode } from "../lib/authMode";
 import { useSociety } from "../hooks/useSociety";
+import { useTranslation } from "react-i18next";
 import {
   MODULE_CATEGORIES,
   MODULE_DEFINITIONS,
@@ -18,6 +20,7 @@ import {
 } from "../lib/modules";
 
 export function SettingsPage() {
+  const { t } = useTranslation();
   const society = useSociety();
   const [demo, setDemo] = useState(isDemoMode());
   const authMode = getAuthMode();
@@ -73,26 +76,34 @@ export function SettingsPage() {
 
   return (
     <div className="page">
-      <PageHeader title="Settings" subtitle="Workspace-level preferences and demo data controls." />
+      <PageHeader title={t("settings.title")} subtitle={t("settings.subtitle")} />
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card__head"><h2 className="card__title">Appearance</h2></div>
+        <div className="card__head">
+          <h2 className="card__title">{t("settings.languageTitle")}</h2>
+          <span className="card__subtitle">{t("settings.languageSubtitle")}</span>
+        </div>
         <div className="card__body row" style={{ gap: 8 }}>
-          <button className={`btn${theme === "light" ? " btn--accent" : ""}`} onClick={() => applyTheme("light")}>Light</button>
-          <button className={`btn${theme === "dark" ? " btn--accent" : ""}`} onClick={() => applyTheme("dark")}>Dark</button>
+          <LocaleSwitcher />
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head"><h2 className="card__title">{t("settings.appearanceTitle")}</h2></div>
+        <div className="card__body row" style={{ gap: 8 }}>
+          <button className={`btn${theme === "light" ? " btn--accent" : ""}`} onClick={() => applyTheme("light")}>{t("settings.lightTheme")}</button>
+          <button className={`btn${theme === "dark" ? " btn--accent" : ""}`} onClick={() => applyTheme("dark")}>{t("settings.darkTheme")}</button>
         </div>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
-          <h2 className="card__title">Modules</h2>
-          <span className="card__subtitle">Enable only the parts this organization actually uses.</span>
+          <h2 className="card__title">{t("settings.modulesTitle")}</h2>
+          <span className="card__subtitle">{t("settings.modulesSubtitle")}</span>
         </div>
         <div className="card__body col" style={{ gap: 16 }}>
           <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-            Disabling a module hides its navigation, command-palette entries, public entry points,
-            and guarded routes. Existing data stays in place and becomes available again if you
-            re-enable the module later.
+            {t("settings.modulesHint")}
           </div>
 
           {modulesByCategory.map(({ category, items }) => (

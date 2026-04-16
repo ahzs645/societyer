@@ -77,11 +77,34 @@
   "sidebar": {
     "openNavigation": "Ouvrir la navigation",
     "closeNavigation": "Fermer la navigation",
+    "openSidebar": "Ouvrir la barre latérale",
+    "expand": "Développer",
+    "collapse": "Réduire",
+    "navigation": "navigation",
+    "sidebar": "barre latérale",
     "selectWorkspace": "Sélectionner l'espace de travail",
     "workspaces": "Espaces de travail",
+    "defaultWorkspace": "Espace Societyer",
     "openTasks": "Tâches ouvertes",
     "upcomingDeadlines": "Échéances à venir",
-    "operationsDesk": "Bureau des opérations"
+    "operationsDesk": "Bureau des opérations",
+    "pinned": "Épinglé",
+    "grouped": "Groupé",
+    "reference": "Référence",
+    "activeWorkspace": "Actif",
+    "noSocieties": "Aucune société disponible pour le moment."
+  },
+  "settings": {
+    "title": "Paramètres",
+    "subtitle": "Préférences de l'espace de travail et contrôles des données de démonstration.",
+    "languageTitle": "Langue",
+    "languageSubtitle": "Choisissez la langue de l'interface pour ce navigateur.",
+    "appearanceTitle": "Apparence",
+    "lightTheme": "Clair",
+    "darkTheme": "Sombre",
+    "modulesTitle": "Modules",
+    "modulesSubtitle": "Activez seulement les parties réellement utilisées par cette organisation.",
+    "modulesHint": "Désactiver un module masque sa navigation, ses entrées dans la palette de commandes, ses points d'entrée publics et ses routes protégées. Les données existantes restent en place et redeviennent disponibles si vous réactivez le module plus tard."
   },
   "locale": {
     "en": "English",
