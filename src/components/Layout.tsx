@@ -41,6 +41,7 @@ import {
   HandHeart,
   BadgeDollarSign,
   Globe,
+  Download,
 } from "lucide-react";
 import { ComponentType, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
@@ -55,6 +56,8 @@ import { UserPicker } from "./UserPicker";
 import { InspectorHost, InspectorProvider } from "./InspectorPanel";
 import { Pill, TintedIconTile } from "./ui";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
+import { LocaleSwitcher } from "./LocaleSwitcher";
+import { useTranslation } from "react-i18next";
 
 const MOBILE_SIDEBAR_BREAKPOINT = 980;
 
@@ -149,6 +152,8 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Meetings & votes",
     items: [
       { to: "/app/meetings", label: "Meetings", icon: Calendar, color: "orange" },
+      { to: "/app/agendas", label: "Agendas", icon: ClipboardList, color: "orange" },
+      { to: "/app/motion-library", label: "Motion library", icon: BookOpen, color: "purple" },
       { to: "/app/minutes", label: "Minutes", icon: FileText, color: "turquoise" },
       { to: "/app/proposals", label: "Member proposals", icon: Vote, color: "purple", module: "voting" },
       { to: "/app/elections", label: "Elections", icon: Vote, color: "purple", module: "voting" },
@@ -188,6 +193,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Finance",
     items: [
       { to: "/app/financials", label: "Financials", icon: PiggyBank, color: "green" },
+      { to: "/app/treasurer", label: "Treasurer", icon: PiggyBank, color: "green" },
       { to: "/app/grants", label: "Grants", icon: BadgeDollarSign, color: "green", module: "grants" },
       { to: "/app/reconciliation", label: "Reconciliation", icon: Scale, color: "green", module: "reconciliation" },
       { to: "/app/receipts", label: "Donation receipts", icon: Receipt, color: "pink", module: "donationReceipts" },
@@ -201,6 +207,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/app/notifications", label: "Notifications", icon: Bell, color: "orange" },
       { to: "/app/users", label: "Users & roles", icon: UserCog, color: "blue" },
       { to: "/app/audit", label: "Audit log", icon: ShieldCheck, color: "red" },
+      { to: "/app/exports", label: "Data export", icon: Download, color: "blue" },
     ],
   },
 ];
@@ -236,6 +243,7 @@ const COLLAPSE_KEY = "societyer.sidebar.collapsed";
 
 export function Layout() {
   const { society, societies } = useSocietySelection();
+  const { t } = useTranslation();
   const loc = useLocation();
   const [isMobileNav, setIsMobileNav] = useState(() =>
     window.matchMedia(`(max-width: ${MOBILE_SIDEBAR_BREAKPOINT}px)`).matches,
@@ -418,6 +426,9 @@ export function Layout() {
           </div>
           <div className="sidebar__identity">
             <UserPickerSafe />
+          </div>
+          <div className="sidebar__identity" style={{ padding: "4px 12px" }}>
+            <LocaleSwitcher compact />
           </div>
           <div className="sidebar__spotlight">
             <div className="sidebar__spotlight-label">Operations desk</div>

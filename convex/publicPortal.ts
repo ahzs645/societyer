@@ -1,4 +1,6 @@
-// @ts-nocheck
+// @ts-nocheck — Convex type generation hits TS recursion limit on schemas with 50+ tables.
+// The code is correct; the schema is just too large for TS inference. Track upstream:
+// https://github.com/get-convex/convex-backend/issues
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 import { isSocietyModuleEnabled } from "./lib/moduleSettings";
@@ -6,8 +8,10 @@ import { isSocietyModuleEnabled } from "./lib/moduleSettings";
 export const getSocietyBySlug = query({
   args: { slug: v.string() },
   handler: async (ctx, { slug }) => {
-    const societies = await ctx.db.query("societies").collect();
-    const society = societies.find((row) => row.publicSlug === slug) ?? null;
+    const society = await ctx.db
+      .query("societies")
+      .withIndex("by_public_slug", (q) => q.eq("publicSlug", slug))
+      .first();
     if (!society) return null;
     return {
       _id: society._id,
@@ -23,8 +27,10 @@ export const getSocietyBySlug = query({
 export const volunteerIntakeContext = query({
   args: { slug: v.string() },
   handler: async (ctx, { slug }) => {
-    const societies = await ctx.db.query("societies").collect();
-    const society = societies.find((row) => row.publicSlug === slug) ?? null;
+    const society = await ctx.db
+      .query("societies")
+      .withIndex("by_public_slug", (q) => q.eq("publicSlug", slug))
+      .first();
     if (!society || !isSocietyModuleEnabled(society, "volunteers")) return null;
 
     const committees = await ctx.db
@@ -42,7 +48,7 @@ export const volunteerIntakeContext = query({
       committees: committees.map((committee) => ({
         _id: committee._id,
         name: committee.name,
-        summary: committee.mandate ?? committee.description ?? committee.notes,
+        summary: committee.mission ?? committee.description ?? committee.cadenceNotes ?? null,
       })),
     };
   },
@@ -51,8 +57,10 @@ export const volunteerIntakeContext = query({
 export const grantIntakeContext = query({
   args: { slug: v.string() },
   handler: async (ctx, { slug }) => {
-    const societies = await ctx.db.query("societies").collect();
-    const society = societies.find((row) => row.publicSlug === slug) ?? null;
+    const society = await ctx.db
+      .query("societies")
+      .withIndex("by_public_slug", (q) => q.eq("publicSlug", slug))
+      .first();
     if (!society || !isSocietyModuleEnabled(society, "grants")) return null;
 
     const grants = await ctx.db

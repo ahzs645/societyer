@@ -31,7 +31,7 @@ export default defineSchema({
     disabledModules: v.optional(v.array(v.string())),
     demoMode: v.optional(v.boolean()),
     updatedAt: v.number(),
-  }),
+  }).index("by_public_slug", ["publicSlug"]),
 
   users: defineTable({
     societyId: v.id("societies"),
@@ -1174,6 +1174,52 @@ export default defineSchema({
       }),
     ),
   }).index("by_society", ["societyId"]),
+
+  // ========== Board meeting workflow ==========
+
+  agendas: defineTable({
+    societyId: v.id("societies"),
+    meetingId: v.id("meetings"),
+    title: v.string(),
+    status: v.string(), // Draft | Published | Finalized
+    notes: v.optional(v.string()),
+    updatedAtISO: v.string(),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_meeting", ["meetingId"]),
+
+  agendaItems: defineTable({
+    societyId: v.id("societies"),
+    agendaId: v.id("agendas"),
+    order: v.number(),
+    type: v.string(), // discussion | motion | report | break | executive_session
+    title: v.string(),
+    details: v.optional(v.string()),
+    presenter: v.optional(v.string()),
+    timeAllottedMinutes: v.optional(v.number()),
+    motionTemplateId: v.optional(v.id("motionTemplates")),
+    motionText: v.optional(v.string()),
+    outcome: v.optional(v.string()), // carried | defeated | tabled | deferred
+    resolutionId: v.optional(v.id("writtenResolutions")),
+    createdAtISO: v.string(),
+  })
+    .index("by_agenda", ["agendaId"])
+    .index("by_society", ["societyId"]),
+
+  motionTemplates: defineTable({
+    societyId: v.id("societies"),
+    title: v.string(),
+    body: v.string(),
+    category: v.string(), // governance | finance | membership | operations | bylaws | other
+    requiresSpecialResolution: v.boolean(),
+    notes: v.optional(v.string()),
+    usageCount: v.optional(v.number()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_category", ["societyId", "category"]),
 
   // Where records are kept if not at the registered office
   recordsLocation: defineTable({

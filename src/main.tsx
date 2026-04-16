@@ -7,6 +7,7 @@ import { AuthProvider } from "./auth/AuthProvider";
 import { AuthGate } from "./components/AuthGate";
 import { Layout } from "./components/Layout";
 import { ModuleGate } from "./components/ModuleGate";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ConfirmProvider, PromptProvider } from "./components/Modal";
 import { ToastProvider } from "./components/Toast";
 import { Dashboard } from "./pages/Dashboard";
@@ -32,6 +33,10 @@ import { TimelinePage } from "./pages/Timeline";
 import { NotificationsPage } from "./pages/Notifications";
 import { UsersPage } from "./pages/Users";
 import { AuditLogPage } from "./pages/AuditLog";
+import { ExportsPage } from "./pages/Exports";
+import { AgendaBuilderPage } from "./pages/AgendaBuilder";
+import { MotionLibraryPage } from "./pages/MotionLibrary";
+import { TreasurerPage } from "./pages/Treasurer";
 import { MembershipPage } from "./pages/Membership";
 import { InspectionsPage } from "./pages/Inspections";
 import { AttestationsPage } from "./pages/Attestations";
@@ -64,6 +69,7 @@ import { TransparencyPage } from "./pages/Transparency";
 import { PublicTransparencyPage } from "./pages/PublicTransparency";
 import { VolunteerApplyPage } from "./pages/VolunteerApply";
 import { GrantApplyPage } from "./pages/GrantApply";
+import "./i18n";
 import "./theme/tokens.css";
 import "./styles/index.scss";
 
@@ -87,8 +93,32 @@ function AppProviders() {
   );
 }
 
+function RootErrorFallback() {
+  return (
+    <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
+      <h1 style={{ fontSize: 20, marginBottom: 8 }}>Something went wrong.</h1>
+      <p style={{ color: "#555", marginBottom: 16 }}>
+        The page hit an unrecoverable error. Try reloading. If it keeps happening, contact your administrator.
+      </p>
+      <button
+        onClick={() => window.location.reload()}
+        style={{
+          padding: "8px 14px",
+          border: "1px solid #ccc",
+          borderRadius: 6,
+          background: "#fff",
+          cursor: "pointer",
+        }}
+      >
+        Reload
+      </button>
+    </div>
+  );
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
+    <ErrorBoundary label="root" fallback={<RootErrorFallback />}>
     <BrowserRouter
       basename={import.meta.env.BASE_URL}
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
@@ -158,6 +188,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="audit" element={<AuditLogPage />} />
+            <Route path="exports" element={<ExportsPage />} />
+            <Route path="agendas" element={<AgendaBuilderPage />} />
+            <Route path="motion-library" element={<MotionLibraryPage />} />
+            <Route path="treasurer" element={<TreasurerPage />} />
             <Route
               path="membership"
               element={withModule("membershipBilling", <MembershipPage />)}
@@ -240,5 +274,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
+    </ErrorBoundary>
   </React.StrictMode>,
 );
