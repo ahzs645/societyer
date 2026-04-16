@@ -97,7 +97,6 @@ const HIGHLIGHTS = [
 ];
 
 export function LandingPage() {
-  const authEnabled = isBetterAuthMode();
   const [theme, setTheme] = useState<"light" | "dark">(() =>
     document.documentElement.classList.contains("dark") ? "dark" : "light",
   );
@@ -107,14 +106,13 @@ export function LandingPage() {
     document.documentElement.classList.add(theme);
   }, [theme]);
 
-  const appHref = authEnabled ? "/login" : "/app";
-  const navCtaLabel = authEnabled ? "Sign in" : "Open app";
-  const primaryCtaLabel = authEnabled
-    ? "Sign in to the demo"
-    : "Open the demo society";
+  const authEnabled = isBetterAuthMode();
+  const demoHref = "/demo";
+  const navCtaLabel = "Open demo";
+  const primaryCtaLabel = "Explore the static demo";
   const authMeta = authEnabled
-    ? "Optional Better Auth login for staff and members"
-    : "No login wall in demo mode";
+    ? "Staff auth exists in the full app; this public demo stays backend-free"
+    : "Public site stays static; full app runs separately with a backend";
   const sourceHref = "https://github.com/ahzs645/societyer";
 
   return (
@@ -146,7 +144,7 @@ export function LandingPage() {
                 {theme === "dark" ? "Light" : "Dark"}
               </span>
             </button>
-            <Link to={appHref} className="landing__btn landing__btn--primary">
+            <Link to={demoHref} className="landing__btn landing__btn--primary">
               {navCtaLabel} <ArrowRight size={14} />
             </Link>
           </div>
@@ -168,7 +166,7 @@ export function LandingPage() {
             one live workspace, with the Societies Act checks running in the background.
           </p>
           <div className="landing__cta-row">
-            <Link to={appHref} className="landing__btn landing__btn--primary landing__btn--lg">
+            <Link to={demoHref} className="landing__btn landing__btn--primary landing__btn--lg">
               {primaryCtaLabel} <ArrowRight size={16} />
             </Link>
             <a
@@ -181,7 +179,7 @@ export function LandingPage() {
           </div>
           <div className="landing__hero-meta">
             <span><CheckCircle2 size={12} /> Pre-seeded with Riverside Community Society</span>
-            <span><CheckCircle2 size={12} /> Self-host with Convex or run locally</span>
+            <span><CheckCircle2 size={12} /> Static walkthrough lives at <code>/demo</code></span>
             <span><CheckCircle2 size={12} /> {authMeta}</span>
           </div>
         </div>
@@ -255,7 +253,7 @@ export function LandingPage() {
               <li><Lock size={14} /> PIPA records inspection rules and privacy officer documented</li>
             </ul>
             <div className="landing__cta-row">
-              <Link to={appHref} className="landing__btn landing__btn--primary">
+              <Link to={demoHref} className="landing__btn landing__btn--primary">
                 Try the compliance dashboard <ArrowRight size={14} />
               </Link>
             </div>
@@ -348,11 +346,11 @@ export function LandingPage() {
         <div className="landing__container">
           <h2>Stop reconstructing the registers the night before the AGM.</h2>
           <p>
-            Explore the seeded society with realistic data, or inspect the code and run it
-            locally.
+            Show the interface on the custom domain without shipping a backend, then run the full
+            app locally when you want the live version.
           </p>
           <div className="landing__cta-row landing__cta-row--center">
-            <Link to={appHref} className="landing__btn landing__btn--primary landing__btn--lg">
+            <Link to={demoHref} className="landing__btn landing__btn--primary landing__btn--lg">
               {primaryCtaLabel} <ArrowRight size={16} />
             </Link>
             <a
@@ -462,8 +460,6 @@ function StackChip({ label }: { label: string }) {
   return <span className="landing__stack-chip">{label}</span>;
 }
 
-// HashRouter intercepts URL hash changes — using href="#section" would trigger
-// a router navigation. Scroll manually instead and swallow the default.
 function scrollTo(id: string) {
   return (e: MouseEvent) => {
     e.preventDefault();

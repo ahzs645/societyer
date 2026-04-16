@@ -34,7 +34,7 @@ export function TransparencyPage() {
   const [publicationDraft, setPublicationDraft] = useState<any | null>(null);
   const absolutePublicHref = useMemo(() => {
     if (typeof window === "undefined") return publicHref;
-    return `${window.location.origin}/#${publicHref}`;
+    return `${window.location.origin}${publicHref}`;
   }, [publicHref]);
   const publishedCount = (publications ?? []).filter((row: any) => row.status === "Published").length;
   const draftCount = (publications ?? []).filter((row: any) => row.status === "Draft").length;

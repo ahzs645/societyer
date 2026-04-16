@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { ConvexProvider } from "convex/react";
 import { convex } from "./lib/convex";
 import { AuthProvider } from "./auth/AuthProvider";
@@ -51,6 +51,7 @@ import { BylawDiffPage } from "./pages/BylawDiff";
 import { BylawsHistoryPage } from "./pages/BylawsHistory";
 import { ReconciliationPage } from "./pages/Reconciliation";
 import { LandingPage } from "./pages/Landing";
+import { DemoPage } from "./pages/Demo";
 import { LoginPage } from "./pages/Login";
 import { BylawRulesPage } from "./pages/BylawRules";
 import { ElectionsPage } from "./pages/Elections";
@@ -70,164 +71,174 @@ function withModule(moduleKey: React.ComponentProps<typeof ModuleGate>["moduleKe
   return <ModuleGate moduleKey={moduleKey}>{element}</ModuleGate>;
 }
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
+function AppProviders() {
+  return (
     <ConvexProvider client={convex}>
       <AuthProvider>
         <ToastProvider>
           <ConfirmProvider>
             <PromptProvider>
-              <HashRouter
-                future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-              >
-                <Routes>
-                  <Route path="/" element={<LandingPage />} />
-                  <Route path="/login" element={<LoginPage />} />
-                  <Route path="/public" element={<PublicTransparencyPage />} />
-                  <Route path="/public/:slug" element={<PublicTransparencyPage />} />
-                  <Route
-                    path="/public/:slug/volunteer-apply"
-                    element={<VolunteerApplyPage />}
-                  />
-                  <Route
-                    path="/public/:slug/grant-apply"
-                    element={<GrantApplyPage />}
-                  />
-                  <Route
-                    path="/portal"
-                    element={
-                      <AuthGate>
-                        <PortalPage />
-                      </AuthGate>
-                    }
-                  />
-                  <Route
-                    path="/app"
-                    element={
-                      <AuthGate>
-                        <Layout />
-                      </AuthGate>
-                    }
-                  >
-                    <Route index element={<Dashboard />} />
-                    <Route path="society" element={<SocietyPage />} />
-                    <Route path="members" element={<MembersPage />} />
-                    <Route path="directors" element={<DirectorsPage />} />
-                    <Route path="meetings" element={<MeetingsPage />} />
-                    <Route path="meetings/:id" element={<MeetingDetailPage />} />
-                    <Route path="minutes" element={<MinutesPage />} />
-                    <Route path="filings" element={<FilingsPage />} />
-                    <Route path="deadlines" element={<DeadlinesPage />} />
-                    <Route path="documents" element={<DocumentsPage />} />
-                    <Route path="conflicts" element={<ConflictsPage />} />
-                    <Route path="financials" element={<FinancialsPage />} />
-                    <Route
-                      path="grants"
-                      element={withModule("grants", <GrantsPage />)}
-                    />
-                    <Route path="privacy" element={<PrivacyPage />} />
-                    <Route
-                      path="communications"
-                      element={withModule("communications", <CommunicationsPage />)}
-                    />
-                    <Route path="committees" element={<CommitteesPage />} />
-                    <Route path="committees/:id" element={<CommitteeDetailPage />} />
-                    <Route
-                      path="volunteers"
-                      element={withModule("volunteers", <VolunteersPage />)}
-                    />
-                    <Route path="goals" element={<GoalsPage />} />
-                    <Route path="goals/:id" element={<GoalDetailPage />} />
-                    <Route path="tasks" element={<TasksPage />} />
-                    <Route path="timeline" element={<TimelinePage />} />
-                    <Route path="notifications" element={<NotificationsPage />} />
-                    <Route path="users" element={<UsersPage />} />
-                    <Route path="audit" element={<AuditLogPage />} />
-                    <Route
-                      path="membership"
-                      element={withModule("membershipBilling", <MembershipPage />)}
-                    />
-                    <Route
-                      path="inspections"
-                      element={withModule("recordsInspection", <InspectionsPage />)}
-                    />
-                    <Route
-                      path="attestations"
-                      element={withModule("attestations", <AttestationsPage />)}
-                    />
-                    <Route
-                      path="retention"
-                      element={withModule("recordsInspection", <RetentionPage />)}
-                    />
-                    <Route
-                      path="insurance"
-                      element={withModule("insurance", <InsurancePage />)}
-                    />
-                    <Route
-                      path="pipa-training"
-                      element={withModule("pipaTraining", <PipaTrainingPage />)}
-                    />
-                    <Route
-                      path="proxies"
-                      element={withModule("voting", <ProxiesPage />)}
-                    />
-                    <Route
-                      path="auditors"
-                      element={withModule("auditors", <AuditorsPage />)}
-                    />
-                    <Route
-                      path="proposals"
-                      element={withModule("voting", <MemberProposalsPage />)}
-                    />
-                    <Route
-                      path="receipts"
-                      element={withModule("donationReceipts", <ReceiptsPage />)}
-                    />
-                    <Route
-                      path="employees"
-                      element={withModule("employees", <EmployeesPage />)}
-                    />
-                    <Route
-                      path="court-orders"
-                      element={withModule("courtOrders", <CourtOrdersPage />)}
-                    />
-                    <Route
-                      path="written-resolutions"
-                      element={withModule("voting", <WrittenResolutionsPage />)}
-                    />
-                    <Route path="meetings/:id/agm" element={<AgmWorkflowPage />} />
-                    <Route
-                      path="filings/prefill"
-                      element={withModule("filingPrefill", <FilingPreFillPage />)}
-                    />
-                    <Route path="bylaw-diff" element={<BylawDiffPage />} />
-                    <Route path="bylaw-rules" element={<BylawRulesPage />} />
-                    <Route path="bylaws-history" element={<BylawsHistoryPage />} />
-                    <Route
-                      path="elections"
-                      element={withModule("voting", <ElectionsPage />)}
-                    />
-                    <Route
-                      path="elections/:id"
-                      element={withModule("voting", <ElectionDetailPage />)}
-                    />
-                    <Route
-                      path="reconciliation"
-                      element={withModule("reconciliation", <ReconciliationPage />)}
-                    />
-                    <Route
-                      path="transparency"
-                      element={withModule("transparency", <TransparencyPage />)}
-                    />
-                    <Route path="settings" element={<SettingsPage />} />
-                  </Route>
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              </HashRouter>
+              <Outlet />
             </PromptProvider>
           </ConfirmProvider>
         </ToastProvider>
       </AuthProvider>
     </ConvexProvider>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <BrowserRouter
+      basename={import.meta.env.BASE_URL}
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/demo/*" element={<DemoPage />} />
+        <Route element={<AppProviders />}>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/public" element={<PublicTransparencyPage />} />
+          <Route path="/public/:slug" element={<PublicTransparencyPage />} />
+          <Route
+            path="/public/:slug/volunteer-apply"
+            element={<VolunteerApplyPage />}
+          />
+          <Route
+            path="/public/:slug/grant-apply"
+            element={<GrantApplyPage />}
+          />
+          <Route
+            path="/portal"
+            element={
+              <AuthGate>
+                <PortalPage />
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/app"
+            element={
+              <AuthGate>
+                <Layout />
+              </AuthGate>
+            }
+          >
+            <Route index element={<Dashboard />} />
+            <Route path="society" element={<SocietyPage />} />
+            <Route path="members" element={<MembersPage />} />
+            <Route path="directors" element={<DirectorsPage />} />
+            <Route path="meetings" element={<MeetingsPage />} />
+            <Route path="meetings/:id" element={<MeetingDetailPage />} />
+            <Route path="minutes" element={<MinutesPage />} />
+            <Route path="filings" element={<FilingsPage />} />
+            <Route path="deadlines" element={<DeadlinesPage />} />
+            <Route path="documents" element={<DocumentsPage />} />
+            <Route path="conflicts" element={<ConflictsPage />} />
+            <Route path="financials" element={<FinancialsPage />} />
+            <Route
+              path="grants"
+              element={withModule("grants", <GrantsPage />)}
+            />
+            <Route path="privacy" element={<PrivacyPage />} />
+            <Route
+              path="communications"
+              element={withModule("communications", <CommunicationsPage />)}
+            />
+            <Route path="committees" element={<CommitteesPage />} />
+            <Route path="committees/:id" element={<CommitteeDetailPage />} />
+            <Route
+              path="volunteers"
+              element={withModule("volunteers", <VolunteersPage />)}
+            />
+            <Route path="goals" element={<GoalsPage />} />
+            <Route path="goals/:id" element={<GoalDetailPage />} />
+            <Route path="tasks" element={<TasksPage />} />
+            <Route path="timeline" element={<TimelinePage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="users" element={<UsersPage />} />
+            <Route path="audit" element={<AuditLogPage />} />
+            <Route
+              path="membership"
+              element={withModule("membershipBilling", <MembershipPage />)}
+            />
+            <Route
+              path="inspections"
+              element={withModule("recordsInspection", <InspectionsPage />)}
+            />
+            <Route
+              path="attestations"
+              element={withModule("attestations", <AttestationsPage />)}
+            />
+            <Route
+              path="retention"
+              element={withModule("recordsInspection", <RetentionPage />)}
+            />
+            <Route
+              path="insurance"
+              element={withModule("insurance", <InsurancePage />)}
+            />
+            <Route
+              path="pipa-training"
+              element={withModule("pipaTraining", <PipaTrainingPage />)}
+            />
+            <Route
+              path="proxies"
+              element={withModule("voting", <ProxiesPage />)}
+            />
+            <Route
+              path="auditors"
+              element={withModule("auditors", <AuditorsPage />)}
+            />
+            <Route
+              path="proposals"
+              element={withModule("voting", <MemberProposalsPage />)}
+            />
+            <Route
+              path="receipts"
+              element={withModule("donationReceipts", <ReceiptsPage />)}
+            />
+            <Route
+              path="employees"
+              element={withModule("employees", <EmployeesPage />)}
+            />
+            <Route
+              path="court-orders"
+              element={withModule("courtOrders", <CourtOrdersPage />)}
+            />
+            <Route
+              path="written-resolutions"
+              element={withModule("voting", <WrittenResolutionsPage />)}
+            />
+            <Route path="meetings/:id/agm" element={<AgmWorkflowPage />} />
+            <Route
+              path="filings/prefill"
+              element={withModule("filingPrefill", <FilingPreFillPage />)}
+            />
+            <Route path="bylaw-diff" element={<BylawDiffPage />} />
+            <Route path="bylaw-rules" element={<BylawRulesPage />} />
+            <Route path="bylaws-history" element={<BylawsHistoryPage />} />
+            <Route
+              path="elections"
+              element={withModule("voting", <ElectionsPage />)}
+            />
+            <Route
+              path="elections/:id"
+              element={withModule("voting", <ElectionDetailPage />)}
+            />
+            <Route
+              path="reconciliation"
+              element={withModule("reconciliation", <ReconciliationPage />)}
+            />
+            <Route
+              path="transparency"
+              element={withModule("transparency", <TransparencyPage />)}
+            />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   </React.StrictMode>,
 );

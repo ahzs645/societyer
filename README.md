@@ -88,6 +88,13 @@ npm run dev
 - Append `?demo=0` to any URL to suppress it, `?demo=1` to force it on.
 - The seeded society is **Riverside Community Society** — a fictional BC charity with 7 directors, 15 members, two past meetings (a 2025 AGM and a Q4 board meeting), minutes with motions/decisions/action items, filed and upcoming filings (annual report, T3010, T4, GST/HST, bylaw amendment, change of directors), recurring deadlines, a disclosed conflict of interest, FY2024-25 financials with remuneration disclosure, and a document repository with retention flags.
 
+## Public site vs full app
+
+- `/` is now the marketing page for the public custom domain.
+- `/demo` is a **static** product walkthrough that shows the interface without requiring Convex, auth, or seeded data.
+- `/app` remains the real workspace route for the backend-backed application.
+- `/public/:slug` and other operational routes still expect the live app stack.
+
 ## Auth modes
 
 Societyer now supports two identity modes:
@@ -115,28 +122,40 @@ npm run dev:full
 
 Auth mode uses a small SQLite auth database configured by `AUTH_DB_PATH`, and maps signed-in identities into the existing Convex `users` / `members` records.
 
+## GitHub Pages deployment
+
+This repo now includes a GitHub Pages workflow at [.github/workflows/deploy-pages.yml](/Users/ahmadjalil/github/societyer/.github/workflows/deploy-pages.yml) and a custom-domain file at [public/CNAME](/Users/ahmadjalil/github/societyer/public/CNAME).
+
+For the public site:
+
+- `npm run build:pages` builds the app, writes `dist/404.html` for SPA fallback, and writes `dist/demo/index.html` so `/demo` resolves directly.
+- The configured custom domain is `society.ahmadjalil.com`.
+- In the GitHub repository settings, Pages should use **GitHub Actions** as the source.
+
 ---
 
 ## What's in it
 
 | Area | Page | Notes |
 |---|---|---|
-| Overview | `/` Dashboard | Compliance flags (≥3 directors, ≥1 BC resident, consents on file, PIPA policy, constitution & bylaws uploaded), stat tiles, upcoming meetings and filings |
-| Overview | `/society` | Edit legal name, incorporation #, fiscal year end, addresses, purposes, charity / member-funded flags, privacy officer |
-| People | `/members` | Register of members (s.20), class, voting rights, join date, status |
-| People | `/directors` | Register of directors with BC-resident & consent-on-file checks, warnings when Act thresholds aren't met |
-| Governance | `/meetings` | Board / Committee / AGM / SGM scheduling; AGM reminder about 14–60 day notice |
-| Governance | `/meetings/:id` | Agenda, minutes (discussion, motions with vote counts, decisions, action items), AGM checklist, **mock AI minute generator** from raw transcript |
-| Governance | `/elections` | Verified member elections with anonymous ballot storage, voter snapshots, and tallies |
-| Governance | `/minutes` | All minutes across meetings, quorum and action status |
-| Governance | `/conflicts` | s.56 disclosures with "left room" / "abstained" tracking |
-| Compliance | `/filings` | Societies Online + CRA: AnnualReport, ChangeOfDirectors, ChangeOfAddress, BylawAmendment, T2, T1044, T3010, T4, GST/HST — mark filed with confirmation # and fee |
-| Compliance | `/deadlines` | Rolling calendar; recurrence (Monthly/Quarterly/Annual); categories (Governance / Tax / Payroll / Privacy / Other) |
-| Compliance | `/documents` | Constitution, bylaws, minutes, policies, financial statements; retention years; "flag for deletion" after 10-year threshold |
-| Compliance | `/bylaw-rules` | Active bylaw rule set that drives notice windows, proxies, voting, proposal thresholds, quorum, and inspection defaults |
-| Compliance | `/privacy` | PIPA checklist and records-inspection rules |
-| Finance | `/financials` | Annual statements with revenue / expenses / net assets / restricted funds / audit status / board approval; remuneration disclosure ≥ $75k |
-| System | `/settings` | Theme (light/dark), demo mode, seed/reset, Convex deployment info |
+| Public | `/` Marketing page | Product positioning, feature overview, and CTA into the static walkthrough |
+| Public | `/demo` Static demo | Backend-free preview of the workspace layout and core modules |
+| Overview | `/app` Dashboard | Compliance flags (≥3 directors, ≥1 BC resident, consents on file, PIPA policy, constitution & bylaws uploaded), stat tiles, upcoming meetings and filings |
+| Overview | `/app/society` | Edit legal name, incorporation #, fiscal year end, addresses, purposes, charity / member-funded flags, privacy officer |
+| People | `/app/members` | Register of members (s.20), class, voting rights, join date, status |
+| People | `/app/directors` | Register of directors with BC-resident & consent-on-file checks, warnings when Act thresholds aren't met |
+| Governance | `/app/meetings` | Board / Committee / AGM / SGM scheduling; AGM reminder about 14–60 day notice |
+| Governance | `/app/meetings/:id` | Agenda, minutes (discussion, motions with vote counts, decisions, action items), AGM checklist, **mock AI minute generator** from raw transcript |
+| Governance | `/app/elections` | Verified member elections with anonymous ballot storage, voter snapshots, and tallies |
+| Governance | `/app/minutes` | All minutes across meetings, quorum and action status |
+| Governance | `/app/conflicts` | s.56 disclosures with "left room" / "abstained" tracking |
+| Compliance | `/app/filings` | Societies Online + CRA: AnnualReport, ChangeOfDirectors, ChangeOfAddress, BylawAmendment, T2, T1044, T3010, T4, GST/HST — mark filed with confirmation # and fee |
+| Compliance | `/app/deadlines` | Rolling calendar; recurrence (Monthly/Quarterly/Annual); categories (Governance / Tax / Payroll / Privacy / Other) |
+| Compliance | `/app/documents` | Constitution, bylaws, minutes, policies, financial statements; retention years; "flag for deletion" after 10-year threshold |
+| Compliance | `/app/bylaw-rules` | Active bylaw rule set that drives notice windows, proxies, voting, proposal thresholds, quorum, and inspection defaults |
+| Compliance | `/app/privacy` | PIPA checklist and records-inspection rules |
+| Finance | `/app/financials` | Annual statements with revenue / expenses / net assets / restricted funds / audit status / board approval; remuneration disclosure ≥ $75k |
+| System | `/app/settings` | Theme (light/dark), demo mode, seed/reset, Convex deployment info |
 
 Press `⌘K` (or `Ctrl+K`) anywhere for the command palette.
 

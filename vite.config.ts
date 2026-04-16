@@ -2,10 +2,10 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
+const base = process.env.VITE_BASE_PATH ?? "/";
+
 export default defineConfig({
-  // Relative asset URLs so the build works from any subpath
-  // (root domain, GitHub Pages project page, S3 prefix, etc.).
-  base: "./",
+  base,
   plugins: [react()],
   resolve: {
     alias: {
