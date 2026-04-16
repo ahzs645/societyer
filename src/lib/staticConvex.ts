@@ -11,6 +11,8 @@ const MEETING_BOARD_ID = "static_meeting_board_q2";
 const MEETING_AGM_ID = "static_meeting_agm_2025";
 const DOCUMENT_BYLAWS_ID = "static_document_bylaws";
 const DOCUMENT_POLICY_ID = "static_document_privacy";
+const ELECTION_ID = "static_election";
+const ELECTION_QUESTION_ID = "static_election_question_directors";
 const FINANCIAL_CONNECTION_ID = "static_financial_connection";
 const CASH_ACCOUNT_ID = "static_financial_cash";
 const GRANT_ACCOUNT_ID = "static_financial_grant";
@@ -254,6 +256,85 @@ const documents = [
   },
 ];
 
+const elections = [
+  {
+    _id: ELECTION_ID,
+    societyId: SOCIETY_ID,
+    meetingId: MEETING_AGM_ID,
+    title: "2026 board slate approval",
+    description: "Demo electronic ballot for approving the incoming director slate.",
+    status: "Open",
+    opensAtISO: "2026-04-16T16:00:00.000Z",
+    closesAtISO: "2026-04-30T23:59:00.000Z",
+    nominationsOpenAtISO: "2026-04-01T16:00:00.000Z",
+    nominationsCloseAtISO: "2026-04-10T23:59:00.000Z",
+    anonymousBallot: true,
+    scrutineerUserIds: [USER_OWNER_ID, USER_SECRETARY_ID],
+    createdByUserId: USER_SECRETARY_ID,
+    createdAtISO: "2026-03-25T18:00:00.000Z",
+    updatedAtISO: "2026-04-16T16:00:00.000Z",
+  },
+];
+
+const electionQuestions = [
+  {
+    _id: ELECTION_QUESTION_ID,
+    societyId: SOCIETY_ID,
+    electionId: ELECTION_ID,
+    title: "Approve the nominated director slate",
+    description: "One anonymous vote is recorded. Eligibility is kept separate from the ballot.",
+    kind: "single_choice",
+    maxSelections: 1,
+    seatsAvailable: 1,
+    options: [
+      { id: "approve", label: "Approve the slate" },
+      { id: "oppose", label: "Do not approve" },
+      { id: "abstain", label: "Abstain" },
+    ],
+    order: 0,
+  },
+];
+
+const electionEligibleVoters = [
+  {
+    _id: "static_election_eligible_mina",
+    societyId: SOCIETY_ID,
+    electionId: ELECTION_ID,
+    memberId: "static_member_mina",
+    userId: USER_OWNER_ID,
+    email: "mina@riverside.example",
+    fullName: "Mina Patel",
+    status: "Eligible",
+    eligibilityReason: "Active voting member at the eligibility cutoff.",
+    createdAtISO: "2026-04-16T16:00:00.000Z",
+  },
+  {
+    _id: "static_election_eligible_jordan",
+    societyId: SOCIETY_ID,
+    electionId: ELECTION_ID,
+    memberId: "static_member_jordan",
+    userId: USER_TREASURER_ID,
+    email: "jordan@riverside.example",
+    fullName: "Jordan Lee",
+    status: "Confirmed",
+    eligibilityReason: "Active voting member at the eligibility cutoff.",
+    confirmedAtISO: "2026-04-16T16:10:00.000Z",
+    createdAtISO: "2026-04-16T16:00:00.000Z",
+  },
+];
+
+const electionAuditEvents = [
+  {
+    _id: "static_election_audit_opened",
+    societyId: SOCIETY_ID,
+    electionId: ELECTION_ID,
+    actorName: "Avery Santos",
+    action: "opened",
+    detail: "Eligible voting members were snapshotted and voting opened.",
+    createdAtISO: "2026-04-16T16:00:00.000Z",
+  },
+];
+
 const goals = [
   {
     _id: "static_goal_agm",
@@ -485,10 +566,43 @@ const tables: Record<string, any[]> = {
       societyId: SOCIETY_ID,
       title: "Electronic meeting cleanup",
       status: "Filed",
-      adoptedAt: "2025-06-19",
-      filedAt: "2025-06-25",
-      beforeText: "Meetings must be held in British Columbia.",
-      afterText: "Meetings may be held electronically if members can participate.",
+      baseText: "General meetings must be held in British Columbia. Members may attend electronically only if the board permits it for accessibility reasons.",
+      proposedText: "General meetings may be held in person, electronically, or in a hybrid format if all participating members can communicate adequately with each other.",
+      createdByName: "Avery Santos",
+      createdAtISO: "2025-05-18T17:00:00.000Z",
+      updatedAtISO: "2025-06-25T18:00:00.000Z",
+      consultationStartedAtISO: "2025-05-25T17:00:00.000Z",
+      resolutionPassedAtISO: "2025-06-19T19:40:00.000Z",
+      votesFor: 42,
+      votesAgainst: 3,
+      abstentions: 1,
+      filedAtISO: "2025-06-25T18:00:00.000Z",
+      history: [
+        {
+          atISO: "2025-05-18T17:00:00.000Z",
+          actor: "Avery Santos",
+          action: "created",
+          note: "Drafted the electronic meeting amendment.",
+        },
+        {
+          atISO: "2025-05-25T17:00:00.000Z",
+          actor: "Mina Patel",
+          action: "consultation-started",
+          note: "Sent to members for comment before the AGM.",
+        },
+        {
+          atISO: "2025-06-19T19:40:00.000Z",
+          actor: "Mina Patel",
+          action: "resolution-passed",
+          note: "Special resolution passed at the AGM.",
+        },
+        {
+          atISO: "2025-06-25T18:00:00.000Z",
+          actor: "Avery Santos",
+          action: "filed",
+          note: "Filed through Societies Online.",
+        },
+      ],
     },
   ],
   committees,
@@ -498,16 +612,12 @@ const tables: Record<string, any[]> = {
   directors,
   documents,
   documentVersions: [],
-  elections: [
-    {
-      _id: "static_election",
-      societyId: SOCIETY_ID,
-      title: "2026 board slate approval",
-      status: "Open",
-      opensAtISO: "2026-04-16T16:00:00.000Z",
-      closesAtISO: "2026-04-30T23:59:00.000Z",
-    },
-  ],
+  electionAuditEvents,
+  electionBallots: [],
+  electionEligibleVoters,
+  electionNominations: [],
+  electionQuestions,
+  elections,
   employees: [
     {
       _id: "static_employee",
@@ -746,6 +856,72 @@ function financialSummary() {
   };
 }
 
+function profitAndLoss(args: StaticArgs) {
+  const from = args?.from ?? "2026-01-01";
+  const to = args?.to ?? "2026-12-31";
+  const rows = financialTransactions.filter((transaction) => transaction.date >= from && transaction.date <= to);
+  const incomeByCategory: Record<string, number> = {};
+  const expenseByCategory: Record<string, number> = {};
+  let totalIncomeCents = 0;
+  let totalExpenseCents = 0;
+
+  for (const transaction of rows) {
+    const category = transaction.category ?? "Uncategorized";
+    if (transaction.amountCents > 0) {
+      incomeByCategory[category] = (incomeByCategory[category] ?? 0) + transaction.amountCents;
+      totalIncomeCents += transaction.amountCents;
+    } else {
+      expenseByCategory[category] = (expenseByCategory[category] ?? 0) + Math.abs(transaction.amountCents);
+      totalExpenseCents += Math.abs(transaction.amountCents);
+    }
+  }
+
+  return {
+    from,
+    to,
+    totalIncomeCents,
+    totalExpenseCents,
+    netCents: totalIncomeCents - totalExpenseCents,
+    incomeByCategory,
+    expenseByCategory,
+    transactionCount: rows.length,
+  };
+}
+
+function budgetVariance() {
+  return budgets.map((budget) => {
+    const actualCents = financialTransactions
+      .filter((transaction) => transaction.category === budget.category)
+      .reduce((sum, transaction) => sum + Math.abs(transaction.amountCents), 0);
+
+    return {
+      category: budget.category,
+      plannedCents: budget.plannedCents,
+      actualCents,
+      varianceCents: actualCents - budget.plannedCents,
+      notes: budget.notes,
+    };
+  });
+}
+
+function restrictedFunds() {
+  return [
+    {
+      grantId: "static_grant",
+      title: "Youth resilience grant",
+      funder: "Harbour Foundation",
+      purpose: "Youth resilience program",
+      awardedCents: 1500000,
+      inflowCents: 1500000,
+      outflowCents: 0,
+      balanceCents: 1500000,
+      startDate: "2026-04-01",
+      endDate: "2027-03-31",
+      status: "Active",
+    },
+  ];
+}
+
 function grantsSummary() {
   return {
     total: tables.grants.length,
@@ -758,6 +934,53 @@ function grantsSummary() {
     overdueReports: 0,
     dueSoonReports: 1,
   };
+}
+
+function electionBundle(args: StaticArgs) {
+  const election = byId(elections, args?.id) ?? elections[0];
+  const questions = electionQuestions.filter((row) => row.electionId === election._id);
+  const eligible = electionEligibleVoters.filter((row) => row.electionId === election._id);
+  const ballots = tables.electionBallots.filter((row) => row.electionId === election._id);
+  const audit = electionAuditEvents.filter((row) => row.electionId === election._id);
+
+  return {
+    election,
+    questions,
+    eligible,
+    ballots,
+    ballotCount: ballots.length,
+    audit,
+    canSeeSensitive: true,
+  };
+}
+
+function mineElections(args: StaticArgs) {
+  if (!args?.userId) return [];
+  const user = byId(users, args.userId);
+  if (!user?.memberId) return [];
+
+  return electionEligibleVoters
+    .filter((row) => row.memberId === user.memberId)
+    .map((eligibility) => ({
+      election: byId(elections, eligibility.electionId),
+      eligibility,
+    }))
+    .filter((row) => row.election?.societyId === args.societyId);
+}
+
+function electionTally(args: StaticArgs) {
+  const electionId = args?.electionId ?? ELECTION_ID;
+  return electionQuestions
+    .filter((question) => question.electionId === electionId)
+    .map((question) => ({
+      questionId: question._id,
+      title: question.title,
+      totals: question.options.map((option) => ({
+        id: option.id,
+        label: option.label,
+        votes: 0,
+      })),
+    }));
 }
 
 function publicCenter() {
@@ -789,12 +1012,13 @@ function queryResult(name: string, args: StaticArgs) {
     case "documentVersions:listForDocument":
       return [];
     case "elections:get":
-      return { election: byId(tables.elections, args?.id) ?? tables.elections[0], questions: [], ballots: [] };
+      return electionBundle(args);
     case "elections:listMine":
-      return tables.elections;
+      return mineElections(args);
     case "elections:listNominations":
-    case "elections:tally":
       return [];
+    case "elections:tally":
+      return electionTally(args);
     case "filingBot:buildFilingPacket":
       return { filing: byId(filings, args?.filingId), documents: [] };
     case "filingBot:runsForFiling":
@@ -880,6 +1104,12 @@ function queryResult(name: string, args: StaticArgs) {
       return tables.transparency;
     case "transparency:publicCenter":
       return publicCenter();
+    case "treasury:budgetVariance":
+      return budgetVariance();
+    case "treasury:profitAndLoss":
+      return profitAndLoss(args);
+    case "treasury:restrictedFunds":
+      return restrictedFunds();
     case "users:get":
       return byId(users, args?.id) ?? users[0];
     case "volunteers:applications":

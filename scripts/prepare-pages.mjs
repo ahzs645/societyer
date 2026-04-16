@@ -48,6 +48,7 @@ const demoAppRoutes = [
   "app/bylaw-rules",
   "app/bylaws-history",
   "app/elections",
+  "app/elections/static_election",
   "app/reconciliation",
   "app/transparency",
   "app/settings",
