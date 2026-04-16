@@ -131,11 +131,20 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
-          <Route
-            path="/"
-            element={staticDemoRuntime ? <Navigate to="/app" replace /> : <LandingPage />}
-          />
+          {!staticDemoRuntime && <Route path="/" element={<LandingPage />} />}
           <Route element={<AppProviders client={convexClient} />}>
+            {staticDemoRuntime && (
+              <Route
+                path="/"
+                element={
+                  <AuthGate>
+                    <Layout />
+                  </AuthGate>
+                }
+              >
+                <Route index element={<Dashboard />} />
+              </Route>
+            )}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/public" element={<PublicTransparencyPage />} />
             <Route path="/public/:slug" element={<PublicTransparencyPage />} />

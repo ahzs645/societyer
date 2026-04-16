@@ -10,6 +10,7 @@ import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { authClient, BetterAuthSession } from "../lib/authClient";
 import { getAuthMode, type AuthMode } from "../lib/authMode";
+import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { setStoredUserId } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
 
@@ -25,6 +26,44 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const mode = getAuthMode();
+
+  if (mode !== "better-auth" || isStaticDemoRuntime()) {
+    return <NoAuthProvider mode="none">{children}</NoAuthProvider>;
+  }
+
+  return <BetterAuthProvider mode={mode}>{children}</BetterAuthProvider>;
+}
+
+function NoAuthProvider({
+  children,
+  mode,
+}: {
+  children: React.ReactNode;
+  mode: AuthMode;
+}) {
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      mode,
+      session: null,
+      isPending: false,
+      isAuthenticated: true,
+      signOut: async () => {
+        setStoredUserId(null);
+      },
+    }),
+    [mode],
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+function BetterAuthProvider({
+  children,
+  mode,
+}: {
+  children: React.ReactNode;
+  mode: AuthMode;
+}) {
   const sessionState = authClient.useSession();
   const society = useSociety();
   const resolveAuthSession = useMutation(api.users.resolveAuthSession);

@@ -11,4 +11,6 @@ if (!existsSync(indexHtml)) {
 copyFileSync(indexHtml, resolve(distDir, "404.html"));
 mkdirSync(resolve(distDir, "demo"), { recursive: true });
 copyFileSync(indexHtml, resolve(distDir, "demo/index.html"));
+mkdirSync(resolve(distDir, "demo/app"), { recursive: true });
+copyFileSync(indexHtml, resolve(distDir, "demo/app/index.html"));
 writeFileSync(resolve(distDir, ".nojekyll"), "");
