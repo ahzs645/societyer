@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 
 const base = process.env.VITE_BASE_PATH ?? "/";
+const stableAssetNames = process.env.VITE_STABLE_ASSET_NAMES === "1";
 
 export default defineConfig({
   base,
@@ -29,4 +30,15 @@ export default defineConfig({
       scss: { api: "modern-compiler" },
     },
   },
+  build: stableAssetNames
+    ? {
+        rollupOptions: {
+          output: {
+            entryFileNames: "assets/[name].js",
+            chunkFileNames: "assets/[name].js",
+            assetFileNames: "assets/[name][extname]",
+          },
+        },
+      }
+    : undefined,
 });

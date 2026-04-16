@@ -129,7 +129,7 @@ This repo now includes a GitHub Pages workflow at [.github/workflows/deploy-page
 
 For the public site:
 
-- `npm run build:pages` builds the app, writes `dist/404.html` for SPA fallback, and writes `dist/demo/index.html` so `/demo` resolves directly.
+- `npm run build:pages` builds the app with stable `assets/index.js` and `assets/index.css` filenames, writes `dist/404.html` for SPA fallback, and writes `dist/demo/index.html` so `/demo` resolves directly.
 - `/demo` uses [src/lib/staticConvex.ts](/Users/ahmadjalil/github/societyer/src/lib/staticConvex.ts) to satisfy the real frontend's Convex queries with in-memory fixture data, and [src/lib/staticRuntime.ts](/Users/ahmadjalil/github/societyer/src/lib/staticRuntime.ts) keeps demo-only app state out of persistent browser storage.
 - The configured custom domain is `society.ahmadjalil.com`.
 - In the GitHub repository settings, Pages should use **GitHub Actions** as the source.
