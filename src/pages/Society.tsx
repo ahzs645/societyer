@@ -62,7 +62,7 @@ export function SocietyPage() {
         actions={
           <>
             <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-              {saved ? "Saved" : `Last updated ${formatDate(new Date(society.updatedAt).toISOString())}`}
+              {saved ? "Saved" : `Last updated ${formatDate(society.updatedAt)}`}
             </span>
             <button className="btn btn--accent" onClick={save} disabled={saving}>
               {saving ? "Saving…" : "Save changes"}

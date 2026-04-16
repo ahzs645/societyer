@@ -9,6 +9,8 @@ const demoAppRoutes = [
   "app/members",
   "app/directors",
   "app/meetings",
+  "app/meetings/static_meeting_agm_2025",
+  "app/meetings/static_meeting_agm_2025/agm",
   "app/minutes",
   "app/filings",
   "app/filings/prefill",

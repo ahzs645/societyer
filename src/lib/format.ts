@@ -1,19 +1,28 @@
 import { format, formatDistanceToNowStrict, parseISO, isValid } from "date-fns";
 
-export function formatDate(iso?: string | null, pattern = "MMM d, yyyy") {
-  if (!iso) return "—";
-  const d = iso.length === 10 ? parseISO(iso) : new Date(iso);
+type DateInput = string | number | Date | null | undefined;
+
+function parseDateInput(value: DateInput) {
+  if (value == null || value === "") return null;
+  if (value instanceof Date) return value;
+  if (typeof value === "number") return new Date(value);
+  return value.length === 10 ? parseISO(value) : new Date(value);
+}
+
+export function formatDate(value?: DateInput, pattern = "MMM d, yyyy") {
+  const d = parseDateInput(value);
+  if (!d) return "—";
   if (!isValid(d)) return "—";
   return format(d, pattern);
 }
 
-export function formatDateTime(iso?: string | null) {
-  return formatDate(iso, "MMM d, yyyy · h:mma");
+export function formatDateTime(value?: DateInput) {
+  return formatDate(value, "MMM d, yyyy · h:mma");
 }
 
-export function relative(iso?: string | null) {
-  if (!iso) return "—";
-  const d = iso.length === 10 ? parseISO(iso) : new Date(iso);
+export function relative(value?: DateInput) {
+  const d = parseDateInput(value);
+  if (!d) return "—";
   if (!isValid(d)) return "—";
   const diff = d.getTime() - Date.now();
   const suffix = diff >= 0 ? "from now" : "ago";

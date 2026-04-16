@@ -25,7 +25,7 @@ const society = {
   name: "Riverside Community Society",
   incorporationNumber: "S-0076543",
   incorporationDate: "2017-05-12",
-  fiscalYearEnd: "2026-03-31",
+  fiscalYearEnd: "03-31",
   isCharity: true,
   isMemberFunded: false,
   registeredOfficeAddress: "400 Granville Street, Vancouver, BC V6C 1T2",
@@ -46,6 +46,7 @@ const society = {
   constitutionDocId: "static_document_constitution",
   bylawsDocId: DOCUMENT_BYLAWS_ID,
   demoMode: true,
+  updatedAt: Date.parse("2026-04-16T16:00:00.000Z"),
 };
 
 const users = [
@@ -215,18 +216,25 @@ const minutes = [
     societyId: SOCIETY_ID,
     meetingId: MEETING_AGM_ID,
     status: "Approved",
+    heldAt: "2025-06-19T18:30:00.000Z",
     approvedAt: "2025-07-10",
+    attendees: ["Mina Patel", "Jordan Lee", "Devon Clarke", "Avery Santos"],
+    absent: ["Sam Nguyen"],
+    quorumMet: true,
     discussion: "Members reviewed the annual report, financial statements, and director slate.",
     motions: [
       {
         text: "Approve the 2025 financial statements as presented.",
         movedBy: "Jordan Lee",
         secondedBy: "Mina Patel",
-        result: "Carried",
+        outcome: "Carried",
+        votesFor: 4,
+        votesAgainst: 0,
+        abstentions: 0,
       },
     ],
     decisions: ["Approved annual report filing package."],
-    actionItems: [{ text: "File annual report package", owner: "Mina Patel", status: "Done" }],
+    actionItems: [{ text: "File annual report package", assignee: "Mina Patel", dueDate: "2025-07-19", done: true }],
   },
 ];
 
