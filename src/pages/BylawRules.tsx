@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Field } from "../components/ui";

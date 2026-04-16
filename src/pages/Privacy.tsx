@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Flag } from "../components/ui";

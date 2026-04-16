@@ -35,9 +35,10 @@ import {
   ShieldCheck,
   UserCheck,
   Vote,
+  Newspaper,
 } from "lucide-react";
 import { useMutation } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 
@@ -51,6 +52,7 @@ const ITEMS: Array<{
   { label: "Go to Dashboard", to: "/app", icon: LayoutDashboard, kind: "Navigate" },
   { label: "Timeline", to: "/app/timeline", icon: CalendarClock, kind: "Navigate" },
   { label: "Society profile", to: "/app/society", icon: Building2, kind: "Navigate" },
+  { label: "Org history", to: "/app/org-history", icon: Newspaper, kind: "Navigate" },
   { label: "Committees", to: "/app/committees", icon: UsersRound, kind: "Navigate" },
   { label: "Employees", to: "/app/employees", icon: Users, kind: "Navigate", module: "employees" },
   { label: "Goals", to: "/app/goals", icon: Target, kind: "Navigate" },

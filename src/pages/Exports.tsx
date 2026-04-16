@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useConvex } from "convex/react";
 import { Download, Database } from "lucide-react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, SeedPrompt } from "./_helpers";
 

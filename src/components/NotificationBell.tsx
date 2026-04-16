@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { Bell, CheckCircle2, AlertTriangle, Info, XCircle } from "lucide-react";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { Link } from "react-router-dom";

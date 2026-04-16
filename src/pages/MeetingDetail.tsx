@@ -1,6 +1,6 @@
 import { useParams, Link } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { useToast } from "../components/Toast";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, SeedPrompt } from "./_helpers";

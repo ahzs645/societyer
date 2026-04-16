@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { Drawer, Field, Badge } from "./ui";
 import { useToast } from "./Toast";

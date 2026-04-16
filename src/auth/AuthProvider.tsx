@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import { useMutation } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { authClient, BetterAuthSession } from "../lib/authClient";
 import { getAuthMode, type AuthMode } from "../lib/authMode";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";

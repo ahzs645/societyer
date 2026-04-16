@@ -1,7 +1,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { ErrorSummary, Field, InspectorNote, type ErrorSummaryItem } from "../components/ui";

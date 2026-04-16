@@ -1,5 +1,5 @@
 import { useMutation } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { PageHeader, SeedPrompt } from "./_helpers";
 import { isDemoMode, setDemoMode } from "../lib/demoMode";
 import { useEffect, useMemo, useState } from "react";

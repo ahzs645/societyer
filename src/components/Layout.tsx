@@ -43,10 +43,11 @@ import {
   Globe,
   Download,
   Menu,
+  Newspaper,
 } from "lucide-react";
 import { ComponentType, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { DemoBanner } from "./DemoBanner";
 import { CommandPalette } from "./CommandPalette";
 import { NotificationBell } from "./NotificationBell";
@@ -121,6 +122,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/app", label: "Dashboard", icon: LayoutDashboard, color: "gray", end: true },
       { to: "/app/society", label: "Society", icon: Building2, color: "blue" },
+      { to: "/app/org-history", label: "Org history", icon: Newspaper, color: "purple" },
       { to: "/app/timeline", label: "Timeline", icon: CalendarClock, color: "purple" },
     ],
   },
@@ -245,6 +247,7 @@ const COLLAPSE_KEY = "societyer.sidebar.collapsed";
 const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   Dashboard: "nav.dashboard",
   Society: "nav.society",
+  "Org history": "nav.orgHistory",
   Timeline: "nav.timeline",
   Members: "nav.members",
   Directors: "nav.directors",

@@ -1,7 +1,7 @@
 import { useQuery } from "convex/react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import {
   useCurrentUserId,
   useCurrentUser,

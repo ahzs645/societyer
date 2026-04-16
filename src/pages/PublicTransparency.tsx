@@ -1,6 +1,6 @@
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { Badge } from "../components/ui";
 import { Mail, Scale, ShieldCheck, ClipboardList, FileText } from "lucide-react";
 import { formatDate } from "../lib/format";

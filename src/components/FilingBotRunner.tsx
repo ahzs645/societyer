@@ -1,5 +1,5 @@
 import { useAction, useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { Drawer, Badge } from "./ui";
 import { useCurrentUserId } from "../hooks/useCurrentUser";

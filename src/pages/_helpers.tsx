@@ -2,7 +2,7 @@ import { Sparkles } from "lucide-react";
 import { ReactNode } from "react";
 import { EmptyState, TintedIconTile } from "../components/ui";
 import { useMutation } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 
 export function SeedPrompt() {
   const seed = useMutation(api.seed.run);

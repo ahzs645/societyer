@@ -15,6 +15,7 @@ import { ToastProvider } from "./components/Toast";
 
 const Dashboard = React.lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
 const SocietyPage = React.lazy(() => import("./pages/Society").then((m) => ({ default: m.SocietyPage })));
+const OrganizationHistoryPage = React.lazy(() => import("./pages/OrganizationHistory").then((m) => ({ default: m.OrganizationHistoryPage })));
 const MembersPage = React.lazy(() => import("./pages/Members").then((m) => ({ default: m.MembersPage })));
 const DirectorsPage = React.lazy(() => import("./pages/Directors").then((m) => ({ default: m.DirectorsPage })));
 const MeetingsPage = React.lazy(() => import("./pages/Meetings").then((m) => ({ default: m.MeetingsPage })));
@@ -182,6 +183,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             >
             <Route index element={<Dashboard />} />
             <Route path="society" element={<SocietyPage />} />
+            <Route path="org-history" element={<OrganizationHistoryPage />} />
             <Route path="members" element={<MembersPage />} />
             <Route path="directors" element={<DirectorsPage />} />
             <Route path="meetings" element={<MeetingsPage />} />

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, SeedPrompt } from "./_helpers";
 import { PiggyBank, TrendingUp, TrendingDown, AlertTriangle, DollarSign } from "lucide-react";

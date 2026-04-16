@@ -1,5 +1,5 @@
 import { useMutation } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { isDemoMode } from "../lib/demoMode";
 import { Sparkles, RefreshCw } from "lucide-react";
 import { useState } from "react";

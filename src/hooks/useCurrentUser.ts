@@ -1,5 +1,5 @@
 import { useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useEffect, useState } from "react";
 import { getAuthMode } from "../lib/authMode";

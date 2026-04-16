@@ -9,6 +9,7 @@
  */
 
 import type * as activity from "../activity.js";
+import type * as agendas from "../agendas.js";
 import type * as agm from "../agm.js";
 import type * as attestations from "../attestations.js";
 import type * as auditors from "../auditors.js";
@@ -26,6 +27,7 @@ import type * as documentVersions from "../documentVersions.js";
 import type * as documents from "../documents.js";
 import type * as elections from "../elections.js";
 import type * as employees from "../employees.js";
+import type * as exports from "../exports.js";
 import type * as files from "../files.js";
 import type * as filingBot from "../filingBot.js";
 import type * as filingExports from "../filingExports.js";
@@ -39,11 +41,15 @@ import type * as inspections from "../inspections.js";
 import type * as insurance from "../insurance.js";
 import type * as lib_bylawRules from "../lib/bylawRules.js";
 import type * as lib_moduleSettings from "../lib/moduleSettings.js";
+import type * as lib_permissions from "../lib/permissions.js";
 import type * as meetings from "../meetings.js";
 import type * as memberProposals from "../memberProposals.js";
 import type * as members from "../members.js";
 import type * as minutes from "../minutes.js";
+import type * as motionTemplates from "../motionTemplates.js";
 import type * as notifications from "../notifications.js";
+import type * as organizationHistory from "../organizationHistory.js";
+import type * as permissions from "../permissions.js";
 import type * as pipaTraining from "../pipaTraining.js";
 import type * as providers_accounting from "../providers/accounting.js";
 import type * as providers_billing from "../providers/billing.js";
@@ -67,6 +73,7 @@ import type * as subscriptions from "../subscriptions.js";
 import type * as tasks from "../tasks.js";
 import type * as transcripts from "../transcripts.js";
 import type * as transparency from "../transparency.js";
+import type * as treasury from "../treasury.js";
 import type * as users from "../users.js";
 import type * as volunteers from "../volunteers.js";
 import type * as writtenResolutions from "../writtenResolutions.js";
@@ -79,6 +86,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   activity: typeof activity;
+  agendas: typeof agendas;
   agm: typeof agm;
   attestations: typeof attestations;
   auditors: typeof auditors;
@@ -96,6 +104,7 @@ declare const fullApi: ApiFromModules<{
   documents: typeof documents;
   elections: typeof elections;
   employees: typeof employees;
+  exports: typeof exports;
   files: typeof files;
   filingBot: typeof filingBot;
   filingExports: typeof filingExports;
@@ -109,11 +118,15 @@ declare const fullApi: ApiFromModules<{
   insurance: typeof insurance;
   "lib/bylawRules": typeof lib_bylawRules;
   "lib/moduleSettings": typeof lib_moduleSettings;
+  "lib/permissions": typeof lib_permissions;
   meetings: typeof meetings;
   memberProposals: typeof memberProposals;
   members: typeof members;
   minutes: typeof minutes;
+  motionTemplates: typeof motionTemplates;
   notifications: typeof notifications;
+  organizationHistory: typeof organizationHistory;
+  permissions: typeof permissions;
   pipaTraining: typeof pipaTraining;
   "providers/accounting": typeof providers_accounting;
   "providers/billing": typeof providers_billing;
@@ -137,6 +150,7 @@ declare const fullApi: ApiFromModules<{
   tasks: typeof tasks;
   transcripts: typeof transcripts;
   transparency: typeof transparency;
+  treasury: typeof treasury;
   users: typeof users;
   volunteers: typeof volunteers;
   writtenResolutions: typeof writtenResolutions;

@@ -1,6 +1,6 @@
 import { Link, Navigate } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useAuth } from "../auth/AuthProvider";
