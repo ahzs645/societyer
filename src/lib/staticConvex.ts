@@ -86,6 +86,75 @@ const members = [
   member("static_member_avery", "Avery", "Santos", "Associate", false, "2024-01-10"),
 ];
 
+const subscriptionPlans = [
+  {
+    _id: "static_plan_regular",
+    societyId: SOCIETY_ID,
+    name: "Regular member",
+    description: "Voting rights at general meetings, program discounts, and member notices.",
+    priceCents: 2500,
+    currency: "CAD",
+    interval: "year",
+    benefits: ["AGM vote", "Program discount", "Quarterly newsletter"],
+    membershipClass: "Regular",
+    active: true,
+  },
+  {
+    _id: "static_plan_student",
+    societyId: SOCIETY_ID,
+    name: "Student",
+    description: "Reduced annual dues for students and emerging community organizers.",
+    priceCents: 500,
+    currency: "CAD",
+    interval: "year",
+    benefits: ["AGM vote", "Program discount"],
+    membershipClass: "Student",
+    active: true,
+  },
+  {
+    _id: "static_plan_sustainer",
+    societyId: SOCIETY_ID,
+    name: "Sustainer",
+    description: "Monthly recurring support for core operations and resilience programs.",
+    priceCents: 1500,
+    currency: "CAD",
+    interval: "month",
+    benefits: ["Named in annual report", "Invite to donor events"],
+    active: true,
+  },
+];
+
+const memberSubscriptions = [
+  {
+    _id: "static_member_subscription_devon",
+    societyId: SOCIETY_ID,
+    planId: "static_plan_regular",
+    memberId: "static_member_devon",
+    email: "devon@riverside.example",
+    fullName: "Devon Clarke",
+    status: "active",
+    startedAtISO: "2025-04-01T16:00:00.000Z",
+    currentPeriodEndISO: "2027-03-31T23:59:59.000Z",
+    lastPaymentAtISO: "2026-04-01T16:05:00.000Z",
+    lastPaymentCents: 2500,
+    demo: true,
+  },
+  {
+    _id: "static_member_subscription_avery",
+    societyId: SOCIETY_ID,
+    planId: "static_plan_sustainer",
+    memberId: "static_member_avery",
+    email: "avery@riverside.example",
+    fullName: "Avery Santos",
+    status: "active",
+    startedAtISO: "2026-01-15T18:30:00.000Z",
+    currentPeriodEndISO: "2026-05-15T18:30:00.000Z",
+    lastPaymentAtISO: "2026-04-15T18:30:00.000Z",
+    lastPaymentCents: 1500,
+    demo: true,
+  },
+];
+
 const committees = [
   {
     _id: "static_committee_finance",
@@ -679,6 +748,7 @@ const tables: Record<string, any[]> = {
   ],
   meetings,
   memberProposals: [],
+  memberSubscriptions,
   members,
   minutes,
   notifications,
@@ -706,16 +776,8 @@ const tables: Record<string, any[]> = {
     },
   ],
   reconciliation: [],
-  subscriptions: [
-    {
-      _id: "static_subscription",
-      societyId: SOCIETY_ID,
-      memberId: "static_member_devon",
-      status: "active",
-      planName: "Regular membership",
-      currentPeriodEnd: "2027-03-31",
-    },
-  ],
+  subscriptionPlans,
+  subscriptions: memberSubscriptions,
   tasks,
   transparency: [
     {
@@ -1092,11 +1154,11 @@ function queryResult(name: string, args: StaticArgs) {
     case "signatures:listForEntity":
       return [];
     case "subscriptions:allSubscriptions":
-      return tables.subscriptions;
+      return memberSubscriptions;
     case "subscriptions:getPlan":
-      return null;
+      return byId(subscriptionPlans, args?.id);
     case "subscriptions:plans":
-      return [{ _id: "static_plan_regular", societyId: SOCIETY_ID, name: "Regular membership", amountCents: 2500, interval: "year", status: "active" }];
+      return subscriptionPlans;
     case "transcripts:getByMeeting":
     case "transcripts:jobForMeeting":
       return null;
@@ -1131,6 +1193,12 @@ function queryResult(name: string, args: StaticArgs) {
 function mutationResult(name: string, args: StaticArgs) {
   if (name === "seed:run") return SOCIETY_ID;
   if (name === "users:resolveAuthSession") return { userId: USER_OWNER_ID };
+  if (name === "subscriptions:beginCheckout") {
+    return {
+      url: `demo://checkout/${args?.planId ?? "membership"}`,
+      demo: true,
+    };
+  }
   if (name.endsWith(":create") || name.includes(":upsert") || name.includes(":issue")) {
     return args?.id ?? `static_${Date.now()}`;
   }
