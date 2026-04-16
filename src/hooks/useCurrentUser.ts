@@ -3,17 +3,26 @@ import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { useEffect, useState } from "react";
 import { getAuthMode } from "../lib/authMode";
+import { STATIC_DEMO_USER_ID } from "../lib/staticConvex";
+import { isStaticDemoRuntime } from "../lib/staticRuntime";
 
 const KEY = "societyer.currentUserId";
+let staticUserId = STATIC_DEMO_USER_ID as Id<"users"> | null;
 
 export function getStoredUserId(): Id<"users"> | null {
+  if (isStaticDemoRuntime()) return staticUserId;
   const v = localStorage.getItem(KEY);
   return (v as Id<"users"> | null) ?? null;
 }
 
 export function setStoredUserId(id: Id<"users"> | null) {
-  if (id) localStorage.setItem(KEY, id);
-  else localStorage.removeItem(KEY);
+  if (isStaticDemoRuntime()) {
+    staticUserId = id;
+  } else if (id) {
+    localStorage.setItem(KEY, id);
+  } else {
+    localStorage.removeItem(KEY);
+  }
   window.dispatchEvent(new Event("societyer:user-changed"));
 }
 

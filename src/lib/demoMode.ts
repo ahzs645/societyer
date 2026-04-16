@@ -1,6 +1,9 @@
+import { isStaticDemoRuntime } from "./staticRuntime";
+
 const KEY = "societyer.demo";
 
 export function isDemoMode(): boolean {
+  if (isStaticDemoRuntime()) return true;
   const url = new URLSearchParams(window.location.search);
   if (url.has("demo")) {
     const v = url.get("demo");
@@ -12,5 +15,6 @@ export function isDemoMode(): boolean {
 }
 
 export function setDemoMode(on: boolean) {
+  if (isStaticDemoRuntime()) return;
   localStorage.setItem(KEY, on ? "1" : "0");
 }

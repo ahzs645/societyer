@@ -2,18 +2,27 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { useEffect, useMemo, useState } from "react";
+import { STATIC_DEMO_SOCIETY_ID } from "../lib/staticConvex";
+import { isStaticDemoRuntime } from "../lib/staticRuntime";
 
 const KEY = "societyer.currentSocietyId";
 const SOCIETY_CHANGED_EVENT = "societyer:society-changed";
+let staticSocietyId = STATIC_DEMO_SOCIETY_ID as Id<"societies"> | null;
 
 export function getStoredSocietyId(): Id<"societies"> | null {
+  if (isStaticDemoRuntime()) return staticSocietyId;
   const value = localStorage.getItem(KEY);
   return (value as Id<"societies"> | null) ?? null;
 }
 
 export function setStoredSocietyId(id: Id<"societies"> | null) {
-  if (id) localStorage.setItem(KEY, id);
-  else localStorage.removeItem(KEY);
+  if (isStaticDemoRuntime()) {
+    staticSocietyId = id;
+  } else if (id) {
+    localStorage.setItem(KEY, id);
+  } else {
+    localStorage.removeItem(KEY);
+  }
   window.dispatchEvent(new Event(SOCIETY_CHANGED_EVENT));
 }
 

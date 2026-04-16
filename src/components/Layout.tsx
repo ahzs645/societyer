@@ -58,6 +58,7 @@ import { Pill, TintedIconTile } from "./ui";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { LocaleSwitcher } from "./LocaleSwitcher";
 import { useTranslation } from "react-i18next";
+import { isStaticDemoRuntime } from "../lib/staticRuntime";
 
 const MOBILE_SIDEBAR_BREAKPOINT = 980;
 
@@ -250,7 +251,7 @@ export function Layout() {
   );
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem(COLLAPSE_KEY) === "1",
+    () => !isStaticDemoRuntime() && localStorage.getItem(COLLAPSE_KEY) === "1",
   );
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(
     () => getInitialOpenGroups(window.location.pathname),
@@ -265,6 +266,7 @@ export function Layout() {
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    if (isStaticDemoRuntime()) return;
     localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
 

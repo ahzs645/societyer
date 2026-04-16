@@ -1,8 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
-import { ConvexProvider } from "convex/react";
+import { ConvexProvider, type ConvexReactClient } from "convex/react";
 import { convex } from "./lib/convex";
+import { staticConvex } from "./lib/staticConvex";
+import { isStaticDemoRuntime } from "./lib/staticRuntime";
 import { AuthProvider } from "./auth/AuthProvider";
 import { AuthGate } from "./components/AuthGate";
 import { Layout } from "./components/Layout";
@@ -56,7 +58,6 @@ import { BylawDiffPage } from "./pages/BylawDiff";
 import { BylawsHistoryPage } from "./pages/BylawsHistory";
 import { ReconciliationPage } from "./pages/Reconciliation";
 import { LandingPage } from "./pages/Landing";
-import { DemoPage } from "./pages/Demo";
 import { LoginPage } from "./pages/Login";
 import { BylawRulesPage } from "./pages/BylawRules";
 import { ElectionsPage } from "./pages/Elections";
@@ -77,9 +78,9 @@ function withModule(moduleKey: React.ComponentProps<typeof ModuleGate>["moduleKe
   return <ModuleGate moduleKey={moduleKey}>{element}</ModuleGate>;
 }
 
-function AppProviders() {
+function AppProviders({ client }: { client: ConvexReactClient }) {
   return (
-    <ConvexProvider client={convex}>
+    <ConvexProvider client={client}>
       <AuthProvider>
         <ToastProvider>
           <ConfirmProvider>
@@ -92,6 +93,12 @@ function AppProviders() {
     </ConvexProvider>
   );
 }
+
+const staticDemoRuntime = isStaticDemoRuntime();
+const routerBasename = staticDemoRuntime ? "/demo" : import.meta.env.BASE_URL;
+const convexClient = staticDemoRuntime
+  ? (staticConvex as unknown as ConvexReactClient)
+  : convex;
 
 function RootErrorFallback() {
   return (
@@ -119,41 +126,43 @@ function RootErrorFallback() {
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary label="root" fallback={<RootErrorFallback />}>
-    <BrowserRouter
-      basename={import.meta.env.BASE_URL}
-      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-    >
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/demo/*" element={<DemoPage />} />
-        <Route element={<AppProviders />}>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/public" element={<PublicTransparencyPage />} />
-          <Route path="/public/:slug" element={<PublicTransparencyPage />} />
+      <BrowserRouter
+        basename={routerBasename}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
           <Route
-            path="/public/:slug/volunteer-apply"
-            element={<VolunteerApplyPage />}
+            path="/"
+            element={staticDemoRuntime ? <Navigate to="/app" replace /> : <LandingPage />}
           />
-          <Route
-            path="/public/:slug/grant-apply"
-            element={<GrantApplyPage />}
-          />
-          <Route
-            path="/portal"
-            element={
-              <AuthGate>
-                <PortalPage />
-              </AuthGate>
-            }
-          />
-          <Route
-            path="/app"
-            element={
-              <AuthGate>
-                <Layout />
-              </AuthGate>
-            }
-          >
+          <Route element={<AppProviders client={convexClient} />}>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/public" element={<PublicTransparencyPage />} />
+            <Route path="/public/:slug" element={<PublicTransparencyPage />} />
+            <Route
+              path="/public/:slug/volunteer-apply"
+              element={<VolunteerApplyPage />}
+            />
+            <Route
+              path="/public/:slug/grant-apply"
+              element={<GrantApplyPage />}
+            />
+            <Route
+              path="/portal"
+              element={
+                <AuthGate>
+                  <PortalPage />
+                </AuthGate>
+              }
+            />
+            <Route
+              path="/app"
+              element={
+                <AuthGate>
+                  <Layout />
+                </AuthGate>
+              }
+            >
             <Route index element={<Dashboard />} />
             <Route path="society" element={<SocietyPage />} />
             <Route path="members" element={<MembersPage />} />
@@ -269,11 +278,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               element={withModule("transparency", <TransparencyPage />)}
             />
             <Route path="settings" element={<SettingsPage />} />
+            </Route>
           </Route>
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
     </ErrorBoundary>
   </React.StrictMode>,
 );

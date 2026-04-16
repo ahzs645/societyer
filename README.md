@@ -91,7 +91,8 @@ npm run dev
 ## Public site vs full app
 
 - `/` is now the marketing page for the public custom domain.
-- `/demo` is a **static** product walkthrough that shows the interface without requiring Convex, auth, or seeded data.
+- `/demo` boots the same React app shell and `/app/...` routes in a browser-only in-memory fixture mode. It does not require Convex, auth, localStorage app state, IndexedDB, SQLite, or seeded backend data.
+- Inside demo mode, app links are automatically scoped under `/demo`, so `/app/filings` becomes `/demo/app/filings`.
 - `/app` remains the real workspace route for the backend-backed application.
 - `/public/:slug` and other operational routes still expect the live app stack.
 
@@ -129,6 +130,7 @@ This repo now includes a GitHub Pages workflow at [.github/workflows/deploy-page
 For the public site:
 
 - `npm run build:pages` builds the app, writes `dist/404.html` for SPA fallback, and writes `dist/demo/index.html` so `/demo` resolves directly.
+- `/demo` uses [src/lib/staticConvex.ts](/Users/ahmadjalil/github/societyer/src/lib/staticConvex.ts) to satisfy the real frontend's Convex queries with in-memory fixture data, and [src/lib/staticRuntime.ts](/Users/ahmadjalil/github/societyer/src/lib/staticRuntime.ts) keeps demo-only app state out of persistent browser storage.
 - The configured custom domain is `society.ahmadjalil.com`.
 - In the GitHub repository settings, Pages should use **GitHub Actions** as the source.
 
@@ -139,7 +141,7 @@ For the public site:
 | Area | Page | Notes |
 |---|---|---|
 | Public | `/` Marketing page | Product positioning, feature overview, and CTA into the static walkthrough |
-| Public | `/demo` Static demo | Backend-free preview of the workspace layout and core modules |
+| Public | `/demo` Browser-only demo | The real app frontend using an in-memory Convex-compatible fixture client |
 | Overview | `/app` Dashboard | Compliance flags (≥3 directors, ≥1 BC resident, consents on file, PIPA policy, constitution & bylaws uploaded), stat tiles, upcoming meetings and filings |
 | Overview | `/app/society` | Edit legal name, incorporation #, fiscal year end, addresses, purposes, charity / member-funded flags, privacy officer |
 | People | `/app/members` | Register of members (s.20), class, voting rights, join date, status |

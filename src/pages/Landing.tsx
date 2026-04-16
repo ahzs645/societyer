@@ -144,9 +144,9 @@ export function LandingPage() {
                 {theme === "dark" ? "Light" : "Dark"}
               </span>
             </button>
-            <Link to={demoHref} className="landing__btn landing__btn--primary">
+            <a href={demoHref} className="landing__btn landing__btn--primary">
               {navCtaLabel} <ArrowRight size={14} />
-            </Link>
+            </a>
           </div>
         </div>
       </header>
@@ -166,9 +166,9 @@ export function LandingPage() {
             one live workspace, with the Societies Act checks running in the background.
           </p>
           <div className="landing__cta-row">
-            <Link to={demoHref} className="landing__btn landing__btn--primary landing__btn--lg">
+            <a href={demoHref} className="landing__btn landing__btn--primary landing__btn--lg">
               {primaryCtaLabel} <ArrowRight size={16} />
-            </Link>
+            </a>
             <a
               href="#features"
               onClick={scrollTo("features")}
@@ -253,9 +253,9 @@ export function LandingPage() {
               <li><Lock size={14} /> PIPA records inspection rules and privacy officer documented</li>
             </ul>
             <div className="landing__cta-row">
-              <Link to={demoHref} className="landing__btn landing__btn--primary">
+              <a href={demoHref} className="landing__btn landing__btn--primary">
                 Try the compliance dashboard <ArrowRight size={14} />
-              </Link>
+              </a>
             </div>
           </div>
           <div className="landing__split-visual">
@@ -350,9 +350,9 @@ export function LandingPage() {
             app locally when you want the live version.
           </p>
           <div className="landing__cta-row landing__cta-row--center">
-            <Link to={demoHref} className="landing__btn landing__btn--primary landing__btn--lg">
+            <a href={demoHref} className="landing__btn landing__btn--primary landing__btn--lg">
               {primaryCtaLabel} <ArrowRight size={16} />
-            </Link>
+            </a>
             <a
               href={sourceHref}
               className="landing__btn landing__btn--ghost landing__btn--lg"
