@@ -712,6 +712,67 @@
   }
 }
 
+/* Mobile card list — replaces the table below 760 px */
+.card-list {
+  display: flex;
+  flex-direction: column;
+}
+.card-list__item {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+.card-list__item--interactive {
+  cursor: pointer;
+}
+.card-list__item--interactive:active {
+  background: var(--bg-hover);
+}
+.card-list__primary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card-list__primary-cell {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+}
+.card-list__actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.card-list__details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 6px;
+  padding-left: 2px;
+}
+.card-list__detail {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-sm);
+  min-width: 0;
+}
+.card-list__detail-label {
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.card-list__detail-label::after {
+  content: ":";
+}
+.card-list__detail-value {
+  color: var(--text-secondary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .avatar {
   width: 24px;
   height: 24px;

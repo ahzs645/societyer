@@ -735,3 +735,71 @@
     flex-basis: 100%;
   }
 }
+
+/* Bottom navigation bar — mobile only */
+.bottom-nav {
+  display: none;
+}
+
+@media (max-width: 980px) {
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 23;
+    height: 56px;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    background: var(--bg-base);
+    border-top: 1px solid var(--border);
+    align-items: stretch;
+    justify-content: space-around;
+  }
+
+  .bottom-nav__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    color: var(--text-tertiary);
+    font-size: 10px;
+    font-weight: 500;
+    border: 0;
+    background: transparent;
+    padding: 4px 2px;
+    transition: color 0.1s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .bottom-nav__item:active {
+    color: var(--text-primary);
+  }
+  .bottom-nav__item.is-active {
+    color: var(--accent);
+  }
+  .bottom-nav__item svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 1.8;
+  }
+  .bottom-nav__item span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  /* Adjust main area to leave room for bottom nav */
+  .app-shell.is-mobile .main {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0));
+  }
+
+  /* Hide sidebar-peek on mobile when bottom nav provides the "More" button */
+  .app-shell.is-mobile.is-collapsed .sidebar-peek {
+    opacity: 0;
+    pointer-events: none;
+  }
+}

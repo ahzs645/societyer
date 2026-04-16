@@ -42,6 +42,7 @@ import {
   BadgeDollarSign,
   Globe,
   Download,
+  Menu,
 } from "lucide-react";
 import { ComponentType, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
@@ -668,6 +669,34 @@ export function Layout() {
             </div>
           </div>
         </div>
+        {isMobileNav && (
+          <nav className="bottom-nav" aria-label={t("sidebar.navigation")}>
+            <NavLink to="/app" end className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}>
+              <LayoutDashboard size={18} />
+              <span>{t("nav.dashboard", "Dashboard")}</span>
+            </NavLink>
+            <NavLink to="/app/tasks" className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}>
+              <ListTodo size={18} />
+              <span>{t("nav.tasks", "Tasks")}</span>
+            </NavLink>
+            <NavLink to="/app/meetings" className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}>
+              <Calendar size={18} />
+              <span>{t("nav.meetingsItem", "Meetings")}</span>
+            </NavLink>
+            <NavLink to="/app/documents" className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}>
+              <FolderOpen size={18} />
+              <span>{t("nav.documents", "Docs")}</span>
+            </NavLink>
+            <button
+              type="button"
+              className="bottom-nav__item"
+              onClick={openSidebar}
+            >
+              <Menu size={18} />
+              <span>{t("sidebar.more", "More")}</span>
+            </button>
+          </nav>
+        )}
       </div>
     </InspectorProvider>
   );

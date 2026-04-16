@@ -10,6 +10,8 @@ import {
 } from "./FilterBar";
 import { MenuRow, MenuSectionLabel, Pill } from "./ui";
 
+const MOBILE_CARD_BREAKPOINT = 760;
+
 export type Column<T> = {
   id: string;
   header: ReactNode;
@@ -62,8 +64,18 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [sort, setSort] = useState<SortState>(defaultSort ?? null);
+  const [isMobileCards, setIsMobileCards] = useState(
+    () => window.matchMedia(`(max-width: ${MOBILE_CARD_BREAKPOINT}px)`).matches,
+  );
   const filterBtnRef = useRef<HTMLButtonElement>(null);
   const sortBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${MOBILE_CARD_BREAKPOINT}px)`);
+    const onChange = (e: MediaQueryListEvent) => setIsMobileCards(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
   const sortColumn = sort ? columns.find((column) => column.id === sort.columnId) : null;
   const sortableColumns = useMemo(() => columns.filter((c) => c.sortable), [columns]);
 
@@ -177,6 +189,61 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
         </div>
       </div>
 
+      {isMobileCards ? (
+        <div className="card-list" role="list" aria-label={label}>
+          {filtered.map((row) => {
+            const primaryCol = columns[0];
+            const secondaryCols = columns.slice(1);
+            const primaryCell = primaryCol.render
+              ? primaryCol.render(row)
+              : String(primaryCol.accessor?.(row) ?? "");
+            return (
+              <div
+                key={rowKey(row)}
+                className={`card-list__item${onRowClick ? " card-list__item--interactive" : ""}`}
+                role="listitem"
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+              >
+                <div className="card-list__primary">
+                  <div className="card-list__primary-cell">{primaryCell}</div>
+                  {renderRowActions && (
+                    <div
+                      className="card-list__actions"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {renderRowActions(row)}
+                    </div>
+                  )}
+                </div>
+                {secondaryCols.length > 0 && (
+                  <div className="card-list__details">
+                    {secondaryCols.map((col) => {
+                      const cell = col.render
+                        ? col.render(row)
+                        : String(col.accessor?.(row) ?? "");
+                      return (
+                        <div key={col.id} className="card-list__detail">
+                          <span className="card-list__detail-label">
+                            {col.header}
+                          </span>
+                          <span className="card-list__detail-value">{cell}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div className="table__empty">
+              {data.length === 0
+                ? emptyMessage
+                : "No rows match the current filters."}
+            </div>
+          )}
+        </div>
+      ) : (
       <table className="table">
         <caption className="sr-only">{label}</caption>
         <thead>
@@ -278,6 +345,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
           )}
         </tbody>
       </table>
+      )}
     </div>
   );
 }

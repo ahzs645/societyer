@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { ConvexProvider, type ConvexReactClient } from "convex/react";
@@ -12,64 +12,65 @@ import { ModuleGate } from "./components/ModuleGate";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ConfirmProvider, PromptProvider } from "./components/Modal";
 import { ToastProvider } from "./components/Toast";
-import { Dashboard } from "./pages/Dashboard";
-import { SocietyPage } from "./pages/Society";
-import { MembersPage } from "./pages/Members";
-import { DirectorsPage } from "./pages/Directors";
-import { MeetingsPage } from "./pages/Meetings";
-import { MeetingDetailPage } from "./pages/MeetingDetail";
-import { MinutesPage } from "./pages/Minutes";
-import { FilingsPage } from "./pages/Filings";
-import { DeadlinesPage } from "./pages/Deadlines";
-import { DocumentsPage } from "./pages/Documents";
-import { ConflictsPage } from "./pages/Conflicts";
-import { FinancialsPage } from "./pages/Financials";
-import { PrivacyPage } from "./pages/Privacy";
-import { SettingsPage } from "./pages/Settings";
-import { CommitteesPage } from "./pages/Committees";
-import { CommitteeDetailPage } from "./pages/CommitteeDetail";
-import { GoalsPage } from "./pages/Goals";
-import { GoalDetailPage } from "./pages/GoalDetail";
-import { TasksPage } from "./pages/Tasks";
-import { TimelinePage } from "./pages/Timeline";
-import { NotificationsPage } from "./pages/Notifications";
-import { UsersPage } from "./pages/Users";
-import { AuditLogPage } from "./pages/AuditLog";
-import { ExportsPage } from "./pages/Exports";
-import { AgendaBuilderPage } from "./pages/AgendaBuilder";
-import { MotionLibraryPage } from "./pages/MotionLibrary";
-import { TreasurerPage } from "./pages/Treasurer";
-import { MembershipPage } from "./pages/Membership";
-import { InspectionsPage } from "./pages/Inspections";
-import { AttestationsPage } from "./pages/Attestations";
-import { RetentionPage } from "./pages/Retention";
-import { InsurancePage } from "./pages/Insurance";
-import { PipaTrainingPage } from "./pages/PipaTraining";
-import { ProxiesPage } from "./pages/Proxies";
-import { AuditorsPage } from "./pages/Auditors";
-import { MemberProposalsPage } from "./pages/MemberProposals";
-import { ReceiptsPage } from "./pages/Receipts";
-import { EmployeesPage } from "./pages/Employees";
-import { CourtOrdersPage } from "./pages/CourtOrders";
-import { WrittenResolutionsPage } from "./pages/WrittenResolutions";
-import { AgmWorkflowPage } from "./pages/AgmWorkflow";
-import { FilingPreFillPage } from "./pages/FilingPreFill";
-import { BylawDiffPage } from "./pages/BylawDiff";
-import { BylawsHistoryPage } from "./pages/BylawsHistory";
-import { ReconciliationPage } from "./pages/Reconciliation";
-import { LandingPage } from "./pages/Landing";
-import { LoginPage } from "./pages/Login";
-import { BylawRulesPage } from "./pages/BylawRules";
-import { ElectionsPage } from "./pages/Elections";
-import { ElectionDetailPage } from "./pages/ElectionDetail";
-import { PortalPage } from "./pages/Portal";
-import { CommunicationsPage } from "./pages/Communications";
-import { VolunteersPage } from "./pages/Volunteers";
-import { GrantsPage } from "./pages/Grants";
-import { TransparencyPage } from "./pages/Transparency";
-import { PublicTransparencyPage } from "./pages/PublicTransparency";
-import { VolunteerApplyPage } from "./pages/VolunteerApply";
-import { GrantApplyPage } from "./pages/GrantApply";
+
+const Dashboard = React.lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
+const SocietyPage = React.lazy(() => import("./pages/Society").then((m) => ({ default: m.SocietyPage })));
+const MembersPage = React.lazy(() => import("./pages/Members").then((m) => ({ default: m.MembersPage })));
+const DirectorsPage = React.lazy(() => import("./pages/Directors").then((m) => ({ default: m.DirectorsPage })));
+const MeetingsPage = React.lazy(() => import("./pages/Meetings").then((m) => ({ default: m.MeetingsPage })));
+const MeetingDetailPage = React.lazy(() => import("./pages/MeetingDetail").then((m) => ({ default: m.MeetingDetailPage })));
+const MinutesPage = React.lazy(() => import("./pages/Minutes").then((m) => ({ default: m.MinutesPage })));
+const FilingsPage = React.lazy(() => import("./pages/Filings").then((m) => ({ default: m.FilingsPage })));
+const DeadlinesPage = React.lazy(() => import("./pages/Deadlines").then((m) => ({ default: m.DeadlinesPage })));
+const DocumentsPage = React.lazy(() => import("./pages/Documents").then((m) => ({ default: m.DocumentsPage })));
+const ConflictsPage = React.lazy(() => import("./pages/Conflicts").then((m) => ({ default: m.ConflictsPage })));
+const FinancialsPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.FinancialsPage })));
+const PrivacyPage = React.lazy(() => import("./pages/Privacy").then((m) => ({ default: m.PrivacyPage })));
+const SettingsPage = React.lazy(() => import("./pages/Settings").then((m) => ({ default: m.SettingsPage })));
+const CommitteesPage = React.lazy(() => import("./pages/Committees").then((m) => ({ default: m.CommitteesPage })));
+const CommitteeDetailPage = React.lazy(() => import("./pages/CommitteeDetail").then((m) => ({ default: m.CommitteeDetailPage })));
+const GoalsPage = React.lazy(() => import("./pages/Goals").then((m) => ({ default: m.GoalsPage })));
+const GoalDetailPage = React.lazy(() => import("./pages/GoalDetail").then((m) => ({ default: m.GoalDetailPage })));
+const TasksPage = React.lazy(() => import("./pages/Tasks").then((m) => ({ default: m.TasksPage })));
+const TimelinePage = React.lazy(() => import("./pages/Timeline").then((m) => ({ default: m.TimelinePage })));
+const NotificationsPage = React.lazy(() => import("./pages/Notifications").then((m) => ({ default: m.NotificationsPage })));
+const UsersPage = React.lazy(() => import("./pages/Users").then((m) => ({ default: m.UsersPage })));
+const AuditLogPage = React.lazy(() => import("./pages/AuditLog").then((m) => ({ default: m.AuditLogPage })));
+const ExportsPage = React.lazy(() => import("./pages/Exports").then((m) => ({ default: m.ExportsPage })));
+const AgendaBuilderPage = React.lazy(() => import("./pages/AgendaBuilder").then((m) => ({ default: m.AgendaBuilderPage })));
+const MotionLibraryPage = React.lazy(() => import("./pages/MotionLibrary").then((m) => ({ default: m.MotionLibraryPage })));
+const TreasurerPage = React.lazy(() => import("./pages/Treasurer").then((m) => ({ default: m.TreasurerPage })));
+const MembershipPage = React.lazy(() => import("./pages/Membership").then((m) => ({ default: m.MembershipPage })));
+const InspectionsPage = React.lazy(() => import("./pages/Inspections").then((m) => ({ default: m.InspectionsPage })));
+const AttestationsPage = React.lazy(() => import("./pages/Attestations").then((m) => ({ default: m.AttestationsPage })));
+const RetentionPage = React.lazy(() => import("./pages/Retention").then((m) => ({ default: m.RetentionPage })));
+const InsurancePage = React.lazy(() => import("./pages/Insurance").then((m) => ({ default: m.InsurancePage })));
+const PipaTrainingPage = React.lazy(() => import("./pages/PipaTraining").then((m) => ({ default: m.PipaTrainingPage })));
+const ProxiesPage = React.lazy(() => import("./pages/Proxies").then((m) => ({ default: m.ProxiesPage })));
+const AuditorsPage = React.lazy(() => import("./pages/Auditors").then((m) => ({ default: m.AuditorsPage })));
+const MemberProposalsPage = React.lazy(() => import("./pages/MemberProposals").then((m) => ({ default: m.MemberProposalsPage })));
+const ReceiptsPage = React.lazy(() => import("./pages/Receipts").then((m) => ({ default: m.ReceiptsPage })));
+const EmployeesPage = React.lazy(() => import("./pages/Employees").then((m) => ({ default: m.EmployeesPage })));
+const CourtOrdersPage = React.lazy(() => import("./pages/CourtOrders").then((m) => ({ default: m.CourtOrdersPage })));
+const WrittenResolutionsPage = React.lazy(() => import("./pages/WrittenResolutions").then((m) => ({ default: m.WrittenResolutionsPage })));
+const AgmWorkflowPage = React.lazy(() => import("./pages/AgmWorkflow").then((m) => ({ default: m.AgmWorkflowPage })));
+const FilingPreFillPage = React.lazy(() => import("./pages/FilingPreFill").then((m) => ({ default: m.FilingPreFillPage })));
+const BylawDiffPage = React.lazy(() => import("./pages/BylawDiff").then((m) => ({ default: m.BylawDiffPage })));
+const BylawsHistoryPage = React.lazy(() => import("./pages/BylawsHistory").then((m) => ({ default: m.BylawsHistoryPage })));
+const ReconciliationPage = React.lazy(() => import("./pages/Reconciliation").then((m) => ({ default: m.ReconciliationPage })));
+const LandingPage = React.lazy(() => import("./pages/Landing").then((m) => ({ default: m.LandingPage })));
+const LoginPage = React.lazy(() => import("./pages/Login").then((m) => ({ default: m.LoginPage })));
+const BylawRulesPage = React.lazy(() => import("./pages/BylawRules").then((m) => ({ default: m.BylawRulesPage })));
+const ElectionsPage = React.lazy(() => import("./pages/Elections").then((m) => ({ default: m.ElectionsPage })));
+const ElectionDetailPage = React.lazy(() => import("./pages/ElectionDetail").then((m) => ({ default: m.ElectionDetailPage })));
+const PortalPage = React.lazy(() => import("./pages/Portal").then((m) => ({ default: m.PortalPage })));
+const CommunicationsPage = React.lazy(() => import("./pages/Communications").then((m) => ({ default: m.CommunicationsPage })));
+const VolunteersPage = React.lazy(() => import("./pages/Volunteers").then((m) => ({ default: m.VolunteersPage })));
+const GrantsPage = React.lazy(() => import("./pages/Grants").then((m) => ({ default: m.GrantsPage })));
+const TransparencyPage = React.lazy(() => import("./pages/Transparency").then((m) => ({ default: m.TransparencyPage })));
+const PublicTransparencyPage = React.lazy(() => import("./pages/PublicTransparency").then((m) => ({ default: m.PublicTransparencyPage })));
+const VolunteerApplyPage = React.lazy(() => import("./pages/VolunteerApply").then((m) => ({ default: m.VolunteerApplyPage })));
+const GrantApplyPage = React.lazy(() => import("./pages/GrantApply").then((m) => ({ default: m.GrantApplyPage })));
 import "./i18n";
 import "./theme/tokens.css";
 import "./styles/index.scss";
@@ -99,6 +100,12 @@ const routerBasename = staticDemoRuntime ? "/demo" : import.meta.env.BASE_URL;
 const convexClient = staticDemoRuntime
   ? (staticConvex as unknown as ConvexReactClient)
   : convex;
+
+function PageLoader() {
+  return (
+    <div style={{ padding: 24, color: "#888", fontSize: 13 }}>Loading…</div>
+  );
+}
 
 function RootErrorFallback() {
   return (
@@ -130,6 +137,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         basename={routerBasename}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
+        <Suspense fallback={<PageLoader />}>
         <Routes>
           {!staticDemoRuntime && <Route path="/" element={<LandingPage />} />}
           <Route element={<AppProviders client={convexClient} />}>
@@ -291,6 +299,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </ErrorBoundary>
   </React.StrictMode>,
