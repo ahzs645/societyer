@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -25,6 +26,7 @@ const DIRECTOR_FIELDS: FilterField<any>[] = [
 export function DirectorsPage() {
   const society = useSociety();
   const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
+  const orgHistory = useQuery(api.organizationHistory.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.directors.create);
   const update = useMutation(api.directors.update);
   const remove = useMutation(api.directors.remove);
@@ -33,12 +35,20 @@ export function DirectorsPage() {
   const [selected, setSelected] = useState<any>(null);
   const [open, setOpen] = useState(false);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
-  if (society === null) return <SeedPrompt />;
-
   const active = (directors ?? []).filter((d: any) => d.status === "Active");
   const bcResidents = active.filter((d: any) => d.isBCResident).length;
   const missingConsent = active.filter((d: any) => !d.consentOnFile);
+  const roleTerms = useMemo(() => {
+    return (orgHistory?.boardTerms ?? [])
+      .slice()
+      .sort((a: any, b: any) => String(b.startDate ?? "").localeCompare(String(a.startDate ?? "")));
+  }, [orgHistory]);
+  const legalDirectorTerms = roleTerms.filter((term: any) =>
+    /director|president|treasurer|secretary|chair/i.test(`${term.position ?? ""} ${term.committeeName ?? ""}`),
+  );
+
+  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
     setSelected({
@@ -103,6 +113,62 @@ export function DirectorsPage() {
           {active.length < 3 && !society.isMemberFunded && <Flag level="err">Fewer than 3 active directors — regular societies must have at least 3.</Flag>}
           {bcResidents < 1 && <Flag level="err">No BC-resident director. At least one is required.</Flag>}
           {missingConsent.length > 0 && <Flag level="warn">{missingConsent.length} director(s) without consent on file.</Flag>}
+        </div>
+      )}
+
+      {roleTerms.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card__head">
+            <div>
+              <h2 className="card__title">Imported role and service timeline</h2>
+              <p className="card__subtitle">
+                Paperless-derived board, director, masthead, and editorial service records. These are historical observations until promoted into the legal director register.
+              </p>
+            </div>
+            <Link className="btn-action" to="/app/org-history">
+              Open history
+            </Link>
+          </div>
+          <div className="card__body">
+            <div className="stat-grid" style={{ marginBottom: 12 }}>
+              <div className="stat">
+                <div className="stat__label">Imported roles</div>
+                <div className="stat__value">{roleTerms.length}</div>
+                <div className="stat__sub">board, director, masthead, staff</div>
+              </div>
+              <div className="stat">
+                <div className="stat__label">Likely director/officer</div>
+                <div className="stat__value">{legalDirectorTerms.length}</div>
+                <div className="stat__sub">needs legal-term review</div>
+              </div>
+              <div className="stat">
+                <div className="stat__label">Verified</div>
+                <div className="stat__value">{roleTerms.filter((term: any) => term.status === "Verified").length}</div>
+                <div className="stat__sub">source-backed import status</div>
+              </div>
+              <div className="stat">
+                <div className="stat__label">Needs review</div>
+                <div className="stat__value">{roleTerms.filter((term: any) => term.status !== "Verified").length}</div>
+                <div className="stat__sub">do not file as legal directors yet</div>
+              </div>
+            </div>
+            <table className="table">
+              <thead>
+                <tr><th>Person</th><th>Position</th><th>Board/group</th><th>Observed</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {roleTerms.slice(0, 12).map((term: any) => (
+                  <tr key={term._id}>
+                    <td><strong>{term.personName}</strong></td>
+                    <td>{term.position}</td>
+                    <td className="muted">{term.committeeName ?? "—"}</td>
+                    <td className="mono">{formatDate(term.startDate)}</td>
+                    <td><Badge tone={term.status === "Verified" ? "success" : "warn"}>{term.status ?? "NeedsReview"}</Badge></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

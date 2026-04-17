@@ -10,11 +10,13 @@ export const MODULE_DEFAULTS = {
   recordsInspection: true,
   pipaTraining: true,
   insurance: true,
+  secrets: true,
   transparency: true,
   reconciliation: true,
   donationReceipts: true,
   membershipBilling: true,
   employees: true,
+  paperless: true,
 } as const;
 
 export type ModuleKey = keyof typeof MODULE_DEFAULTS;
@@ -24,7 +26,8 @@ export type ModuleCategory =
   | "Governance"
   | "Compliance"
   | "Finance"
-  | "Public";
+  | "Public"
+  | "Integrations";
 
 export type ModuleDefinition = {
   key: ModuleKey;
@@ -126,6 +129,13 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     includes: ["Insurance"],
   },
   {
+    key: "secrets",
+    label: "Access custody",
+    category: "Compliance",
+    description: "Client-facing custody tracking for recovery keys, registry credentials, account owners, and review dates.",
+    includes: ["Access custody", "Credential owners", "Recovery-key review"],
+  },
+  {
     key: "transparency",
     label: "Public transparency",
     category: "Public",
@@ -159,6 +169,13 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     category: "Finance",
     description: "Employee records for societies with payroll or staff.",
     includes: ["Employees"],
+  },
+  {
+    key: "paperless",
+    label: "Paperless-ngx",
+    category: "Integrations",
+    description: "External document storage, OCR, and Paperless tag sync for Societyer files.",
+    includes: ["Paperless-ngx plugin", "Document sync", "Cross-module tagging"],
   },
 ];
 

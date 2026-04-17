@@ -49,7 +49,7 @@ test.describe("Demo navigation", () => {
     await expect(page.locator(".app-shell")).toBeVisible();
 
     // Click Members in the sidebar
-    await page.click('.sidebar__nav a[href="/app/members"]');
+    await page.getByRole("link", { name: /^Members\b/ }).click();
     await expect(page.locator(".app-shell")).toBeVisible();
   });
 
@@ -60,5 +60,33 @@ test.describe("Demo navigation", () => {
     if (await banner.isVisible()) {
       await expect(banner).toContainText(/demo/i);
     }
+  });
+});
+
+test.describe("Theme preference", () => {
+  test("defaults to system theme and follows OS theme changes", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.goto("/demo/app/settings", { waitUntil: "networkidle" });
+
+    await expect(page.locator("html")).toHaveClass(/dark/);
+    await expect(page.getByRole("radio", { name: /system/i })).toBeChecked();
+
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect(page.locator("html")).toHaveClass(/light/);
+  });
+
+  test("explicit theme preference overrides the system theme", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.goto("/demo/app/settings", { waitUntil: "networkidle" });
+
+    await page.locator("label.radio-row", { hasText: /^Light/ }).click();
+    await expect(page.locator("html")).toHaveClass(/light/);
+
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(page.locator("html")).toHaveClass(/light/);
   });
 });

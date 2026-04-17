@@ -5,11 +5,13 @@ import { isDemoMode, setDemoMode } from "../lib/demoMode";
 import { useEffect, useMemo, useState } from "react";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Toggle } from "../components/Controls";
+import { RadioGroup, Toggle } from "../components/Controls";
 import { LocaleSwitcher } from "../components/LocaleSwitcher";
 import { getAuthMode } from "../lib/authMode";
 import { useSociety } from "../hooks/useSociety";
+import { useThemePreference } from "../hooks/useThemePreference";
 import { useTranslation } from "react-i18next";
+import type { ThemePreference } from "../lib/theme";
 import {
   MODULE_CATEGORIES,
   MODULE_DEFINITIONS,
@@ -29,7 +31,7 @@ export function SettingsPage() {
   const updateModules = useMutation(api.society.updateModules);
   const confirm = useConfirm();
   const toast = useToast();
-  const [theme, setTheme] = useState<string>(document.documentElement.classList.contains("dark") ? "dark" : "light");
+  const { preference: theme, resolvedTheme, setPreference: setTheme } = useThemePreference();
   const [moduleSettings, setModuleSettings] = useState(() => normalizeModuleSettings(undefined));
   const [savingModule, setSavingModule] = useState<ModuleKey | null>(null);
 
@@ -47,11 +49,28 @@ export function SettingsPage() {
     [],
   );
 
-  const applyTheme = (t: string) => {
-    setTheme(t);
-    document.documentElement.classList.remove("light", "dark");
-    document.documentElement.classList.add(t);
-  };
+  const themeOptions = useMemo(
+    () => [
+      {
+        value: "system" as const,
+        label: t("settings.systemTheme"),
+        hint: t("settings.systemThemeHint", {
+          theme: t(`settings.${resolvedTheme}Theme`).toLowerCase(),
+        }),
+      },
+      {
+        value: "light" as const,
+        label: t("settings.lightTheme"),
+        hint: t("settings.lightThemeHint"),
+      },
+      {
+        value: "dark" as const,
+        label: t("settings.darkTheme"),
+        hint: t("settings.darkThemeHint"),
+      },
+    ],
+    [resolvedTheme, t],
+  );
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -91,8 +110,13 @@ export function SettingsPage() {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head"><h2 className="card__title">{t("settings.appearanceTitle")}</h2></div>
         <div className="card__body row" style={{ gap: 8 }}>
-          <button className={`btn${theme === "light" ? " btn--accent" : ""}`} onClick={() => applyTheme("light")}>{t("settings.lightTheme")}</button>
-          <button className={`btn${theme === "dark" ? " btn--accent" : ""}`} onClick={() => applyTheme("dark")}>{t("settings.darkTheme")}</button>
+          <RadioGroup<ThemePreference>
+            name="appearance-theme"
+            value={theme}
+            onChange={setTheme}
+            options={themeOptions}
+            direction="horizontal"
+          />
         </div>
       </div>
 

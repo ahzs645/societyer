@@ -7,12 +7,14 @@ import { Badge, Field } from "../components/ui";
 import { formatDate, formatDateTime, money } from "../lib/format";
 import { isDemoMode } from "../lib/demoMode";
 import { PiggyBank, Link2, RefreshCw, PlusCircle, Trash2, ExternalLink } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useToast } from "../components/Toast";
 
 export function FinancialsPage() {
   const society = useSociety();
   const items = useQuery(api.financials.list, society ? { societyId: society._id } : "skip");
+  const orgHistory = useQuery(api.organizationHistory.list, society ? { societyId: society._id } : "skip");
   const connections = useQuery(
     api.financialHub.connections,
     society ? { societyId: society._id } : "skip",
@@ -43,13 +45,18 @@ export function FinancialsPage() {
   const [busy, setBusy] = useState(false);
   const [budgetForm, setBudgetForm] = useState<{ category: string; planned: string } | null>(null);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
-  if (society === null) return <SeedPrompt />;
-
   const sorted = (items ?? []).slice().sort((a, b) => b.fiscalYear.localeCompare(a.fiscalYear));
   const latest = sorted[0];
   const fiscalYear = latest?.fiscalYear ?? new Date().getFullYear().toString();
   const activeConnection = (connections ?? []).find((c) => c.status === "connected");
+  const importedBudgets = useMemo(() => {
+    return (orgHistory?.budgets ?? [])
+      .slice()
+      .sort((a: any, b: any) => String(b.sourceDate ?? b.fiscalYear ?? "").localeCompare(String(a.sourceDate ?? a.fiscalYear ?? "")));
+  }, [orgHistory]);
+
+  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === null) return <SeedPrompt />;
 
   const connect = async () => {
     if (!society) return;
@@ -309,6 +316,62 @@ export function FinancialsPage() {
                   </tr>
                 );
               })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {importedBudgets.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card__head">
+            <div>
+              <h2 className="card__title">Paperless budget snapshots</h2>
+              <p className="card__subtitle">
+                Imported budget analyses and forecasts converted from Paperless OCR. Review amounts before using them as official financial statements.
+              </p>
+            </div>
+            <Link className="btn-action" to="/app/org-history?section=budgets">
+              Review sources
+            </Link>
+          </div>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Budget</th>
+                <th>Fiscal year</th>
+                <th>Source date</th>
+                <th style={{ textAlign: "right" }}>Income</th>
+                <th style={{ textAlign: "right" }}>Expense</th>
+                <th style={{ textAlign: "right" }}>Net</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {importedBudgets.map((budget: any) => (
+                <tr key={budget._id}>
+                  <td>
+                    <Link
+                      className="table__cell-button org-history__budget-open"
+                      to={`/app/org-history/budgets/${budget._id}`}
+                    >
+                      <span>
+                        <strong>{budget.title}</strong>
+                        {Array.isArray(budget.lines) && budget.lines.length > 0 && (
+                          <span className="muted" style={{ display: "block", fontSize: "var(--fs-sm)" }}>
+                            {budget.lines.length} converted line item{budget.lines.length === 1 ? "" : "s"}
+                          </span>
+                        )}
+                      </span>
+                    </Link>
+                  </td>
+                  <td>{budget.fiscalYear}</td>
+                  <td className="mono">{budget.sourceDate ? formatDate(budget.sourceDate) : "—"}</td>
+                  <td className="table__cell--mono" style={{ textAlign: "right" }}>{budget.totalIncomeCents != null ? money(budget.totalIncomeCents) : "—"}</td>
+                  <td className="table__cell--mono" style={{ textAlign: "right" }}>{budget.totalExpenseCents != null ? money(budget.totalExpenseCents) : "—"}</td>
+                  <td className="table__cell--mono" style={{ textAlign: "right" }}>{budget.netCents != null ? money(budget.netCents) : "—"}</td>
+                  <td><Badge tone={budget.status === "Verified" ? "success" : "warn"}>{budget.status ?? "NeedsReview"}</Badge></td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

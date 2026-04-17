@@ -61,6 +61,7 @@
     "privacy": "Privacy (PIPA)",
     "pipaTraining": "PIPA training",
     "insurance": "Insurance",
+    "accessCustody": "Access custody",
     "transparency": "Public transparency",
     "financials": "Financials",
     "grants": "Grants",
@@ -72,6 +73,7 @@
     "motionLibrary": "Motion library",
     "notifications": "Notifications",
     "users": "Users & roles",
+    "importSessions": "Import sessions",
     "auditLog": "Audit log",
     "dataExport": "Data export"
   },
@@ -92,6 +94,9 @@
     "pinned": "Pinned",
     "grouped": "Grouped",
     "reference": "Reference",
+    "pinToFavorites": "Pin to favorites",
+    "unpinFromFavorites": "Unpin from favorites",
+    "openInNewTab": "Open in new tab",
     "activeWorkspace": "Active",
     "noSocieties": "No societies available yet."
   },
@@ -101,8 +106,12 @@
     "languageTitle": "Language",
     "languageSubtitle": "Choose the interface language for this browser.",
     "appearanceTitle": "Appearance",
+    "systemTheme": "System",
+    "systemThemeHint": "Uses {{theme}} from this device.",
     "lightTheme": "Light",
+    "lightThemeHint": "Always use light mode.",
     "darkTheme": "Dark",
+    "darkThemeHint": "Always use dark mode.",
     "modulesTitle": "Modules",
     "modulesSubtitle": "Enable only the parts this organization actually uses.",
     "modulesHint": "Disabling a module hides its navigation, command-palette entries, public entry points, and guarded routes. Existing data stays in place and becomes available again if you re-enable the module later."

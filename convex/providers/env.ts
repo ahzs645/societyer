@@ -22,6 +22,10 @@ export const providers = {
       !!env("RUSTFS_SECRET_KEY");
     return { id: live ? "rustfs" : "demo", live };
   },
+  paperless(): Provider<"paperlessngx" | "demo"> {
+    const live = !!env("PAPERLESS_NGX_URL") && !!env("PAPERLESS_NGX_TOKEN");
+    return { id: live ? "paperlessngx" : "demo", live };
+  },
   transcription(): Provider<"whisper" | "demo"> {
     const live = !!env("OPENAI_API_KEY") || !!env("WHISPER_ENDPOINT");
     return { id: live ? "whisper" : "demo", live };

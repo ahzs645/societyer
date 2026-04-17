@@ -16,7 +16,7 @@ export function DemoBanner() {
   const toast = useToast();
   const [busy, setBusy] = useState<"seed" | "reset" | null>(null);
 
-  if (!demo) return null;
+  if (!demo || (society && !society.demoMode)) return null;
 
   return (
     <div className="demo-banner">
@@ -24,7 +24,7 @@ export function DemoBanner() {
       <span>
         <strong>Demo mode.</strong>{" "}
         {society
-          ? `Viewing ${society.name} — a fictional BC society used to showcase the app.`
+          ? `Viewing ${society.name} — a demo society used to showcase the app.`
           : "No demo society yet. Click Seed to load Riverside Community Society."}
       </span>
       <div className="demo-banner__spacer" />

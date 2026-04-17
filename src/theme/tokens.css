@@ -1,128 +1,285 @@
-/* Design tokens matching Twenty's design language — cool neutral monochrome
-   with whisper-soft transparent blue accents. Radii, shadows, and typography
-   follow twenty-ui/theme-constants. */
+/* Semantic design tokens — port of twenty-ui/theme-constants.
+   Depends on palette.css (imported before this file in main.tsx).
+   The palette provides Radix color families (gray/blue/red/...); this file
+   maps them to semantic surfaces (bg-*, text-*, border-*, shadow-*, etc.)
+   and ships the typography, spacing, radius, and motion scales. */
 
 :root,
 .light {
-  /* Neutrals — cool near-white to soft grays (no warm tint) */
-  --bg-base: #ffffff;
-  --bg-app: #fcfcfc;
-  --bg-panel: #ffffff;
-  --bg-subtle: #f7f7f7;
-  --bg-muted: #efefef;
-  --bg-hover: #f1f1f1;
-  --bg-active: #ebebeb;
-  --bg-inverse: #333333;
+  color-scheme: light;
 
-  /* Borders */
-  --border: #ededed;
-  --border-strong: #d6d6d6;
-  --border-focus: rgba(0, 71, 241, 0.45);
+  /* ---------------- Backgrounds (BACKGROUND_LIGHT) ---------------- */
+  --bg-primary:        var(--gray-1);     /* app canvas */
+  --bg-secondary:      var(--gray-2);     /* sidebar, topbar */
+  --bg-tertiary:       var(--gray-4);     /* subtle wells */
+  --bg-quaternary:     var(--gray-5);     /* deepest surface */
+  --bg-inverted-primary:   var(--gray-12);
+  --bg-inverted-secondary: var(--gray-11);
+  --bg-danger:         var(--red-3);
+  --bg-transparent-primary:   rgba(255, 255, 255, 0.64);
+  --bg-transparent-secondary: rgba(255, 255, 255, 0.48);
+  --bg-transparent-strong:    var(--gray-a-7);
+  --bg-transparent-medium:    var(--gray-a-5);
+  --bg-transparent-light:     var(--gray-a-2);
+  --bg-transparent-lighter:   var(--gray-a-1);
+  --bg-overlay-primary:   var(--gray-a-11);
+  --bg-overlay-secondary: var(--gray-a-9);
+  --bg-overlay-tertiary:  var(--gray-a-4);
 
-  /* Text */
-  --text-primary: #333333;
-  --text-secondary: #666666;
-  --text-tertiary: #737373;
-  --text-placeholder: #777777;
-  --text-inverse: #ffffff;
+  /* Legacy aliases kept so existing SCSS continues to work */
+  --bg-base:   var(--bg-primary);
+  --bg-app:    var(--bg-secondary);
+  --bg-panel:  var(--bg-primary);
+  --bg-subtle: var(--bg-secondary);
+  --bg-muted:  var(--bg-tertiary);
+  --bg-hover:  var(--gray-3);
+  --bg-active: var(--gray-4);
+  --bg-inverse: var(--bg-inverted-primary);
 
-  /* Accent — muted p3-equivalent blue; soft background is transparent tint */
-  --accent: #4058c6;
-  --accent-hover: #334aa8;
-  --accent-soft: rgba(0, 71, 241, 0.07);
-  --accent-soft-strong: rgba(0, 71, 241, 0.12);
-  --accent-on: #ffffff;
+  /* ---------------- Borders (BORDER_LIGHT) ---------------- */
+  --border-color-strong:            var(--gray-6);
+  --border-color-medium:            var(--gray-5);
+  --border-color-light:             var(--gray-4);
+  --border-color-inverted:          var(--gray-12);
+  --border-color-secondary-inverted: var(--gray-11);
+  --border-color-danger:            var(--red-5);
+  --border-color-blue:              var(--blue-7);
+  --border-color-transparent-strong: var(--gray-a-4);
 
-  /* Semantic — desaturated to fit monochrome palette */
-  --success: #4ca277;
-  --success-soft: rgba(0, 164, 51, 0.1);
-  --warn: #cc7a00;
-  --warn-soft: rgba(255, 156, 0, 0.12);
-  --danger: #d45450;
-  --danger-soft: rgba(243, 0, 13, 0.08);
-  --info: #4058c6;
-  --info-soft: rgba(0, 71, 241, 0.07);
+  /* Legacy aliases */
+  --border:        var(--border-color-medium);
+  --border-strong: var(--border-color-strong);
+  --border-focus:  var(--blue-8);
 
-  /* Typography */
+  /* ---------------- Text (FONT_LIGHT) ---------------- */
+  --font-color-primary:   var(--gray-12);
+  --font-color-secondary: var(--gray-11);
+  --font-color-tertiary:  var(--gray-10);
+  --font-color-light:     var(--gray-9);
+  --font-color-extra-light: var(--gray-8);
+  --font-color-inverted-primary:   var(--gray-1);
+  --font-color-inverted-secondary: var(--gray-3);
+  --font-color-danger:    var(--red-9);
+  --font-color-success:   var(--green-11);
+
+  /* Legacy aliases */
+  --text-primary:     var(--font-color-primary);
+  --text-secondary:   var(--font-color-secondary);
+  --text-tertiary:    var(--font-color-tertiary);
+  --text-placeholder: var(--font-color-light);
+  --text-inverse:     var(--font-color-inverted-primary);
+
+  /* ---------------- Accent (ACCENT_LIGHT) ---------------- */
+  /* Twenty's accent uses the blue family — blue-9 is the primary accent */
+  --accent-primary: var(--blue-9);
+  --accent-tertiary: var(--blue-4);
+  --accent-quaternary: var(--blue-3);
+  --accent-accent-4: var(--blue-4);
+  --accent-on-accent: #ffffff;
+  --accent-on-accent-inverted: var(--gray-12);
+
+  /* Legacy aliases */
+  --accent:              var(--accent-primary);
+  --accent-hover:        var(--blue-10);
+  --accent-soft:         var(--blue-3);
+  --accent-soft-strong:  var(--blue-4);
+  --accent-on:           var(--accent-on-accent);
+
+  /* ---------------- Semantic tones ---------------- */
+  --success:      var(--green-9);
+  --success-soft: var(--green-3);
+  --warn:         var(--orange-9);
+  --warn-soft:    var(--orange-3);
+  --danger:       var(--red-9);
+  --danger-soft:  var(--red-3);
+  --info:         var(--blue-9);
+  --info-soft:    var(--blue-3);
+
+  /* ---------------- Typography (FONT_COMMON) ---------------- */
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-display: var(--font-sans);
 
-  /* Font scale — rem-based to match Twenty */
-  --fs-xs: 0.625rem;   /* 10px */
-  --fs-sm: 0.75rem;    /* 12px */
-  --fs-md: 0.875rem;   /* 14px */
-  --fs-lg: 1rem;       /* 16px */
-  --fs-xl: 1.23rem;    /* ~20px */
-  --fs-2xl: 1.54rem;   /* ~25px */
-  --fs-3xl: 1.85rem;   /* ~30px */
+  /* Font scale — matches FONT_COMMON in twenty-ui */
+  --fs-xxs: 0.625rem;  /* 10px */
+  --fs-xs:  0.85rem;   /* ~13.6px */
+  --fs-sm:  0.92rem;   /* ~14.7px */
+  --fs-md:  1rem;      /* 16px */
+  --fs-lg:  1.23rem;   /* ~19.7px */
+  --fs-xl:  1.54rem;   /* ~24.6px */
+  --fs-xxl: 1.85rem;   /* ~29.6px */
+  /* Alias kept for legacy consumers */
+  --fs-2xl: var(--fs-xl);
+  --fs-3xl: var(--fs-xxl);
 
-  --fw-regular: 400;
-  --fw-medium: 500;
+  --fw-regular:  400;
+  --fw-medium:   500;
   --fw-semibold: 600;
 
-  /* Radii — Twenty scale: 2 / 4 / 8 / 20 / 40 */
-  --r-xs: 2px;
-  --r-sm: 4px;
-  --r-md: 8px;
-  --r-lg: 20px;
-  --r-xl: 40px;
+  /* ---------------- Radius (BORDER_COMMON) ---------------- */
+  --r-xs:   2px;
+  --r-sm:   4px;
+  --r-md:   8px;
+  --r-xl:   20px;
+  --r-xxl:  40px;
   --r-pill: 999px;
+  --r-rounded: 100%;
+  /* Legacy alias (existing code used r-lg/r-xl for the larger radii) */
+  --r-lg: var(--r-xl);
 
-  /* Spacing — 4px grid */
-  --s-0: 0;
-  --s-1: 4px;
-  --s-2: 8px;
-  --s-3: 12px;
-  --s-4: 16px;
-  --s-5: 20px;
-  --s-6: 24px;
-  --s-7: 28px;
-  --s-8: 32px;
-  --s-10: 40px;
+  /* ---------------- Spacing (THEME_COMMON.spacing, 4px grid × 32 steps) ---------------- */
+  --s-0:  0px;      --s-1:  4px;      --s-2:  8px;      --s-3:  12px;
+  --s-4:  16px;     --s-5:  20px;     --s-6:  24px;     --s-7:  28px;
+  --s-8:  32px;     --s-9:  36px;     --s-10: 40px;     --s-11: 44px;
+  --s-12: 48px;     --s-13: 52px;     --s-14: 56px;     --s-15: 60px;
+  --s-16: 64px;     --s-17: 68px;     --s-18: 72px;     --s-19: 76px;
+  --s-20: 80px;     --s-21: 84px;     --s-22: 88px;     --s-23: 92px;
+  --s-24: 96px;     --s-25: 100px;    --s-26: 104px;    --s-27: 108px;
+  --s-28: 112px;    --s-29: 116px;    --s-30: 120px;    --s-31: 124px;
+  --s-32: 128px;
 
-  /* Shadows — multi-layer, neutral black only */
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.04),
-    0 0 4px rgba(0, 0, 0, 0.06);
-  --shadow-md: 2px 4px 16px rgba(0, 0, 0, 0.08),
-    0 2px 4px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 0 8px rgba(0, 0, 0, 0.12),
-    0 8px 32px rgba(0, 0, 0, 0.16),
-    0 24px 48px rgba(0, 0, 0, 0.06);
+  --between-siblings-gap: 2px;
 
-  /* Layout */
+  /* ---------------- Shadows (BOX_SHADOW_LIGHT) ---------------- */
+  --shadow-light:
+    0px 2px 4px 0px var(--gray-a-2),
+    0px 0px 4px 0px var(--gray-a-5);
+  --shadow-strong:
+    2px 4px 16px 0px var(--gray-a-7),
+    0px 2px 4px 0px var(--gray-a-5);
+  --shadow-underline:
+    0px 1px 0px 0px var(--gray-a-9);
+  --shadow-super-heavy:
+    0px 0px 8px 0px var(--gray-a-7),
+    0px 8px 64px -16px var(--gray-a-10),
+    0px 24px 56px -16px var(--gray-a-5);
+
+  /* Legacy aliases (xs/sm/md/lg) mapped onto the Twenty shadow tiers */
+  --shadow-xs: var(--shadow-light);
+  --shadow-sm: var(--shadow-light);
+  --shadow-md: var(--shadow-strong);
+  --shadow-lg: var(--shadow-super-heavy);
+
+  /* ---------------- Layout ---------------- */
   --sidebar-w: 240px;
   --sidebar-w-collapsed: 0px;
-  --topbar-h: 44px;
-  --anim-fast: 0.15s;
-  --anim-normal: 0.3s;
-  --anim-ease: cubic-bezier(0.2, 0, 0, 1);
+  --topbar-h: 40px;            /* Twenty: compact 40px */
+  --side-panel-w: 500px;
+
+  /* Table tokens from THEME_COMMON.table */
+  --table-horizontal-cell-margin:  8px;
+  --table-horizontal-cell-padding: 8px;
+  --table-checkbox-column-width:   32px;
+
+  /* ---------------- Animation ---------------- */
+  --anim-fast:   0.1s;
+  --anim-normal: 0.2s;
+  --anim-slow:   0.3s;
+  --anim-ease:   cubic-bezier(0.2, 0, 0, 1);
+  --clickable-transition: background 0.1s ease;
 }
 
 .dark {
-  --bg-base: #1a1a1a;
-  --bg-app: #141414;
-  --bg-panel: #1e1e1e;
-  --bg-subtle: #222222;
-  --bg-muted: #2a2a2a;
-  --bg-hover: #262626;
-  --bg-active: #303030;
-  --bg-inverse: #f0f0f0;
-  --border: #2e2e2e;
-  --border-strong: #404040;
-  --border-focus: rgba(122, 153, 255, 0.5);
-  --text-primary: #ededed;
-  --text-secondary: #b3b3b3;
-  --text-tertiary: #808080;
-  --text-placeholder: #555555;
-  --text-inverse: #1a1a1a;
-  --accent: #7a99ff;
-  --accent-hover: #94adff;
-  --accent-soft: rgba(122, 153, 255, 0.12);
-  --accent-soft-strong: rgba(122, 153, 255, 0.2);
-  --success-soft: rgba(76, 162, 119, 0.16);
-  --warn-soft: rgba(204, 122, 0, 0.18);
-  --danger-soft: rgba(212, 84, 80, 0.16);
-  --info-soft: rgba(122, 153, 255, 0.14);
+  color-scheme: dark;
+
+  /* Backgrounds */
+  --bg-primary:        var(--gray-1);
+  --bg-secondary:      var(--gray-2);
+  --bg-tertiary:       var(--gray-4);
+  --bg-quaternary:     var(--gray-5);
+  --bg-inverted-primary:   var(--gray-12);
+  --bg-inverted-secondary: var(--gray-11);
+  --bg-danger:         var(--red-3);
+  --bg-transparent-primary:   rgba(0, 0, 0, 0.48);
+  --bg-transparent-secondary: rgba(0, 0, 0, 0.40);
+  --bg-transparent-strong:    var(--gray-a-7);
+  --bg-transparent-medium:    var(--gray-a-5);
+  --bg-transparent-light:     var(--gray-a-2);
+  --bg-transparent-lighter:   var(--gray-a-1);
+  --bg-overlay-primary:   rgba(0, 0, 0, 0.72);
+  --bg-overlay-secondary: rgba(0, 0, 0, 0.36);
+  --bg-overlay-tertiary:  rgba(0, 0, 0, 0.36);
+
+  --bg-base:   var(--bg-primary);
+  --bg-app:    var(--bg-secondary);
+  --bg-panel:  var(--bg-primary);
+  --bg-subtle: var(--bg-secondary);
+  --bg-muted:  var(--bg-tertiary);
+  --bg-hover:  var(--gray-3);
+  --bg-active: var(--gray-4);
+  --bg-inverse: var(--bg-inverted-primary);
+
+  /* Borders */
+  --border-color-strong:            var(--gray-6);
+  --border-color-medium:            var(--gray-5);
+  --border-color-light:             var(--gray-4);
+  --border-color-inverted:          var(--gray-12);
+  --border-color-secondary-inverted: var(--gray-11);
+  --border-color-danger:            var(--red-5);
+  --border-color-blue:              var(--blue-7);
+  --border-color-transparent-strong: var(--gray-a-4);
+
+  --border:        var(--border-color-medium);
+  --border-strong: var(--border-color-strong);
+  --border-focus:  var(--blue-8);
+
+  /* Text */
+  --font-color-primary:   var(--gray-12);
+  --font-color-secondary: var(--gray-11);
+  --font-color-tertiary:  var(--gray-10);
+  --font-color-light:     var(--gray-9);
+  --font-color-extra-light: var(--gray-8);
+  --font-color-inverted-primary:   var(--gray-1);
+  --font-color-inverted-secondary: var(--gray-3);
+  --font-color-danger:    var(--red-11);
+  --font-color-success:   var(--green-11);
+
+  --text-primary:     var(--font-color-primary);
+  --text-secondary:   var(--font-color-secondary);
+  --text-tertiary:    var(--font-color-tertiary);
+  --text-placeholder: var(--font-color-light);
+  --text-inverse:     var(--font-color-inverted-primary);
+
+  /* Accent */
+  --accent-primary:   var(--blue-9);
+  --accent-tertiary:  var(--blue-4);
+  --accent-quaternary: var(--blue-3);
+  --accent-accent-4:  var(--blue-4);
+  --accent-on-accent: #ffffff;
+  --accent-on-accent-inverted: var(--gray-12);
+
+  --accent:              var(--accent-primary);
+  --accent-hover:        var(--blue-10);
+  --accent-soft:         var(--blue-3);
+  --accent-soft-strong:  var(--blue-4);
+  --accent-on:           var(--accent-on-accent);
+
+  /* Semantic tones — tuned for dark using mid-range dark tints for background */
+  --success:      var(--green-11);
+  --success-soft: var(--green-3);
+  --warn:         var(--orange-11);
+  --warn-soft:    var(--orange-3);
+  --danger:       var(--red-11);
+  --danger-soft:  var(--red-3);
+  --info:         var(--blue-11);
+  --info-soft:    var(--blue-3);
+
+  /* Shadows — dark tier from BOX_SHADOW_DARK */
+  --shadow-light:
+    0px 2px 4px 0px rgba(0, 0, 0, 0.04),
+    0px 0px 4px 0px rgba(0, 0, 0, 0.08);
+  --shadow-strong:
+    2px 4px 16px 0px rgba(0, 0, 0, 0.16),
+    0px 2px 4px 0px rgba(0, 0, 0, 0.08);
+  --shadow-underline:
+    0px 1px 0px 0px rgba(0, 0, 0, 0.32);
+  --shadow-super-heavy:
+    2px 4px 16px 0px rgba(0, 0, 0, 0.12),
+    0px 2px 4px 0px rgba(0, 0, 0, 0.04);
+
+  --shadow-xs: var(--shadow-light);
+  --shadow-sm: var(--shadow-light);
+  --shadow-md: var(--shadow-strong);
+  --shadow-lg: var(--shadow-super-heavy);
 }

@@ -34,22 +34,26 @@ export function InsurancePage() {
     setForm({
       kind: "DirectorsOfficers",
       insurer: "",
+      broker: "",
       policyNumber: "",
       coverageDollars: "500000.00",
       premiumDollars: "",
+      deductibleDollars: "",
       startDate: new Date().toISOString().slice(0, 10),
+      endDate: new Date(Date.now() + 365 * 864e5).toISOString().slice(0, 10),
       renewalDate: new Date(Date.now() + 365 * 864e5).toISOString().slice(0, 10),
       status: "Active",
     });
     setOpen(true);
   };
   const save = async () => {
-    const { coverageDollars, premiumDollars, ...rest } = form;
+    const { coverageDollars, premiumDollars, deductibleDollars, ...rest } = form;
     await create({
       societyId: society._id,
       ...rest,
       coverageCents: dollarInputToCents(coverageDollars) ?? 0,
       premiumCents: dollarInputToCents(premiumDollars),
+      deductibleCents: dollarInputToCents(deductibleDollars),
     });
     setOpen(false);
   };
@@ -79,9 +83,12 @@ export function InsurancePage() {
         columns={[
           { id: "kind", header: "Kind", sortable: true, accessor: (r) => r.kind, render: (r) => <span className="cell-tag">{r.kind}</span> },
           { id: "insurer", header: "Insurer", sortable: true, accessor: (r) => r.insurer, render: (r) => <strong>{r.insurer}</strong> },
+          { id: "broker", header: "Broker", sortable: true, accessor: (r) => r.broker ?? "", render: (r) => r.broker || "—" },
           { id: "policyNumber", header: "Policy #", accessor: (r) => r.policyNumber, render: (r) => <span className="mono">{r.policyNumber}</span> },
           { id: "coverage", header: "Coverage", sortable: true, align: "right", accessor: (r) => r.coverageCents, render: (r) => <span className="mono">{money(r.coverageCents)}</span> },
           { id: "premium", header: "Premium", align: "right", accessor: (r) => r.premiumCents ?? 0, render: (r) => <span className="mono">{money(r.premiumCents)}</span> },
+          { id: "deductible", header: "Deductible", align: "right", accessor: (r) => r.deductibleCents ?? 0, render: (r) => <span className="mono">{money(r.deductibleCents)}</span> },
+          { id: "period", header: "Period", accessor: (r) => `${r.startDate ?? ""} ${r.endDate ?? r.renewalDate ?? ""}`, render: (r) => <span className="mono">{formatDate(r.startDate)} to {formatDate(r.endDate ?? r.renewalDate)}</span> },
           {
             id: "renewalDate", header: "Renewal", sortable: true, accessor: (r) => r.renewalDate,
             render: (r) => {
@@ -91,6 +98,7 @@ export function InsurancePage() {
             },
           },
           { id: "status", header: "Status", sortable: true, accessor: (r) => r.status, render: (r) => <Badge tone={r.status === "Active" ? "success" : "warn"}>{r.status}</Badge> },
+          { id: "sources", header: "Sources", align: "right", accessor: (r) => r.sourceExternalIds?.length ?? 0, render: (r) => r.sourceExternalIds?.length ? <Badge tone="info">{r.sourceExternalIds.length}</Badge> : "—" },
         ]}
         renderRowActions={(r) => (
           <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete insurance policy ${r.policyNumber ?? r.provider}`} onClick={() => remove({ id: r._id })}>
@@ -113,13 +121,16 @@ export function InsurancePage() {
               </select>
             </Field>
             <Field label="Insurer"><input className="input" value={form.insurer} onChange={(e) => setForm({ ...form, insurer: e.target.value })} /></Field>
+            <Field label="Broker"><input className="input" value={form.broker} onChange={(e) => setForm({ ...form, broker: e.target.value })} /></Field>
             <Field label="Policy number"><input className="input" value={form.policyNumber} onChange={(e) => setForm({ ...form, policyNumber: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Coverage" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.coverageDollars} onChange={(e) => setForm({ ...form, coverageDollars: e.target.value })} /></Field>
               <Field label="Premium" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.premiumDollars ?? ""} onChange={(e) => setForm({ ...form, premiumDollars: e.target.value })} /></Field>
+              <Field label="Deductible" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.deductibleDollars ?? ""} onChange={(e) => setForm({ ...form, deductibleDollars: e.target.value })} /></Field>
             </div>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Start"><input className="input" type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></Field>
+              <Field label="End"><input className="input" type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></Field>
               <Field label="Renewal"><input className="input" type="date" value={form.renewalDate} onChange={(e) => setForm({ ...form, renewalDate: e.target.value })} /></Field>
             </div>
           </div>

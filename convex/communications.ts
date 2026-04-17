@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { v } from "convex/values";
-import { action, mutation, query } from "./_generated/server";
-import { api } from "./_generated/api";
+import { action, internalMutation, mutation, query } from "./_generated/server";
+import { api, internal } from "./_generated/api";
 import { sendEmail } from "./providers/email";
 import { sendSms } from "./providers/sms";
 import { requireEnabledModule } from "./lib/moduleSettings";
@@ -471,7 +471,7 @@ export const upsertMemberPref = mutation({
   },
 });
 
-export const _createCampaign = mutation({
+export const _createCampaign = internalMutation({
   args: {
     societyId: v.id("societies"),
     templateId: v.optional(v.id("communicationTemplates")),
@@ -497,7 +497,7 @@ export const _createCampaign = mutation({
     }),
 });
 
-export const _completeCampaign = mutation({
+export const _completeCampaign = internalMutation({
   args: {
     id: v.id("communicationCampaigns"),
     status: v.string(),
@@ -518,7 +518,7 @@ export const _completeCampaign = mutation({
   },
 });
 
-export const _recordDelivery = mutation({
+export const _recordDelivery = internalMutation({
   args: {
     societyId: v.id("societies"),
     campaignId: v.optional(v.id("communicationCampaigns")),
@@ -588,7 +588,7 @@ async function recordManualDelivery(
     errorMessage?: string;
   },
 ) {
-  await ctx.runMutation(api.communications._recordDelivery, {
+  await ctx.runMutation(internal.communications._recordDelivery, {
     societyId: args.societyId as any,
     campaignId: args.campaignId as any,
     templateId: args.templateId as any,
@@ -661,7 +661,7 @@ async function sendCampaignInternal(
     : undefined;
   const segment = segmentId ? await ctx.db.get(segmentId as any) : null;
 
-  const campaignId = await ctx.runMutation(api.communications._createCampaign, {
+  const campaignId = await ctx.runMutation(internal.communications._createCampaign, {
     societyId: args.societyId,
     templateId: args.templateId as any,
     segmentId: segment?._id as any,
@@ -950,7 +950,7 @@ async function sendCampaignInternal(
       ? "partial"
       : "sent";
 
-  await ctx.runMutation(api.communications._completeCampaign, {
+  await ctx.runMutation(internal.communications._completeCampaign, {
     id: campaignId,
     status: finalStatus,
     memberCount: recipients.length,

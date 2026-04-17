@@ -12,10 +12,17 @@ import { ModuleGate } from "./components/ModuleGate";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ConfirmProvider, PromptProvider } from "./components/Modal";
 import { ToastProvider } from "./components/Toast";
+import { applyThemePreference, getStoredThemePreference } from "./lib/theme";
 
 const Dashboard = React.lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
 const SocietyPage = React.lazy(() => import("./pages/Society").then((m) => ({ default: m.SocietyPage })));
 const OrganizationHistoryPage = React.lazy(() => import("./pages/OrganizationHistory").then((m) => ({ default: m.OrganizationHistoryPage })));
+const OrganizationHistoryBudgetPage = React.lazy(() => import("./pages/OrganizationHistory").then((m) => ({ default: m.OrganizationHistoryBudgetPage })));
+const GovernanceRegistersPage = React.lazy(() => import("./pages/EvidenceRegisters").then((m) => ({ default: m.GovernanceRegistersPage })));
+const MeetingEvidencePage = React.lazy(() => import("./pages/EvidenceRegisters").then((m) => ({ default: m.MeetingEvidencePage })));
+const FinanceImportsPage = React.lazy(() => import("./pages/EvidenceRegisters").then((m) => ({ default: m.FinanceImportsPage })));
+const RecordsArchivePage = React.lazy(() => import("./pages/EvidenceRegisters").then((m) => ({ default: m.RecordsArchivePage })));
+const ImportSessionsPage = React.lazy(() => import("./pages/ImportSessions").then((m) => ({ default: m.ImportSessionsPage })));
 const MembersPage = React.lazy(() => import("./pages/Members").then((m) => ({ default: m.MembersPage })));
 const DirectorsPage = React.lazy(() => import("./pages/Directors").then((m) => ({ default: m.DirectorsPage })));
 const MeetingsPage = React.lazy(() => import("./pages/Meetings").then((m) => ({ default: m.MeetingsPage })));
@@ -46,6 +53,7 @@ const InspectionsPage = React.lazy(() => import("./pages/Inspections").then((m) 
 const AttestationsPage = React.lazy(() => import("./pages/Attestations").then((m) => ({ default: m.AttestationsPage })));
 const RetentionPage = React.lazy(() => import("./pages/Retention").then((m) => ({ default: m.RetentionPage })));
 const InsurancePage = React.lazy(() => import("./pages/Insurance").then((m) => ({ default: m.InsurancePage })));
+const SecretsPage = React.lazy(() => import("./pages/Secrets").then((m) => ({ default: m.SecretsPage })));
 const PipaTrainingPage = React.lazy(() => import("./pages/PipaTraining").then((m) => ({ default: m.PipaTrainingPage })));
 const ProxiesPage = React.lazy(() => import("./pages/Proxies").then((m) => ({ default: m.ProxiesPage })));
 const AuditorsPage = React.lazy(() => import("./pages/Auditors").then((m) => ({ default: m.AuditorsPage })));
@@ -69,12 +77,16 @@ const CommunicationsPage = React.lazy(() => import("./pages/Communications").the
 const VolunteersPage = React.lazy(() => import("./pages/Volunteers").then((m) => ({ default: m.VolunteersPage })));
 const GrantsPage = React.lazy(() => import("./pages/Grants").then((m) => ({ default: m.GrantsPage })));
 const TransparencyPage = React.lazy(() => import("./pages/Transparency").then((m) => ({ default: m.TransparencyPage })));
+const PaperlessPage = React.lazy(() => import("./pages/Paperless").then((m) => ({ default: m.PaperlessPage })));
 const PublicTransparencyPage = React.lazy(() => import("./pages/PublicTransparency").then((m) => ({ default: m.PublicTransparencyPage })));
 const VolunteerApplyPage = React.lazy(() => import("./pages/VolunteerApply").then((m) => ({ default: m.VolunteerApplyPage })));
 const GrantApplyPage = React.lazy(() => import("./pages/GrantApply").then((m) => ({ default: m.GrantApplyPage })));
 import "./i18n";
+import "./theme/palette.css";
 import "./theme/tokens.css";
 import "./styles/index.scss";
+
+applyThemePreference(getStoredThemePreference());
 
 function withModule(moduleKey: React.ComponentProps<typeof ModuleGate>["moduleKey"], element: React.ReactNode) {
   return <ModuleGate moduleKey={moduleKey}>{element}</ModuleGate>;
@@ -184,6 +196,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route index element={<Dashboard />} />
             <Route path="society" element={<SocietyPage />} />
             <Route path="org-history" element={<OrganizationHistoryPage />} />
+            <Route path="org-history/budgets/:budgetId" element={<OrganizationHistoryBudgetPage />} />
+            <Route path="governance-registers" element={<GovernanceRegistersPage />} />
+            <Route path="meeting-evidence" element={<MeetingEvidencePage />} />
+            <Route path="finance-imports" element={<FinanceImportsPage />} />
+            <Route path="records-archive" element={<RecordsArchivePage />} />
+            <Route path="imports" element={<ImportSessionsPage />} />
             <Route path="members" element={<MembersPage />} />
             <Route path="directors" element={<DirectorsPage />} />
             <Route path="meetings" element={<MeetingsPage />} />
@@ -241,6 +259,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               element={withModule("insurance", <InsurancePage />)}
             />
             <Route
+              path="access-custody"
+              element={withModule("secrets", <SecretsPage />)}
+            />
+            <Route path="secrets" element={<Navigate to="/app/access-custody" replace />} />
+            <Route
               path="pipa-training"
               element={withModule("pipaTraining", <PipaTrainingPage />)}
             />
@@ -295,6 +318,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route
               path="transparency"
               element={withModule("transparency", <TransparencyPage />)}
+            />
+            <Route
+              path="paperless"
+              element={withModule("paperless", <PaperlessPage />)}
             />
             <Route path="settings" element={<SettingsPage />} />
             </Route>

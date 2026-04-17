@@ -74,11 +74,30 @@ export function ErrorSummary({
   );
 }
 
+/** Semantic tones (success/warn/danger/info/accent) plus the full
+ * palette-driven family tones Twenty uses for chips and tags. */
+export type ToneVariant =
+  | "neutral"
+  | "success"
+  | "warn"
+  | "danger"
+  | "info"
+  | "accent"
+  | "blue"
+  | "red"
+  | "turquoise"
+  | "gray"
+  | "orange"
+  | "purple"
+  | "green"
+  | "pink"
+  | "yellow";
+
 export function Badge({
   tone = "neutral",
   children,
 }: {
-  tone?: "neutral" | "success" | "warn" | "danger" | "info" | "accent";
+  tone?: ToneVariant;
   children: ReactNode;
 }) {
   const klass = tone === "neutral" ? "badge" : `badge badge--${tone}`;
@@ -91,7 +110,7 @@ export function Pill({
   className,
   children,
 }: {
-  tone?: "neutral" | "success" | "warn" | "danger" | "info" | "accent";
+  tone?: ToneVariant;
   size?: "sm" | "md";
   className?: string;
   children: ReactNode;
@@ -100,6 +119,83 @@ export function Pill({
   if (tone !== "neutral") classes.push(`pill--${tone}`);
   if (className) classes.push(className);
   return <span className={classes.join(" ")}>{children}</span>;
+}
+
+/** Twenty-style chip with leftComponent / rightComponent slots.
+ * Uses the .badge CSS for its base look and extends it via tone/size/variant. */
+export function Chip({
+  tone = "neutral",
+  size = "md",
+  variant = "regular",
+  leftComponent,
+  rightComponent,
+  onClick,
+  children,
+  className,
+}: {
+  tone?: ToneVariant;
+  size?: "sm" | "md";
+  variant?: "regular" | "rounded" | "transparent";
+  leftComponent?: ReactNode;
+  rightComponent?: ReactNode;
+  onClick?: (event: ReactMouseEvent<HTMLElement>) => void;
+  children: ReactNode;
+  className?: string;
+}) {
+  const classes = ["chip", `chip--${variant}`, `chip--${size}`];
+  if (tone !== "neutral") classes.push(`chip--tone-${tone}`);
+  if (onClick) classes.push("chip--interactive");
+  if (className) classes.push(className);
+  const Tag: "button" | "span" = onClick ? "button" : "span";
+  return (
+    <Tag
+      type={onClick ? "button" : undefined}
+      className={classes.join(" ")}
+      onClick={onClick as any}
+    >
+      {leftComponent != null && <span className="chip__left">{leftComponent}</span>}
+      <span className="chip__label">{children}</span>
+      {rightComponent != null && <span className="chip__right">{rightComponent}</span>}
+    </Tag>
+  );
+}
+
+export type ButtonVariant = "primary" | "secondary" | "tertiary" | "ghost" | "danger" | "accent";
+export type ButtonSize = "sm" | "md";
+
+/** Variant-driven button that renders the existing .btn CSS classes.
+ * Unlike bare <button className="btn">, this enforces the variant/size prop
+ * set, and centralises icon sizing + disabled behaviour. */
+export function Button({
+  variant = "secondary",
+  size = "md",
+  icon,
+  iconOnly = false,
+  type = "button",
+  className,
+  children,
+  ...rest
+}: {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  icon?: ReactNode;
+  iconOnly?: boolean;
+  children?: ReactNode;
+} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const classes = ["btn"];
+  if (variant === "primary") classes.push("btn--primary");
+  if (variant === "accent") classes.push("btn--accent");
+  if (variant === "ghost" || variant === "tertiary") classes.push("btn--ghost");
+  if (variant === "danger") classes.push("btn--danger");
+  if (size === "sm") classes.push("btn--sm");
+  if (iconOnly) classes.push("btn--icon");
+  if (className) classes.push(className);
+  return (
+    <button type={type} className={classes.join(" ")} {...rest}>
+      {icon && <span className="btn__icon">{icon}</span>}
+      {!iconOnly && children}
+    </button>
+  );
 }
 
 export function TintedIconTile({
@@ -403,12 +499,18 @@ export function LockedField({
   };
 
   return (
-    <div className="field">
+    <div className={`field field--lockable${locked ? "" : " is-unlocked"}`}>
       <div className="field__label-row">
         <label className="field__label" htmlFor={fieldId}>{label}</label>
         {locked ? (
-          <button className="field__lock" onClick={onUnlock} type="button" title={reason}>
-            <Lock /> Locked
+          <button
+            className="field__lock field__lock--icon"
+            onClick={onUnlock}
+            type="button"
+            title={reason}
+            aria-label={`Unlock ${label}`}
+          >
+            <Lock aria-hidden="true" />
           </button>
         ) : (
           <button
@@ -417,7 +519,7 @@ export function LockedField({
             type="button"
             title="Lock again"
           >
-            <Unlock /> Editing
+            <Unlock aria-hidden="true" /> Editing
           </button>
         )}
       </div>

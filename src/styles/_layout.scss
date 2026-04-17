@@ -361,7 +361,9 @@
 .sidebar__item.is-active .sidebar__icon-chip {
   box-shadow: 0 0 0 1px var(--bg-panel);
 }
-/* Monochrome icon chips — Twenty tints only the glyph, surface stays neutral */
+/* Icon chips — Twenty's pattern: neutral surface, family-tinted glyph.
+ * Glyph colors pull from the palette's step-11 for light and step-11 dark,
+ * so every tint tracks the Radix hierarchy automatically. */
 .icon-chip-blue,
 .icon-chip-red,
 .icon-chip-turquoise,
@@ -374,24 +376,15 @@
   background: var(--bg-muted);
   border-color: transparent;
 }
-.icon-chip-blue      { color: #4058c6; }
-.icon-chip-red       { color: #b83d4f; }
-.icon-chip-turquoise { color: #2f8f7a; }
+.icon-chip-blue      { color: var(--blue-11); }
+.icon-chip-red       { color: var(--red-11); }
+.icon-chip-turquoise { color: var(--turquoise-11); }
 .icon-chip-gray      { color: var(--text-secondary); }
-.icon-chip-orange    { color: #b06d1a; }
-.icon-chip-purple    { color: #6b4bb0; }
-.icon-chip-green     { color: #3d8a5c; }
-.icon-chip-pink      { color: #b44a7a; }
-.icon-chip-yellow    { color: #8a6d00; }
-.dark .icon-chip-blue      { color: #97a4ff; }
-.dark .icon-chip-red       { color: #ff8095; }
-.dark .icon-chip-turquoise { color: #6ee0cc; }
-.dark .icon-chip-gray      { color: var(--text-secondary); }
-.dark .icon-chip-orange    { color: #ffb55a; }
-.dark .icon-chip-purple    { color: #b49bff; }
-.dark .icon-chip-green     { color: #5de09a; }
-.dark .icon-chip-pink      { color: #ff7fb8; }
-.dark .icon-chip-yellow    { color: #ffd966; }
+.icon-chip-orange    { color: var(--orange-11); }
+.icon-chip-purple    { color: var(--purple-11); }
+.icon-chip-green     { color: var(--green-11); }
+.icon-chip-pink      { color: var(--pink-11); }
+.icon-chip-yellow    { color: var(--yellow-11); }
 .sidebar__count {
   margin-left: auto;
   font-variant-numeric: tabular-nums;

@@ -4,10 +4,19 @@ import { api } from "@/lib/convexApi";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, SeedPrompt } from "./_helpers";
-import { BookOpen, Plus, Trash2, Sparkles } from "lucide-react";
+import { BookOpen, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { useToast } from "../components/Toast";
+import { Field } from "../components/ui";
+import { Checkbox } from "../components/Controls";
 
-const CATEGORIES = ["governance", "finance", "membership", "operations", "bylaws", "other"];
+const CATEGORIES = [
+  "governance",
+  "finance",
+  "membership",
+  "operations",
+  "bylaws",
+  "other",
+];
 
 type FormState = {
   title: string;
@@ -29,8 +38,11 @@ export function MotionLibraryPage() {
   const society = useSociety();
   const toast = useToast();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [editingId, setEditingId] = useState<Id<"motionTemplates"> | null>(null);
+  const [editingId, setEditingId] = useState<Id<"motionTemplates"> | null>(
+    null,
+  );
   const [filter, setFilter] = useState<string>("all");
+  const [query, setQuery] = useState("");
 
   const templates = useQuery(
     api.motionTemplates.list,
@@ -51,10 +63,10 @@ export function MotionLibraryPage() {
     }
     if (editingId) {
       await update({ templateId: editingId, ...form });
-      toast.success("Updated");
+      toast.success("Template updated");
     } else {
       await create({ societyId: society._id, ...form });
-      toast.success("Motion added");
+      toast.success("Template added");
     }
     setForm(EMPTY_FORM);
     setEditingId(null);
@@ -71,141 +83,237 @@ export function MotionLibraryPage() {
     });
   };
 
-  const filtered = (templates ?? []).filter(
-    (t: any) => filter === "all" || t.category === filter,
-  );
+  const filtered = (templates ?? []).filter((t: any) => {
+    const matchesCategory = filter === "all" || t.category === filter;
+    const q = query.trim().toLowerCase();
+    const matchesQuery =
+      !q ||
+      [t.title, t.body, t.category, t.notes ?? ""]
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
+    return matchesCategory && matchesQuery;
+  });
 
   return (
-    <div className="page">
+    <div className="page motion-library">
       <PageHeader
         title="Motion library"
         icon={<BookOpen size={16} />}
         iconColor="purple"
-        subtitle="Reusable motion text — add from here when building an agenda."
+        subtitle="Reusable motion templates for agenda building."
         actions={
           (templates?.length ?? 0) === 0 && (
             <button
-              className="btn"
+              className="btn-action"
               onClick={async () => {
                 const res = await seed({ societyId: society._id });
                 toast.success(`Added ${res.inserted} starter motions`);
               }}
             >
-              <Sparkles size={14} /> Seed 10 starter motions
+              <Sparkles size={12} /> Seed 10 starter motions
             </button>
           )
         }
       />
 
-      <div className="card">
-        <div className="card__head">
-          <h2 className="card__title">{editingId ? "Edit motion" : "New motion"}</h2>
-        </div>
-        <div className="card__body col" style={{ gap: 8 }}>
-          <input
-            className="input"
-            placeholder="Title"
-            value={form.title}
-            onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-          />
-          <textarea
-            className="input"
-            placeholder='Body ("BE IT RESOLVED THAT…")'
-            rows={4}
-            value={form.body}
-            onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
-          />
-          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <select
-              className="input"
-              value={form.category}
-              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-            <label className="row" style={{ gap: 6, alignItems: "center" }}>
+      <div className="motion-library__layout">
+        <div className="card motion-library__editor">
+          <div className="card__head">
+            <h2 className="card__title">
+              {editingId ? "Edit template" : "New template"}
+            </h2>
+          </div>
+          <div className="card__body motion-library__form">
+            <Field label="Title">
               <input
-                type="checkbox"
-                checked={form.requiresSpecialResolution}
+                className="input"
+                placeholder="Approve minutes of previous meeting"
+                value={form.title}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, requiresSpecialResolution: e.target.checked }))
+                  setForm((f) => ({ ...f, title: e.target.value }))
                 }
               />
-              <span>Requires special resolution</span>
-            </label>
-          </div>
-          <input
-            className="input"
-            placeholder="Notes (optional — e.g. filing deadlines)"
-            value={form.notes}
-            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-          />
-          <div className="row" style={{ gap: 8 }}>
-            <button className="btn btn--accent" onClick={save}>
-              <Plus size={14} /> {editingId ? "Save changes" : "Add motion"}
-            </button>
-            {editingId && (
-              <button
-                className="btn"
-                onClick={() => {
-                  setForm(EMPTY_FORM);
-                  setEditingId(null);
-                }}
-              >
-                Cancel
+            </Field>
+            <Field label="Motion text">
+              <textarea
+                className="textarea"
+                placeholder="BE IT RESOLVED THAT..."
+                rows={5}
+                value={form.body}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, body: e.target.value }))
+                }
+              />
+            </Field>
+            <div className="motion-library__form-row">
+              <Field label="Category">
+                <select
+                  className="input"
+                  value={form.category}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, category: e.target.value }))
+                  }
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {formatCategory(c)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <div className="motion-library__checkbox">
+                <Checkbox
+                  checked={form.requiresSpecialResolution}
+                  onChange={(checked) =>
+                    setForm((f) => ({
+                      ...f,
+                      requiresSpecialResolution: checked,
+                    }))
+                  }
+                  label="Special resolution"
+                />
+              </div>
+            </div>
+            <Field label="Notes">
+              <input
+                className="input"
+                placeholder="Filing deadline, threshold, or source note"
+                value={form.notes}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, notes: e.target.value }))
+                }
+              />
+            </Field>
+            <div className="motion-library__actions">
+              <button className="btn btn--accent" onClick={save}>
+                <Plus size={14} /> {editingId ? "Save changes" : "Add template"}
               </button>
+              {editingId && (
+                <button
+                  className="btn btn--ghost"
+                  onClick={() => {
+                    setForm(EMPTY_FORM);
+                    setEditingId(null);
+                  }}
+                >
+                  <X size={14} /> Cancel
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="card motion-library__templates">
+          <div className="card__head motion-library__templates-head">
+            <div>
+              <h2 className="card__title">Reusable templates</h2>
+              <div className="card__subtitle">
+                {filtered.length} of {(templates ?? []).length} shown
+              </div>
+            </div>
+          </div>
+          <div className="card__body motion-library__templates-body">
+            <div className="motion-library__toolbar">
+              <input
+                className="input"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search templates"
+              />
+              <select
+                className="input"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              >
+                <option value="all">All categories</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {formatCategory(c)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {(templates ?? []).length === 0 ? (
+              <div className="motion-library__empty">
+                <BookOpen size={18} aria-hidden="true" />
+                <strong>No reusable templates yet.</strong>
+                <button
+                  className="btn"
+                  onClick={async () => {
+                    const res = await seed({ societyId: society._id });
+                    toast.success(`Added ${res.inserted} starter motions`);
+                  }}
+                >
+                  <Sparkles size={14} /> Seed 10 starter motions
+                </button>
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="motion-library__empty">
+                <strong>No templates match these filters.</strong>
+              </div>
+            ) : (
+              <div className="motion-library__list">
+                {filtered.map((t: any) => (
+                  <article key={t._id} className="motion-library__template">
+                    <div className="motion-library__template-main">
+                      <div className="motion-library__template-head">
+                        <strong>{t.title}</strong>
+                        <div className="motion-library__meta">
+                          <span className="pill pill--sm">
+                            {formatCategory(t.category)}
+                          </span>
+                          {t.requiresSpecialResolution && (
+                            <span className="pill pill--sm pill--warn">
+                              Special
+                            </span>
+                          )}
+                          {t.usageCount > 0 && (
+                            <span className="pill pill--sm">
+                              Used {t.usageCount}x
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <p>{t.body}</p>
+                      {t.notes && (
+                        <div className="motion-library__notes">
+                          Notes: {t.notes}
+                        </div>
+                      )}
+                    </div>
+                    <div className="motion-library__template-actions">
+                      <button
+                        className="btn-action btn-action--icon"
+                        onClick={() => edit(t)}
+                        title="Edit template"
+                        aria-label={`Edit ${t.title}`}
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        className="btn-action btn-action--icon"
+                        onClick={() => remove({ templateId: t._id })}
+                        title="Delete template"
+                        aria-label={`Delete ${t.title}`}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
             )}
           </div>
         </div>
       </div>
-
-      <div className="card">
-        <div className="card__head">
-          <h2 className="card__title">Templates</h2>
-          <span className="card__subtitle">{filtered.length} shown</span>
-        </div>
-        <div className="card__body col" style={{ gap: 8 }}>
-          <select
-            className="input"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            style={{ maxWidth: 200 }}
-          >
-            <option value="all">All categories</option>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-          {filtered.map((t: any) => (
-            <div key={t._id} className="card" style={{ padding: 12, border: "1px solid var(--border)" }}>
-              <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
-                <div style={{ flex: 1 }}>
-                  <div className="row" style={{ gap: 8, alignItems: "baseline" }}>
-                    <strong>{t.title}</strong>
-                    <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{t.category}</span>
-                    {t.requiresSpecialResolution && (
-                      <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>· special resolution</span>
-                    )}
-                    {t.usageCount > 0 && (
-                      <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>· used {t.usageCount}×</span>
-                    )}
-                  </div>
-                  <div className="muted" style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{t.body}</div>
-                  {t.notes && <div className="muted" style={{ marginTop: 4, fontSize: "var(--fs-sm)" }}>Notes: {t.notes}</div>}
-                </div>
-                <div className="col" style={{ gap: 4 }}>
-                  <button className="btn" onClick={() => edit(t)}>Edit</button>
-                  <button className="btn" onClick={() => remove({ templateId: t._id })}>
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
+}
+
+function formatCategory(category: string) {
+  return category
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }

@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { v } from "convex/values";
-import { query, mutation, action } from "./_generated/server";
-import { api } from "./_generated/api";
+import { query, internalMutation, mutation, action } from "./_generated/server";
+import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { requireRole } from "./users";
 
@@ -54,7 +54,7 @@ export const getRun = query({
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
-export const _createRun = mutation({
+export const _createRun = internalMutation({
   args: {
     societyId: v.id("societies"),
     filingId: v.id("filings"),
@@ -86,7 +86,7 @@ export const _createRun = mutation({
   },
 });
 
-export const _updateStep = mutation({
+export const _updateStep = internalMutation({
   args: {
     id: v.id("filingBotRuns"),
     stepIndex: v.number(),
@@ -105,7 +105,7 @@ export const _updateStep = mutation({
   },
 });
 
-export const _completeRun = mutation({
+export const _completeRun = internalMutation({
   args: {
     id: v.id("filingBotRuns"),
     status: v.string(),
@@ -122,7 +122,7 @@ export const _completeRun = mutation({
   },
 });
 
-export const _patchFiling = mutation({
+export const _patchFiling = internalMutation({
   args: {
     filingId: v.id("filings"),
     filedAt: v.optional(v.string()),
@@ -226,7 +226,7 @@ export const run = action({
     const filing = await ctx.runQuery(api.filings.get, { id: filingId });
     if (!filing) throw new Error("Filing not found.");
 
-    const runId = await ctx.runMutation(api.filingBot._createRun, {
+    const runId = await ctx.runMutation(internal.filingBot._createRun, {
       societyId,
       filingId,
       kind: filing.kind,
@@ -251,7 +251,7 @@ export const run = action({
     const steps = STEP_DEFINITIONS[filing.kind] ?? [];
     try {
       for (let i = 0; i < steps.length; i++) {
-        await ctx.runMutation(api.filingBot._updateStep, {
+        await ctx.runMutation(internal.filingBot._updateStep, {
           id: runId,
           stepIndex: i,
           status: "running",
@@ -262,7 +262,7 @@ export const run = action({
           : i === 4
           ? "Opened https://www.bcregistry.ca/societies — filled Form 11"
           : undefined;
-        await ctx.runMutation(api.filingBot._updateStep, {
+        await ctx.runMutation(internal.filingBot._updateStep, {
           id: runId,
           stepIndex: i,
           status: "ok",
@@ -271,12 +271,12 @@ export const run = action({
       }
 
       const confirmationNumber = `BC-${filing.kind.slice(0, 2).toUpperCase()}-${Math.floor(Math.random() * 900_000 + 100_000)}`;
-      await ctx.runMutation(api.filingBot._completeRun, {
+      await ctx.runMutation(internal.filingBot._completeRun, {
         id: runId,
         status: "success",
         confirmationNumber,
       });
-      await ctx.runMutation(api.filingBot._patchFiling, {
+      await ctx.runMutation(internal.filingBot._patchFiling, {
         filingId,
         filedAt: new Date().toISOString().slice(0, 10),
         confirmationNumber,
@@ -292,7 +292,7 @@ export const run = action({
       });
       return { runId, confirmationNumber };
     } catch (err: any) {
-      await ctx.runMutation(api.filingBot._completeRun, {
+      await ctx.runMutation(internal.filingBot._completeRun, {
         id: runId,
         status: "failed",
       });

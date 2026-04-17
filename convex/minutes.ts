@@ -11,6 +11,7 @@ const motion = v.object({
   votesFor: v.optional(v.number()),
   votesAgainst: v.optional(v.number()),
   abstentions: v.optional(v.number()),
+  resolutionType: v.optional(v.string()),
 });
 
 const actionItem = v.object({
@@ -52,6 +53,8 @@ export const create = mutation({
     motions: v.array(motion),
     decisions: v.array(v.string()),
     actionItems: v.array(actionItem),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
     draftTranscript: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -75,6 +78,8 @@ export const update = mutation({
       actionItems: v.optional(v.array(actionItem)),
       approvedAt: v.optional(v.string()),
       approvedInMeetingId: v.optional(v.id("meetings")),
+      sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+      sourceExternalIds: v.optional(v.array(v.string())),
       draftTranscript: v.optional(v.string()),
     }),
   },
@@ -96,6 +101,8 @@ export const upsertFromDraft = mutation({
     motions: v.array(motion),
     decisions: v.array(v.string()),
     actionItems: v.array(actionItem),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
     draftTranscript: v.optional(v.string()),
   },
   handler: async (ctx, args) => {

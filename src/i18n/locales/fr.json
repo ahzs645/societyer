@@ -61,6 +61,7 @@
     "privacy": "Vie privée (LPRP)",
     "pipaTraining": "Formation LPRP",
     "insurance": "Assurance",
+    "accessCustody": "Garde des accès",
     "transparency": "Transparence publique",
     "financials": "États financiers",
     "grants": "Subventions",
@@ -72,6 +73,7 @@
     "motionLibrary": "Bibliothèque de motions",
     "notifications": "Notifications",
     "users": "Utilisateurs et rôles",
+    "importSessions": "Sessions d'importation",
     "auditLog": "Journal d'audit",
     "dataExport": "Exportation des données"
   },
@@ -92,6 +94,9 @@
     "pinned": "Épinglé",
     "grouped": "Groupé",
     "reference": "Référence",
+    "pinToFavorites": "Épingler aux favoris",
+    "unpinFromFavorites": "Retirer des favoris",
+    "openInNewTab": "Ouvrir dans un nouvel onglet",
     "activeWorkspace": "Actif",
     "noSocieties": "Aucune société disponible pour le moment."
   },
@@ -101,8 +106,12 @@
     "languageTitle": "Langue",
     "languageSubtitle": "Choisissez la langue de l'interface pour ce navigateur.",
     "appearanceTitle": "Apparence",
+    "systemTheme": "Système",
+    "systemThemeHint": "Utilise le mode {{theme}} de cet appareil.",
     "lightTheme": "Clair",
+    "lightThemeHint": "Toujours utiliser le mode clair.",
     "darkTheme": "Sombre",
+    "darkThemeHint": "Toujours utiliser le mode sombre.",
     "modulesTitle": "Modules",
     "modulesSubtitle": "Activez seulement les parties réellement utilisées par cette organisation.",
     "modulesHint": "Désactiver un module masque sa navigation, ses entrées dans la palette de commandes, ses points d'entrée publics et ses routes protégées. Les données existantes restent en place et redeviennent disponibles si vous réactivez le module plus tard."

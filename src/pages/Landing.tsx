@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { type MouseEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -24,6 +24,7 @@ import {
   Github,
 } from "lucide-react";
 import { isBetterAuthMode } from "../lib/authMode";
+import { useThemePreference } from "../hooks/useThemePreference";
 
 const FEATURE_GROUPS = [
   {
@@ -97,14 +98,13 @@ const HIGHLIGHTS = [
 ];
 
 export function LandingPage() {
-  const [theme, setTheme] = useState<"light" | "dark">(() =>
-    document.documentElement.classList.contains("dark") ? "dark" : "light",
-  );
-
-  useEffect(() => {
-    document.documentElement.classList.remove("light", "dark");
-    document.documentElement.classList.add(theme);
-  }, [theme]);
+  const { preference: themePreference, resolvedTheme, setPreference: setTheme } = useThemePreference();
+  const nextTheme = resolvedTheme === "dark" ? "light" : "dark";
+  const nextThemeLabel = nextTheme === "dark" ? "Dark" : "Light";
+  const themeTitle =
+    themePreference === "system"
+      ? `Using system ${resolvedTheme} mode. Switch to ${nextTheme} mode.`
+      : `Switch to ${nextTheme} mode`;
 
   const authEnabled = isBetterAuthMode();
   const demoHref = "/demo";
@@ -133,15 +133,13 @@ export function LandingPage() {
             <button
               type="button"
               className="landing__btn landing__btn--ghost landing__theme-toggle"
-              onClick={() =>
-                setTheme((current) => (current === "dark" ? "light" : "dark"))
-              }
-              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-              title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              onClick={() => setTheme(nextTheme)}
+              aria-label={`Switch to ${nextTheme} mode`}
+              title={themeTitle}
             >
-              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+              {resolvedTheme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
               <span className="landing__theme-label">
-                {theme === "dark" ? "Light" : "Dark"}
+                {nextThemeLabel}
               </span>
             </button>
             <a href={demoHref} className="landing__btn landing__btn--primary">

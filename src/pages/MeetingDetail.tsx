@@ -6,9 +6,9 @@ import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Field } from "../components/ui";
-import { formatDateTime } from "../lib/format";
+import { formatDate, formatDateTime } from "../lib/format";
 import { useRef, useState } from "react";
-import { Sparkles, ArrowLeft, FileText, Save, Mic, FileDown, Gavel, ClipboardCheck, Upload } from "lucide-react";
+import { Sparkles, ArrowLeft, FileText, Save, Mic, FileDown, Gavel, ClipboardCheck, Upload, ExternalLink, Download, RefreshCw } from "lucide-react";
 import { MotionEditor, Motion } from "../components/MotionEditor";
 import { Checkbox } from "../components/Controls";
 import { exportWordDoc, renderMinutesHtml } from "../lib/exportWord";
@@ -21,6 +21,11 @@ export function MeetingDetailPage() {
   const society = useSociety();
   const meeting = useQuery(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
   const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const sourceDocumentIds = ((minutes as any)?.sourceDocumentIds ?? []) as Id<"documents">[];
+  const sourceDocuments = useQuery(
+    api.documents.getMany,
+    sourceDocumentIds.length > 0 ? { ids: sourceDocumentIds } : "skip",
+  );
   const transcriptRecord = useQuery(
     api.transcripts.getByMeeting,
     id ? { meetingId: id as Id<"meetings"> } : "skip",
@@ -48,6 +53,12 @@ export function MeetingDetailPage() {
   const [busy, setBusy] = useState(false);
   const [pipelineBusy, setPipelineBusy] = useState(false);
   const [transcriptEdit, setTranscriptEdit] = useState<string | null>(null);
+  const [agendaEdit, setAgendaEdit] = useState<string | null>(null);
+  const [attendanceEdit, setAttendanceEdit] = useState<{
+    attendees: string;
+    absent: string;
+    quorumMet: boolean;
+  } | null>(null);
   const [savingTranscript, setSavingTranscript] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
 
@@ -55,10 +66,16 @@ export function MeetingDetailPage() {
   if (society === null) return <SeedPrompt />;
   if (!meeting) return <div className="page">Loading…</div>;
 
-  const agenda: string[] = meeting.agendaJson ? JSON.parse(meeting.agendaJson) : [];
-  const transcriptOnFile = transcriptRecord?.text ?? minutes?.draftTranscript ?? "";
+  const agenda = parseAgenda(meeting.agendaJson);
+  const minutesSourceExternalIds = sourceExternalIdsForMinutes(minutes);
+  const linkedSourceCount = (sourceDocuments ?? []).length || minutesSourceExternalIds.length;
+  const minutesDraftTranscript = minutes?.draftTranscript ?? "";
+  const minutesDraftMetadata = parseDocumentMetadata(minutesDraftTranscript);
+  const minutesDraftIsImportMetadata = isImportTranscriptMetadata(minutesDraftMetadata);
+  const transcriptOnFile = transcriptRecord?.text ?? (minutesDraftIsImportMetadata ? "" : minutesDraftTranscript);
+  const importNote = minutesDraftIsImportMetadata ? importTranscriptNote(minutesDraftMetadata) : null;
   const transcriptProvider = transcriptOnFile
-    ? transcriptRecord?.provider ?? (minutes?.draftTranscript ? "manual" : null)
+    ? transcriptRecord?.provider ?? (minutesDraftTranscript ? "manual" : null)
     : null;
   const transcriptStatusTone =
     transcriptionJob?.status === "complete"
@@ -140,7 +157,7 @@ export function MeetingDetailPage() {
       },
     });
     exportWordDoc({
-      filename: `${safe}-minutes-${minutes.heldAt.slice(0, 10)}.doc`,
+      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.doc`,
       title: `${meeting.title} — Minutes`,
       bodyHtml,
     });
@@ -184,7 +201,7 @@ export function MeetingDetailPage() {
       },
     });
     exportWordDoc({
-      filename: `${safe}-public-minutes-${minutes.heldAt.slice(0, 10)}.doc`,
+      filename: `${safe}-public-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.doc`,
       title: `${meeting.title} — Public minutes`,
       bodyHtml,
     });
@@ -194,18 +211,220 @@ export function MeetingDetailPage() {
   /** Names to scrub: every current member + director. Emails/phones/postal codes use the regex rules. */
   const redactOpts = (): RedactOptions => {
     const names: string[] = [];
-    (directors ?? []).forEach((d: any) => names.push(`${d.firstName} ${d.lastName}`));
+    (directors ?? []).forEach((d: any) => addRedactionName(names, `${d.firstName} ${d.lastName}`));
     // Members query isn't loaded on this page by default; use attendees & absent
     // from the minutes as a fallback signal for which names appear in the text.
     if (minutes) {
-      minutes.attendees.forEach((n: string) => names.push(n));
-      minutes.absent.forEach((n: string) => names.push(n));
+      minutes.attendees.forEach((n: string) => addRedactionName(names, n));
+      minutes.absent.forEach((n: string) => addRedactionName(names, n));
+      minutes.actionItems.forEach((item: any) => addRedactionName(names, item.assignee));
+      namesFromDiscussion(minutes.discussion).forEach((n) => addRedactionName(names, n));
     }
-    return { names, typeLabels: true };
+    return { names: Array.from(new Set(names)), typeLabels: true };
   };
 
   const saveMotions = (next: Motion[]) =>
     minutes ? updateMinutes({ id: minutes._id, patch: { motions: next } }) : undefined;
+
+  const saveAgenda = async () => {
+    const next = parseLines(agendaEdit ?? "");
+    await updateMeeting({
+      id: meeting._id,
+      patch: {
+        agendaJson: next.length ? JSON.stringify(next) : undefined,
+      },
+    });
+    setAgendaEdit(null);
+    toast.success("Agenda saved");
+  };
+
+  const startAttendanceEdit = () => {
+    if (!minutes) return;
+    setAttendanceEdit({
+      attendees: minutes.attendees.join("\n"),
+      absent: minutes.absent.join("\n"),
+      quorumMet: minutes.quorumMet,
+    });
+  };
+
+  const saveAttendance = async () => {
+    if (!minutes || !attendanceEdit) return;
+    const attendees = parseLines(attendanceEdit.attendees);
+    const absent = parseLines(attendanceEdit.absent);
+    await updateMinutes({
+      id: minutes._id,
+      patch: { attendees, absent, quorumMet: attendanceEdit.quorumMet },
+    });
+    await updateMeeting({
+      id: meeting._id,
+      patch: { attendeeIds: attendees },
+    });
+    setAttendanceEdit(null);
+    toast.success("Attendance saved");
+  };
+
+  const transcriptCard = (
+    <div className="card meeting-notes-card">
+      <div className="card__head">
+        <h2 className="card__title">
+          <Mic size={14} />
+          Transcript / notes
+        </h2>
+        <span className="card__subtitle">
+          {transcriptOnFile
+            ? `${transcriptOnFile.length.toLocaleString()} characters on file`
+            : "No audio transcript on file"}
+        </span>
+        {transcriptProvider && <Badge tone="info">{transcriptProvider}</Badge>}
+        {transcriptionJob && (
+          <Badge tone={transcriptStatusTone}>
+            {transcriptionJob.status} ({transcriptionJob.provider})
+          </Badge>
+        )}
+      </div>
+      <input
+        ref={vttInputRef}
+        type="file"
+        accept=".vtt,text/vtt"
+        style={{ display: "none" }}
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          setSavingTranscript(true);
+          try {
+            await importVtt({
+              societyId: meeting.societyId,
+              meetingId: meeting._id,
+              vttText: await file.text(),
+            });
+            toast.success(`Transcript imported from ${file.name}.`);
+          } catch (err: any) {
+            toast.error(err?.message ?? "VTT import failed");
+          } finally {
+            setSavingTranscript(false);
+            if (vttInputRef.current) vttInputRef.current.value = "";
+          }
+        }}
+      />
+      <input
+        ref={audioInputRef}
+        type="file"
+        accept="audio/*,video/*"
+        style={{ display: "none" }}
+        onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)}
+      />
+      <div className="card__body meeting-notes-body">
+        {transcriptEdit !== null ? (
+          <textarea
+            className="textarea meeting-notes-editor"
+            value={transcriptEdit}
+            onChange={(e) => setTranscriptEdit(e.target.value)}
+            placeholder="Add meeting notes or paste the raw transcript here."
+          />
+        ) : transcriptOnFile ? (
+          <pre className="meeting-transcript-preview">{transcriptOnFile}</pre>
+        ) : importNote ? (
+          <div className="meeting-note">
+            <div className="meeting-note__title">Import note</div>
+            <p>{importNote}</p>
+          </div>
+        ) : (
+          <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+            No notes added yet.
+          </div>
+        )}
+
+        <div className="meeting-notes-actions">
+          {transcriptEdit === null ? (
+            <>
+              <button
+                className="btn-action"
+                disabled={savingTranscript || pipelineBusy}
+                onClick={() => setTranscriptEdit(transcriptOnFile)}
+              >
+                {transcriptOnFile ? "Edit" : "Add notes"}
+              </button>
+              <button
+                className="btn-action"
+                disabled={savingTranscript || pipelineBusy}
+                onClick={() => vttInputRef.current?.click()}
+              >
+                <Upload size={12} /> Import VTT
+              </button>
+              <button
+                className="btn-action"
+                disabled={savingTranscript || pipelineBusy}
+                onClick={() => audioInputRef.current?.click()}
+              >
+                <Upload size={12} /> {audioFile ? "Change audio" : "Choose audio"}
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="btn-action" onClick={() => setTranscriptEdit(null)}>
+                Cancel
+              </button>
+              <button
+                className="btn-action btn-action--primary"
+                disabled={savingTranscript}
+                onClick={async () => {
+                  setSavingTranscript(true);
+                  try {
+                    await saveTranscriptText({
+                      societyId: meeting.societyId,
+                      meetingId: meeting._id,
+                      text: transcriptEdit ?? "",
+                      provider: "manual",
+                    });
+                    setTranscriptEdit(null);
+                    toast.success((transcriptEdit ?? "").trim() ? "Transcript saved." : "Transcript cleared.");
+                  } catch (err: any) {
+                    toast.error(err?.message ?? "Transcript save failed");
+                  } finally {
+                    setSavingTranscript(false);
+                  }
+                }}
+              >
+                <Save size={12} /> {savingTranscript ? "Saving…" : "Save"}
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="meeting-audio-tools">
+          <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+            VTT/audio imports are optional.
+          </div>
+          <div className="meeting-audio-actions">
+            {audioFile ? (
+              <Badge tone="info">{audioFile.name}</Badge>
+            ) : (
+              <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>No audio selected.</span>
+            )}
+            <button className="btn-action" onClick={() => audioInputRef.current?.click()}>
+              <Upload size={12} /> {audioFile ? "Change file" : "Choose file"}
+            </button>
+            <button
+              className="btn-action btn-action--primary"
+              disabled={!audioFile || pipelineBusy}
+              onClick={() => uploadAudioAndRun(false)}
+            >
+              <Mic size={12} /> {pipelineBusy ? "Transcribing…" : "Transcribe"}
+            </button>
+            {!minutes && (
+              <button
+                className="btn-action"
+                disabled={!audioFile || pipelineBusy}
+                onClick={() => uploadAudioAndRun(true)}
+              >
+                <Sparkles size={12} /> {pipelineBusy ? "Running…" : "Draft minutes"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="page">
@@ -248,183 +467,47 @@ export function MeetingDetailPage() {
 
       <div className="two-col">
         <div className="col" style={{ gap: 16 }}>
-          {agenda.length > 0 && (
-            <div className="card">
-              <div className="card__head"><h2 className="card__title">Agenda</h2></div>
-              <div className="card__body">
-                <ol style={{ margin: 0, paddingLeft: 18 }}>
-                  {agenda.map((a, i) => <li key={i} style={{ padding: "3px 0" }}>{a}</li>)}
-                </ol>
-              </div>
-            </div>
-          )}
-
           <div className="card">
             <div className="card__head">
-              <h2 className="card__title">
-                <Mic size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />
-                Transcript
-              </h2>
+              <h2 className="card__title">Agenda</h2>
               <span className="card__subtitle">
-                {transcriptOnFile
-                  ? `${transcriptOnFile.length.toLocaleString()} characters on file`
-                  : "Transcript is optional. Add one from pasted text, a .vtt file, or a transcribed recording."}
+                {agenda.length ? `${agenda.length} item${agenda.length === 1 ? "" : "s"}` : "No agenda items yet"}
               </span>
-              {transcriptProvider && <Badge tone="info">{transcriptProvider}</Badge>}
-              {transcriptionJob && (
-                <Badge tone={transcriptStatusTone}>
-                  {transcriptionJob.status} ({transcriptionJob.provider})
-                </Badge>
-              )}
-              <div style={{ marginLeft: "auto", display: "flex", gap: 4, flexWrap: "wrap" }}>
-                {transcriptEdit === null ? (
-                  <>
-                    <button
-                      className="btn-action"
-                      disabled={savingTranscript || pipelineBusy}
-                      onClick={() => setTranscriptEdit(transcriptOnFile)}
-                    >
-                      {transcriptOnFile ? "Edit" : "Add transcript"}
-                    </button>
-                    <button
-                      className="btn-action"
-                      disabled={savingTranscript || pipelineBusy}
-                      onClick={() => vttInputRef.current?.click()}
-                    >
-                      <Upload size={12} /> Import VTT
-                    </button>
-                    <button
-                      className="btn-action"
-                      disabled={savingTranscript || pipelineBusy}
-                      onClick={() => audioInputRef.current?.click()}
-                    >
-                      <Upload size={12} /> {audioFile ? "Change audio" : "Choose audio"}
-                    </button>
-                  </>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                {agendaEdit === null ? (
+                  <button className="btn-action" onClick={() => setAgendaEdit(agenda.join("\n"))}>
+                    Edit agenda
+                  </button>
                 ) : (
                   <>
-                    <button className="btn-action" onClick={() => setTranscriptEdit(null)}>
-                      Cancel
-                    </button>
-                    <button
-                      className="btn-action btn-action--primary"
-                      disabled={savingTranscript}
-                      onClick={async () => {
-                        setSavingTranscript(true);
-                        try {
-                          await saveTranscriptText({
-                            societyId: meeting.societyId,
-                            meetingId: meeting._id,
-                            text: transcriptEdit ?? "",
-                            provider: "manual",
-                          });
-                          setTranscriptEdit(null);
-                          toast.success((transcriptEdit ?? "").trim() ? "Transcript saved." : "Transcript cleared.");
-                        } catch (err: any) {
-                          toast.error(err?.message ?? "Transcript save failed");
-                        } finally {
-                          setSavingTranscript(false);
-                        }
-                      }}
-                    >
-                      <Save size={12} /> {savingTranscript ? "Saving…" : "Save"}
+                    <button className="btn-action" onClick={() => setAgendaEdit(null)}>Cancel</button>
+                    <button className="btn-action btn-action--primary" onClick={saveAgenda}>
+                      <Save size={12} /> Save agenda
                     </button>
                   </>
                 )}
               </div>
             </div>
-            <input
-              ref={vttInputRef}
-              type="file"
-              accept=".vtt,text/vtt"
-              style={{ display: "none" }}
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                setSavingTranscript(true);
-                try {
-                  await importVtt({
-                    societyId: meeting.societyId,
-                    meetingId: meeting._id,
-                    vttText: await file.text(),
-                  });
-                  toast.success(`Transcript imported from ${file.name}.`);
-                } catch (err: any) {
-                  toast.error(err?.message ?? "VTT import failed");
-                } finally {
-                  setSavingTranscript(false);
-                  if (vttInputRef.current) vttInputRef.current.value = "";
-                }
-              }}
-            />
-            <input
-              ref={audioInputRef}
-              type="file"
-              accept="audio/*,video/*"
-              style={{ display: "none" }}
-              onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)}
-            />
             <div className="card__body">
-              {transcriptEdit !== null ? (
-                <textarea
-                  className="textarea"
-                  style={{ minHeight: 200, fontFamily: "var(--font-mono)", fontSize: "var(--fs-sm)" }}
-                  value={transcriptEdit}
-                  onChange={(e) => setTranscriptEdit(e.target.value)}
-                  placeholder="Paste the raw meeting transcript here. It stays linked to this meeting and any minutes."
-                />
-              ) : transcriptOnFile ? (
-                <pre
-                  style={{
-                    margin: 0,
-                    whiteSpace: "pre-wrap",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "var(--fs-sm)",
-                    color: "var(--text-secondary)",
-                    maxHeight: 280,
-                    overflow: "auto",
-                  }}
-                >
-                  {transcriptOnFile}
-                </pre>
+              {agendaEdit !== null ? (
+                <Field label="Agenda items" hint="One item per line. These are stored on the meeting record and can be changed without changing the source document.">
+                  <textarea
+                    className="textarea"
+                    rows={Math.max(8, agenda.length + 2)}
+                    value={agendaEdit}
+                    onChange={(event) => setAgendaEdit(event.target.value)}
+                    placeholder="Call to order&#10;Confirm attendance and quorum&#10;Approve agenda"
+                  />
+                </Field>
+              ) : agenda.length > 0 ? (
+                <ol style={{ margin: 0, paddingLeft: 18 }}>
+                  {agenda.map((a, i) => <li key={i} style={{ padding: "3px 0" }}>{formatSourceReferences(a)}</li>)}
+                </ol>
               ) : (
                 <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                  No transcript added yet. Meetings can exist without one, and you can add it later.
+                  Add the meeting agenda here. Imported minutes can use this as an editable reconstruction of the source document's structure.
                 </div>
               )}
-
-              <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
-                <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 8 }}>
-                  Import a `.vtt` caption file, or upload audio/video to transcribe it. Transcription can save the
-                  transcript by itself or draft minutes in one step.
-                </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  {audioFile ? (
-                    <Badge tone="info">{audioFile.name}</Badge>
-                  ) : (
-                    <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>No audio file selected.</span>
-                  )}
-                  <button className="btn-action" onClick={() => audioInputRef.current?.click()}>
-                    <Upload size={12} /> {audioFile ? "Change file" : "Choose file"}
-                  </button>
-                  <button
-                    className="btn-action btn-action--primary"
-                    disabled={!audioFile || pipelineBusy}
-                    onClick={() => uploadAudioAndRun(false)}
-                  >
-                    <Mic size={12} /> {pipelineBusy ? "Transcribing…" : "Transcribe audio"}
-                  </button>
-                  {!minutes && (
-                    <button
-                      className="btn-action"
-                      disabled={!audioFile || pipelineBusy}
-                      onClick={() => uploadAudioAndRun(true)}
-                    >
-                      <Sparkles size={12} /> {pipelineBusy ? "Running…" : "Transcribe + draft minutes"}
-                    </button>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
 
@@ -437,6 +520,57 @@ export function MeetingDetailPage() {
                 </span>
               </div>
               <div className="card__body">
+                <div className="minutes-section">
+                  <h3>Attendance</h3>
+                  {attendanceEdit ? (
+                    <div className="col" style={{ gap: 12 }}>
+                      <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
+                        <Field label="Present" hint="One person per line.">
+                          <textarea
+                            className="textarea"
+                            value={attendanceEdit.attendees}
+                            onChange={(event) => setAttendanceEdit({ ...attendanceEdit, attendees: event.target.value })}
+                            rows={6}
+                          />
+                        </Field>
+                        <Field label="Absent / regrets" hint="One person per line.">
+                          <textarea
+                            className="textarea"
+                            value={attendanceEdit.absent}
+                            onChange={(event) => setAttendanceEdit({ ...attendanceEdit, absent: event.target.value })}
+                            rows={6}
+                          />
+                        </Field>
+                      </div>
+                      <Checkbox
+                        checked={attendanceEdit.quorumMet}
+                        onChange={(quorumMet) => setAttendanceEdit({ ...attendanceEdit, quorumMet })}
+                        label="Quorum met"
+                      />
+                      <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
+                        <button className="btn-action" onClick={() => setAttendanceEdit(null)}>Cancel</button>
+                        <button className="btn-action btn-action--primary" onClick={saveAttendance}>
+                          <Save size={12} /> Save attendance
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="col" style={{ gap: 8 }}>
+                      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                        <Badge tone={minutes.quorumMet ? "success" : "warn"}>
+                          Quorum {minutes.quorumMet ? "met" : "not met"}
+                        </Badge>
+                        <Badge tone="info">{minutes.attendees.length} present</Badge>
+                        <Badge tone="neutral">{minutes.absent.length} absent/regrets</Badge>
+                        <button className="btn-action" onClick={startAttendanceEdit}>
+                          Edit attendance
+                        </button>
+                      </div>
+                      <AttendanceDetails present={minutes.attendees} absent={minutes.absent} />
+                    </div>
+                  )}
+                </div>
+
                 <div className="minutes-section">
                   <h3>Discussion</h3>
                   <p style={{ whiteSpace: "pre-wrap", margin: 0, color: "var(--text-secondary)" }}>{minutes.discussion}</p>
@@ -540,6 +674,45 @@ export function MeetingDetailPage() {
             </div>
           </div>
 
+          {minutes && (
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">Source documents</h2>
+                <span className="card__subtitle">
+                  {linkedSourceCount ? `${linkedSourceCount} linked` : "None linked"}
+                </span>
+              </div>
+              <div className="card__body source-document-list">
+                {(sourceDocuments ?? []).map((document: any) => (
+                  <SourceDocumentRow
+                    key={document._id}
+                    document={document}
+                    societyId={meeting.societyId}
+                  />
+                ))}
+                {(sourceDocuments ?? []).length === 0 && minutesSourceExternalIds.map((externalId) => (
+                  <div key={externalId} className="source-document source-document--placeholder">
+                    <FileText className="source-document__icon" size={14} />
+                    <div className="source-document__main">
+                      <div className="source-document__title">{sourceLabelForExternalId(externalId)}</div>
+                      <div className="source-document__meta">
+                        <Badge tone={externalId.startsWith("paperless:") ? "info" : "neutral"}>Source reference</Badge>
+                        <Badge tone="warn">No local copy</Badge>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {(sourceDocuments ?? []).length === 0 && minutesSourceExternalIds.length === 0 && (
+                  <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                    Link source documents by importing or backfilling the meeting-minute source records.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {transcriptCard}
+
           {meeting.type === "AGM" && (
             <div className="card">
               <div className="card__head"><h2 className="card__title">AGM checklist</h2></div>
@@ -556,6 +729,239 @@ export function MeetingDetailPage() {
       </div>
     </div>
   );
+}
+
+function AttendanceDetails({ present, absent }: { present: string[]; absent: string[] }) {
+  const rows = [
+    ...present.map((name) => ({ status: "Present", ...parseAttendanceName(name) })),
+    ...absent.map((name) => ({ status: "Absent / regrets", ...parseAttendanceName(name) })),
+  ];
+
+  if (rows.length === 0) {
+    return (
+      <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+        No attendance names recorded yet.
+      </div>
+    );
+  }
+
+  return (
+    <details className="attendance-details">
+      <summary>
+        <span>Attendance list</span>
+        <span className="muted">
+          {present.length} present · {absent.length} absent/regrets
+        </span>
+      </summary>
+      <div className="attendance-table-wrap">
+        <table className="attendance-table">
+          <thead>
+            <tr>
+              <th scope="col">Status</th>
+              <th scope="col">Name</th>
+              <th scope="col">Role</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={`${row.status}-${row.name}-${index}`}>
+                <td>{row.status}</td>
+                <td>{row.name}</td>
+                <td>{row.role || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}
+
+function parseAttendanceName(value: string) {
+  const [name, ...roleParts] = value.split(/\s+-\s+/);
+  return {
+    name: name.trim() || value,
+    role: roleParts.join(" - ").trim(),
+  };
+}
+
+function SourceDocumentRow({
+  document,
+  societyId,
+}: {
+  document: any;
+  societyId: Id<"societies">;
+}) {
+  const metadata = parseDocumentMetadata(document.content);
+  const externalId = sourceExternalIdFromDocument(document, metadata);
+  const sourceLabel = sourceLabelForExternalId(externalId);
+  const downloadUrl = useQuery(
+    api.files.getUrl,
+    document.storageId ? { storageId: document.storageId } : "skip",
+  );
+  const pullSourceDocument = useAction(api.paperless.pullSourceDocument);
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const canPull = !!externalId?.match(/^paperless:\d+$/i);
+  const hasActions = !!downloadUrl || (!!document.url && !downloadUrl) || canPull;
+
+  const pull = async () => {
+    if (!canPull) return;
+    setBusy(true);
+    try {
+      const result = await pullSourceDocument({
+        societyId,
+        documentId: document._id,
+        externalId,
+      });
+      toast.success(`Pulled ${result.fileName} from Paperless-ngx`);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not pull the Paperless source document");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="source-document">
+      <FileText className="source-document__icon" size={14} />
+      <div className="source-document__main">
+        <div className="source-document__title">{document.title}</div>
+        <div className="source-document__meta">
+          {sourceLabel ? (
+            <Badge tone={externalId?.startsWith("paperless:") ? "info" : "neutral"}>{sourceLabel}</Badge>
+          ) : document.category ? (
+            <Badge tone="neutral">{document.category}</Badge>
+          ) : null}
+          {document.storageId ? (
+            <Badge tone="success">Local copy</Badge>
+          ) : canPull ? (
+            <Badge tone="warn">No local copy</Badge>
+          ) : null}
+        </div>
+      </div>
+      {hasActions && (
+        <div className="source-document__actions">
+          {downloadUrl && (
+            <a className="btn btn--ghost btn--sm" href={downloadUrl} target="_blank" rel="noreferrer">
+              <Download size={12} /> Open
+            </a>
+          )}
+          {document.url && !downloadUrl ? (
+            <a className="btn btn--ghost btn--sm" href={document.url} target="_blank" rel="noreferrer">
+              <ExternalLink size={12} /> Open
+            </a>
+          ) : null}
+          {canPull && (
+            <button className="btn btn--ghost btn--sm" disabled={busy} onClick={pull}>
+              {busy ? <RefreshCw size={12} /> : <Download size={12} />}
+              {busy ? "Pulling" : document.storageId ? "Refresh" : "Pull"}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function parseAgenda(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+  } catch {
+    return parseLines(value);
+  }
+}
+
+function parseLines(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function addRedactionName(names: string[], raw?: string | null) {
+  const value = String(raw ?? "").trim();
+  if (!value) return;
+  const withoutParenthetical = value.replace(/\s*\([^)]*\)\s*/g, " ").trim();
+  const withoutRole = withoutParenthetical.split(/\s+-\s+/)[0]?.trim() ?? "";
+  for (const candidate of [value, withoutParenthetical, withoutRole]) {
+    const normalized = candidate.replace(/\s+/g, " ").trim();
+    if (normalized.length >= 3) names.push(normalized);
+    const firstName = normalized.match(/^([A-Z][a-zA-Z'-]{2,})\b/)?.[1];
+    if (firstName) names.push(firstName);
+  }
+}
+
+function namesFromDiscussion(text: string) {
+  const names = new Set<string>();
+  for (const match of text.matchAll(/\b([A-Z][a-zA-Z'-]{2,}\s+[A-Z][a-zA-Z'-]{2,})\b/g)) {
+    const value = match[1];
+    if (!isLikelyNonPersonPhrase(value)) {
+      names.add(value);
+    }
+  }
+  for (const match of text.matchAll(/\bnaming\s+([^.;]+)/gi)) {
+    match[1]
+      .split(/,|\band\b/i)
+      .map((name) => name.trim())
+      .filter((name) => /^[A-Z][a-zA-Z'-]{2,}$/.test(name))
+      .forEach((name) => names.add(name));
+  }
+  return Array.from(names);
+}
+
+function isLikelyNonPersonPhrase(value: string) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (/^[A-Z]{2,}\s+[A-Z]{2,}$/.test(normalized)) return true;
+  return /\b(Source PDF|Editor Chief|Bank payment|Online payment|Blackboard link)\b/i.test(normalized);
+}
+
+function sourceExternalIdsForMinutes(minutes: any) {
+  if (!minutes) return [];
+  if (Array.isArray(minutes.sourceExternalIds)) return minutes.sourceExternalIds.map(String);
+  const parsed = parseDocumentMetadata(minutes.draftTranscript);
+  return Array.isArray(parsed.sourceExternalIds) ? parsed.sourceExternalIds.map(String) : [];
+}
+
+function parseDocumentMetadata(value: unknown): Record<string, any> {
+  if (typeof value !== "string") return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function isImportTranscriptMetadata(metadata: Record<string, any>) {
+  return (
+    typeof metadata.importSessionId === "string" ||
+    Array.isArray(metadata.sourceExternalIds) ||
+    /not an audio transcript/i.test(String(metadata.note ?? ""))
+  );
+}
+
+function importTranscriptNote(metadata: Record<string, any>) {
+  const note = typeof metadata.note === "string" ? metadata.note.trim() : "";
+  return note || "Imported from source documents; no audio transcript is attached.";
+}
+
+function sourceExternalIdFromDocument(document: any, metadata = parseDocumentMetadata(document.content)) {
+  const externalId = typeof metadata.externalId === "string" ? metadata.externalId : "";
+  if (externalId) return externalId;
+  return document.tags?.find?.((tag: string) => tag.startsWith("paperless:"));
+}
+
+function sourceLabelForExternalId(externalId: string | undefined) {
+  const paperlessId = externalId?.match(/^paperless:(\d+)$/i)?.[1];
+  if (paperlessId) return `Paperless #${paperlessId}`;
+  return externalId ?? "";
+}
+
+function formatSourceReferences(value: string) {
+  return value.replace(/\bpaperless:(\d+)\b/gi, "Paperless #$1");
 }
 
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {

@@ -1,7 +1,9 @@
-import { useRef, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
@@ -12,6 +14,7 @@ import { useToast } from "../components/Toast";
 import { Plus, Trash2, Flag as FlagIcon, Upload, Download, FolderOpen, Tag, History } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { DocumentVersionsDrawer } from "../components/DocumentVersions";
+import { PaperlessDocumentAction } from "../components/PaperlessDocumentAction";
 
 const CATS = ["Constitution", "Bylaws", "Minutes", "FinancialStatement", "Policy", "Filing", "Other"] as const;
 
@@ -26,18 +29,23 @@ const DOC_FIELDS: FilterField<any>[] = [
 export function DocumentsPage() {
   const society = useSociety();
   const docs = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
+  const importSessions = useQuery(api.importSessions.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.documents.create);
   const flag = useMutation(api.documents.flagForDeletion);
   const remove = useMutation(api.documents.remove);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const attach = useMutation(api.files.attachUploadedFileToDocument);
+  const syncDocument = useAction(api.paperless.syncDocument);
   const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
+  const paperlessConnection = useQuery(api.paperless.listConnection, society ? { societyId: society._id } : "skip");
+  const actingUserId = useCurrentUserId() ?? undefined;
   const confirm = useConfirm();
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [versionsFor, setVersionsFor] = useState<{ id: any; title: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const visibleDocs = useMemo(() => (docs ?? []).filter((doc: any) => !isInternalDocumentRecord(doc)), [docs]);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -46,6 +54,9 @@ export function DocumentsPage() {
     setForm({ title: "", category: "Other", tags: [], retentionYears: 10 });
     setOpen(true);
   };
+  const documentImportSession = (importSessions ?? []).find(
+    (session: any) => (session.summary?.byKind?.documentCandidate ?? 0) > 0,
+  );
 
   const uploadFile = async (documentId: any, file: File) => {
     const url = await generateUploadUrl({});
@@ -55,15 +66,29 @@ export function DocumentsPage() {
     await attach({ documentId, storageId, fileName: file.name, mimeType: file.type, fileSizeBytes: file.size });
   };
 
+  const maybeSyncToPaperless = async (documentId: any) => {
+    if (!paperlessConnection?.autoUpload || paperlessConnection.status !== "connected") return;
+    try {
+      await syncDocument({ societyId: society._id, documentId, actingUserId });
+      toast.success("Uploaded and sent to Paperless-ngx");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Uploaded locally, but Paperless-ngx sync failed");
+    }
+  };
+
   const save = async () => {
     const newDocId = await create({ societyId: society._id, ...form, tags: form.tags ?? [] });
-    if (form._file) await uploadFile(newDocId, form._file);
+    if (form._file) {
+      await uploadFile(newDocId, form._file);
+      await maybeSyncToPaperless(newDocId);
+    }
     setOpen(false);
   };
 
   const quickUpload = async (file: File) => {
     const docId = await create({ societyId: society._id, title: file.name, category: "Other", tags: [], retentionYears: 10 });
     await uploadFile(docId, file);
+    await maybeSyncToPaperless(docId);
   };
 
   return (
@@ -92,10 +117,50 @@ export function DocumentsPage() {
         }
       />
 
+      {documentImportSession && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card__head">
+            <div>
+              <h2 className="card__title">Paperless document candidates</h2>
+              <p className="card__subtitle">
+                {documentImportSession.summary.byKind.documentCandidate} Paperless records are staged for section-by-section review before becoming Documents records.
+              </p>
+            </div>
+            <Link className="btn-action" to="/app/imports">
+              Review import
+            </Link>
+          </div>
+          <div className="card__body">
+            <div className="stat-grid" style={{ marginBottom: 0 }}>
+              <div className="stat">
+                <div className="stat__label">Candidates</div>
+                <div className="stat__value">{documentImportSession.summary.byKind.documentCandidate}</div>
+                <div className="stat__sub">metadata-only until approved</div>
+              </div>
+              <div className="stat">
+                <div className="stat__label">Review flags</div>
+                <div className="stat__value">{documentImportSession.summary.riskCount}</div>
+                <div className="stat__sub">restricted, OCR, duplicate, date risk</div>
+              </div>
+              <div className="stat">
+                <div className="stat__label">Created docs</div>
+                <div className="stat__value">{documentImportSession.summary.documentsApplied ?? 0}</div>
+                <div className="stat__sub">approve then use Create docs</div>
+              </div>
+              <div className="stat">
+                <div className="stat__label">Top section</div>
+                <div className="stat__value">{topTargetLabel(documentImportSession.summary.byTarget)}</div>
+                <div className="stat__sub">filter by target in Import sessions</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <DataTable
         label="All documents"
         icon={<FolderOpen size={14} />}
-        data={(docs ?? []) as any[]}
+        data={visibleDocs as any[]}
         rowKey={(r) => r._id}
         filterFields={DOC_FIELDS}
         searchPlaceholder="Search title, tag, file name…"
@@ -143,6 +208,11 @@ export function DocumentsPage() {
         renderRowActions={(r) => (
           <>
             {r.storageId && <DownloadLink storageId={r.storageId} />}
+            <PaperlessDocumentAction
+              societyId={society._id}
+              documentId={r._id}
+              disabled={!r.storageId && !r.fileName}
+            />
             <button
               className="btn btn--ghost btn--sm"
               onClick={() => setVersionsFor({ id: r._id, title: r.title })}
@@ -242,4 +312,22 @@ function catTone(cat: string) {
     case "Minutes": return "success" as const;
     default: return "neutral" as const;
   }
+}
+
+function isInternalDocumentRecord(doc: any) {
+  const tags = Array.isArray(doc.tags) ? doc.tags : [];
+  return (
+    tags.includes("import-session") ||
+    tags.includes("org-history") ||
+    doc.category === "Import Session" ||
+    doc.category === "Import Candidate" ||
+    doc.category === "Org History Source" ||
+    doc.category === "Org History Item"
+  );
+}
+
+function topTargetLabel(byTarget: Record<string, number> | undefined) {
+  const top = Object.entries(byTarget ?? {}).sort((a, b) => b[1] - a[1])[0];
+  if (!top) return "—";
+  return top[0].length > 13 ? `${top[0].slice(0, 12)}…` : top[0];
 }

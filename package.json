@@ -18,9 +18,13 @@
     "docker:logs": "docker compose logs -f backend",
     "docker:admin-key": "./scripts/convex-admin-key.sh",
     "auth:server": "tsx server/auth-server.ts",
-    "test:smoke": "npx playwright test"
+    "test:smoke": "npx playwright test",
+    "test:api-contract": "tsx scripts/check-api-contract.ts",
+    "test:exports": "tsx scripts/check-export-coverage.ts",
+    "test:exports:db": "tsx scripts/validate-export-database.ts"
   },
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^8.5.0",
     "@types/express": "^5.0.6",
     "better-auth": "^1.6.3",
     "concurrently": "^9.2.1",
@@ -34,12 +38,15 @@
     "react-dom": "^18.3.1",
     "react-i18next": "^15.2.0",
     "react-router-dom": "^6.28.0",
-    "tsx": "^4.21.0"
+    "swagger-ui-express": "^5.0.1",
+    "tsx": "^4.21.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/swagger-ui-express": "^4.1.8",
     "@vitejs/plugin-react": "^4.3.4",
     "sass": "^1.99.0",
     "typescript": "~5.6.3",

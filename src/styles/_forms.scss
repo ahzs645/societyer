@@ -56,18 +56,27 @@
   margin-top: 12px;
 }
 
+.signature-form-row .field {
+  margin-bottom: 0;
+}
+
 /* Form */
 .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: var(--s-3);
+  gap: 6px;
+  margin-bottom: var(--s-4);
   min-width: 0;
 }
 .field__label {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   color: var(--text-secondary);
   font-weight: 500;
+  line-height: 1.4;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .field__required,
 .field__error {
@@ -84,12 +93,13 @@
 .input,
 .select,
 .textarea {
-  height: 30px;
-  padding: 0 var(--s-2);
+  height: 32px;
+  padding: 0 10px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--bg-base);
   color: var(--text-primary);
+  font-size: var(--fs-sm);
   transition: border-color 0.08s ease, box-shadow 0.08s ease;
 }
 .input:focus,
@@ -118,22 +128,59 @@
 .field__label-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  min-height: 18px;
+}
+.field__label-row .field__label {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .field__lock {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   margin-left: auto;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-xxs);
   color: var(--text-tertiary);
   font-weight: 500;
-  padding: 1px 6px;
+  padding: 2px 6px;
   border-radius: 3px;
   border: 1px solid var(--border);
   background: var(--bg-subtle);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
 }
 .field__lock svg { width: 10px; height: 10px; }
+
+/* Icon-only lock affordance: hidden at rest, fades in on field hover/focus.
+ * Keeps the affordance discoverable without cluttering the label row. */
+.field__lock--icon {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  background: transparent;
+  border-color: transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+.field__lock--icon svg { width: 12px; height: 12px; }
+.field--lockable:hover .field__lock--icon,
+.field--lockable:focus-within .field__lock--icon,
+.field__lock--icon:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.field__lock--icon:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.field__lock--icon:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
 .field__lock--unlocked {
   color: var(--warn);
   background: var(--warn-soft);
@@ -152,10 +199,11 @@
 }
 .textarea {
   height: auto;
-  min-height: 72px;
-  padding: var(--s-2);
-  line-height: 1.5;
+  min-height: 120px;
+  padding: 10px 12px;
+  line-height: 1.55;
   font-family: inherit;
+  font-size: var(--fs-sm);
   resize: vertical;
 }
 .checkbox {
@@ -301,9 +349,9 @@
 }
 
 /* Misc */
-.row { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.row { display: flex; align-items: center; gap: var(--s-3); min-width: 0; }
 .row > * { min-width: 0; }
-.row > .field { flex: 1 1 180px; }
+.row > .field { flex: 1 1 220px; align-items: stretch; align-self: stretch; }
 .col { display: flex; flex-direction: column; gap: var(--s-2); }
 .muted { color: var(--text-tertiary); }
 .mono { font-family: var(--font-mono); font-size: var(--fs-sm); }

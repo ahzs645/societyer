@@ -119,6 +119,8 @@ npm run dev:full
 - **Resend**: set `RESEND_API_KEY` plus `RESEND_FROM_EMAIL` to turn digest emails and communications into real outbound email.
 - **Stripe**: set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` to enable real hosted checkout. Point Stripe webhooks at Convex HTTP route `/stripe/webhook`.
 - **Wave**: set `WAVE_ACCESS_TOKEN` and `WAVE_BUSINESS_ID` to switch the accounting sync from demo data to live GraphQL fetches.
+- **Paperless-ngx**: set `PAPERLESS_NGX_URL` and `PAPERLESS_NGX_TOKEN`, then enable the Paperless-ngx module at `/app/paperless`. Documents can be sent to Paperless from `/app/documents`; Societyer creates contextual tags such as document category, filing kind, grant report, PIPA training, election evidence, and volunteer screening.
+- **Access custody vault**: set `SECRET_VAULT_ENCRYPTION_KEY` before storing client credentials in production. `/app/access-custody` encrypts stored values, keeps them hidden by default, and logs explicit reveals to the activity trail.
 - **Filing evidence**: BC still has no public Societies Online filing API. This build improves the manual path by storing submission method, confirmation number, fee paid, and linked receipt/evidence documents when a filing is marked filed.
 
 Auth mode uses a small SQLite auth database configured by `AUTH_DB_PATH`, and maps signed-in identities into the existing Convex `users` / `members` records.

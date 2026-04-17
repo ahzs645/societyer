@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { v } from "convex/values";
-import { query, mutation, action } from "./_generated/server";
-import { api } from "./_generated/api";
+import { query, internalMutation, mutation, action } from "./_generated/server";
+import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { requireRole } from "./users";
 import { createCheckoutSession, simulateWebhookFromCheckout } from "./providers/billing";
@@ -136,7 +136,7 @@ export const beginCheckout = action({
     });
 
     // Create a pending subscription now so the society can see the attempt.
-    await ctx.runMutation(api.subscriptions._createPending, {
+    await ctx.runMutation(internal.subscriptions._createPending, {
       societyId: args.societyId,
       planId: args.planId,
       email: args.email,
@@ -153,7 +153,7 @@ export const getPlan = query({
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
-export const _createPending = mutation({
+export const _createPending = internalMutation({
   args: {
     societyId: v.id("societies"),
     planId: v.id("subscriptionPlans"),

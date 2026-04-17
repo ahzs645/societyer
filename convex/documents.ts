@@ -1,13 +1,41 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
+const VISIBLE_DOCUMENT_CATEGORIES = [
+  "Constitution",
+  "Bylaws",
+  "Minutes",
+  "FinancialStatement",
+  "Policy",
+  "Filing",
+  "Other",
+  "Insurance",
+  "Grant",
+  "Receipt",
+  "CourtOrder",
+];
+
 export const list = query({
   args: { societyId: v.id("societies") },
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("documents")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: async (ctx, { societyId }) => {
+    const groups = await Promise.all(
+      VISIBLE_DOCUMENT_CATEGORIES.map((category) =>
+        ctx.db
+          .query("documents")
+          .withIndex("by_society_category", (q) => q.eq("societyId", societyId).eq("category", category))
+          .collect(),
+      ),
+    );
+    return groups.flat().sort((a, b) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
+  },
+});
+
+export const getMany = query({
+  args: { ids: v.array(v.id("documents")) },
+  handler: async (ctx, { ids }) => {
+    const rows = await Promise.all(ids.map((id) => ctx.db.get(id)));
+    return rows.filter(Boolean);
+  },
 });
 
 export const create = mutation({

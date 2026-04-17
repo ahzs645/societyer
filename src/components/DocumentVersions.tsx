@@ -31,6 +31,8 @@ export function DocumentVersionsDrawer({
   const recordUpload = useMutation(api.documentVersions.recordUploadedVersion);
   const rollback = useMutation(api.documentVersions.rollback);
   const getDownloadUrl = useAction(api.documentVersions.getDownloadUrl);
+  const paperlessConnection = useQuery(api.paperless.listConnection, { societyId });
+  const syncDocument = useAction(api.paperless.syncDocument);
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -39,12 +41,22 @@ export function DocumentVersionsDrawer({
 
   if (!documentId) return null;
 
+  const maybeSyncVersionToPaperless = async (versionId: Id<"documentVersions">) => {
+    if (!paperlessConnection?.autoUpload || paperlessConnection.status !== "connected") return;
+    try {
+      await syncDocument({ societyId, documentId, versionId, actingUserId });
+      toast.success("Sent version to Paperless-ngx");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Uploaded version, but Paperless-ngx sync failed");
+    }
+  };
+
   const handleFile = async (file: File) => {
     if (!documentId) return;
     setBusy(true);
     try {
       if (isDemoMode()) {
-        await createDemoVersion({
+        const versionId = await createDemoVersion({
           societyId,
           documentId,
           fileName: file.name,
@@ -53,6 +65,7 @@ export function DocumentVersionsDrawer({
           changeNote: changeNote || undefined,
           actingUserId,
         });
+        await maybeSyncVersionToPaperless(versionId);
         toast.success(`Uploaded as v${(versions?.[0]?.version ?? 0) + 1} (demo)`);
       } else {
         const { version, presigned } = await beginUpload({
@@ -71,7 +84,7 @@ export function DocumentVersionsDrawer({
           });
           if (!res.ok) throw new Error(`RustFS upload failed (${res.status})`);
         }
-        await recordUpload({
+        const versionId = await recordUpload({
           societyId,
           documentId,
           version,
@@ -83,6 +96,7 @@ export function DocumentVersionsDrawer({
           changeNote: changeNote || undefined,
           actingUserId,
         });
+        await maybeSyncVersionToPaperless(versionId);
         toast.success(`Uploaded as v${version}`);
       }
       setChangeNote("");

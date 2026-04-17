@@ -7,6 +7,7 @@ import {
   UserCog,
   Calendar,
   FileText,
+  FileJson,
   ClipboardList,
   FolderOpen,
   AlertTriangle,
@@ -42,10 +43,23 @@ import {
   BadgeDollarSign,
   Globe,
   Download,
+  Database,
   Menu,
   Newspaper,
+  Pin,
+  PinOff,
+  ExternalLink,
+  KeyRound,
 } from "lucide-react";
-import { ComponentType, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ComponentType,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { DemoBanner } from "./DemoBanner";
@@ -56,7 +70,7 @@ import { setStoredUserId } from "../hooks/useCurrentUser";
 import { setStoredSocietyId, useSocietySelection } from "../hooks/useSociety";
 import { UserPicker } from "./UserPicker";
 import { InspectorHost, InspectorProvider } from "./InspectorPanel";
-import { Pill, TintedIconTile } from "./ui";
+import { MenuRow, MenuSectionLabel, Pill, TintedIconTile } from "./ui";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { useTranslation } from "react-i18next";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
@@ -158,6 +172,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/app/agendas", label: "Agendas", icon: ClipboardList, color: "orange" },
       { to: "/app/motion-library", label: "Motion library", icon: BookOpen, color: "purple" },
       { to: "/app/minutes", label: "Minutes", icon: FileText, color: "turquoise" },
+      { to: "/app/meeting-evidence", label: "Meeting evidence", icon: ClipboardList, color: "orange" },
       { to: "/app/proposals", label: "Member proposals", icon: Vote, color: "purple", module: "voting" },
       { to: "/app/elections", label: "Elections", icon: Vote, color: "purple", module: "voting" },
       { to: "/app/written-resolutions", label: "Written resolutions", icon: PenLine, color: "purple", module: "voting" },
@@ -172,6 +187,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/app/attestations", label: "Director attestations", icon: ShieldCheck, color: "red", module: "attestations" },
       { to: "/app/auditors", label: "Auditors", icon: Calculator, color: "green", module: "auditors" },
       { to: "/app/court-orders", label: "Court orders", icon: Gavel, color: "red", module: "courtOrders" },
+      { to: "/app/governance-registers", label: "Governance registers", icon: Scale, color: "blue" },
       { to: "/app/bylaw-rules", label: "Bylaw rules", icon: Scale, color: "purple" },
       { to: "/app/bylaw-diff", label: "Bylaw redline", icon: GitCompare, color: "purple" },
       { to: "/app/bylaws-history", label: "Bylaws history", icon: BookOpen, color: "purple" },
@@ -184,10 +200,12 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/app/filings", label: "Filings", icon: ClipboardList, color: "orange" },
       { to: "/app/filings/prefill", label: "Filing pre-fill", icon: FileCog, color: "orange", module: "filingPrefill" },
       { to: "/app/retention", label: "Records retention", icon: Archive, color: "gray", module: "recordsInspection" },
+      { to: "/app/records-archive", label: "Records archive", icon: Archive, color: "gray" },
       { to: "/app/inspections", label: "Records inspections", icon: Eye, color: "gray", module: "recordsInspection" },
       { to: "/app/privacy", label: "Privacy (PIPA)", icon: Shield, color: "green" },
       { to: "/app/pipa-training", label: "PIPA training", icon: ShieldCheck, color: "green", module: "pipaTraining" },
       { to: "/app/insurance", label: "Insurance", icon: Shield, color: "green", module: "insurance" },
+      { to: "/app/access-custody", label: "Access custody", icon: KeyRound, color: "red", module: "secrets" },
       { to: "/app/transparency", label: "Public transparency", icon: Globe, color: "blue", module: "transparency" },
     ],
   },
@@ -196,6 +214,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Finance",
     items: [
       { to: "/app/financials", label: "Financials", icon: PiggyBank, color: "green" },
+      { to: "/app/finance-imports", label: "Finance imports", icon: PiggyBank, color: "green" },
       { to: "/app/treasurer", label: "Treasurer", icon: PiggyBank, color: "green" },
       { to: "/app/grants", label: "Grants", icon: BadgeDollarSign, color: "green", module: "grants" },
       { to: "/app/reconciliation", label: "Reconciliation", icon: Scale, color: "green", module: "reconciliation" },
@@ -209,6 +228,8 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/app/notifications", label: "Notifications", icon: Bell, color: "orange" },
       { to: "/app/users", label: "Users & roles", icon: UserCog, color: "blue" },
+      { to: "/app/imports", label: "Import sessions", icon: FileJson, color: "purple" },
+      { to: "/app/paperless", label: "Paperless-ngx", icon: Database, color: "gray", module: "paperless" },
       { to: "/app/settings", label: "Settings", icon: Settings, color: "gray" },
       { to: "/app/audit", label: "Audit log", icon: ShieldCheck, color: "red" },
       { to: "/app/exports", label: "Data export", icon: Download, color: "blue" },
@@ -216,27 +237,55 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-const PINNED_ROUTES = ["/app", "/app/tasks", "/app/deadlines", "/app/meetings", "/app/documents"];
-const PINNED_ROUTE_SET = new Set(PINNED_ROUTES);
+const DEFAULT_PINNED_ROUTES = ["/app", "/app/tasks", "/app/deadlines", "/app/meetings", "/app/documents"];
 const ALL_NAV_ITEMS = NAV_GROUPS.flatMap((group) => group.items);
-const PINNED_NAV = PINNED_ROUTES
-  .map((route) => ALL_NAV_ITEMS.find((item) => item.to === route))
-  .filter((item): item is NavItem => Boolean(item));
-const GROUPED_NAV = NAV_GROUPS
-  .map((group) => ({
-    ...group,
-    items: group.items.filter((item) => !PINNED_ROUTE_SET.has(item.to)),
-  }))
-  .filter((group) => group.items.length > 0);
+const ALL_NAV_ITEM_ROUTES = new Set(ALL_NAV_ITEMS.map((item) => item.to));
 
 function isNavItemActive(item: NavItem, pathname: string) {
   if (item.end) return pathname === item.to;
   return pathname === item.to || pathname.startsWith(`${item.to}/`);
 }
 
-function getInitialOpenGroups(pathname: string) {
+function normalizePinnedRoutes(routes: unknown): string[] {
+  if (!Array.isArray(routes)) return DEFAULT_PINNED_ROUTES;
+  const seen = new Set<string>();
+  return routes.filter((route): route is string => {
+    if (typeof route !== "string") return false;
+    if (!ALL_NAV_ITEM_ROUTES.has(route) || seen.has(route)) return false;
+    seen.add(route);
+    return true;
+  });
+}
+
+function readStoredPinnedRoutes() {
+  if (isStaticDemoRuntime()) return DEFAULT_PINNED_ROUTES;
+  try {
+    const stored = localStorage.getItem(PINNED_ROUTES_KEY);
+    return stored ? normalizePinnedRoutes(JSON.parse(stored)) : DEFAULT_PINNED_ROUTES;
+  } catch {
+    return DEFAULT_PINNED_ROUTES;
+  }
+}
+
+function getPinnedNav(pinnedRoutes: string[]) {
+  return pinnedRoutes
+    .map((route) => ALL_NAV_ITEMS.find((item) => item.to === route))
+    .filter((item): item is NavItem => Boolean(item));
+}
+
+function getGroupedNav(pinnedRouteSet: Set<string>) {
+  return NAV_GROUPS
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !pinnedRouteSet.has(item.to)),
+    }))
+    .filter((group) => group.items.length > 0);
+}
+
+function getInitialOpenGroups(pathname: string, pinnedRoutes: string[] = readStoredPinnedRoutes()) {
+  const groupedNav = getGroupedNav(new Set(pinnedRoutes));
   return Object.fromEntries(
-    GROUPED_NAV.map((group) => [
+    groupedNav.map((group) => [
       group.id,
       Boolean(group.defaultOpen || group.items.some((item) => isNavItemActive(item, pathname))),
     ]),
@@ -244,6 +293,9 @@ function getInitialOpenGroups(pathname: string) {
 }
 
 const COLLAPSE_KEY = "societyer.sidebar.collapsed";
+const PINNED_ROUTES_KEY = "societyer.sidebar.pinnedRoutes";
+const SIDEBAR_MENU_WIDTH = 220;
+const SIDEBAR_MENU_HEIGHT = 116;
 const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   Dashboard: "nav.dashboard",
   Society: "nav.society",
@@ -281,6 +333,7 @@ const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   "Privacy (PIPA)": "nav.privacy",
   "PIPA training": "nav.pipaTraining",
   Insurance: "nav.insurance",
+  "Access custody": "nav.accessCustody",
   "Public transparency": "nav.transparency",
   Financials: "nav.financials",
   Treasurer: "nav.treasurer",
@@ -290,10 +343,28 @@ const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   "Membership & billing": "nav.membership",
   Notifications: "nav.notifications",
   "Users & roles": "nav.users",
+  "Import sessions": "nav.importSessions",
   Settings: "nav.settings",
   "Audit log": "nav.auditLog",
   "Data export": "nav.dataExport",
 };
+
+type SidebarContextMenu = {
+  item: NavItem;
+  label: string;
+  top: number;
+  left: number;
+};
+
+function getSidebarMenuPosition(x: number, y: number) {
+  const margin = 8;
+  const maxLeft = Math.max(margin, window.innerWidth - SIDEBAR_MENU_WIDTH - margin);
+  const maxTop = Math.max(margin, window.innerHeight - SIDEBAR_MENU_HEIGHT - margin);
+  return {
+    left: Math.min(Math.max(margin, x), maxLeft),
+    top: Math.min(Math.max(margin, y), maxTop),
+  };
+}
 
 export function Layout() {
   const { society, societies } = useSocietySelection();
@@ -306,6 +377,7 @@ export function Layout() {
   const [collapsed, setCollapsed] = useState(
     () => !isStaticDemoRuntime() && localStorage.getItem(COLLAPSE_KEY) === "1",
   );
+  const [pinnedRoutes, setPinnedRoutes] = useState(readStoredPinnedRoutes);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(
     () => getInitialOpenGroups(window.location.pathname),
   );
@@ -316,15 +388,22 @@ export function Layout() {
     width: number;
     maxHeight: number;
   } | null>(null);
+  const [navContextMenu, setNavContextMenu] = useState<SidebarContextMenu | null>(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
   const mainRef = useRef<HTMLDivElement | null>(null);
   const workspaceButtonRef = useRef<HTMLButtonElement | null>(null);
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
+  const navContextMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (isStaticDemoRuntime()) return;
     localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
+
+  useEffect(() => {
+    if (isStaticDemoRuntime()) return;
+    localStorage.setItem(PINNED_ROUTES_KEY, JSON.stringify(pinnedRoutes));
+  }, [pinnedRoutes]);
 
   useEffect(() => {
     const media = window.matchMedia(`(max-width: ${MOBILE_SIDEBAR_BREAKPOINT}px)`);
@@ -377,12 +456,13 @@ export function Layout() {
   }, [isMobileNav, mobileSidebarOpen]);
 
   useEffect(() => {
-    const activeGroup = GROUPED_NAV.find((group) =>
+    const groupedNav = getGroupedNav(new Set(pinnedRoutes));
+    const activeGroup = groupedNav.find((group) =>
       group.items.some((item) => isNavItemActive(item, loc.pathname)),
     );
     if (!activeGroup) return;
     setOpenGroups((prev) => (prev[activeGroup.id] ? prev : { ...prev, [activeGroup.id]: true }));
-  }, [loc.pathname]);
+  }, [loc.pathname, pinnedRoutes]);
 
   useEffect(() => {
     if (!workspaceOpen) return;
@@ -421,18 +501,43 @@ export function Layout() {
     };
   }, [workspaceOpen]);
 
+  useEffect(() => {
+    if (!navContextMenu) return;
+    const onDown = (event: MouseEvent) => {
+      if (navContextMenuRef.current?.contains(event.target as Node)) return;
+      setNavContextMenu(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNavContextMenu(null);
+    };
+    const close = () => setNavContextMenu(null);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [navContextMenu]);
+
   const counts = useQuery(api.dashboard.summary, society ? { societyId: society._id } : "skip");
+  const pinnedRouteSet = useMemo(() => new Set(pinnedRoutes), [pinnedRoutes]);
+  const pinnedNav = useMemo(() => getPinnedNav(pinnedRoutes), [pinnedRoutes]);
+  const groupedNav = useMemo(() => getGroupedNav(pinnedRouteSet), [pinnedRouteSet]);
   const visiblePinnedNav = useMemo(
-    () => PINNED_NAV.filter((item) => !item.module || isModuleEnabled(society, item.module)),
-    [society],
+    () => pinnedNav.filter((item) => !item.module || isModuleEnabled(society, item.module)),
+    [pinnedNav, society],
   );
   const visibleGroupedNav = useMemo(
     () =>
-      GROUPED_NAV.map((group) => ({
+      groupedNav.map((group) => ({
         ...group,
         items: group.items.filter((item) => !item.module || isModuleEnabled(society, item.module)),
       })).filter((group) => group.items.length > 0),
-    [society],
+    [groupedNav, society],
   );
   const getNavItemLabel = (item: NavItem) => t(NAV_ITEM_LABEL_KEYS[item.label] ?? item.label, item.label);
   const isSidebarCollapsed = isMobileNav ? !mobileSidebarOpen : collapsed;
@@ -458,6 +563,43 @@ export function Layout() {
     } else {
       setCollapsed((v) => !v);
     }
+  };
+
+  const togglePinnedRoute = (item: NavItem) => {
+    setPinnedRoutes((prev) => {
+      if (prev.includes(item.to)) return prev.filter((route) => route !== item.to);
+      return normalizePinnedRoutes([...prev, item.to]);
+    });
+    setNavContextMenu(null);
+  };
+
+  const openNavContextMenu = (item: NavItem, x: number, y: number) => {
+    const position = getSidebarMenuPosition(x, y);
+    setNavContextMenu({
+      item,
+      label: getNavItemLabel(item),
+      top: position.top,
+      left: position.left,
+    });
+    setWorkspaceOpen(false);
+  };
+
+  const handleNavItemContextMenu = (event: ReactMouseEvent<HTMLElement>, item: NavItem) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openNavContextMenu(item, event.clientX, event.clientY);
+  };
+
+  const handleNavItemKeyDown = (event: ReactKeyboardEvent<HTMLElement>, item: NavItem) => {
+    if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    openNavContextMenu(item, rect.left + 28, rect.bottom - 2);
+  };
+
+  const openNavItemInNewTab = (item: NavItem) => {
+    window.open(item.to, "_blank", "noopener,noreferrer");
+    setNavContextMenu(null);
   };
 
   return (
@@ -537,7 +679,18 @@ export function Layout() {
               <span>{t("nav.favorites")}</span>
               <span className="sidebar__section-meta">{t("sidebar.pinned")}</span>
             </div>
-            {visiblePinnedNav.map((item) => renderNavItem(item, counts, collapsed, isMobileNav, getNavItemLabel))}
+            {visiblePinnedNav.map((item) =>
+              renderNavItem(
+                item,
+                counts,
+                collapsed,
+                isMobileNav,
+                getNavItemLabel,
+                pinnedRouteSet.has(item.to),
+                handleNavItemContextMenu,
+                handleNavItemKeyDown,
+              ),
+            )}
             <div className="sidebar__section sidebar__section--compact">
               <span>{t("nav.allRecords")}</span>
               <span className="sidebar__section-meta">{t("sidebar.grouped")}</span>
@@ -562,7 +715,18 @@ export function Layout() {
                   </button>
                   {isOpen && (
                     <div className="sidebar__group-items">
-                      {group.items.map((item) => renderNavItem(item, counts, collapsed, isMobileNav, getNavItemLabel))}
+                      {group.items.map((item) =>
+                        renderNavItem(
+                          item,
+                          counts,
+                          collapsed,
+                          isMobileNav,
+                          getNavItemLabel,
+                          pinnedRouteSet.has(item.to),
+                          handleNavItemContextMenu,
+                          handleNavItemKeyDown,
+                        ),
+                      )}
                     </div>
                   )}
                 </div>
@@ -659,6 +823,41 @@ export function Layout() {
           document.body,
         )}
 
+        {navContextMenu && createPortal(
+          <div
+            ref={navContextMenuRef}
+            className="menu menu--actions sidebar-context-menu"
+            role="menu"
+            style={{
+              top: navContextMenu.top,
+              left: navContextMenu.left,
+              width: SIDEBAR_MENU_WIDTH,
+            }}
+          >
+            <div className="menu__section">
+              <MenuSectionLabel>{navContextMenu.label}</MenuSectionLabel>
+              <MenuRow
+                role="menuitem"
+                icon={pinnedRouteSet.has(navContextMenu.item.to) ? <PinOff size={14} /> : <Pin size={14} />}
+                label={
+                  pinnedRouteSet.has(navContextMenu.item.to)
+                    ? t("sidebar.unpinFromFavorites")
+                    : t("sidebar.pinToFavorites")
+                }
+                onClick={() => togglePinnedRoute(navContextMenu.item)}
+              />
+              <div className="menu__separator" />
+              <MenuRow
+                role="menuitem"
+                icon={<ExternalLink size={14} />}
+                label={t("sidebar.openInNewTab")}
+                onClick={() => openNavItemInNewTab(navContextMenu.item)}
+              />
+            </div>
+          </div>,
+          document.body,
+        )}
+
         <div className="main" ref={mainRef}>
           <div className="workbench">
             <div className="workbench__panel">
@@ -711,6 +910,9 @@ function renderNavItem(
   collapsed: boolean,
   isMobileNav: boolean,
   getLabel: (item: NavItem) => string,
+  isPinned: boolean,
+  onContextMenu: (event: ReactMouseEvent<HTMLElement>, item: NavItem) => void,
+  onKeyDown: (event: ReactKeyboardEvent<HTMLElement>, item: NavItem) => void,
 ) {
   const Icon = item.icon;
   const count = getCount(item.to, counts);
@@ -722,7 +924,10 @@ function renderNavItem(
       to={item.to}
       end={item.end}
       className={({ isActive }) => `sidebar__item${isActive ? " is-active" : ""}`}
+      data-pinned={isPinned || undefined}
       title={!isMobileNav && collapsed ? label : undefined}
+      onContextMenu={(event) => onContextMenu(event, item)}
+      onKeyDown={(event) => onKeyDown(event, item)}
     >
       <TintedIconTile tone={item.color} size="sm" className="sidebar__icon-chip">
         <Icon size={14} />

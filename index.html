@@ -1,7 +1,31 @@
 <!doctype html>
-<html lang="en" class="light">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (function () {
+        try {
+          var preference = window.localStorage.getItem("societyer:theme") || "system";
+          if (preference !== "light" && preference !== "dark" && preference !== "system") {
+            preference = "system";
+          }
+
+          var resolvedTheme =
+            preference === "system"
+              ? window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light"
+              : preference;
+
+          document.documentElement.classList.remove("light", "dark");
+          document.documentElement.classList.add(resolvedTheme);
+          document.documentElement.style.colorScheme = resolvedTheme;
+        } catch (error) {
+          document.documentElement.classList.add("light");
+          document.documentElement.style.colorScheme = "light";
+        }
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

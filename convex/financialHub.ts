@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { v } from "convex/values";
-import { query, mutation, action } from "./_generated/server";
-import { api } from "./_generated/api";
+import { query, internalMutation, mutation, action } from "./_generated/server";
+import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { requireRole } from "./users";
 import {
@@ -151,7 +151,7 @@ export const disconnect = mutation({
 
 // Internal mutation the sync action calls to replace accounts/transactions
 // after talking to Wave.
-export const _replaceSyncedData = mutation({
+export const _replaceSyncedData = internalMutation({
   args: {
     societyId: v.id("societies"),
     connectionId: v.id("financialConnections"),
@@ -241,7 +241,7 @@ export const sync = action({
     try {
       const { accounts } = await waveListAccounts();
       const { transactions } = await waveListTransactions();
-      await ctx.runMutation(api.financialHub._replaceSyncedData, {
+      await ctx.runMutation(internal.financialHub._replaceSyncedData, {
         societyId: conn.societyId,
         connectionId,
         accounts,
@@ -257,7 +257,7 @@ export const sync = action({
       });
       return { accounts: accounts.length, transactions: transactions.length };
     } catch (err: any) {
-      await ctx.runMutation(api.financialHub._markSyncError, {
+      await ctx.runMutation(internal.financialHub._markSyncError, {
         connectionId,
         error: err?.message ?? "Unknown error",
       });
@@ -271,7 +271,7 @@ export const getConnection = query({
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
-export const _markSyncError = mutation({
+export const _markSyncError = internalMutation({
   args: { connectionId: v.id("financialConnections"), error: v.string() },
   handler: async (ctx, { connectionId, error }) => {
     await ctx.db.patch(connectionId, { status: "error", lastError: error });

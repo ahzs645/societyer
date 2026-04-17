@@ -4,6 +4,7 @@ import path from "path";
 
 const base = process.env.VITE_BASE_PATH ?? "/";
 const stableAssetNames = process.env.VITE_STABLE_ASSET_NAMES === "1";
+const apiServerTarget = `http://127.0.0.1:${process.env.AUTH_SERVER_PORT ?? "8787"}`;
 
 export default defineConfig({
   base,
@@ -15,15 +16,12 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy:
-      process.env.VITE_AUTH_MODE === "better-auth"
-        ? {
-            "/api/auth": {
-              target: `http://127.0.0.1:${process.env.AUTH_SERVER_PORT ?? "8787"}`,
-              changeOrigin: true,
-            },
-          }
-        : undefined,
+    proxy: {
+      "/api": {
+        target: apiServerTarget,
+        changeOrigin: true,
+      },
+    },
   },
   css: {
     preprocessorOptions: {

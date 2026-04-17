@@ -1208,6 +1208,9 @@ async function wipe(ctx: any) {
     "employees",
     "courtOrders",
     "recordsLocation",
+    "sourceEvidence",
+    "secretVaultItems",
+    "archiveAccessions",
     "bylawAmendments",
     "societies",
   ];

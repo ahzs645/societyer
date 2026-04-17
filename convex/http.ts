@@ -1,6 +1,6 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
 const http = httpRouter();
 
@@ -217,7 +217,7 @@ http.route({
           unsubscribedAtISO: new Date().toISOString(),
           unsubscribeReason: eventType,
         });
-        await ctx.runMutation(api.communications._recordDelivery, {
+        await ctx.runMutation(internal.communications._recordDelivery, {
           societyId: lookup.societyId,
           memberId: lookup.member._id,
           recipientName: `${lookup.member.firstName} ${lookup.member.lastName}`,
@@ -281,7 +281,7 @@ http.route({
           unsubscribedAtISO: new Date().toISOString(),
           unsubscribeReason: "sms-stop",
         });
-        await ctx.runMutation(api.communications._recordDelivery, {
+        await ctx.runMutation(internal.communications._recordDelivery, {
           societyId: society._id,
           memberId: member._id,
           recipientName: `${member.firstName} ${member.lastName}`,

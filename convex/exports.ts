@@ -1,109 +1,287 @@
+// @ts-nocheck
 import { query } from "./_generated/server";
 import { v } from "convex/values";
-import type { QueryCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import { paginationOptsValidator } from "convex/server";
 
-const EXPORTABLE = [
+const EXPORT_VERSION = 2;
+
+export const EXPORTABLE_TABLES = [
+  "societies",
+  "users",
+  "apiClients",
+  "apiTokens",
+  "pluginInstallations",
+  "webhookSubscriptions",
+  "webhookDeliveries",
+  "documentVersions",
+  "paperlessConnections",
+  "paperlessDocumentSyncs",
+  "notifications",
+  "notificationPrefs",
+  "memberCommunicationPrefs",
+  "communicationSegments",
+  "communicationTemplates",
+  "communicationCampaigns",
+  "communicationDeliveries",
+  "financialConnections",
+  "financialAccounts",
+  "financialTransactions",
+  "budgets",
+  "budgetSnapshots",
+  "budgetSnapshotLines",
+  "financialStatementImports",
+  "financialStatementImportLines",
+  "treasurerReports",
+  "transactionCandidates",
+  "signatures",
+  "filingBotRuns",
+  "subscriptionPlans",
+  "memberSubscriptions",
+  "transcripts",
+  "transcriptionJobs",
   "members",
   "directors",
+  "boardRoleAssignments",
+  "boardRoleChanges",
+  "signingAuthorities",
   "committees",
+  "committeeMembers",
+  "volunteers",
+  "volunteerApplications",
+  "volunteerScreenings",
   "meetings",
   "minutes",
+  "meetingAttendanceRecords",
+  "motionEvidence",
   "filings",
-  "deadlines",
-  "volunteers",
   "grants",
   "grantApplications",
   "grantReports",
-  "donationReceipts",
-  "financialTransactions",
-  "financialAccounts",
-  "budgets",
+  "grantTransactions",
+  "deadlines",
+  "documents",
+  "publications",
   "conflicts",
-  "attestations",
+  "financials",
+  "bylawRuleSets",
+  "goals",
+  "tasks",
+  "activity",
+  "inspections",
+  "directorAttestations",
+  "writtenResolutions",
+  "agmRuns",
+  "noticeDeliveries",
   "insurancePolicies",
   "pipaTrainings",
-  "memberSubscriptions",
+  "proxies",
+  "auditorAppointments",
+  "memberProposals",
+  "elections",
+  "electionQuestions",
+  "electionEligibleVoters",
+  "electionBallots",
+  "electionNominations",
+  "electionAuditEvents",
+  "donationReceipts",
   "employees",
-  "documents",
-  "activity",
+  "courtOrders",
+  "bylawAmendments",
+  "agendas",
+  "agendaItems",
+  "motionTemplates",
+  "recordsLocation",
+  "sourceEvidence",
+  "secretVaultItems",
+  "archiveAccessions",
 ] as const;
 
-export type ExportableTable = (typeof EXPORTABLE)[number];
-
-async function collectForSociety(
-  ctx: QueryCtx,
-  table: ExportableTable,
-  societyId: Id<"societies">,
-) {
-  switch (table) {
-    case "members":
-      return await ctx.db.query("members").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "directors":
-      return await ctx.db.query("directors").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "committees":
-      return await ctx.db.query("committees").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "meetings":
-      return await ctx.db.query("meetings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "minutes":
-      return await ctx.db.query("minutes").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "filings":
-      return await ctx.db.query("filings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "deadlines":
-      return await ctx.db.query("deadlines").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "volunteers":
-      return await ctx.db.query("volunteers").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "grants":
-      return await ctx.db.query("grants").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "grantApplications":
-      return await ctx.db.query("grantApplications").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "grantReports":
-      return await ctx.db.query("grantReports").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "donationReceipts":
-      return await ctx.db.query("donationReceipts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "financialTransactions":
-      return await ctx.db.query("financialTransactions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "financialAccounts":
-      return await ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "budgets":
-      return await ctx.db.query("budgets").withIndex("by_society_fy", (q) => q.eq("societyId", societyId)).collect();
-    case "conflicts":
-      return await ctx.db.query("conflicts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "attestations":
-      return await ctx.db.query("directorAttestations").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "insurancePolicies":
-      return await ctx.db.query("insurancePolicies").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "pipaTrainings":
-      return await ctx.db.query("pipaTrainings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "memberSubscriptions":
-      return await ctx.db.query("memberSubscriptions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "employees":
-      return await ctx.db.query("employees").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "documents":
-      return await ctx.db.query("documents").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    case "activity":
-      return await ctx.db.query("activity").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-  }
-}
+const EXPORTABLE_SET = new Set<string>(EXPORTABLE_TABLES);
+const REDACTED_FIELDS = new Set(["secretEncrypted", "tokenHash", "storageId"]);
+const NO_BY_SOCIETY_INDEX = new Set(["transcriptionJobs", "electionEligibleVoters", "electionBallots"]);
+const SOCIETY_INDEX_BY_TABLE: Record<string, string> = {
+  budgets: "by_society_fy",
+};
 
 export const listExportableTables = query({
-  args: {},
-  handler: async () => EXPORTABLE.map((t) => t),
+  args: { societyId: v.optional(v.id("societies")) },
+  handler: async (ctx, { societyId }) => {
+    if (!societyId) {
+      return EXPORTABLE_TABLES.map((name) => ({ name, rowCount: null, exportable: true }));
+    }
+    const society = await ctx.db.get(societyId);
+    if (!society) throw new Error("Society not found.");
+    return EXPORTABLE_TABLES.map((name) => ({ name, rowCount: null, exportable: true }));
+  },
 });
 
 export const exportTable = query({
   args: {
     societyId: v.id("societies"),
-    table: v.union(...EXPORTABLE.map((t) => v.literal(t))),
+    table: v.string(),
   },
   handler: async (ctx, { societyId, table }) => {
-    const rows = await collectForSociety(ctx, table, societyId);
-    return rows.map(stripStorageRefs);
+    const result = await paginateForSociety(ctx, table, societyId, { cursor: null, numItems: 100 });
+    if (!result.isDone) {
+      throw new Error("Table is too large for a single export query. Use exportTablePage.");
+    }
+    return result.page;
   },
 });
 
-function stripStorageRefs<T extends Record<string, unknown>>(row: T): T {
+export const exportTablePage = query({
+  args: {
+    societyId: v.id("societies"),
+    table: v.string(),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, { societyId, table, paginationOpts }) => {
+    return await paginateForSociety(ctx, table, societyId, paginationOpts);
+  },
+});
+
+export const countTablePage = query({
+  args: {
+    societyId: v.id("societies"),
+    table: v.string(),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, { societyId, table, paginationOpts }) => {
+    const result = await paginateForSociety(ctx, table, societyId, paginationOpts);
+    return {
+      count: result.page.length,
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
+  },
+});
+
+export const exportWorkspace = query({
+  args: {
+    societyId: v.id("societies"),
+    includeEmptyTables: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { societyId, includeEmptyTables }) => {
+    const society = await ctx.db.get(societyId);
+    if (!society) throw new Error("Society not found.");
+
+    const generatedAtISO = new Date().toISOString();
+    const summaries = EXPORTABLE_TABLES.map((name) => ({ name, rowCount: null, exportable: true }));
+
+    return {
+      kind: "societyer.workspaceExport",
+      version: EXPORT_VERSION,
+      generatedAtISO,
+      society: sanitizeRow(society),
+      manifest: {
+        societyId,
+        societyName: society.name,
+        tableCount: EXPORTABLE_TABLES.length,
+        exportedTableCount: includeEmptyTables ? EXPORTABLE_TABLES.length : 0,
+        totalRows: null,
+        redactedFields: Array.from(REDACTED_FIELDS),
+        binaryFilesIncluded: false,
+        tables: summaries,
+      },
+      validation: validationFromSummaries(summaries),
+      tables: {},
+    };
+  },
+});
+
+export const validateCurrentDatabase = query({
+  args: { societyId: v.id("societies") },
+  handler: async (ctx, { societyId }) => {
+    const society = await ctx.db.get(societyId);
+    if (!society) {
+      return {
+        ok: false,
+        generatedAtISO: new Date().toISOString(),
+        issues: ["Society not found."],
+        tables: [],
+        totalRows: 0,
+      };
+    }
+    const tables = EXPORTABLE_TABLES.map((name) => ({ name, rowCount: null, exportable: true }));
+    return {
+      societyId,
+      societyName: society.name,
+      generatedAtISO: new Date().toISOString(),
+      ...validationFromSummaries(tables),
+      tables,
+    };
+  },
+});
+
+async function paginateForSociety(ctx: any, table: string, societyId: string, paginationOpts: any) {
+  assertExportable(table);
+  const societyKey = String(societyId);
+
+  if (table === "societies") {
+    const society = await ctx.db.get(societyId);
+    const include = society && (!paginationOpts.cursor || paginationOpts.cursor === "0");
+    return {
+      page: include ? [sanitizeRow(society)] : [],
+      isDone: true,
+      continueCursor: "",
+    };
+  }
+
+  if (table === "notificationPrefs") {
+    const users = await ctx.db.query("users").collect();
+    const userIds = new Set(
+      users
+        .filter((row: any) => String(row.societyId) === societyKey)
+        .map((row: any) => String(row._id)),
+    );
+    if (userIds.size === 0) {
+      return { page: [], isDone: true, continueCursor: "" };
+    }
+    const page = await ctx.db
+      .query("notificationPrefs")
+      .filter((q: any) => q.or(...Array.from(userIds).map((id) => q.eq(q.field("userId"), id))))
+      .paginate(paginationOpts);
+    return { ...page, page: page.page.map(sanitizeRow) };
+  }
+
+  const indexName = SOCIETY_INDEX_BY_TABLE[table] ?? "by_society";
+  const query = NO_BY_SOCIETY_INDEX.has(table)
+    ? ctx.db.query(table).filter((q: any) => q.eq(q.field("societyId"), societyId))
+    : ctx.db.query(table).withIndex(indexName, (q: any) => q.eq("societyId", societyId));
+  const page = await query.paginate(paginationOpts);
+  return { ...page, page: page.page.map(sanitizeRow) };
+}
+
+function assertExportable(table: string) {
+  if (!EXPORTABLE_SET.has(table)) {
+    throw new Error(`Table "${table}" is not exportable.`);
+  }
+}
+
+function validationFromSummaries(tables: Array<{ name: string; rowCount: number | null }>) {
+  const issues: string[] = [];
+  const names = new Set(tables.map((table) => table.name));
+  for (const table of EXPORTABLE_TABLES) {
+    if (!names.has(table)) issues.push(`Missing export coverage for ${table}.`);
+  }
+  const countedTables = tables.filter((table) => typeof table.rowCount === "number");
+  const totalRows = countedTables.length
+    ? countedTables.reduce((sum, table) => sum + Number(table.rowCount), 0)
+    : null;
+  return {
+    ok: issues.length === 0,
+    version: EXPORT_VERSION,
+    tableCount: EXPORTABLE_TABLES.length,
+    nonEmptyTableCount: countedTables.filter((table) => Number(table.rowCount) > 0).length,
+    totalRows,
+    issues,
+  };
+}
+
+function sanitizeRow<T extends Record<string, unknown>>(row: T): T {
   const copy: Record<string, unknown> = { ...row };
-  if ("storageId" in copy) copy.storageId = undefined;
+  for (const field of REDACTED_FIELDS) {
+    if (field in copy) copy[field] = "[redacted]";
+  }
   return copy as T;
 }

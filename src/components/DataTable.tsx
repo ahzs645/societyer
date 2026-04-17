@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { ViewBar } from "./primitives";
 import {
   AppliedFilter,
@@ -41,6 +41,9 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   searchExtraFields,
   renderRowActions,
   rowActionLabel,
+  pagination = false,
+  initialPageSize = 10,
+  pageSizeOptions = [10, 25, 50],
 }: {
   label: string;
   icon?: ReactNode;
@@ -58,12 +61,18 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   renderRowActions?: (row: T) => ReactNode;
   /** Accessible label for clickable rows. */
   rowActionLabel?: (row: T) => string;
+  /** Opt-in client-side pagination for long result sets. */
+  pagination?: boolean;
+  initialPageSize?: number;
+  pageSizeOptions?: number[];
 }) {
   const [q, setQ] = useState("");
   const [filters, setFilters] = useState<AppliedFilter[]>([]);
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [sort, setSort] = useState<SortState>(defaultSort ?? null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(initialPageSize);
   const [isMobileCards, setIsMobileCards] = useState(
     () => window.matchMedia(`(max-width: ${MOBILE_CARD_BREAKPOINT}px)`).matches,
   );
@@ -78,6 +87,10 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   }, []);
   const sortColumn = sort ? columns.find((column) => column.id === sort.columnId) : null;
   const sortableColumns = useMemo(() => columns.filter((c) => c.sortable), [columns]);
+  const effectivePageSizeOptions = useMemo(
+    () => Array.from(new Set([initialPageSize, ...pageSizeOptions])).filter((size) => size > 0).sort((a, b) => a - b),
+    [initialPageSize, pageSizeOptions],
+  );
 
   const filtered = useMemo(() => {
     let rows = data;
@@ -114,6 +127,19 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
     }
     return rows;
   }, [data, filters, q, sort, columns, filterFields, searchExtraFields]);
+
+  const totalPages = pagination ? Math.max(1, Math.ceil(filtered.length / pageSize)) : 1;
+  const visibleRows = pagination ? filtered.slice((page - 1) * pageSize, page * pageSize) : filtered;
+  const pageStart = filtered.length === 0 ? 0 : (page - 1) * pageSize + 1;
+  const pageEnd = pagination ? Math.min(page * pageSize, filtered.length) : filtered.length;
+
+  useEffect(() => {
+    setPage(1);
+  }, [q, filters, sort, data.length, pageSize]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(Math.max(current, 1), totalPages));
+  }, [totalPages]);
 
   const toggleSort = (columnId: string) => {
     const col = columns.find((c) => c.id === columnId);
@@ -191,7 +217,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
 
       {isMobileCards ? (
         <div className="card-list" role="list" aria-label={label}>
-          {filtered.map((row) => {
+          {visibleRows.map((row) => {
             const primaryCol = columns[0];
             const secondaryCols = columns.slice(1);
             const primaryCell = primaryCol.render
@@ -288,7 +314,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
           </tr>
         </thead>
         <tbody>
-          {filtered.map((row) => (
+          {visibleRows.map((row) => (
             <tr
               key={rowKey(row)}
               className={renderRowActions ? "table__row--actions" : undefined}
@@ -345,6 +371,45 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
           )}
         </tbody>
       </table>
+      )}
+      {pagination && filtered.length > 0 && (
+        <div className="table-pagination">
+          <div className="table-pagination__range">
+            Showing {pageStart}-{pageEnd} of {filtered.length}
+          </div>
+          <label className="table-pagination__size">
+            <span>Rows</span>
+            <select
+              value={pageSize}
+              onChange={(event) => setPageSize(Number(event.target.value))}
+            >
+              {effectivePageSizeOptions.map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+          </label>
+          <div className="table-pagination__controls" aria-label={`${label} pagination`}>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm btn--icon"
+              aria-label="Previous page"
+              disabled={page <= 1}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+            >
+              <ChevronLeft size={12} />
+            </button>
+            <span className="table-pagination__page">Page {page} of {totalPages}</span>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm btn--icon"
+              aria-label="Next page"
+              disabled={page >= totalPages}
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            >
+              <ChevronRight size={12} />
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

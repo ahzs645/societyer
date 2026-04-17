@@ -14,6 +14,7 @@ const DOCUMENT_POLICY_ID = "static_document_privacy";
 const ELECTION_ID = "static_election";
 const ELECTION_QUESTION_ID = "static_election_question_directors";
 const FINANCIAL_CONNECTION_ID = "static_financial_connection";
+const PAPERLESS_CONNECTION_ID = "static_paperless_connection";
 const CASH_ACCOUNT_ID = "static_financial_cash";
 const GRANT_ACCOUNT_ID = "static_financial_grant";
 
@@ -502,6 +503,41 @@ const financialConnections = [
   },
 ];
 
+const paperlessConnections = [
+  {
+    _id: PAPERLESS_CONNECTION_ID,
+    societyId: SOCIETY_ID,
+    status: "connected",
+    baseUrl: "demo://paperless-ngx",
+    apiVersion: "demo",
+    serverVersion: "demo",
+    autoCreateTags: true,
+    autoUpload: false,
+    tagPrefix: "societyer",
+    connectedAtISO: "2026-04-12T18:00:00.000Z",
+    lastCheckedAtISO: "2026-04-16T16:00:00.000Z",
+    demo: true,
+  },
+];
+
+const paperlessDocumentSyncs = [
+  {
+    _id: "static_paperless_sync_bylaws",
+    societyId: SOCIETY_ID,
+    documentId: DOCUMENT_BYLAWS_ID,
+    connectionId: PAPERLESS_CONNECTION_ID,
+    status: "complete",
+    paperlessTaskId: "demo-paperless-task-1001",
+    paperlessDocumentId: 1001,
+    paperlessDocumentUrl: "demo://paperless/1001",
+    title: "Current bylaws",
+    fileName: "current-bylaws.pdf",
+    tags: ["societyer", "societyer:bylaws", "bylaws", "corporate register", "public"],
+    queuedAtISO: "2026-04-12T18:05:00.000Z",
+    completedAtISO: "2026-04-12T18:05:00.000Z",
+  },
+];
+
 const financialAccounts = [
   {
     _id: CASH_ACCOUNT_ID,
@@ -696,6 +732,8 @@ const tables: Record<string, any[]> = {
   directors,
   documents,
   documentVersions: [],
+  paperlessConnections,
+  paperlessDocumentSyncs,
   electionAuditEvents,
   electionBallots: [],
   electionEligibleVoters,
@@ -750,6 +788,35 @@ const tables: Record<string, any[]> = {
   ],
   grantTransactions: [],
   inspections: [],
+  secrets: [
+    {
+      _id: "static_access_registry",
+      societyId: SOCIETY_ID,
+      name: "BC Registry account recovery",
+      service: "BC Registries",
+      credentialType: "registry_key",
+      ownerRole: "Secretary",
+      custodianUserId: USER_SECRETARY_ID,
+      custodianPersonName: "Avery Santos",
+      custodianEmail: "avery@riverside.example",
+      backupCustodianName: "Mina Patel",
+      backupCustodianEmail: "mina@riverside.example",
+      storageMode: "stored_encrypted",
+      externalLocation: "Societyer demo vault",
+      hasSecretValue: true,
+      secretPreview: "•••• demo",
+      revealPolicy: "owner_admin_custodian",
+      lastVerifiedAtISO: "2026-03-15",
+      rotationDueAtISO: "2026-09-15",
+      status: "Active",
+      sensitivity: "restricted",
+      accessLevel: "restricted",
+      sourceExternalIds: ["demo:registry-custody"],
+      notes: "Demo custody metadata only.",
+      createdAtISO: "2026-03-15T16:00:00.000Z",
+      updatedAtISO: "2026-03-15T16:00:00.000Z",
+    },
+  ],
   insurance: [
     {
       _id: "static_insurance",
@@ -1085,6 +1152,170 @@ function publicCenter(args?: StaticArgs) {
   };
 }
 
+const STATIC_EXPORT_TABLES = [
+  "societies",
+  "users",
+  "apiClients",
+  "apiTokens",
+  "pluginInstallations",
+  "webhookSubscriptions",
+  "webhookDeliveries",
+  "documentVersions",
+  "paperlessConnections",
+  "paperlessDocumentSyncs",
+  "notifications",
+  "notificationPrefs",
+  "memberCommunicationPrefs",
+  "communicationSegments",
+  "communicationTemplates",
+  "communicationCampaigns",
+  "communicationDeliveries",
+  "financialConnections",
+  "financialAccounts",
+  "financialTransactions",
+  "budgets",
+  "budgetSnapshots",
+  "budgetSnapshotLines",
+  "financialStatementImports",
+  "financialStatementImportLines",
+  "treasurerReports",
+  "transactionCandidates",
+  "signatures",
+  "filingBotRuns",
+  "subscriptionPlans",
+  "memberSubscriptions",
+  "transcripts",
+  "transcriptionJobs",
+  "members",
+  "directors",
+  "boardRoleAssignments",
+  "boardRoleChanges",
+  "signingAuthorities",
+  "committees",
+  "committeeMembers",
+  "volunteers",
+  "volunteerApplications",
+  "volunteerScreenings",
+  "meetings",
+  "minutes",
+  "meetingAttendanceRecords",
+  "motionEvidence",
+  "filings",
+  "grants",
+  "grantApplications",
+  "grantReports",
+  "grantTransactions",
+  "deadlines",
+  "documents",
+  "publications",
+  "conflicts",
+  "financials",
+  "bylawRuleSets",
+  "goals",
+  "tasks",
+  "activity",
+  "inspections",
+  "directorAttestations",
+  "writtenResolutions",
+  "agmRuns",
+  "noticeDeliveries",
+  "insurancePolicies",
+  "pipaTrainings",
+  "proxies",
+  "auditorAppointments",
+  "memberProposals",
+  "elections",
+  "electionQuestions",
+  "electionEligibleVoters",
+  "electionBallots",
+  "electionNominations",
+  "electionAuditEvents",
+  "donationReceipts",
+  "employees",
+  "courtOrders",
+  "bylawAmendments",
+  "agendas",
+  "agendaItems",
+  "motionTemplates",
+  "recordsLocation",
+  "sourceEvidence",
+  "secretVaultItems",
+  "archiveAccessions",
+];
+
+const STATIC_EXPORT_ALIASES: Record<string, string> = {
+  donationReceipts: "receipts",
+  insurancePolicies: "insurance",
+  pipaTrainings: "pipaTraining",
+  publications: "transparency",
+  secretVaultItems: "secrets",
+};
+
+function staticExportRows(table: string, args?: StaticArgs) {
+  if (!table) return [];
+  if (table === "societies") return [society].filter((row) => !args?.societyId || row._id === args.societyId);
+  const key = STATIC_EXPORT_ALIASES[table] ?? table;
+  return scopedRows(tables[key] ?? [], args).map((row: any) => staticSanitizeExportRow(row));
+}
+
+function staticExportSummaries(args?: StaticArgs) {
+  return STATIC_EXPORT_TABLES.map((name) => ({
+    name,
+    rowCount: staticExportRows(name, args).length,
+    exportable: true,
+  }));
+}
+
+function staticExportValidation(args?: StaticArgs) {
+  const summaries = staticExportSummaries(args);
+  const totalRows = summaries.reduce((sum, table) => sum + table.rowCount, 0);
+  return {
+    ok: true,
+    version: 2,
+    tableCount: STATIC_EXPORT_TABLES.length,
+    nonEmptyTableCount: summaries.filter((table) => table.rowCount > 0).length,
+    totalRows,
+    issues: [],
+    tables: summaries,
+    generatedAtISO: new Date().toISOString(),
+    societyId: args?.societyId ?? SOCIETY_ID,
+    societyName: society.name,
+  };
+}
+
+function staticExportWorkspace(args?: StaticArgs) {
+  const summaries = staticExportSummaries(args);
+  const tableRows = Object.fromEntries(
+    STATIC_EXPORT_TABLES.map((table) => [table, staticExportRows(table, args)]),
+  );
+  return {
+    kind: "societyer.workspaceExport",
+    version: 2,
+    generatedAtISO: new Date().toISOString(),
+    society: staticSanitizeExportRow(society),
+    manifest: {
+      societyId: args?.societyId ?? SOCIETY_ID,
+      societyName: society.name,
+      tableCount: STATIC_EXPORT_TABLES.length,
+      exportedTableCount: STATIC_EXPORT_TABLES.length,
+      totalRows: summaries.reduce((sum, table) => sum + table.rowCount, 0),
+      redactedFields: ["secretEncrypted", "tokenHash", "storageId"],
+      binaryFilesIncluded: false,
+      tables: summaries,
+    },
+    validation: staticExportValidation(args),
+    tables: tableRows,
+  };
+}
+
+function staticSanitizeExportRow(row: any) {
+  const copy = { ...row };
+  for (const field of ["secretEncrypted", "tokenHash", "storageId"]) {
+    if (field in copy) copy[field] = "[redacted]";
+  }
+  return copy;
+}
+
 function queryResult(name: string, args: StaticArgs) {
   switch (name) {
     case "activity:list":
@@ -1104,6 +1335,51 @@ function queryResult(name: string, args: StaticArgs) {
     case "documentVersions:latest":
     case "documentVersions:listForDocument":
       return [];
+    case "paperless:connectionStatus":
+      return {
+        connection: paperlessConnections[0],
+        runtime: {
+          provider: "demo",
+          live: false,
+          configured: false,
+          baseUrl: "demo://paperless-ngx",
+        },
+      };
+    case "paperless:listConnection":
+      return paperlessConnections[0];
+    case "paperless:recentSyncs":
+      return paperlessDocumentSyncs
+        .slice(0, args?.limit ?? paperlessDocumentSyncs.length)
+        .map((sync) => ({
+          ...sync,
+          documentTitle: byId(documents, sync.documentId)?.title ?? sync.title,
+          documentCategory: byId(documents, sync.documentId)?.category,
+        }));
+    case "paperless:syncForDocument":
+      return paperlessDocumentSyncs.find((sync) => sync.documentId === args?.documentId) ?? null;
+    case "paperless:tagProfiles":
+      return [
+        {
+          scope: "Core record",
+          tags: ["societyer", "category:<document category>", "local document tags"],
+          usage: "Every synced document carries stable app-level context.",
+        },
+        {
+          scope: "Governance",
+          tags: ["constitution", "bylaws", "minutes", "election", "auditor"],
+          usage: "Society profile, meetings, elections, bylaws, and auditor records.",
+        },
+        {
+          scope: "Compliance",
+          tags: ["filing", "filing:<kind>", "records-inspection", "pipa-training"],
+          usage: "Filing evidence, retained records, inspections, and privacy training proof.",
+        },
+        {
+          scope: "Finance and programs",
+          tags: ["financial-statement", "grant-report", "grant-transaction", "volunteer-screening"],
+          usage: "Financials, grants, donation evidence, and volunteer screening files.",
+        },
+      ];
     case "elections:get":
       return electionBundle(args);
     case "elections:listMine":
@@ -1112,6 +1388,16 @@ function queryResult(name: string, args: StaticArgs) {
       return [];
     case "elections:tally":
       return electionTally(args);
+    case "exports:countTablePage":
+      return { count: staticExportRows(args?.table, args).length, isDone: true, continueCursor: "" };
+    case "exports:exportTable":
+      return staticExportRows(args?.table, args);
+    case "exports:exportWorkspace":
+      return staticExportWorkspace(args);
+    case "exports:listExportableTables":
+      return staticExportSummaries(args);
+    case "exports:validateCurrentDatabase":
+      return staticExportValidation(args);
     case "filingBot:buildFilingPacket":
       return { filing: byId(filings, args?.filingId), documents: [] };
     case "filingBot:runsForFiling":
@@ -1227,6 +1513,31 @@ function queryResult(name: string, args: StaticArgs) {
 function mutationResult(name: string, args: StaticArgs) {
   if (name === "seed:run") return SOCIETY_ID;
   if (name === "users:resolveAuthSession") return { userId: USER_OWNER_ID };
+  if (name === "paperless:testConnection") {
+    return {
+      ok: true,
+      provider: "demo",
+      demo: true,
+      baseUrl: "demo://paperless-ngx",
+      apiVersion: "demo",
+      serverVersion: "demo",
+      documentCount: documents.length,
+    };
+  }
+  if (name === "paperless:syncDocument") {
+    return {
+      taskId: "demo-paperless-task-1002",
+      documentId: 1002,
+      documentUrl: "demo://paperless/1002",
+      demo: true,
+      status: "complete",
+      tags: ["societyer", "demo"],
+    };
+  }
+  if (name === "paperless:upsertConnection") return PAPERLESS_CONNECTION_ID;
+  if (name === "secrets:revealSecret") {
+    return { value: "demo-registry-recovery-key", revealedAtISO: new Date().toISOString() };
+  }
   if (name === "subscriptions:beginCheckout") {
     return {
       url: `demo://checkout/${args?.planId ?? "membership"}`,

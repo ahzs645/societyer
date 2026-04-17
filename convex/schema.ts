@@ -54,6 +54,89 @@ export default defineSchema({
     .index("by_email", ["email"])
     .index("by_auth_subject", ["authSubject"]),
 
+  apiClients: defineTable({
+    societyId: v.id("societies"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    kind: v.string(), // plugin | integration | service
+    status: v.string(), // active | disabled
+    createdByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  apiTokens: defineTable({
+    societyId: v.id("societies"),
+    clientId: v.id("apiClients"),
+    name: v.string(),
+    tokenHash: v.string(),
+    tokenStart: v.string(),
+    scopes: v.array(v.string()),
+    status: v.string(), // active | revoked
+    expiresAtISO: v.optional(v.string()),
+    createdByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+    lastUsedAtISO: v.optional(v.string()),
+    revokedAtISO: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_client", ["clientId"])
+    .index("by_token_hash", ["tokenHash"]),
+
+  pluginInstallations: defineTable({
+    societyId: v.id("societies"),
+    clientId: v.optional(v.id("apiClients")),
+    name: v.string(),
+    slug: v.string(),
+    status: v.string(), // installed | disabled | removed
+    capabilities: v.array(v.string()),
+    configJson: v.optional(v.string()),
+    installedByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_slug", ["societyId", "slug"]),
+
+  webhookSubscriptions: defineTable({
+    societyId: v.id("societies"),
+    clientId: v.optional(v.id("apiClients")),
+    pluginInstallationId: v.optional(v.id("pluginInstallations")),
+    name: v.string(),
+    targetUrl: v.string(),
+    eventTypes: v.array(v.string()),
+    secretEncrypted: v.string(),
+    status: v.string(), // active | disabled
+    createdByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  webhookDeliveries: defineTable({
+    societyId: v.id("societies"),
+    subscriptionId: v.id("webhookSubscriptions"),
+    eventId: v.string(),
+    eventType: v.string(),
+    payloadJson: v.string(),
+    status: v.string(), // pending | delivered | failed
+    attempts: v.number(),
+    attemptHistoryJson: v.optional(v.string()),
+    nextAttemptAtISO: v.optional(v.string()),
+    lastAttemptAtISO: v.optional(v.string()),
+    lastStatusCode: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+    createdAtISO: v.string(),
+    deliveredAtISO: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_subscription", ["subscriptionId"])
+    .index("by_event", ["eventId"])
+    .index("by_status_next", ["status", "nextAttemptAtISO"]),
+
   documentVersions: defineTable({
     societyId: v.id("societies"),
     documentId: v.id("documents"),
@@ -72,6 +155,43 @@ export default defineSchema({
   })
     .index("by_document", ["documentId"])
     .index("by_society", ["societyId"]),
+
+  paperlessConnections: defineTable({
+    societyId: v.id("societies"),
+    status: v.string(), // connected | disconnected | error
+    baseUrl: v.optional(v.string()),
+    apiVersion: v.optional(v.string()),
+    serverVersion: v.optional(v.string()),
+    autoCreateTags: v.boolean(),
+    autoUpload: v.boolean(),
+    tagPrefix: v.optional(v.string()),
+    connectedAtISO: v.string(),
+    lastCheckedAtISO: v.optional(v.string()),
+    lastSyncAtISO: v.optional(v.string()),
+    lastError: v.optional(v.string()),
+    demo: v.boolean(),
+  }).index("by_society", ["societyId"]),
+
+  paperlessDocumentSyncs: defineTable({
+    societyId: v.id("societies"),
+    documentId: v.id("documents"),
+    versionId: v.optional(v.id("documentVersions")),
+    connectionId: v.optional(v.id("paperlessConnections")),
+    status: v.string(), // queued | processing | complete | failed
+    paperlessTaskId: v.optional(v.string()),
+    paperlessDocumentId: v.optional(v.number()),
+    paperlessDocumentUrl: v.optional(v.string()),
+    title: v.string(),
+    fileName: v.optional(v.string()),
+    tags: v.array(v.string()),
+    queuedAtISO: v.string(),
+    completedAtISO: v.optional(v.string()),
+    lastCheckedAtISO: v.optional(v.string()),
+    lastError: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_document", ["documentId"])
+    .index("by_task", ["paperlessTaskId"]),
 
   notifications: defineTable({
     societyId: v.id("societies"),
@@ -253,6 +373,134 @@ export default defineSchema({
     notes: v.optional(v.string()),
   }).index("by_society_fy", ["societyId", "fiscalYear"]),
 
+  budgetSnapshots: defineTable({
+    societyId: v.id("societies"),
+    title: v.string(),
+    fiscalYear: v.string(),
+    periodLabel: v.optional(v.string()),
+    sourceDate: v.optional(v.string()),
+    currency: v.string(),
+    totalIncomeCents: v.optional(v.number()),
+    totalExpenseCents: v.optional(v.number()),
+    netCents: v.optional(v.number()),
+    endingBalanceCents: v.optional(v.number()),
+    preparedByName: v.optional(v.string()),
+    lastModifiedDate: v.optional(v.string()),
+    sourcePageCount: v.optional(v.number()),
+    importGroupKey: v.optional(v.string()),
+    status: v.string(), // NeedsReview | Verified | Superseded
+    confidence: v.string(),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_fy", ["societyId", "fiscalYear"]),
+
+  budgetSnapshotLines: defineTable({
+    societyId: v.id("societies"),
+    snapshotId: v.id("budgetSnapshots"),
+    lineType: v.string(), // income | expense | balance | note
+    category: v.string(),
+    parentCategory: v.optional(v.string()),
+    rowKind: v.optional(v.string()), // detail | subtotal | tax | total | ytd | note
+    sortOrder: v.optional(v.number()),
+    description: v.optional(v.string()),
+    amountCents: v.optional(v.number()),
+    projectedCents: v.optional(v.number()),
+    ytdCents: v.optional(v.number()),
+    sourcePage: v.optional(v.string()),
+    rawLabel: v.optional(v.string()),
+    rawAmountText: v.optional(v.string()),
+    confidence: v.string(),
+    notes: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_snapshot", ["snapshotId"]),
+
+  financialStatementImports: defineTable({
+    societyId: v.id("societies"),
+    title: v.string(),
+    fiscalYear: v.string(),
+    statementType: v.string(), // income_statement | balance_sheet | trial_balance | full_statement
+    periodStart: v.optional(v.string()),
+    periodEnd: v.string(),
+    revenueCents: v.optional(v.number()),
+    expensesCents: v.optional(v.number()),
+    netAssetsCents: v.optional(v.number()),
+    restrictedFundsCents: v.optional(v.number()),
+    status: v.string(), // NeedsReview | Verified | Rejected
+    confidence: v.string(),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_fy", ["societyId", "fiscalYear"]),
+
+  financialStatementImportLines: defineTable({
+    societyId: v.id("societies"),
+    statementImportId: v.id("financialStatementImports"),
+    section: v.string(),
+    label: v.string(),
+    amountCents: v.optional(v.number()),
+    confidence: v.string(),
+    notes: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_statement_import", ["statementImportId"]),
+
+  treasurerReports: defineTable({
+    societyId: v.id("societies"),
+    title: v.string(),
+    fiscalYear: v.string(),
+    reportDate: v.string(),
+    authorName: v.optional(v.string()),
+    cashBalanceCents: v.optional(v.number()),
+    highlights: v.array(v.string()),
+    concerns: v.array(v.string()),
+    status: v.string(), // NeedsReview | Verified | Archived
+    confidence: v.string(),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_date", ["societyId", "reportDate"]),
+
+  transactionCandidates: defineTable({
+    societyId: v.id("societies"),
+    transactionDate: v.string(),
+    importGroupKey: v.optional(v.string()),
+    periodLabel: v.optional(v.string()),
+    sourcePage: v.optional(v.string()),
+    rowOrder: v.optional(v.number()),
+    description: v.string(),
+    amountCents: v.optional(v.number()),
+    debitCents: v.optional(v.number()),
+    creditCents: v.optional(v.number()),
+    balanceCents: v.optional(v.number()),
+    chequeNumber: v.optional(v.string()),
+    comment: v.optional(v.string()),
+    rawText: v.optional(v.string()),
+    accountName: v.optional(v.string()),
+    counterparty: v.optional(v.string()),
+    category: v.optional(v.string()),
+    debitCredit: v.optional(v.string()),
+    status: v.string(), // NeedsReview | Matched | Ignored | Restricted
+    sensitivity: v.string(),
+    confidence: v.string(),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_date", ["societyId", "transactionDate"]),
+
   signatures: defineTable({
     societyId: v.id("societies"),
     entityType: v.string(), // minutes | resolution | filing
@@ -389,6 +637,66 @@ export default defineSchema({
     status: v.string(),
     notes: v.optional(v.string()),
   }).index("by_society", ["societyId"]),
+
+  boardRoleAssignments: defineTable({
+    societyId: v.id("societies"),
+    personName: v.string(),
+    personKey: v.optional(v.string()),
+    roleTitle: v.string(),
+    roleGroup: v.optional(v.string()),
+    roleType: v.string(), // director | officer | committee | staff | observed
+    startDate: v.string(),
+    endDate: v.optional(v.string()),
+    status: v.string(), // Observed | Verified | Superseded | Rejected
+    confidence: v.string(),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
+    importedFrom: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_start", ["societyId", "startDate"])
+    .index("by_person", ["societyId", "personKey"]),
+
+  boardRoleChanges: defineTable({
+    societyId: v.id("societies"),
+    effectiveDate: v.string(),
+    changeType: v.string(), // added | removed | renamed | appointed | resigned | elected
+    roleTitle: v.string(),
+    personName: v.optional(v.string()),
+    previousPersonName: v.optional(v.string()),
+    meetingId: v.optional(v.id("meetings")),
+    minutesId: v.optional(v.id("minutes")),
+    motionEvidenceId: v.optional(v.string()),
+    status: v.string(),
+    confidence: v.string(),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_date", ["societyId", "effectiveDate"]),
+
+  signingAuthorities: defineTable({
+    societyId: v.id("societies"),
+    personName: v.string(),
+    roleTitle: v.optional(v.string()),
+    institutionName: v.optional(v.string()),
+    accountLabel: v.optional(v.string()),
+    authorityType: v.string(), // signing | banking | card | online-banking | other
+    effectiveDate: v.string(),
+    endDate: v.optional(v.string()),
+    status: v.string(),
+    confidence: v.string(),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_date", ["societyId", "effectiveDate"]),
 
   committees: defineTable({
     societyId: v.id("societies"),
@@ -535,10 +843,56 @@ export default defineSchema({
     ),
     approvedAt: v.optional(v.string()),
     approvedInMeetingId: v.optional(v.id("meetings")),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
     draftTranscript: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
     .index("by_meeting", ["meetingId"]),
+
+  meetingAttendanceRecords: defineTable({
+    societyId: v.id("societies"),
+    meetingId: v.optional(v.id("meetings")),
+    minutesId: v.optional(v.id("minutes")),
+    meetingTitle: v.string(),
+    meetingDate: v.string(),
+    personName: v.string(),
+    roleTitle: v.optional(v.string()),
+    attendanceStatus: v.string(), // present | absent | regrets | guest | needs_review
+    quorumCounted: v.optional(v.boolean()),
+    confidence: v.string(),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_meeting", ["meetingId"])
+    .index("by_society_date", ["societyId", "meetingDate"]),
+
+  motionEvidence: defineTable({
+    societyId: v.id("societies"),
+    meetingId: v.optional(v.id("meetings")),
+    minutesId: v.optional(v.id("minutes")),
+    meetingTitle: v.string(),
+    meetingDate: v.string(),
+    motionText: v.string(),
+    movedBy: v.optional(v.string()),
+    secondedBy: v.optional(v.string()),
+    outcome: v.string(),
+    voteSummary: v.optional(v.string()),
+    pageRef: v.optional(v.string()),
+    evidenceText: v.optional(v.string()),
+    confidence: v.string(),
+    status: v.string(), // Extracted | Verified | Rejected
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_meeting", ["meetingId"])
+    .index("by_society_date", ["societyId", "meetingDate"]),
 
   filings: defineTable({
     societyId: v.id("societies"),
@@ -674,8 +1028,14 @@ export default defineSchema({
     flaggedForDeletion: v.boolean(),
     archivedAtISO: v.optional(v.string()),
     archivedReason: v.optional(v.string()),
+    importSessionId: v.optional(v.id("documents")),
+    importRecordKind: v.optional(v.string()),
     tags: v.array(v.string()),
-  }).index("by_society", ["societyId"]).index("by_committee", ["committeeId"]),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_category", ["societyId", "category"])
+    .index("by_import_session", ["importSessionId"])
+    .index("by_committee", ["committeeId"]),
 
   publications: defineTable({
     societyId: v.id("societies"),
@@ -921,13 +1281,24 @@ export default defineSchema({
     societyId: v.id("societies"),
     kind: v.string(), // DirectorsOfficers | GeneralLiability | PropertyCasualty | CyberLiability | Other
     insurer: v.string(),
+    broker: v.optional(v.string()),
     policyNumber: v.string(),
     coverageCents: v.number(),
     premiumCents: v.optional(v.number()),
+    deductibleCents: v.optional(v.number()),
+    coverageSummary: v.optional(v.string()),
+    additionalInsureds: v.optional(v.array(v.string())),
     startDate: v.string(),
+    endDate: v.optional(v.string()),
     renewalDate: v.string(),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
+    confidence: v.optional(v.string()),
+    sensitivity: v.optional(v.string()),
     notes: v.optional(v.string()),
     status: v.string(), // Active | Lapsed | Cancelled
+    createdAtISO: v.optional(v.string()),
+    updatedAtISO: v.optional(v.string()),
   }).index("by_society", ["societyId"]),
 
   pipaTrainings: defineTable({
@@ -1234,4 +1605,85 @@ export default defineSchema({
     computerProvidedForInspection: v.boolean(),
     notes: v.optional(v.string()),
   }).index("by_society", ["societyId"]),
+
+  sourceEvidence: defineTable({
+    societyId: v.id("societies"),
+    sourceDocumentId: v.optional(v.id("documents")),
+    externalSystem: v.string(),
+    externalId: v.optional(v.string()),
+    sourceTitle: v.string(),
+    sourceDate: v.optional(v.string()),
+    evidenceKind: v.string(), // provenance | restricted | publication_sidecar | import_support
+    targetTable: v.optional(v.string()),
+    targetId: v.optional(v.string()),
+    sensitivity: v.string(), // standard | restricted
+    accessLevel: v.string(), // public | internal | restricted
+    summary: v.string(),
+    excerpt: v.optional(v.string()),
+    status: v.string(), // NeedsReview | Linked | Verified | Rejected
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_external", ["societyId", "externalId"])
+    .index("by_source", ["sourceDocumentId"])
+    .index("by_target", ["targetTable", "targetId"]),
+
+  secretVaultItems: defineTable({
+    societyId: v.id("societies"),
+    name: v.string(),
+    service: v.string(),
+    credentialType: v.string(), // recovery_key | registry_key | api_key | password | certificate | other
+    ownerRole: v.optional(v.string()),
+    custodianUserId: v.optional(v.id("users")),
+    custodianPersonName: v.optional(v.string()),
+    custodianEmail: v.optional(v.string()),
+    backupCustodianName: v.optional(v.string()),
+    backupCustodianEmail: v.optional(v.string()),
+    username: v.optional(v.string()),
+    accessUrl: v.optional(v.string()),
+    storageMode: v.string(), // stored_encrypted | external_reference | encrypted_elsewhere | not_stored
+    externalLocation: v.optional(v.string()),
+    secretEncrypted: v.optional(v.string()),
+    secretPreview: v.optional(v.string()),
+    secretUpdatedAtISO: v.optional(v.string()),
+    secretUpdatedByUserId: v.optional(v.id("users")),
+    secretLastRevealedAtISO: v.optional(v.string()),
+    secretLastRevealedByUserId: v.optional(v.id("users")),
+    revealPolicy: v.optional(v.string()), // owner_admin | owner_admin_custodian | owner_only
+    authorizedUserIds: v.optional(v.array(v.id("users"))),
+    lastVerifiedAtISO: v.optional(v.string()),
+    rotationDueAtISO: v.optional(v.string()),
+    status: v.string(), // Active | NeedsReview | Rotated | Revoked
+    sensitivity: v.string(), // restricted | high
+    accessLevel: v.string(), // restricted
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_service", ["societyId", "service"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  archiveAccessions: defineTable({
+    societyId: v.id("societies"),
+    title: v.string(),
+    accessionNumber: v.optional(v.string()),
+    containerType: v.string(), // box | binder | drive | folder | external_archive | other
+    location: v.string(),
+    custodian: v.optional(v.string()),
+    dateReceived: v.optional(v.string()),
+    dateRange: v.optional(v.string()),
+    status: v.string(), // NeedsReview | InCustody | Transferred | Archived
+    accessRestrictions: v.optional(v.string()),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_date", ["societyId", "dateReceived"]),
+
 });
