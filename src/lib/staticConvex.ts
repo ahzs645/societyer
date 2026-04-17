@@ -83,6 +83,99 @@ const directors = [
   director("static_director_sam", "Sam", "Nguyen", "Director", false, false, "2026-03-15"),
 ];
 
+const orgHistoryBoardTerms = [
+  {
+    _id: "static_orghistory_term_devon",
+    _creationTime: Date.parse("2026-02-10T18:00:00.000Z"),
+    kind: "boardTerm",
+    personName: "Devon Clarke",
+    position: "President",
+    committeeName: "Board",
+    startDate: "2022-06-18",
+    endDate: null,
+    status: "Verified",
+    sourceIds: ["static_orghistory_source_agm_2022"],
+    createdAtISO: "2026-02-10T18:00:00.000Z",
+  },
+  {
+    _id: "static_orghistory_term_jordan",
+    _creationTime: Date.parse("2026-02-10T18:00:00.000Z"),
+    kind: "boardTerm",
+    personName: "Jordan Lee",
+    position: "Treasurer",
+    committeeName: "Board",
+    startDate: "2023-06-22",
+    endDate: null,
+    status: "Verified",
+    sourceIds: ["static_orghistory_source_agm_2023"],
+    createdAtISO: "2026-02-10T18:00:00.000Z",
+  },
+  {
+    _id: "static_orghistory_term_mina",
+    _creationTime: Date.parse("2026-02-10T18:00:00.000Z"),
+    kind: "boardTerm",
+    personName: "Mina Patel",
+    position: "Secretary",
+    committeeName: "Board",
+    startDate: "2024-06-20",
+    endDate: null,
+    status: "NeedsReview",
+    sourceIds: ["static_orghistory_source_agm_2024"],
+    createdAtISO: "2026-02-10T18:00:00.000Z",
+  },
+  {
+    _id: "static_orghistory_term_rae",
+    _creationTime: Date.parse("2026-02-10T18:00:00.000Z"),
+    kind: "boardTerm",
+    personName: "Rae Thompson",
+    position: "Director",
+    committeeName: "Board",
+    startDate: "2021-06-15",
+    endDate: "2023-06-15",
+    status: "NeedsReview",
+    sourceIds: ["static_orghistory_source_agm_2021"],
+    createdAtISO: "2026-02-10T18:00:00.000Z",
+  },
+  {
+    _id: "static_orghistory_term_avery_staff",
+    _creationTime: Date.parse("2026-02-10T18:00:00.000Z"),
+    kind: "boardTerm",
+    personName: "Avery Santos",
+    position: "Operations lead",
+    committeeName: "Staff",
+    startDate: "2023-09-01",
+    endDate: null,
+    status: "Verified",
+    sourceIds: ["static_orghistory_source_staff_masthead"],
+    createdAtISO: "2026-02-10T18:00:00.000Z",
+  },
+];
+
+const orgHistoryBundle = {
+  sources: [],
+  facts: [],
+  events: [],
+  boardTerms: orgHistoryBoardTerms,
+  motions: [],
+  budgets: [],
+};
+
+const evidenceRegistersOverview = {
+  boardRoleAssignments: [],
+  boardRoleChanges: [],
+  signingAuthorities: [],
+  meetingAttendanceRecords: [],
+  motionEvidence: [],
+  budgetSnapshots: [],
+  budgetSnapshotLines: [],
+  financialStatementImports: [],
+  financialStatementImportLines: [],
+  treasurerReports: [],
+  transactionCandidates: [],
+  sourceEvidence: [],
+  archiveAccessions: [],
+};
+
 const members = [
   member("static_member_mina", "Mina", "Patel", "Regular", true, "2021-04-13"),
   member("static_member_jordan", "Jordan", "Lee", "Regular", true, "2020-08-01"),
@@ -1335,6 +1428,14 @@ function queryResult(name: string, args: StaticArgs) {
     case "documentVersions:latest":
     case "documentVersions:listForDocument":
       return [];
+    case "evidenceRegisters:overview":
+      return evidenceRegistersOverview;
+    case "importSessions:list":
+      return [];
+    case "importSessions:get":
+      return null;
+    case "organizationHistory:list":
+      return orgHistoryBundle;
     case "paperless:connectionStatus":
       return {
         connection: paperlessConnections[0],

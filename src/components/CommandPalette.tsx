@@ -361,6 +361,7 @@ export function CommandPalette() {
           <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
           <span><kbd>↵</kbd> to run</span>
           <span><kbd>esc</kbd> to close</span>
+          <span style={{ marginLeft: "auto" }}><kbd>alt</kbd>+<kbd>o</kbd> inspector</span>
         </div>
       </div>
     </div>

@@ -874,6 +874,87 @@
   white-space: nowrap;
   width: 1px; /* shrink to content — the flex-wrapper sets the real width */
 }
+
+/* Row-selection column */
+.table__select-col,
+.table__select-cell {
+  width: var(--table-checkbox-column-width);
+  text-align: center;
+  padding: 0 4px;
+}
+.table__select-cell input,
+.table__select-col input {
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.table tbody tr.is-selected td {
+  background: var(--accent-soft);
+}
+.table tbody tr.is-selected:hover td {
+  background: var(--accent-soft-strong);
+}
+
+/* Sticky bulk-action toolbar shown while rows are selected */
+.table-bulkbar {
+  position: sticky;
+  bottom: var(--s-3);
+  margin: var(--s-3) auto 0;
+  width: fit-content;
+  max-width: calc(100% - var(--s-6));
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-pill);
+  background: var(--bg-inverse);
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-strong);
+  z-index: var(--z-sticky);
+  animation: bulkbarIn 0.18s var(--anim-ease);
+}
+@keyframes bulkbarIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.table-bulkbar__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-pill);
+  background: transparent;
+  border: 0;
+  color: var(--text-inverse);
+  opacity: 0.7;
+  cursor: pointer;
+  transition: background var(--anim-fast) var(--anim-ease), opacity var(--anim-fast) var(--anim-ease);
+}
+.table-bulkbar__clear:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+.table-bulkbar__count {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+.table-bulkbar__actions {
+  display: inline-flex;
+  gap: 4px;
+}
+.table-bulkbar__actions .btn {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  border-color: var(--bg-panel);
+}
+.table-bulkbar__actions .btn:hover {
+  background: var(--bg-hover);
+}
+.table-bulkbar__actions .btn--danger {
+  background: var(--danger);
+  color: var(--text-inverse);
+  border-color: var(--danger);
+}
 .table__actions-inner {
   display: inline-flex;
   gap: 4px;

@@ -252,12 +252,13 @@
 }
 
 .landing__h1 {
-  font-size: clamp(36px, 5.2vw, 56px);
-  line-height: 1.05;
+  font-size: clamp(32px, 4.6vw, 54px);
+  line-height: 1.08;
   font-weight: 700;
   letter-spacing: -0.03em;
   margin: 0 auto var(--s-5);
-  max-width: 780px;
+  max-width: 720px;
+  text-wrap: balance;
 }
 .landing__h1-accent {
   display: block;
@@ -277,11 +278,12 @@
 }
 
 .landing__lede {
-  max-width: 620px;
+  max-width: 580px;
   margin: 0 auto var(--s-7);
   font-size: var(--fs-lg);
   color: var(--text-secondary);
   line-height: 1.55;
+  text-wrap: pretty;
 }
 
 .landing__cta-row {

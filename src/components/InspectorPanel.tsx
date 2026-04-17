@@ -118,14 +118,36 @@ export function InspectorBackButton() {
   );
 }
 
+/** Emitted when Alt+O is pressed with no inspector open; pages that wish to
+ * expose a default "open inspector" action listen for this event (e.g., open
+ * the first selected row's detail drawer). */
+export const INSPECTOR_REQUEST_OPEN_EVENT = "societyer:inspector-request-open";
+
 export function InspectorHost() {
   const inspector = useInspectorPanel();
   const isOpen = Boolean(inspector?.activePanelId);
 
   useEffect(() => {
-    if (!isOpen || !inspector) return;
+    if (!inspector) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") inspector.closeActive();
+      if (event.key === "Escape" && isOpen) {
+        inspector.closeActive();
+        return;
+      }
+      // Alt+O toggles the inspector. When open → close; when closed → ask the
+      // page (via a custom event) to open its default inspector target.
+      if (event.altKey && (event.key === "o" || event.key === "O")) {
+        // Don't hijack the shortcut while typing in a text input.
+        const target = event.target as HTMLElement | null;
+        if (target && /^(input|textarea|select)$/i.test(target.tagName)) return;
+        if (target?.isContentEditable) return;
+        event.preventDefault();
+        if (isOpen) {
+          inspector.closeActive();
+        } else {
+          window.dispatchEvent(new Event(INSPECTOR_REQUEST_OPEN_EVENT));
+        }
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

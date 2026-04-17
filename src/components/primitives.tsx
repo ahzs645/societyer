@@ -12,6 +12,7 @@ export function ViewBar({
   extra,
   filterBtnRef,
   sortBtnRef,
+  optionsBtnRef,
 }: {
   label: string;
   count?: number;
@@ -22,6 +23,7 @@ export function ViewBar({
   extra?: ReactNode;
   filterBtnRef?: React.RefObject<HTMLButtonElement>;
   sortBtnRef?: React.RefObject<HTMLButtonElement>;
+  optionsBtnRef?: React.RefObject<HTMLButtonElement>;
 }) {
   return (
     <div className="view-bar">
@@ -54,7 +56,7 @@ export function ViewBar({
               </button>
             )}
             {onOptions && (
-              <button className="view-bar__btn" type="button" onClick={onOptions}>
+              <button className="view-bar__btn" type="button" onClick={onOptions} ref={optionsBtnRef}>
                 <MoreHorizontal size={12} style={{ marginRight: 4, verticalAlign: -2 }} />
                 Options
               </button>

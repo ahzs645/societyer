@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { ViewBar } from "./primitives";
 import {
   AppliedFilter,
@@ -26,6 +26,17 @@ export type Column<T> = {
 
 export type SortState = { columnId: string; dir: "asc" | "desc" } | null;
 
+export type BulkAction<T> = {
+  id: string;
+  label: string;
+  icon?: ReactNode;
+  /** Clears the selection after a successful run unless `keepSelection` is set. */
+  onRun: (rows: T[]) => void | Promise<void>;
+  /** Visual tone — destructive gets a danger-tinted button. */
+  tone?: "default" | "danger";
+  keepSelection?: boolean;
+};
+
 export function DataTable<T extends { _id?: string } & Record<string, any>>({
   label,
   icon,
@@ -43,6 +54,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   pagination = false,
   initialPageSize = 10,
   pageSizeOptions = [10, 25, 50],
+  bulkActions,
 }: {
   label: string;
   icon?: ReactNode;
@@ -64,6 +76,8 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   pagination?: boolean;
   initialPageSize?: number;
   pageSizeOptions?: number[];
+  /** When provided, enables row selection with a sticky bulk-action toolbar. */
+  bulkActions?: BulkAction<T>[];
 }) {
   const [q, setQ] = useState("");
   const [filters, setFilters] = useState<AppliedFilter[]>([]);
@@ -75,8 +89,18 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   const [isMobileCards, setIsMobileCards] = useState(
     () => window.matchMedia(mobileCardMediaQuery).matches,
   );
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => new Set());
+  const [density, setDensity] = useState<"compact" | "comfortable">("compact");
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const filterBtnRef = useRef<HTMLButtonElement>(null);
   const sortBtnRef = useRef<HTMLButtonElement>(null);
+  const optionsBtnRef = useRef<HTMLButtonElement>(null);
+  const selectable = Boolean(bulkActions && bulkActions.length > 0);
+  const visibleColumns = useMemo(
+    () => columns.filter((col) => !hiddenColumns.has(col.id)),
+    [columns, hiddenColumns],
+  );
 
   useEffect(() => {
     const mq = window.matchMedia(mobileCardMediaQuery);
@@ -140,6 +164,56 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
     setPage((current) => Math.min(Math.max(current, 1), totalPages));
   }, [totalPages]);
 
+  // Drop selection entries that no longer match the current filter/search.
+  useEffect(() => {
+    if (!selectable || selected.size === 0) return;
+    const keep = new Set(filtered.map((row) => rowKey(row)));
+    let changed = false;
+    const next = new Set<string>();
+    for (const id of selected) {
+      if (keep.has(id)) next.add(id);
+      else changed = true;
+    }
+    if (changed) setSelected(next);
+  }, [filtered, selectable]); // rowKey is stable per render; skip as dep
+
+  const selectedRows = useMemo(
+    () => (selectable ? filtered.filter((row) => selected.has(rowKey(row))) : []),
+    [filtered, selected, selectable],
+  );
+  const allVisibleSelected =
+    selectable && filtered.length > 0 && filtered.every((row) => selected.has(rowKey(row)));
+  const someVisibleSelected =
+    selectable && !allVisibleSelected && filtered.some((row) => selected.has(rowKey(row)));
+
+  const toggleRow = (row: T) => {
+    const id = rowKey(row);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleAllVisible = () => {
+    setSelected((prev) => {
+      if (allVisibleSelected) {
+        const next = new Set(prev);
+        for (const row of filtered) next.delete(rowKey(row));
+        return next;
+      }
+      const next = new Set(prev);
+      for (const row of filtered) next.add(rowKey(row));
+      return next;
+    });
+  };
+  const clearSelection = () => setSelected(new Set());
+  const runBulkAction = async (action: BulkAction<T>) => {
+    if (selectedRows.length === 0) return;
+    await action.onRun(selectedRows);
+    if (!action.keepSelection) clearSelection();
+  };
+
   const toggleSort = (columnId: string) => {
     const col = columns.find((c) => c.id === columnId);
     if (!col?.sortable) return;
@@ -160,9 +234,30 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
         icon={icon}
         filterBtnRef={filterBtnRef}
         sortBtnRef={sortBtnRef}
+        optionsBtnRef={optionsBtnRef}
         onFilter={filterFields?.length ? () => setFilterOpen((v) => !v) : undefined}
         onSort={sortableColumns.length ? () => setSortOpen((v) => !v) : undefined}
+        onOptions={() => setOptionsOpen((v) => !v)}
       />
+      {optionsOpen && (
+        <OptionsPopover
+          columns={columns}
+          hidden={hiddenColumns}
+          onToggleColumn={(id) => {
+            setHiddenColumns((prev) => {
+              const next = new Set(prev);
+              if (next.has(id)) next.delete(id);
+              else next.add(id);
+              return next;
+            });
+          }}
+          onResetColumns={() => setHiddenColumns(new Set())}
+          density={density}
+          onDensity={setDensity}
+          anchorRef={optionsBtnRef as any}
+          onClose={() => setOptionsOpen(false)}
+        />
+      )}
       {filterFields && (
         <FilterChips
           filters={filters}
@@ -217,8 +312,8 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
       {isMobileCards ? (
         <div className="card-list" role="list" aria-label={label}>
           {visibleRows.map((row) => {
-            const primaryCol = columns[0];
-            const secondaryCols = columns.slice(1);
+            const primaryCol = visibleColumns[0] ?? columns[0];
+            const secondaryCols = visibleColumns.slice(1);
             const primaryCell = primaryCol.render
               ? primaryCol.render(row)
               : String(primaryCol.accessor?.(row) ?? "");
@@ -269,11 +364,24 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
           )}
         </div>
       ) : (
-      <table className="table">
+      <table className={`table${density === "comfortable" ? " table--comfortable" : ""}`}>
         <caption className="sr-only">{label}</caption>
         <thead>
           <tr>
-            {columns.map((col) => (
+            {selectable && (
+              <th className="table__select-col">
+                <input
+                  type="checkbox"
+                  aria-label={allVisibleSelected ? `Deselect all ${label}` : `Select all ${label}`}
+                  checked={allVisibleSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someVisibleSelected;
+                  }}
+                  onChange={toggleAllVisible}
+                />
+              </th>
+            )}
+            {visibleColumns.map((col) => (
               <th
                 key={col.id}
                 className={col.sortable ? "is-sortable" : undefined}
@@ -318,14 +426,28 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
           </tr>
         </thead>
         <tbody>
-          {visibleRows.map((row) => (
+          {visibleRows.map((row) => {
+            const id = rowKey(row);
+            const isSelected = selectable && selected.has(id);
+            return (
             <tr
-              key={rowKey(row)}
-              className={renderRowActions ? "table__row--actions" : undefined}
+              key={id}
+              className={`${renderRowActions ? "table__row--actions " : ""}${isSelected ? "is-selected" : ""}`.trim() || undefined}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               style={{ cursor: onRowClick ? "pointer" : undefined }}
+              aria-selected={selectable ? isSelected : undefined}
             >
-              {columns.map((col, index) => {
+              {selectable && (
+                <td className="table__select-cell" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    aria-label={isSelected ? `Deselect row` : `Select row`}
+                    checked={isSelected}
+                    onChange={() => toggleRow(row)}
+                  />
+                </td>
+              )}
+              {visibleColumns.map((col, index) => {
                 const cell = col.render ? col.render(row) : String(col.accessor?.(row) ?? "");
                 return (
                 <td
@@ -362,11 +484,12 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
                 </td>
               )}
             </tr>
-          ))}
+            );
+          })}
           {filtered.length === 0 && (
             <tr>
               <td
-                colSpan={columns.length + (renderRowActions ? 1 : 0)}
+                colSpan={visibleColumns.length + (renderRowActions ? 1 : 0) + (selectable ? 1 : 0)}
                 className="table__empty"
               >
                 {data.length === 0 ? emptyMessage : "No rows match the current filters."}
@@ -375,6 +498,34 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
           )}
         </tbody>
       </table>
+      )}
+      {selectable && selectedRows.length > 0 && (
+        <div className="table-bulkbar" role="region" aria-label="Bulk actions">
+          <button
+            type="button"
+            className="table-bulkbar__clear"
+            onClick={clearSelection}
+            aria-label="Clear selection"
+          >
+            <X size={14} />
+          </button>
+          <span className="table-bulkbar__count">
+            {selectedRows.length} selected
+          </span>
+          <div className="table-bulkbar__actions">
+            {bulkActions!.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                className={`btn btn--sm${action.tone === "danger" ? " btn--danger" : ""}`}
+                onClick={() => runBulkAction(action)}
+              >
+                {action.icon}
+                {action.label}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
       {pagination && filtered.length > 0 && (
         <div className="table-pagination">
