@@ -100,6 +100,7 @@ export function MembersPage() {
         filterFields={MEMBER_FIELDS}
         searchPlaceholder="Search name, email, class…"
         defaultSort={{ columnId: "name", dir: "asc" }}
+        viewsKey="members"
         onRowClick={(row) => { setSelected(row); setDrawerOpen(true); }}
         columns={[
           {

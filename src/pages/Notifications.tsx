@@ -4,11 +4,12 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge } from "../components/ui";
-import { Bell, CheckCheck, Send, RefreshCw } from "lucide-react";
+import { Segmented } from "../components/primitives";
+import { Bell, CheckCheck, Send } from "lucide-react";
 import { formatDateTime } from "../lib/format";
 import { useToast } from "../components/Toast";
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useConfirm } from "../components/Modal";
 
 export function NotificationsPage() {
@@ -23,6 +24,14 @@ export function NotificationsPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
+  const [scope, setScope] = useState<"all" | "unread">("all");
+
+  const filtered = useMemo(() => {
+    const list = notifications ?? [];
+    if (scope === "unread") return list.filter((n) => !n.readAt);
+    return list;
+  }, [notifications, scope]);
+  const unreadCount = (notifications ?? []).filter((n) => !n.readAt).length;
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -81,17 +90,28 @@ export function NotificationsPage() {
         <div className="card__head">
           <h2 className="card__title">Recent</h2>
           <span className="card__subtitle">
-            {notifications?.length ?? 0} total · cron runs daily at 07:00 UTC
+            {notifications?.length ?? 0} total · {unreadCount} unread · cron runs daily at 07:00 UTC
           </span>
+          <div style={{ marginLeft: "auto" }}>
+            <Segmented
+              value={scope}
+              onChange={setScope}
+              items={[
+                { id: "all", label: `All (${notifications?.length ?? 0})` },
+                { id: "unread", label: `Unread (${unreadCount})` },
+              ]}
+            />
+          </div>
         </div>
         <div className="card__body">
-          {(notifications ?? []).length === 0 && (
+          {filtered.length === 0 && (
             <div className="empty-state empty-state--lg">
-              No notifications yet. They'll appear here when deadlines approach, filings are due,
-              AI drafts complete, or bots run.
+              {scope === "unread"
+                ? "No unread notifications."
+                : "No notifications yet. They'll appear here when deadlines approach, filings are due, AI drafts complete, or bots run."}
             </div>
           )}
-          {(notifications ?? []).map((n) => (
+          {filtered.map((n) => (
             <div key={n._id} className="notif-row">
               <Badge
                 tone={

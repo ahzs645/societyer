@@ -10,6 +10,12 @@ import {
 } from "./FilterBar";
 import { MenuRow, MenuSectionLabel, Pill } from "./ui";
 import { mobileCardMediaQuery } from "../lib/breakpoints";
+import {
+  makeViewId,
+  readSavedViews,
+  writeSavedViews,
+  type SavedView,
+} from "../lib/savedViews";
 
 export type Column<T> = {
   id: string;
@@ -55,6 +61,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   initialPageSize = 10,
   pageSizeOptions = [10, 25, 50],
   bulkActions,
+  viewsKey,
 }: {
   label: string;
   icon?: ReactNode;
@@ -78,6 +85,9 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   pageSizeOptions?: number[];
   /** When provided, enables row selection with a sticky bulk-action toolbar. */
   bulkActions?: BulkAction<T>[];
+  /** Enables "saved views" (filter + sort + columns + density) keyed by this
+   * stable string. Persisted to localStorage. */
+  viewsKey?: string;
 }) {
   const [q, setQ] = useState("");
   const [filters, setFilters] = useState<AppliedFilter[]>([]);
@@ -93,6 +103,10 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => new Set());
   const [density, setDensity] = useState<"compact" | "comfortable">("compact");
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [savedViews, setSavedViews] = useState<SavedView[]>(() =>
+    viewsKey ? readSavedViews(viewsKey) : [],
+  );
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const filterBtnRef = useRef<HTMLButtonElement>(null);
   const sortBtnRef = useRef<HTMLButtonElement>(null);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
@@ -214,6 +228,39 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
     if (!action.keepSelection) clearSelection();
   };
 
+  const saveView = (name: string) => {
+    if (!viewsKey) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const view: SavedView = {
+      id: makeViewId(),
+      name: trimmed,
+      filters,
+      sort,
+      hiddenColumns: [...hiddenColumns],
+      density,
+      createdAtISO: new Date().toISOString(),
+    };
+    const next = [...savedViews, view];
+    setSavedViews(next);
+    writeSavedViews(viewsKey, next);
+    setActiveViewId(view.id);
+  };
+  const applyView = (view: SavedView) => {
+    setFilters(view.filters);
+    setSort(view.sort);
+    setHiddenColumns(new Set(view.hiddenColumns));
+    setDensity(view.density);
+    setActiveViewId(view.id);
+  };
+  const deleteView = (id: string) => {
+    if (!viewsKey) return;
+    const next = savedViews.filter((v) => v.id !== id);
+    setSavedViews(next);
+    writeSavedViews(viewsKey, next);
+    if (activeViewId === id) setActiveViewId(null);
+  };
+
   const toggleSort = (columnId: string) => {
     const col = columns.find((c) => c.id === columnId);
     if (!col?.sortable) return;
@@ -254,6 +301,11 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
           onResetColumns={() => setHiddenColumns(new Set())}
           density={density}
           onDensity={setDensity}
+          savedViews={viewsKey ? savedViews : undefined}
+          activeViewId={activeViewId}
+          onApplyView={applyView}
+          onSaveView={saveView}
+          onDeleteView={deleteView}
           anchorRef={optionsBtnRef as any}
           onClose={() => setOptionsOpen(false)}
         />
@@ -637,6 +689,173 @@ function SortPopover<T>({
           <div className="menu__separator" />
           <MenuSectionLabel>Current</MenuSectionLabel>
           <MenuRow label="Clear sort" subtle onClick={() => onPick(null)} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function OptionsPopover<T>({
+  columns,
+  hidden,
+  onToggleColumn,
+  onResetColumns,
+  density,
+  onDensity,
+  savedViews,
+  activeViewId,
+  onApplyView,
+  onSaveView,
+  onDeleteView,
+  anchorRef,
+  onClose,
+}: {
+  columns: Column<T>[];
+  hidden: Set<string>;
+  onToggleColumn: (id: string) => void;
+  onResetColumns: () => void;
+  density: "compact" | "comfortable";
+  onDensity: (d: "compact" | "comfortable") => void;
+  savedViews?: SavedView[];
+  activeViewId?: string | null;
+  onApplyView?: (view: SavedView) => void;
+  onSaveView?: (name: string) => void;
+  onDeleteView?: (id: string) => void;
+  anchorRef: React.RefObject<HTMLElement>;
+  onClose: () => void;
+}) {
+  const [newViewName, setNewViewName] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!ref.current) return;
+      if (ref.current.contains(e.target as Node)) return;
+      if (anchorRef.current?.contains(e.target as Node)) return;
+      onClose();
+    };
+    const timer = window.setTimeout(() => document.addEventListener("mousedown", onDoc), 0);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("mousedown", onDoc);
+    };
+  }, [onClose, anchorRef]);
+
+  const rect = anchorRef.current?.getBoundingClientRect();
+  const margin = 8;
+  const style = rect
+    ? {
+        top: Math.max(margin, Math.min(rect.bottom + 4, window.innerHeight - 320 - margin)),
+        left: Math.max(margin, Math.min(rect.left, window.innerWidth - 240 - margin)),
+      }
+    : { top: 48, left: 16 };
+
+  const visibleCount = columns.length - hidden.size;
+  const canHideMore = visibleCount > 1;
+
+  return (
+    <div className="popover" ref={ref} style={style}>
+      {savedViews && (
+        <>
+          <MenuSectionLabel>Saved views</MenuSectionLabel>
+          {savedViews.length === 0 && (
+            <div className="empty-state empty-state--sm empty-state--start">
+              No saved views yet.
+            </div>
+          )}
+          {savedViews.map((view) => (
+            <div key={view.id} className="options-popover__view-row">
+              <button
+                type="button"
+                className={`options-popover__view-name${activeViewId === view.id ? " is-active" : ""}`}
+                onClick={() => onApplyView?.(view)}
+                title="Apply this view"
+              >
+                {view.name}
+              </button>
+              <button
+                type="button"
+                className="options-popover__view-del"
+                onClick={() => onDeleteView?.(view.id)}
+                aria-label={`Delete view ${view.name}`}
+              >
+                <X size={10} />
+              </button>
+            </div>
+          ))}
+          <div className="options-popover__save-row">
+            <input
+              className="options-popover__save-input"
+              placeholder="Save current view as…"
+              value={newViewName}
+              onChange={(e) => setNewViewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newViewName.trim()) {
+                  onSaveView?.(newViewName);
+                  setNewViewName("");
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="btn-action btn-action--primary"
+              disabled={!newViewName.trim()}
+              onClick={() => {
+                onSaveView?.(newViewName);
+                setNewViewName("");
+              }}
+            >
+              Save
+            </button>
+          </div>
+          <div className="menu__separator" />
+        </>
+      )}
+      <MenuSectionLabel>Density</MenuSectionLabel>
+      <div className="options-popover__segmented" role="radiogroup" aria-label="Density">
+        <button
+          type="button"
+          role="radio"
+          aria-checked={density === "compact"}
+          className={`options-popover__seg${density === "compact" ? " is-active" : ""}`}
+          onClick={() => onDensity("compact")}
+        >
+          Compact
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={density === "comfortable"}
+          className={`options-popover__seg${density === "comfortable" ? " is-active" : ""}`}
+          onClick={() => onDensity("comfortable")}
+        >
+          Comfortable
+        </button>
+      </div>
+      <div className="menu__separator" />
+      <MenuSectionLabel>Columns</MenuSectionLabel>
+      {columns.map((col) => {
+        const isHidden = hidden.has(col.id);
+        const label = typeof col.header === "string" ? col.header : col.id;
+        return (
+          <label key={col.id} className="options-popover__col-row">
+            <input
+              type="checkbox"
+              checked={!isHidden}
+              onChange={() => {
+                // Keep at least one column visible.
+                if (!isHidden && !canHideMore) return;
+                onToggleColumn(col.id);
+              }}
+              disabled={!isHidden && !canHideMore}
+            />
+            <span>{label}</span>
+          </label>
+        );
+      })}
+      {hidden.size > 0 && (
+        <>
+          <div className="menu__separator" />
+          <MenuRow label="Reset columns" subtle onClick={onResetColumns} />
         </>
       )}
     </div>

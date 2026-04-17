@@ -27,13 +27,24 @@ export function applyFilters<T>(
   fields: FilterField<T>[],
 ): T[] {
   if (filters.length === 0) return records;
-  return records.filter((r) =>
-    filters.every((f) => {
-      const field = fields.find((x) => x.id === f.fieldId);
-      if (!field) return true;
-      return field.match(r, f.value);
-    }),
-  );
+  // Group filters by fieldId — same-field values are OR'd together, different
+  // fields are AND'd. This matches the common expectation ("status is Open OR
+  // Closed" but "status=Open AND assignee=Alex").
+  const byField = new Map<string, string[]>();
+  for (const f of filters) {
+    const list = byField.get(f.fieldId) ?? [];
+    list.push(f.value);
+    byField.set(f.fieldId, list);
+  }
+  return records.filter((r) => {
+    for (const [fieldId, values] of byField) {
+      const field = fields.find((x) => x.id === fieldId);
+      if (!field) continue;
+      const anyMatch = values.some((v) => field.match(r, v));
+      if (!anyMatch) return false;
+    }
+    return true;
+  });
 }
 
 export function FilterPopover<T>({
@@ -155,14 +166,23 @@ export function FilterChips({
   onRemove: (index: number) => void;
 }) {
   if (filters.length === 0) return null;
+  // Count per-field repeats so we can hint "is X OR Y" vs "contains".
+  const counts = new Map<string, number>();
+  for (const f of filters) counts.set(f.fieldId, (counts.get(f.fieldId) ?? 0) + 1);
   return (
     <div className="filter-chips">
       {filters.map((f, i) => {
         const field = fields.find((x) => x.id === f.fieldId);
+        const isRepeat = (counts.get(f.fieldId) ?? 0) > 1;
+        // Use "or" when the same field has multiple values; "contains" otherwise.
+        const firstIdxForField = filters.findIndex((other) => other.fieldId === f.fieldId);
+        const op = isRepeat ? (i === firstIdxForField ? "is" : "or") : "contains";
         return (
           <span className="filter-chip" key={i}>
-            <span className="filter-chip__field">{field?.label ?? f.fieldId}</span>
-            <span className="filter-chip__op">contains</span>
+            {(!isRepeat || i === firstIdxForField) && (
+              <span className="filter-chip__field">{field?.label ?? f.fieldId}</span>
+            )}
+            <span className="filter-chip__op">{op}</span>
             <strong>{f.value}</strong>
             <button className="filter-chip__remove" onClick={() => onRemove(i)} aria-label="Remove filter">
               <X size={10} />
