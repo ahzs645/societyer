@@ -314,24 +314,21 @@ function MotionRow({
           {isPending && (
             <div className="row" style={{ gap: 4 }}>
               <button
-                className="btn-action"
-                style={{ color: "var(--success)", borderColor: "color-mix(in srgb, var(--success) 40%, transparent)" }}
+                className="btn-action btn-action--success"
                 onClick={() => onPatch({ outcome: "Carried" })}
                 title="Record as Carried"
               >
                 ✓ Carried
               </button>
               <button
-                className="btn-action"
-                style={{ color: "var(--danger)", borderColor: "color-mix(in srgb, var(--danger) 40%, transparent)" }}
+                className="btn-action btn-action--danger"
                 onClick={() => onPatch({ outcome: "Defeated" })}
                 title="Record as Defeated"
               >
                 ✗ Defeated
               </button>
               <button
-                className="btn-action"
-                style={{ color: "var(--warn)" }}
+                className="btn-action btn-action--warn"
                 onClick={() => onPatch({ outcome: "Tabled" })}
                 title="Table this motion"
               >

@@ -733,7 +733,7 @@ export function OrganizationHistoryPage() {
         open={workflowOpen}
         onClose={() => setWorkflowOpen(false)}
         title="Import workflow"
-        width={620}
+        size="lg"
         footer={<button className="btn btn--accent" onClick={() => setWorkflowOpen(false)}>Done</button>}
       >
         <div className="col" style={{ gap: 10 }}>

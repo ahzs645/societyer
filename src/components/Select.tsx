@@ -113,6 +113,13 @@ export function Select<T extends string>({
     if (!searchable) setTimeout(() => menuRef.current?.focus(), 0);
   }, [open, value, visibleItems]);
 
+  // Keep the keyboard-focused option visible as the user moves through the menu.
+  useEffect(() => {
+    if (!open || !menuRef.current) return;
+    const items = menuRef.current.querySelectorAll<HTMLElement>(".menu__list .menu__item");
+    items[activeIdx]?.scrollIntoView({ block: "nearest" });
+  }, [activeIdx, open]);
+
   const commit = (idx: number) => {
     const item = visibleItems[idx];
     if (!item || (!("_clear" in item) && item.disabled)) return;

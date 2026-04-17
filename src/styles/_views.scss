@@ -1,5 +1,5 @@
 /* Compliance flags */
-.flag { display: flex; gap: var(--s-2); padding: 8px 10px; border-radius: var(--r-sm); font-size: var(--fs-md); align-items: flex-start; }
+.flag { display: flex; gap: var(--s-2); padding: var(--s-2) 10px; border-radius: var(--r-sm); font-size: var(--fs-md); align-items: flex-start; }
 .flag--ok { background: var(--success-soft); color: var(--success); }
 .flag--warn { background: var(--warn-soft); color: var(--warn); }
 .flag--err { background: var(--danger-soft); color: var(--danger); }
@@ -65,7 +65,7 @@
 }
 .attendance-table th,
 .attendance-table td {
-  padding: 8px 10px;
+  padding: var(--s-2) 10px;
   border-bottom: 1px solid var(--border);
   text-align: left;
   vertical-align: top;
@@ -141,7 +141,7 @@
 .org-history__people-head {
   align-items: stretch;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--s-3);
   padding-bottom: 0;
 }
 .org-history__people-title-row {
@@ -154,7 +154,7 @@
 .org-history__inline-tabs {
   display: flex;
   align-items: flex-end;
-  gap: 28px;
+  gap: var(--s-7);
   overflow-x: auto;
   margin: 0 calc(var(--s-4) * -1) -1px;
   padding: 0 var(--s-4);
@@ -167,7 +167,7 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s-2);
   min-height: 42px;
   padding: 0 0 11px;
   border-bottom: 2px solid transparent;
@@ -218,7 +218,7 @@
 .org-history__budget-group-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s-2);
   min-width: 0;
   max-width: 100%;
   color: inherit;
@@ -283,7 +283,7 @@
   }
 
   .org-history__inline-tabs {
-    gap: 20px;
+    gap: var(--s-5);
   }
 
   .org-history__budget-stats {
@@ -355,7 +355,7 @@
   align-items: flex-start;
   gap: 10px;
   margin: 0 0 var(--s-4);
-  padding: 12px 14px;
+  padding: var(--s-3) 14px;
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: var(--bg-panel);
@@ -490,7 +490,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--s-3);
-  padding: 12px;
+  padding: var(--s-3);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--bg-base);
@@ -514,11 +514,11 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 4px;
+  gap: var(--s-1);
   flex-shrink: 0;
 }
 .motion-library__template p {
-  margin: 8px 0 0;
+  margin: var(--s-2) 0 0;
   color: var(--text-secondary);
   line-height: 1.45;
   white-space: pre-wrap;
@@ -531,7 +531,7 @@
 }
 .motion-library__template-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--s-1);
   align-items: flex-start;
 }
 .motion-library__empty {
@@ -577,7 +577,7 @@
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  padding: 4px;
+  padding: var(--s-1);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: var(--bg-subtle);
@@ -653,7 +653,7 @@
   letter-spacing: 0.04em;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s-2);
   border-bottom: 1px solid var(--border);
 }
 .kanban__body {
@@ -730,7 +730,7 @@
 .activity-item {
   display: flex;
   gap: var(--s-2);
-  padding: 8px 0;
+  padding: var(--s-2) 0;
   border-bottom: 1px solid var(--border);
 }
 .activity-item:last-child { border-bottom: none; }
@@ -955,7 +955,7 @@
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  padding: 8px 10px;
+  padding: var(--s-2) 10px;
   border-radius: var(--r-sm);
   background: var(--bg-base);
   border: 1px solid var(--border);

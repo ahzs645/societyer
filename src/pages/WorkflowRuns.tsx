@@ -46,7 +46,7 @@ export function WorkflowRunsPage() {
         </div>
         <div className="card__body" style={{ padding: 0 }}>
           {(runs ?? []).length === 0 ? (
-            <div className="muted" style={{ padding: 16, textAlign: "center" }}>
+            <div className="empty-state">
               No runs yet. Trigger a workflow from the Workflows page.
             </div>
           ) : (

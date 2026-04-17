@@ -60,7 +60,7 @@ export function Kanban<T extends { _id: string; status: string }>({
               </div>
             ))}
             {col.items.length === 0 && (
-              <div className="muted" style={{ padding: "12px 8px", fontSize: "var(--fs-sm)" }}>
+              <div className="empty-state empty-state--sm">
                 Drop here
               </div>
             )}

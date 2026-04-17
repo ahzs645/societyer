@@ -86,7 +86,7 @@ export function NotificationsPage() {
         </div>
         <div className="card__body">
           {(notifications ?? []).length === 0 && (
-            <div className="muted" style={{ padding: 24, textAlign: "center" }}>
+            <div className="empty-state empty-state--lg">
               No notifications yet. They'll appear here when deadlines approach, filings are due,
               AI drafts complete, or bots run.
             </div>

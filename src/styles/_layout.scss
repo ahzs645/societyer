@@ -12,8 +12,8 @@
 .sidebar-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 24;
-  background: rgba(10, 10, 10, 0.28);
+  z-index: var(--z-sidebar-backdrop);
+  background: var(--bg-overlay-scrim);
   border: 0;
   padding: 0;
 }
@@ -23,7 +23,7 @@
   position: fixed;
   top: 10px;
   left: 10px;
-  z-index: 20;
+  z-index: var(--z-sidebar-peek);
   width: 30px;
   height: 30px;
   display: grid;
@@ -70,7 +70,7 @@
   transition: width var(--anim-normal) var(--anim-ease);
   position: relative;
   overflow: hidden;
-  z-index: 1;
+  z-index: var(--z-base);
 }
 .app-shell.is-collapsed .sidebar {
   width: 0;
@@ -81,7 +81,7 @@
   flex: 1;
   min-width: 0;
   position: relative;
-  z-index: 1;
+  z-index: var(--z-base);
 }
 .sidebar__brand,
 .sidebar__footer {
@@ -451,7 +451,7 @@
   padding: 0 var(--s-4);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: var(--z-sticky);
 }
 .topbar__crumb {
   color: var(--text-secondary);
@@ -647,8 +647,45 @@
   width: 100%;
   border-left: 1px solid var(--border);
   background: var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
-.inspector__portal,
+.inspector__header {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 0;
+
+  /* When the back button is present it pushes the header into view. Empty
+   * headers collapse completely so the panel body keeps its existing layout. */
+  &:empty { display: none; }
+  &:not(:empty) {
+    min-height: 34px;
+    padding: var(--s-2) var(--s-3);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-subtle);
+  }
+}
+.inspector__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  transition: background var(--anim-fast) var(--anim-ease), color var(--anim-fast) var(--anim-ease);
+}
+.inspector__back:hover { background: var(--bg-hover); color: var(--text-primary); }
+.inspector__portal {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
 .inspector-panel {
   height: 100%;
 }
@@ -672,7 +709,7 @@
     inset: 0 auto 0 0;
     width: min(320px, calc(100vw - 56px));
     height: 100dvh;
-    z-index: 25;
+    z-index: var(--z-sidebar);
     box-shadow: var(--shadow-lg);
     transform: translateX(-100%);
     transition:
@@ -714,7 +751,7 @@
   .app-shell.is-mobile .inspector-host {
     position: fixed;
     inset: 0;
-    z-index: 31;
+    z-index: var(--z-inspector);
     width: 100%;
     flex: 0 0 auto;
   }
@@ -724,7 +761,7 @@
     position: absolute;
     inset: 0;
     border: 0;
-    background: rgba(16, 16, 16, 0.28);
+    background: var(--bg-overlay-scrim);
     opacity: 0;
     transition: opacity var(--anim-normal) var(--anim-ease);
   }
@@ -791,7 +828,7 @@
     bottom: 0;
     left: 0;
     right: 0;
-    z-index: 23;
+    z-index: var(--z-bottom-nav);
     height: 56px;
     padding-bottom: env(safe-area-inset-bottom, 0);
     background: var(--bg-base);

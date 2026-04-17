@@ -165,7 +165,7 @@ export function DocumentVersionsDrawer({
 
       {versions === undefined && <div className="muted">Loading…</div>}
       {versions && versions.length === 0 && (
-        <div className="muted" style={{ padding: 12 }}>
+        <div className="empty-state empty-state--sm empty-state--start">
           No versions yet. Upload a file to create v1.
         </div>
       )}

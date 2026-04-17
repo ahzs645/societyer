@@ -219,7 +219,7 @@ export function BylawDiffPage() {
           <div className="card__head"><h2 className="card__title">History</h2></div>
           <div style={{ maxHeight: 560, overflow: "auto" }}>
             {(amendments ?? []).length === 0 && (
-              <div className="muted" style={{ padding: 16, textAlign: "center" }}>
+              <div className="empty-state">
                 No amendments yet. Draft one on the right.
               </div>
             )}
@@ -440,7 +440,7 @@ export function BylawDiffPage() {
         open={!!voteModal}
         onClose={() => setVoteModal(null)}
         title="Record resolution vote"
-        width={380}
+        size="sm"
         footer={
           <>
             <button className="btn" onClick={() => setVoteModal(null)}>Cancel</button>

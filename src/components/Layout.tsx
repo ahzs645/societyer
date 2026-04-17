@@ -76,8 +76,8 @@ import { MenuRow, MenuSectionLabel, Pill, TintedIconTile } from "./ui";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { useTranslation } from "react-i18next";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
-
-const MOBILE_SIDEBAR_BREAKPOINT = 980;
+import { mobileSidebarMediaQuery } from "../lib/breakpoints";
+import { DEFAULT_PINNED_ROUTES } from "../lib/navConfig";
 
 function NotificationBellSafe() {
   return (
@@ -247,7 +247,6 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-const DEFAULT_PINNED_ROUTES = ["/app", "/app/tasks", "/app/deadlines", "/app/meetings", "/app/documents"];
 const ALL_NAV_ITEMS = NAV_GROUPS.flatMap((group) => group.items);
 const ALL_NAV_ITEM_ROUTES = new Set(ALL_NAV_ITEMS.map((item) => item.to));
 
@@ -257,7 +256,7 @@ function isNavItemActive(item: NavItem, pathname: string) {
 }
 
 function normalizePinnedRoutes(routes: unknown): string[] {
-  if (!Array.isArray(routes)) return DEFAULT_PINNED_ROUTES;
+  if (!Array.isArray(routes)) return [...DEFAULT_PINNED_ROUTES];
   const seen = new Set<string>();
   return routes.filter((route): route is string => {
     if (typeof route !== "string") return false;
@@ -267,13 +266,13 @@ function normalizePinnedRoutes(routes: unknown): string[] {
   });
 }
 
-function readStoredPinnedRoutes() {
-  if (isStaticDemoRuntime()) return DEFAULT_PINNED_ROUTES;
+function readStoredPinnedRoutes(): string[] {
+  if (isStaticDemoRuntime()) return [...DEFAULT_PINNED_ROUTES];
   try {
     const stored = localStorage.getItem(PINNED_ROUTES_KEY);
-    return stored ? normalizePinnedRoutes(JSON.parse(stored)) : DEFAULT_PINNED_ROUTES;
+    return stored ? normalizePinnedRoutes(JSON.parse(stored)) : [...DEFAULT_PINNED_ROUTES];
   } catch {
-    return DEFAULT_PINNED_ROUTES;
+    return [...DEFAULT_PINNED_ROUTES];
   }
 }
 
@@ -384,7 +383,7 @@ export function Layout() {
   const { t } = useTranslation();
   const loc = useLocation();
   const [isMobileNav, setIsMobileNav] = useState(() =>
-    window.matchMedia(`(max-width: ${MOBILE_SIDEBAR_BREAKPOINT}px)`).matches,
+    window.matchMedia(mobileSidebarMediaQuery).matches,
   );
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(
@@ -416,6 +415,17 @@ export function Layout() {
     localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
 
+  // Keep the active route's sidebar group open as the user navigates. We only
+  // force-open — never auto-close — so user-collapsed groups stay that way.
+  useEffect(() => {
+    const groupedNav = getGroupedNav(new Set(pinnedRoutes));
+    const activeGroup = groupedNav.find((group) =>
+      group.items.some((item) => isNavItemActive(item, loc.pathname)),
+    );
+    if (!activeGroup) return;
+    setOpenGroups((prev) => (prev[activeGroup.id] ? prev : { ...prev, [activeGroup.id]: true }));
+  }, [loc.pathname, pinnedRoutes]);
+
   useEffect(() => {
     if (isStaticDemoRuntime()) return;
     localStorage.setItem(SPOTLIGHT_COLLAPSED_KEY, spotlightCollapsed ? "1" : "0");
@@ -427,7 +437,7 @@ export function Layout() {
   }, [pinnedRoutes]);
 
   useEffect(() => {
-    const media = window.matchMedia(`(max-width: ${MOBILE_SIDEBAR_BREAKPOINT}px)`);
+    const media = window.matchMedia(mobileSidebarMediaQuery);
     const onChange = (event: MediaQueryListEvent) => setIsMobileNav(event.matches);
     setIsMobileNav(media.matches);
     media.addEventListener("change", onChange);
@@ -649,6 +659,9 @@ export function Layout() {
               className="sidebar__workspace"
               type="button"
               title={society?.name ?? t("sidebar.selectWorkspace")}
+              aria-label={society?.name ? `${t("sidebar.selectWorkspace")} — ${society.name}` : t("sidebar.selectWorkspace")}
+              aria-haspopup="menu"
+              aria-expanded={workspaceOpen}
               onClick={() => setWorkspaceOpen((v) => !v)}
             >
               <div className="sidebar__brand-logo">
@@ -793,7 +806,7 @@ export function Layout() {
               border: "1px solid var(--border)",
               borderRadius: "var(--r-md)",
               boxShadow: "var(--shadow-lg)",
-              zIndex: 1000,
+              zIndex: "var(--z-dropdown)",
               overflow: "hidden",
               maxHeight: workspaceAnchor.maxHeight,
               color: "var(--text-primary)",
@@ -844,7 +857,7 @@ export function Layout() {
                 );
               })}
               {(!societies || societies.length === 0) && (
-                <div className="muted" style={{ padding: 12, fontSize: "var(--fs-sm)" }}>
+                <div className="empty-state empty-state--sm empty-state--start">
                   {t("sidebar.noSocieties")}
                 </div>
               )}

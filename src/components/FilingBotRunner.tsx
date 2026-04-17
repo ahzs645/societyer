@@ -198,7 +198,7 @@ export function FilingBotRunner({
       )}
 
       {!active && !last && (
-        <div className="muted" style={{ padding: 16, textAlign: "center" }}>
+        <div className="empty-state">
           No runs yet. Click "Run filing bot" to stage this filing.
         </div>
       )}

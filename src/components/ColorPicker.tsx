@@ -22,6 +22,13 @@ const DEFAULT_PALETTE = [
 ];
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+const SAFE_HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+/** Only let validated hex strings through to inline style.background so
+ * untrusted color values can't inject arbitrary CSS. */
+function safeBg(color: string | undefined | null): string {
+  return color && SAFE_HEX_RE.test(color) ? color : "transparent";
+}
 
 export function ColorPicker({
   value,
@@ -86,7 +93,7 @@ export function ColorPicker({
           disabled={disabled}
           aria-label="Pick color"
         >
-          <span className="color-swatch-trigger__chip" style={{ background: value || "transparent" }} />
+          <span className="color-swatch-trigger__chip" style={{ background: safeBg(value) }} />
           <span className="color-swatch-trigger__value">{value || "—"}</span>
         </button>
       ) : (
@@ -98,7 +105,7 @@ export function ColorPicker({
           disabled={disabled}
         >
           <span className="select-trigger__label">
-            <span className="color-chip" style={{ background: value || "transparent" }} />
+            <span className="color-chip" style={{ background: safeBg(value) }} />
             {value || <span className="select-trigger__placeholder">Pick color</span>}
           </span>
         </button>
@@ -112,7 +119,7 @@ export function ColorPicker({
                     key={c}
                     type="button"
                     className={`color-pop__cell${c.toLowerCase() === value.toLowerCase() ? " is-selected" : ""}`}
-                    style={{ background: c }}
+                    style={{ background: safeBg(c) }}
                     title={c}
                     onClick={() => apply(c)}
                     aria-label={c}
@@ -123,7 +130,7 @@ export function ColorPicker({
               </div>
               {customInput && (
                 <div className="color-pop__custom">
-                  <span className="color-chip" style={{ background: HEX_RE.test(draft) ? draft : "transparent" }} />
+                  <span className="color-chip" style={{ background: safeBg(draft) }} />
                   <input
                     className="color-pop__hex"
                     value={draft}

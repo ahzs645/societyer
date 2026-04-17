@@ -178,6 +178,45 @@
   --anim-slow:   0.3s;
   --anim-ease:   cubic-bezier(0.2, 0, 0, 1);
   --clickable-transition: background 0.1s ease;
+
+  /* ---------------- Z-index scale ----------------
+     Semantic layering. Always prefer var(--z-*) over numeric literals so
+     stacking stays coherent when new surfaces are added. */
+  --z-base:             1;    /* sidebar column, main column */
+  --z-sticky:           10;   /* sticky topbar / page headers */
+  --z-sidebar-peek:     20;   /* floating re-open button when collapsed */
+  --z-bottom-nav:       23;   /* mobile bottom nav */
+  --z-sidebar-backdrop: 24;   /* mobile sidebar backdrop */
+  --z-sidebar:          25;   /* mobile sidebar panel */
+  --z-inspector:        31;   /* mobile inspector overlay */
+  --z-drawer-backdrop:  40;
+  --z-drawer:           41;
+  --z-dropdown:         80;   /* menus, selects, date/icon/color popovers */
+  --z-modal-backdrop:   90;
+  --z-modal:            91;
+  --z-popover:          95;   /* popovers that may float above modals */
+  --z-command-palette:  100;
+  --z-toast:            105;
+  --z-tooltip:          110;
+
+  /* ---------------- Overlay backdrops ---------------- */
+  --bg-overlay-scrim:       rgba(10, 10, 10, 0.28);
+  --bg-overlay-scrim-dense: rgba(10, 10, 10, 0.35);
+
+  /* ---------------- Layout — modal sizes ---------------- */
+  --modal-w-sm: 400px;
+  --modal-w-md: 480px;
+  --modal-w-lg: 640px;
+  --modal-w-xl: 800px;
+
+  /* ---------------- Layout — popover sizes ---------------- */
+  --popover-w-sm: 220px;
+  --popover-w-md: 240px;
+  --popover-h-md: 260px;
+
+  /* ---------------- Layout — breakpoints (numeric, used by JS via readCssNumber) ---------------- */
+  --bp-mobile-sidebar: 980;
+  --bp-mobile-card:    760;
 }
 
 .dark {
@@ -282,4 +321,8 @@
   --shadow-sm: var(--shadow-light);
   --shadow-md: var(--shadow-strong);
   --shadow-lg: var(--shadow-super-heavy);
+
+  /* Overlay scrims — deeper on dark for sufficient contrast */
+  --bg-overlay-scrim:       rgba(0, 0, 0, 0.5);
+  --bg-overlay-scrim-dense: rgba(0, 0, 0, 0.6);
 }

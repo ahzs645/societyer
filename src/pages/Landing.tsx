@@ -91,16 +91,6 @@ const UPCOMING_DEADLINES = [
   { label: "AGM notice (14-day minimum)", due: "in 62 days", tone: "ok" as const },
 ];
 
-const SIDEBAR_ITEMS = [
-  { label: "Dashboard", icon: <Zap size={11} />, active: true },
-  { label: "Directors", icon: <Gavel size={11} /> },
-  { label: "Members", icon: <Users size={11} /> },
-  { label: "Meetings", icon: <CalendarClock size={11} /> },
-  { label: "Filings", icon: <FileCheck2 size={11} />, badge: "3" },
-  { label: "Bylaws", icon: <Scale size={11} /> },
-  { label: "PIPA", icon: <Lock size={11} /> },
-];
-
 const PAIN_POINTS = [
   {
     icon: <FileSpreadsheet size={16} />,
@@ -192,7 +182,6 @@ export function LandingPage() {
       <header className="landing__nav">
         <div className="landing__nav-inner">
           <Link to="/" className="landing__brand">
-            <span className="landing__brand-mark">S</span>
             <span className="landing__brand-name">Societyer</span>
             <span className="landing__brand-tag">preview</span>
           </Link>
@@ -262,63 +251,6 @@ export function LandingPage() {
             <span><CheckCircle2 size={12} /> Seeded with Riverside Community Society</span>
             <span><CheckCircle2 size={12} /> No login for the <code>/demo</code> walkthrough</span>
             <span><CheckCircle2 size={12} /> {authMeta}</span>
-          </div>
-        </div>
-
-        <div className="landing__hero-preview">
-          <div className="landing__preview-card">
-            <div className="landing__preview-head">
-              <span className="landing__preview-dot landing__preview-dot--r" />
-              <span className="landing__preview-dot landing__preview-dot--y" />
-              <span className="landing__preview-dot landing__preview-dot--g" />
-              <span className="landing__preview-url">
-                riverside.societyer.app<span> / compliance</span>
-              </span>
-            </div>
-            <div className="landing__preview-layout">
-              <aside className="landing__preview-sidebar" aria-hidden="true">
-                <div className="landing__preview-sidebar-brand">
-                  <span className="landing__brand-mark landing__brand-mark--xs">R</span>
-                  <span>Riverside Community</span>
-                </div>
-                <ul className="landing__preview-nav">
-                  {SIDEBAR_ITEMS.map((item) => (
-                    <li
-                      key={item.label}
-                      className={`landing__preview-nav-item${item.active ? " is-active" : ""}`}
-                    >
-                      <span className="landing__preview-nav-icon">{item.icon}</span>
-                      <span className="landing__preview-nav-label">{item.label}</span>
-                      {item.badge && (
-                        <span className="landing__preview-nav-badge">{item.badge}</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </aside>
-              <div className="landing__preview-body">
-                <div className="landing__preview-title-row">
-                  <div>
-                    <div className="landing__preview-kicker">Compliance posture</div>
-                    <div className="landing__preview-title">Riverside Community Society</div>
-                  </div>
-                  <span className="landing__preview-pill">
-                    <span className="landing__flag-dot landing__flag-dot--warn" /> 2 open flags
-                  </span>
-                </div>
-                <div className="landing__preview-stat-row">
-                  <Stat label="Active members" value="84" />
-                  <Stat label="Directors" value="7" />
-                  <Stat label="Open filings" value="3" tone="warn" />
-                  <Stat label="Overdue" value="1" tone="danger" />
-                </div>
-                <div className="landing__preview-flags">
-                  {FLAG_EXAMPLES.slice(0, 4).map((f) => (
-                    <FlagRow key={f.label} {...f} />
-                  ))}
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -499,50 +431,26 @@ export function LandingPage() {
       </section>
 
       <section id="self-host" className="landing__section landing__section--alt">
-        <div className="landing__container landing__selfhost">
-          <div className="landing__selfhost-text">
-            <SectionHead
-              kicker="Own your data"
-              title="Self-host the whole thing. No vendor on your registers."
-              sub="React + TypeScript on a Convex live-reactive backend. Run the Convex backend in Docker for full data residency, or point at hosted Convex when you want less ops."
-              align="left"
-            />
-            <div className="landing__selfhost-points">
-              <div><Server size={14} /> Convex backend runs in Docker — your database, your disk</div>
-              <div><ListChecks size={14} /> Schema-driven mutations with audit logs on every write</div>
-              <div><Zap size={14} /> Live queries — no polling, no manual refresh</div>
-              <div><Lock size={14} /> Export everything as JSON or CSV at any point</div>
-            </div>
-            <div className="landing__stack">
-              <StackChip label="React 18" />
-              <StackChip label="TypeScript" />
-              <StackChip label="Vite" />
-              <StackChip label="Convex" />
-              <StackChip label="React Router" />
-              <StackChip label="Sass" />
-              <StackChip label="Lucide" />
-            </div>
+        <div className="landing__container">
+          <SectionHead
+            kicker="Own your data"
+            title="Self-host the whole thing. No vendor on your registers."
+            sub="React + TypeScript on a Convex live-reactive backend. Run the Convex backend in Docker for full data residency, or point at hosted Convex when you want less ops."
+          />
+          <div className="landing__selfhost-points">
+            <div><Server size={14} /> Convex backend runs in Docker — your database, your disk</div>
+            <div><ListChecks size={14} /> Schema-driven mutations with audit logs on every write</div>
+            <div><Zap size={14} /> Live queries — no polling, no manual refresh</div>
+            <div><Lock size={14} /> Export everything as JSON or CSV at any point</div>
           </div>
-          <div className="landing__selfhost-code" aria-hidden="true">
-            <div className="landing__code-head">
-              <span className="landing__preview-dot landing__preview-dot--r" />
-              <span className="landing__preview-dot landing__preview-dot--y" />
-              <span className="landing__preview-dot landing__preview-dot--g" />
-              <span className="landing__code-title">~ / societyer</span>
-            </div>
-            <pre className="landing__code">
-              <code>
-                <span className="landing__code-comment"># Clone and run the full app</span>{"\n"}
-                <span className="landing__code-prompt">$</span> git clone github.com/ahzs645/societyer{"\n"}
-                <span className="landing__code-prompt">$</span> cd societyer{"\n"}
-                <span className="landing__code-prompt">$</span> docker compose up -d convex{"\n"}
-                <span className="landing__code-prompt">$</span> npm install{"\n"}
-                <span className="landing__code-prompt">$</span> npm run dev{"\n"}
-                {"\n"}
-                <span className="landing__code-comment">→ app on :5173</span>{"\n"}
-                <span className="landing__code-comment">→ convex dashboard on :6791</span>
-              </code>
-            </pre>
+          <div className="landing__stack">
+            <StackChip label="React 18" />
+            <StackChip label="TypeScript" />
+            <StackChip label="Vite" />
+            <StackChip label="Convex" />
+            <StackChip label="React Router" />
+            <StackChip label="Sass" />
+            <StackChip label="Lucide" />
           </div>
         </div>
       </section>
@@ -601,7 +509,6 @@ export function LandingPage() {
       <footer className="landing__footer">
         <div className="landing__container landing__footer-inner">
           <div className="landing__brand">
-            <span className="landing__brand-mark">S</span>
             <span className="landing__brand-name">Societyer</span>
           </div>
           <div className="landing__footer-meta">
@@ -632,23 +539,6 @@ function SectionHead({
       <div className="landing__kicker">{kicker}</div>
       <h2>{title}</h2>
       {sub && <p>{sub}</p>}
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "warn" | "danger";
-}) {
-  return (
-    <div className={`landing__stat${tone ? ` landing__stat--${tone}` : ""}`}>
-      <div className="landing__stat-value">{value}</div>
-      <div className="landing__stat-label">{label}</div>
     </div>
   );
 }

@@ -11,16 +11,27 @@ import {
 import { createPortal } from "react-dom";
 import { X, AlertTriangle } from "lucide-react";
 
+type ModalSize = "sm" | "md" | "lg" | "xl";
+
 type ModalProps = {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
   footer?: ReactNode;
-  /** Max width in px, default 480. */
+  /** Named width token; defaults to "md" (var(--modal-w-md)). */
+  size?: ModalSize;
+  /** Escape hatch for custom pixel widths. Prefer `size` when possible. */
   width?: number;
   /** Prevent closing on backdrop click. */
   dismissOnBackdrop?: boolean;
+};
+
+const MODAL_WIDTH_VARS: Record<ModalSize, string> = {
+  sm: "var(--modal-w-sm)",
+  md: "var(--modal-w-md)",
+  lg: "var(--modal-w-lg)",
+  xl: "var(--modal-w-xl)",
 };
 
 export function Modal({
@@ -29,13 +40,15 @@ export function Modal({
   title,
   children,
   footer,
-  width = 480,
+  size = "md",
+  width,
   dismissOnBackdrop = true,
 }: ModalProps) {
   const titleId = useStableDomId("modal-title");
   const dialogRef = useDialogFocus<HTMLDivElement>(open, onClose);
 
   if (!open) return null;
+  const maxWidth = width != null ? `${width}px` : MODAL_WIDTH_VARS[size];
   return createPortal(
     <>
       <div
@@ -49,7 +62,7 @@ export function Modal({
         aria-labelledby={titleId}
         ref={dialogRef}
         tabIndex={-1}
-        style={{ maxWidth: width }}
+        style={{ maxWidth }}
       >
         <div className="modal__head">
           <h2 className="modal__title" id={titleId}>{title}</h2>
@@ -107,7 +120,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           open
           onClose={() => close(false)}
           title={state.title}
-          width={420}
+          size="sm"
           footer={
             <>
               <button className="btn" onClick={() => close(false)}>
@@ -203,7 +216,7 @@ export function PromptProvider({ children }: { children: ReactNode }) {
           open
           onClose={() => close(null)}
           title={state.title}
-          width={460}
+          size="md"
           footer={
             <>
               <button className="btn" onClick={() => close(null)}>

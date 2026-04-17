@@ -2,6 +2,13 @@ import { ReactNode, useRef, useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { MenuRow, MenuSectionLabel } from "./ui";
 
+function readCssPx(name: string, fallback: number): number {
+  if (typeof window === "undefined") return fallback;
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name);
+  const n = parseFloat(raw);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 export type FilterField<T = any> = {
   id: string;
   label: string;
@@ -56,8 +63,10 @@ export function FilterPopover<T>({
   }, [onClose, anchorRef]);
 
   const rect = anchorRef.current?.getBoundingClientRect();
-  const POPOVER_W = 240;
-  const POPOVER_H = 260;
+  // Popover size estimates — kept in sync with tokens.css --popover-w-md / --popover-h-md.
+  // Used to clamp the popover inside the viewport; the rendered size is driven by CSS.
+  const POPOVER_W = readCssPx("--popover-w-md", 240);
+  const POPOVER_H = readCssPx("--popover-h-md", 260);
   const margin = 8;
   const style = rect
     ? {

@@ -90,7 +90,7 @@ export function WorkflowsPage() {
         </div>
         <div className="card__body" style={{ padding: 0 }}>
           {(rows ?? []).length === 0 ? (
-            <div className="muted" style={{ padding: 16, textAlign: "center" }}>
+            <div className="empty-state">
               No workflows yet. Pick a recipe from the catalog to get started.
             </div>
           ) : (

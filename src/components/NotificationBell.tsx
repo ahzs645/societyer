@@ -71,7 +71,9 @@ export function NotificationBell() {
         className="sidebar__icon-btn"
         onClick={() => setOpen((v) => !v)}
         title="Notifications"
-        aria-label="Notifications"
+        aria-label={unread && unread > 0 ? `Notifications (${unread} unread)` : "Notifications"}
+        aria-haspopup="dialog"
+        aria-expanded={open}
         style={{ position: "relative" }}
       >
         <Bell size={14} />
@@ -111,7 +113,7 @@ export function NotificationBell() {
               border: "1px solid var(--border)",
               borderRadius: "var(--r-md)",
               boxShadow: "var(--shadow-lg)",
-              zIndex: 1000,
+              zIndex: "var(--z-dropdown)",
               color: "var(--text-primary)",
             }}
           >
@@ -137,7 +139,7 @@ export function NotificationBell() {
             </div>
 
             {(notifications ?? []).length === 0 && (
-              <div className="muted" style={{ padding: 16, textAlign: "center" }}>
+              <div className="empty-state">
                 You're all caught up.
               </div>
             )}

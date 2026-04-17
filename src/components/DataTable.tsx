@@ -9,8 +9,7 @@ import {
   applyFilters,
 } from "./FilterBar";
 import { MenuRow, MenuSectionLabel, Pill } from "./ui";
-
-const MOBILE_CARD_BREAKPOINT = 760;
+import { mobileCardMediaQuery } from "../lib/breakpoints";
 
 export type Column<T> = {
   id: string;
@@ -74,13 +73,13 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [isMobileCards, setIsMobileCards] = useState(
-    () => window.matchMedia(`(max-width: ${MOBILE_CARD_BREAKPOINT}px)`).matches,
+    () => window.matchMedia(mobileCardMediaQuery).matches,
   );
   const filterBtnRef = useRef<HTMLButtonElement>(null);
   const sortBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${MOBILE_CARD_BREAKPOINT}px)`);
+    const mq = window.matchMedia(mobileCardMediaQuery);
     const onChange = (e: MediaQueryListEvent) => setIsMobileCards(e.matches);
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
@@ -297,6 +296,11 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
                     type="button"
                     className="table__sort-button"
                     onClick={() => toggleSort(col.id)}
+                    aria-label={
+                      sort?.columnId === col.id
+                        ? `Sorted ${sort.dir === "asc" ? "ascending" : "descending"} — click to ${sort.dir === "asc" ? "sort descending" : "clear sort"}`
+                        : "Click to sort ascending"
+                    }
                   >
                     <span>{col.header}</span>
                     {sort?.columnId === col.id && (
@@ -310,7 +314,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
                 )}
               </th>
             ))}
-            {renderRowActions && <th style={{ width: 1 }} />}
+            {renderRowActions && <th className="table__actions-col" />}
           </tr>
         </thead>
         <tbody>

@@ -1,4 +1,18 @@
 /* ============================================================
+   Empty-state — shared placeholder for "no rows", "no notifications",
+   "no matches". Prefer this over inline padding on .muted blocks.
+   ============================================================ */
+.empty-state {
+  padding: var(--s-4);
+  font-size: var(--fs-sm);
+  color: var(--text-tertiary);
+  text-align: center;
+}
+.empty-state--sm { padding: var(--s-3); }
+.empty-state--lg { padding: var(--s-6); }
+.empty-state--start { text-align: start; }
+
+/* ============================================================
    Select / Dropdown trigger + floating menu
    ============================================================ */
 .select-trigger {
@@ -60,7 +74,7 @@
 
 .menu {
   position: fixed;
-  z-index: 80;
+  z-index: var(--z-dropdown);
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
@@ -202,7 +216,7 @@
 
 .calendar {
   position: fixed;
-  z-index: 80;
+  z-index: var(--z-dropdown);
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
@@ -228,9 +242,60 @@
 }
 .calendar__nav:hover { background: var(--bg-hover); color: var(--text-primary); }
 .calendar__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--fs-md);
   font-weight: 500;
   color: var(--text-primary);
+}
+.calendar__title-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.08s ease, border-color 0.08s ease;
+}
+.calendar__title-btn:hover { background: var(--bg-hover); }
+.calendar__title-btn.is-open {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+.calendar__quick {
+  display: grid;
+  gap: 2px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 4px;
+}
+.calendar__quick--months { grid-template-columns: repeat(3, 1fr); }
+.calendar__quick--years  { grid-template-columns: repeat(4, 1fr); }
+.calendar__quick-cell {
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  transition: background 0.08s ease, color 0.08s ease;
+}
+.calendar__quick-cell:hover { background: var(--bg-hover); }
+.calendar__quick-cell.is-current {
+  background: var(--accent);
+  color: var(--accent-on);
+  border-color: var(--accent);
+}
+.calendar__cell.is-today.is-selected { border-color: var(--accent); }
+.calendar__cell.is-today:not(.is-selected) {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
 }
 .calendar__grid {
   display: grid;
@@ -255,6 +320,10 @@
   transition: background 0.08s ease, color 0.08s ease, border-color 0.08s ease;
 }
 .calendar__cell:hover:not(:disabled):not(.is-selected) { background: var(--bg-hover); }
+.calendar__cell.is-active:not(.is-selected) {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
 .calendar__cell.is-out { color: var(--text-tertiary); opacity: 0.55; }
 .calendar__cell.is-today { border-color: var(--border-strong); }
 .calendar__cell.is-selected {
@@ -279,8 +348,8 @@
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.18);
-  z-index: 90;
+  background: var(--bg-overlay-scrim);
+  z-index: var(--z-modal-backdrop);
   animation: fadeIn 0.12s ease-out;
 }
 @keyframes fadeIn {
@@ -289,7 +358,7 @@
 }
 .modal {
   position: fixed;
-  z-index: 91;
+  z-index: var(--z-modal);
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -414,7 +483,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  z-index: 100;
+  z-index: var(--z-toast);
   pointer-events: none;
   max-width: 360px;
 }
@@ -578,7 +647,7 @@
    ============================================================ */
 .tooltip {
   position: fixed;
-  z-index: 110;
+  z-index: var(--z-tooltip);
   background: var(--bg-inverse);
   color: var(--text-inverse);
   padding: 4px 8px;
@@ -731,7 +800,7 @@
    ============================================================ */
 .icon-picker {
   position: fixed;
-  z-index: 80;
+  z-index: var(--z-dropdown);
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
@@ -808,7 +877,7 @@
 
 .color-pop {
   position: fixed;
-  z-index: 80;
+  z-index: var(--z-dropdown);
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--r-md);

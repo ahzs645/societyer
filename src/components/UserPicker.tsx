@@ -154,7 +154,7 @@ export function UserPicker() {
               border: "1px solid var(--border)",
               borderRadius: "var(--r-md)",
               boxShadow: "var(--shadow-md)",
-              zIndex: 1000,
+              zIndex: "var(--z-dropdown)",
               overflow: "hidden",
               color: "var(--text-primary)",
             }}
@@ -189,7 +189,7 @@ export function UserPicker() {
               </div>
             ))}
             {(users ?? []).length === 0 && (
-              <div className="muted" style={{ padding: 12, fontSize: "var(--fs-sm)" }}>
+              <div className="empty-state empty-state--sm empty-state--start">
                 Add users under Users & roles, or click Reseed in the demo banner.
               </div>
             )}
