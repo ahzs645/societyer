@@ -1,6 +1,7 @@
 import {
   Children,
   cloneElement,
+  Fragment,
   isValidElement,
   MouseEvent as ReactMouseEvent,
   ReactElement,
@@ -11,10 +12,73 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { X, AlertTriangle, CheckCircle2, Info, Lock, Unlock } from "lucide-react";
+import { ChevronRight, X, AlertTriangle, CheckCircle2, Info, Lock, Unlock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useConfirm } from "./Modal";
 import { useInspectorPanel } from "./InspectorPanel";
+
+export type Breadcrumb = {
+  label: ReactNode;
+  to?: string;
+};
+
+/** 40px-tall page header with optional breadcrumb trail, title, and
+ * right-side actions. Opt-in: pages render it at the top of their content
+ * when they want the canonical "page chrome" row. */
+export function PageHeader({
+  breadcrumbs,
+  title,
+  meta,
+  actions,
+  className,
+}: {
+  breadcrumbs?: Breadcrumb[];
+  title: ReactNode;
+  meta?: ReactNode;
+  actions?: ReactNode;
+  className?: string;
+}) {
+  const classes = ["page-header"];
+  if (className) classes.push(className);
+  return (
+    <header className={classes.join(" ")}>
+      <div className="page-header__main">
+        {breadcrumbs && breadcrumbs.length > 0 && (
+          <nav className="page-header__crumbs" aria-label="Breadcrumb">
+            {breadcrumbs.map((crumb, index) => {
+              const isLast = index === breadcrumbs.length - 1;
+              return (
+                <Fragment key={index}>
+                  {crumb.to && !isLast ? (
+                    <Link to={crumb.to} className="page-header__crumb">
+                      {crumb.label}
+                    </Link>
+                  ) : (
+                    <span className="page-header__crumb page-header__crumb--current">
+                      {crumb.label}
+                    </span>
+                  )}
+                  {!isLast && (
+                    <ChevronRight
+                      size={12}
+                      aria-hidden="true"
+                      className="page-header__crumb-sep"
+                    />
+                  )}
+                </Fragment>
+              );
+            })}
+          </nav>
+        )}
+        <div className="page-header__title-row">
+          <h1 className="page-header__title">{title}</h1>
+          {meta && <span className="page-header__meta">{meta}</span>}
+        </div>
+      </div>
+      {actions && <div className="page-header__actions">{actions}</div>}
+    </header>
+  );
+}
 
 export function EmptyState({
   icon,

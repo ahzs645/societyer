@@ -540,6 +540,53 @@ export default defineSchema({
     .index("by_society", ["societyId"])
     .index("by_filing", ["filingId"]),
 
+  workflows: defineTable({
+    societyId: v.id("societies"),
+    recipe: v.string(), // agm_prep | insurance_renewal | annual_report_filing
+    name: v.string(),
+    status: v.string(), // active | paused | archived
+    trigger: v.object({
+      kind: v.string(), // cron | manual | date_offset
+      cron: v.optional(v.string()),
+      offset: v.optional(
+        v.object({
+          anchor: v.string(), // meetings.scheduledAt | insurancePolicies.renewalDate | filings.dueDate
+          anchorId: v.optional(v.string()),
+          daysBefore: v.number(),
+        }),
+      ),
+    }),
+    config: v.optional(v.any()),
+    lastRunAtISO: v.optional(v.string()),
+    nextRunAtISO: v.optional(v.string()),
+    createdByUserId: v.optional(v.id("users")),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_next_run", ["nextRunAtISO"]),
+
+  workflowRuns: defineTable({
+    societyId: v.id("societies"),
+    workflowId: v.id("workflows"),
+    recipe: v.string(),
+    status: v.string(), // queued | running | success | failed | manual_required
+    startedAtISO: v.string(),
+    completedAtISO: v.optional(v.string()),
+    steps: v.array(
+      v.object({
+        label: v.string(),
+        status: v.string(), // pending | running | ok | fail | skip
+        atISO: v.optional(v.string()),
+        note: v.optional(v.string()),
+      }),
+    ),
+    output: v.optional(v.any()),
+    demo: v.boolean(),
+    triggeredBy: v.string(), // cron | manual | event
+    triggeredByUserId: v.optional(v.id("users")),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_workflow", ["workflowId"]),
+
   subscriptionPlans: defineTable({
     societyId: v.id("societies"),
     name: v.string(),

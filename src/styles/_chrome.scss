@@ -615,99 +615,139 @@
     padding-right: 10px;
   }
 }
+/* Table toolbar — 39px tall, matches Twenty's TopBar height spec. */
 .table-toolbar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--s-2);
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
+  padding: 4px 8px;
+  min-height: 39px;
+  border-bottom: 1px solid var(--border-color-light);
   background: var(--bg-panel);
 }
 .table-toolbar__search {
   position: relative;
   flex: 1;
   min-width: min(220px, 100%);
-  max-width: 320px;
+  max-width: 280px;
 }
 .table-toolbar__search input {
   width: 100%;
-  height: 30px;
-  border: 1px solid var(--border);
+  height: 28px;
+  border: 1px solid var(--border-color-light);
   border-radius: var(--r-sm);
   background: var(--bg-base);
-  padding: 0 12px 0 30px;
+  color: var(--text-primary);
+  padding: 0 10px 0 28px;
+  font-size: var(--fs-sm);
+  transition: border-color 0.08s ease, box-shadow 0.08s ease;
+}
+.table-toolbar__search input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .table-toolbar__search svg {
   position: absolute;
-  left: 10px;
+  left: 9px;
   top: 50%;
   transform: translateY(-50%);
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
   color: var(--text-tertiary);
 }
 .table-toolbar__state {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 30px;
+  min-height: 28px;
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
 }
 .table-toolbar__summary {
   margin-left: auto;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  padding-right: 4px;
 }
+
+/* Table — Twenty RecordTable spec. 32px rows, sticky header, 8px horizontal
+ * cell padding, per-cell right+bottom hairlines to produce a grid feel. */
 .table {
   width: max-content;
   min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
 }
 .table thead th {
   text-align: left;
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-tertiary);
   font-size: var(--fs-sm);
-  padding: 10px 14px;
-  background: var(--bg-subtle);
-  border-bottom: 1px solid var(--border);
+  height: 32px;
+  padding: 0 8px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border-color-light);
+  border-bottom: 1px solid var(--border-color-light);
   position: sticky;
   top: 0;
+  z-index: 2;
   user-select: none;
   white-space: nowrap;
+  transition: background 0.08s ease;
+}
+.table thead th:last-child {
+  border-right: none;
+}
+.table thead th.is-sortable {
+  cursor: pointer;
+}
+.table thead th.is-sortable:hover {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
 }
 .table tbody td {
-  padding: 6px 14px;
-  border-bottom: 1px solid var(--border);
+  padding: 0 8px;
+  border-right: 1px solid var(--border-color-light);
+  border-bottom: 1px solid var(--border-color-light);
   color: var(--text-primary);
   vertical-align: middle;
   height: 32px;
+  background: var(--bg-panel);
+  transition: background 0.08s ease;
 }
-.table thead th.is-sortable { padding: 0; }
-.table thead th.is-sortable:hover { background: var(--bg-hover); color: var(--text-primary); }
+.table tbody td:last-child {
+  border-right: none;
+}
 .table__sort-button {
   width: 100%;
-  min-height: 38px;
-  padding: 10px 14px;
+  height: 100%;
+  min-height: 32px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   color: inherit;
   font: inherit;
   text-align: inherit;
+  background: transparent;
+  border: none;
+  cursor: pointer;
 }
 .table__sort-button:focus-visible {
   outline: 2px solid var(--border-focus);
   outline-offset: -2px;
 }
 .table__sort-indicator {
-  display: inline-block;
-  margin-left: 4px;
-  color: var(--accent);
-  font-size: 9px;
-  vertical-align: 1px;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 2px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
 }
+.table__sort-indicator svg { width: 12px; height: 12px; }
 .table__cell-button {
   display: inline-flex;
   width: 100%;
@@ -723,7 +763,9 @@
   border-radius: var(--r-sm);
 }
 
-/* Twenty-style record chip used for the first cell in record tables */
+/* Twenty-style record chip used for the first cell in record tables.
+ * Transparent background so it stays legible against both the default td
+ * (bg-panel) and the selected row (accent-quaternary). */
 .record-chip,
 .cell-chip {
   display: inline-flex;
@@ -731,12 +773,12 @@
   gap: 8px;
   min-width: 0;
   max-width: 100%;
-  padding: 3px 10px 3px 3px;
+  padding: 2px 10px 2px 2px;
   border-radius: var(--r-pill);
-  border: 1px solid var(--border);
-  background: var(--bg-panel);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   transition: background 0.08s ease, border-color 0.08s ease;
 }
 .record-chip--interactive,
@@ -745,8 +787,8 @@
 }
 .record-chip--interactive:hover,
 .cell-chip:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-strong);
+  background: var(--bg-tertiary);
+  border-color: var(--border-color-medium);
 }
 .record-chip__avatar,
 .cell-chip__avatar {
@@ -780,13 +822,23 @@
   border: 1px solid var(--border);
   font-size: var(--fs-sm);
 }
-.table tbody tr:hover {
-  background: var(--bg-hover);
+/* Body row hover — very subtle (Twenty only tints header cells on hover;
+ * we need a faint affordance so action reveal works). */
+.table tbody tr:hover td {
+  background: var(--bg-secondary);
 }
 .table tbody tr[role="button"]:focus-visible {
   outline: 2px solid var(--border-focus);
   outline-offset: -2px;
-  background: var(--bg-hover);
+}
+.table tbody tr[role="button"]:focus-visible td {
+  background: var(--bg-secondary);
+}
+/* Selected / active row — matches Twenty's accent-quaternary fill + medium
+ * border to call out the row currently being acted on. */
+.table tbody tr[data-active="true"] td,
+.table tbody tr.is-active td {
+  background: var(--accent-quaternary);
 }
 .table tbody tr:last-child td {
   border-bottom: none;
@@ -837,11 +889,12 @@
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  padding: 10px 12px;
-  border-top: 1px solid var(--border);
+  min-height: 39px;
+  padding: 4px 8px;
+  border-top: 1px solid var(--border-color-light);
   background: var(--bg-panel);
-  font-size: var(--fs-sm);
-  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
 }
 .table-pagination__range {
   margin-right: auto;
@@ -966,30 +1019,110 @@
   box-shadow: 0 0 0 2px var(--bg-panel);
 }
 
+/* PageHeader — 40px bar at the top of a page, mirrors topbar height. Holds
+ * a breadcrumb, title, and right-side actions. Pages opt in by rendering
+ * <PageHeader /> as the first child of their .page wrapper. */
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: var(--topbar-h);
+  padding: var(--s-2) 0;
+  margin-bottom: var(--s-4);
+  border-bottom: 1px solid var(--border-color-light);
+  flex-wrap: wrap;
+}
+.page-header__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.page-header__crumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.page-header__crumb {
+  color: var(--text-tertiary);
+  text-decoration: none;
+  transition: color 0.08s ease;
+}
+.page-header__crumb:hover {
+  color: var(--text-secondary);
+}
+.page-header__crumb--current {
+  color: var(--text-secondary);
+}
+.page-header__crumb-sep {
+  color: var(--text-placeholder);
+  flex-shrink: 0;
+}
+.page-header__title-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.page-header__title {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.2px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-header__meta {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.page-header__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-shrink: 0;
+}
+
 .empty-state {
-  padding: var(--s-9) var(--s-5);
+  padding: var(--s-12) var(--s-6);
   text-align: center;
   color: var(--text-secondary);
-  border: 1px dashed var(--border);
+  border: 1px dashed var(--border-color-medium);
   border-radius: var(--r-md);
-  background: var(--bg-subtle);
+  background: var(--bg-secondary);
 }
 .empty-state__icon {
-  width: 44px;
-  height: 44px;
+  width: 56px;
+  height: 56px;
   border-radius: var(--r-md);
   background: var(--bg-panel);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-color-light);
   color: var(--text-tertiary);
   display: inline-grid;
   place-items: center;
-  margin-bottom: var(--s-3);
+  margin-bottom: var(--s-4);
+  box-shadow: var(--shadow-light);
+}
+.empty-state__icon svg {
+  width: 24px;
+  height: 24px;
+  stroke-width: 1.75;
 }
 .empty-state__title {
-  font-size: clamp(22px, 2vw, 26px);
+  font-size: clamp(20px, 1.8vw, 24px);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0 0 6px;
+  margin: 0 0 var(--s-2);
+  letter-spacing: -0.1px;
 }
 
 .inspector-note {

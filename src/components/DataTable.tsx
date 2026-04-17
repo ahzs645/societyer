@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { ViewBar } from "./primitives";
 import {
   AppliedFilter,
@@ -301,7 +301,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
                     <span>{col.header}</span>
                     {sort?.columnId === col.id && (
                       <span className="table__sort-indicator" aria-hidden="true">
-                        {sort.dir === "asc" ? "▲" : "▼"}
+                        {sort.dir === "asc" ? <ArrowUp /> : <ArrowDown />}
                       </span>
                     )}
                   </button>

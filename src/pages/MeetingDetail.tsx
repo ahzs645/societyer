@@ -427,7 +427,7 @@ export function MeetingDetailPage() {
   );
 
   return (
-    <div className="page">
+    <div className="page page--narrow">
       <Link to="/app/meetings" className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
         <ArrowLeft size={12} /> All meetings
       </Link>

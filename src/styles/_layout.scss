@@ -56,10 +56,12 @@
 }
 .sidebar-peek svg { width: 14px; height: 14px; }
 
-/* Sidebar */
+/* Sidebar — Twenty-style: inherits the app background (bg-app = gray-2) and
+ * uses a hairline right-border. No separate fill keeps the shell feeling
+ * like a single continuous surface. */
 .sidebar {
-  background: var(--bg-subtle);
-  border-right: 1px solid var(--border);
+  background: transparent;
+  border-right: 1px solid var(--border-color-light);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -159,12 +161,12 @@
   flex: 1;
   min-width: 0;
   cursor: pointer;
-  transition: background 0.08s ease;
+  transition: background 0.08s ease, border-color 0.08s ease;
   border: 1px solid transparent;
 }
 .sidebar__workspace:hover {
-  background: var(--bg-hover);
-  border-color: var(--border);
+  background: var(--bg-transparent-light);
+  border-color: var(--border-color-medium);
 }
 .sidebar__brand-logo {
   width: 20px;
@@ -203,19 +205,47 @@
 }
 .sidebar__spotlight {
   margin: 12px 12px 8px;
-  padding: 12px;
+  padding: 10px 12px;
   border-radius: var(--r-md);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-color-light);
   background: var(--bg-panel);
-  box-shadow: var(--shadow-sm);
+  transition: padding var(--anim-fast) var(--anim-ease);
+}
+.sidebar__spotlight.is-collapsed {
+  padding: 4px 10px;
+}
+.sidebar__spotlight-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  margin-bottom: 4px;
+  color: var(--text-tertiary);
+}
+.sidebar__spotlight.is-collapsed .sidebar__spotlight-toggle {
+  margin-bottom: 0;
+}
+.sidebar__spotlight-toggle:hover {
+  color: var(--text-secondary);
+}
+.sidebar__spotlight-chevron {
+  flex-shrink: 0;
+  transition: transform var(--anim-fast) var(--anim-ease);
+}
+.sidebar__spotlight.is-collapsed .sidebar__spotlight-chevron {
+  transform: rotate(-90deg);
 }
 .sidebar__spotlight-label {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--text-tertiary);
-  margin-bottom: 6px;
+  color: inherit;
 }
 .sidebar__spotlight-title {
   font-size: var(--fs-md);
@@ -249,7 +279,7 @@
   transition: background 0.08s ease, color 0.08s ease;
 }
 .sidebar__icon-btn:hover {
-  background: var(--bg-hover);
+  background: var(--bg-transparent-light);
   color: var(--text-primary);
 }
 .app-shell.is-collapsed .sidebar__workspace {
@@ -259,24 +289,22 @@
 .app-shell.is-collapsed .sidebar__brand-actions {
   display: none;
 }
+/* Section labels — Twenty keeps them title-case and quiet; no uppercase,
+ * no letter-spacing. Just a slightly smaller, tertiary-colored row. */
 .sidebar__section {
   padding: var(--s-3) var(--s-2) var(--s-1);
   font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--text-tertiary);
-  font-weight: 500;
-  padding-left: var(--s-4);
+  font-weight: var(--fw-medium);
+  padding-left: var(--s-3);
 }
 .sidebar__section--compact {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 11px;
-  font-weight: 600;
-  padding-top: 14px;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  padding-top: var(--s-3);
 }
 .sidebar__section-meta {
   color: var(--text-placeholder);
@@ -298,7 +326,16 @@
   cursor: pointer;
   text-align: left;
 }
-.sidebar__group-toggle:hover,
+.sidebar__group-toggle {
+  padding: var(--s-2) var(--s-3) var(--s-1);
+  border-radius: var(--r-sm);
+  color: var(--text-tertiary);
+  transition: background 0.08s ease, color 0.08s ease;
+}
+.sidebar__group-toggle:hover {
+  background: var(--bg-transparent-light);
+  color: var(--text-secondary);
+}
 .sidebar__group-toggle.is-active {
   color: var(--text-secondary);
 }
@@ -345,13 +382,15 @@
   transition: background 0.08s ease, color 0.08s ease;
   border: 1px solid transparent;
 }
+/* Hover / active use bg-transparent-light (gray-a-2, ~4% alpha black) so the
+ * tint is visible but doesn't compete with the active page content. */
 .sidebar__item:hover {
-  background: var(--bg-hover);
+  background: var(--bg-transparent-light);
   color: var(--text-primary);
   border-color: transparent;
 }
 .sidebar__item.is-active {
-  background: var(--bg-hover);
+  background: var(--bg-transparent-medium);
   color: var(--text-primary);
   border-color: transparent;
 }
@@ -507,6 +546,17 @@
   flex: 1;
 }
 .page--flush {
+  padding: 0;
+}
+/* Record-detail / long-form pages: cap content at ~960px and center — keeps
+ * reading measure short on wide monitors. Table pages should stay full-width
+ * and omit this modifier. */
+.page--narrow > * {
+  max-width: 960px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.page--narrow.page--flush {
   padding: 0;
 }
 .page__header {

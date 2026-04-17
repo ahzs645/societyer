@@ -50,6 +50,8 @@ import {
   PinOff,
   ExternalLink,
   KeyRound,
+  Workflow,
+  History,
 } from "lucide-react";
 import {
   ComponentType,
@@ -223,6 +225,14 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    id: "workflows",
+    label: "Workflows",
+    items: [
+      { to: "/app/workflows", label: "Workflows", icon: Workflow, color: "orange", module: "workflows" },
+      { to: "/app/workflow-runs", label: "Workflow runs", icon: History, color: "gray", module: "workflows" },
+    ],
+  },
+  {
     id: "administration",
     label: "Administration",
     items: [
@@ -293,6 +303,7 @@ function getInitialOpenGroups(pathname: string, pinnedRoutes: string[] = readSto
 }
 
 const COLLAPSE_KEY = "societyer.sidebar.collapsed";
+const SPOTLIGHT_COLLAPSED_KEY = "societyer.sidebar.spotlight.collapsed";
 const PINNED_ROUTES_KEY = "societyer.sidebar.pinnedRoutes";
 const SIDEBAR_MENU_WIDTH = 220;
 const SIDEBAR_MENU_HEIGHT = 116;
@@ -341,6 +352,8 @@ const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   Reconciliation: "nav.reconciliation",
   "Donation receipts": "nav.donationReceipts",
   "Membership & billing": "nav.membership",
+  Workflows: "nav.workflows",
+  "Workflow runs": "nav.workflowRuns",
   Notifications: "nav.notifications",
   "Users & roles": "nav.users",
   "Import sessions": "nav.importSessions",
@@ -377,6 +390,9 @@ export function Layout() {
   const [collapsed, setCollapsed] = useState(
     () => !isStaticDemoRuntime() && localStorage.getItem(COLLAPSE_KEY) === "1",
   );
+  const [spotlightCollapsed, setSpotlightCollapsed] = useState(
+    () => !isStaticDemoRuntime() && localStorage.getItem(SPOTLIGHT_COLLAPSED_KEY) === "1",
+  );
   const [pinnedRoutes, setPinnedRoutes] = useState(readStoredPinnedRoutes);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(
     () => getInitialOpenGroups(window.location.pathname),
@@ -399,6 +415,11 @@ export function Layout() {
     if (isStaticDemoRuntime()) return;
     localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
+
+  useEffect(() => {
+    if (isStaticDemoRuntime()) return;
+    localStorage.setItem(SPOTLIGHT_COLLAPSED_KEY, spotlightCollapsed ? "1" : "0");
+  }, [spotlightCollapsed]);
 
   useEffect(() => {
     if (isStaticDemoRuntime()) return;
@@ -661,23 +682,34 @@ export function Layout() {
           <div className="sidebar__identity">
             <UserPickerSafe />
           </div>
-          <div className="sidebar__spotlight">
-            <div className="sidebar__spotlight-label">{t("sidebar.operationsDesk")}</div>
-            <div className="sidebar__spotlight-title">{society?.name ?? t("sidebar.defaultWorkspace")}</div>
-            <div className="sidebar__spotlight-meta">
-              <span>{t("sidebar.openTasks")}</span>
-              <Pill size="sm">{counts?.counts.openTasks ?? 0}</Pill>
-            </div>
-            <div className="sidebar__spotlight-meta">
-              <span>{t("sidebar.upcomingDeadlines")}</span>
-              <Pill size="sm">{counts?.counts.openDeadlines ?? 0}</Pill>
-            </div>
+          <div className={`sidebar__spotlight${spotlightCollapsed ? " is-collapsed" : ""}`}>
+            <button
+              type="button"
+              className="sidebar__spotlight-toggle"
+              onClick={() => setSpotlightCollapsed((v) => !v)}
+              aria-expanded={!spotlightCollapsed}
+            >
+              <span className="sidebar__spotlight-label">{t("sidebar.operationsDesk")}</span>
+              <ChevronDown size={12} className="sidebar__spotlight-chevron" />
+            </button>
+            {!spotlightCollapsed && (
+              <>
+                <div className="sidebar__spotlight-title">{society?.name ?? t("sidebar.defaultWorkspace")}</div>
+                <div className="sidebar__spotlight-meta">
+                  <span>{t("sidebar.openTasks")}</span>
+                  <Pill size="sm">{counts?.counts.openTasks ?? 0}</Pill>
+                </div>
+                <div className="sidebar__spotlight-meta">
+                  <span>{t("sidebar.upcomingDeadlines")}</span>
+                  <Pill size="sm">{counts?.counts.openDeadlines ?? 0}</Pill>
+                </div>
+              </>
+            )}
           </div>
 
           <nav className="sidebar__nav">
             <div className="sidebar__section sidebar__section--compact">
               <span>{t("nav.favorites")}</span>
-              <span className="sidebar__section-meta">{t("sidebar.pinned")}</span>
             </div>
             {visiblePinnedNav.map((item) =>
               renderNavItem(
@@ -693,7 +725,6 @@ export function Layout() {
             )}
             <div className="sidebar__section sidebar__section--compact">
               <span>{t("nav.allRecords")}</span>
-              <span className="sidebar__section-meta">{t("sidebar.grouped")}</span>
             </div>
             {visibleGroupedNav.map((group) => {
               const isOpen = openGroups[group.id] ?? false;
@@ -734,7 +765,6 @@ export function Layout() {
             })}
             <div className="sidebar__section sidebar__section--compact">
               <span>{t("nav.resources")}</span>
-              <span className="sidebar__section-meta">{t("sidebar.reference")}</span>
             </div>
             <a
               className="sidebar__item"

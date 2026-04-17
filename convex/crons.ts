@@ -40,4 +40,14 @@ crons.cron(
   {},
 );
 
+// Every 15 minutes — pick up any workflow whose nextRunAtISO has elapsed
+// and fire its runner. This is the only scheduler for configured workflows;
+// per-workflow cadence is stored on the workflow row itself.
+crons.interval(
+  "workflow scan",
+  { minutes: 15 },
+  internal.workflows.scan,
+  {},
+);
+
 export default crons;
