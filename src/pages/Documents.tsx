@@ -18,6 +18,10 @@ import { PaperlessDocumentAction } from "../components/PaperlessDocumentAction";
 
 const CATS = ["Constitution", "Bylaws", "Minutes", "FinancialStatement", "Policy", "Filing", "Other"] as const;
 
+const CAT_LABELS: Record<string, string> = {
+  FinancialStatement: "Financial Statement",
+};
+
 const DOC_FIELDS: FilterField<any>[] = [
   { id: "title", label: "Title", icon: <Tag size={14} />, match: (d, q) => d.title.toLowerCase().includes(q.toLowerCase()) },
   { id: "category", label: "Category", icon: <Tag size={14} />, options: [...CATS], match: (d, q) => d.category === q },
@@ -180,7 +184,7 @@ export function DocumentsPage() {
           {
             id: "category", header: "Category", sortable: true,
             accessor: (r) => r.category,
-            render: (r) => <Badge tone={catTone(r.category)}>{r.category}</Badge>,
+            render: (r) => <Badge tone={catTone(r.category)}>{CAT_LABELS[r.category] ?? r.category}</Badge>,
           },
           {
             id: "createdAtISO", header: "Created", sortable: true,

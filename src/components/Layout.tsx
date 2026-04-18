@@ -185,7 +185,7 @@ const NAV_GROUPS: NavGroup[] = [
     id: "records",
     label: "Governance records",
     items: [
-      { to: "/app/conflicts", label: "Conflicts of interest", icon: AlertTriangle, color: "red" },
+      { to: "/app/conflicts", label: "Conflicts of int.", icon: AlertTriangle, color: "red" },
       { to: "/app/attestations", label: "Director attestations", icon: ShieldCheck, color: "red", module: "attestations" },
       { to: "/app/auditors", label: "Auditors", icon: Calculator, color: "green", module: "auditors" },
       { to: "/app/court-orders", label: "Court orders", icon: Gavel, color: "red", module: "courtOrders" },
@@ -329,7 +329,7 @@ const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   Elections: "nav.elections",
   "Written resolutions": "nav.writtenResolutions",
   Proxies: "nav.proxies",
-  "Conflicts of interest": "nav.conflicts",
+  "Conflicts of int.": "nav.conflicts",
   "Director attestations": "nav.attestations",
   Auditors: "nav.auditors",
   "Court orders": "nav.courtOrders",

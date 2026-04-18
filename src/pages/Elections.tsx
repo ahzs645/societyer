@@ -159,9 +159,9 @@ export function ElectionsPage() {
       />
 
       {!isBetterAuthMode() && (
-        <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card" style={{ marginBottom: 16, borderLeft: "3px solid var(--text-tertiary)" }}>
           <div className="card__body">
-            Real anonymous member voting requires authenticated member accounts.
+            <strong>No-auth mode:</strong> Real anonymous member voting requires authenticated member accounts.
             You can still design and administer elections here, but the member
             ballot flow stays disabled until authentication is enabled.
           </div>
@@ -169,9 +169,9 @@ export function ElectionsPage() {
       )}
 
       {rules && !rules.allowElectronicVoting && (
-        <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card" style={{ marginBottom: 16, borderLeft: "3px solid var(--warn)" }}>
           <div className="card__body">
-            The active bylaw rule set currently disallows electronic voting. You can
+            <strong>Bylaw restriction:</strong> The active bylaw rule set currently disallows electronic voting. You can
             still prepare elections here, but opening them for remote ballots may not
             match the society's bylaws.
           </div>
@@ -199,8 +199,8 @@ export function ElectionsPage() {
                   </Badge>
                 </div>
                 <div className="muted" style={{ fontSize: 13 }}>
-                  Opens {new Date(row.election.opensAtISO).toLocaleString()} · closes{" "}
-                  {new Date(row.election.closesAtISO).toLocaleString()}
+                  Opens {new Date(row.election.opensAtISO).toLocaleDateString()} · closes{" "}
+                  {new Date(row.election.closesAtISO).toLocaleDateString()}
                 </div>
               </Link>
             ))}

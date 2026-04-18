@@ -9,6 +9,13 @@ import { FilterField } from "../components/FilterBar";
 import { Plus, Users, Trash2, Tag } from "lucide-react";
 import { dollarInputToCents, formatDate, money, initials } from "../lib/format";
 
+const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
+  FullTime: "Full-time",
+  PartTime: "Part-time",
+  Casual: "Casual",
+  Contractor: "Contractor",
+};
+
 const FIELDS: FilterField<any>[] = [
   { id: "type", label: "Type", icon: <Tag size={14} />, options: ["FullTime", "PartTime", "Casual", "Contractor"], match: (r, q) => r.employmentType === q },
   { id: "active", label: "Active", options: ["Yes", "No"], match: (r, q) => (r.endDate ? "No" : "Yes") === q },
@@ -82,9 +89,9 @@ export function EmployeesPage() {
             ),
           },
           { id: "role", header: "Role", sortable: true, accessor: (r) => r.role, render: (r) => <span className="cell-tag">{r.role}</span> },
-          { id: "employmentType", header: "Type", sortable: true, accessor: (r) => r.employmentType, render: (r) => <Badge>{r.employmentType}</Badge> },
+          { id: "employmentType", header: "Type", sortable: true, accessor: (r) => r.employmentType, render: (r) => <Badge>{EMPLOYMENT_TYPE_LABELS[r.employmentType] ?? r.employmentType}</Badge> },
           { id: "startDate", header: "Start", sortable: true, accessor: (r) => r.startDate, render: (r) => <span className="mono">{formatDate(r.startDate)}</span> },
-          { id: "endDate", header: "End", sortable: true, accessor: (r) => r.endDate ?? "", render: (r) => r.endDate ? <span className="mono">{formatDate(r.endDate)}</span> : <Badge tone="success">Active</Badge> },
+          { id: "endDate", header: "Status", sortable: true, accessor: (r) => r.endDate ?? "", render: (r) => r.endDate ? <span className="mono">{formatDate(r.endDate)}</span> : <Badge tone="success">Active</Badge> },
           { id: "annualSalaryCents", header: "Salary (annual)", sortable: true, align: "right", accessor: (r) => r.annualSalaryCents ?? 0, render: (r) => r.annualSalaryCents ? <span className="mono">{money(r.annualSalaryCents)}</span> : r.hourlyWageCents ? <span className="mono">{money(r.hourlyWageCents)}/hr</span> : <span className="muted">—</span> },
         ]}
         renderRowActions={(r) => (

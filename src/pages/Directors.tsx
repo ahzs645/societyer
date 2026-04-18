@@ -163,7 +163,7 @@ export function DirectorsPage() {
                     <td>{term.position}</td>
                     <td className="muted">{term.committeeName ?? "—"}</td>
                     <td className="mono">{formatDate(term.startDate)}</td>
-                    <td><Badge tone={term.status === "Verified" ? "success" : "warn"}>{term.status ?? "NeedsReview"}</Badge></td>
+                    <td><Badge tone={term.status === "Verified" ? "success" : "warn"}>{term.status ?? "Needs Review"}</Badge></td>
                   </tr>
                 ))}
               </tbody>

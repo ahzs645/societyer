@@ -121,7 +121,7 @@ export function PrivacyPage() {
 
 function Item({ children }: { children: React.ReactNode }) {
   return (
-    <div className="row" style={{ alignItems: "flex-start" }}>
+    <div className="row" style={{ alignItems: "flex-start", textAlign: "left" }}>
       <span style={{ color: "var(--text-tertiary)" }}>•</span>
       <span style={{ color: "var(--text-secondary)" }}>{children}</span>
     </div>

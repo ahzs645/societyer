@@ -215,7 +215,7 @@ export function TasksPage() {
                         value={t.status}
                         onChange={(v) => update({ id: t._id, patch: { status: v } })}
                         style={{ width: 120 }}
-                        options={STATUSES.map((s) => ({ value: s, label: s }))}
+                        options={COLS.map((c) => ({ value: c.id, label: c.label }))}
                       />
                     </td>
                     <td><button className="btn btn--ghost btn--sm" onClick={() => confirmDelete(t._id, t.title)}>Delete</button></td>

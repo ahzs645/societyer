@@ -36,6 +36,7 @@ import type * as filingExports from "../filingExports.js";
 import type * as filings from "../filings.js";
 import type * as financialHub from "../financialHub.js";
 import type * as financials from "../financials.js";
+import type * as fixOteDataOnce from "../fixOteDataOnce.js";
 import type * as goals from "../goals.js";
 import type * as grants from "../grants.js";
 import type * as http from "../http.js";
@@ -77,11 +78,13 @@ import type * as signatures from "../signatures.js";
 import type * as society from "../society.js";
 import type * as subscriptions from "../subscriptions.js";
 import type * as tasks from "../tasks.js";
+import type * as testFix from "../testFix.js";
 import type * as transcripts from "../transcripts.js";
 import type * as transparency from "../transparency.js";
 import type * as treasury from "../treasury.js";
 import type * as users from "../users.js";
 import type * as volunteers from "../volunteers.js";
+import type * as workflows from "../workflows.js";
 import type * as writtenResolutions from "../writtenResolutions.js";
 
 import type {
@@ -119,6 +122,7 @@ declare const fullApi: ApiFromModules<{
   filings: typeof filings;
   financialHub: typeof financialHub;
   financials: typeof financials;
+  fixOteDataOnce: typeof fixOteDataOnce;
   goals: typeof goals;
   grants: typeof grants;
   http: typeof http;
@@ -160,11 +164,13 @@ declare const fullApi: ApiFromModules<{
   society: typeof society;
   subscriptions: typeof subscriptions;
   tasks: typeof tasks;
+  testFix: typeof testFix;
   transcripts: typeof transcripts;
   transparency: typeof transparency;
   treasury: typeof treasury;
   users: typeof users;
   volunteers: typeof volunteers;
+  workflows: typeof workflows;
   writtenResolutions: typeof writtenResolutions;
 }>;
 

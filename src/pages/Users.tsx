@@ -103,7 +103,7 @@ export function UsersPage() {
                 </td>
                 <td>
                   <Badge tone={u.status === "Active" ? "success" : u.status === "Invited" ? "warn" : "neutral"}>
-                    {u.status}
+                    {u.status ?? "Active"}
                   </Badge>
                 </td>
                 <td className="mono">{u.lastLoginAtISO ?? "—"}</td>
