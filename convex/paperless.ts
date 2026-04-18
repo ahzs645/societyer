@@ -1137,7 +1137,7 @@ function transposedInsurancePolicy(doc: any) {
   const startDate = dateNear(text, /\b(effective|start|from)\b/i) ?? inferredPaperlessDate(doc);
   const endDate = dateNear(text, /\b(expires?|expiry|expiration|to)\b/i);
   const renewalDate = dateNear(text, /\b(renewal|expires?|expiry|to)\b/i) ?? endDate ?? addOneYear(startDate);
-  const coverageCents = moneyNear(text, /\b(coverage|limit|liability)\b/i) ?? 0;
+  const coverageCents = moneyNear(text, /\b(coverage|limit|liability)\b/i);
   return {
     title,
     kind: /\bdirector|d&o|officer\b/i.test(text) ? "DirectorsOfficers" : /\bcyber\b/i.test(text) ? "CyberLiability" : /\bgeneral liability|commercial general\b/i.test(text) ? "GeneralLiability" : "Other",

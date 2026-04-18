@@ -1,7 +1,6 @@
 // Runtime config for third-party adapters. In demo mode every adapter returns
 // deterministic fake data so nothing requires real credentials. Live adapters
-// are stubs that expect env vars — they don't call out over the network from
-// this codebase today, but the shape is ready for drop-in implementation.
+// expect env vars and may call their provider APIs from Convex actions.
 
 export type Provider<T extends string> = { id: T; live: boolean };
 

@@ -15,6 +15,7 @@ import { Plus, Trash2, Flag as FlagIcon, Upload, Download, FolderOpen, Tag, Hist
 import { formatDate } from "../lib/format";
 import { DocumentVersionsDrawer } from "../components/DocumentVersions";
 import { PaperlessDocumentAction } from "../components/PaperlessDocumentAction";
+import { isDemoMode } from "../lib/demoMode";
 
 const CATS = ["Constitution", "Bylaws", "Minutes", "FinancialStatement", "Policy", "Filing", "Other"] as const;
 
@@ -27,7 +28,7 @@ const DOC_FIELDS: FilterField<any>[] = [
   { id: "category", label: "Category", icon: <Tag size={14} />, options: [...CATS], match: (d, q) => d.category === q },
   { id: "tag", label: "Tag", icon: <Tag size={14} />, match: (d, q) => d.tags.some((t: string) => t.toLowerCase().includes(q.toLowerCase())) },
   { id: "flagged", label: "Flagged for deletion", options: ["Yes", "No"], match: (d, q) => (d.flaggedForDeletion ? "Yes" : "No") === q },
-  { id: "hasFile", label: "Attachment", options: ["Uploaded", "Metadata only"], match: (d, q) => (d.storageId ? "Uploaded" : "Metadata only") === q },
+  { id: "hasFile", label: "Attachment", options: ["Uploaded", "Metadata only"], match: (d, q) => ((d.storageId || d.fileName) ? "Uploaded" : "Metadata only") === q },
 ];
 
 export function DocumentsPage() {
@@ -37,8 +38,9 @@ export function DocumentsPage() {
   const create = useMutation(api.documents.create);
   const flag = useMutation(api.documents.flagForDeletion);
   const remove = useMutation(api.documents.remove);
-  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
-  const attach = useMutation(api.files.attachUploadedFileToDocument);
+  const createDemoVersion = useMutation(api.documentVersions.createDemoVersion);
+  const beginVersionUpload = useAction(api.documentVersions.beginUpload);
+  const recordVersionUpload = useMutation(api.documentVersions.recordUploadedVersion);
   const syncDocument = useAction(api.paperless.syncDocument);
   const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
   const paperlessConnection = useQuery(api.paperless.listConnection, society ? { societyId: society._id } : "skip");
@@ -48,6 +50,7 @@ export function DocumentsPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [versionsFor, setVersionsFor] = useState<{ id: any; title: string } | null>(null);
+  const [busy, setBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const visibleDocs = useMemo(() => (docs ?? []).filter((doc: any) => !isInternalDocumentRecord(doc)), [docs]);
 
@@ -63,11 +66,44 @@ export function DocumentsPage() {
   );
 
   const uploadFile = async (documentId: any, file: File) => {
-    const url = await generateUploadUrl({});
-    const res = await fetch(url, { method: "POST", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file });
-    if (!res.ok) throw new Error("Upload failed");
-    const { storageId } = await res.json();
-    await attach({ documentId, storageId, fileName: file.name, mimeType: file.type, fileSizeBytes: file.size });
+    if (isDemoMode()) {
+      return await createDemoVersion({
+        societyId: society._id,
+        documentId,
+        fileName: file.name,
+        mimeType: file.type,
+        fileSizeBytes: file.size,
+        actingUserId,
+      });
+    }
+
+    const { version, presigned } = await beginVersionUpload({
+      societyId: society._id,
+      documentId,
+      fileName: file.name,
+      mimeType: file.type,
+      fileSizeBytes: file.size,
+      actingUserId,
+    });
+    if (presigned.provider === "rustfs") {
+      const res = await fetch(presigned.url, {
+        method: "PUT",
+        headers: presigned.headers ?? (file.type ? { "Content-Type": file.type } : {}),
+        body: file,
+      });
+      if (!res.ok) throw new Error(`RustFS upload failed (${res.status})`);
+    }
+    return await recordVersionUpload({
+      societyId: society._id,
+      documentId,
+      version,
+      storageProvider: presigned.provider,
+      storageKey: presigned.key,
+      fileName: file.name,
+      mimeType: file.type,
+      fileSizeBytes: file.size,
+      actingUserId,
+    });
   };
 
   const maybeSyncToPaperless = async (documentId: any) => {
@@ -81,18 +117,34 @@ export function DocumentsPage() {
   };
 
   const save = async () => {
-    const newDocId = await create({ societyId: society._id, ...form, tags: form.tags ?? [] });
-    if (form._file) {
-      await uploadFile(newDocId, form._file);
-      await maybeSyncToPaperless(newDocId);
+    setBusy(true);
+    try {
+      const newDocId = await create({ societyId: society._id, ...documentPayload(form) });
+      if (form._file) {
+        await uploadFile(newDocId, form._file);
+        await maybeSyncToPaperless(newDocId);
+      }
+      setOpen(false);
+      toast.success("Document saved");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Document save failed");
+    } finally {
+      setBusy(false);
     }
-    setOpen(false);
   };
 
   const quickUpload = async (file: File) => {
-    const docId = await create({ societyId: society._id, title: file.name, category: "Other", tags: [], retentionYears: 10 });
-    await uploadFile(docId, file);
-    await maybeSyncToPaperless(docId);
+    setBusy(true);
+    try {
+      const docId = await create({ societyId: society._id, title: file.name, category: "Other", tags: [], retentionYears: 10 });
+      await uploadFile(docId, file);
+      await maybeSyncToPaperless(docId);
+      toast.success("Document uploaded");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Upload failed");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -111,10 +163,10 @@ export function DocumentsPage() {
                 if (fileInputRef.current) fileInputRef.current.value = "";
               }}
             />
-            <button className="btn-action" onClick={() => fileInputRef.current?.click()}>
+            <button className="btn-action" disabled={busy} onClick={() => fileInputRef.current?.click()}>
               <Upload size={12} /> Upload
             </button>
-            <button className="btn-action btn-action--primary" onClick={openNew}>
+            <button className="btn-action btn-action--primary" disabled={busy} onClick={openNew}>
               <Plus size={12} /> New document
             </button>
           </>
@@ -211,7 +263,9 @@ export function DocumentsPage() {
         ]}
         renderRowActions={(r) => (
           <>
-            {r.storageId && <DownloadLink storageId={r.storageId} />}
+            {(r.storageId || r.fileName) && (
+              <CurrentDocumentDownload documentId={r._id} legacyStorageId={r.storageId} />
+            )}
             <PaperlessDocumentAction
               societyId={society._id}
               documentId={r._id}
@@ -233,7 +287,7 @@ export function DocumentsPage() {
               onClick={async () => {
                 const ok = await confirm({
                   title: "Delete document?",
-                  message: `"${r.title}" will be permanently removed${r.storageId ? ", including its attached file" : ""}.`,
+                  message: `"${r.title}" will be permanently removed${(r.storageId || r.fileName) ? ", including its attached file metadata" : ""}.`,
                   confirmLabel: "Delete",
                   tone: "danger",
                 });
@@ -250,7 +304,7 @@ export function DocumentsPage() {
 
       <Drawer
         open={open} onClose={() => setOpen(false)} title="Add document"
-        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save}>Save</button></>}
+        footer={<><button className="btn" disabled={busy} onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={save}>Save</button></>}
       >
         {form && (
           <div>
@@ -262,7 +316,7 @@ export function DocumentsPage() {
                 options={CATS.map((c) => ({ value: c, label: c }))}
               />
             </Field>
-            <Field label="Attach file" hint="Stored in the local self-hosted Convex backend.">
+            <Field label="Attach file" hint="Stored as document version history.">
               <input type="file" onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) setForm({ ...form, _file: file, fileName: file.name });
@@ -297,14 +351,53 @@ export function DocumentsPage() {
   );
 }
 
-function DownloadLink({ storageId }: { storageId: any }) {
-  const url = useQuery(api.files.getUrl, { storageId });
-  if (!url) return null;
+function CurrentDocumentDownload({ documentId, legacyStorageId }: { documentId: any; legacyStorageId?: any }) {
+  const latest = useQuery(api.documentVersions.latest, { documentId });
+  const legacyUrl = useQuery(api.files.getUrl, legacyStorageId ? { storageId: legacyStorageId } : "skip");
+  const getDownloadUrl = useAction(api.documentVersions.getDownloadUrl);
+  const toast = useToast();
+
+  const open = async () => {
+    if (latest) {
+      const url = await getDownloadUrl({ versionId: latest._id });
+      if (!url) return;
+      if (url.startsWith("demo://")) {
+        toast.info("Demo mode — no real file is stored, so the download URL is simulated.");
+        return;
+      }
+      window.open(url, "_blank");
+      return;
+    }
+    if (legacyUrl) window.open(legacyUrl, "_blank");
+  };
+
+  if (latest === undefined && !legacyUrl) return null;
+  if (!latest && !legacyUrl) return null;
   return (
-    <a className="btn btn--ghost btn--sm" href={url} target="_blank" rel="noreferrer">
+    <button className="btn btn--ghost btn--sm" onClick={open}>
       <Download size={12} /> Open
-    </a>
+    </button>
   );
+}
+
+function documentPayload(form: any) {
+  const {
+    _file,
+    fileName,
+    mimeType,
+    fileSizeBytes,
+    storageId,
+    ...rest
+  } = form;
+  void _file;
+  void fileName;
+  void mimeType;
+  void fileSizeBytes;
+  void storageId;
+  return {
+    ...rest,
+    tags: rest.tags ?? [],
+  };
 }
 
 function catTone(cat: string) {

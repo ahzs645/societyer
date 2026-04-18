@@ -65,6 +65,8 @@ import type * as providers_paperless from "../providers/paperless.js";
 import type * as providers_sms from "../providers/sms.js";
 import type * as providers_storage from "../providers/storage.js";
 import type * as providers_transcription from "../providers/transcription.js";
+import type * as providers_waveData from "../providers/waveData.js";
+import type * as providers_waveDiagnostics from "../providers/waveDiagnostics.js";
 import type * as proxies from "../proxies.js";
 import type * as publicPortal from "../publicPortal.js";
 import type * as receipts from "../receipts.js";
@@ -84,6 +86,7 @@ import type * as transparency from "../transparency.js";
 import type * as treasury from "../treasury.js";
 import type * as users from "../users.js";
 import type * as volunteers from "../volunteers.js";
+import type * as waveCache from "../waveCache.js";
 import type * as workflows from "../workflows.js";
 import type * as writtenResolutions from "../writtenResolutions.js";
 
@@ -151,6 +154,8 @@ declare const fullApi: ApiFromModules<{
   "providers/sms": typeof providers_sms;
   "providers/storage": typeof providers_storage;
   "providers/transcription": typeof providers_transcription;
+  "providers/waveData": typeof providers_waveData;
+  "providers/waveDiagnostics": typeof providers_waveDiagnostics;
   proxies: typeof proxies;
   publicPortal: typeof publicPortal;
   receipts: typeof receipts;
@@ -170,6 +175,7 @@ declare const fullApi: ApiFromModules<{
   treasury: typeof treasury;
   users: typeof users;
   volunteers: typeof volunteers;
+  waveCache: typeof waveCache;
   workflows: typeof workflows;
   writtenResolutions: typeof writtenResolutions;
 }>;

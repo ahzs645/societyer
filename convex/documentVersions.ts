@@ -2,7 +2,7 @@ import { query, mutation, action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
-import { requireRole } from "./users";
+import { canActAs, requireRole } from "./users";
 import {
   buildStorageKey,
   createUploadUrl,
@@ -43,6 +43,16 @@ export const beginUpload = action({
     actingUserId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
+    if (!args.actingUserId) {
+      throw new Error("Role Director required — no authenticated actor.");
+    }
+    const actor = await ctx.runQuery(api.users.get, { id: args.actingUserId });
+    if (!actor) throw new Error("Unknown user.");
+    if (actor.societyId !== args.societyId) throw new Error("User is not part of this society.");
+    if (!canActAs(actor.role as any, "Director")) {
+      throw new Error(`Role Director required — you have ${actor.role}.`);
+    }
+
     // Look up the latest version number inside the action via a query.
     const latestVersion = await ctx.runQuery(api.documentVersions.latest, {
       documentId: args.documentId,
@@ -115,6 +125,7 @@ export const recordUploadedVersion = mutation({
 
     // Mirror the key bits onto the parent document so existing UI works.
     await ctx.db.patch(args.documentId, {
+      storageId: undefined,
       fileName: args.fileName,
       mimeType: args.mimeType,
       fileSizeBytes: args.fileSizeBytes,
@@ -198,6 +209,7 @@ export const createDemoVersion = mutation({
       isCurrent: true,
     });
     await ctx.db.patch(args.documentId, {
+      storageId: undefined,
       fileName: args.fileName,
       mimeType: args.mimeType,
       fileSizeBytes: args.fileSizeBytes,
@@ -236,6 +248,12 @@ export const rollback = mutation({
       if (row.isCurrent) await ctx.db.patch(row._id, { isCurrent: false });
     }
     await ctx.db.patch(versionId, { isCurrent: true });
+    await ctx.db.patch(v.documentId, {
+      storageId: undefined,
+      fileName: v.fileName,
+      mimeType: v.mimeType,
+      fileSizeBytes: v.fileSizeBytes,
+    });
     await ctx.db.insert("activity", {
       societyId: v.societyId,
       actor: "System",

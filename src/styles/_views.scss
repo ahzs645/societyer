@@ -135,6 +135,44 @@
   overflow-wrap: anywhere;
   color: var(--text-secondary);
 }
+.org-history__motions-card .table td {
+  vertical-align: top;
+}
+.org-history__motion-cell {
+  display: grid;
+  gap: 6px;
+  min-width: 420px;
+  max-width: 860px;
+  white-space: normal;
+}
+.org-history__motion-text {
+  color: var(--text-primary);
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.org-history__motion-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px var(--s-2);
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+}
+.org-history__motion-meeting {
+  display: inline-block;
+  max-width: 260px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+}
+.org-history__motion-people {
+  display: grid;
+  gap: 3px;
+  min-width: 150px;
+  color: var(--text-secondary);
+}
 .org-history__budget-open {
   max-width: 360px;
 }
@@ -288,6 +326,14 @@
 
   .org-history__budget-stats {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .org-history__motion-cell {
+    min-width: 0;
+  }
+
+  .org-history__motion-meeting {
+    max-width: none;
   }
 }
 .meeting-notes-card .card__head {

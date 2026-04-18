@@ -1,5 +1,6 @@
 // Accounting adapter — Wave in live mode, demo-seeded data otherwise.
 import { providers } from "./env";
+import { redactWaveDiagnostic, waveGraphQLEndpoint } from "./waveDiagnostics";
 
 export type WaveAccount = {
   externalId: string;
@@ -61,7 +62,7 @@ function env(name: string): string | undefined {
 }
 
 async function waveGraphQL<T>(query: string, variables: Record<string, unknown>): Promise<T> {
-  const endpoint = env("WAVE_GRAPHQL_ENDPOINT") ?? "https://gql.waveapps.com/graphql/public";
+  const endpoint = waveGraphQLEndpoint();
   const token = env("WAVE_ACCESS_TOKEN");
   if (!token) {
     throw new Error("Live Wave sync requires WAVE_ACCESS_TOKEN.");
@@ -78,14 +79,18 @@ async function waveGraphQL<T>(query: string, variables: Record<string, unknown>)
 
   if (!response.ok) {
     const detail = (await response.text().catch(() => "")).trim();
-    throw new Error(detail || `Wave request failed with status ${response.status}.`);
+    throw new Error(redactWaveDiagnostic(detail || `Wave request failed with status ${response.status}.`, variableStrings(variables)));
   }
 
   const data = await response.json();
   if ((data as any)?.errors?.length) {
-    throw new Error((data as any).errors.map((row: any) => row.message).join("; "));
+    throw new Error(redactWaveDiagnostic((data as any).errors.map((row: any) => row.message).join("; "), variableStrings(variables)));
   }
   return (data as any).data as T;
+}
+
+function variableStrings(variables: Record<string, unknown>) {
+  return Object.values(variables).filter((value): value is string => typeof value === "string");
 }
 
 export async function waveListAccounts(): Promise<{ provider: "wave" | "demo"; accounts: WaveAccount[] }> {

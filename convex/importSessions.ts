@@ -151,12 +151,17 @@ export const updateRecord = mutation({
     const doc = await ctx.db.get(recordId);
     if (!isImportRecord(doc)) return null;
     const record = hydrateRecord(doc);
+    const nextPayload = payload != null ? normalizePayload(record.recordKind, payload) : record.payload;
+    const nextSourceExternalIds = sourceExternalIds != null
+      ? sourceExternalIds.map(String).filter(Boolean)
+      : record.sourceExternalIds;
     const next = {
       ...record,
       status: normalizeReviewStatus(status ?? record.status),
       reviewNotes: reviewNotes != null ? cleanText(reviewNotes) : record.reviewNotes,
-      payload: payload != null ? normalizePayload(record.recordKind, payload) : record.payload,
-      sourceExternalIds: sourceExternalIds != null ? sourceExternalIds.map(String).filter(Boolean) : record.sourceExternalIds,
+      payload: nextPayload,
+      sourceExternalIds: nextSourceExternalIds,
+      riskFlags: riskFlagsFor(record.recordKind, record.targetModule, nextPayload),
       updatedAtISO: new Date().toISOString(),
     };
     const title = titleForRecord(next.recordKind, next.payload);
@@ -870,13 +875,16 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
   }
 
   if (record.recordKind === "insurancePolicy") {
+    const riskFlags = unique([...(record.riskFlags ?? []), ...arrayOf(payload.riskFlags).map(String)])
+      .map(cleanText)
+      .filter(Boolean);
     return await ctx.db.insert("insurancePolicies", {
       societyId,
       kind: cleanText(payload.kind) || "Other",
       insurer: cleanText(payload.insurer) || "Needs review",
       broker: cleanText(payload.broker),
       policyNumber: cleanText(payload.policyNumber) || "Needs review",
-      coverageCents: numberOrUndefined(payload.coverageCents) ?? 0,
+      coverageCents: numberOrUndefined(payload.coverageCents),
       premiumCents: numberOrUndefined(payload.premiumCents),
       deductibleCents: numberOrUndefined(payload.deductibleCents),
       coverageSummary: cleanText(payload.coverageSummary),
@@ -887,7 +895,8 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       sourceDocumentIds,
       sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
       confidence: confidenceFor(payload),
-      sensitivity: cleanText(payload.sensitivity),
+      sensitivity: cleanText(payload.sensitivity) || (riskFlags.includes("restricted") ? "restricted" : undefined),
+      riskFlags,
       notes: sourceNote,
       status: cleanText(payload.status) || "Active",
       createdAtISO: new Date().toISOString(),
@@ -1621,6 +1630,7 @@ function normalizeSectionPayload(payload: any) {
     lines: arrayOf(payload?.lines),
     submissionChecklist: arrayOf(payload?.submissionChecklist).map(String),
     interests: arrayOf(payload?.interests).map(String),
+    riskFlags: arrayOf(payload?.riskFlags).map(String).map(cleanText).filter(Boolean),
     remunerationDisclosures: arrayOf(payload?.remunerationDisclosures),
     feePaidCents: numberOrUndefined(payload?.feePaidCents),
     coverageCents: numberOrUndefined(payload?.coverageCents),

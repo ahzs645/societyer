@@ -41,6 +41,7 @@ export const getMany = query({
 export const create = mutation({
   args: {
     societyId: v.id("societies"),
+    committeeId: v.optional(v.id("committees")),
     title: v.string(),
     category: v.string(),
     fileName: v.optional(v.string()),

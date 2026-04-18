@@ -10,6 +10,7 @@ import {
   waveOAuthUrl,
 } from "./providers/accounting";
 import { providers } from "./providers/env";
+import { redactWaveDiagnostic } from "./providers/waveDiagnostics";
 
 export const connections = query({
   args: { societyId: v.id("societies") },
@@ -257,11 +258,12 @@ export const sync = action({
       });
       return { accounts: accounts.length, transactions: transactions.length };
     } catch (err: any) {
+      const safeError = redactWaveDiagnostic(err?.message ?? "Unknown error");
       await ctx.runMutation(internal.financialHub._markSyncError, {
         connectionId,
-        error: err?.message ?? "Unknown error",
+        error: safeError,
       });
-      throw err;
+      throw new Error(safeError);
     }
   },
 });

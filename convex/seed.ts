@@ -970,7 +970,11 @@ export const run = mutation({
       coverageCents: 200000000,
       premiumCents: 189000,
       startDate: "2026-01-01",
+      endDate: "2026-12-31",
       renewalDate: "2026-12-31",
+      sourceExternalIds: ["demo:insurance-dno-2026"],
+      sensitivity: "restricted",
+      riskFlags: ["restricted"],
       status: "Active",
     });
     await ctx.db.insert("insurancePolicies", {
@@ -981,7 +985,11 @@ export const run = mutation({
       coverageCents: 500000000,
       premiumCents: 312000,
       startDate: "2026-04-01",
+      endDate: "2026-05-31",
       renewalDate: "2026-05-31", // renewal within 60 days — shows warning
+      sourceExternalIds: ["demo:insurance-cgl-2026"],
+      sensitivity: "restricted",
+      riskFlags: ["restricted"],
       status: "Active",
     });
 
@@ -1177,6 +1185,8 @@ async function wipe(ctx: any) {
     "deadlines",
     "filings",
     "filingBotRuns",
+    "workflowRuns",
+    "workflows",
     "minutes",
     "transcripts",
     "transcriptionJobs",
@@ -1185,6 +1195,9 @@ async function wipe(ctx: any) {
     "members",
     "memberSubscriptions",
     "subscriptionPlans",
+    "waveCacheStructures",
+    "waveCacheResources",
+    "waveCacheSnapshots",
     "financialTransactions",
     "financialAccounts",
     "financialConnections",

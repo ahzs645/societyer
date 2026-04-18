@@ -17,6 +17,7 @@
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f backend",
     "docker:admin-key": "./scripts/convex-admin-key.sh",
+    "rustfs:setup": "./scripts/setup-rustfs.sh",
     "auth:server": "tsx server/auth-server.ts",
     "test:smoke": "npx playwright test",
     "test:api-contract": "tsx scripts/check-api-contract.ts",

@@ -48,7 +48,7 @@ services:
 
   # S3-compatible object storage for society documents.
   # Alpha, Apache 2.0 licensed, drop-in MinIO replacement.
-  # Console: http://127.0.0.1:9791 (default admin/admin for local dev only).
+  # Console: http://127.0.0.1:9791 (default societyer/societyer-dev-secret for local dev only).
   rustfs:
     image: rustfs/rustfs:latest
     container_name: societyer-rustfs

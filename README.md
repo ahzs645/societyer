@@ -34,6 +34,8 @@ This starts:
 - **Backend API** → http://127.0.0.1:3220
 - **HTTP actions** → http://127.0.0.1:3221
 - **Dashboard** → http://127.0.0.1:6792
+- **RustFS S3 API** → http://127.0.0.1:9790
+- **RustFS console** → http://127.0.0.1:9791
 
 Tail logs: `npm run docker:logs`. Stop everything: `npm run docker:down`. Wipe the database: `docker compose down -v`.
 
@@ -50,6 +52,12 @@ Your `.env.local` should end up looking like:
 CONVEX_SELF_HOSTED_URL="http://127.0.0.1:3220"
 CONVEX_SELF_HOSTED_ADMIN_KEY="<the key the script printed>"
 VITE_CONVEX_URL="http://127.0.0.1:3220"
+```
+
+If you are using the RustFS service under OrbStack for document version uploads, create the local bucket and point Convex at the service domain:
+
+```bash
+npm run rustfs:setup
 ```
 
 If the helper script can't find the binary in your image version, open the dashboard (http://127.0.0.1:6792) — it can generate one too.
@@ -118,7 +126,7 @@ npm run dev:full
 
 - **Resend**: set `RESEND_API_KEY` plus `RESEND_FROM_EMAIL` to turn digest emails and communications into real outbound email.
 - **Stripe**: set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` to enable real hosted checkout. Point Stripe webhooks at Convex HTTP route `/stripe/webhook`.
-- **Wave**: set `WAVE_ACCESS_TOKEN` and `WAVE_BUSINESS_ID` to switch the accounting sync from demo data to live GraphQL fetches.
+- **Wave**: set `WAVE_ACCESS_TOKEN` and `WAVE_BUSINESS_ID` to switch the accounting sync from demo data to live GraphQL fetches. `WAVE_CLIENT_ID` only powers the OAuth connect link, and `WAVE_GRAPHQL_ENDPOINT` is an optional override for the default Wave GraphQL endpoint. The Financials page includes a Wave health check that reports only present/missing env status plus redacted provider diagnostics.
 - **Paperless-ngx**: set `PAPERLESS_NGX_URL` and `PAPERLESS_NGX_TOKEN`, then enable the Paperless-ngx module at `/app/paperless`. Documents can be sent to Paperless from `/app/documents`; Societyer creates contextual tags such as document category, filing kind, grant report, PIPA training, election evidence, and volunteer screening.
 - **Access custody vault**: set `SECRET_VAULT_ENCRYPTION_KEY` before storing client credentials in production. `/app/access-custody` encrypts stored values, keeps them hidden by default, and logs explicit reveals to the activity trail.
 - **Filing evidence**: BC still has no public Societies Online filing API. This build improves the manual path by storing submission method, confirmation number, fee paid, and linked receipt/evidence documents when a filing is marked filed.

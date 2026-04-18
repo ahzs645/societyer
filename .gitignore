@@ -5,6 +5,9 @@ dist
 .env.*.local
 .DS_Store
 *.log
+*.tsbuildinfo
+data/*.sqlite
+data/*.sqlite-*
 *.pyc
 __pycache__/
 scripts/__pycache__/

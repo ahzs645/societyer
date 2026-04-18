@@ -316,7 +316,7 @@ export function LandingPage() {
         <div className="landing__container">
           <SectionHead
             kicker="One record, end to end"
-            title="Agenda → motion → minute → audit. No re-keying."
+            title={"Agenda → motion → minute → audit. No re\u2011keying."}
             sub="Every step writes into the same underlying records, so Tuesday's motion is Friday's minute is next year's audit answer."
           />
           <div className="landing__workflow">

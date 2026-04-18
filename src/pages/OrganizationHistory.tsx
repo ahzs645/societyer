@@ -181,12 +181,45 @@ export function OrganizationHistoryPage() {
     + events.filter((item: any) => item.status !== "Verified").length
     + sources.filter((item: any) => item.confidence === "Review").length
     + boardTerms.filter((item: any) => item.status !== "Verified").length
-    + motions.filter((item: any) => item.outcome.toLowerCase() !== "passed").length
+    + motions.filter((item: any) => !isPositiveMotionOutcome(item.outcome)).length
     + budgets.filter((item: any) => item.status !== "Verified").length;
 
   const sourceById = useMemo(() => {
     return new Map(sources.map((source: any) => [source._id, source]));
   }, [sources]);
+
+  const motionOutcomeOptions = useMemo(
+    () => uniqueOptions(motions.map((motion: any) => motion.outcome)),
+    [motions],
+  );
+  const motionRecordSourceOptions = useMemo(
+    () => uniqueOptions(motions.map(motionReviewSourceLabel)),
+    [motions],
+  );
+  const motionFilterFields = useMemo(() => [
+    {
+      id: "outcome",
+      label: "Outcome",
+      options: motionOutcomeOptions,
+      match: (motion: any, query: string) => String(motion.outcome ?? "").toLowerCase() === query.toLowerCase(),
+    },
+    {
+      id: "meeting",
+      label: "Meeting",
+      match: (motion: any, query: string) => String(motion.meetingTitle ?? "").toLowerCase().includes(query.toLowerCase()),
+    },
+    {
+      id: "source",
+      label: "Source",
+      match: (motion: any, query: string) => sourceSearchText(motion.sourceIds, sourceById).toLowerCase().includes(query.toLowerCase()),
+    },
+    {
+      id: "recordSource",
+      label: "Record source",
+      options: motionRecordSourceOptions,
+      match: (motion: any, query: string) => motionReviewSourceLabel(motion).toLowerCase() === query.toLowerCase(),
+    },
+  ], [motionOutcomeOptions, motionRecordSourceOptions, sourceById]);
 
   const peopleConnections = useMemo(
     () => buildPeopleConnections(boardTerms, motions),
@@ -499,55 +532,87 @@ export function OrganizationHistoryPage() {
       )}
 
       {section === "motions" && (
-        <div className="card">
+        <div className="card org-history__motions-card">
           <div className="card__head">
-            <h2 className="card__title">Converted motions</h2>
+            <div>
+              <h2 className="card__title">Converted motions</h2>
+              <span className="card__subtitle">Paperless minute motions merged with editable org-history records</span>
+            </div>
             <button className="btn-action" onClick={() => setMotionForm(newMotionForm())}>
               <Plus size={12} /> Add motion
             </button>
           </div>
-          <TableScroll>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Motion</th>
-                  <th>Moved / seconded</th>
-                  <th>Outcome</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {motions.map((motion: any) => (
-                  <tr key={motion._id}>
-                    <td className="table__cell--mono muted">{motion.meetingDate}</td>
-                    <td style={{ minWidth: 360, maxWidth: 720, whiteSpace: "normal" }}>
-                      <strong>{motionTitle(motion)}</strong>
-                      {motion.meetingTitle && (
-                        <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{motion.meetingTitle}</div>
-                      )}
-                      <SourceBadges ids={motion.sourceIds} sourceById={sourceById} />
-                    </td>
-                    <td>{[motion.movedByName, motion.secondedByName].filter(Boolean).join(" / ") || "-"}</td>
-                    <td><Badge tone={motion.outcome.toLowerCase().includes("pass") || motion.outcome.toLowerCase().includes("approved") ? "success" : "neutral"}>{motion.outcome}</Badge></td>
-                    <td>
-                      <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
-                        <IconButton label="Edit motion" onClick={() => setMotionForm({ ...motion, sourceIds: motion.sourceIds ?? [] })}>
-                          <Pencil size={12} />
-                        </IconButton>
-                        <IconButton label="Delete motion" onClick={() => removeItem({ id: motion._id, kind: "motion" })}>
-                          <Trash2 size={12} />
-                        </IconButton>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {motions.length === 0 && (
-                  <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 18 }}>No converted motions yet.</td></tr>
+          <DataTable<any>
+            label="Converted motions"
+            icon={<BookOpen size={14} />}
+            data={motions}
+            rowKey={(motion) => motion._id}
+            pagination
+            initialPageSize={50}
+            pageSizeOptions={[25, 50, 100]}
+            defaultSort={{ columnId: "meetingDate", dir: "asc" }}
+            searchPlaceholder="Search motions, meetings, people, or sources..."
+            searchExtraFields={[
+              (motion) => sourceSearchText(motion.sourceIds, sourceById),
+              (motion) => motionPeopleText(motion),
+              (motion) => motionReviewSourceLabel(motion),
+            ]}
+            filterFields={motionFilterFields}
+            emptyMessage="No converted motions yet."
+            columns={[
+              {
+                id: "motion",
+                header: "Motion",
+                sortable: true,
+                accessor: (motion) => motion.motionText,
+                render: (motion) => <MotionReviewCell motion={motion} sourceById={sourceById} />,
+                width: "52%",
+              },
+              {
+                id: "meetingDate",
+                header: "Date",
+                sortable: true,
+                accessor: (motion) => motion.meetingDate,
+                render: (motion) => <span className="table__cell--mono muted">{motion.meetingDate || "-"}</span>,
+                width: 120,
+              },
+              {
+                id: "meeting",
+                header: "Meeting",
+                sortable: true,
+                accessor: (motion) => motion.meetingTitle,
+                render: (motion) => <span className="org-history__motion-meeting">{motion.meetingTitle || "-"}</span>,
+                width: "22%",
+              },
+              {
+                id: "people",
+                header: "Moved / seconded",
+                accessor: motionPeopleText,
+                render: (motion) => <MotionPeople motion={motion} />,
+                width: 180,
+              },
+              {
+                id: "outcome",
+                header: "Outcome",
+                sortable: true,
+                accessor: (motion) => motion.outcome,
+                render: (motion) => <MotionOutcomeBadge outcome={motion.outcome} />,
+                width: 130,
+              },
+            ]}
+            renderRowActions={(motion) => (
+              <>
+                <IconButton label={isPersistedMotion(motion) ? "Edit motion" : "Review motion as org-history item"} onClick={() => setMotionForm(motionEditForm(motion))}>
+                  <Pencil size={12} />
+                </IconButton>
+                {isPersistedMotion(motion) && (
+                  <IconButton label="Delete motion" onClick={() => removeItem({ id: motion._id, kind: "motion" })}>
+                    <Trash2 size={12} />
+                  </IconButton>
                 )}
-              </tbody>
-            </table>
-          </TableScroll>
+              </>
+            )}
+          />
         </div>
       )}
 
@@ -1348,6 +1413,96 @@ function normalizeMotion(form: any) {
 
 function motionTitle(motion: any) {
   return String(motion?.motionText || motion?.meetingTitle || motion?.category || "Motion").trim();
+}
+
+function MotionReviewCell({ motion, sourceById }: { motion: any; sourceById: Map<any, any> }) {
+  return (
+    <div className="org-history__motion-cell">
+      <div className="org-history__motion-text">{motionTitle(motion)}</div>
+      <div className="org-history__motion-meta">
+        <span className="table__cell--mono">{motion.meetingDate || "Undated"}</span>
+        {motion.meetingTitle && <span>{motion.meetingTitle}</span>}
+        <Badge tone={motionReviewSourceTone(motion)}>{motionReviewSourceLabel(motion)}</Badge>
+        {motion.matchedPaperlessMinutes && isPersistedMotion(motion) && <Badge tone="info">Matched minutes</Badge>}
+      </div>
+      <SourceBadges ids={motion.sourceIds} sourceById={sourceById} />
+    </div>
+  );
+}
+
+function MotionPeople({ motion }: { motion: any }) {
+  const people = motionPeopleText(motion);
+  const votes = motionVoteText(motion);
+  if (!people && !votes) return <span className="muted">-</span>;
+  return (
+    <div className="org-history__motion-people">
+      {people && <span>{people}</span>}
+      {votes && <span className="table__cell--mono muted">{votes}</span>}
+    </div>
+  );
+}
+
+function MotionOutcomeBadge({ outcome }: { outcome: string }) {
+  return <Badge tone={motionOutcomeTone(outcome)}>{outcome || "NeedsReview"}</Badge>;
+}
+
+function motionPeopleText(motion: any) {
+  return [motion.movedByName, motion.secondedByName].map(normalizeOptional).filter(Boolean).join(" / ");
+}
+
+function motionVoteText(motion: any) {
+  return [
+    motion.votesFor != null ? `For ${motion.votesFor}` : "",
+    motion.votesAgainst != null ? `Against ${motion.votesAgainst}` : "",
+    motion.abstentions != null ? `Abstain ${motion.abstentions}` : "",
+  ].filter(Boolean).join(" · ");
+}
+
+function isPersistedMotion(motion: any) {
+  return motion?.motionRecordSource !== "paperlessMinutes" && !String(motion?._id ?? "").startsWith("minutes:");
+}
+
+function motionEditForm(motion: any) {
+  const form = {
+    meetingDate: motion.meetingDate ?? "",
+    meetingTitle: motion.meetingTitle ?? "",
+    motionText: motion.motionText ?? "",
+    outcome: motion.outcome ?? "",
+    movedByName: motion.movedByName ?? "",
+    secondedByName: motion.secondedByName ?? "",
+    votesFor: motion.votesFor ?? "",
+    votesAgainst: motion.votesAgainst ?? "",
+    abstentions: motion.abstentions ?? "",
+    category: motion.category ?? "Governance",
+    sourceIds: motion.sourceIds ?? [],
+    notes: motion.notes ?? "",
+  };
+  return isPersistedMotion(motion) ? { ...form, _id: motion._id } : form;
+}
+
+function motionReviewSourceLabel(motion: any) {
+  return motion?.motionRecordSource === "paperlessMinutes" ? "Paperless minutes" : "Org history";
+}
+
+function motionReviewSourceTone(motion: any): BadgeTone {
+  return motion?.motionRecordSource === "paperlessMinutes" ? "info" : "neutral";
+}
+
+function motionOutcomeTone(outcome: string): BadgeTone {
+  const text = String(outcome ?? "").toLowerCase();
+  if (isPositiveMotionOutcome(text)) return "success";
+  if (text.includes("defeat") || text.includes("reject") || text.includes("fail")) return "danger";
+  if (text.includes("table") || text.includes("pending") || text.includes("review")) return "warn";
+  return "neutral";
+}
+
+function isPositiveMotionOutcome(outcome: unknown) {
+  const text = String(outcome ?? "").toLowerCase();
+  return text.includes("pass") || text.includes("approv") || text.includes("carried") || text.includes("carry") || text.includes("unanimous");
+}
+
+function uniqueOptions(values: unknown[]) {
+  return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 }
 
 function normalizeBudget(form: any) {

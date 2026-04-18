@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireRole } from "./users";
 import { isSocietyModuleEnabled } from "./lib/moduleSettings";
+import { createDownloadUrl } from "./providers/storage";
 
 export const listPublications = query({
   args: { societyId: v.id("societies") },
@@ -123,8 +124,8 @@ export const publicCenter = query({
           const document = publication.documentId
             ? documentById.get(String(publication.documentId))
             : null;
-          const downloadUrl = document?.storageId
-            ? await ctx.storage.getUrl(document.storageId)
+          const downloadUrl = document
+            ? await publicDocumentDownloadUrl(ctx, document)
             : undefined;
           return {
             ...publication,
@@ -181,3 +182,20 @@ export const publicCenter = query({
     };
   },
 });
+
+async function publicDocumentDownloadUrl(ctx: any, document: any) {
+  const versions = await ctx.db
+    .query("documentVersions")
+    .withIndex("by_document", (q: any) => q.eq("documentId", document._id))
+    .collect();
+  const current = versions
+    .filter((version: any) => version.isCurrent)
+    .sort((a: any, b: any) => b.version - a.version)[0] ?? null;
+  if (current) {
+    return await createDownloadUrl({
+      provider: current.storageProvider as "demo" | "rustfs",
+      key: current.storageKey,
+    });
+  }
+  return document.storageId ? await ctx.storage.getUrl(document.storageId) : undefined;
+}

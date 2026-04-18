@@ -596,6 +596,124 @@ const financialConnections = [
   },
 ];
 
+const WAVE_CACHE_SNAPSHOT_ID = "static_wave_cache_snapshot";
+
+const waveCacheSnapshots = [
+  {
+    _id: WAVE_CACHE_SNAPSHOT_ID,
+    societyId: SOCIETY_ID,
+    connectionId: FINANCIAL_CONNECTION_ID,
+    provider: "wave",
+    businessId: "static_wave_business",
+    businessName: "Riverside demo book",
+    currencyCode: "CAD",
+    fetchedAtISO: "2026-04-16T16:00:00.000Z",
+    resourceCountsJson: JSON.stringify({
+      business: 1,
+      account: 2,
+      vendor: 2,
+      product: 2,
+      invoice: 1,
+    }),
+    resourceTypes: ["business", "account", "vendor", "product", "invoice"],
+    structureTypes: ["Business", "Account", "Vendor", "Product", "Invoice", "Money"],
+    status: "complete",
+  },
+];
+
+const waveCacheResources = [
+  waveResource("static_wave_business_resource", "business", "static_wave_business", "Riverside demo book", "CAD", {
+    id: "static_wave_business",
+    name: "Riverside demo book",
+    currency: { code: "CAD" },
+    timezone: "America/Vancouver",
+  }),
+  waveResource("static_wave_account_operating", "account", "cash", "Operating chequing", "ASSET / CASH_AND_BANK", {
+    id: "cash",
+    name: "Operating chequing",
+    type: { value: "ASSET", name: "Asset" },
+    subtype: { value: "CASH_AND_BANK", name: "Cash and Bank" },
+    balanceInBusinessCurrency: "34900.00",
+    currency: { code: "CAD" },
+  }),
+  waveResource("static_wave_account_grant", "account", "grant", "Neighbourhood grant fund", "ASSET / CASH_AND_BANK", {
+    id: "grant",
+    name: "Neighbourhood grant fund",
+    type: { value: "ASSET", name: "Asset" },
+    subtype: { value: "CASH_AND_BANK", name: "Cash and Bank" },
+    balanceInBusinessCurrency: "27500.00",
+    currency: { code: "CAD" },
+  }),
+  waveResource("static_wave_vendor_harbour", "vendor", "vendor_harbour", "Harbour Print Co.", "print@example.org", {
+    id: "vendor_harbour",
+    name: "Harbour Print Co.",
+    email: "print@example.org",
+    isArchived: false,
+  }),
+  waveResource("static_wave_vendor_city", "vendor", "vendor_city", "City Facilities", "facilities@example.org", {
+    id: "vendor_city",
+    name: "City Facilities",
+    email: "facilities@example.org",
+    isArchived: false,
+  }),
+  waveResource("static_wave_product_hall", "product", "product_hall", "Hall rental", "bought", {
+    id: "product_hall",
+    name: "Hall rental",
+    isBought: true,
+    isSold: false,
+    unitPrice: "420.00",
+  }),
+  waveResource("static_wave_product_program", "product", "product_program", "Program fee", "sold", {
+    id: "product_program",
+    name: "Program fee",
+    isBought: false,
+    isSold: true,
+    unitPrice: "25.00",
+  }),
+  waveResource("static_wave_invoice_1", "invoice", "invoice_1", "INV-1001", "Monthly program fees", {
+    id: "invoice_1",
+    invoiceNumber: "INV-1001",
+    title: "Monthly program fees",
+    status: "PAID",
+    total: { value: "840.00", currency: { code: "CAD" } },
+  }),
+];
+
+const waveCacheStructures = [
+  waveStructure("static_wave_structure_business", "Business", "OBJECT", [
+    { name: "id", type: { kind: "SCALAR", name: "ID" } },
+    { name: "name", type: { kind: "SCALAR", name: "String" } },
+    { name: "accounts", args: [{ name: "page" }, { name: "pageSize" }] },
+  ]),
+  waveStructure("static_wave_structure_account", "Account", "OBJECT", [
+    { name: "id", type: { kind: "SCALAR", name: "ID" } },
+    { name: "name", type: { kind: "SCALAR", name: "String" } },
+    { name: "type", type: { kind: "OBJECT", name: "AccountType" } },
+    { name: "subtype", type: { kind: "OBJECT", name: "AccountSubtype" } },
+  ]),
+  waveStructure("static_wave_structure_vendor", "Vendor", "OBJECT", [
+    { name: "id", type: { kind: "SCALAR", name: "ID" } },
+    { name: "name", type: { kind: "SCALAR", name: "String" } },
+    { name: "email", type: { kind: "SCALAR", name: "String" } },
+  ]),
+  waveStructure("static_wave_structure_product", "Product", "OBJECT", [
+    { name: "id", type: { kind: "SCALAR", name: "ID" } },
+    { name: "name", type: { kind: "SCALAR", name: "String" } },
+    { name: "isBought", type: { kind: "SCALAR", name: "Boolean" } },
+    { name: "isSold", type: { kind: "SCALAR", name: "Boolean" } },
+  ]),
+  waveStructure("static_wave_structure_invoice", "Invoice", "OBJECT", [
+    { name: "id", type: { kind: "SCALAR", name: "ID" } },
+    { name: "invoiceNumber", type: { kind: "SCALAR", name: "String" } },
+    { name: "total", type: { kind: "OBJECT", name: "Money" } },
+  ]),
+  waveStructure("static_wave_structure_money", "Money", "OBJECT", [
+    { name: "value", type: { kind: "SCALAR", name: "String" } },
+    { name: "minorUnitValue", type: { kind: "SCALAR", name: "Decimal" } },
+    { name: "currency", type: { kind: "OBJECT", name: "Currency" } },
+  ]),
+];
+
 const paperlessConnections = [
   {
     _id: PAPERLESS_CONNECTION_ID,
@@ -845,6 +963,9 @@ const tables: Record<string, any[]> = {
   ],
   filings,
   financials,
+  waveCacheSnapshots,
+  waveCacheResources,
+  waveCacheStructures,
   goals,
   grants: [
     {
@@ -914,10 +1035,22 @@ const tables: Record<string, any[]> = {
     {
       _id: "static_insurance",
       societyId: SOCIETY_ID,
-      provider: "Community Mutual",
+      kind: "DirectorsOfficers",
+      insurer: "Community Mutual",
+      broker: "Harbour Risk Advisors",
       policyNumber: "CM-2026-331",
-      coverageType: "D&O and CGL",
+      coverageCents: 200000000,
+      premiumCents: 185000,
+      deductibleCents: 100000,
+      coverageSummary: "Directors and officers liability coverage.",
+      startDate: "2026-01-01",
+      endDate: "2026-08-31",
       renewalDate: "2026-08-31",
+      sourceExternalIds: ["demo:insurance-dno-2026"],
+      confidence: "High",
+      sensitivity: "restricted",
+      riskFlags: ["restricted"],
+      notes: "Demo policy record with restricted source provenance.",
       status: "Active",
     },
   ],
@@ -1018,6 +1151,49 @@ function member(id: string, firstName: string, lastName: string, membershipClass
     status: "Active",
     joinedAt,
     votingRights,
+  };
+}
+
+function waveResource(id: string, resourceType: string, externalId: string, label: string, secondaryLabel: string, raw: any) {
+  const rawJson = JSON.stringify(raw);
+  return {
+    _id: id,
+    societyId: SOCIETY_ID,
+    snapshotId: WAVE_CACHE_SNAPSHOT_ID,
+    connectionId: FINANCIAL_CONNECTION_ID,
+    provider: "wave",
+    businessId: "static_wave_business",
+    resourceType,
+    externalId,
+    label,
+    secondaryLabel,
+    typeValue: raw.type?.value,
+    subtypeValue: raw.subtype?.value,
+    status: raw.status ?? (raw.isArchived ? "archived" : "active"),
+    currencyCode: raw.currency?.code ?? raw.total?.currency?.code,
+    amountValue: raw.balanceInBusinessCurrency ?? raw.unitPrice ?? raw.total?.value,
+    dateValue: raw.modifiedAt ?? raw.invoiceDate,
+    searchText: `${resourceType} ${externalId} ${label} ${secondaryLabel}`.toLowerCase(),
+    rawJson,
+    fetchedAtISO: "2026-04-16T16:00:00.000Z",
+  };
+}
+
+function waveStructure(id: string, typeName: string, kind: string, fields: any[]) {
+  const raw = { name: typeName, kind, fields };
+  return {
+    _id: id,
+    societyId: SOCIETY_ID,
+    snapshotId: WAVE_CACHE_SNAPSHOT_ID,
+    connectionId: FINANCIAL_CONNECTION_ID,
+    provider: "wave",
+    businessId: "static_wave_business",
+    typeName,
+    kind,
+    fieldCount: fields.length,
+    fieldsJson: JSON.stringify(fields),
+    rawJson: JSON.stringify(raw),
+    fetchedAtISO: "2026-04-16T16:00:00.000Z",
   };
 }
 
@@ -1264,6 +1440,9 @@ const STATIC_EXPORT_TABLES = [
   "communicationCampaigns",
   "communicationDeliveries",
   "financialConnections",
+  "waveCacheSnapshots",
+  "waveCacheResources",
+  "waveCacheStructures",
   "financialAccounts",
   "financialTransactions",
   "budgets",
@@ -1275,6 +1454,8 @@ const STATIC_EXPORT_TABLES = [
   "transactionCandidates",
   "signatures",
   "filingBotRuns",
+  "workflows",
+  "workflowRuns",
   "subscriptionPlans",
   "memberSubscriptions",
   "transcripts",
@@ -1543,6 +1724,30 @@ function queryResult(name: string, args: StaticArgs) {
       return financialSummary();
     case "financialHub:transactions":
       return financialTransactions.slice(0, args?.limit ?? financialTransactions.length);
+    case "waveCache:summary": {
+      const snapshot = waveCacheSnapshots[0];
+      return {
+        ...snapshot,
+        resourceCounts: JSON.parse(snapshot.resourceCountsJson),
+      };
+    }
+    case "waveCache:resources": {
+      const needle = args?.search?.trim?.().toLowerCase?.();
+      return waveCacheResources
+        .filter((row) => !args?.resourceType || row.resourceType === args.resourceType)
+        .filter((row) => !needle || row.searchText.includes(needle))
+        .slice(0, args?.limit ?? waveCacheResources.length)
+        .map(({ rawJson, ...row }) => ({ ...row, hasRawJson: Boolean(rawJson) }));
+    }
+    case "waveCache:resource": {
+      const row = byId(waveCacheResources, args?.id);
+      return row ? { ...row, raw: JSON.parse(row.rawJson) } : null;
+    }
+    case "waveCache:structures":
+      return waveCacheStructures.slice(0, args?.limit ?? waveCacheStructures.length).map((row) => ({
+        ...row,
+        fields: JSON.parse(row.fieldsJson),
+      }));
     case "grants:applications":
       return tables.grantApplications;
     case "grants:publicOpenings":
@@ -1633,6 +1838,57 @@ function mutationResult(name: string, args: StaticArgs) {
       demo: true,
       status: "complete",
       tags: ["societyer", "demo"],
+    };
+  }
+  if (name === "waveCache:sync") {
+    return {
+      snapshotId: WAVE_CACHE_SNAPSHOT_ID,
+      businessName: waveCacheSnapshots[0].businessName,
+      resourceCounts: JSON.parse(waveCacheSnapshots[0].resourceCountsJson),
+      resourceCount: waveCacheResources.length,
+      structureCount: waveCacheStructures.length,
+      fetchedAtISO: new Date().toISOString(),
+    };
+  }
+  if (name === "waveCache:healthCheck") {
+    return {
+      provider: "wave",
+      mode: "not_configured",
+      ok: true,
+      status: "pass",
+      checkedAtISO: new Date().toISOString(),
+      env: [
+        { name: "WAVE_ACCESS_TOKEN", required: true, secret: true, purpose: "Wave GraphQL bearer token", present: false },
+        { name: "WAVE_BUSINESS_ID", required: true, secret: false, purpose: "Business selected for live sync", present: false },
+        { name: "WAVE_CLIENT_ID", required: false, secret: false, purpose: "OAuth connect link client id", present: false },
+        { name: "WAVE_GRAPHQL_ENDPOINT", required: false, secret: false, purpose: "GraphQL endpoint override", present: false },
+      ],
+      business: {
+        source: "firstAccessible",
+        name: waveCacheSnapshots[0].businessName,
+        currencyCode: waveCacheSnapshots[0].currencyCode,
+      },
+      steps: [
+        {
+          id: "environment",
+          label: "Environment",
+          status: "pass",
+          message: "Static demo uses fixture Wave data without local secrets.",
+        },
+        {
+          id: "auth",
+          label: "Wave auth",
+          status: "pass",
+          message: "Static demo auth probe resolved against fixture data.",
+        },
+        {
+          id: "accounts",
+          label: "Accounts probe",
+          status: "pass",
+          message: "Fixture accounts are available.",
+          detail: { accountCount: waveCacheResources.filter((row) => row.resourceType === "account").length },
+        },
+      ],
     };
   }
   if (name === "paperless:upsertConnection") return PAPERLESS_CONNECTION_ID;

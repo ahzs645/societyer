@@ -6,8 +6,8 @@ import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Field, Flag } from "../components/ui";
 import { formatDate, formatDateTime, money } from "../lib/format";
 import { isDemoMode } from "../lib/demoMode";
-import { PiggyBank, Link2, RefreshCw, PlusCircle, Trash2, ExternalLink } from "lucide-react";
-import { useState } from "react";
+import { Braces, Database, ExternalLink, Link2, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useToast } from "../components/Toast";
 
@@ -38,18 +38,58 @@ export function FinancialsPage() {
   const markConnected = useMutation(api.financialHub.markConnectionConnected);
   const disconnect = useMutation(api.financialHub.disconnect);
   const sync = useAction(api.financialHub.sync);
+  const syncWaveCache = useAction(api.waveCache.sync);
+  const checkWaveHealth = useAction(api.waveCache.healthCheck);
+  const waveSummary = useQuery(
+    api.waveCache.summary,
+    society ? { societyId: society._id } : "skip",
+  );
   const upsertBudget = useMutation(api.financialHub.upsertBudget);
   const removeBudget = useMutation(api.financialHub.removeBudget);
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [waveHealthBusy, setWaveHealthBusy] = useState(false);
+  const [waveHealth, setWaveHealth] = useState<any>(null);
   const [budgetForm, setBudgetForm] = useState<{ category: string; planned: string } | null>(null);
+  const [waveMode, setWaveMode] = useState<"resources" | "structures">("resources");
+  const [waveResourceType, setWaveResourceType] = useState("account");
+  const [waveSearch, setWaveSearch] = useState("");
+  const [selectedWaveResourceId, setSelectedWaveResourceId] = useState<string | null>(null);
+  const waveResources = useQuery(
+    api.waveCache.resources,
+    society
+      ? {
+          societyId: society._id,
+          resourceType: waveResourceType === "all" ? undefined : waveResourceType,
+          search: waveSearch || undefined,
+          limit: 500,
+        }
+      : "skip",
+  );
+  const waveStructures = useQuery(
+    api.waveCache.structures,
+    society ? { societyId: society._id, search: waveSearch || undefined, limit: 100 } : "skip",
+  );
+  const selectedWaveResource = useQuery(
+    api.waveCache.resource,
+    selectedWaveResourceId ? { id: selectedWaveResourceId as any } : "skip",
+  );
 
   const sorted = (items ?? []).slice().sort((a, b) => b.fiscalYear.localeCompare(a.fiscalYear));
   const latest = sorted[0];
   const fiscalYear = latest?.fiscalYear ?? new Date().getFullYear().toString();
   const activeConnection = (connections ?? []).find((c) => c.status === "connected");
   const importedBudgetCount = (orgHistory?.budgets ?? []).length;
+  const waveResourceTypes = useMemo(() => {
+    const counts = waveSummary?.resourceCounts ?? {};
+    const ordered = ["account", "vendor", "product", "customer", "invoice", "estimate", "salesTax", "business", "availableBusiness"];
+    const types = ordered.filter((type) => counts[type] != null);
+    for (const type of Object.keys(counts)) {
+      if (!types.includes(type)) types.push(type);
+    }
+    return types;
+  }, [waveSummary]);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -73,6 +113,45 @@ export function FinancialsPage() {
       toast.error(err?.message ?? "Connect failed");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const refreshWaveCache = async () => {
+    if (!society) return;
+    setBusy(true);
+    try {
+      const result = await syncWaveCache({
+        societyId: society._id,
+        connectionId: activeConnection?._id,
+      });
+      toast.success(
+        `Cached ${result.resourceCount} Wave resources and ${result.structureCount} structures.`,
+      );
+    } catch (err: any) {
+      toast.error(err?.message ?? "Wave cache refresh failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runWaveHealthCheck = async () => {
+    if (!society) return;
+    setWaveHealthBusy(true);
+    try {
+      const result = await checkWaveHealth({
+        businessId: activeConnection?.externalBusinessId,
+      });
+      setWaveHealth(result);
+      if (result.ok) {
+        toast.success("Wave health check passed");
+      } else {
+        const failingStep = result.steps?.find((step: any) => step.status === "fail");
+        toast.warn("Wave health check needs attention", failingStep?.message ?? "Review the Wave diagnostics.");
+      }
+    } catch (err: any) {
+      toast.error(err?.message ?? "Wave health check failed");
+    } finally {
+      setWaveHealthBusy(false);
     }
   };
 
@@ -108,6 +187,20 @@ export function FinancialsPage() {
               </button>
               <button
                 className="btn-action"
+                disabled={busy}
+                onClick={refreshWaveCache}
+              >
+                <Database size={12} /> Cache
+              </button>
+              <button
+                className="btn-action"
+                disabled={busy || waveHealthBusy}
+                onClick={runWaveHealthCheck}
+              >
+                <ShieldCheck size={12} /> Check
+              </button>
+              <button
+                className="btn-action"
                 onClick={async () => {
                   await disconnect({ connectionId: activeConnection._id, actingUserId });
                   toast.info("Disconnected Wave");
@@ -117,9 +210,18 @@ export function FinancialsPage() {
               </button>
             </>
           ) : (
-            <button className="btn-action btn-action--primary" disabled={busy} onClick={connect}>
-              <Link2 size={12} /> Connect Wave
-            </button>
+            <>
+              <button className="btn-action btn-action--primary" disabled={busy} onClick={connect}>
+                <Link2 size={12} /> Connect Wave
+              </button>
+              <button
+                className="btn-action"
+                disabled={busy || waveHealthBusy}
+                onClick={runWaveHealthCheck}
+              >
+                <ShieldCheck size={12} /> Check
+              </button>
+            </>
           )
         }
       />
@@ -145,6 +247,8 @@ export function FinancialsPage() {
         </div>
       )}
 
+      {waveHealth && <WaveHealthPanel result={waveHealth} />}
+
       {activeConnection && hub && (
         <div className="stat-grid" style={{ marginBottom: 16 }}>
           <Stat label="Total bank balance" value={money(hub.totalBalance)} />
@@ -155,6 +259,29 @@ export function FinancialsPage() {
             value={activeConnection.lastSyncAtISO ? formatDateTime(activeConnection.lastSyncAtISO) : "—"}
           />
         </div>
+      )}
+
+      {activeConnection && (
+        <WaveCacheExplorer
+          busy={busy}
+          mode={waveMode}
+          onModeChange={setWaveMode}
+          onRefresh={refreshWaveCache}
+          resources={waveResources ?? []}
+          resourceType={waveResourceType}
+          resourceTypes={waveResourceTypes}
+          search={waveSearch}
+          selectedResource={selectedWaveResource}
+          selectedResourceId={selectedWaveResourceId}
+          structures={waveStructures ?? []}
+          summary={waveSummary}
+          onResourceTypeChange={(type) => {
+            setWaveResourceType(type);
+            setSelectedWaveResourceId(null);
+          }}
+          onSearchChange={setWaveSearch}
+          onSelectResource={(id) => setSelectedWaveResourceId(id)}
+        />
       )}
 
       {activeConnection && hub && hub.restrictedAccounts.length > 0 && (
@@ -417,6 +544,296 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "ok
   );
 }
 
+function WaveHealthPanel({ result }: { result: any }) {
+  const envRows = result.env ?? [];
+  const steps = result.steps ?? [];
+  const checkedAt = result.checkedAtISO ? formatDateTime(result.checkedAtISO) : "just now";
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card__head">
+        <h2 className="card__title">Wave connection health</h2>
+        <Badge tone={healthTone(result.status)}>
+          {healthLabel(result.status)}
+        </Badge>
+        <span className="card__subtitle">
+          {checkedAt} · {result.mode === "live" ? "live" : "not configured"} · secrets redacted
+        </span>
+      </div>
+      <div
+        className="card__body"
+        style={{
+          display: "grid",
+          gap: 16,
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+        }}
+      >
+        <div>
+          <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>Expected environment</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {envRows.map((row: any) => (
+              <div key={row.name} style={{ display: "grid", gap: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <code className="mono">{row.name}</code>
+                  <Badge tone={row.present ? "success" : row.required ? "danger" : "neutral"}>
+                    {row.present ? "present" : "missing"}
+                  </Badge>
+                  {row.required && <Badge tone="warn">required</Badge>}
+                  {row.secret && <Badge tone="info">secret</Badge>}
+                </div>
+                <div className="muted" style={{ fontSize: 12 }}>{row.purpose}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>Probe result</div>
+          {result.business && (
+            <div style={{ marginBottom: 10 }}>
+              <strong>{result.business.name ?? "Selected business"}</strong>
+              {result.business.currencyCode && <span className="muted"> · {result.business.currencyCode}</span>}
+              <div className="muted" style={{ fontSize: 12 }}>Business source: {businessSourceLabel(result.business.source)}</div>
+            </div>
+          )}
+          <div style={{ display: "grid", gap: 8 }}>
+            {steps.map((step: any) => (
+              <div key={step.id} style={{ display: "grid", gap: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <Badge tone={healthTone(step.status)}>{healthLabel(step.status)}</Badge>
+                  <strong>{step.label}</strong>
+                </div>
+                <div className="muted" style={{ fontSize: 12 }}>{step.message}</div>
+                {step.detail && (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {Object.entries(step.detail).map(([key, value]) => (
+                      <span key={key} className="cell-tag">{key}: {String(value)}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function healthTone(status?: string): "success" | "warn" | "danger" | "neutral" {
+  if (status === "pass") return "success";
+  if (status === "warn") return "warn";
+  if (status === "fail") return "danger";
+  return "neutral";
+}
+
+function healthLabel(status?: string) {
+  if (status === "pass") return "pass";
+  if (status === "warn") return "warning";
+  if (status === "fail") return "fail";
+  return "skipped";
+}
+
+function businessSourceLabel(source?: string) {
+  if (source === "env") return "WAVE_BUSINESS_ID";
+  if (source === "argument") return "connection";
+  if (source === "firstAccessible") return "first accessible business";
+  return "unknown";
+}
+
+function WaveCacheExplorer({
+  busy,
+  mode,
+  onModeChange,
+  onRefresh,
+  resources,
+  resourceType,
+  resourceTypes,
+  search,
+  selectedResource,
+  selectedResourceId,
+  structures,
+  summary,
+  onResourceTypeChange,
+  onSearchChange,
+  onSelectResource,
+}: {
+  busy: boolean;
+  mode: "resources" | "structures";
+  onModeChange: (mode: "resources" | "structures") => void;
+  onRefresh: () => void;
+  resources: any[];
+  resourceType: string;
+  resourceTypes: string[];
+  search: string;
+  selectedResource: any;
+  selectedResourceId: string | null;
+  structures: any[];
+  summary: any;
+  onResourceTypeChange: (type: string) => void;
+  onSearchChange: (value: string) => void;
+  onSelectResource: (id: string) => void;
+}) {
+  const counts = summary?.resourceCounts ?? {};
+  const totalResources = Object.values(counts).reduce((sum: number, value: any) => sum + Number(value ?? 0), 0);
+  const selectedRaw = selectedResource?.raw
+    ? JSON.stringify(selectedResource.raw, null, 2)
+    : selectedResourceId
+    ? "Loading..."
+    : "";
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card__head">
+        <h2 className="card__title">Wave data cache</h2>
+        <span className="card__subtitle">
+          {summary ? (
+            <>
+              {summary.businessName} · {totalResources} resources · {summary.structureTypes?.length ?? 0} structures · {formatDateTime(summary.fetchedAtISO)}
+            </>
+          ) : (
+            <>No cached Wave snapshot yet.</>
+          )}
+        </span>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className={mode === "resources" ? "btn btn--accent btn--sm" : "btn btn--ghost btn--sm"} onClick={() => onModeChange("resources")}>
+            <Database size={12} /> Data
+          </button>
+          <button className={mode === "structures" ? "btn btn--accent btn--sm" : "btn btn--ghost btn--sm"} onClick={() => onModeChange("structures")}>
+            <Braces size={12} /> Structures
+          </button>
+          <button className="btn-action" disabled={busy} onClick={onRefresh}>
+            <RefreshCw size={12} /> Refresh
+          </button>
+        </div>
+      </div>
+
+      <div className="card__body" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        {mode === "resources" && (
+          <>
+            <button
+              className={resourceType === "all" ? "btn btn--accent btn--sm" : "btn btn--ghost btn--sm"}
+              onClick={() => onResourceTypeChange("all")}
+            >
+              All <span className="muted">{totalResources}</span>
+            </button>
+            {resourceTypes.map((type) => (
+              <button
+                key={type}
+                className={resourceType === type ? "btn btn--accent btn--sm" : "btn btn--ghost btn--sm"}
+                onClick={() => onResourceTypeChange(type)}
+              >
+                {waveTypeLabel(type)} <span className="muted">{counts[type] ?? 0}</span>
+              </button>
+            ))}
+          </>
+        )}
+        <input
+          className="input"
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+          placeholder={mode === "resources" ? "Search cached Wave data" : "Search structures"}
+          style={{ marginLeft: "auto", maxWidth: 280 }}
+        />
+      </div>
+
+      {mode === "resources" ? (
+        <>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Resource</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Value</th>
+                <th>Date</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {resources.map((row) => (
+                <tr key={row._id}>
+                  <td>
+                    <strong>{row.label}</strong>
+                    {row.secondaryLabel && <div className="muted" style={{ fontSize: 12 }}>{row.secondaryLabel}</div>}
+                  </td>
+                  <td>
+                    <Badge>{waveTypeLabel(row.resourceType)}</Badge>
+                    {(row.typeValue || row.subtypeValue) && (
+                      <div className="muted" style={{ fontSize: 12 }}>
+                        {[row.typeValue, row.subtypeValue].filter(Boolean).join(" / ")}
+                      </div>
+                    )}
+                  </td>
+                  <td>{row.status ? <Badge tone={row.status === "archived" ? "neutral" : "info"}>{row.status}</Badge> : "—"}</td>
+                  <td className="table__cell--mono">{formatWaveValue(row.amountValue, row.currencyCode)}</td>
+                  <td className="table__cell--mono">{row.dateValue ?? "—"}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <button className="btn btn--ghost btn--sm" onClick={() => onSelectResource(row._id)}>
+                      <ExternalLink size={12} /> Raw
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {resources.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="muted" style={{ textAlign: "center", padding: 16 }}>
+                    {summary ? "No cached rows match this view." : "Refresh the Wave cache to load data."}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+
+          {selectedResourceId && (
+            <div className="card__body" style={{ borderTop: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <Braces size={14} />
+                <strong>{selectedResource?.label ?? "Wave resource"}</strong>
+                {selectedResource?.externalId && <span className="muted table__cell--mono">{selectedResource.externalId}</span>}
+              </div>
+              <pre style={rawBlockStyle}>{selectedRaw}</pre>
+            </div>
+          )}
+        </>
+      ) : (
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Kind</th>
+              <th>Fields</th>
+            </tr>
+          </thead>
+          <tbody>
+            {structures.map((row) => (
+              <tr key={row._id}>
+                <td><strong>{row.typeName}</strong></td>
+                <td><Badge>{row.kind}</Badge></td>
+                <td>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {(row.fields ?? []).slice(0, 16).map((field: any) => (
+                      <span key={field.name} className="cell-tag">{field.name}</span>
+                    ))}
+                    {(row.fields?.length ?? 0) > 16 && <span className="muted">+{row.fields.length - 16}</span>}
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {structures.length === 0 && (
+              <tr>
+                <td colSpan={3} className="muted" style={{ textAlign: "center", padding: 16 }}>
+                  {summary ? "No cached structures match this view." : "Refresh the Wave cache to load structures."}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 function ProviderCard({
   name,
   desc,
@@ -460,4 +877,38 @@ function ProviderCard({
       )}
     </div>
   );
+}
+
+const rawBlockStyle = {
+  maxHeight: 360,
+  overflow: "auto",
+  padding: 12,
+  border: "1px solid var(--border)",
+  borderRadius: 8,
+  background: "var(--surface-muted)",
+  fontSize: 12,
+  lineHeight: 1.5,
+} as const;
+
+function waveTypeLabel(type: string) {
+  const labels: Record<string, string> = {
+    availableBusiness: "Available business",
+    business: "Business",
+    account: "Accounts",
+    vendor: "Vendors",
+    customer: "Customers",
+    product: "Products",
+    invoice: "Invoices",
+    estimate: "Estimates",
+    salesTax: "Sales taxes",
+  };
+  return labels[type] ?? type;
+}
+
+function formatWaveValue(value?: string, currencyCode?: string) {
+  if (value == null || value === "") return "—";
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return value;
+  if (!currencyCode) return amount.toLocaleString("en-CA");
+  return new Intl.NumberFormat("en-CA", { style: "currency", currency: currencyCode }).format(amount);
 }
