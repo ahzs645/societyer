@@ -977,6 +977,30 @@ const tables: Record<string, any[]> = {
       amountAwardedCents: 1500000,
       linkedFinancialAccountId: GRANT_ACCOUNT_ID,
       allowPublicApplications: true,
+      opportunityType: "Foundation",
+      priority: "High",
+      fitScore: 80,
+      nextAction: "Submit Q1 outcomes report",
+      requirements: [
+        {
+          id: "core-reporting-calendar",
+          category: "Post-award",
+          label: "Reporting deadlines added",
+          status: "Ready",
+        },
+        {
+          id: "core-submission-confirmation",
+          category: "Submission",
+          label: "Submission confirmation saved",
+          status: "Attached",
+        },
+        {
+          id: "core-budget",
+          category: "Finance",
+          label: "Requested amount and budget notes prepared",
+          status: "Ready",
+        },
+      ],
     },
   ],
   grantApplications: [

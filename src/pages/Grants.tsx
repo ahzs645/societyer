@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -6,9 +6,209 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
 import { DataTable } from "../components/DataTable";
-import { BadgeDollarSign, FileText, Plus, Trash2, Inbox } from "lucide-react";
+import { BadgeDollarSign, FileText, Plus, Trash2, Inbox, ListChecks } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { centsToDollarInput, dollarInputToCents, formatDate, money } from "../lib/format";
+
+type GrantRequirementStatus = "Needed" | "Requested" | "Ready" | "Attached" | "Waived";
+
+type GrantRequirement = {
+  id: string;
+  category: string;
+  label: string;
+  status: GrantRequirementStatus;
+  dueDate?: string;
+  documentId?: string;
+  notes?: string;
+};
+
+type RequirementTemplateKey = "core" | "bcGaming" | "canadaSummerJobs";
+
+const REQUIREMENT_STATUSES: GrantRequirementStatus[] = [
+  "Needed",
+  "Requested",
+  "Ready",
+  "Attached",
+  "Waived",
+];
+
+const GRANT_REQUIREMENT_TEMPLATES: Record<
+  RequirementTemplateKey,
+  { label: string; items: Omit<GrantRequirement, "status">[] }
+> = {
+  core: {
+    label: "Core",
+    items: [
+      { id: "core-opportunity-fit", category: "Prospect", label: "Eligibility and fit confirmed" },
+      { id: "core-owner", category: "Ownership", label: "Board owner and internal reviewer assigned" },
+      { id: "core-budget", category: "Finance", label: "Requested amount and budget notes prepared" },
+      { id: "core-application-draft", category: "Application", label: "Application narrative drafted" },
+      { id: "core-submission-confirmation", category: "Submission", label: "Submission confirmation saved" },
+      { id: "core-reporting-calendar", category: "Post-award", label: "Reporting deadlines added" },
+    ],
+  },
+  bcGaming: {
+    label: "BC Gaming",
+    items: [
+      { id: "bc-bylaws", category: "Organization", label: "Certified constitution and bylaws attached" },
+      { id: "bc-board-list", category: "Governance", label: "Board list and officer details ready" },
+      { id: "bc-agm-minutes", category: "Governance", label: "AGM minutes with board election evidence attached" },
+      { id: "bc-org-financials", category: "Finance", label: "Prior-year financial statements and current budget attached" },
+      { id: "bc-gaming-account", category: "Finance", label: "Gaming account evidence reviewed" },
+      { id: "bc-program-description", category: "Program", label: "Program description and community benefit narrative ready" },
+      { id: "bc-program-financials", category: "Program", label: "Program actuals or simplified financials attached" },
+      { id: "bc-program-budget", category: "Program", label: "Program budget attached when required" },
+      { id: "bc-inkind", category: "Program", label: "In-kind contribution summary attached when claimed" },
+      { id: "bc-officers", category: "Submission", label: "Two officers, submitter, contact, and delivery emails confirmed" },
+      { id: "bc-confirmation", category: "Submission", label: "Application ID and confirmation PDF saved" },
+      { id: "bc-summary-report", category: "Post-award", label: "Gaming Account Summary Report deadline tracked" },
+    ],
+  },
+  canadaSummerJobs: {
+    label: "Canada Summer Jobs",
+    items: [
+      { id: "csj-gcos-authority", category: "Access", label: "GCOS access and primary officer authority confirmed" },
+      { id: "csj-org-profile", category: "Organization", label: "Legal name, CRA/business number, mandate, and address ready" },
+      { id: "csj-project-dates", category: "Project", label: "Project title, start date, end date, and location confirmed" },
+      { id: "csj-job-details", category: "Project", label: "Job activities, supervision, and youth employment details prepared" },
+      { id: "csj-wage-budget", category: "Finance", label: "Wage, hours, and requested contribution calculated" },
+      { id: "csj-contacts", category: "Contacts", label: "Primary and secondary contacts confirmed" },
+      { id: "csj-attestation", category: "Submission", label: "Privacy, attestation, and signatory details reviewed" },
+      { id: "csj-confirmation", category: "Submission", label: "Submission confirmation saved" },
+    ],
+  },
+};
+
+function optionalString(value: unknown) {
+  const text = String(value ?? "").trim();
+  return text ? text : undefined;
+}
+
+function optionalNumber(value: unknown) {
+  if (value === "" || value === undefined || value === null) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function asRequirements(value: unknown): GrantRequirement[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item: any) => ({
+      id: String(item?.id ?? `custom-${Date.now()}`),
+      category: String(item?.category ?? "Custom"),
+      label: String(item?.label ?? ""),
+      status: REQUIREMENT_STATUSES.includes(item?.status) ? item.status : "Needed",
+      dueDate: optionalString(item?.dueDate),
+      documentId: optionalString(item?.documentId),
+      notes: optionalString(item?.notes),
+    }));
+}
+
+function sanitizeRequirements(value: unknown) {
+  return asRequirements(value).filter((item) => item.label.trim());
+}
+
+function mergeTemplateRequirements(
+  current: GrantRequirement[] | undefined,
+  templateKey: RequirementTemplateKey,
+) {
+  const existing = new Map(asRequirements(current).map((item) => [item.id, item]));
+  for (const item of GRANT_REQUIREMENT_TEMPLATES[templateKey].items) {
+    if (!existing.has(item.id)) {
+      existing.set(item.id, { ...item, status: "Needed" });
+    }
+  }
+  return Array.from(existing.values());
+}
+
+function requirementSummary(requirements: GrantRequirement[] | undefined) {
+  const rows = asRequirements(requirements);
+  const complete = rows.filter((row) =>
+    ["Ready", "Attached", "Waived"].includes(row.status),
+  ).length;
+  const attached = rows.filter((row) => row.documentId).length;
+  const total = rows.length;
+  return {
+    total,
+    complete,
+    attached,
+    percent: total > 0 ? Math.round((complete / total) * 100) : 0,
+  };
+}
+
+function requirementStatusTone(status: GrantRequirementStatus): "success" | "warn" | "info" {
+  if (status === "Attached" || status === "Ready" || status === "Waived") return "success";
+  if (status === "Requested") return "warn";
+  return "info";
+}
+
+function buildGrantPayload(draft: any, societyId: any, actingUserId: any) {
+  return {
+    id: draft.id,
+    societyId,
+    committeeId: draft.committeeId || undefined,
+    boardOwnerUserId: draft.boardOwnerUserId || undefined,
+    linkedFinancialAccountId: draft.linkedFinancialAccountId || undefined,
+    opportunityUrl: optionalString(draft.opportunityUrl),
+    opportunityType: optionalString(draft.opportunityType),
+    priority: optionalString(draft.priority),
+    fitScore: optionalNumber(draft.fitScore),
+    nextAction: optionalString(draft.nextAction),
+    publicDescription: optionalString(draft.publicDescription),
+    allowPublicApplications: !!draft.allowPublicApplications,
+    applicationInstructions: optionalString(draft.applicationInstructions),
+    requirements: sanitizeRequirements(draft.requirements),
+    title: draft.title,
+    funder: draft.funder,
+    program: optionalString(draft.program),
+    status: draft.status,
+    amountRequestedCents: dollarInputToCents(draft.amountRequestedDollars),
+    amountAwardedCents: dollarInputToCents(draft.amountAwardedDollars),
+    restrictedPurpose: optionalString(draft.restrictedPurpose),
+    applicationDueDate: optionalString(draft.applicationDueDate),
+    submittedAtISO: optionalString(draft.submittedAtISO),
+    decisionAtISO: optionalString(draft.decisionAtISO),
+    startDate: optionalString(draft.startDate),
+    endDate: optionalString(draft.endDate),
+    nextReportDueAtISO: optionalString(draft.nextReportDueAtISO),
+    notes: optionalString(draft.notes),
+    actingUserId,
+  };
+}
+
+function buildReportPayload(draft: any, societyId: any, actingUserId: any) {
+  return {
+    id: draft.id,
+    societyId,
+    grantId: draft.grantId,
+    title: draft.title,
+    dueAtISO: draft.dueAtISO,
+    submittedAtISO: optionalString(draft.submittedAtISO),
+    status: draft.status,
+    spendingToDateCents: dollarInputToCents(draft.spendingToDateDollars),
+    outcomeSummary: optionalString(draft.outcomeSummary),
+    documentId: draft.documentId || undefined,
+    submittedByUserId: draft.submittedAtISO ? actingUserId : undefined,
+    notes: optionalString(draft.notes),
+    actingUserId,
+  };
+}
+
+function buildTransactionPayload(draft: any, societyId: any, actingUserId: any) {
+  return {
+    id: draft.id,
+    societyId,
+    grantId: draft.grantId,
+    financialTransactionId: draft.financialTransactionId || undefined,
+    documentId: draft.documentId || undefined,
+    date: draft.date,
+    direction: draft.direction,
+    amountCents: dollarInputToCents(draft.amountDollars) ?? 0,
+    description: draft.description,
+    notes: optionalString(draft.notes),
+    actingUserId,
+  };
+}
 
 export function GrantsPage() {
   const society = useSociety();
@@ -69,14 +269,10 @@ export function GrantsPage() {
   const grantById = new Map<string, any>((grants ?? []).map((row) => [String(row._id), row]));
   const accountById = new Map<string, any>((accounts ?? []).map((row) => [String(row._id), row]));
 
-  const reportRows = useMemo(
-    () =>
-      (reports ?? []).map((report) => ({
-        ...report,
-        grantTitle: grantById.get(String(report.grantId))?.title ?? "Unknown grant",
-      })),
-    [reports, grantById],
-  );
+  const reportRows = (reports ?? []).map((report) => ({
+    ...report,
+    grantTitle: grantById.get(String(report.grantId))?.title ?? "Unknown grant",
+  }));
 
   return (
     <div className="page">
@@ -125,8 +321,14 @@ export function GrantsPage() {
                   funder: "",
                   program: "",
                   status: "Prospecting",
+                  opportunityType: "Government",
+                  priority: "Medium",
+                  fitScore: "",
+                  nextAction: "",
+                  opportunityUrl: "",
                   applicationDueDate: new Date().toISOString().slice(0, 10),
                   allowPublicApplications: false,
+                  requirements: [],
                 })
               }
             >
@@ -242,6 +444,27 @@ export function GrantsPage() {
             render: (row) => <Badge tone={row.status === "Active" || row.status === "Awarded" ? "success" : row.status === "Declined" ? "danger" : "warn"}>{row.status}</Badge>,
           },
           {
+            id: "readiness",
+            header: "Readiness",
+            sortable: true,
+            accessor: (row) => requirementSummary(row.requirements).percent,
+            render: (row) => {
+              const readiness = requirementSummary(row.requirements);
+              return readiness.total > 0 ? (
+                <div>
+                  <Badge tone={readiness.percent === 100 ? "success" : readiness.percent >= 50 ? "warn" : "info"}>
+                    {readiness.percent}%
+                  </Badge>
+                  <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                    {readiness.complete}/{readiness.total} ready
+                  </div>
+                </div>
+              ) : (
+                <Badge tone="info">Not set</Badge>
+              );
+            },
+          },
+          {
             id: "amountAwardedCents",
             header: "Awarded",
             sortable: true,
@@ -279,8 +502,10 @@ export function GrantsPage() {
                 setGrantDraft({
                   ...row,
                   id: row._id,
+                  fitScore: row.fitScore ?? "",
                   amountRequestedDollars: centsToDollarInput(row.amountRequestedCents),
                   amountAwardedDollars: centsToDollarInput(row.amountAwardedCents),
+                  requirements: asRequirements(row.requirements),
                 })
               }
             >
@@ -387,29 +612,7 @@ export function GrantsPage() {
             <button
               className="btn btn--accent"
               onClick={async () => {
-                await upsertGrant({
-                  ...grantDraft,
-                  societyId: society._id,
-                  funder: grantDraft.funder,
-                  program: grantDraft.program || undefined,
-                  committeeId: grantDraft.committeeId || undefined,
-                  boardOwnerUserId: grantDraft.boardOwnerUserId || undefined,
-                  linkedFinancialAccountId: grantDraft.linkedFinancialAccountId || undefined,
-                  publicDescription: grantDraft.publicDescription || undefined,
-                  allowPublicApplications: !!grantDraft.allowPublicApplications,
-                  applicationInstructions: grantDraft.applicationInstructions || undefined,
-                  restrictedPurpose: grantDraft.restrictedPurpose || undefined,
-                  applicationDueDate: grantDraft.applicationDueDate || undefined,
-                  submittedAtISO: grantDraft.submittedAtISO || undefined,
-                  decisionAtISO: grantDraft.decisionAtISO || undefined,
-                  startDate: grantDraft.startDate || undefined,
-                  endDate: grantDraft.endDate || undefined,
-                  nextReportDueAtISO: grantDraft.nextReportDueAtISO || undefined,
-                  notes: grantDraft.notes || undefined,
-                  amountRequestedCents: dollarInputToCents(grantDraft.amountRequestedDollars),
-                  amountAwardedCents: dollarInputToCents(grantDraft.amountAwardedDollars),
-                  actingUserId,
-                });
+                await upsertGrant(buildGrantPayload(grantDraft, society._id, actingUserId));
                 toast.success("Grant saved");
                 setGrantDraft(null);
               }}
@@ -429,6 +632,31 @@ export function GrantsPage() {
               <Field label="Funder"><input className="input" value={grantDraft.funder} onChange={(e) => setGrantDraft({ ...grantDraft, funder: e.target.value })} /></Field>
               <Field label="Program"><input className="input" value={grantDraft.program ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, program: e.target.value })} /></Field>
             </div>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Opportunity type">
+                <select className="input" value={grantDraft.opportunityType ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, opportunityType: e.target.value })}>
+                  <option value="">Unspecified</option>
+                  <option>Government</option>
+                  <option>Foundation</option>
+                  <option>Corporate</option>
+                  <option>Internal</option>
+                  <option>Other</option>
+                </select>
+              </Field>
+              <Field label="Priority">
+                <select className="input" value={grantDraft.priority ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, priority: e.target.value })}>
+                  <option value="">Unspecified</option>
+                  <option>High</option>
+                  <option>Medium</option>
+                  <option>Low</option>
+                </select>
+              </Field>
+            </div>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Fit score" hint="0 to 100"><input className="input" type="number" inputMode="numeric" min="0" max="100" step="1" value={grantDraft.fitScore ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, fitScore: e.target.value })} /></Field>
+              <Field label="Opportunity URL"><input className="input" type="url" value={grantDraft.opportunityUrl ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, opportunityUrl: e.target.value })} /></Field>
+            </div>
+            <Field label="Next action"><input className="input" value={grantDraft.nextAction ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, nextAction: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Status">
                 <select className="input" value={grantDraft.status} onChange={(e) => setGrantDraft({ ...grantDraft, status: e.target.value })}>
@@ -453,6 +681,11 @@ export function GrantsPage() {
               <Field label="Awarded" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountAwardedDollars ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, amountAwardedDollars: e.target.value })} /></Field>
             </div>
             <Field label="Restricted purpose"><textarea className="textarea" value={grantDraft.restrictedPurpose ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, restrictedPurpose: e.target.value })} /></Field>
+            <GrantRequirementsEditor
+              draft={grantDraft}
+              documents={documents ?? []}
+              onChange={setGrantDraft}
+            />
             <label className="checkbox"><input type="checkbox" checked={!!grantDraft.allowPublicApplications} onChange={(e) => setGrantDraft({ ...grantDraft, allowPublicApplications: e.target.checked })} /> Accept public applications</label>
             <Field label="Public description"><textarea className="textarea" rows={4} value={grantDraft.publicDescription ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, publicDescription: e.target.value })} /></Field>
             <Field label="Application instructions"><textarea className="textarea" rows={4} value={grantDraft.applicationInstructions ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, applicationInstructions: e.target.value })} /></Field>
@@ -496,16 +729,7 @@ export function GrantsPage() {
             <button
               className="btn btn--accent"
               onClick={async () => {
-                await upsertTransaction({
-                  ...txnDraft,
-                  societyId: society._id,
-                  grantId: txnDraft.grantId,
-                  financialTransactionId: txnDraft.financialTransactionId || undefined,
-                  documentId: txnDraft.documentId || undefined,
-                  amountCents: dollarInputToCents(txnDraft.amountDollars) ?? 0,
-                  notes: txnDraft.notes || undefined,
-                  actingUserId,
-                });
+                await upsertTransaction(buildTransactionPayload(txnDraft, society._id, actingUserId));
                 toast.success("Ledger entry saved");
                 setTxnDraft(null);
               }}
@@ -556,18 +780,7 @@ export function GrantsPage() {
             <button
               className="btn btn--accent"
               onClick={async () => {
-                await upsertReport({
-                  ...reportDraft,
-                  societyId: society._id,
-                  grantId: reportDraft.grantId,
-                  submittedAtISO: reportDraft.submittedAtISO || undefined,
-                  spendingToDateCents: dollarInputToCents(reportDraft.spendingToDateDollars),
-                  outcomeSummary: reportDraft.outcomeSummary || undefined,
-                  documentId: reportDraft.documentId || undefined,
-                  submittedByUserId: reportDraft.submittedAtISO ? actingUserId : undefined,
-                  notes: reportDraft.notes || undefined,
-                  actingUserId,
-                });
+                await upsertReport(buildReportPayload(reportDraft, society._id, actingUserId));
                 toast.success("Grant report saved");
                 setReportDraft(null);
               }}
@@ -609,6 +822,163 @@ export function GrantsPage() {
           </div>
         )}
       </Drawer>
+    </div>
+  );
+}
+
+function GrantRequirementsEditor({
+  draft,
+  documents,
+  onChange,
+}: {
+  draft: any;
+  documents: any[];
+  onChange: (draft: any) => void;
+}) {
+  const requirements = asRequirements(draft.requirements);
+  const summary = requirementSummary(requirements);
+
+  const setRequirements = (next: GrantRequirement[]) => {
+    onChange({ ...draft, requirements: next });
+  };
+
+  const updateRequirement = (index: number, patch: Partial<GrantRequirement>) => {
+    setRequirements(
+      requirements.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item,
+      ),
+    );
+  };
+
+  return (
+    <div style={{ display: "grid", gap: 12, margin: "12px 0" }}>
+      <InspectorNote title="Readiness checklist">
+        Track the documents, financials, confirmations, and post-award obligations that make a grant file auditable.
+      </InspectorNote>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+        <Badge tone={summary.percent === 100 && summary.total > 0 ? "success" : "info"}>
+          {summary.total > 0 ? `${summary.percent}% ready` : "No checklist"}
+        </Badge>
+        <Badge tone="info">{summary.attached} docs linked</Badge>
+        {(Object.keys(GRANT_REQUIREMENT_TEMPLATES) as RequirementTemplateKey[]).map((key) => (
+          <button
+            key={key}
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={() => setRequirements(mergeTemplateRequirements(requirements, key))}
+          >
+            <ListChecks size={12} /> {GRANT_REQUIREMENT_TEMPLATES[key].label}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          onClick={() =>
+            setRequirements([
+              ...requirements,
+              {
+                id: `custom-${Date.now()}`,
+                category: "Custom",
+                label: "New requirement",
+                status: "Needed",
+              },
+            ])
+          }
+        >
+          <Plus size={12} /> Add item
+        </button>
+      </div>
+
+      {requirements.length > 0 && (
+        <div style={{ display: "grid", gap: 10 }}>
+          {requirements.map((item, index) => (
+            <div
+              key={item.id}
+              style={{
+                border: "1px solid var(--border)",
+                borderRadius: "var(--r-sm)",
+                padding: 12,
+                background: "var(--bg-base)",
+              }}
+            >
+              <div className="row" style={{ justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                <Badge tone={requirementStatusTone(item.status)}>{item.status}</Badge>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Remove requirement ${item.label}`}
+                  onClick={() => setRequirements(requirements.filter((_, itemIndex) => itemIndex !== index))}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+              <div className="row" style={{ gap: 12 }}>
+                <Field label="Status">
+                  <select
+                    className="input"
+                    value={item.status}
+                    onChange={(event) =>
+                      updateRequirement(index, {
+                        status: event.target.value as GrantRequirementStatus,
+                      })
+                    }
+                  >
+                    {REQUIREMENT_STATUSES.map((status) => (
+                      <option key={status}>{status}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Category">
+                  <input
+                    className="input"
+                    value={item.category}
+                    onChange={(event) => updateRequirement(index, { category: event.target.value })}
+                  />
+                </Field>
+              </div>
+              <Field label="Requirement">
+                <input
+                  className="input"
+                  value={item.label}
+                  onChange={(event) => updateRequirement(index, { label: event.target.value })}
+                />
+              </Field>
+              <div className="row" style={{ gap: 12 }}>
+                <Field label="Due">
+                  <input
+                    className="input"
+                    type="date"
+                    value={item.dueDate ?? ""}
+                    onChange={(event) => updateRequirement(index, { dueDate: event.target.value || undefined })}
+                  />
+                </Field>
+                <Field label="Document">
+                  <select
+                    className="input"
+                    value={item.documentId ?? ""}
+                    onChange={(event) => updateRequirement(index, { documentId: event.target.value || undefined })}
+                  >
+                    <option value="">None</option>
+                    {documents.map((document) => (
+                      <option key={document._id} value={document._id}>
+                        {document.title}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+              <Field label="Notes">
+                <textarea
+                  className="textarea"
+                  rows={2}
+                  value={item.notes ?? ""}
+                  onChange={(event) => updateRequirement(index, { notes: event.target.value })}
+                />
+              </Field>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

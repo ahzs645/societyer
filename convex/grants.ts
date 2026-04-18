@@ -7,6 +7,16 @@ function isoNow() {
   return new Date().toISOString();
 }
 
+const grantRequirement = v.object({
+  id: v.string(),
+  category: v.string(),
+  label: v.string(),
+  status: v.string(),
+  dueDate: v.optional(v.string()),
+  documentId: v.optional(v.id("documents")),
+  notes: v.optional(v.string()),
+});
+
 export const list = query({
   args: { societyId: v.id("societies") },
   handler: async (ctx, { societyId }) =>
@@ -218,9 +228,15 @@ export const upsertGrant = mutation({
     committeeId: v.optional(v.id("committees")),
     boardOwnerUserId: v.optional(v.id("users")),
     linkedFinancialAccountId: v.optional(v.id("financialAccounts")),
+    opportunityUrl: v.optional(v.string()),
+    opportunityType: v.optional(v.string()),
+    priority: v.optional(v.string()),
+    fitScore: v.optional(v.number()),
+    nextAction: v.optional(v.string()),
     publicDescription: v.optional(v.string()),
     allowPublicApplications: v.optional(v.boolean()),
     applicationInstructions: v.optional(v.string()),
+    requirements: v.optional(v.array(grantRequirement)),
     title: v.string(),
     funder: v.string(),
     program: v.optional(v.string()),

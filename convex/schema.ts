@@ -1029,9 +1029,27 @@ export default defineSchema({
     committeeId: v.optional(v.id("committees")),
     boardOwnerUserId: v.optional(v.id("users")),
     linkedFinancialAccountId: v.optional(v.id("financialAccounts")),
+    opportunityUrl: v.optional(v.string()),
+    opportunityType: v.optional(v.string()),
+    priority: v.optional(v.string()),
+    fitScore: v.optional(v.number()),
+    nextAction: v.optional(v.string()),
     publicDescription: v.optional(v.string()),
     allowPublicApplications: v.optional(v.boolean()),
     applicationInstructions: v.optional(v.string()),
+    requirements: v.optional(
+      v.array(
+        v.object({
+          id: v.string(),
+          category: v.string(),
+          label: v.string(),
+          status: v.string(), // Needed | Requested | Ready | Attached | Waived
+          dueDate: v.optional(v.string()),
+          documentId: v.optional(v.id("documents")),
+          notes: v.optional(v.string()),
+        }),
+      ),
+    ),
     title: v.string(),
     funder: v.string(),
     program: v.optional(v.string()),
