@@ -88,6 +88,17 @@ for (const spec of grantSpecs) {
     allowPublicApplications: false,
     applicationInstructions: spec.applicationInstructions,
     requirements: spec.requirements,
+    confirmationCode: spec.confirmationCode,
+    sourcePath: ROOT,
+    sourceImportedAtISO: today,
+    sourceFileCount: spec.sourceFileCount,
+    sourceNotes: spec.sourceNotes,
+    keyFacts: spec.keyFacts,
+    useOfFunds: spec.useOfFunds,
+    timelineEvents: spec.timelineEvents,
+    complianceFlags: spec.complianceFlags,
+    contacts: spec.contacts,
+    answerLibrary: spec.answerLibrary,
     amountRequestedCents: spec.amountRequestedCents,
     restrictedPurpose: spec.restrictedPurpose,
     applicationDueDate: spec.applicationDueDate,
@@ -226,6 +237,12 @@ function req({
   };
 }
 
+function fileCountFor(folderName) {
+  return allFiles.filter((absPath) =>
+    path.relative(ROOT, absPath).startsWith(`${folderName}${path.sep}`),
+  ).length;
+}
+
 function buildGrantSpecs() {
   return [
     {
@@ -237,6 +254,8 @@ function buildGrantSpecs() {
       priority: "High",
       fitScore: 90,
       amountRequestedCents: 7_500_000,
+      confirmationCode: "1238069",
+      sourceFileCount: fileCountFor("BC Gaming Grant"),
       submittedAtISO: "2025-01-22",
       nextReportDueAtISO: "2025-07-29",
       nextAction: "Track application status and retain application confirmation, follow-up, and program financial evidence.",
@@ -248,6 +267,130 @@ function buildGrantSpecs() {
         "Community News Publication and Distribution program costs, including production, distribution, contributor honoraria, digital access, equipment, software, and program support.",
       notes:
         `Imported from local Grant folder on ${today}. Application ID 1238069 was received on 2025-01-22. The application summary lists BC society S0048345, fiscal year end April 30, Arts and Culture sector, program delivered for 30 years, and a $75,000 request for Community News Publication and Distribution. Supporting documents in the packet include bylaws, directors/officers evidence, AGM minutes, financial statement evidence, program budget, simplified program financials, common forms, and confirmation/follow-up PDFs.`,
+      sourceNotes: "Review sensitive contact details before public use. Keep gaming-account evidence, receipts, and summary reporting records with restricted access.",
+      keyFacts: [
+        "Application ID 1238069",
+        "Submitted 2025-01-22",
+        "Requested $75,000",
+        "BC society S0048345",
+        "Fiscal year-end April 30",
+        "Program delivered for 30 years",
+      ],
+      useOfFunds: [
+        {
+          label: "Production costs",
+          amountCents: 3_000_000,
+          notes: "Printing, distribution, and contributor honoraria from the imported application budget summary.",
+        },
+        {
+          label: "Equipment",
+          amountCents: 1_500_000,
+          notes: "Workstations, photo/video gear, and production equipment for program delivery.",
+        },
+        {
+          label: "Software",
+          amountCents: 300_000,
+          notes: "Software and digital production tools.",
+        },
+        {
+          label: "Website / digital access",
+          amountCents: 500_000,
+          notes: "Website and digital access improvements.",
+        },
+        {
+          label: "Operations support",
+          amountCents: 2_200_000,
+          notes: "Professional development, office supplies, technical support, and remaining program support.",
+        },
+      ],
+      timelineEvents: [
+        {
+          label: "Supporting documents follow-up deadline",
+          date: "2025-02-05",
+          status: "Due",
+          notes: "Two weeks after submission if any supporting documents were emailed.",
+        },
+        {
+          label: "Gaming Account Summary Report deadline",
+          date: "2025-07-29",
+          status: "Conditional",
+          notes: "Required within 90 days of fiscal year-end if grant funds are received.",
+        },
+        {
+          label: "Post-award record retention",
+          date: "2026-04-30",
+          status: "Watch",
+          notes: "Retain gaming-account records, receipts, and grant fund records for compliance review.",
+        },
+      ],
+      complianceFlags: [
+        {
+          label: "Gaming account evidence present",
+          status: "Ready",
+          requirementId: "bc-gaming-account",
+        },
+        {
+          label: "AGM evidence linked",
+          status: "Attached",
+          requirementId: "bc-agm-minutes",
+        },
+        {
+          label: "Confirmation saved",
+          status: "Attached",
+          requirementId: "bc-confirmation",
+        },
+        {
+          label: "Post-award report not scheduled",
+          status: "Requested",
+          requirementId: "bc-summary-report",
+        },
+        {
+          label: "In-kind summary waived / empty",
+          status: "Waived",
+          requirementId: "bc-inkind",
+        },
+      ],
+      contacts: [
+        {
+          role: "Primary contact",
+          name: "Ahmad Jalil",
+          organization: "Over the Edge Newspaper Society",
+          notes: "Submitter / application contact from imported packet.",
+        },
+        {
+          role: "Officer / signatory",
+          name: "Behrouz Danesh",
+          organization: "Over the Edge Newspaper Society",
+          notes: "Responsible officer evidence appears in the imported packet.",
+        },
+        {
+          role: "Applicant organization",
+          organization: "Over the Edge Newspaper Society",
+          notes: "BC society S0048345.",
+        },
+      ],
+      answerLibrary: [
+        {
+          section: "Organization mandate",
+          title: "Community newspaper mandate",
+          body: "Over the Edge Newspaper Society operates a long-running community news publication that documents local culture, civic issues, student and youth perspectives, and independent media activity.",
+        },
+        {
+          section: "Program description",
+          title: "Community News Publication and Distribution",
+          body: "The program produces and distributes accessible community journalism through print and digital channels, supporting editorial production, contributor development, archives, multimedia work, and public access to local stories.",
+        },
+        {
+          section: "Community benefit",
+          title: "Public access and participation",
+          body: "The publication creates low-barrier opportunities for community members, emerging writers, students, artists, and volunteers to participate in civic media while preserving a public record of local cultural activity.",
+        },
+        {
+          section: "Accessibility / inclusivity",
+          title: "Accessible distribution",
+          body: "Funding supports print distribution, digital access, and production systems that help readers access local journalism across formats and help contributors participate regardless of income or technical access.",
+        },
+      ],
       requirements: [
         req({ id: "core-opportunity-fit", category: "Prospect", label: "Eligibility and fit confirmed", status: "Ready" }),
         req({ id: "core-owner", category: "Ownership", label: "Board owner and internal reviewer assigned", status: "Ready" }),
@@ -278,6 +421,8 @@ function buildGrantSpecs() {
       priority: "High",
       fitScore: 85,
       amountRequestedCents: 1_149_120,
+      confirmationCode: "A001242170",
+      sourceFileCount: fileCountFor("Canada Summer Jobs"),
       submittedAtISO: "2024-12-10",
       startDate: "2025-04-21",
       endDate: "2025-08-30",
@@ -290,6 +435,114 @@ function buildGrantSpecs() {
         "Wages and mandatory employment related costs for one media coordinator placement supporting archives, digital systems, editorial workflow, and multimedia operations.",
       notes:
         `Imported from local Grant folder on ${today}. Confirmation number A001242170 was captured in the packet on 2024-12-10. The application requests one participant for 16 weeks at 35 hours/week and $18/hour, plus $1,411.20 in mandatory employment related costs; estimated requested contribution is $11,491.20. The role covers archive digitization, digital content management, editorial calendar support, multimedia production, process documentation, database/archive management, and staff training.`,
+      sourceNotes: "Review sensitive contact details before public use. Keep GCOS authority, confirmation, wage calculation, and post-award hiring records together.",
+      keyFacts: [
+        "Confirmation A001242170",
+        "Submitted 2024-12-10",
+        "1 participant",
+        "16 weeks at 35 hours/week",
+        "$18/hour",
+        "$1,411.20 mandatory employment related costs",
+      ],
+      useOfFunds: [
+        {
+          label: "Participant wages",
+          amountCents: 1_008_000,
+          notes: "1 participant x 16 weeks x 35 hours/week x $18/hour.",
+        },
+        {
+          label: "Mandatory employment related costs",
+          amountCents: 141_120,
+          notes: "MERCS estimate from the imported application packet.",
+        },
+      ],
+      timelineEvents: [
+        {
+          label: "Application submitted",
+          date: "2024-12-10",
+          status: "Submitted",
+          notes: "GCOS confirmation A001242170.",
+        },
+        {
+          label: "Project start",
+          date: "2025-04-21",
+          status: "Scheduled",
+        },
+        {
+          label: "Anticipated job start",
+          date: "2025-05-01",
+          status: "Planned",
+          notes: "Imported application indicates a 16-week student placement.",
+        },
+        {
+          label: "Project end",
+          date: "2025-08-30",
+          status: "Scheduled",
+        },
+      ],
+      complianceFlags: [
+        {
+          label: "Authority-to-act evidence linked",
+          status: "Attached",
+          requirementId: "csj-gcos-authority",
+        },
+        {
+          label: "Confirmation saved",
+          status: "Attached",
+          requirementId: "csj-confirmation",
+        },
+        {
+          label: "Wage math ready",
+          status: "Ready",
+          requirementId: "csj-wage-budget",
+        },
+        {
+          label: "Post-award report not scheduled",
+          status: "Needed",
+          requirementId: "core-reporting-calendar",
+        },
+      ],
+      contacts: [
+        {
+          role: "Primary contact",
+          name: "Ahmad Jalil",
+          organization: "Over the Edge Newspaper Society",
+          notes: "Primary contact from imported CSJ packet.",
+        },
+        {
+          role: "Secondary contact",
+          name: "Behrouz Danesh",
+          organization: "Over the Edge Newspaper Society",
+          notes: "Secondary contact / officer material appears in the imported packet.",
+        },
+        {
+          role: "Authority evidence",
+          organization: "Government of Canada GCOS",
+          notes: "Authority-to-act evidence linked in the evidence packet.",
+        },
+      ],
+      answerLibrary: [
+        {
+          section: "Organization mandate",
+          title: "Independent community media mandate",
+          body: "Over the Edge Newspaper Society supports community journalism, youth participation, public-interest media, archives, and digital access to local cultural and civic records.",
+        },
+        {
+          section: "Project description",
+          title: "Student Media Operations & Systems Coordinator",
+          body: "The placement supports archive digitization, digital content management, editorial calendar coordination, multimedia production, process documentation, database maintenance, and staff training.",
+        },
+        {
+          section: "Youth priorities",
+          title: "Youth employment and skill building",
+          body: "The role gives a youth participant supervised experience in media operations, digital archives, publishing workflows, accessibility, documentation, and collaborative nonprofit operations.",
+        },
+        {
+          section: "Safety / anti-harassment",
+          title: "Safe and inclusive workplace practices",
+          body: "The project should reference supervision, clear role expectations, respectful workplace expectations, anti-harassment practices, and safe access to digital systems and workplace materials.",
+        },
+      ],
       requirements: [
         req({ id: "core-opportunity-fit", category: "Prospect", label: "Eligibility and fit confirmed", status: "Ready" }),
         req({ id: "core-owner", category: "Ownership", label: "Board owner and internal reviewer assigned", status: "Ready" }),

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -20,6 +20,41 @@ type GrantRequirement = {
   dueDate?: string;
   documentId?: string;
   notes?: string;
+};
+
+type GrantUseOfFundsLine = {
+  label: string;
+  amountCents?: number;
+  notes?: string;
+};
+
+type GrantTimelineEvent = {
+  label: string;
+  date: string;
+  status?: string;
+  notes?: string;
+};
+
+type GrantComplianceFlag = {
+  label: string;
+  status: string;
+  notes?: string;
+  requirementId?: string;
+};
+
+type GrantContact = {
+  role: string;
+  name?: string;
+  organization?: string;
+  email?: string;
+  phone?: string;
+  notes?: string;
+};
+
+type GrantAnswerLibraryItem = {
+  section: string;
+  title: string;
+  body: string;
 };
 
 type RequirementTemplateKey = "core" | "bcGaming" | "canadaSummerJobs";
@@ -90,6 +125,86 @@ function optionalNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function cleanStringList(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => String(item ?? "").trim())
+    .filter(Boolean);
+}
+
+function asUseOfFunds(value: unknown): GrantUseOfFundsLine[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item: any) => ({
+    label: String(item?.label ?? ""),
+    amountCents: optionalNumber(item?.amountCents),
+    notes: optionalString(item?.notes),
+  }));
+}
+
+function sanitizeUseOfFunds(value: unknown) {
+  return asUseOfFunds(value).filter((item) => item.label.trim());
+}
+
+function asTimelineEvents(value: unknown): GrantTimelineEvent[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item: any) => ({
+    label: String(item?.label ?? ""),
+    date: String(item?.date ?? ""),
+    status: optionalString(item?.status),
+    notes: optionalString(item?.notes),
+  }));
+}
+
+function sanitizeTimelineEvents(value: unknown) {
+  return asTimelineEvents(value).filter((item) => item.label.trim() && item.date.trim());
+}
+
+function asComplianceFlags(value: unknown): GrantComplianceFlag[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item: any) => ({
+    label: String(item?.label ?? ""),
+    status: String(item?.status ?? "Info"),
+    notes: optionalString(item?.notes),
+    requirementId: optionalString(item?.requirementId),
+  }));
+}
+
+function sanitizeComplianceFlags(value: unknown) {
+  return asComplianceFlags(value).filter((item) => item.label.trim());
+}
+
+function asContacts(value: unknown): GrantContact[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item: any) => ({
+    role: optionalString(item?.role) ?? "Contact",
+    name: optionalString(item?.name),
+    organization: optionalString(item?.organization),
+    email: optionalString(item?.email),
+    phone: optionalString(item?.phone),
+    notes: optionalString(item?.notes),
+  }));
+}
+
+function sanitizeContacts(value: unknown) {
+  return asContacts(value).filter((item) =>
+    [item.role, item.name, item.organization, item.email, item.phone, item.notes]
+      .some((part) => String(part ?? "").trim()),
+  );
+}
+
+function asAnswerLibrary(value: unknown): GrantAnswerLibraryItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item: any) => ({
+    section: String(item?.section ?? "Application answer"),
+    title: String(item?.title ?? ""),
+    body: String(item?.body ?? ""),
+  }));
+}
+
+function sanitizeAnswerLibrary(value: unknown) {
+  return asAnswerLibrary(value).filter((item) => item.title.trim() && item.body.trim());
+}
+
 function asRequirements(value: unknown): GrantRequirement[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -158,6 +273,17 @@ function buildGrantPayload(draft: any, societyId: any, actingUserId: any) {
     allowPublicApplications: !!draft.allowPublicApplications,
     applicationInstructions: optionalString(draft.applicationInstructions),
     requirements: sanitizeRequirements(draft.requirements),
+    confirmationCode: optionalString(draft.confirmationCode),
+    sourcePath: optionalString(draft.sourcePath),
+    sourceImportedAtISO: optionalString(draft.sourceImportedAtISO),
+    sourceFileCount: optionalNumber(draft.sourceFileCount),
+    sourceNotes: optionalString(draft.sourceNotes),
+    keyFacts: cleanStringList(draft.keyFacts),
+    useOfFunds: sanitizeUseOfFunds(draft.useOfFunds),
+    timelineEvents: sanitizeTimelineEvents(draft.timelineEvents),
+    complianceFlags: sanitizeComplianceFlags(draft.complianceFlags),
+    contacts: sanitizeContacts(draft.contacts),
+    answerLibrary: sanitizeAnswerLibrary(draft.answerLibrary),
     title: draft.title,
     funder: draft.funder,
     program: optionalString(draft.program),
@@ -329,6 +455,12 @@ export function GrantsPage() {
                   applicationDueDate: new Date().toISOString().slice(0, 10),
                   allowPublicApplications: false,
                   requirements: [],
+                  keyFacts: [],
+                  useOfFunds: [],
+                  timelineEvents: [],
+                  complianceFlags: [],
+                  contacts: [],
+                  answerLibrary: [],
                 })
               }
             >
@@ -506,6 +638,12 @@ export function GrantsPage() {
                   amountRequestedDollars: centsToDollarInput(row.amountRequestedCents),
                   amountAwardedDollars: centsToDollarInput(row.amountAwardedCents),
                   requirements: asRequirements(row.requirements),
+                  keyFacts: cleanStringList(row.keyFacts),
+                  useOfFunds: asUseOfFunds(row.useOfFunds),
+                  timelineEvents: asTimelineEvents(row.timelineEvents),
+                  complianceFlags: asComplianceFlags(row.complianceFlags),
+                  contacts: asContacts(row.contacts),
+                  answerLibrary: asAnswerLibrary(row.answerLibrary),
                 })
               }
             >
@@ -627,6 +765,11 @@ export function GrantsPage() {
             <InspectorNote title="Public intake">
               Turn on public applications only when the opportunity is actually open. Submitted requests will land in the intake queue above.
             </InspectorNote>
+            <GrantDossierStack
+              grant={grantDraft}
+              documents={documents ?? []}
+              reports={reports ?? []}
+            />
             <Field label="Title"><input className="input" value={grantDraft.title} onChange={(e) => setGrantDraft({ ...grantDraft, title: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Funder"><input className="input" value={grantDraft.funder} onChange={(e) => setGrantDraft({ ...grantDraft, funder: e.target.value })} /></Field>
@@ -825,6 +968,525 @@ export function GrantsPage() {
     </div>
   );
 }
+
+function GrantDossierStack({
+  grant,
+  documents,
+  reports,
+}: {
+  grant: any;
+  documents: any[];
+  reports: any[];
+}) {
+  const hasDossierData =
+    !!(grant.id ?? grant._id) ||
+    !!grant.confirmationCode ||
+    asUseOfFunds(grant.useOfFunds).length > 0 ||
+    asTimelineEvents(grant.timelineEvents).length > 0 ||
+    asComplianceFlags(grant.complianceFlags).length > 0 ||
+    asContacts(grant.contacts).length > 0 ||
+    asAnswerLibrary(grant.answerLibrary).length > 0 ||
+    cleanStringList(grant.keyFacts).length > 0;
+
+  if (!hasDossierData) return null;
+
+  return (
+    <div style={{ display: "grid", gap: 12, margin: "0 0 16px" }}>
+      <GrantDossierSummary grant={grant} />
+      <GrantEvidencePacketMap grant={grant} documents={documents} />
+      <GrantDeadlineTimeline grant={grant} reports={reports} />
+      <GrantUseOfFundsPanel grant={grant} />
+      <GrantComplianceFlagsPanel grant={grant} />
+      <GrantContactsPanel grant={grant} />
+      <GrantAnswerLibraryPanel grant={grant} />
+      <GrantSourceNotesPanel grant={grant} />
+    </div>
+  );
+}
+
+function GrantDossierSummary({ grant }: { grant: any }) {
+  const readiness = requirementSummary(grant.requirements);
+  const keyDates = [
+    grant.applicationDueDate ? `Due ${formatDate(grant.applicationDueDate)}` : undefined,
+    grant.submittedAtISO ? `Submitted ${formatDate(grant.submittedAtISO)}` : undefined,
+    grant.startDate ? `Starts ${formatDate(grant.startDate)}` : undefined,
+    grant.endDate ? `Ends ${formatDate(grant.endDate)}` : undefined,
+    grant.nextReportDueAtISO ? `Report ${formatDate(grant.nextReportDueAtISO)}` : undefined,
+  ].filter(Boolean);
+
+  return (
+    <DossierSection title="Grant Dossier Summary">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+        <DossierFact label="Funder" value={grant.funder ?? grant.funderName} />
+        <DossierFact label="Program" value={grant.program} />
+        <DossierFact label="Requested" value={grant.amountRequestedCents ? money(grant.amountRequestedCents) : undefined} />
+        <DossierFact label="Submitted" value={grant.submittedAtISO ? formatDate(grant.submittedAtISO) : undefined} />
+        <DossierFact label="Confirmation" value={grant.confirmationCode} />
+        <DossierFact label="Status">
+          <Badge tone={grantStatusTone(grant.status)}>{grant.status ?? "Not set"}</Badge>
+        </DossierFact>
+        <DossierFact label="Readiness">
+          {readiness.total > 0 ? (
+            <span>
+              <Badge tone={readiness.percent === 100 ? "success" : readiness.percent >= 50 ? "warn" : "info"}>
+                {readiness.percent}%
+              </Badge>{" "}
+              <span className="muted">{readiness.complete}/{readiness.total}</span>
+            </span>
+          ) : (
+            "—"
+          )}
+        </DossierFact>
+        <DossierFact label="Key dates" value={keyDates.length ? keyDates.join(" · ") : undefined} />
+      </div>
+      {grant.nextAction && (
+        <div style={{ marginTop: 10 }}>
+          <div className="stat__label">Next action</div>
+          <div>{grant.nextAction}</div>
+        </div>
+      )}
+    </DossierSection>
+  );
+}
+
+function GrantEvidencePacketMap({ grant, documents }: { grant: any; documents: any[] }) {
+  const relatedDocuments = grantRelatedDocuments(grant, documents);
+  if (relatedDocuments.length === 0) return null;
+
+  const groups = groupEvidenceDocuments(relatedDocuments);
+
+  return (
+    <DossierSection title="Evidence Packet Map">
+      <div style={{ display: "grid", gap: 8 }}>
+        {groups.map((group, index) => group.documents.length > 0 && (
+          <details key={group.label} open={index < 4} style={detailPanelStyle}>
+            <summary style={detailSummaryStyle}>
+              <span>{group.label}</span>
+              <Badge tone="info">{group.documents.length}</Badge>
+            </summary>
+            <ul style={documentListStyle}>
+              {group.documents.map((document) => (
+                <li key={String(document._id)} style={documentListItemStyle}>
+                  <span>{cleanDocumentTitle(document)}</span>
+                  {document.category && <Badge tone="neutral">{document.category}</Badge>}
+                </li>
+              ))}
+            </ul>
+          </details>
+        ))}
+      </div>
+    </DossierSection>
+  );
+}
+
+function GrantDeadlineTimeline({ grant, reports }: { grant: any; reports: any[] }) {
+  const items = buildGrantTimeline(grant, reports);
+  if (items.length === 0) return null;
+
+  return (
+    <DossierSection title="Deadline + Obligation Timeline">
+      <div style={{ display: "grid", gap: 8 }}>
+        {items.map((item) => (
+          <div key={`${item.date}-${item.label}`} style={timelineItemStyle}>
+            <div className="mono" style={{ minWidth: 96 }}>{formatDate(item.date)}</div>
+            <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <strong>{item.label}</strong>
+                {item.status && <Badge tone={timelineTone(item.status, item.date)}>{item.status}</Badge>}
+              </div>
+              {item.notes && <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>{item.notes}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </DossierSection>
+  );
+}
+
+function GrantUseOfFundsPanel({ grant }: { grant: any }) {
+  const lines = asUseOfFunds(grant.useOfFunds).filter((line) => line.label.trim());
+  if (lines.length === 0) return null;
+
+  const knownTotal = lines.reduce((sum, line) => sum + (line.amountCents ?? 0), 0);
+  const hasAmounts = lines.some((line) => typeof line.amountCents === "number");
+
+  return (
+    <DossierSection title="Use of Funds / Budget Breakdown">
+      <div style={{ display: "grid", gap: 8 }}>
+        {lines.map((line) => (
+          <div key={`${line.label}-${line.amountCents ?? "na"}`} style={fundLineStyle}>
+            <div>
+              <strong>{line.label}</strong>
+              {line.notes && <div className="muted" style={{ fontSize: 12 }}>{line.notes}</div>}
+            </div>
+            <span className="mono">{line.amountCents === undefined ? "—" : money(line.amountCents)}</span>
+          </div>
+        ))}
+        {hasAmounts && (
+          <div style={{ ...fundLineStyle, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+            <strong>Seeded total</strong>
+            <span className="mono">{money(knownTotal)}</span>
+          </div>
+        )}
+      </div>
+    </DossierSection>
+  );
+}
+
+function GrantComplianceFlagsPanel({ grant }: { grant: any }) {
+  const flags = asComplianceFlags(grant.complianceFlags).filter((flag) => flag.label.trim());
+  if (flags.length === 0) return null;
+
+  return (
+    <DossierSection title="Compliance Flags">
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {flags.map((flag) => (
+          <span key={`${flag.label}-${flag.status}`} style={flagChipStyle} title={flag.notes}>
+            <Badge tone={complianceTone(flag.status)}>{flag.status}</Badge>
+            <span>{flag.label}</span>
+          </span>
+        ))}
+      </div>
+    </DossierSection>
+  );
+}
+
+function GrantContactsPanel({ grant }: { grant: any }) {
+  const contacts = asContacts(grant.contacts).filter((contact) =>
+    [contact.role, contact.name, contact.organization, contact.email, contact.phone, contact.notes]
+      .some((part) => String(part ?? "").trim()),
+  );
+  if (contacts.length === 0) return null;
+
+  return (
+    <DossierSection title="Contacts / Signatories">
+      <div style={{ display: "grid", gap: 8 }}>
+        {contacts.map((contact) => (
+          <div key={`${contact.role}-${contact.name ?? contact.organization ?? "contact"}`} style={contactRowStyle}>
+            <div>
+              <div className="stat__label">{contact.role}</div>
+              <strong>{contact.name ?? contact.organization ?? "Unnamed contact"}</strong>
+              {contact.organization && contact.name && (
+                <div className="muted" style={{ fontSize: 12 }}>{contact.organization}</div>
+              )}
+            </div>
+            <div className="muted" style={{ fontSize: 12, textAlign: "right" }}>
+              {[contact.email, contact.phone, contact.notes].filter(Boolean).join(" · ")}
+            </div>
+          </div>
+        ))}
+      </div>
+    </DossierSection>
+  );
+}
+
+function GrantAnswerLibraryPanel({ grant }: { grant: any }) {
+  const answers = asAnswerLibrary(grant.answerLibrary).filter((answer) => answer.title.trim() && answer.body.trim());
+  if (answers.length === 0) return null;
+
+  return (
+    <DossierSection title="Application Answer Library">
+      <div style={{ display: "grid", gap: 8 }}>
+        {answers.map((answer) => (
+          <details key={`${answer.section}-${answer.title}`} style={detailPanelStyle}>
+            <summary style={detailSummaryStyle}>
+              <span>{answer.title}</span>
+              <Badge tone="neutral">{answer.section}</Badge>
+            </summary>
+            <p style={{ margin: "8px 0 0", color: "var(--text-secondary)", lineHeight: 1.45 }}>
+              {answer.body}
+            </p>
+          </details>
+        ))}
+      </div>
+    </DossierSection>
+  );
+}
+
+function GrantSourceNotesPanel({ grant }: { grant: any }) {
+  const keyFacts = cleanStringList(grant.keyFacts);
+  const hasSource = grant.sourcePath || grant.sourceImportedAtISO || grant.sourceFileCount || grant.sourceNotes || keyFacts.length > 0;
+  if (!hasSource) return null;
+
+  return (
+    <DossierSection title="Imported Source Notes">
+      <div style={{ display: "grid", gap: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+          <DossierFact label="Imported from" value={grant.sourcePath} />
+          <DossierFact label="Import date" value={grant.sourceImportedAtISO ? formatDate(grant.sourceImportedAtISO) : undefined} />
+          <DossierFact label="Linked files" value={grant.sourceFileCount ? String(grant.sourceFileCount) : undefined} />
+        </div>
+        {keyFacts.length > 0 && (
+          <ul style={{ ...documentListStyle, marginTop: 0 }}>
+            {keyFacts.map((fact) => <li key={fact}>{fact}</li>)}
+          </ul>
+        )}
+        <div className="muted" style={{ fontSize: 12 }}>
+          {grant.sourceNotes ?? "Review sensitive contact details before public use."}
+        </div>
+      </div>
+    </DossierSection>
+  );
+}
+
+function DossierSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section style={dossierSectionStyle}>
+      <div className="stat__label" style={{ marginBottom: 10 }}>{title}</div>
+      {children}
+    </section>
+  );
+}
+
+function DossierFact({
+  label,
+  value,
+  children,
+}: {
+  label: string;
+  value?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <div style={factBoxStyle}>
+      <div className="stat__label">{label}</div>
+      <div style={{ fontWeight: 600, overflowWrap: "anywhere" }}>{children ?? value ?? "—"}</div>
+    </div>
+  );
+}
+
+function grantStatusTone(status: unknown) {
+  if (status === "Awarded" || status === "Active" || status === "Closed") return "success";
+  if (status === "Declined") return "danger";
+  if (status === "Submitted" || status === "Drafting") return "warn";
+  return "info";
+}
+
+function complianceTone(status: unknown) {
+  const text = String(status ?? "").toLowerCase();
+  if (/(ready|attached|present|saved|linked|waived|complete)/.test(text)) return "success";
+  if (/(missing|not|needed|overdue)/.test(text)) return "danger";
+  if (/(requested|review|scheduled|watch|conditional)/.test(text)) return "warn";
+  return "info";
+}
+
+function timelineTone(status: unknown, date: string) {
+  const text = String(status ?? "").toLowerCase();
+  if (/(submitted|complete|attached|ready|saved|done)/.test(text)) return "success";
+  if (/(overdue|missing|not)/.test(text)) return "danger";
+  const dueTime = new Date(date).getTime();
+  if (Number.isFinite(dueTime) && dueTime < Date.now() && !/(conditional|expected)/.test(text)) return "danger";
+  if (/(due|requested|conditional|expected|watch)/.test(text)) return "warn";
+  return "info";
+}
+
+function grantPacketKey(grant: any) {
+  const title = String(grant.title ?? "").toLowerCase();
+  if (title.includes("canada summer jobs")) return "canada summer jobs";
+  if (title.includes("bc community gaming") || title.includes("gaming grant")) return "bc gaming grant";
+  return "";
+}
+
+function grantRelatedDocuments(grant: any, documents: any[]) {
+  const linkedIds = new Set(
+    asRequirements(grant.requirements)
+      .map((requirement) => requirement.documentId)
+      .filter(Boolean)
+      .map(String),
+  );
+  const packetKey = grantPacketKey(grant);
+  return documents.filter((document) => {
+    if (linkedIds.has(String(document._id))) return true;
+    if (!packetKey) return false;
+    return evidenceDocumentText(document).includes(packetKey);
+  });
+}
+
+const EVIDENCE_GROUPS = [
+  {
+    label: "Application / confirmation",
+    patterns: [/application|confirmation|summary|online version|main application|review purposes/i],
+  },
+  {
+    label: "Bylaws and registry evidence",
+    patterns: [/bylaws|constitution|registry|society|annual report|certified/i],
+  },
+  {
+    label: "AGM / board evidence",
+    patterns: [/annual general meeting|agm|directors|office|officer|authority to act|primary officer/i],
+  },
+  {
+    label: "Financials and budgets",
+    patterns: [/budget|financial|fin312|statement|screenshot|revenue|expenses|balance|2024-2025|simplified_program_financials/i],
+  },
+  {
+    label: "Program narrative",
+    patterns: [/program information|program|narrative|job details/i],
+  },
+  {
+    label: "Government guides / conditions",
+    patterns: [/guide|conditions|cond|checklist|faq|tutorial|canada\.ca|common hosted/i],
+  },
+  {
+    label: "Follow-up documents",
+    patterns: [/follow.?up|direct deposit|email/i],
+  },
+];
+
+function groupEvidenceDocuments(documents: any[]) {
+  const groups = EVIDENCE_GROUPS.map((group) => ({ label: group.label, documents: [] as any[] }));
+  const other = { label: "Other packet files", documents: [] as any[] };
+
+  for (const document of documents) {
+    const text = evidenceDocumentText(document);
+    const index = EVIDENCE_GROUPS.findIndex((group) =>
+      group.patterns.some((pattern) => pattern.test(text)),
+    );
+    if (index >= 0) groups[index].documents.push(document);
+    else other.documents.push(document);
+  }
+
+  return [...groups, other];
+}
+
+function evidenceDocumentText(document: any) {
+  return [
+    document.title,
+    document.fileName,
+    document.category,
+    ...(Array.isArray(document.tags) ? document.tags : []),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function cleanDocumentTitle(document: any) {
+  return String(document.title ?? document.fileName ?? "Document")
+    .replace(/^Grant packet — /, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildGrantTimeline(grant: any, reports: any[]) {
+  const grantId = String(grant.id ?? grant._id ?? "");
+  const items: { date: string; label: string; status?: string; notes?: string }[] = [];
+  const add = (date: unknown, label: string, status?: string, notes?: string) => {
+    const text = optionalString(date);
+    if (!text) return;
+    items.push({ date: text, label, status, notes });
+  };
+
+  add(grant.applicationDueDate, "Application due", "Due");
+  add(grant.submittedAtISO, "Application submitted", "Submitted", grant.confirmationCode ? `Confirmation ${grant.confirmationCode}` : undefined);
+  add(grant.decisionAtISO, "Decision expected / recorded", "Expected");
+  add(grant.startDate, "Project start", "Scheduled");
+  add(grant.endDate, "Project end", "Scheduled");
+  add(grant.nextReportDueAtISO, "Next report due", "Due");
+
+  for (const requirement of asRequirements(grant.requirements)) {
+    add(requirement.dueDate, requirement.label, requirement.status, requirement.notes);
+  }
+  for (const event of asTimelineEvents(grant.timelineEvents)) {
+    add(event.date, event.label, event.status, event.notes);
+  }
+  for (const report of reports.filter((report) => String(report.grantId) === grantId)) {
+    add(report.dueAtISO, report.title, report.status, report.notes);
+    add(report.submittedAtISO, `${report.title} submitted`, "Submitted");
+  }
+
+  const deduped = new Map<string, { date: string; label: string; status?: string; notes?: string }>();
+  for (const item of items) {
+    deduped.set(`${item.date}-${item.label}`, item);
+  }
+  return Array.from(deduped.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+const dossierSectionStyle = {
+  border: "1px solid var(--border)",
+  borderRadius: "var(--r-sm)",
+  background: "var(--bg-panel)",
+  padding: 12,
+};
+
+const factBoxStyle = {
+  border: "1px solid var(--border)",
+  borderRadius: "var(--r-sm)",
+  background: "var(--bg-base)",
+  padding: 10,
+  minWidth: 0,
+};
+
+const detailPanelStyle = {
+  border: "1px solid var(--border)",
+  borderRadius: "var(--r-sm)",
+  background: "var(--bg-base)",
+  padding: "8px 10px",
+};
+
+const detailSummaryStyle = {
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  fontWeight: 600,
+};
+
+const documentListStyle = {
+  margin: "8px 0 0",
+  paddingLeft: 18,
+  display: "grid",
+  gap: 6,
+};
+
+const documentListItemStyle = {
+  color: "var(--text-secondary)",
+  lineHeight: 1.35,
+};
+
+const timelineItemStyle = {
+  display: "flex",
+  gap: 12,
+  alignItems: "flex-start",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--r-sm)",
+  background: "var(--bg-base)",
+  padding: 10,
+};
+
+const fundLineStyle = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: 12,
+};
+
+const flagChipStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  border: "1px solid var(--border)",
+  borderRadius: "var(--r-sm)",
+  padding: "6px 8px",
+  background: "var(--bg-base)",
+};
+
+const contactRowStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  border: "1px solid var(--border)",
+  borderRadius: "var(--r-sm)",
+  background: "var(--bg-base)",
+  padding: 10,
+};
 
 function GrantRequirementsEditor({
   draft,

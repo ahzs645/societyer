@@ -1050,6 +1050,62 @@ export default defineSchema({
         }),
       ),
     ),
+    confirmationCode: v.optional(v.string()),
+    sourcePath: v.optional(v.string()),
+    sourceImportedAtISO: v.optional(v.string()),
+    sourceFileCount: v.optional(v.number()),
+    sourceNotes: v.optional(v.string()),
+    keyFacts: v.optional(v.array(v.string())),
+    useOfFunds: v.optional(
+      v.array(
+        v.object({
+          label: v.string(),
+          amountCents: v.optional(v.number()),
+          notes: v.optional(v.string()),
+        }),
+      ),
+    ),
+    timelineEvents: v.optional(
+      v.array(
+        v.object({
+          label: v.string(),
+          date: v.string(),
+          status: v.optional(v.string()),
+          notes: v.optional(v.string()),
+        }),
+      ),
+    ),
+    complianceFlags: v.optional(
+      v.array(
+        v.object({
+          label: v.string(),
+          status: v.string(),
+          notes: v.optional(v.string()),
+          requirementId: v.optional(v.string()),
+        }),
+      ),
+    ),
+    contacts: v.optional(
+      v.array(
+        v.object({
+          role: v.string(),
+          name: v.optional(v.string()),
+          organization: v.optional(v.string()),
+          email: v.optional(v.string()),
+          phone: v.optional(v.string()),
+          notes: v.optional(v.string()),
+        }),
+      ),
+    ),
+    answerLibrary: v.optional(
+      v.array(
+        v.object({
+          section: v.string(),
+          title: v.string(),
+          body: v.string(),
+        }),
+      ),
+    ),
     title: v.string(),
     funder: v.string(),
     program: v.optional(v.string()),

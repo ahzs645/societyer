@@ -17,6 +17,41 @@ const grantRequirement = v.object({
   notes: v.optional(v.string()),
 });
 
+const grantUseOfFundsLine = v.object({
+  label: v.string(),
+  amountCents: v.optional(v.number()),
+  notes: v.optional(v.string()),
+});
+
+const grantTimelineEvent = v.object({
+  label: v.string(),
+  date: v.string(),
+  status: v.optional(v.string()),
+  notes: v.optional(v.string()),
+});
+
+const grantComplianceFlag = v.object({
+  label: v.string(),
+  status: v.string(),
+  notes: v.optional(v.string()),
+  requirementId: v.optional(v.string()),
+});
+
+const grantContact = v.object({
+  role: v.string(),
+  name: v.optional(v.string()),
+  organization: v.optional(v.string()),
+  email: v.optional(v.string()),
+  phone: v.optional(v.string()),
+  notes: v.optional(v.string()),
+});
+
+const grantAnswerLibraryItem = v.object({
+  section: v.string(),
+  title: v.string(),
+  body: v.string(),
+});
+
 export const list = query({
   args: { societyId: v.id("societies") },
   handler: async (ctx, { societyId }) =>
@@ -237,6 +272,17 @@ export const upsertGrant = mutation({
     allowPublicApplications: v.optional(v.boolean()),
     applicationInstructions: v.optional(v.string()),
     requirements: v.optional(v.array(grantRequirement)),
+    confirmationCode: v.optional(v.string()),
+    sourcePath: v.optional(v.string()),
+    sourceImportedAtISO: v.optional(v.string()),
+    sourceFileCount: v.optional(v.number()),
+    sourceNotes: v.optional(v.string()),
+    keyFacts: v.optional(v.array(v.string())),
+    useOfFunds: v.optional(v.array(grantUseOfFundsLine)),
+    timelineEvents: v.optional(v.array(grantTimelineEvent)),
+    complianceFlags: v.optional(v.array(grantComplianceFlag)),
+    contacts: v.optional(v.array(grantContact)),
+    answerLibrary: v.optional(v.array(grantAnswerLibraryItem)),
     title: v.string(),
     funder: v.string(),
     program: v.optional(v.string()),
