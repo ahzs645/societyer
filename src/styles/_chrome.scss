@@ -123,13 +123,16 @@
   height: 18px;
 }
 
-/* View bar (above tables) */
+/* View bar (above tables) — wraps on narrow widths so controls stay
+ * accessible instead of clipping at the right edge. */
 .view-bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  row-gap: var(--s-1);
   gap: 4px;
   padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-color-light);
   background: var(--bg-panel);
 }
 .view-pill {
@@ -576,11 +579,12 @@
   .two-col { grid-template-columns: 1fr; }
 }
 
-/* Data table */
+/* Data table — flush with the page. Twenty's RecordTable sits directly on
+ * the canvas, separated only by the toolbar's hairline. */
 .table-wrap {
   background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  border: 0;
+  border-radius: 0;
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;

@@ -707,7 +707,6 @@ export function Layout() {
             </button>
             {!spotlightCollapsed && (
               <>
-                <div className="sidebar__spotlight-title">{society?.name ?? t("sidebar.defaultWorkspace")}</div>
                 <div className="sidebar__spotlight-meta">
                   <span>{t("sidebar.openTasks")}</span>
                   <Pill size="sm">{counts?.counts.openTasks ?? 0}</Pill>

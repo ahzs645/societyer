@@ -282,9 +282,29 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
         filterBtnRef={filterBtnRef}
         sortBtnRef={sortBtnRef}
         optionsBtnRef={optionsBtnRef}
-        onFilter={filterFields?.length ? () => setFilterOpen((v) => !v) : undefined}
-        onSort={sortableColumns.length ? () => setSortOpen((v) => !v) : undefined}
-        onOptions={() => setOptionsOpen((v) => !v)}
+        onFilter={
+          filterFields?.length
+            ? () => {
+                setFilterOpen((v) => !v);
+                setSortOpen(false);
+                setOptionsOpen(false);
+              }
+            : undefined
+        }
+        onSort={
+          sortableColumns.length
+            ? () => {
+                setSortOpen((v) => !v);
+                setFilterOpen(false);
+                setOptionsOpen(false);
+              }
+            : undefined
+        }
+        onOptions={() => {
+          setOptionsOpen((v) => !v);
+          setFilterOpen(false);
+          setSortOpen(false);
+        }}
       />
       {optionsOpen && (
         <OptionsPopover

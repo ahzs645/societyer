@@ -145,9 +145,9 @@
 .app-shell.is-collapsed .sidebar__toggle svg { transform: rotate(180deg); }
 
 .sidebar__brand {
-  padding: 8px 10px;
+  padding: var(--s-2) var(--s-2);
   display: flex;
-  gap: 6px;
+  gap: var(--s-1);
   align-items: center;
   height: var(--topbar-h);
   flex-shrink: 0;
@@ -155,8 +155,8 @@
 .sidebar__workspace {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 6px;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-1);
   border-radius: var(--r-sm);
   flex: 1;
   min-width: 0;
@@ -182,12 +182,13 @@
 }
 .sidebar__brand-name {
   font-weight: 500;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   letter-spacing: -0.1px;
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sidebar__brand-workspace {
   font-size: var(--fs-xs);
@@ -197,22 +198,24 @@
 }
 .sidebar__brand-actions {
   display: flex;
-  gap: 2px;
+  gap: 0;
   flex-shrink: 0;
 }
 .sidebar__identity {
   padding: 6px 12px 0;
 }
+/* Spotlight — Twenty keeps the sidebar flat. No bordered card; just a quiet
+ * section with a toggle label and inline metadata rows. */
 .sidebar__spotlight {
-  margin: 12px 12px 8px;
-  padding: 10px 12px;
-  border-radius: var(--r-md);
-  border: 1px solid var(--border-color-light);
-  background: var(--bg-panel);
+  margin: var(--s-2) 0 var(--s-1);
+  padding: 0 var(--s-3);
+  border-radius: 0;
+  border: 0;
+  background: transparent;
   transition: padding var(--anim-fast) var(--anim-ease);
 }
 .sidebar__spotlight.is-collapsed {
-  padding: 4px 10px;
+  padding: 0 var(--s-3);
 }
 .sidebar__spotlight-toggle {
   display: flex;
@@ -248,10 +251,10 @@
   color: inherit;
 }
 .sidebar__spotlight-title {
-  font-size: var(--fs-md);
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 10px;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: var(--s-2);
   line-height: 1.3;
 }
 .sidebar__spotlight-meta {
@@ -270,8 +273,8 @@
   display: none;
 }
 .sidebar__icon-btn {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: var(--r-sm);
   display: grid;
   place-items: center;
@@ -500,14 +503,15 @@
   margin-left: var(--s-1);
 }
 
-/* Main */
+/* Main — Twenty uses a continuous surface; no padding around a floating card. */
 .main {
   display: flex;
   flex-direction: column;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  padding: 14px 16px 16px 0;
+  padding: 0;
+  background: var(--bg-panel);
 }
 .workbench {
   flex: 1;
@@ -520,10 +524,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
   background: var(--bg-panel);
-  box-shadow: var(--shadow-xs);
 }
 .workbench__body {
   flex: 1;
@@ -559,18 +560,23 @@
 .page--narrow.page--flush {
   padding: 0;
 }
+/* Page header — Twenty keeps this lightweight: no bordered card, just a row
+ * flush with the page. Separation from the content below comes from a hairline
+ * rather than a full card outline. */
 .page__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 14px;
-  margin-bottom: 18px;
-  padding: 12px 14px;
+  margin-bottom: var(--s-3);
+  padding: 0;
   min-height: 32px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--bg-panel);
+  border: 0;
+  border-bottom: 1px solid var(--border-color-light);
+  border-radius: 0;
+  background: transparent;
+  padding-bottom: var(--s-3);
 }
 .page__header-main {
   display: flex;
@@ -710,12 +716,22 @@
     width: min(320px, calc(100vw - 56px));
     height: 100dvh;
     z-index: var(--z-sidebar);
+    /* Opaque drawer background — on desktop the sidebar is transparent
+     * against the app canvas, but when it becomes a floating overlay on
+     * mobile it must be solid so the content behind it doesn't bleed through. */
+    background: var(--bg-app);
     box-shadow: var(--shadow-lg);
     transform: translateX(-100%);
     transition:
       transform var(--anim-normal) var(--anim-ease),
+      visibility 0s linear var(--anim-normal),
       box-shadow var(--anim-normal) var(--anim-ease);
     border-right-width: 1px;
+    /* Defense in depth: some engines don't clip fixed elements at the viewport
+     * edge when an ancestor has overflow:visible. `visibility: hidden` removes
+     * the sidebar from the render tree entirely while the translate still
+     * animates smoothly. */
+    visibility: hidden;
   }
 
   .app-shell.is-mobile.is-mobile-nav-open .sidebar-backdrop {
@@ -730,7 +746,12 @@
 
   .app-shell.is-mobile.is-mobile-nav-open .sidebar {
     transform: translateX(0);
+    visibility: visible;
     pointer-events: auto;
+    transition:
+      transform var(--anim-normal) var(--anim-ease),
+      visibility 0s,
+      box-shadow var(--anim-normal) var(--anim-ease);
   }
 
   .app-shell.is-mobile .sidebar__brand,
@@ -741,11 +762,11 @@
 
   .app-shell.is-mobile .main {
     width: 100%;
-    padding: 10px;
+    padding: 0;
   }
 
   .app-shell.is-mobile .workbench__panel {
-    border-radius: var(--r-md);
+    border-radius: 0;
   }
 
   .app-shell.is-mobile .inspector-host {

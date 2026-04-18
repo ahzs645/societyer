@@ -162,7 +162,7 @@
   --shadow-lg: var(--shadow-super-heavy);
 
   /* ---------------- Layout ---------------- */
-  --sidebar-w: 240px;
+  --sidebar-w: 256px;
   --sidebar-w-collapsed: 0px;
   --topbar-h: 40px;            /* Twenty: compact 40px */
   --side-panel-w: 500px;
