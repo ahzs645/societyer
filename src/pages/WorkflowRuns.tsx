@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -24,12 +25,15 @@ export function WorkflowRunsPage() {
     society ? { societyId: society._id } : "skip",
   );
   const catalog = useQuery(api.workflows.listCatalog, {});
+  const [searchParams] = useSearchParams();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
 
   const workflowsById = new Map<string, any>((workflows ?? []).map((w: any) => [w._id, w]));
+  const workflowFilter = searchParams.get("workflowId");
+  const visibleRuns = (runs ?? []).filter((run: any) => !workflowFilter || run.workflowId === workflowFilter);
 
   return (
     <div className="page">
@@ -45,7 +49,7 @@ export function WorkflowRunsPage() {
           <h3 className="card__title">Recent runs</h3>
         </div>
         <div className="card__body" style={{ padding: 0 }}>
-          {(runs ?? []).length === 0 ? (
+          {visibleRuns.length === 0 ? (
             <div className="empty-state">
               No runs yet. Trigger a workflow from the Workflows page.
             </div>
@@ -63,7 +67,7 @@ export function WorkflowRunsPage() {
                 </tr>
               </thead>
               <tbody>
-                {(runs ?? []).map((r: any) => {
+                {visibleRuns.map((r: any) => {
                   const wf = workflowsById.get(r.workflowId);
                   const recipe = catalog?.find((c) => c.key === r.recipe);
                   const expanded = expandedId === r._id;
@@ -75,7 +79,15 @@ export function WorkflowRunsPage() {
                         onClick={() => setExpandedId(expanded ? null : r._id)}
                       >
                         <td style={{ width: 20 }}>{expanded ? "▾" : "▸"}</td>
-                        <td>{wf?.name ?? "—"}</td>
+                        <td>
+                          {wf ? (
+                            <Link className="link" to={`/app/workflows/${wf._id}`}>
+                              {wf.name}
+                            </Link>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
                         <td>{recipe?.label ?? r.recipe}</td>
                         <td>
                           <Badge

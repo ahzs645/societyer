@@ -1159,6 +1159,49 @@ export const run = mutation({
       status: "Circulating",
     });
 
+    await ctx.db.insert("workflows", {
+      societyId,
+      recipe: "unbc_affiliate_id_request",
+      name: "UNBC Affiliate ID Request",
+      status: "paused",
+      provider: "n8n",
+      providerConfig: {
+        externalWebhookUrl: "http://127.0.0.1:5678/webhook/societyer/unbc-affiliate-id",
+        externalEditUrl: "http://127.0.0.1:5678/workflow",
+      },
+      nodePreview: [
+        { key: "manual", type: "manual_trigger", label: "Launch manually", description: "A Societyer user starts the affiliate request.", status: "ready" },
+        { key: "intake", type: "form", label: "Affiliate intake form", description: "Collects the fields that map to the UNBC AcroForm widgets.", status: "ready" },
+        { key: "fill_pdf", type: "pdf_fill", label: "Fill UNBC ID PDF", description: "n8n calls Societyer's PDF fill endpoint using the configured local template path.", status: "needs_setup" },
+        { key: "save_document", type: "document_create", label: "Save generated PDF", description: "Stores the generated affiliate request as a Societyer document.", status: "ready" },
+        { key: "notify", type: "email", label: "Notify manager", description: "Marks the workflow complete and leaves room for a real email/signature step later.", status: "draft" },
+      ],
+      trigger: { kind: "manual" },
+      config: {
+        pdfTemplateKey: "unbc_affiliate_id",
+        sampleAffiliate: {
+          "Legal First Name of Affiliate": "Sample",
+          "Legal Middle Name of Affiliate": "A",
+          "Legal Last Name of Affiliate": "Affiliate",
+          "Current Mailing Address": "3333 University Way, Prince George, BC V2N 4Z9",
+          "Emergency Contact(Name and Ph)": "Sample Contact 250 555 0100",
+          "UNBC ID #": "000000000",
+          "Birthdate of Affiliate (MM/DD/YYYY)": "01/01/1990",
+          "Personal email address": "sample.affiliate@example.com",
+          "Name of requesting Manager": "Sample Manager",
+          "UNBC Department/Organization": "Sample Department",
+          "Length of Affiliate status(lf known)": "1 year",
+          ManagerPhone: "250-555-0101",
+          "Manager Email": "manager@example.com",
+          "Authorizing Name (if different from Manager)": "",
+          "Date signed": "2026-04-18",
+          "Check Box0": true,
+          "Check Box1": false,
+        },
+      },
+      createdByUserId: undefined,
+    });
+
     return { societyId };
   },
 });

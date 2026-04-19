@@ -602,9 +602,28 @@ export default defineSchema({
 
   workflows: defineTable({
     societyId: v.id("societies"),
-    recipe: v.string(), // agm_prep | insurance_renewal | annual_report_filing
+    recipe: v.string(), // agm_prep | insurance_renewal | annual_report_filing | unbc_affiliate_id_request
     name: v.string(),
     status: v.string(), // active | paused | archived
+    provider: v.optional(v.string()), // internal | n8n
+    providerConfig: v.optional(
+      v.object({
+        externalWorkflowId: v.optional(v.string()),
+        externalWebhookUrl: v.optional(v.string()),
+        externalEditUrl: v.optional(v.string()),
+      }),
+    ),
+    nodePreview: v.optional(
+      v.array(
+        v.object({
+          key: v.string(),
+          type: v.string(),
+          label: v.string(),
+          description: v.optional(v.string()),
+          status: v.optional(v.string()),
+        }),
+      ),
+    ),
     trigger: v.object({
       kind: v.string(), // cron | manual | date_offset
       cron: v.optional(v.string()),
@@ -633,12 +652,18 @@ export default defineSchema({
     completedAtISO: v.optional(v.string()),
     steps: v.array(
       v.object({
+        key: v.optional(v.string()),
         label: v.string(),
         status: v.string(), // pending | running | ok | fail | skip
         atISO: v.optional(v.string()),
         note: v.optional(v.string()),
       }),
     ),
+    provider: v.optional(v.string()), // internal | n8n
+    externalRunId: v.optional(v.string()),
+    externalStatus: v.optional(v.string()),
+    generatedDocumentId: v.optional(v.id("documents")),
+    generatedDocumentVersionId: v.optional(v.id("documentVersions")),
     output: v.optional(v.any()),
     demo: v.boolean(),
     triggeredBy: v.string(), // cron | manual | event

@@ -13,6 +13,7 @@ const VISIBLE_DOCUMENT_CATEGORIES = [
   "Grant",
   "Receipt",
   "CourtOrder",
+  "WorkflowGenerated",
 ];
 
 export const list = query({

@@ -1,7 +1,11 @@
+import "./env";
 import crypto from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import express, { NextFunction, Request, Response, Router } from "express";
 import swaggerUi from "swagger-ui-express";
 import { ConvexHttpClient } from "convex/browser";
+import { PDFDocument } from "pdf-lib";
 import { z } from "zod";
 import {
   extendZodWithOpenApi,
@@ -492,9 +496,10 @@ export function mountApiGateway(app: express.Express) {
   app.get("/api/openapi.json", (_req, res) => res.json(openApiDocument));
   app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
 
-  router.use(express.json({ limit: "2mb" }));
+  router.use(express.json({ limit: "10mb" }));
 
   mountPlatformRoutes(router, client);
+  mountWorkflowBridgeRoutes(router, client);
   for (const route of RESOURCE_ROUTES) mountResourceRoute(router, client, route);
   for (const route of ACTION_ROUTES) mountActionRoute(router, client, route);
 
@@ -661,6 +666,110 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
         subscriptionId: req.query.subscriptionId,
       });
       res.json(listResponse(rows));
+    }),
+  );
+}
+
+function mountWorkflowBridgeRoutes(router: Router, client: ConvexHttpClient) {
+  router.post(
+    "/workflow-pdf/unbc-affiliate-id/fill",
+    asyncHandler(async (req, res) => {
+      requireWorkflowSecret(req);
+      const templatePath = process.env.UNBC_AFFILIATE_TEMPLATE_PATH;
+      if (!templatePath) {
+        throw httpError(
+          500,
+          "unbc_template_missing",
+          "UNBC_AFFILIATE_TEMPLATE_PATH is required to fill the UNBC Affiliate ID PDF.",
+        );
+      }
+
+      const affiliate = normalizeAffiliatePayload(req.body?.affiliate ?? req.body?.input?.affiliate);
+      const bytes = await fillUnbcAffiliatePdf(templatePath, affiliate);
+      const fileName = workflowPdfFileName(affiliate);
+      res.json(
+        singleResponse({
+          filename: fileName,
+          mimeType: "application/pdf",
+          base64: Buffer.from(bytes).toString("base64"),
+        }),
+      );
+    }),
+  );
+
+  router.post(
+    "/workflow-callbacks/n8n",
+    asyncHandler(async (req, res) => {
+      requireWorkflowSecret(req);
+      const body = req.body ?? {};
+      if (!body.workflowId || !body.runId || !body.event) {
+        throw httpError(400, "invalid_workflow_callback", "workflowId, runId, and event are required.");
+      }
+
+      let generatedDocument:
+        | {
+            documentId: string;
+            versionId: string;
+            fileName: string;
+            storageKey: string;
+          }
+        | undefined;
+
+      if (body.generatedPdf?.base64) {
+        const run = await convexCall(client, query("workflows.getRun"), {
+          id: body.runId,
+        });
+        if (!run) throw httpError(404, "workflow_run_not_found", "Workflow run not found.");
+        const pdf = decodeBase64Pdf(body.generatedPdf.base64);
+        const filename = sanitizeFileName(
+          body.generatedPdf.filename || `UNBC Affiliate ID Request - ${body.runId}.pdf`,
+        );
+        const storageKey = `${crypto.randomUUID()}-${filename}`;
+        const dir = generatedWorkflowDocumentDir();
+        await mkdir(dir, { recursive: true });
+        await writeFile(path.join(dir, storageKey), pdf);
+
+        const recorded = await convexCall(client, mutation("workflows.recordGeneratedDocument"), {
+          societyId: run.societyId,
+          workflowId: body.workflowId,
+          runId: body.runId,
+          storageKey,
+          fileName: filename,
+          mimeType: body.generatedPdf.mimeType ?? "application/pdf",
+          fileSizeBytes: pdf.byteLength,
+        });
+        generatedDocument = {
+          documentId: recorded.documentId,
+          versionId: recorded.versionId,
+          fileName: filename,
+          storageKey,
+        };
+      }
+
+      await convexCall(client, mutation("workflows.receiveExternalCallback"), {
+        workflowId: body.workflowId,
+        runId: body.runId,
+        externalRunId: body.externalRunId,
+        event: body.event,
+        stepKey: body.stepKey,
+        note: body.note,
+        output: body.output,
+        generatedDocument,
+      });
+
+      res.json(singleResponse({ ok: true, generatedDocument }));
+    }),
+  );
+
+  router.get(
+    "/workflow-generated-documents/:key",
+    asyncHandler(async (req, res) => {
+      const key = sanitizeStorageKey(req.params.key);
+      const file = await readFile(path.join(generatedWorkflowDocumentDir(), key)).catch(() => null);
+      if (!file) throw httpError(404, "generated_document_not_found", "Generated workflow document not found.");
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="${downloadFileNameFromStorageKey(key)}"`);
+      res.send(file);
     }),
   );
 }
@@ -1134,6 +1243,113 @@ function actionRoute(
     event,
     operationId: operationId(path.split("/").filter(Boolean).join("-"), "action"),
   };
+}
+
+async function fillUnbcAffiliatePdf(templatePath: string, affiliate: Record<string, unknown>) {
+  const pdfDoc = await PDFDocument.load(await readFile(templatePath));
+  const form = pdfDoc.getForm();
+  for (const [fieldName, rawValue] of Object.entries(affiliate)) {
+    if (fieldName === "Authorizing Signature") continue;
+    const value = rawValue == null ? "" : String(rawValue);
+    try {
+      if (typeof rawValue === "boolean") {
+        const checkbox = form.getCheckBox(fieldName);
+        if (rawValue) checkbox.check();
+        else checkbox.uncheck();
+        continue;
+      }
+      form.getTextField(fieldName).setText(value);
+    } catch {
+      // The template has a few non-text widgets. Unknown fields are ignored so
+      // the n8n payload can be broader than this specific PDF revision.
+    }
+  }
+  form.updateFieldAppearances();
+  return await pdfDoc.save();
+}
+
+function normalizeAffiliatePayload(value: unknown) {
+  const input = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return {
+    "Legal First Name of Affiliate": input["Legal First Name of Affiliate"] ?? input.firstName ?? "",
+    "Legal Middle Name of Affiliate": input["Legal Middle Name of Affiliate"] ?? input.middleName ?? "",
+    "Legal Last Name of Affiliate": input["Legal Last Name of Affiliate"] ?? input.lastName ?? "",
+    "Current Mailing Address": input["Current Mailing Address"] ?? input.mailingAddress ?? "",
+    "Emergency Contact(Name and Ph)": input["Emergency Contact(Name and Ph)"] ?? input.emergencyContact ?? "",
+    "UNBC ID #": input["UNBC ID #"] ?? input.unbcId ?? "",
+    "Birthdate of Affiliate (MM/DD/YYYY)": input["Birthdate of Affiliate (MM/DD/YYYY)"] ?? input.birthdate ?? "",
+    "Personal email address": input["Personal email address"] ?? input.email ?? "",
+    "Name of requesting Manager": input["Name of requesting Manager"] ?? input.managerName ?? "",
+    "UNBC Department/Organization": input["UNBC Department/Organization"] ?? input.department ?? "",
+    "Length of Affiliate status(lf known)": input["Length of Affiliate status(lf known)"] ?? input.affiliateStatusLength ?? "",
+    ManagerPhone: input.ManagerPhone ?? input.managerPhone ?? "",
+    "Manager Email": input["Manager Email"] ?? input.managerEmail ?? "",
+    "Authorizing Name (if different from Manager)": input["Authorizing Name (if different from Manager)"] ?? input.authorizingName ?? "",
+    "Date signed": input["Date signed"] ?? input.dateSigned ?? new Date().toISOString().slice(0, 10),
+    "Check Box0": Boolean(input["Check Box0"] ?? input.previousUnbcIdYes),
+    "Check Box1": Boolean(input["Check Box1"] ?? input.previousUnbcIdNo),
+  };
+}
+
+function workflowPdfFileName(affiliate: Record<string, unknown>) {
+  const first = String(affiliate["Legal First Name of Affiliate"] ?? "Affiliate").trim() || "Affiliate";
+  const last = String(affiliate["Legal Last Name of Affiliate"] ?? "Request").trim() || "Request";
+  return sanitizeFileName(`UNBC Affiliate ID Request - ${last}, ${first}.pdf`);
+}
+
+function requireWorkflowSecret(req: Request) {
+  const expected = process.env.SOCIETYER_WORKFLOW_CALLBACK_SECRET;
+  if (!expected) {
+    throw httpError(500, "workflow_secret_missing", "SOCIETYER_WORKFLOW_CALLBACK_SECRET is not configured.");
+  }
+  const provided =
+    req.get("x-societyer-workflow-secret") ??
+    req.get("x-societyer-callback-secret") ??
+    bearerToken(req) ??
+    (typeof req.body?.callbackSecret === "string" ? req.body.callbackSecret : undefined);
+  if (!provided || !timingSafeEqual(provided, expected)) {
+    throw httpError(401, "invalid_workflow_secret", "Workflow callback secret is invalid.");
+  }
+}
+
+function bearerToken(req: Request) {
+  const header = req.get("authorization");
+  if (header?.toLowerCase().startsWith("bearer ")) return header.slice(7).trim();
+  return undefined;
+}
+
+function timingSafeEqual(a: string, b: string) {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+function decodeBase64Pdf(value: string) {
+  const pdf = Buffer.from(value, "base64");
+  if (pdf.byteLength === 0 || pdf.subarray(0, 4).toString("utf8") !== "%PDF") {
+    throw httpError(400, "invalid_pdf_payload", "generatedPdf.base64 must be a PDF file.");
+  }
+  return pdf;
+}
+
+function generatedWorkflowDocumentDir() {
+  return path.resolve(process.cwd(), "data", "workflow-generated-documents");
+}
+
+function sanitizeFileName(value: string) {
+  const cleaned = value.replace(/[/\\?%*:|"<>]/g, "-").replace(/\s+/g, " ").trim();
+  return cleaned.endsWith(".pdf") ? cleaned : `${cleaned || "workflow-generated-document"}.pdf`;
+}
+
+function sanitizeStorageKey(value: string) {
+  if (!/^[a-zA-Z0-9._, -]+$/.test(value)) {
+    throw httpError(400, "invalid_document_key", "Generated document key is invalid.");
+  }
+  return value;
+}
+
+function downloadFileNameFromStorageKey(value: string) {
+  return sanitizeFileName(value.replace(/^[0-9a-f-]+-/i, ""));
 }
 
 async function convexCall(client: ConvexHttpClient, call: ConvexCall, args: Record<string, unknown>) {

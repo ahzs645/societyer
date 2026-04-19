@@ -150,6 +150,13 @@ export const getDownloadUrl = action({
   handler: async (ctx, { versionId }): Promise<string | null> => {
     const version = await ctx.runQuery(api.documentVersions.get, { id: versionId });
     if (!version) return null;
+    if (version.storageProvider === "local") {
+      const base =
+        process.env.SOCIETYER_API_PUBLIC_URL ??
+        process.env.BETTER_AUTH_BASE_URL?.replace(/\/$/, "").replace(/:5173$/, ":8787") ??
+        "http://127.0.0.1:8787";
+      return `${base.replace(/\/$/, "")}/api/v1/workflow-generated-documents/${encodeURIComponent(version.storageKey)}`;
+    }
     return await createDownloadUrl({
       provider: version.storageProvider as "demo" | "rustfs",
       key: version.storageKey,

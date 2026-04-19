@@ -8,6 +8,7 @@ dist
 *.tsbuildinfo
 data/*.sqlite
 data/*.sqlite-*
+data/workflow-generated-documents/
 *.pyc
 __pycache__/
 scripts/__pycache__/

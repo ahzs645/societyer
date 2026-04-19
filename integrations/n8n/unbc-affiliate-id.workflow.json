@@ -1,0 +1,173 @@
+{
+  "id": "societyer-unbc-affiliate-id",
+  "name": "Societyer - UNBC Affiliate ID Request",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "societyer/unbc-affiliate-id",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Societyer Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-760, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$json.body.callbackUrl}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-societyer-workflow-secret",
+              "value": "={{$json.body.callbackSecret}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({ workflowId: $json.body.workflowId, runId: $json.body.runId, event: 'step.started', stepKey: 'fill_pdf', note: 'n8n started the PDF fill step.' })}}",
+        "options": {}
+      },
+      "id": "callback-pdf-started",
+      "name": "Callback PDF Started",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-520, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Societyer Webhook').item.json.body.pdfFillUrl}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-societyer-workflow-secret",
+              "value": "={{$('Societyer Webhook').item.json.body.callbackSecret}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({ affiliate: $('Societyer Webhook').item.json.body.input.affiliate })}}",
+        "options": {}
+      },
+      "id": "fill-unbc-pdf",
+      "name": "Fill UNBC PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-280, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Societyer Webhook').item.json.body.callbackUrl}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-societyer-workflow-secret",
+              "value": "={{$('Societyer Webhook').item.json.body.callbackSecret}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({ workflowId: $('Societyer Webhook').item.json.body.workflowId, runId: $('Societyer Webhook').item.json.body.runId, event: 'document.created', stepKey: 'save_document', note: 'Generated PDF returned from Societyer PDF service.', generatedPdf: $json.data })}}",
+        "options": {}
+      },
+      "id": "callback-generated-document",
+      "name": "Callback Generated Document",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-40, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Societyer Webhook').item.json.body.callbackUrl}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-societyer-workflow-secret",
+              "value": "={{$('Societyer Webhook').item.json.body.callbackSecret}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({ workflowId: $('Societyer Webhook').item.json.body.workflowId, runId: $('Societyer Webhook').item.json.body.runId, event: 'run.completed', stepKey: 'notify', note: 'n8n completed the UNBC Affiliate ID workflow.', output: { engine: 'n8n', pdfTemplateKey: $('Societyer Webhook').item.json.body.input.pdfTemplateKey } })}}",
+        "options": {}
+      },
+      "id": "callback-run-complete",
+      "name": "Callback Run Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [200, 0]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Societyer Webhook": {
+      "main": [
+        [
+          {
+            "node": "Callback PDF Started",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Callback PDF Started": {
+      "main": [
+        [
+          {
+            "node": "Fill UNBC PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fill UNBC PDF": {
+      "main": [
+        [
+          {
+            "node": "Callback Generated Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Callback Generated Document": {
+      "main": [
+        [
+          {
+            "node": "Callback Run Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "societyer-unbc-affiliate-id-v1",
+  "meta": {
+    "societyerBridge": "n8n",
+    "societyerRecipe": "unbc_affiliate_id_request"
+  },
+  "tags": []
+}

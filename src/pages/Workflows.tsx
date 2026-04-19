@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -6,7 +7,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Drawer, Field, Badge } from "../components/ui";
-import { Plus, Workflow as WorkflowIcon, Play, Pause, Trash2 } from "lucide-react";
+import { ExternalLink, Plus, Workflow as WorkflowIcon, Play, Pause, Trash2 } from "lucide-react";
 import { formatDateTime } from "../lib/format";
 
 type TriggerKind = "cron" | "manual" | "date_offset";
@@ -30,21 +31,25 @@ export function WorkflowsPage() {
     cron: string;
     daysBefore: string;
     anchor: string;
+    provider?: string;
   } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
 
-  const openNew = () => {
-    const first = catalog?.[0]?.key ?? "agm_prep";
+  const openNew = (recipeKey?: string) => {
+    const first = recipeKey ?? catalog?.[0]?.key ?? "agm_prep";
+    const selected = catalog?.find((c: any) => c.key === first);
+    const isUnbc = first === "unbc_affiliate_id_request";
     setForm({
       recipe: first,
-      name: catalog?.[0]?.label ?? "New workflow",
-      triggerKind: "cron",
-      cron: "0 8 * * 1",
+      name: selected?.label ?? "New workflow",
+      triggerKind: isUnbc ? "manual" : "cron",
+      cron: isUnbc ? "" : "0 8 * * 1",
       daysBefore: "30",
       anchor: "insurancePolicies.renewalDate",
+      provider: selected?.provider ?? "internal",
     });
     setOpen(true);
   };
@@ -64,6 +69,8 @@ export function WorkflowsPage() {
       recipe: form.recipe,
       name: form.name || "Untitled workflow",
       trigger,
+      provider: form.provider,
+      status: "active",
       actingUserId,
     });
     setOpen(false);
@@ -76,11 +83,16 @@ export function WorkflowsPage() {
         title="Workflows"
         icon={<WorkflowIcon size={16} />}
         iconColor="orange"
-        subtitle="Templated automations built from existing Societyer primitives — no DAG to author."
+        subtitle="Native workflow control with Societyer context and n8n execution for external automations."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
-            <Plus size={12} /> New workflow
-          </button>
+          <>
+            <button className="btn-action" onClick={() => openNew("unbc_affiliate_id_request")}>
+              <WorkflowIcon size={12} /> UNBC example
+            </button>
+            <button className="btn-action btn-action--primary" onClick={() => openNew()}>
+              <Plus size={12} /> New workflow
+            </button>
+          </>
         }
       />
 
@@ -100,6 +112,7 @@ export function WorkflowsPage() {
                   <th>Name</th>
                   <th>Recipe</th>
                   <th>Trigger</th>
+                  <th>Provider</th>
                   <th>Status</th>
                   <th>Last run</th>
                   <th>Next run</th>
@@ -111,7 +124,11 @@ export function WorkflowsPage() {
                   const recipe = catalog?.find((c) => c.key === r.recipe);
                   return (
                     <tr key={r._id}>
-                      <td>{r.name}</td>
+                      <td>
+                        <Link className="link" to={`/app/workflows/${r._id}`}>
+                          {r.name}
+                        </Link>
+                      </td>
                       <td>{recipe?.label ?? r.recipe}</td>
                       <td className="mono" style={{ fontSize: "var(--fs-sm)" }}>
                         {r.trigger.kind === "cron"
@@ -119,6 +136,11 @@ export function WorkflowsPage() {
                           : r.trigger.kind === "date_offset"
                           ? `${r.trigger.offset?.daysBefore}d before ${r.trigger.offset?.anchor}`
                           : "manual"}
+                      </td>
+                      <td>
+                        <Badge tone={r.provider === "n8n" ? "info" : "neutral"}>
+                          {r.provider ?? "internal"}
+                        </Badge>
                       </td>
                       <td>
                         <Badge tone={r.status === "active" ? "success" : r.status === "paused" ? "warn" : "neutral"}>
@@ -132,19 +154,22 @@ export function WorkflowsPage() {
                         {r.nextRunAtISO ? formatDateTime(r.nextRunAtISO) : "—"}
                       </td>
                       <td style={{ whiteSpace: "nowrap" }}>
+                        <Link className="btn btn--ghost btn--sm" to={`/app/workflows/${r._id}`}>
+                          <ExternalLink size={12} /> Canvas
+                        </Link>
                         <button
                           className="btn btn--ghost btn--sm"
                           disabled={busyId === r._id}
                           onClick={async () => {
                             setBusyId(r._id);
                             try {
-                              await run({
+                              const result = await run({
                                 societyId: society._id,
                                 workflowId: r._id,
                                 triggeredBy: "manual",
                                 actingUserId,
                               });
-                              toast.success("Workflow run complete");
+                              toast.success(result?.status === "running" ? "Workflow queued in n8n" : "Workflow run complete");
                             } catch (err: any) {
                               toast.error(err?.message ?? "Run failed");
                             } finally {
@@ -202,8 +227,16 @@ export function WorkflowsPage() {
               <select
                 value={form.recipe}
                 onChange={(e) => {
-                  const next = catalog?.find((c) => c.key === e.target.value);
-                  setForm({ ...form, recipe: e.target.value, name: next?.label ?? form.name });
+                  const next = catalog?.find((c: any) => c.key === e.target.value);
+                  const isUnbc = e.target.value === "unbc_affiliate_id_request";
+                  setForm({
+                    ...form,
+                    recipe: e.target.value,
+                    name: next?.label ?? form.name,
+                    provider: next?.provider ?? "internal",
+                    triggerKind: isUnbc ? "manual" : form.triggerKind,
+                    cron: isUnbc ? "" : form.cron,
+                  });
                 }}
               >
                 {(catalog ?? []).map((c) => (
@@ -221,6 +254,9 @@ export function WorkflowsPage() {
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
+            </Field>
+            <Field label="Provider">
+              <input value={form.provider ?? "internal"} readOnly />
             </Field>
             <Field label="Trigger">
               <select

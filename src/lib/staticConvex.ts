@@ -859,6 +859,64 @@ const bylawRules = {
   writtenResolutionsAllowed: true,
 };
 
+const workflowCatalog = [
+  {
+    key: "unbc_affiliate_id_request",
+    label: "UNBC Affiliate ID Request",
+    description: "Collects affiliate intake, hands execution to n8n, fills the UNBC PDF, and saves the generated document.",
+    provider: "n8n",
+    steps: ["Launch manually", "Affiliate intake form", "Fill UNBC ID PDF", "Save generated PDF", "Notify/request manager review"],
+    nodePreview: [
+      { key: "manual", type: "manual_trigger", label: "Launch manually", status: "ready" },
+      { key: "intake", type: "form", label: "Affiliate intake form", status: "ready" },
+      { key: "fill_pdf", type: "pdf_fill", label: "Fill UNBC ID PDF", status: "needs_setup" },
+      { key: "save_document", type: "document_create", label: "Save generated PDF", status: "ready" },
+      { key: "notify", type: "email", label: "Notify manager", status: "draft" },
+    ],
+    config: {
+      sampleAffiliate: {
+        "Legal First Name of Affiliate": "Sample",
+        "Legal Middle Name of Affiliate": "A",
+        "Legal Last Name of Affiliate": "Affiliate",
+        "Current Mailing Address": "3333 University Way, Prince George, BC V2N 4Z9",
+        "Emergency Contact(Name and Ph)": "Sample Contact 250 555 0100",
+        "UNBC ID #": "000000000",
+        "Birthdate of Affiliate (MM/DD/YYYY)": "01/01/1990",
+        "Personal email address": "sample.affiliate@example.com",
+        "Name of requesting Manager": "Sample Manager",
+        "UNBC Department/Organization": "Sample Department",
+        "Length of Affiliate status(lf known)": "1 year",
+        ManagerPhone: "250-555-0101",
+        "Manager Email": "manager@example.com",
+        "Authorizing Name (if different from Manager)": "",
+        "Date signed": "2026-04-18",
+        "Check Box0": true,
+        "Check Box1": false,
+      },
+    },
+  },
+];
+
+const workflows = [
+  {
+    _id: "static_workflow_unbc",
+    societyId: SOCIETY_ID,
+    recipe: "unbc_affiliate_id_request",
+    name: "UNBC Affiliate ID Request",
+    status: "paused",
+    provider: "n8n",
+    providerConfig: {
+      externalWebhookUrl: "http://127.0.0.1:5678/webhook/societyer/unbc-affiliate-id",
+      externalEditUrl: "http://127.0.0.1:5678/workflow",
+    },
+    nodePreview: workflowCatalog[0].nodePreview,
+    trigger: { kind: "manual" },
+    config: workflowCatalog[0].config,
+  },
+];
+
+const workflowRuns: any[] = [];
+
 const tables: Record<string, any[]> = {
   activity: [
     {
@@ -880,6 +938,8 @@ const tables: Record<string, any[]> = {
       createdAtISO: "2026-04-13T19:45:00.000Z",
     },
   ],
+  workflows,
+  workflowRuns,
   attestations: [],
   auditors: [
     {
@@ -1875,6 +1935,18 @@ function queryResult(name: string, args: StaticArgs) {
       return tables.volunteerScreenings;
     case "volunteers:summary":
       return { active: tables.volunteers.length, pendingApplications: tables.volunteerApplications.length };
+    case "workflows:listCatalog":
+      return workflowCatalog;
+    case "workflows:list":
+      return scopedRows(workflows, args);
+    case "workflows:get":
+      return byId(workflows, args?.id);
+    case "workflows:listRuns":
+      return workflowRuns.slice(0, args?.limit ?? workflowRuns.length);
+    case "workflows:runsForWorkflow":
+      return workflowRuns.filter((run) => run.workflowId === args?.workflowId);
+    case "workflows:getRun":
+      return byId(workflowRuns, args?.id);
   }
 
   const [moduleName, exportName] = name.split(":");

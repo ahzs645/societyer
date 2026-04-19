@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./env";
 import express from "express";
 import { getMigrations } from "better-auth/db/migration";
 import { toNodeHandler } from "better-auth/node";

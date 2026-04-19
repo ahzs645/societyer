@@ -79,6 +79,7 @@ const GrantsPage = React.lazy(() => import("./pages/Grants").then((m) => ({ defa
 const TransparencyPage = React.lazy(() => import("./pages/Transparency").then((m) => ({ default: m.TransparencyPage })));
 const PaperlessPage = React.lazy(() => import("./pages/Paperless").then((m) => ({ default: m.PaperlessPage })));
 const WorkflowsPage = React.lazy(() => import("./pages/Workflows").then((m) => ({ default: m.WorkflowsPage })));
+const WorkflowDetailPage = React.lazy(() => import("./pages/WorkflowDetail").then((m) => ({ default: m.WorkflowDetailPage })));
 const WorkflowRunsPage = React.lazy(() => import("./pages/WorkflowRuns").then((m) => ({ default: m.WorkflowRunsPage })));
 const PublicTransparencyPage = React.lazy(() => import("./pages/PublicTransparency").then((m) => ({ default: m.PublicTransparencyPage })));
 const VolunteerApplyPage = React.lazy(() => import("./pages/VolunteerApply").then((m) => ({ default: m.VolunteerApplyPage })));
@@ -328,6 +329,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route
               path="workflows"
               element={withModule("workflows", <WorkflowsPage />)}
+            />
+            <Route
+              path="workflows/:id"
+              element={withModule("workflows", <WorkflowDetailPage />)}
             />
             <Route
               path="workflow-runs"
