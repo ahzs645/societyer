@@ -21,7 +21,7 @@ import { BulkEditPanel } from "../components/BulkEditPanel";
 import { MergeRecordsModal } from "../components/MergeRecordsModal";
 
 const MEMBER_FIELDS: FilterField<any>[] = [
-  { id: "name", label: "Name", icon: <CircleUser size={14} />, match: (m, q) => `${m.firstName} ${m.lastName}`.toLowerCase().includes(q.toLowerCase()) },
+  { id: "name", label: "Name", icon: <CircleUser size={14} />, match: (m, q) => `${m.firstName} ${m.lastName} ${(m.aliases ?? []).join(" ")}`.toLowerCase().includes(q.toLowerCase()) },
   { id: "email", label: "Email", icon: <Mail size={14} />, match: (m, q) => (m.email ?? "").toLowerCase().includes(q.toLowerCase()) },
   { id: "class", label: "Class", icon: <Tag size={14} />, options: ["Regular", "Honorary", "Student", "Associate"], match: (m, q) => m.membershipClass === q },
   { id: "status", label: "Status", icon: <Tag size={14} />, options: ["Active", "Inactive", "Suspended"], match: (m, q) => m.status === q },
@@ -112,6 +112,7 @@ export function MembersPage() {
   const openNew = () => {
     setSelected({
       firstName: "", lastName: "", email: "",
+      aliases: [],
       membershipClass: "Regular", status: "Active", votingRights: true,
       joinedAt: new Date().toISOString().slice(0, 10),
     });
@@ -122,9 +123,10 @@ export function MembersPage() {
     if (!selected) return;
     if (selected._id) {
       const { _id, _creationTime, societyId, ...patch } = selected;
+      patch.aliases = cleanAliases(patch.aliases);
       await update({ id: _id, patch });
     } else {
-      await create({ societyId: society._id, ...selected });
+      await create({ societyId: society._id, ...selected, aliases: cleanAliases(selected.aliases) });
     }
     setDrawerOpen(false);
   };
@@ -317,6 +319,14 @@ export function MembersPage() {
               <Field label="Last name"><input className="input" value={selected.lastName} onChange={(e) => setSelected({ ...selected, lastName: e.target.value })} /></Field>
             </div>
             <Field label="Email"><input className="input" value={selected.email ?? ""} onChange={(e) => setSelected({ ...selected, email: e.target.value })} /></Field>
+            <Field label="Aliases">
+              <input
+                className="input"
+                value={(selected.aliases ?? []).join(", ")}
+                onChange={(e) => setSelected({ ...selected, aliases: e.target.value.split(",") })}
+                placeholder="Alternate names, separated by commas"
+              />
+            </Field>
             <Field label="Phone"><input className="input" value={selected.phone ?? ""} onChange={(e) => setSelected({ ...selected, phone: e.target.value })} /></Field>
             <Field label="Address"><textarea className="textarea" value={selected.address ?? ""} onChange={(e) => setSelected({ ...selected, address: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
@@ -358,4 +368,9 @@ export function MembersPage() {
       </Drawer>
     </div>
   );
+}
+
+function cleanAliases(value: unknown) {
+  const items = Array.isArray(value) ? value : String(value ?? "").split(",");
+  return Array.from(new Set(items.map((item) => String(item).trim()).filter(Boolean)));
 }

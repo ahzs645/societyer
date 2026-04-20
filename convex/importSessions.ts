@@ -1460,6 +1460,7 @@ function personLookupKeys(row: any) {
     `${row?.firstName ?? ""} ${row?.lastName ?? ""}`,
     `${row?.lastName ?? ""}, ${row?.firstName ?? ""}`,
     row?.name,
+    ...arrayOf(row?.aliases),
   ]).map(normalizePersonLookupName).filter(Boolean);
 }
 

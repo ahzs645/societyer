@@ -855,6 +855,7 @@ function AttendanceDetails({
 type PersonLinkCandidate = {
   id: string;
   name: string;
+  aliases: string[];
   kind: "member" | "director";
 };
 
@@ -863,18 +864,23 @@ function personLinkCandidates(members: any[] | undefined, directors: any[] | und
     ...(members ?? []).map((member: any) => ({
       id: String(member._id),
       name: `${member.firstName} ${member.lastName}`.trim(),
+      aliases: Array.isArray(member.aliases) ? member.aliases : [],
       kind: "member" as const,
     })),
     ...(directors ?? []).map((director: any) => ({
       id: String(director._id),
       name: `${director.firstName} ${director.lastName}`.trim(),
+      aliases: Array.isArray(director.aliases) ? director.aliases : [],
       kind: "director" as const,
     })),
   ];
 }
 
 function LinkedPersonName({ name, people }: { name: string; people: PersonLinkCandidate[] }) {
-  const match = people.find((person) => normalizePersonName(person.name) === normalizePersonName(name));
+  const key = normalizePersonName(name);
+  const match = people.find((person) =>
+    [person.name, ...person.aliases].some((candidate) => normalizePersonName(candidate) === key),
+  );
   if (!match) return <span>{name}</span>;
   return (
     <span className="row" style={{ gap: 4, flexWrap: "wrap" }}>

@@ -8,7 +8,7 @@ import { Archive, Banknote, ClipboardCheck, FileSearch, GitBranch } from "lucide
 import { formatDate, money } from "../lib/format";
 
 export function GovernanceRegistersPage() {
-  const { society, data } = useRegisters();
+  const { society, data, people } = useRegisters();
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
 
@@ -36,28 +36,28 @@ export function GovernanceRegistersPage() {
         rows={roles}
         empty="Approve board role assignment imports to build the timeline."
         columns={["Person", "Role", "Group", "Start", "Status"]}
-        render={(row) => [<PersonCell key="p" row={row} name={row.personName} />, row.roleTitle, row.roleGroup ?? "-", formatDate(row.startDate), <Status key="s" value={row.status} />]}
+        render={(row) => [<PersonCell key="p" row={row} name={row.personName} people={people} />, row.roleTitle, row.roleGroup ?? "-", formatDate(row.startDate), <Status key="s" value={row.status} />]}
       />
       <RegisterTable
         title="Board role changes"
         rows={changes}
         empty="Approve role-change imports to track appointments, removals, vacancies, and renamed positions."
         columns={["Effective", "Change", "Role", "Person", "Status"]}
-        render={(row) => [formatDate(row.effectiveDate), row.changeType, row.roleTitle, <PersonCell key="p" row={row} name={row.personName} />, <Status key="s" value={row.status} />]}
+        render={(row) => [formatDate(row.effectiveDate), row.changeType, row.roleTitle, <PersonCell key="p" row={row} name={row.personName} people={people} />, <Status key="s" value={row.status} />]}
       />
       <RegisterTable
         title="Signing authorities"
         rows={signing}
         empty="Approve signing-authority imports after source review."
         columns={["Effective", "Person", "Institution", "Authority", "Status"]}
-        render={(row) => [formatDate(row.effectiveDate), row.personName, row.institutionName ?? "-", row.authorityType, <Status key="s" value={row.status} />]}
+        render={(row) => [formatDate(row.effectiveDate), <PersonCell key="p" row={row} name={row.personName} people={people} />, row.institutionName ?? "-", row.authorityType, <Status key="s" value={row.status} />]}
       />
     </div>
   );
 }
 
 export function MeetingEvidencePage() {
-  const { society, data } = useRegisters();
+  const { society, data, people } = useRegisters();
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
 
@@ -84,7 +84,7 @@ export function MeetingEvidencePage() {
         rows={attendance}
         empty="Approve attendance imports to populate this register."
         columns={["Meeting", "Date", "Person", "Attendance", "Confidence"]}
-        render={(row) => [<MeetingCell key="m" row={row} />, formatDate(row.meetingDate), <PersonCell key="p" row={row} name={row.personName} />, row.attendanceStatus, <Confidence key="c" value={row.confidence} />]}
+        render={(row) => [<MeetingCell key="m" row={row} />, formatDate(row.meetingDate), <PersonCell key="p" row={row} name={row.personName} people={people} />, row.attendanceStatus, <Confidence key="c" value={row.confidence} />]}
       />
       <RegisterTable
         title="Motion evidence"
@@ -206,7 +206,9 @@ export function RecordsArchivePage() {
 function useRegisters() {
   const society = useSociety();
   const data = useQuery(api.evidenceRegisters.overview, society ? { societyId: society._id } : "skip");
-  return { society, data };
+  const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
+  const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
+  return { society, data, people: personLinkCandidates(members, directors) };
 }
 
 function RegisterTable({
@@ -262,10 +264,11 @@ function Status({ value }: { value?: string }) {
   return <Badge tone={tone}>{value ?? "NeedsReview"}</Badge>;
 }
 
-function PersonCell({ row, name }: { row: any; name?: string }) {
+function PersonCell({ row, name, people }: { row: any; name?: string; people?: PersonLinkCandidate[] }) {
   const label = name || "-";
-  const linked = Boolean(row.directorId || row.memberId);
-  const to = row.directorId ? "/app/directors" : row.memberId ? "/app/members" : null;
+  const fallback = findPersonLink(name, people ?? []);
+  const linked = Boolean(row.directorId || row.memberId || fallback);
+  const to = row.directorId || fallback?.kind === "director" ? "/app/directors" : row.memberId || fallback?.kind === "member" ? "/app/members" : null;
   const content = (
     <span className="row" style={{ gap: 4, flexWrap: "wrap" }}>
       <span>{label}</span>
@@ -273,6 +276,48 @@ function PersonCell({ row, name }: { row: any; name?: string }) {
     </span>
   );
   return to ? <Link to={to}>{content}</Link> : content;
+}
+
+type PersonLinkCandidate = {
+  id: string;
+  name: string;
+  aliases: string[];
+  kind: "member" | "director";
+};
+
+function personLinkCandidates(members: any[] | undefined, directors: any[] | undefined): PersonLinkCandidate[] {
+  return [
+    ...(members ?? []).map((member: any) => ({
+      id: String(member._id),
+      name: `${member.firstName} ${member.lastName}`.trim(),
+      aliases: Array.isArray(member.aliases) ? member.aliases : [],
+      kind: "member" as const,
+    })),
+    ...(directors ?? []).map((director: any) => ({
+      id: String(director._id),
+      name: `${director.firstName} ${director.lastName}`.trim(),
+      aliases: Array.isArray(director.aliases) ? director.aliases : [],
+      kind: "director" as const,
+    })),
+  ];
+}
+
+function findPersonLink(name: string | undefined, people: PersonLinkCandidate[]) {
+  const key = normalizePersonName(name ?? "");
+  if (!key) return null;
+  return people.find((person) =>
+    [person.name, ...person.aliases].some((candidate) => normalizePersonName(candidate) === key),
+  ) ?? null;
+}
+
+function normalizePersonName(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 function MeetingCell({ row }: { row: any }) {

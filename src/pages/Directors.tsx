@@ -17,7 +17,7 @@ import { Plus, Trash2, UserCog, Tag, MapPin, CheckCircle2, CircleUser } from "lu
 import { formatDate, initials } from "../lib/format";
 
 const DIRECTOR_FIELDS: FilterField<any>[] = [
-  { id: "name", label: "Name", icon: <CircleUser size={14} />, match: (d, q) => `${d.firstName} ${d.lastName}`.toLowerCase().includes(q.toLowerCase()) },
+  { id: "name", label: "Name", icon: <CircleUser size={14} />, match: (d, q) => `${d.firstName} ${d.lastName} ${(d.aliases ?? []).join(" ")}`.toLowerCase().includes(q.toLowerCase()) },
   { id: "position", label: "Position", icon: <Tag size={14} />, options: ["President", "Vice President", "Treasurer", "Secretary", "Director"], match: (d, q) => d.position === q },
   { id: "status", label: "Status", icon: <Tag size={14} />, options: ["Active", "Resigned", "Removed"], match: (d, q) => d.status === q },
   { id: "bc", label: "BC resident", icon: <MapPin size={14} />, options: ["Yes", "No"], match: (d, q) => (d.isBCResident ? "Yes" : "No") === q },
@@ -57,7 +57,7 @@ export function DirectorsPage() {
       firstName: "", lastName: "", email: "",
       position: "Director", isBCResident: true,
       termStart: new Date().toISOString().slice(0, 10),
-      consentOnFile: false, status: "Active",
+      consentOnFile: false, status: "Active", aliases: [],
     });
     setOpen(true);
   };
@@ -66,9 +66,10 @@ export function DirectorsPage() {
     if (!selected) return;
     if (selected._id) {
       const { _id, _creationTime, societyId, ...patch } = selected;
+      patch.aliases = cleanAliases(patch.aliases);
       await update({ id: _id, patch });
     } else {
-      await create({ societyId: society._id, ...selected });
+      await create({ societyId: society._id, ...selected, aliases: cleanAliases(selected.aliases) });
     }
     setOpen(false);
   };
@@ -265,6 +266,14 @@ export function DirectorsPage() {
               <Field label="Last name"><input className="input" value={selected.lastName} onChange={(e) => setSelected({ ...selected, lastName: e.target.value })} /></Field>
             </div>
             <Field label="Email"><input className="input" value={selected.email ?? ""} onChange={(e) => setSelected({ ...selected, email: e.target.value })} /></Field>
+            <Field label="Aliases">
+              <input
+                className="input"
+                value={(selected.aliases ?? []).join(", ")}
+                onChange={(e) => setSelected({ ...selected, aliases: e.target.value.split(",") })}
+                placeholder="Bruce Danesh, Behrouz (Bruce) Danesh"
+              />
+            </Field>
             <Field label="Linked member">
               <select
                 className="input"
@@ -327,4 +336,9 @@ export function DirectorsPage() {
       </Drawer>
     </div>
   );
+}
+
+function cleanAliases(value: unknown) {
+  const items = Array.isArray(value) ? value : String(value ?? "").split(",");
+  return Array.from(new Set(items.map((item) => String(item).trim()).filter(Boolean)));
 }
