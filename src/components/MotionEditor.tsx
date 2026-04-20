@@ -5,12 +5,23 @@ import { Badge, Field } from "./ui";
 export type Motion = {
   text: string;
   movedBy?: string;
+  movedByMemberId?: string;
+  movedByDirectorId?: string;
   secondedBy?: string;
+  secondedByMemberId?: string;
+  secondedByDirectorId?: string;
   outcome: "Carried" | "Defeated" | "Tabled" | string;
   votesFor?: number;
   votesAgainst?: number;
   abstentions?: number;
   resolutionType?: "Ordinary" | "Special" | "Unanimous" | string;
+};
+
+export type MotionPerson = {
+  id: string;
+  kind: "member" | "director";
+  name: string;
+  aliases?: string[];
 };
 
 /** Required threshold percentage for a resolution type per the Societies Act. */
@@ -128,16 +139,22 @@ export function MotionEditor({
   motions,
   onChange,
   directorNames,
+  people = [],
 }: {
   motions: Motion[];
   onChange: (next: Motion[]) => void;
   /** Director full names used to autofill movedBy/secondedBy. */
   directorNames: string[];
+  people?: MotionPerson[];
 }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<Motion>({ text: "", outcome: "Pending" });
 
   const listId = useMemo(() => `dir-list-${Math.random().toString(36).slice(2, 8)}`, []);
+  const nameOptions = useMemo(
+    () => Array.from(new Set([...directorNames, ...people.flatMap((person) => [person.name, ...(person.aliases ?? [])])])).filter(Boolean).sort(),
+    [directorNames, people],
+  );
 
   const saveDraft = () => {
     if (!draft.text.trim()) return;
@@ -159,7 +176,7 @@ export function MotionEditor({
   return (
     <div>
       <datalist id={listId}>
-        {directorNames.map((n) => <option key={n} value={n} />)}
+        {nameOptions.map((n) => <option key={n} value={n} />)}
       </datalist>
 
       {motions.length === 0 && !adding && <div className="muted">No motions recorded yet.</div>}
@@ -170,6 +187,7 @@ export function MotionEditor({
           motion={m}
           listId={listId}
           directorNames={directorNames}
+          people={people}
           onPatch={(diff) => patch(i, diff)}
           onBumpVote={(k, d) => bumpVote(i, k, d)}
           onDelete={() => onChange(motions.filter((_, j) => j !== i))}
@@ -192,7 +210,13 @@ export function MotionEditor({
               <NameInput
                 listId={listId}
                 value={draft.movedBy}
-                onChange={(v) => setDraft({ ...draft, movedBy: v })}
+                onChange={(v) =>
+                  setDraft((current) => ({
+                    ...current,
+                    movedBy: v,
+                    ...motionPersonPatch("movedBy", resolveMotionPerson(v, people)),
+                  }))
+                }
                 placeholder="Start typing…"
               />
             </Field>
@@ -200,7 +224,13 @@ export function MotionEditor({
               <NameInput
                 listId={listId}
                 value={draft.secondedBy}
-                onChange={(v) => setDraft({ ...draft, secondedBy: v })}
+                onChange={(v) =>
+                  setDraft((current) => ({
+                    ...current,
+                    secondedBy: v,
+                    ...motionPersonPatch("secondedBy", resolveMotionPerson(v, people)),
+                  }))
+                }
                 placeholder="Optional"
               />
             </Field>
@@ -258,6 +288,7 @@ function MotionRow({
   motion,
   listId,
   directorNames,
+  people,
   onPatch,
   onBumpVote,
   onDelete,
@@ -265,6 +296,7 @@ function MotionRow({
   motion: Motion;
   listId: string;
   directorNames: string[];
+  people: MotionPerson[];
   onPatch: (diff: Partial<Motion>) => void;
   onBumpVote: (k: "votesFor" | "votesAgainst" | "abstentions", d: number) => void;
   onDelete: () => void;
@@ -277,6 +309,14 @@ function MotionRow({
     motion.outcome === "Pending" ? "accent" : "warn";
   const isPending = motion.outcome === "Pending";
   const thresholdMet = motionMeetsThreshold(motion);
+  const movedByLink = resolveMotionPerson(motion.movedBy, people, {
+    memberId: motion.movedByMemberId,
+    directorId: motion.movedByDirectorId,
+  });
+  const secondedByLink = resolveMotionPerson(motion.secondedBy, people, {
+    memberId: motion.secondedByMemberId,
+    directorId: motion.secondedByDirectorId,
+  });
   const kindLabel =
     motion.resolutionType === "Special"
       ? "Special · ≥ 2⁄3"
@@ -293,8 +333,8 @@ function MotionRow({
         <div style={{ flex: 1 }}>
           <div className="motion__text">{motion.text}</div>
           <div className="motion__meta">
-            {motion.movedBy && <span>Moved by <strong>{motion.movedBy}</strong></span>}
-            {motion.secondedBy && <span>Seconded by <strong>{motion.secondedBy}</strong></span>}
+            {motion.movedBy && <MotionPersonMeta label="Moved by" value={motion.movedBy} person={movedByLink} />}
+            {motion.secondedBy && <MotionPersonMeta label="Seconded by" value={motion.secondedBy} person={secondedByLink} />}
             <Badge tone={tone as any}>{motion.outcome}</Badge>
             <Badge tone="neutral">{kindLabel}</Badge>
             {thresholdMet != null && (
@@ -357,14 +397,14 @@ function MotionRow({
               <NameInput
                 listId={listId}
                 value={motion.movedBy}
-                onChange={(v) => onPatch({ movedBy: v })}
+                onChange={(v) => onPatch({ movedBy: v, ...motionPersonPatch("movedBy", resolveMotionPerson(v, people)) })}
               />
             </Field>
             <Field label="Seconded by">
               <NameInput
                 listId={listId}
                 value={motion.secondedBy}
-                onChange={(v) => onPatch({ secondedBy: v })}
+                onChange={(v) => onPatch({ secondedBy: v, ...motionPersonPatch("secondedBy", resolveMotionPerson(v, people)) })}
               />
             </Field>
           </div>
@@ -380,6 +420,64 @@ function MotionRow({
       )}
     </div>
   );
+}
+
+function MotionPersonMeta({
+  label,
+  value,
+  person,
+}: {
+  label: string;
+  value: string;
+  person: MotionPerson | null;
+}) {
+  return (
+    <span>
+      {label} <strong>{value}</strong>
+      {person && <Badge tone="success">Linked: {person.name}</Badge>}
+    </span>
+  );
+}
+
+function motionPersonPatch(prefix: "movedBy" | "secondedBy", person: MotionPerson | null): Partial<Motion> {
+  return {
+    [`${prefix}MemberId`]: person?.kind === "member" ? person.id : undefined,
+    [`${prefix}DirectorId`]: person?.kind === "director" ? person.id : undefined,
+  } as Partial<Motion>;
+}
+
+function resolveMotionPerson(
+  value: string | undefined,
+  people: MotionPerson[],
+  ids: { memberId?: string; directorId?: string } = {},
+) {
+  if (ids.memberId || ids.directorId) {
+    const id = ids.memberId ?? ids.directorId;
+    const kind = ids.memberId ? "member" : "director";
+    return people.find((person) => person.id === id && person.kind === kind) ?? null;
+  }
+  const key = normalizePersonName(value ?? "");
+  if (!key) return null;
+  const matches = people.filter((person) =>
+    personLookupKeys(person).some((candidate) => candidate === key),
+  );
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function personLookupKeys(person: MotionPerson) {
+  const values = [person.name, ...(person.aliases ?? [])];
+  const firstNames = values.map((value) => normalizePersonName(value).split(" ")[0]).filter(Boolean);
+  return Array.from(new Set([...values.map(normalizePersonName), ...firstNames].filter(Boolean)));
+}
+
+function normalizePersonName(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 function VoteStepper({

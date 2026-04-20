@@ -8,7 +8,11 @@ import { Doc } from "./_generated/dataModel";
 const motion = v.object({
   text: v.string(),
   movedBy: v.optional(v.string()),
+  movedByMemberId: v.optional(v.id("members")),
+  movedByDirectorId: v.optional(v.id("directors")),
   secondedBy: v.optional(v.string()),
+  secondedByMemberId: v.optional(v.id("members")),
+  secondedByDirectorId: v.optional(v.id("directors")),
   outcome: v.string(),
   votesFor: v.optional(v.number()),
   votesAgainst: v.optional(v.number()),
@@ -66,6 +70,7 @@ export const create = mutation({
     draftTranscript: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await assertMotionPersonLinksBelongToSociety(ctx, args.societyId, args.motions);
     const meeting = await ctx.db.get(args.meetingId);
     const snapshot = meeting
       ? await quorumSnapshotForMeeting(ctx, meeting, args.quorumRequired)
@@ -105,6 +110,11 @@ export const update = mutation({
     }),
   },
   handler: async (ctx, { id, patch }) => {
+    const minutes = await ctx.db.get(id);
+    if (!minutes) throw new Error("Minutes not found");
+    if (patch.motions) {
+      await assertMotionPersonLinksBelongToSociety(ctx, minutes.societyId, patch.motions);
+    }
     await ctx.db.patch(id, patch);
   },
 });
@@ -133,6 +143,7 @@ export const upsertFromDraft = mutation({
     draftTranscript: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await assertMotionPersonLinksBelongToSociety(ctx, args.societyId, args.motions);
     const meeting = await ctx.db.get(args.meetingId);
     const snapshot = meeting
       ? await quorumSnapshotForMeeting(ctx, meeting, args.quorumRequired)
@@ -157,6 +168,76 @@ export const upsertFromDraft = mutation({
     const id = await ctx.db.insert("minutes", payload);
     await ctx.db.patch(args.meetingId, { minutesId: id });
     return id;
+  },
+});
+
+export const backfillMotionPersonLinks = mutation({
+  args: { societyId: v.id("societies") },
+  handler: async (ctx, { societyId }) => {
+    const [rows, members, directors] = await Promise.all([
+      ctx.db
+        .query("minutes")
+        .withIndex("by_society", (q) => q.eq("societyId", societyId))
+        .collect(),
+      ctx.db
+        .query("members")
+        .withIndex("by_society", (q) => q.eq("societyId", societyId))
+        .collect(),
+      ctx.db
+        .query("directors")
+        .withIndex("by_society", (q) => q.eq("societyId", societyId))
+        .collect(),
+    ]);
+
+    let minutesUpdated = 0;
+    let motionRowsUpdated = 0;
+    const linkedNames: Record<string, string> = {};
+    const unresolvedNames: Record<string, number> = {};
+
+    for (const row of rows) {
+      let changed = false;
+      const motions = row.motions.map((motion: any) => {
+        const movedBy = resolveMotionPersonLink(motion.movedBy, members, directors);
+        const secondedBy = resolveMotionPersonLink(motion.secondedBy, members, directors);
+        const next = { ...motion };
+
+        if (movedBy.label || !motion.movedBy) {
+          next.movedByMemberId = movedBy.memberId;
+          next.movedByDirectorId = movedBy.directorId;
+        }
+        if (secondedBy.label || !motion.secondedBy) {
+          next.secondedByMemberId = secondedBy.memberId;
+          next.secondedByDirectorId = secondedBy.directorId;
+        }
+
+        if (motion.movedBy) {
+          if (movedBy.label) linkedNames[motion.movedBy] = movedBy.label;
+          else unresolvedNames[motion.movedBy] = (unresolvedNames[motion.movedBy] ?? 0) + 1;
+        }
+        if (motion.secondedBy) {
+          if (secondedBy.label) linkedNames[motion.secondedBy] = secondedBy.label;
+          else unresolvedNames[motion.secondedBy] = (unresolvedNames[motion.secondedBy] ?? 0) + 1;
+        }
+
+        if (
+          next.movedByMemberId !== motion.movedByMemberId ||
+          next.movedByDirectorId !== motion.movedByDirectorId ||
+          next.secondedByMemberId !== motion.secondedByMemberId ||
+          next.secondedByDirectorId !== motion.secondedByDirectorId
+        ) {
+          changed = true;
+          motionRowsUpdated += 1;
+        }
+        return next;
+      });
+
+      if (changed) {
+        await ctx.db.patch(row._id, { motions });
+        minutesUpdated += 1;
+      }
+    }
+
+    return { minutesScanned: rows.length, minutesUpdated, motionRowsUpdated, linkedNames, unresolvedNames };
   },
 });
 
@@ -263,4 +344,75 @@ function minutesSnapshotFields(
     quorumSourceLabel: args.quorumSourceLabel ?? snapshot?.quorumSourceLabel,
     quorumComputedAtISO: args.quorumComputedAtISO ?? snapshot?.quorumComputedAtISO,
   };
+}
+
+async function assertMotionPersonLinksBelongToSociety(ctx: any, societyId: string, motions: any[]) {
+  for (const motion of motions) {
+    await assertPersonLinkBelongsToSociety(ctx, societyId, "members", motion.movedByMemberId, "movedByMemberId");
+    await assertPersonLinkBelongsToSociety(ctx, societyId, "directors", motion.movedByDirectorId, "movedByDirectorId");
+    await assertPersonLinkBelongsToSociety(ctx, societyId, "members", motion.secondedByMemberId, "secondedByMemberId");
+    await assertPersonLinkBelongsToSociety(ctx, societyId, "directors", motion.secondedByDirectorId, "secondedByDirectorId");
+  }
+}
+
+async function assertPersonLinkBelongsToSociety(
+  ctx: any,
+  societyId: string,
+  table: "members" | "directors",
+  id: string | undefined,
+  fieldName: string,
+) {
+  if (!id) return;
+  const row = await ctx.db.get(id);
+  if (!row || row.societyId !== societyId) {
+    throw new Error(`Motion ${fieldName} must reference a ${table.slice(0, -1)} in the same society.`);
+  }
+}
+
+function resolveMotionPersonLink(value: unknown, members: any[], directors: any[]) {
+  const key = normalizePersonLookupName(value);
+  if (!key) return {};
+  const memberMatches = members.filter((member) => personLookupKeys(member).includes(key));
+  const directorMatches = directors.filter((director) => personLookupKeys(director).includes(key));
+  const matches = [
+    ...memberMatches.map((member) => ({
+      memberId: member._id,
+      label: `${member.firstName ?? ""} ${member.lastName ?? ""}`.trim(),
+    })),
+    ...directorMatches.map((director) => ({
+      directorId: director._id,
+      label: `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim(),
+    })),
+  ];
+  return matches.length === 1 ? matches[0] : {};
+}
+
+function personLookupKeys(row: any) {
+  return unique([
+    `${row?.firstName ?? ""} ${row?.lastName ?? ""}`,
+    `${row?.lastName ?? ""}, ${row?.firstName ?? ""}`,
+    row?.name,
+    ...(Array.isArray(row?.aliases) ? row.aliases : []),
+  ]).map(normalizePersonLookupName).filter(Boolean);
+}
+
+function normalizePersonLookupName(value: unknown) {
+  if (typeof value !== "string") return undefined;
+  const text = value.trim();
+  if (!text) return undefined;
+  const withoutFormer = text.replace(/\([^)]*\)/g, " ");
+  const commaMatch = withoutFormer.match(/^\s*([^,]+),\s*(.+?)\s*$/);
+  const name = commaMatch ? `${commaMatch[2]} ${commaMatch[1]}` : withoutFormer;
+  return name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function unique<T>(values: T[]) {
+  return Array.from(new Set(values.filter(Boolean)));
 }

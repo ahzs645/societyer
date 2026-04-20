@@ -48,6 +48,8 @@ export function DirectorsPage() {
   const legalDirectorTerms = roleTerms.filter((term: any) =>
     /director|president|treasurer|secretary|chair/i.test(`${term.position ?? ""} ${term.committeeName ?? ""}`),
   );
+  const archivedRoleTerms = roleTerms.filter((term: any) => term.status === "Archived");
+  const unresolvedRoleTerms = roleTerms.filter((term: any) => !["Archived", "Verified"].includes(term.status));
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -119,64 +121,8 @@ export function DirectorsPage() {
         </div>
       )}
 
-      {roleTerms.length > 0 && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card__head">
-            <div>
-              <h2 className="card__title">Imported role and service timeline</h2>
-              <p className="card__subtitle">
-                Paperless-derived board, director, masthead, and editorial service records. These are historical observations until promoted into the legal director register.
-              </p>
-            </div>
-            <Link className="btn-action" to="/app/org-history">
-              Open history
-            </Link>
-          </div>
-          <div className="card__body">
-            <div className="stat-grid" style={{ marginBottom: 12 }}>
-              <div className="stat">
-                <div className="stat__label">Imported roles</div>
-                <div className="stat__value">{roleTerms.length}</div>
-                <div className="stat__sub">board, director, masthead, staff</div>
-              </div>
-              <div className="stat">
-                <div className="stat__label">Likely director/officer</div>
-                <div className="stat__value">{legalDirectorTerms.length}</div>
-                <div className="stat__sub">needs legal-term review</div>
-              </div>
-              <div className="stat">
-                <div className="stat__label">Verified</div>
-                <div className="stat__value">{roleTerms.filter((term: any) => term.status === "Verified").length}</div>
-                <div className="stat__sub">source-backed import status</div>
-              </div>
-              <div className="stat">
-                <div className="stat__label">Needs review</div>
-                <div className="stat__value">{roleTerms.filter((term: any) => term.status !== "Verified").length}</div>
-                <div className="stat__sub">do not file as legal directors yet</div>
-              </div>
-            </div>
-            <table className="table">
-              <thead>
-                <tr><th>Person</th><th>Position</th><th>Board/group</th><th>Observed</th><th>Status</th></tr>
-              </thead>
-              <tbody>
-                {roleTerms.slice(0, 12).map((term: any) => (
-                  <tr key={term._id}>
-                    <td><strong>{term.personName}</strong></td>
-                    <td>{term.position}</td>
-                    <td className="muted">{term.committeeName ?? "—"}</td>
-                    <td className="mono">{formatDate(term.startDate)}</td>
-                    <td><Badge tone={term.status === "Verified" ? "success" : "warn"}>{term.status ?? "Needs Review"}</Badge></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       <DataTable
-        label="All directors"
+        label="Current legal director register"
         icon={<UserCog size={14} />}
         data={(directors ?? []) as any[]}
         loading={directors === undefined}
@@ -243,6 +189,62 @@ export function DirectorsPage() {
           </button>
         )}
       />
+
+      {roleTerms.length > 0 && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="card__head">
+            <div>
+              <h2 className="card__title">Archived role and service evidence</h2>
+              <p className="card__subtitle">
+                Paperless-derived board, director, masthead, and editorial records retained as historical evidence. The legal register above is the definitive current board.
+              </p>
+            </div>
+            <Link className="btn-action" to="/app/org-history">
+              Open history
+            </Link>
+          </div>
+          <div className="card__body">
+            <div className="stat-grid" style={{ marginBottom: 12 }}>
+              <div className="stat">
+                <div className="stat__label">Historical roles</div>
+                <div className="stat__value">{roleTerms.length}</div>
+                <div className="stat__sub">board, director, masthead, staff</div>
+              </div>
+              <div className="stat">
+                <div className="stat__label">Director/officer evidence</div>
+                <div className="stat__value">{legalDirectorTerms.length}</div>
+                <div className="stat__sub">archived historical observations</div>
+              </div>
+              <div className="stat">
+                <div className="stat__label">Archived</div>
+                <div className="stat__value">{archivedRoleTerms.length}</div>
+                <div className="stat__sub">kept for audit trail</div>
+              </div>
+              <div className="stat">
+                <div className="stat__label">Unresolved</div>
+                <div className="stat__value">{unresolvedRoleTerms.length}</div>
+                <div className="stat__sub">source needs cleanup</div>
+              </div>
+            </div>
+            <table className="table">
+              <thead>
+                <tr><th>Person</th><th>Position</th><th>Board/group</th><th>Observed</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {roleTerms.slice(0, 12).map((term: any) => (
+                  <tr key={term._id}>
+                    <td><strong>{term.personName}</strong></td>
+                    <td>{term.position}</td>
+                    <td className="muted">{term.committeeName ?? "—"}</td>
+                    <td className="mono">{formatDate(term.startDate ?? term.endDate)}</td>
+                    <td><Badge tone={roleStatusTone(term.status)}>{term.status ?? "Needs Review"}</Badge></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <Drawer
         open={open}
@@ -341,4 +343,10 @@ export function DirectorsPage() {
 function cleanAliases(value: unknown) {
   const items = Array.isArray(value) ? value : String(value ?? "").split(",");
   return Array.from(new Set(items.map((item) => String(item).trim()).filter(Boolean)));
+}
+
+function roleStatusTone(status?: string) {
+  if (status === "Verified") return "success";
+  if (status === "NeedsReview") return "warn";
+  return "neutral";
 }

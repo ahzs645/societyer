@@ -40,7 +40,8 @@ export function MeetingDetailPage() {
     api.members.list,
     society ? { societyId: society._id } : "skip",
   );
-  const directorNames = (directors ?? []).map((d: any) => `${d.firstName} ${d.lastName}`);
+  const motionPeople = personLinkCandidates(members, directors);
+  const directorNames = (directors ?? []).flatMap((d: any) => [`${d.firstName} ${d.lastName}`, ...(Array.isArray(d.aliases) ? d.aliases : [])]);
   const generate = useAction(api.minutes.generateDraft);
   const updateMeeting = useMutation(api.meetings.update);
   const backfillMeetingQuorum = useMutation(api.meetings.backfillQuorumSnapshot);
@@ -640,6 +641,7 @@ export function MeetingDetailPage() {
                   <MotionEditor
                     motions={minutes.motions as Motion[]}
                     directorNames={directorNames}
+                    people={motionPeople}
                     onChange={saveMotions}
                   />
                 </div>

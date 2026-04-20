@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 
 type Confidence = "High" | "Medium" | "Review";
-type Status = "Draft" | "Verified" | "NeedsReview";
+type Status = "Draft" | "Verified" | "NeedsReview" | "Archived";
 type BadgeTone = "neutral" | "success" | "warn" | "danger" | "info" | "accent";
 type HistorySection = "facts" | "people" | "motions" | "budgets" | "timeline" | "sources";
 type PeopleSection = "summary" | "terms";
@@ -59,7 +59,7 @@ const CATEGORY_OPTIONS = [
 ] as const;
 
 const CONFIDENCE_OPTIONS: Confidence[] = ["High", "Medium", "Review"];
-const STATUS_OPTIONS: Status[] = ["Draft", "Verified", "NeedsReview"];
+const STATUS_OPTIONS: Status[] = ["Draft", "Verified", "NeedsReview", "Archived"];
 const CHANGE_TYPE_OPTIONS = ["appointed", "elected", "removed", "resigned", "ended", "unknown"];
 const LINE_SECTION_OPTIONS = ["income", "expense", "balance", "note"];
 
