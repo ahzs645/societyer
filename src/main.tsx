@@ -79,6 +79,8 @@ const PortalPage = React.lazy(() => import("./pages/Portal").then((m) => ({ defa
 const CommunicationsPage = React.lazy(() => import("./pages/Communications").then((m) => ({ default: m.CommunicationsPage })));
 const VolunteersPage = React.lazy(() => import("./pages/Volunteers").then((m) => ({ default: m.VolunteersPage })));
 const GrantsPage = React.lazy(() => import("./pages/Grants").then((m) => ({ default: m.GrantsPage })));
+const GrantDetailPage = React.lazy(() => import("./pages/Grants").then((m) => ({ default: m.GrantDetailPage })));
+const GrantEditPage = React.lazy(() => import("./pages/Grants").then((m) => ({ default: m.GrantEditPage })));
 const TransparencyPage = React.lazy(() => import("./pages/Transparency").then((m) => ({ default: m.TransparencyPage })));
 const PaperlessPage = React.lazy(() => import("./pages/Paperless").then((m) => ({ default: m.PaperlessPage })));
 const WorkflowsPage = React.lazy(() => import("./pages/Workflows").then((m) => ({ default: m.WorkflowsPage })));
@@ -225,6 +227,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route
               path="grants"
               element={withModule("grants", <GrantsPage />)}
+            />
+            <Route
+              path="grants/:id"
+              element={withModule("grants", <GrantDetailPage />)}
+            />
+            <Route
+              path="grants/:id/edit"
+              element={withModule("grants", <GrantEditPage />)}
             />
             <Route path="privacy" element={<PrivacyPage />} />
             <Route

@@ -26,6 +26,17 @@ const OPERATING_SUBSCRIPTION_STATUSES = [
   { value: "Paused", label: "Paused" },
 ];
 
+function auditStatusTone(status: string) {
+  if (status === "Audited") return "success";
+  if (["ReviewEngagement", "Review engagement", "Compilation", "Compiled", "T2/GIFI"].includes(status)) return "info";
+  return "warn";
+}
+
+function auditStatusLabel(status: string) {
+  if (status === "ReviewEngagement") return "Review engagement";
+  return status;
+}
+
 export function FinancialsPage() {
   const society = useSociety();
   const items = useQuery(api.financials.list, society ? { societyId: society._id } : "skip");
@@ -103,7 +114,7 @@ export function FinancialsPage() {
   const latest = sorted[0];
   const fiscalYear = latest?.fiscalYear ?? new Date().getFullYear().toString();
   const activeConnection = (connections ?? []).find((c) => c.status === "connected");
-  const importedBudgetCount = (orgHistory?.budgets ?? []).length;
+  const importedBudgetReviewCount = (orgHistory?.budgets ?? []).filter((budget: any) => budget.status === "NeedsReview").length;
   const waveLive = oauth?.live === true;
   const waveDemoAvailable = !waveLive && isDemoMode() && oauth?.demoAvailable === true;
   const canConnectWave = waveLive || waveDemoAvailable;
@@ -511,11 +522,11 @@ export function FinancialsPage() {
         </div>
       )}
 
-      {importedBudgetCount > 0 && (
+      {importedBudgetReviewCount > 0 && (
         <div style={{ marginBottom: 16 }}>
           <Flag level="warn">
-            <strong>{importedBudgetCount} imported budget snapshot{importedBudgetCount === 1 ? "" : "s"}</strong>{" "}
-            awaiting review before use as official statements.{" "}
+            <strong>{importedBudgetReviewCount} imported budget record{importedBudgetReviewCount === 1 ? "" : "s"}</strong>{" "}
+            awaiting review.{" "}
             <Link to="/app/org-history?section=budgets">Review in history →</Link>
           </Flag>
         </div>
@@ -559,8 +570,8 @@ export function FinancialsPage() {
                 <td className="table__cell--mono">{money(f.netAssetsCents)}</td>
                 <td className="table__cell--mono">{money(f.restrictedFundsCents)}</td>
                 <td>
-                  <Badge tone={f.auditStatus === "Audited" ? "success" : f.auditStatus === "ReviewEngagement" ? "info" : "warn"}>
-                    {f.auditStatus}
+                  <Badge tone={auditStatusTone(f.auditStatus)}>
+                    {auditStatusLabel(f.auditStatus)}
                   </Badge>
                   {f.auditorName && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{f.auditorName}</div>}
                 </td>

@@ -61,6 +61,11 @@ export const list = query({
       .collect(),
 });
 
+export const get = query({
+  args: { id: v.id("grants") },
+  handler: async (ctx, { id }) => ctx.db.get(id),
+});
+
 export const publicOpenings = query({
   args: { societyId: v.id("societies") },
   handler: async (ctx, { societyId }) => {

@@ -402,7 +402,7 @@ export function computeEffectiveNodePreview(
       // a step as draft, keep it draft rather than downgrading the badge to a
       // setup warning. Everything else with failing checks becomes needs_setup.
       status = node.status === "draft" ? "draft" : "needs_setup";
-    } else if (node.status !== "draft") {
+    } else if (node.status !== "draft" || checks.length > 0) {
       status = "ready";
     }
     return { ...node, status, setupIssues };

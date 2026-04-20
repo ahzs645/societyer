@@ -1,5 +1,5 @@
-import { type ReactNode, useState } from "react";
-import { Link } from "react-router-dom";
+import { type ReactNode, useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -7,7 +7,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
 import { DataTable } from "../components/DataTable";
-import { BadgeDollarSign, FileText, Plus, Trash2, Inbox, ListChecks } from "lucide-react";
+import { ArrowLeft, BadgeDollarSign, ExternalLink, FileText, Pencil, Plus, Save, Trash2, Inbox, ListChecks } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { centsToDollarInput, dollarInputToCents, formatDate, money } from "../lib/format";
 
@@ -327,6 +327,57 @@ function buildGrantPayload(draft: any, societyId: any, actingUserId: any) {
   };
 }
 
+function newGrantDraft(societyId: any) {
+  return {
+    societyId,
+    title: "",
+    funder: "",
+    program: "",
+    status: "Prospecting",
+    opportunityType: "Government",
+    priority: "Medium",
+    fitScore: "",
+    nextAction: "",
+    opportunityUrl: "",
+    applicationDueDate: new Date().toISOString().slice(0, 10),
+    allowPublicApplications: false,
+    sourceDocumentIds: [],
+    sourceExternalIdsInput: "",
+    confidence: "",
+    sensitivity: "",
+    riskFlagsInput: "",
+    requirements: [],
+    keyFacts: [],
+    useOfFunds: [],
+    timelineEvents: [],
+    complianceFlags: [],
+    contacts: [],
+    answerLibrary: [],
+  };
+}
+
+function grantToDraft(row: any) {
+  return {
+    ...row,
+    id: row._id,
+    fitScore: row.fitScore ?? "",
+    sourceDocumentIds: cleanStringList(row.sourceDocumentIds),
+    sourceExternalIdsInput: (row.sourceExternalIds ?? []).join(", "),
+    confidence: row.confidence ?? "",
+    sensitivity: row.sensitivity ?? "",
+    riskFlagsInput: (row.riskFlags ?? []).join(", "),
+    amountRequestedDollars: centsToDollarInput(row.amountRequestedCents),
+    amountAwardedDollars: centsToDollarInput(row.amountAwardedCents),
+    requirements: asRequirements(row.requirements),
+    keyFacts: cleanStringList(row.keyFacts),
+    useOfFunds: asUseOfFunds(row.useOfFunds),
+    timelineEvents: asTimelineEvents(row.timelineEvents),
+    complianceFlags: asComplianceFlags(row.complianceFlags),
+    contacts: asContacts(row.contacts),
+    answerLibrary: asAnswerLibrary(row.answerLibrary),
+  };
+}
+
 function buildReportPayload(draft: any, societyId: any, actingUserId: any) {
   return {
     id: draft.id,
@@ -409,6 +460,7 @@ export function GrantsPage() {
   const upsertTransaction = useMutation(api.grants.upsertTransaction);
   const removeTransaction = useMutation(api.grants.removeTransaction);
   const toast = useToast();
+  const [selectedGrant, setSelectedGrant] = useState<any | null>(null);
   const [grantDraft, setGrantDraft] = useState<any | null>(null);
   const [reportDraft, setReportDraft] = useState<any | null>(null);
   const [txnDraft, setTxnDraft] = useState<any | null>(null);
@@ -468,34 +520,7 @@ export function GrantsPage() {
             </button>
             <button
               className="btn-action btn-action--primary"
-              onClick={() =>
-                setGrantDraft({
-                  societyId: society._id,
-                  title: "",
-                  funder: "",
-                  program: "",
-                  status: "Prospecting",
-                  opportunityType: "Government",
-                  priority: "Medium",
-                  fitScore: "",
-                  nextAction: "",
-                  opportunityUrl: "",
-                  applicationDueDate: new Date().toISOString().slice(0, 10),
-                  allowPublicApplications: false,
-                  sourceDocumentIds: [],
-                  sourceExternalIdsInput: "",
-                  confidence: "",
-                  sensitivity: "",
-                  riskFlagsInput: "",
-                  requirements: [],
-                  keyFacts: [],
-                  useOfFunds: [],
-                  timelineEvents: [],
-                  complianceFlags: [],
-                  contacts: [],
-                  answerLibrary: [],
-                })
-              }
+              onClick={() => setGrantDraft(newGrantDraft(society._id))}
             >
               <Plus size={12} /> New grant
             </button>
@@ -595,6 +620,8 @@ export function GrantsPage() {
           (row) => row.sourceNotes,
         ]}
         defaultSort={{ columnId: "createdAtISO", dir: "desc" }}
+        onRowClick={(row) => setSelectedGrant(row)}
+        rowActionLabel={(row) => `Open grant ${row.title}`}
         columns={[
           {
             id: "title",
@@ -676,32 +703,12 @@ export function GrantsPage() {
         ]}
         renderRowActions={(row) => (
           <>
-            <button
+            <Link
               className="btn btn--ghost btn--sm"
-              onClick={() =>
-                setGrantDraft({
-                  ...row,
-                  id: row._id,
-                  fitScore: row.fitScore ?? "",
-                  sourceDocumentIds: cleanStringList(row.sourceDocumentIds),
-                  sourceExternalIdsInput: (row.sourceExternalIds ?? []).join(", "),
-                  confidence: row.confidence ?? "",
-                  sensitivity: row.sensitivity ?? "",
-                  riskFlagsInput: (row.riskFlags ?? []).join(", "),
-                  amountRequestedDollars: centsToDollarInput(row.amountRequestedCents),
-                  amountAwardedDollars: centsToDollarInput(row.amountAwardedCents),
-                  requirements: asRequirements(row.requirements),
-                  keyFacts: cleanStringList(row.keyFacts),
-                  useOfFunds: asUseOfFunds(row.useOfFunds),
-                  timelineEvents: asTimelineEvents(row.timelineEvents),
-                  complianceFlags: asComplianceFlags(row.complianceFlags),
-                  contacts: asContacts(row.contacts),
-                  answerLibrary: asAnswerLibrary(row.answerLibrary),
-                })
-              }
+              to={`/app/grants/${row._id}/edit`}
             >
               Edit
-            </button>
+            </Link>
             <button
               className="btn btn--ghost btn--sm btn--icon"
               aria-label={`Delete grant ${row.title}`}
@@ -795,9 +802,41 @@ export function GrantsPage() {
       />
 
       <Drawer
+        open={!!selectedGrant}
+        onClose={() => setSelectedGrant(null)}
+        title={selectedGrant?.title ?? "Grant details"}
+        footer={
+          <>
+            <button className="btn" onClick={() => setSelectedGrant(null)}>Close</button>
+            {selectedGrant && (
+              <>
+                <Link className="btn" to={`/app/grants/${selectedGrant._id}`}>
+                  <ExternalLink size={12} /> Open full screen
+                </Link>
+                <Link className="btn btn--accent" to={`/app/grants/${selectedGrant._id}/edit`}>
+                  <Pencil size={12} /> Edit
+                </Link>
+              </>
+            )}
+          </>
+        }
+      >
+        {selectedGrant && (
+          <GrantReadPanel
+            grant={selectedGrant}
+            documents={documents ?? []}
+            reports={reports ?? []}
+            committee={committeeById.get(String(selectedGrant.committeeId))}
+            owner={(users ?? []).find((user) => String(user._id) === String(selectedGrant.boardOwnerUserId))}
+            account={accountById.get(String(selectedGrant.linkedFinancialAccountId))}
+          />
+        )}
+      </Drawer>
+
+      <Drawer
         open={!!grantDraft}
         onClose={() => setGrantDraft(null)}
-        title={grantDraft?.id ? "Edit grant" : "New grant"}
+        title="New grant"
         footer={
           <>
             <button className="btn" onClick={() => setGrantDraft(null)}>Cancel</button>
@@ -815,129 +854,16 @@ export function GrantsPage() {
         }
       >
         {grantDraft && (
-          <div>
-            <InspectorNote title="Public intake">
-              Turn on public applications only when the opportunity is actually open. Submitted requests will land in the intake queue above.
-            </InspectorNote>
-            <GrantDossierStack
-              grant={grantDraft}
-              documents={documents ?? []}
-              reports={reports ?? []}
-            />
-            <Field label="Title"><input className="input" value={grantDraft.title} onChange={(e) => setGrantDraft({ ...grantDraft, title: e.target.value })} /></Field>
-            <div className="row" style={{ gap: 12 }}>
-              <Field label="Funder"><input className="input" value={grantDraft.funder} onChange={(e) => setGrantDraft({ ...grantDraft, funder: e.target.value })} /></Field>
-              <Field label="Program"><input className="input" value={grantDraft.program ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, program: e.target.value })} /></Field>
-            </div>
-            <div className="row" style={{ gap: 12 }}>
-              <Field label="Opportunity type">
-                <select className="input" value={grantDraft.opportunityType ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, opportunityType: e.target.value })}>
-                  <option value="">Unspecified</option>
-                  <option>Government</option>
-                  <option>Foundation</option>
-                  <option>Corporate</option>
-                  <option>Internal</option>
-                  <option>Other</option>
-                </select>
-              </Field>
-              <Field label="Priority">
-                <select className="input" value={grantDraft.priority ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, priority: e.target.value })}>
-                  <option value="">Unspecified</option>
-                  <option>High</option>
-                  <option>Medium</option>
-                  <option>Low</option>
-                </select>
-              </Field>
-            </div>
-            <div className="row" style={{ gap: 12 }}>
-              <Field label="Fit score" hint="0 to 100"><input className="input" type="number" inputMode="numeric" min="0" max="100" step="1" value={grantDraft.fitScore ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, fitScore: e.target.value })} /></Field>
-              <Field label="Opportunity URL"><input className="input" type="url" value={grantDraft.opportunityUrl ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, opportunityUrl: e.target.value })} /></Field>
-            </div>
-            <Field label="Next action"><input className="input" value={grantDraft.nextAction ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, nextAction: e.target.value })} /></Field>
-            <div className="row" style={{ gap: 12 }}>
-              <Field label="Status">
-                <select className="input" value={grantDraft.status} onChange={(e) => setGrantDraft({ ...grantDraft, status: e.target.value })}>
-                  <option>Prospecting</option>
-                  <option>Drafting</option>
-                  <option>Submitted</option>
-                  <option>Awarded</option>
-                  <option>Declined</option>
-                  <option>Active</option>
-                  <option>Closed</option>
-                </select>
-              </Field>
-              <Field label="Committee">
-                <select className="input" value={grantDraft.committeeId ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, committeeId: e.target.value })}>
-                  <option value="">None</option>
-                  {(committees ?? []).map((committee) => <option key={committee._id} value={committee._id}>{committee.name}</option>)}
-                </select>
-              </Field>
-            </div>
-            <div className="row" style={{ gap: 12 }}>
-              <Field label="Requested" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountRequestedDollars ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, amountRequestedDollars: e.target.value })} /></Field>
-              <Field label="Awarded" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountAwardedDollars ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, amountAwardedDollars: e.target.value })} /></Field>
-            </div>
-            <Field label="Restricted purpose"><textarea className="textarea" value={grantDraft.restrictedPurpose ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, restrictedPurpose: e.target.value })} /></Field>
-            <GrantRequirementsEditor
-              draft={grantDraft}
-              documents={documents ?? []}
-              onChange={setGrantDraft}
-            />
-            <label className="checkbox"><input type="checkbox" checked={!!grantDraft.allowPublicApplications} onChange={(e) => setGrantDraft({ ...grantDraft, allowPublicApplications: e.target.checked })} /> Accept public applications</label>
-            <Field label="Public description"><textarea className="textarea" rows={4} value={grantDraft.publicDescription ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, publicDescription: e.target.value })} /></Field>
-            <Field label="Application instructions"><textarea className="textarea" rows={4} value={grantDraft.applicationInstructions ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, applicationInstructions: e.target.value })} /></Field>
-            <div className="row" style={{ gap: 12 }}>
-              <Field label="Application due"><input className="input" type="date" value={grantDraft.applicationDueDate ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, applicationDueDate: e.target.value })} /></Field>
-              <Field label="Next report"><input className="input" type="date" value={grantDraft.nextReportDueAtISO ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, nextReportDueAtISO: e.target.value })} /></Field>
-            </div>
-            <div className="row" style={{ gap: 12 }}>
-              <Field label="Start"><input className="input" type="date" value={grantDraft.startDate ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, startDate: e.target.value })} /></Field>
-              <Field label="End"><input className="input" type="date" value={grantDraft.endDate ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, endDate: e.target.value })} /></Field>
-            </div>
-            <Field label="Board owner">
-              <select className="input" value={grantDraft.boardOwnerUserId ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, boardOwnerUserId: e.target.value })}>
-                <option value="">None</option>
-                {(users ?? []).map((user) => <option key={user._id} value={user._id}>{user.displayName}</option>)}
-              </select>
-            </Field>
-            <Field label="Linked financial account">
-              <select className="input" value={grantDraft.linkedFinancialAccountId ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, linkedFinancialAccountId: e.target.value })}>
-                <option value="">None</option>
-                {(accounts ?? []).map((account) => <option key={account._id} value={account._id}>{account.name}</option>)}
-              </select>
-            </Field>
-            {grantDraft.linkedFinancialAccountId && (
-              <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
-                Current linked balance: {money(accountById.get(String(grantDraft.linkedFinancialAccountId))?.balanceCents ?? 0)}
-              </div>
-            )}
-            <Field label="Source external IDs" hint="Comma-separated Paperless, local, or external IDs used for provenance.">
-              <input className="input" value={grantDraft.sourceExternalIdsInput ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, sourceExternalIdsInput: e.target.value })} />
-            </Field>
-            <div className="row" style={{ gap: 12 }}>
-              <Field label="Confidence">
-                <select className="input" value={grantDraft.confidence ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, confidence: e.target.value })}>
-                  <option value="">Unspecified</option>
-                  <option>High</option>
-                  <option>Medium</option>
-                  <option>Review</option>
-                </select>
-              </Field>
-              <Field label="Sensitivity">
-                <select className="input" value={grantDraft.sensitivity ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, sensitivity: e.target.value })}>
-                  <option value="">Standard</option>
-                  <option value="restricted">Restricted</option>
-                </select>
-              </Field>
-            </div>
-            <Field label="Risk flags" hint="Comma-separated review markers.">
-              <input className="input" value={grantDraft.riskFlagsInput ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, riskFlagsInput: e.target.value })} />
-            </Field>
-            <Field label="Source notes">
-              <textarea className="textarea" rows={3} value={grantDraft.sourceNotes ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, sourceNotes: e.target.value })} />
-            </Field>
-            <Field label="Notes"><textarea className="textarea" value={grantDraft.notes ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, notes: e.target.value })} /></Field>
-          </div>
+          <GrantEditorForm
+            grantDraft={grantDraft}
+            setGrantDraft={setGrantDraft}
+            committees={committees ?? []}
+            users={users ?? []}
+            accounts={accounts ?? []}
+            documents={documents ?? []}
+            reports={reports ?? []}
+            accountById={accountById}
+          />
         )}
       </Drawer>
 
@@ -1044,6 +970,424 @@ export function GrantsPage() {
           </div>
         )}
       </Drawer>
+    </div>
+  );
+}
+
+export function GrantDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const society = useSociety();
+  const grant = useQuery(api.grants.get, id ? { id } : "skip");
+  const reports = useQuery(
+    api.grants.reports,
+    society ? { societyId: society._id } : "skip",
+  );
+  const committees = useQuery(
+    api.committees.list,
+    society ? { societyId: society._id } : "skip",
+  );
+  const users = useQuery(
+    api.users.list,
+    society ? { societyId: society._id } : "skip",
+  );
+  const accounts = useQuery(
+    api.financialHub.accounts,
+    society ? { societyId: society._id } : "skip",
+  );
+  const documents = useQuery(
+    api.documents.list,
+    society ? { societyId: society._id } : "skip",
+  );
+
+  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === null) return <SeedPrompt />;
+  if (grant === undefined) return <div className="page">Loading…</div>;
+  if (!grant || grant.societyId !== society._id) {
+    return (
+      <div className="page">
+        <Link to="/app/grants" className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
+          <ArrowLeft size={12} /> All grants
+        </Link>
+        <PageHeader
+          title="Grant not found"
+          icon={<BadgeDollarSign size={16} />}
+          iconColor="green"
+          subtitle="The grant could not be found in the current society."
+        />
+      </div>
+    );
+  }
+
+  const committee = (committees ?? []).find((row) => String(row._id) === String(grant.committeeId));
+  const owner = (users ?? []).find((row) => String(row._id) === String(grant.boardOwnerUserId));
+  const account = (accounts ?? []).find((row) => String(row._id) === String(grant.linkedFinancialAccountId));
+
+  return (
+    <div className="page">
+      <Link to="/app/grants" className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
+        <ArrowLeft size={12} /> All grants
+      </Link>
+      <PageHeader
+        title={grant.title}
+        icon={<BadgeDollarSign size={16} />}
+        iconColor="green"
+        subtitle={`${grant.funder}${grant.program ? ` · ${grant.program}` : ""}`}
+        actions={
+          <Link className="btn-action btn-action--primary" to={`/app/grants/${grant._id}/edit`}>
+            <Pencil size={12} /> Edit grant
+          </Link>
+        }
+      />
+
+      <GrantReadPanel
+        grant={grant}
+        documents={documents ?? []}
+        reports={reports ?? []}
+        committee={committee}
+        owner={owner}
+        account={account}
+      />
+    </div>
+  );
+}
+
+export function GrantEditPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const society = useSociety();
+  const actingUserId = useCurrentUserId() ?? undefined;
+  const grant = useQuery(api.grants.get, id ? { id } : "skip");
+  const reports = useQuery(
+    api.grants.reports,
+    society ? { societyId: society._id } : "skip",
+  );
+  const committees = useQuery(
+    api.committees.list,
+    society ? { societyId: society._id } : "skip",
+  );
+  const users = useQuery(
+    api.users.list,
+    society ? { societyId: society._id } : "skip",
+  );
+  const accounts = useQuery(
+    api.financialHub.accounts,
+    society ? { societyId: society._id } : "skip",
+  );
+  const documents = useQuery(
+    api.documents.list,
+    society ? { societyId: society._id } : "skip",
+  );
+  const upsertGrant = useMutation(api.grants.upsertGrant);
+  const toast = useToast();
+  const [grantDraft, setGrantDraft] = useState<any | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!grant) return;
+    setGrantDraft((current) => current?.id === grant._id ? current : grantToDraft(grant));
+  }, [grant?._id]);
+
+  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === null) return <SeedPrompt />;
+  if (grant === undefined || (grant && !grantDraft)) return <div className="page">Loading…</div>;
+  if (!grant || grant.societyId !== society._id) {
+    return (
+      <div className="page">
+        <Link to="/app/grants" className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
+          <ArrowLeft size={12} /> All grants
+        </Link>
+        <PageHeader
+          title="Grant not found"
+          icon={<BadgeDollarSign size={16} />}
+          iconColor="green"
+          subtitle="The grant could not be found in the current society."
+        />
+      </div>
+    );
+  }
+
+  const accountById = new Map<string, any>((accounts ?? []).map((row) => [String(row._id), row]));
+
+  const saveGrant = async () => {
+    if (!grantDraft) return;
+    setSaving(true);
+    try {
+      await upsertGrant(buildGrantPayload(grantDraft, society._id, actingUserId));
+      toast.success("Grant saved");
+      navigate("/app/grants");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="page">
+      <Link to="/app/grants" className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
+        <ArrowLeft size={12} /> All grants
+      </Link>
+      <PageHeader
+        title={grantDraft?.title || "Edit grant"}
+        icon={<BadgeDollarSign size={16} />}
+        iconColor="green"
+        subtitle="Edit grant details, intake settings, requirements, evidence links, and restricted-fund tracking."
+        actions={
+          <button
+            className="btn-action btn-action--primary"
+            disabled={saving}
+            onClick={saveGrant}
+          >
+            <Save size={12} /> {saving ? "Saving…" : "Save changes"}
+          </button>
+        }
+      />
+
+      <div className="card">
+        <div className="card__body">
+          {grantDraft && (
+            <GrantEditorForm
+              grantDraft={grantDraft}
+              setGrantDraft={setGrantDraft}
+              committees={committees ?? []}
+              users={users ?? []}
+              accounts={accounts ?? []}
+              documents={documents ?? []}
+              reports={reports ?? []}
+              accountById={accountById}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GrantReadPanel({
+  grant,
+  documents,
+  reports,
+  committee,
+  owner,
+  account,
+}: {
+  grant: any;
+  documents: any[];
+  reports: any[];
+  committee?: any;
+  owner?: any;
+  account?: any;
+}) {
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      <GrantDossierStack
+        grant={grant}
+        documents={documents}
+        reports={reports}
+      />
+      <DossierSection title="Administrative Details">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+          <DossierFact label="Status">
+            <Badge tone={grantStatusTone(grant.status)}>{grant.status ?? "Not set"}</Badge>
+          </DossierFact>
+          <DossierFact label="Opportunity type" value={grant.opportunityType} />
+          <DossierFact label="Priority" value={grant.priority} />
+          <DossierFact label="Fit score" value={grant.fitScore == null ? undefined : `${grant.fitScore}/100`} />
+          <DossierFact label="Committee" value={committee?.name} />
+          <DossierFact label="Board owner" value={owner?.displayName} />
+          <DossierFact label="Requested" value={grant.amountRequestedCents == null ? undefined : money(grant.amountRequestedCents)} />
+          <DossierFact label="Awarded" value={grant.amountAwardedCents == null ? undefined : money(grant.amountAwardedCents)} />
+          <DossierFact label="Application due" value={grant.applicationDueDate ? formatDate(grant.applicationDueDate) : undefined} />
+          <DossierFact label="Submitted" value={grant.submittedAtISO ? formatDate(grant.submittedAtISO) : undefined} />
+          <DossierFact label="Decision" value={grant.decisionAtISO ? formatDate(grant.decisionAtISO) : undefined} />
+          <DossierFact label="Next report" value={grant.nextReportDueAtISO ? formatDate(grant.nextReportDueAtISO) : undefined} />
+          <DossierFact label="Project start" value={grant.startDate ? formatDate(grant.startDate) : undefined} />
+          <DossierFact label="Project end" value={grant.endDate ? formatDate(grant.endDate) : undefined} />
+          <DossierFact label="Public intake">
+            <Badge tone={grant.allowPublicApplications ? "success" : "info"}>{grant.allowPublicApplications ? "Open" : "Internal"}</Badge>
+          </DossierFact>
+          <DossierFact label="Linked account" value={account ? `${account.name} · ${money(account.balanceCents ?? 0)}` : undefined} />
+        </div>
+        {grant.opportunityUrl && (
+          <div style={{ marginTop: 10 }}>
+            <div className="stat__label">Opportunity URL</div>
+            <a href={grant.opportunityUrl} target="_blank" rel="noreferrer" className="row" style={{ gap: 6, overflowWrap: "anywhere" }}>
+              {grant.opportunityUrl}
+              <ExternalLink size={12} />
+            </a>
+          </div>
+        )}
+      </DossierSection>
+      {grant.restrictedPurpose && (
+        <DossierSection title="Restricted Purpose">
+          <div style={{ whiteSpace: "pre-wrap" }}>{grant.restrictedPurpose}</div>
+        </DossierSection>
+      )}
+      {(grant.publicDescription || grant.applicationInstructions) && (
+        <DossierSection title="Public Intake Copy">
+          {grant.publicDescription && (
+            <div style={{ marginBottom: grant.applicationInstructions ? 12 : 0 }}>
+              <div className="stat__label">Public description</div>
+              <div style={{ whiteSpace: "pre-wrap" }}>{grant.publicDescription}</div>
+            </div>
+          )}
+          {grant.applicationInstructions && (
+            <div>
+              <div className="stat__label">Application instructions</div>
+              <div style={{ whiteSpace: "pre-wrap" }}>{grant.applicationInstructions}</div>
+            </div>
+          )}
+        </DossierSection>
+      )}
+      {grant.notes && (
+        <DossierSection title="Notes">
+          <div style={{ whiteSpace: "pre-wrap" }}>{grant.notes}</div>
+        </DossierSection>
+      )}
+    </div>
+  );
+}
+
+function GrantEditorForm({
+  grantDraft,
+  setGrantDraft,
+  committees,
+  users,
+  accounts,
+  documents,
+  reports,
+  accountById,
+}: {
+  grantDraft: any;
+  setGrantDraft: (draft: any) => void;
+  committees: any[];
+  users: any[];
+  accounts: any[];
+  documents: any[];
+  reports: any[];
+  accountById: Map<string, any>;
+}) {
+  return (
+    <div>
+      <InspectorNote title="Public intake">
+        Turn on public applications only when the opportunity is actually open. Submitted requests will land in the intake queue above.
+      </InspectorNote>
+      <GrantDossierStack
+        grant={grantDraft}
+        documents={documents}
+        reports={reports}
+      />
+      <Field label="Title"><input className="input" value={grantDraft.title} onChange={(e) => setGrantDraft({ ...grantDraft, title: e.target.value })} /></Field>
+      <div className="row" style={{ gap: 12 }}>
+        <Field label="Funder"><input className="input" value={grantDraft.funder} onChange={(e) => setGrantDraft({ ...grantDraft, funder: e.target.value })} /></Field>
+        <Field label="Program"><input className="input" value={grantDraft.program ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, program: e.target.value })} /></Field>
+      </div>
+      <div className="row" style={{ gap: 12 }}>
+        <Field label="Opportunity type">
+          <select className="input" value={grantDraft.opportunityType ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, opportunityType: e.target.value })}>
+            <option value="">Unspecified</option>
+            <option>Government</option>
+            <option>Foundation</option>
+            <option>Corporate</option>
+            <option>Internal</option>
+            <option>Other</option>
+          </select>
+        </Field>
+        <Field label="Priority">
+          <select className="input" value={grantDraft.priority ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, priority: e.target.value })}>
+            <option value="">Unspecified</option>
+            <option>High</option>
+            <option>Medium</option>
+            <option>Low</option>
+          </select>
+        </Field>
+      </div>
+      <div className="row" style={{ gap: 12 }}>
+        <Field label="Fit score" hint="0 to 100"><input className="input" type="number" inputMode="numeric" min="0" max="100" step="1" value={grantDraft.fitScore ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, fitScore: e.target.value })} /></Field>
+        <Field label="Opportunity URL"><input className="input" type="url" value={grantDraft.opportunityUrl ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, opportunityUrl: e.target.value })} /></Field>
+      </div>
+      <Field label="Next action"><input className="input" value={grantDraft.nextAction ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, nextAction: e.target.value })} /></Field>
+      <div className="row" style={{ gap: 12 }}>
+        <Field label="Status">
+          <select className="input" value={grantDraft.status} onChange={(e) => setGrantDraft({ ...grantDraft, status: e.target.value })}>
+            <option>Prospecting</option>
+            <option>Drafting</option>
+            <option>Submitted</option>
+            <option>Awarded</option>
+            <option>Declined</option>
+            <option>Active</option>
+            <option>Closed</option>
+          </select>
+        </Field>
+        <Field label="Committee">
+          <select className="input" value={grantDraft.committeeId ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, committeeId: e.target.value })}>
+            <option value="">None</option>
+            {committees.map((committee) => <option key={committee._id} value={committee._id}>{committee.name}</option>)}
+          </select>
+        </Field>
+      </div>
+      <div className="row" style={{ gap: 12 }}>
+        <Field label="Requested" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountRequestedDollars ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, amountRequestedDollars: e.target.value })} /></Field>
+        <Field label="Awarded" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountAwardedDollars ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, amountAwardedDollars: e.target.value })} /></Field>
+      </div>
+      <Field label="Restricted purpose"><textarea className="textarea" value={grantDraft.restrictedPurpose ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, restrictedPurpose: e.target.value })} /></Field>
+      <GrantRequirementsEditor
+        draft={grantDraft}
+        documents={documents}
+        onChange={setGrantDraft}
+      />
+      <label className="checkbox"><input type="checkbox" checked={!!grantDraft.allowPublicApplications} onChange={(e) => setGrantDraft({ ...grantDraft, allowPublicApplications: e.target.checked })} /> Accept public applications</label>
+      <Field label="Public description"><textarea className="textarea" rows={4} value={grantDraft.publicDescription ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, publicDescription: e.target.value })} /></Field>
+      <Field label="Application instructions"><textarea className="textarea" rows={4} value={grantDraft.applicationInstructions ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, applicationInstructions: e.target.value })} /></Field>
+      <div className="row" style={{ gap: 12 }}>
+        <Field label="Application due"><input className="input" type="date" value={grantDraft.applicationDueDate ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, applicationDueDate: e.target.value })} /></Field>
+        <Field label="Next report"><input className="input" type="date" value={grantDraft.nextReportDueAtISO ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, nextReportDueAtISO: e.target.value })} /></Field>
+      </div>
+      <div className="row" style={{ gap: 12 }}>
+        <Field label="Start"><input className="input" type="date" value={grantDraft.startDate ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, startDate: e.target.value })} /></Field>
+        <Field label="End"><input className="input" type="date" value={grantDraft.endDate ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, endDate: e.target.value })} /></Field>
+      </div>
+      <Field label="Board owner">
+        <select className="input" value={grantDraft.boardOwnerUserId ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, boardOwnerUserId: e.target.value })}>
+          <option value="">None</option>
+          {users.map((user) => <option key={user._id} value={user._id}>{user.displayName}</option>)}
+        </select>
+      </Field>
+      <Field label="Linked financial account">
+        <select className="input" value={grantDraft.linkedFinancialAccountId ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, linkedFinancialAccountId: e.target.value })}>
+          <option value="">None</option>
+          {accounts.map((account) => <option key={account._id} value={account._id}>{account.name}</option>)}
+        </select>
+      </Field>
+      {grantDraft.linkedFinancialAccountId && (
+        <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+          Current linked balance: {money(accountById.get(String(grantDraft.linkedFinancialAccountId))?.balanceCents ?? 0)}
+        </div>
+      )}
+      <Field label="Source external IDs" hint="Comma-separated Paperless, local, or external IDs used for provenance.">
+        <input className="input" value={grantDraft.sourceExternalIdsInput ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, sourceExternalIdsInput: e.target.value })} />
+      </Field>
+      <div className="row" style={{ gap: 12 }}>
+        <Field label="Confidence">
+          <select className="input" value={grantDraft.confidence ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, confidence: e.target.value })}>
+            <option value="">Unspecified</option>
+            <option>High</option>
+            <option>Medium</option>
+            <option>Review</option>
+          </select>
+        </Field>
+        <Field label="Sensitivity">
+          <select className="input" value={grantDraft.sensitivity ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, sensitivity: e.target.value })}>
+            <option value="">Standard</option>
+            <option value="restricted">Restricted</option>
+          </select>
+        </Field>
+      </div>
+      <Field label="Risk flags" hint="Comma-separated review markers.">
+        <input className="input" value={grantDraft.riskFlagsInput ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, riskFlagsInput: e.target.value })} />
+      </Field>
+      <Field label="Source notes">
+        <textarea className="textarea" rows={3} value={grantDraft.sourceNotes ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, sourceNotes: e.target.value })} />
+      </Field>
+      <Field label="Notes"><textarea className="textarea" value={grantDraft.notes ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, notes: e.target.value })} /></Field>
     </div>
   );
 }

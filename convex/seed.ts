@@ -1161,7 +1161,7 @@ export const run = mutation({
       status: "Circulating",
     });
 
-    await ctx.db.insert("workflows", {
+    const unbcWorkflowId = await ctx.db.insert("workflows", {
       societyId,
       recipe: "unbc_affiliate_id_request",
       name: "UNBC Affiliate ID Request",
@@ -1176,11 +1176,43 @@ export const run = mutation({
         { key: "intake", type: "form", label: "Affiliate intake form", description: "Collects the fields that map to the UNBC AcroForm widgets.", status: "ready" },
         { key: "fill_pdf", type: "pdf_fill", label: "Fill UNBC ID PDF", description: "n8n calls Societyer's PDF fill endpoint using the configured local template path.", status: "needs_setup" },
         { key: "save_document", type: "document_create", label: "Save generated PDF", description: "Stores the generated affiliate request as a Societyer document.", status: "ready" },
-        { key: "notify", type: "email", label: "Notify manager", description: "Marks the workflow complete and leaves room for a real email/signature step later.", status: "draft" },
+        {
+          key: "notify",
+          type: "email",
+          label: "Notify UNBC processing",
+          description: "Queues an Outbox email to UNBC Employment Processing with the generated PDF attached.",
+          status: "ready",
+          config: {
+            to: "employmentprocessing@unbc.ca",
+            subject: "Completed affiliate status request form - {{intake.legal_first_name_of_affiliate}} {{intake.legal_last_name_of_affiliate}}",
+            body: [
+              "Hello,",
+              "",
+              "Please see the attached completed UNBC affiliate status request form for {{intake.legal_first_name_of_affiliate}} {{intake.legal_last_name_of_affiliate}}.",
+              "",
+              "The generated PDF is attached for processing.",
+              "",
+              "Thanks,",
+              "{{intake.name_of_requesting_manager}}",
+            ].join("\n"),
+          },
+        },
       ],
       trigger: { kind: "manual" },
       config: {
         pdfTemplateKey: "unbc_affiliate_id",
+        emailTo: "employmentprocessing@unbc.ca",
+        emailSubject: "Completed affiliate status request form - {{intake.legal_first_name_of_affiliate}} {{intake.legal_last_name_of_affiliate}}",
+        emailBody: [
+          "Hello,",
+          "",
+          "Please see the attached completed UNBC affiliate status request form for {{intake.legal_first_name_of_affiliate}} {{intake.legal_last_name_of_affiliate}}.",
+          "",
+          "The generated PDF is attached for processing.",
+          "",
+          "Thanks,",
+          "{{intake.name_of_requesting_manager}}",
+        ].join("\n"),
         sampleAffiliate: {
           "Legal First Name of Affiliate": "Sample",
           "Legal Middle Name of Affiliate": "A",
@@ -1202,6 +1234,46 @@ export const run = mutation({
         },
       },
       createdByUserId: undefined,
+    });
+
+    const unbcGeneratedDocumentId = await ctx.db.insert("documents", {
+      societyId,
+      title: "UNBC Affiliate ID Request - Sample Affiliate",
+      category: "WorkflowGenerated",
+      fileName: "UNBC Affiliate ID Request - Sample Affiliate.pdf",
+      mimeType: "application/pdf",
+      fileSizeBytes: 0,
+      retentionYears: 10,
+      createdAtISO: "2026-04-18T19:32:00.000Z",
+      flaggedForDeletion: false,
+      tags: ["workflow-generated", "unbc-affiliate-id", "workflow-run:sample"],
+    });
+
+    await ctx.db.insert("pendingEmails", {
+      societyId,
+      workflowId: unbcWorkflowId,
+      nodeKey: "notify",
+      to: "employmentprocessing@unbc.ca",
+      subject: "Completed affiliate status request form - Sample Affiliate",
+      body: [
+        "Hello,",
+        "",
+        "Please see the attached completed UNBC affiliate status request form for Sample Affiliate.",
+        "",
+        "The generated PDF is attached for processing.",
+        "",
+        "Thanks,",
+        "Sample Manager",
+      ].join("\n"),
+      attachments: [
+        {
+          documentId: unbcGeneratedDocumentId,
+          fileName: "UNBC Affiliate ID Request - Sample Affiliate.pdf",
+        },
+      ],
+      status: "ready",
+      createdAtISO: "2026-04-18T19:32:00.000Z",
+      notes: "Queued by workflow UNBC Affiliate ID Request · node notify",
     });
 
     return { societyId };

@@ -11,6 +11,7 @@ const MEETING_BOARD_ID = "static_meeting_board_q2";
 const MEETING_AGM_ID = "static_meeting_agm_2025";
 const DOCUMENT_BYLAWS_ID = "static_document_bylaws";
 const DOCUMENT_POLICY_ID = "static_document_privacy";
+const DOCUMENT_UNBC_GENERATED_ID = "static_document_unbc_affiliate";
 const ELECTION_ID = "static_election";
 const ELECTION_QUESTION_ID = "static_election_question_directors";
 const FINANCIAL_CONNECTION_ID = "static_financial_connection";
@@ -477,6 +478,21 @@ const documents = [
     flaggedForDeletion: false,
     tags: ["privacy", "PIPA", "public"],
     public: true,
+  },
+  {
+    _id: DOCUMENT_UNBC_GENERATED_ID,
+    societyId: SOCIETY_ID,
+    title: "UNBC Affiliate ID Request - Sample Affiliate",
+    kind: "WorkflowGenerated",
+    category: "WorkflowGenerated",
+    status: "Generated",
+    fileName: "UNBC Affiliate ID Request - Sample Affiliate.pdf",
+    mimeType: "application/pdf",
+    retentionYears: 10,
+    createdAtISO: "2026-04-18T19:32:00.000Z",
+    flaggedForDeletion: false,
+    tags: ["workflow-generated", "unbc-affiliate-id", "workflow-run:static_workflow_run_unbc"],
+    public: false,
   },
   {
     _id: "static_document_financials",
@@ -959,9 +975,41 @@ const workflowCatalog = [
       { key: "intake", type: "form", label: "Affiliate intake form", status: "ready" },
       { key: "fill_pdf", type: "pdf_fill", label: "Fill UNBC ID PDF", status: "needs_setup" },
       { key: "save_document", type: "document_create", label: "Save generated PDF", status: "ready" },
-      { key: "notify", type: "email", label: "Notify manager", status: "draft" },
+      {
+        key: "notify",
+        type: "email",
+        label: "Notify UNBC processing",
+        status: "ready",
+        config: {
+          to: "employmentprocessing@unbc.ca",
+          subject: "Completed affiliate status request form - {{intake.legal_first_name_of_affiliate}} {{intake.legal_last_name_of_affiliate}}",
+          body: [
+            "Hello,",
+            "",
+            "Please see the attached completed UNBC affiliate status request form for {{intake.legal_first_name_of_affiliate}} {{intake.legal_last_name_of_affiliate}}.",
+            "",
+            "The generated PDF is attached for processing.",
+            "",
+            "Thanks,",
+            "{{intake.name_of_requesting_manager}}",
+          ].join("\n"),
+        },
+      },
     ],
     config: {
+      pdfTemplateKey: "unbc_affiliate_id",
+      emailTo: "employmentprocessing@unbc.ca",
+      emailSubject: "Completed affiliate status request form - {{intake.legal_first_name_of_affiliate}} {{intake.legal_last_name_of_affiliate}}",
+      emailBody: [
+        "Hello,",
+        "",
+        "Please see the attached completed UNBC affiliate status request form for {{intake.legal_first_name_of_affiliate}} {{intake.legal_last_name_of_affiliate}}.",
+        "",
+        "The generated PDF is attached for processing.",
+        "",
+        "Thanks,",
+        "{{intake.name_of_requesting_manager}}",
+      ].join("\n"),
       sampleAffiliate: {
         "Legal First Name of Affiliate": "Sample",
         "Legal Middle Name of Affiliate": "A",
@@ -1028,6 +1076,36 @@ const tables: Record<string, any[]> = {
   ],
   workflows,
   workflowRuns,
+  pendingEmails: [
+    {
+      _id: "static_pending_email_unbc",
+      societyId: SOCIETY_ID,
+      workflowId: "static_workflow_unbc",
+      workflowRunId: "static_workflow_run_unbc",
+      nodeKey: "notify",
+      to: "employmentprocessing@unbc.ca",
+      subject: "Completed affiliate status request form - Sample Affiliate",
+      body: [
+        "Hello,",
+        "",
+        "Please see the attached completed UNBC affiliate status request form for Sample Affiliate.",
+        "",
+        "The generated PDF is attached for processing.",
+        "",
+        "Thanks,",
+        "Sample Manager",
+      ].join("\n"),
+      attachments: [
+        {
+          documentId: DOCUMENT_UNBC_GENERATED_ID,
+          fileName: "UNBC Affiliate ID Request - Sample Affiliate.pdf",
+        },
+      ],
+      status: "ready",
+      createdAtISO: "2026-04-18T19:32:00.000Z",
+      notes: "Queued by workflow UNBC Affiliate ID Request · node notify",
+    },
+  ],
   attestations: [],
   auditors: [
     {
