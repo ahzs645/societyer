@@ -32,6 +32,7 @@ import {
   Power,
   Save,
   Settings,
+  Trash2,
   UserPlus,
 } from "lucide-react";
 import { formatDateTime } from "../lib/format";
@@ -66,18 +67,26 @@ export function WorkflowDetailPage() {
   const workflow = useQuery(api.workflows.get, id ? { id: id as any } : "skip");
   const runs = useQuery(api.workflows.runsForWorkflow, id ? { workflowId: id as any } : "skip");
   const catalog = useQuery(api.workflows.listCatalog, {});
+  const nodeTypeCatalog = useQuery(api.workflows.listNodeTypes, {});
   const setStatus = useMutation(api.workflows.setStatus);
+  const addNode = useMutation(api.workflows.addNode);
+  const removeNode = useMutation(api.workflows.removeNode);
   const run = useAction(api.workflows.run);
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [intakeOpen, setIntakeOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [intake, setIntake] = useState<Record<string, any>>({});
 
   const recipe = catalog?.find((item: any) => item.key === workflow?.recipe);
   const preview = (workflow?.nodePreview?.length ? workflow.nodePreview : recipe?.nodePreview ?? []) as any[];
+  const recipeNodeKeys = new Set<string>(
+    (recipe?.nodePreview ?? []).map((node: any) => node.key),
+  );
   const selectedNode = preview.find((node) => node.key === selectedKey) ?? preview[0];
+  const isUserAddedNode = selectedNode ? !recipeNodeKeys.has(selectedNode.key) : false;
   const latestRun = runs?.[0];
 
   const graph = useMemo(() => buildGraph(preview), [preview]);
@@ -168,7 +177,11 @@ export function WorkflowDetailPage() {
           <Link className="btn btn--ghost btn--sm" to={`/app/workflow-runs?workflowId=${workflow._id}`}>
             <History size={12} /> See Runs
           </Link>
-          <button className="btn btn--ghost btn--sm" disabled title="Native editing lands after the bridge MVP.">
+          <button
+            className="btn btn--ghost btn--sm"
+            onClick={() => setAddOpen(true)}
+            title="Insert a new step into this workflow"
+          >
             <Plus size={12} /> Add Node
           </button>
           {providerConfig.externalEditUrl ? (
@@ -225,7 +238,33 @@ export function WorkflowDetailPage() {
                 <Badge tone={selectedNode.status === "needs_setup" ? "warn" : selectedNode.status === "draft" ? "neutral" : "success"}>
                   {selectedNode.status ?? "ready"}
                 </Badge>
+                {Array.isArray(selectedNode.setupIssues) && selectedNode.setupIssues.length > 0 && (
+                  <ul className="workflow-setup-issues">
+                    {selectedNode.setupIssues.map((issue: string) => (
+                      <li key={issue}>{issue}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
+              {isUserAddedNode && (
+                <div className="workflow-sidepanel__section">
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    onClick={async () => {
+                      if (!workflow) return;
+                      await removeNode({
+                        id: workflow._id,
+                        key: selectedNode.key,
+                        actingUserId,
+                      });
+                      setSelectedKey(null);
+                      toast.success("Node removed");
+                    }}
+                  >
+                    <Trash2 size={12} /> Remove node
+                  </button>
+                </div>
+              )}
               {selectedNode.key === "fill_pdf" && (
                 <div className="workflow-sidepanel__section">
                   <div className="field__label">PDF setup</div>
@@ -271,6 +310,60 @@ export function WorkflowDetailPage() {
           </div>
         </aside>
       </div>
+
+      <Drawer
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        title="Add node"
+      >
+        <p className="muted" style={{ marginBottom: 12 }}>
+          Pick a step type to append after{" "}
+          <strong>{selectedNode?.label ?? "the last node"}</strong>. New nodes start
+          as drafts — the runner will skip them until execution logic is wired in.
+        </p>
+        <div className="workflow-node-picker">
+          {(nodeTypeCatalog ?? []).map((entry: any) => (
+            <button
+              key={entry.type}
+              type="button"
+              className="workflow-node-picker__item"
+              disabled={busy}
+              onClick={async () => {
+                if (!workflow) return;
+                setBusy(true);
+                try {
+                  const result = await addNode({
+                    id: workflow._id,
+                    node: {
+                      type: entry.type,
+                      label: entry.label,
+                      description: entry.description,
+                    },
+                    afterKey: selectedNode?.key,
+                    actingUserId,
+                  });
+                  if (result?.key) setSelectedKey(result.key);
+                  setAddOpen(false);
+                  toast.success(`Added ${entry.label}`);
+                } catch (err: any) {
+                  toast.error(err?.message ?? "Could not add node");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <span className="workflow-node-picker__icon">
+                <NodeIcon type={entry.type} />
+              </span>
+              <span className="workflow-node-picker__text">
+                <strong>{entry.label}</strong>
+                <span className="muted">{entry.description}</span>
+              </span>
+            </button>
+          ))}
+          {!nodeTypeCatalog && <div className="muted">Loading node types…</div>}
+        </div>
+      </Drawer>
 
       <Drawer
         open={intakeOpen}

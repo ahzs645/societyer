@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -7,8 +7,59 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Drawer, Field, Badge } from "../components/ui";
-import { ExternalLink, Plus, Workflow as WorkflowIcon, Play, Pause, Trash2 } from "lucide-react";
+import { DataTable } from "../components/DataTable";
+import { FilterField } from "../components/FilterBar";
+import {
+  ExternalLink,
+  Plus,
+  Workflow as WorkflowIcon,
+  Play,
+  Pause,
+  Trash2,
+  Tag,
+  Server,
+  Activity,
+  Clock,
+} from "lucide-react";
 import { formatDateTime } from "../lib/format";
+
+const triggerLabel = (trigger: any) =>
+  trigger?.kind === "cron"
+    ? trigger.cron
+    : trigger?.kind === "date_offset"
+      ? `${trigger.offset?.daysBefore}d before ${trigger.offset?.anchor}`
+      : "manual";
+
+const WORKFLOW_FILTERS = (catalog: Array<{ key: string; label: string }>): FilterField<any>[] => [
+  {
+    id: "recipe",
+    label: "Recipe",
+    icon: <Tag size={14} />,
+    options: catalog.map((c) => c.label),
+    match: (r, q) => (catalog.find((c) => c.key === r.recipe)?.label ?? r.recipe) === q,
+  },
+  {
+    id: "provider",
+    label: "Provider",
+    icon: <Server size={14} />,
+    options: ["internal", "n8n"],
+    match: (r, q) => (r.provider ?? "internal") === q,
+  },
+  {
+    id: "status",
+    label: "Status",
+    icon: <Activity size={14} />,
+    options: ["active", "paused"],
+    match: (r, q) => r.status === q,
+  },
+  {
+    id: "trigger",
+    label: "Trigger kind",
+    icon: <Clock size={14} />,
+    options: ["cron", "manual", "date_offset"],
+    match: (r, q) => r.trigger?.kind === q,
+  },
+];
 
 type TriggerKind = "cron" | "manual" | "date_offset";
 
@@ -22,6 +73,7 @@ export function WorkflowsPage() {
   const run = useAction(api.workflows.run);
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
+  const navigate = useNavigate();
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<{
@@ -96,119 +148,157 @@ export function WorkflowsPage() {
         }
       />
 
-      <div className="card">
-        <div className="card__head">
-          <h3 className="card__title">Configured workflows</h3>
-        </div>
-        <div className="card__body" style={{ padding: 0 }}>
-          {(rows ?? []).length === 0 ? (
-            <div className="empty-state">
-              No workflows yet. Pick a recipe from the catalog to get started.
-            </div>
-          ) : (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Recipe</th>
-                  <th>Trigger</th>
-                  <th>Provider</th>
-                  <th>Status</th>
-                  <th>Last run</th>
-                  <th>Next run</th>
-                  <th style={{ width: 1 }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {(rows ?? []).map((r: any) => {
-                  const recipe = catalog?.find((c) => c.key === r.recipe);
-                  return (
-                    <tr key={r._id}>
-                      <td>
-                        <Link className="link" to={`/app/workflows/${r._id}`}>
-                          {r.name}
-                        </Link>
-                      </td>
-                      <td>{recipe?.label ?? r.recipe}</td>
-                      <td className="mono" style={{ fontSize: "var(--fs-sm)" }}>
-                        {r.trigger.kind === "cron"
-                          ? r.trigger.cron
-                          : r.trigger.kind === "date_offset"
-                          ? `${r.trigger.offset?.daysBefore}d before ${r.trigger.offset?.anchor}`
-                          : "manual"}
-                      </td>
-                      <td>
-                        <Badge tone={r.provider === "n8n" ? "info" : "neutral"}>
-                          {r.provider ?? "internal"}
-                        </Badge>
-                      </td>
-                      <td>
-                        <Badge tone={r.status === "active" ? "success" : r.status === "paused" ? "warn" : "neutral"}>
-                          {r.status}
-                        </Badge>
-                      </td>
-                      <td className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
-                        {r.lastRunAtISO ? formatDateTime(r.lastRunAtISO) : "—"}
-                      </td>
-                      <td className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
-                        {r.nextRunAtISO ? formatDateTime(r.nextRunAtISO) : "—"}
-                      </td>
-                      <td style={{ whiteSpace: "nowrap" }}>
-                        <Link className="btn btn--ghost btn--sm" to={`/app/workflows/${r._id}`}>
-                          <ExternalLink size={12} /> Canvas
-                        </Link>
-                        <button
-                          className="btn btn--ghost btn--sm"
-                          disabled={busyId === r._id}
-                          onClick={async () => {
-                            setBusyId(r._id);
-                            try {
-                              const result = await run({
-                                societyId: society._id,
-                                workflowId: r._id,
-                                triggeredBy: "manual",
-                                actingUserId,
-                              });
-                              toast.success(result?.status === "running" ? "Workflow queued in n8n" : "Workflow run complete");
-                            } catch (err: any) {
-                              toast.error(err?.message ?? "Run failed");
-                            } finally {
-                              setBusyId(null);
-                            }
-                          }}
-                        >
-                          <Play size={12} /> Run now
-                        </button>
-                        <button
-                          className="btn btn--ghost btn--sm"
-                          onClick={() =>
-                            setStatus({
-                              id: r._id,
-                              status: r.status === "active" ? "paused" : "active",
-                              actingUserId,
-                            })
-                          }
-                        >
-                          <Pause size={12} /> {r.status === "active" ? "Pause" : "Resume"}
-                        </button>
-                        <button
-                          className="btn btn--ghost btn--sm"
-                          onClick={async () => {
-                            await remove({ id: r._id, actingUserId });
-                            toast.success("Workflow removed");
-                          }}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </td>
-                    </tr>
+      <DataTable
+        label="Configured workflows"
+        icon={<WorkflowIcon size={14} />}
+        data={(rows ?? []) as any[]}
+        rowKey={(r) => String(r._id)}
+        searchPlaceholder="Search name, recipe, trigger…"
+        defaultSort={{ columnId: "name", dir: "asc" }}
+        viewsKey="workflows"
+        emptyMessage="No workflows yet. Pick a recipe from the catalog to get started."
+        onRowClick={(r) => navigate(`/app/workflows/${r._id}`)}
+        rowActionLabel={(r) => `Open ${r.name}`}
+        filterFields={WORKFLOW_FILTERS(catalog ?? [])}
+        searchExtraFields={[(r) => triggerLabel(r.trigger)]}
+        columns={[
+          {
+            id: "name",
+            header: "Name",
+            sortable: true,
+            accessor: (r) => r.name,
+            render: (r) => (
+              <Link className="link" to={`/app/workflows/${r._id}`} onClick={(e) => e.stopPropagation()}>
+                {r.name}
+              </Link>
+            ),
+          },
+          {
+            id: "recipe",
+            header: "Recipe",
+            sortable: true,
+            accessor: (r) => catalog?.find((c) => c.key === r.recipe)?.label ?? r.recipe,
+            render: (r) => (
+              <span className="cell-tag">
+                {catalog?.find((c) => c.key === r.recipe)?.label ?? r.recipe}
+              </span>
+            ),
+          },
+          {
+            id: "trigger",
+            header: "Trigger",
+            sortable: true,
+            accessor: (r) => triggerLabel(r.trigger),
+            render: (r) => (
+              <span className="mono" style={{ fontSize: "var(--fs-sm)" }}>
+                {triggerLabel(r.trigger)}
+              </span>
+            ),
+          },
+          {
+            id: "provider",
+            header: "Provider",
+            sortable: true,
+            accessor: (r) => r.provider ?? "internal",
+            render: (r) => (
+              <Badge tone={r.provider === "n8n" ? "info" : "neutral"}>
+                {r.provider ?? "internal"}
+              </Badge>
+            ),
+          },
+          {
+            id: "status",
+            header: "Status",
+            sortable: true,
+            accessor: (r) => r.status,
+            render: (r) => (
+              <Badge tone={r.status === "active" ? "success" : r.status === "paused" ? "warn" : "neutral"}>
+                {r.status}
+              </Badge>
+            ),
+          },
+          {
+            id: "lastRunAtISO",
+            header: "Last run",
+            sortable: true,
+            accessor: (r) => r.lastRunAtISO ?? "",
+            render: (r) => (
+              <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
+                {r.lastRunAtISO ? formatDateTime(r.lastRunAtISO) : "—"}
+              </span>
+            ),
+          },
+          {
+            id: "nextRunAtISO",
+            header: "Next run",
+            sortable: true,
+            accessor: (r) => r.nextRunAtISO ?? "",
+            render: (r) => (
+              <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
+                {r.nextRunAtISO ? formatDateTime(r.nextRunAtISO) : "—"}
+              </span>
+            ),
+          },
+        ]}
+        renderRowActions={(r) => (
+          <>
+            <Link
+              className="btn btn--ghost btn--sm"
+              to={`/app/workflows/${r._id}`}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`Open canvas for ${r.name}`}
+            >
+              <ExternalLink size={12} /> Canvas
+            </Link>
+            <button
+              className="btn btn--ghost btn--sm"
+              disabled={busyId === r._id}
+              onClick={async () => {
+                setBusyId(r._id);
+                try {
+                  const result = await run({
+                    societyId: society._id,
+                    workflowId: r._id,
+                    triggeredBy: "manual",
+                    actingUserId,
+                  });
+                  toast.success(
+                    result?.status === "running" ? "Workflow queued in n8n" : "Workflow run complete",
                   );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
+                } catch (err: any) {
+                  toast.error(err?.message ?? "Run failed");
+                } finally {
+                  setBusyId(null);
+                }
+              }}
+            >
+              <Play size={12} /> Run now
+            </button>
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() =>
+                setStatus({
+                  id: r._id,
+                  status: r.status === "active" ? "paused" : "active",
+                  actingUserId,
+                })
+              }
+            >
+              <Pause size={12} /> {r.status === "active" ? "Pause" : "Resume"}
+            </button>
+            <button
+              className="btn btn--ghost btn--sm btn--icon"
+              aria-label={`Remove ${r.name}`}
+              onClick={async () => {
+                await remove({ id: r._id, actingUserId });
+                toast.success("Workflow removed");
+              }}
+            >
+              <Trash2 size={12} />
+            </button>
+          </>
+        )}
+      />
 
       <Drawer
         open={open}

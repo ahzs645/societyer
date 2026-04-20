@@ -183,11 +183,109 @@ export const RECIPE_CATALOG = (Object.keys(RECIPE_STEPS) as RecipeKey[]).map(
   }),
 );
 
+// Node types the "Add Node" picker offers, and what each type is called in
+// the UI. Keep the label in sync with `nodeTypeLabel` on the frontend.
+export const NODE_TYPE_CATALOG: Array<{
+  type: NodePreview["type"];
+  label: string;
+  description: string;
+}> = [
+  { type: "manual_trigger", label: "Manual trigger", description: "A person starts the workflow from Societyer." },
+  { type: "form", label: "Form", description: "Collects structured input before handing off." },
+  { type: "pdf_fill", label: "Fill PDF", description: "Hands a template + payload to the PDF fill endpoint." },
+  { type: "document_create", label: "Save document", description: "Stores the generated file in Documents." },
+  { type: "email", label: "Send notification", description: "Sends an email / in-app notification." },
+  { type: "external_n8n", label: "External n8n step", description: "Delegates work to an n8n workflow node." },
+];
+
+type SetupCheck = { ok: boolean; message?: string };
+
+function checkNodeSetup(
+  node: NodePreview,
+  providerConfig: { externalWebhookUrl?: string } | undefined,
+): SetupCheck[] {
+  const checks: SetupCheck[] = [];
+  if (node.type === "pdf_fill") {
+    const hasTemplate = Boolean(env("UNBC_AFFILIATE_TEMPLATE_PATH"));
+    checks.push({
+      ok: hasTemplate,
+      message: hasTemplate
+        ? undefined
+        : "UNBC_AFFILIATE_TEMPLATE_PATH is not set on the Societyer server.",
+    });
+    const hasSecret = Boolean(env("SOCIETYER_WORKFLOW_CALLBACK_SECRET"));
+    checks.push({
+      ok: hasSecret,
+      message: hasSecret
+        ? undefined
+        : "SOCIETYER_WORKFLOW_CALLBACK_SECRET is not set — n8n can't call back.",
+    });
+    const hasWebhook = Boolean(providerConfig?.externalWebhookUrl);
+    checks.push({
+      ok: hasWebhook,
+      message: hasWebhook ? undefined : "No n8n webhook URL configured on this workflow.",
+    });
+  } else if (node.type === "external_n8n") {
+    const hasWebhook = Boolean(providerConfig?.externalWebhookUrl);
+    checks.push({
+      ok: hasWebhook,
+      message: hasWebhook ? undefined : "No n8n webhook URL configured on this workflow.",
+    });
+  } else if (node.type === "email") {
+    const hasResend = Boolean(env("RESEND_API_KEY") && env("RESEND_FROM_EMAIL"));
+    // Email is marked "draft" by default — surface it as needs_setup only when
+    // the recipe author has explicitly flipped it to ready, but the server
+    // hasn't configured Resend.
+    checks.push({
+      ok: hasResend,
+      message: hasResend ? undefined : "Resend is not configured — notifications will be skipped.",
+    });
+  }
+  return checks;
+}
+
+// Computes the live node preview for rendering: starts from the stored
+// (or catalog) preview and replaces each node's `status` based on the
+// environment + provider config at read time. Also attaches `setupIssues`
+// so the UI can explain *why* a node is not ready.
+export function computeEffectiveNodePreview(
+  baseNodes: NodePreview[] | undefined,
+  providerConfig?: { externalWebhookUrl?: string },
+) {
+  const nodes = Array.isArray(baseNodes) ? baseNodes : [];
+  return nodes.map((node) => {
+    const checks = checkNodeSetup(node, providerConfig);
+    const failing = checks.filter((c) => !c.ok);
+    const setupIssues = failing.map((c) => c.message!).filter(Boolean);
+    let status: NodePreview["status"] = node.status ?? "ready";
+    if (failing.length > 0) {
+      // Respect an explicit "draft" designation — if the recipe author flagged
+      // a step as draft, keep it draft rather than downgrading the badge to a
+      // setup warning. Everything else with failing checks becomes needs_setup.
+      status = node.status === "draft" ? "draft" : "needs_setup";
+    } else if (node.status !== "draft") {
+      status = "ready";
+    }
+    return { ...node, status, setupIssues };
+  });
+}
+
 // ---- queries -----------------------------------------------------------
 
 export const listCatalog = query({
   args: {},
-  handler: async () => RECIPE_CATALOG,
+  handler: async () =>
+    RECIPE_CATALOG.map((entry) => ({
+      ...entry,
+      // Recompute node statuses at read time so the preview reflects the
+      // current server env (e.g. whether UNBC_AFFILIATE_TEMPLATE_PATH is set).
+      nodePreview: computeEffectiveNodePreview(entry.nodePreview),
+    })),
+});
+
+export const listNodeTypes = query({
+  args: {},
+  handler: async () => NODE_TYPE_CATALOG,
 });
 
 export const list = query({
@@ -227,7 +325,14 @@ export const getRun = query({
 
 export const get = query({
   args: { id: v.id("workflows") },
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: async (ctx, { id }) => {
+    const wf = await ctx.db.get(id);
+    if (!wf) return null;
+    return {
+      ...wf,
+      nodePreview: computeEffectiveNodePreview(wf.nodePreview, wf.providerConfig),
+    };
+  },
 });
 
 // ---- mutations ---------------------------------------------------------
@@ -352,6 +457,89 @@ export const remove = mutation({
   },
 });
 
+// Append (or insert) a node into the workflow's preview graph. For now this
+// is additive only — no runner logic is attached to user-added nodes; they
+// show up in the canvas, the sidepanel, and the run timeline as "pending"
+// and are marked skipped if the workflow runs. Clarifying the execution
+// contract is tracked for the full bridge MVP.
+export const addNode = mutation({
+  args: {
+    id: v.id("workflows"),
+    node: v.object({
+      type: v.string(),
+      label: v.string(),
+      description: v.optional(v.string()),
+    }),
+    afterKey: v.optional(v.string()),
+    actingUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, { id, node, afterKey, actingUserId }) => {
+    const wf = await ctx.db.get(id);
+    if (!wf) throw new Error("Workflow not found");
+    await requireRole(ctx, {
+      actingUserId,
+      societyId: wf.societyId,
+      required: "Director",
+    });
+
+    const valid = NODE_TYPE_CATALOG.some((entry) => entry.type === node.type);
+    if (!valid) throw new Error(`Unknown node type: ${node.type}`);
+
+    const existing: NodePreview[] = Array.isArray(wf.nodePreview) ? [...wf.nodePreview] : [];
+    const baseKey = node.type.replace(/[^a-z0-9_]/gi, "_").toLowerCase() || "node";
+    const usedKeys = new Set(existing.map((n) => n.key));
+    let newKey = baseKey;
+    let suffix = 1;
+    while (usedKeys.has(newKey)) {
+      newKey = `${baseKey}_${suffix++}`;
+    }
+
+    const newNode: NodePreview = {
+      key: newKey,
+      type: node.type as NodePreview["type"],
+      label: node.label,
+      description: node.description,
+      status: "draft",
+    };
+
+    let next: NodePreview[];
+    if (afterKey) {
+      const idx = existing.findIndex((n) => n.key === afterKey);
+      if (idx === -1) {
+        next = [...existing, newNode];
+      } else {
+        next = [...existing.slice(0, idx + 1), newNode, ...existing.slice(idx + 1)];
+      }
+    } else {
+      next = [...existing, newNode];
+    }
+
+    await ctx.db.patch(id, { nodePreview: next });
+    return { key: newKey };
+  },
+});
+
+export const removeNode = mutation({
+  args: {
+    id: v.id("workflows"),
+    key: v.string(),
+    actingUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, { id, key, actingUserId }) => {
+    const wf = await ctx.db.get(id);
+    if (!wf) throw new Error("Workflow not found");
+    await requireRole(ctx, {
+      actingUserId,
+      societyId: wf.societyId,
+      required: "Director",
+    });
+    const existing: NodePreview[] = Array.isArray(wf.nodePreview) ? wf.nodePreview : [];
+    const next = existing.filter((n) => n.key !== key);
+    if (next.length === existing.length) return;
+    await ctx.db.patch(id, { nodePreview: next });
+  },
+});
+
 export const receiveExternalCallback = mutation({
   args: {
     workflowId: v.id("workflows"),
@@ -377,6 +565,7 @@ export const receiveExternalCallback = mutation({
     }
 
     const now = new Date().toISOString();
+    const isFailure = args.event === "run.failed" || args.event === "step.failed";
     let steps = run.steps ?? [];
     if (args.event === "document.created" && args.generatedDocument) {
       steps = steps.map((step) => {
@@ -392,13 +581,21 @@ export const receiveExternalCallback = mutation({
       const status =
         args.event === "step.started"
           ? "running"
-          : args.event === "step.failed"
-          ? "fail"
-          : "ok";
+          : isFailure
+            ? "fail"
+            : "ok";
       steps = steps.map((step) =>
         step.key === args.stepKey
           ? { ...step, status, atISO: now, note: args.note ?? step.note }
           : step,
+      );
+    }
+
+    if (isFailure) {
+      steps = reconcileStepsOnFailure(
+        steps,
+        args.note ?? (args.event === "run.failed" ? "Workflow run failed." : "Step failed."),
+        now,
       );
     }
 
@@ -423,7 +620,7 @@ export const receiveExternalCallback = mutation({
     if (args.event === "run.completed") {
       patch.status = "success";
       patch.completedAtISO = now;
-    } else if (args.event === "run.failed" || args.event === "step.failed") {
+    } else if (isFailure) {
       patch.status = "failed";
       patch.completedAtISO = now;
     } else if (run.status === "queued") {
@@ -433,6 +630,35 @@ export const receiveExternalCallback = mutation({
     await ctx.db.patch(args.runId, patch);
   },
 });
+
+// Any step still running/pending when a run fails needs to be resolved so
+// the timeline reflects where execution actually stopped. The first
+// still-open step is attributed the failure; any pending steps after it are
+// skipped. If the step that triggered the failure has already been marked
+// "fail", that stays and only the trailing pending steps become "skip".
+function reconcileStepsOnFailure(
+  steps: Array<{ key?: string; label: string; status: string; atISO?: string; note?: string }>,
+  errorNote: string,
+  nowISO: string,
+) {
+  let failureAssigned = steps.some((s) => s.status === "fail");
+  return steps.map((step) => {
+    if (step.status === "ok" || step.status === "fail") return step;
+    if (!failureAssigned && (step.status === "running" || step.status === "pending")) {
+      failureAssigned = true;
+      return { ...step, status: "fail", atISO: nowISO, note: errorNote };
+    }
+    if (step.status === "pending" || step.status === "running") {
+      return {
+        ...step,
+        status: "skip",
+        atISO: nowISO,
+        note: "Skipped — earlier step failed.",
+      };
+    }
+    return step;
+  });
+}
 
 export const recordGeneratedDocument = mutation({
   args: {
@@ -569,10 +795,21 @@ export const _completeRun = internalMutation({
     output: v.optional(v.any()),
   },
   handler: async (ctx, { id, status, output }) => {
+    const run = await ctx.db.get(id);
+    const now = new Date().toISOString();
+    let steps = run?.steps ?? [];
+    if (status === "failed" && steps.length > 0) {
+      const errorNote =
+        (output && typeof output === "object" && typeof (output as any).error === "string"
+          ? (output as any).error
+          : undefined) ?? "Workflow failed.";
+      steps = reconcileStepsOnFailure(steps, errorNote, now);
+    }
     await ctx.db.patch(id, {
       status,
-      completedAtISO: new Date().toISOString(),
+      completedAtISO: now,
       output,
+      steps,
     });
   },
 });

@@ -62,11 +62,15 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   pageSizeOptions = [10, 25, 50],
   bulkActions,
   viewsKey,
+  loading = false,
 }: {
   label: string;
   icon?: ReactNode;
   data: T[];
   columns: Column<T>[];
+  /** When true, replaces rows with skeleton placeholders. Callers should
+   * pass `loading={myQuery === undefined}` for Convex useQuery results. */
+  loading?: boolean;
   filterFields?: FilterField<T>[];
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
@@ -383,6 +387,22 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
 
       {isMobileCards ? (
         <div className="card-list" role="list" aria-label={label}>
+          {loading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={`sk-${i}`} className="card-list__item" role="listitem" aria-busy="true">
+                <div className="card-list__primary">
+                  <div className="card-list__primary-cell">
+                    <Skeleton variant="line" width="60%" height={12} />
+                  </div>
+                </div>
+                <div className="card-list__details">
+                  <Skeleton variant="line" width="40%" height={10} />
+                  <Skeleton variant="line" width="30%" height={10} />
+                </div>
+              </div>
+            ))
+          ) : (
+          <>
           {visibleRows.map((row) => {
             const primaryCol = visibleColumns[0] ?? columns[0];
             const secondaryCols = visibleColumns.slice(1);
@@ -433,6 +453,8 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
                 ? emptyMessage
                 : "No rows match the current filters."}
             </div>
+          )}
+          </>
           )}
         </div>
       ) : (
@@ -498,7 +520,28 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
           </tr>
         </thead>
         <tbody>
-          {visibleRows.map((row) => {
+          {loading
+            ? Array.from({ length: 6 }).map((_, i) => (
+                <tr key={`sk-${i}`} aria-busy="true">
+                  {selectable && (
+                    <td className="table__select-cell">
+                      <Skeleton variant="block" width={14} height={14} radius={3} />
+                    </td>
+                  )}
+                  {visibleColumns.map((col, ci) => (
+                    <td key={col.id} style={{ textAlign: col.align }}>
+                      <Skeleton
+                        variant="line"
+                        height={10}
+                        width={ci === 0 ? "65%" : ci === visibleColumns.length - 1 ? "35%" : "50%"}
+                      />
+                    </td>
+                  ))}
+                  {renderRowActions && <td className="table__actions" />}
+                </tr>
+              ))
+            : null}
+          {!loading && visibleRows.map((row) => {
             const id = rowKey(row);
             const isSelected = selectable && selected.has(id);
             return (

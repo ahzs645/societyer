@@ -12,7 +12,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight, X, AlertTriangle, CheckCircle2, Info, Lock, Unlock } from "lucide-react";
+import { ChevronRight, X, AlertTriangle, CheckCircle2, Info, Lock, Unlock, type LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useConfirm } from "./Modal";
 import { useInspectorPanel } from "./InspectorPanel";
@@ -418,6 +418,118 @@ export function InspectorNote({
 
 export function Avatar({ label }: { label: string }) {
   return <span className="avatar">{label.slice(0, 2).toUpperCase()}</span>;
+}
+
+/** Animated placeholder block. Use while Convex useQuery returns undefined. */
+export function Skeleton({
+  width,
+  height,
+  radius,
+  variant = "block",
+  className,
+  style,
+}: {
+  width?: number | string;
+  height?: number | string;
+  radius?: number | string;
+  variant?: "block" | "line" | "text" | "circle";
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const classes = ["skeleton", `skeleton--${variant}`];
+  if (className) classes.push(className);
+  const merged: React.CSSProperties = { ...style };
+  if (width != null) merged.width = typeof width === "number" ? `${width}px` : width;
+  if (height != null) merged.height = typeof height === "number" ? `${height}px` : height;
+  if (radius != null) merged.borderRadius = typeof radius === "number" ? `${radius}px` : radius;
+  return <span className={classes.join(" ")} style={merged} aria-hidden="true" />;
+}
+
+/** N stacked skeleton rows — handy for DataTable loading states. */
+export function SkeletonRows({ rows = 6, columns = 4 }: { rows?: number; columns?: number }) {
+  return (
+    <div className="skeleton-stack" aria-busy="true" aria-label="Loading">
+      {Array.from({ length: rows }).map((_, r) => (
+        <div className="skeleton-row" key={r}>
+          {Array.from({ length: columns }).map((_, c) => (
+            <Skeleton
+              key={c}
+              variant="line"
+              height={10}
+              width={c === 0 ? "22%" : c === columns - 1 ? "14%" : "18%"}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function Spinner({
+  size = "md",
+  tone,
+  className,
+  label = "Loading",
+}: {
+  size?: "sm" | "md" | "lg";
+  tone?: "accent";
+  className?: string;
+  label?: string;
+}) {
+  const classes = ["spinner", `spinner--${size}`];
+  if (tone) classes.push(`spinner--${tone}`);
+  if (className) classes.push(className);
+  return <span className={classes.join(" ")} role="status" aria-label={label} />;
+}
+
+export type BannerTone = "info" | "success" | "warn" | "danger";
+
+/** Inline callout row. Use at the top of a page or panel to convey
+ * non-blocking state (hint, success confirmation, warning, error). */
+export function Banner({
+  tone = "info",
+  icon,
+  title,
+  onDismiss,
+  className,
+  children,
+}: {
+  tone?: BannerTone;
+  icon?: ReactNode;
+  title?: ReactNode;
+  onDismiss?: () => void;
+  className?: string;
+  children?: ReactNode;
+}) {
+  const classes = ["banner", `banner--${tone}`];
+  if (className) classes.push(className);
+  const DefaultIcon: LucideIcon =
+    tone === "success" ? CheckCircle2
+    : tone === "danger" ? AlertTriangle
+    : tone === "warn" ? AlertTriangle
+    : Info;
+  return (
+    <div
+      className={classes.join(" ")}
+      role={tone === "danger" ? "alert" : "status"}
+    >
+      <span className="banner__icon">{icon ?? <DefaultIcon aria-hidden="true" />}</span>
+      <div className="banner__content">
+        {title && <div className="banner__title">{title}</div>}
+        {children && <div className="banner__body">{children}</div>}
+      </div>
+      {onDismiss && (
+        <button
+          type="button"
+          className="banner__dismiss"
+          onClick={onDismiss}
+          aria-label="Dismiss"
+        >
+          <X aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  );
 }
 
 export function Drawer({
