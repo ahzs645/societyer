@@ -58,6 +58,23 @@ const FIELD_LABELS = [
   "Check Box1",
 ];
 
+type IntakeFieldType = "text" | "email" | "phone" | "date" | "checkbox" | "textarea";
+
+type IntakeField = {
+  key: string;
+  label: string;
+  type: IntakeFieldType;
+  required?: boolean;
+  defaultValue?: string | boolean;
+  helpText?: string;
+};
+
+type TemplateToken = {
+  label: string;
+  value: string;
+  group: string;
+};
+
 const nodeTypes = {
   societyerWorkflowNode: WorkflowNode,
 };
@@ -112,9 +129,10 @@ export function WorkflowDetailPage() {
 
   const providerConfig = workflow.providerConfig ?? {};
   const sampleAffiliate = workflow.config?.sampleAffiliate ?? {};
+  const intakeFields = configuredIntakeFields(workflow);
 
   const openIntake = () => {
-    setIntake({ ...sampleAffiliate });
+    setIntake(initialIntakeValues(intakeFields, sampleAffiliate));
     setIntakeOpen(true);
   };
 
@@ -178,7 +196,7 @@ export function WorkflowDetailPage() {
             disabled={busy}
             onClick={() => (isUnbc ? openIntake() : runWorkflow())}
           >
-            <Play size={12} /> Test
+            <Play size={12} /> Launch
           </button>
           <Link className="btn btn--ghost btn--sm" to={`/app/workflow-runs?workflowId=${workflow._id}`}>
             <History size={12} /> See Runs
@@ -276,6 +294,8 @@ export function WorkflowDetailPage() {
                 node={selectedNode}
                 workflow={workflow}
                 documents={documents ?? []}
+                onLaunch={() => (isUnbc ? openIntake() : runWorkflow())}
+                launchDisabled={busy}
                 onSave={async (patch) => {
                   await updateNodeConfig({
                     id: workflow._id,
@@ -366,47 +386,72 @@ export function WorkflowDetailPage() {
         </div>
       </Drawer>
 
-      <Drawer
+      <Modal
         open={intakeOpen}
         onClose={() => setIntakeOpen(false)}
-        title="Affiliate intake"
+        title="Launch affiliate request"
+        size="lg"
         footer={
           <>
             <button className="btn" disabled={busy} onClick={() => setIntakeOpen(false)}>
               Cancel
             </button>
-            <button className="btn btn--accent" disabled={busy} onClick={() => runWorkflow({ affiliate: intake })}>
+            <button
+              className="btn btn--accent"
+              disabled={busy}
+              onClick={() => {
+                const missing = missingRequiredIntakeFields(intakeFields, intake);
+                if (missing.length > 0) {
+                  toast.error(`Fill required fields: ${missing.slice(0, 3).join(", ")}`);
+                  return;
+                }
+                const payload = intakePayloadFromState(intakeFields, intake);
+                runWorkflow({ intake: payload, affiliate: payload });
+              }}
+            >
               <Play size={12} /> Run in n8n
             </button>
           </>
         }
       >
         <div className="workflow-intake">
-          {FIELD_LABELS.map((field) => {
-            const isCheckbox = field === "Check Box0" || field === "Check Box1";
+          {intakeFields.map((field) => {
             return (
-              <Field key={field} label={checkboxLabel(field)}>
-                {isCheckbox ? (
+              <Field
+                key={field.key}
+                label={checkboxLabel(field.label)}
+                hint={field.helpText}
+                required={field.required}
+              >
+                {field.type === "checkbox" ? (
                   <label className="workflow-checkbox">
                     <input
                       type="checkbox"
-                      checked={Boolean(intake[field])}
-                      onChange={(event) => setIntake({ ...intake, [field]: event.target.checked })}
+                      checked={Boolean(intake[field.key])}
+                      onChange={(event) => setIntake({ ...intake, [field.key]: event.target.checked })}
                     />
-                    <span>{field === "Check Box0" ? "Previous UNBC ID: yes" : "Previous UNBC ID: no"}</span>
+                    <span>{field.label}</span>
                   </label>
+                ) : field.type === "textarea" ? (
+                  <textarea
+                    className="textarea"
+                    rows={3}
+                    value={intake[field.key] ?? ""}
+                    onChange={(event) => setIntake({ ...intake, [field.key]: event.target.value })}
+                  />
                 ) : (
                   <input
                     className="input"
-                    value={intake[field] ?? ""}
-                    onChange={(event) => setIntake({ ...intake, [field]: event.target.value })}
+                    type={field.type === "date" ? "date" : field.type === "email" ? "email" : field.type === "phone" ? "tel" : "text"}
+                    value={intake[field.key] ?? ""}
+                    onChange={(event) => setIntake({ ...intake, [field.key]: event.target.value })}
                   />
                 )}
               </Field>
             );
           })}
         </div>
-      </Drawer>
+      </Modal>
     </div>
   );
 }
@@ -490,25 +535,200 @@ function checkboxLabel(field: string) {
   return field;
 }
 
+function slugifyFieldKey(label: string) {
+  const key = label
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return key || "field";
+}
+
+function inferIntakeFieldType(label: string): IntakeFieldType {
+  const norm = label.toLowerCase();
+  if (/check\s*box|yes\/no|true\/false/.test(norm)) return "checkbox";
+  if (/e-?mail/.test(norm)) return "email";
+  if (/phone|tel|mobile|cell/.test(norm)) return "phone";
+  if (/date|birth/.test(norm)) return "date";
+  if (/address|note|description|comment/.test(norm)) return "textarea";
+  return "text";
+}
+
+function normalizeIntakeFields(raw: any, fallback?: any): IntakeField[] {
+  const source = Array.isArray(raw) && raw.length > 0
+    ? raw
+    : Array.isArray(fallback) && fallback.length > 0
+      ? fallback
+      : [];
+  const seen = new Set<string>();
+  return source
+    .map((entry: any): IntakeField | null => {
+      if (typeof entry === "string") {
+        const label = entry.trim();
+        if (!label) return null;
+        const key = uniqueFieldKey(slugifyFieldKey(label), seen);
+        return {
+          key,
+          label,
+          type: inferIntakeFieldType(label),
+          required: false,
+        };
+      }
+      if (!entry || typeof entry !== "object") return null;
+      const label = String(entry.label ?? entry.name ?? entry.key ?? "").trim();
+      if (!label) return null;
+      const rawKey = String(entry.key ?? entry.name ?? slugifyFieldKey(label)).trim();
+      const key = uniqueFieldKey(slugifyFieldKey(rawKey), seen);
+      const type = ["text", "email", "phone", "date", "checkbox", "textarea"].includes(entry.type)
+        ? entry.type as IntakeFieldType
+        : inferIntakeFieldType(label);
+      return {
+        key,
+        label,
+        type,
+        required: Boolean(entry.required),
+        defaultValue: entry.defaultValue,
+        helpText: typeof entry.helpText === "string" ? entry.helpText : undefined,
+      };
+    })
+    .filter(Boolean) as IntakeField[];
+}
+
+function uniqueFieldKey(base: string, seen: Set<string>) {
+  let key = base || "field";
+  let suffix = 2;
+  while (seen.has(key)) key = `${base}_${suffix++}`;
+  seen.add(key);
+  return key;
+}
+
+function configuredIntakeFields(workflow: any) {
+  const intakeNode = Array.isArray(workflow?.nodePreview)
+    ? workflow.nodePreview.find((node: any) => node?.type === "form")
+    : null;
+  const fallback =
+    workflow?.config?.intakeFields ??
+    workflow?.config?.pdfFields ??
+    (workflow?.config?.sampleAffiliate && typeof workflow.config.sampleAffiliate === "object"
+      ? Object.keys(workflow.config.sampleAffiliate)
+      : FIELD_LABELS);
+  return normalizeIntakeFields(intakeNode?.config?.fields, fallback);
+}
+
+function initialIntakeValues(fields: IntakeField[], sample: Record<string, any>) {
+  const values: Record<string, any> = {};
+  for (const field of fields) {
+    const fallback = sample[field.key] ?? sample[field.label] ?? field.defaultValue;
+    values[field.key] = field.type === "checkbox" ? Boolean(fallback) : fallback ?? "";
+  }
+  return values;
+}
+
+function intakePayloadFromState(fields: IntakeField[], values: Record<string, any>) {
+  const payload: Record<string, any> = {};
+  for (const field of fields) {
+    const value = field.type === "checkbox" ? Boolean(values[field.key]) : values[field.key] ?? "";
+    payload[field.key] = value;
+    // Preserve AcroForm label lookups and older mappings that used the label as the key.
+    payload[field.label] = value;
+  }
+  return payload;
+}
+
+function missingRequiredIntakeFields(fields: IntakeField[], values: Record<string, any>) {
+  return fields
+    .filter((field) => {
+      if (!field.required) return false;
+      const value = values[field.key];
+      if (field.type === "checkbox") return !Boolean(value);
+      return value == null || String(value).trim() === "";
+    })
+    .map((field) => field.label);
+}
+
+function documentDefaults(workflow: any) {
+  const cfg = workflow?.config ?? {};
+  if (cfg.pdfTemplateKey !== "unbc_affiliate_id") return {};
+  return {
+    category: cfg.documentCategory ?? "WorkflowGenerated",
+    tags: Array.isArray(cfg.documentTags) ? cfg.documentTags : ["workflow-generated", "unbc-affiliate-id"],
+    retentionYears: typeof cfg.documentRetentionYears === "number" ? cfg.documentRetentionYears : 10,
+    titleTemplate:
+      cfg.documentTitleTemplate ??
+      "UNBC Affiliate ID Request - {{intake.legal_first_name_of_affiliate}} {{intake.legal_last_name_of_affiliate}}",
+    changeNote: cfg.documentChangeNote ?? "Generated by UNBC Affiliate ID Request workflow.",
+  };
+}
+
+function emailDefaults(workflow: any) {
+  const cfg = workflow?.config ?? {};
+  if (cfg.pdfTemplateKey !== "unbc_affiliate_id") return {};
+  return {
+    to: cfg.emailTo ?? "employmentprocessing@unbc.ca",
+    subject:
+      cfg.emailSubject ??
+      "Completed affiliate status request form - {{intake.legal_first_name_of_affiliate}} {{intake.legal_last_name_of_affiliate}}",
+    body:
+      cfg.emailBody ??
+      [
+        "Hello,",
+        "",
+        "Please see the attached completed UNBC affiliate status request form for {{intake.legal_first_name_of_affiliate}} {{intake.legal_last_name_of_affiliate}}.",
+        "",
+        "The generated PDF is attached for processing.",
+        "",
+        "Thanks,",
+        "{{intake.name_of_requesting_manager}}",
+      ].join("\n"),
+  };
+}
+
+function workflowTemplateTokens(workflow: any): TemplateToken[] {
+  const intakeTokens = configuredIntakeFields(workflow).map((field) => ({
+    group: "Intake",
+    label: field.label,
+    value: `{{intake.${field.key}}}`,
+  }));
+  return [
+    ...intakeTokens,
+    { group: "Document", label: "Generated PDF title", value: "{{document.title}}" },
+    { group: "Document", label: "Generated PDF file name", value: "{{document.fileName}}" },
+    { group: "Document", label: "Document category", value: "{{document.category}}" },
+    { group: "Workflow", label: "Workflow name", value: "{{workflow.name}}" },
+    { group: "Workflow", label: "Run ID", value: "{{run.id}}" },
+    { group: "User", label: "Launcher name", value: "{{currentUser.name}}" },
+    { group: "User", label: "Launcher email", value: "{{currentUser.email}}" },
+    { group: "Dynamic", label: "Today", value: "{{today}}" },
+  ];
+}
+
 type NodeSetupPanelProps = {
   node: any;
   workflow: any;
   documents: any[];
+  onLaunch: () => void;
+  launchDisabled?: boolean;
   onSave: (patch: Record<string, any>) => Promise<void>;
 };
 
-function NodeSetupPanel({ node, workflow, documents, onSave }: NodeSetupPanelProps) {
+function NodeSetupPanel({ node, workflow, documents, onLaunch, launchDisabled, onSave }: NodeSetupPanelProps) {
   const cfg = node.config ?? {};
   const recipeCfg = workflow?.config ?? {};
+  const emailCfg = { ...emailDefaults(workflow), ...cfg };
 
   const blurbs: Record<string, string> = {
     manual_trigger: "A person starts this workflow from inside Societyer. No external setup required.",
     form: "Collects structured input before handing off to later steps. Define the fields to collect.",
     pdf_fill: "Picks up a fillable PDF from Documents, fills mapped AcroForm fields, and saves the output as a new document version.",
     document_create: "Saves the output of a prior step into Documents with a category and retention policy.",
-    email: "Sends a templated email via Resend. Will be skipped until Resend is configured on the server.",
+    email: "Queues a manual-send Outbox draft with templated content and the generated document attached.",
     external_n8n: "Hands execution to an n8n workflow via its webhook URL. n8n then calls back to progress the timeline.",
   };
+  const launchLabel =
+    typeof cfg.launchLabel === "string" && cfg.launchLabel.trim()
+      ? cfg.launchLabel.trim()
+      : "Launch workflow";
 
   return (
     <div className="workflow-sidepanel__section workflow-setup">
@@ -518,19 +738,34 @@ function NodeSetupPanel({ node, workflow, documents, onSave }: NodeSetupPanelPro
       </p>
 
       {node.type === "manual_trigger" && (
-        <LabeledInput
-          label="Trigger label"
-          value={cfg.launchLabel ?? ""}
-          placeholder="Launch"
-          onSave={(v) => onSave({ launchLabel: v })}
-        />
+        <>
+          <button
+            type="button"
+            className="btn btn--accent btn--sm"
+            disabled={launchDisabled}
+            onClick={onLaunch}
+          >
+            <Play size={12} /> {launchLabel}
+          </button>
+          <LabeledInput
+            label="Trigger label"
+            value={cfg.launchLabel ?? ""}
+            placeholder="Launch workflow"
+            onSave={(v) => onSave({ launchLabel: v })}
+          />
+        </>
       )}
 
       {node.type === "form" && (
-        <FieldListEditor
-          label="Intake fields"
-          hint="One field per line. Saved when focus leaves the box."
-          value={Array.isArray(cfg.fields) ? cfg.fields : []}
+        <IntakeFieldSetup
+          fields={normalizeIntakeFields(
+            cfg.fields,
+            recipeCfg.intakeFields ??
+              recipeCfg.pdfFields ??
+              (recipeCfg.sampleAffiliate && typeof recipeCfg.sampleAffiliate === "object"
+                ? Object.keys(recipeCfg.sampleAffiliate)
+                : FIELD_LABELS),
+          )}
           onSave={(fields) => onSave({ fields })}
         />
       )}
@@ -539,6 +774,7 @@ function NodeSetupPanel({ node, workflow, documents, onSave }: NodeSetupPanelPro
         <PdfFillSetup
           node={node}
           cfg={cfg}
+          intakeFields={configuredIntakeFields(workflow)}
           documents={documents}
           recipeFields={Array.isArray(recipeCfg.pdfFields) ? recipeCfg.pdfFields : []}
           onSave={onSave}
@@ -546,47 +782,32 @@ function NodeSetupPanel({ node, workflow, documents, onSave }: NodeSetupPanelPro
       )}
 
       {node.type === "document_create" && (
-        <>
-          <LabeledInput
-            label="Category"
-            value={cfg.category ?? ""}
-            placeholder="WorkflowGenerated"
-            onSave={(v) => onSave({ category: v })}
-          />
-          <LabeledInput
-            label="Tags (comma-separated)"
-            value={(Array.isArray(cfg.tags) ? cfg.tags : []).join(", ")}
-            placeholder="workflow-generated, unbc-affiliate-id"
-            onSave={(v) =>
-              onSave({
-                tags: v
-                  .split(",")
-                  .map((t) => t.trim())
-                  .filter(Boolean),
-              })
-            }
-          />
-        </>
+        <DocumentCreateSetup
+          cfg={cfg}
+          defaults={documentDefaults(workflow)}
+          onSave={onSave}
+        />
       )}
 
       {node.type === "email" && (
         <>
           <LabeledInput
             label="To"
-            value={cfg.to ?? ""}
+            value={emailCfg.to ?? ""}
             placeholder="recipient@example.com"
             onSave={(v) => onSave({ to: v })}
           />
           <LabeledInput
             label="Subject"
-            value={cfg.subject ?? ""}
-            placeholder="UNBC affiliate ID ready for review"
+            value={emailCfg.subject ?? ""}
+            placeholder="Completed affiliate status request form"
             onSave={(v) => onSave({ subject: v })}
           />
-          <LabeledTextarea
+          <TemplateTextarea
             label="Body"
-            value={cfg.body ?? ""}
-            placeholder="Hi {{manager}}, the affiliate request for {{affiliate}} is ready for your signature."
+            value={emailCfg.body ?? ""}
+            placeholder={"Hello,\n\nHere is the completed affiliate status request form.\n\nThanks,"}
+            tokens={workflowTemplateTokens(workflow)}
             onSave={(v) => onSave({ body: v })}
           />
         </>
@@ -609,19 +830,21 @@ function NodeSetupPanel({ node, workflow, documents, onSave }: NodeSetupPanelPro
         </>
       )}
 
-      <div className="workflow-setup__footer">
-        <button
-          type="button"
-          className="btn btn--ghost btn--sm"
-          disabled
-          title="Test harness ships with Phase 2 — executing nodes individually."
-        >
-          <Play size={12} /> Test node
-        </button>
-        <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
-          Runner support for user-edited nodes is staged; config saved here will wire in once execution lands.
-        </span>
-      </div>
+      {node.type !== "manual_trigger" && (
+        <div className="workflow-setup__footer">
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            disabled
+            title="Test harness ships with Phase 2 — executing nodes individually."
+          >
+            <Play size={12} /> Test node
+          </button>
+          <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+            Runner support for user-edited nodes is staged; config saved here will wire in once execution lands.
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -692,6 +915,109 @@ function LabeledTextarea({
   );
 }
 
+function TemplateTextarea({
+  label,
+  value,
+  placeholder,
+  tokens,
+  onSave,
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  tokens: TemplateToken[];
+  onSave: (next: string) => void | Promise<void>;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [slash, setSlash] = useState<{ start: number; term: string } | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const lastExternal = useRef(value);
+  if (lastExternal.current !== value) {
+    lastExternal.current = value;
+    if (draft !== value) setDraft(value);
+  }
+
+  const filteredTokens = slash
+    ? tokens
+        .filter((token) => `${token.group} ${token.label} ${token.value}`.toLowerCase().includes(slash.term))
+        .slice(0, 8)
+    : [];
+
+  const detectSlash = (text: string, cursor: number) => {
+    const start = text.lastIndexOf("/", cursor - 1);
+    if (start < 0) return null;
+    const before = start === 0 ? "" : text[start - 1];
+    const term = text.slice(start + 1, cursor);
+    if (before && !/\s/.test(before)) return null;
+    if (/\s/.test(term)) return null;
+    return { start, term: term.toLowerCase() };
+  };
+
+  const updateDraft = (next: string, cursor: number) => {
+    setDraft(next);
+    setSlash(detectSlash(next, cursor));
+  };
+
+  const insertToken = (token: TemplateToken) => {
+    const textarea = textareaRef.current;
+    if (!textarea || !slash) return;
+    const cursor = textarea.selectionStart ?? draft.length;
+    const next = `${draft.slice(0, slash.start)}${token.value}${draft.slice(cursor)}`;
+    setDraft(next);
+    setSlash(null);
+    requestAnimationFrame(() => {
+      const nextCursor = slash.start + token.value.length;
+      textarea.focus();
+      textarea.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
+  return (
+    <Field label={label}>
+      <div className="template-textarea">
+        <textarea
+          ref={textareaRef}
+          className="textarea"
+          value={draft}
+          placeholder={placeholder}
+          rows={7}
+          onChange={(event) => updateDraft(event.target.value, event.target.selectionStart)}
+          onKeyUp={(event) => {
+            const target = event.currentTarget;
+            setSlash(detectSlash(target.value, target.selectionStart));
+          }}
+          onBlur={() => {
+            window.setTimeout(() => setSlash(null), 120);
+            if (draft !== value) onSave(draft);
+          }}
+        />
+        {slash && filteredTokens.length > 0 && (
+          <div className="template-token-menu">
+            {filteredTokens.map((token) => (
+              <button
+                key={`${token.group}-${token.value}`}
+                type="button"
+                className="template-token-menu__item"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  insertToken(token);
+                }}
+              >
+                <span className="template-token-menu__group">{token.group}</span>
+                <span className="template-token-menu__label">{token.label}</span>
+                <span className="template-token-menu__value mono">{token.value}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 4 }}>
+        Type / to insert workflow, intake, document, or date fields.
+      </div>
+    </Field>
+  );
+}
+
 function FieldListEditor({
   label,
   hint,
@@ -734,15 +1060,351 @@ function FieldListEditor({
   );
 }
 
+function DocumentCreateSetup({
+  cfg,
+  defaults,
+  onSave,
+}: {
+  cfg: Record<string, any>;
+  defaults: Record<string, any>;
+  onSave: (patch: Record<string, any>) => Promise<void>;
+}) {
+  const category = cfg.category ?? defaults.category ?? "";
+  const tags = Array.isArray(cfg.tags) ? cfg.tags : Array.isArray(defaults.tags) ? defaults.tags : [];
+  const retentionYears = cfg.retentionYears ?? defaults.retentionYears ?? 10;
+  const titleTemplate = cfg.titleTemplate ?? defaults.titleTemplate ?? "";
+  const changeNote = cfg.changeNote ?? defaults.changeNote ?? "";
+
+  return (
+    <>
+      <LabeledInput
+        label="Category"
+        value={category}
+        placeholder="WorkflowGenerated"
+        onSave={(v) => onSave({ category: v })}
+      />
+      <LabeledInput
+        label="Generated document title"
+        value={titleTemplate}
+        placeholder="UNBC Affiliate ID Request - {{intake.legal_first_name_of_affiliate}} {{intake.legal_last_name_of_affiliate}}"
+        onSave={(v) => onSave({ titleTemplate: v })}
+      />
+      <LabeledInput
+        label="Retention years"
+        value={String(retentionYears)}
+        placeholder="10"
+        onSave={(v) => {
+          const parsed = Number(v);
+          return onSave({ retentionYears: Number.isFinite(parsed) && parsed > 0 ? parsed : undefined });
+        }}
+      />
+      <LabeledInput
+        label="Tags (comma-separated)"
+        value={tags.join(", ")}
+        placeholder="workflow-generated, unbc-affiliate-id"
+        onSave={(v) =>
+          onSave({
+            tags: v
+              .split(",")
+              .map((t) => t.trim())
+              .filter(Boolean),
+          })
+        }
+      />
+      <LabeledTextarea
+        label="Version note"
+        value={changeNote}
+        placeholder="Generated by workflow."
+        onSave={(v) => onSave({ changeNote: v })}
+      />
+    </>
+  );
+}
+
+function IntakeFieldSetup({
+  fields,
+  onSave,
+}: {
+  fields: IntakeField[];
+  onSave: (next: IntakeField[]) => void | Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const requiredCount = fields.filter((field) => field.required).length;
+  const byType = fields.reduce<Record<string, number>>((acc, field) => {
+    acc[field.type] = (acc[field.type] ?? 0) + 1;
+    return acc;
+  }, {});
+  const breakdown = Object.entries(byType)
+    .map(([type, count]) => `${count} ${type}`)
+    .join(" · ");
+
+  return (
+    <>
+      <Field label="Intake fields">
+        <div className="pdf-picker-trigger">
+          <div className="pdf-picker-trigger__label">
+            <strong>{fields.length} fields configured</strong>
+            <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+              {fields.length === 0
+                ? "Open the wizard to define what the launch form collects."
+                : `${requiredCount} required${breakdown ? ` · ${breakdown}` : ""}`}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={() => setOpen(true)}
+          >
+            {fields.length === 0 ? "Start wizard" : "Edit fields"}
+          </button>
+        </div>
+      </Field>
+      <IntakeFieldWizardModal
+        open={open}
+        onClose={() => setOpen(false)}
+        fields={fields}
+        onSave={async (next) => {
+          await onSave(next);
+          setOpen(false);
+        }}
+      />
+    </>
+  );
+}
+
+function IntakeFieldWizardModal({
+  open,
+  onClose,
+  fields,
+  onSave,
+}: {
+  open: boolean;
+  onClose: () => void;
+  fields: IntakeField[];
+  onSave: (next: IntakeField[]) => void | Promise<void>;
+}) {
+  const [draft, setDraft] = useState<IntakeField[]>(fields);
+  const [stepIndex, setStepIndex] = useState(0);
+  const [newField, setNewField] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setDraft(fields);
+    setStepIndex(0);
+    setNewField("");
+  }, [open, fields]);
+
+  const safeIndex = Math.min(stepIndex, Math.max(0, draft.length - 1));
+  const current = draft[safeIndex];
+  const usedKeys = (exceptIndex?: number) =>
+    new Set(draft.map((field, idx) => (idx === exceptIndex ? "" : field.key)).filter(Boolean));
+
+  const updateCurrent = (patch: Partial<IntakeField>) => {
+    if (!current) return;
+    setDraft((prev) =>
+      prev.map((field, idx) => {
+        if (idx !== safeIndex) return field;
+        const next = { ...field, ...patch };
+        if (patch.key !== undefined) {
+          next.key = uniqueFieldKey(slugifyFieldKey(patch.key), usedKeys(idx));
+        }
+        return next;
+      }),
+    );
+  };
+
+  const addField = () => {
+    const label = newField.trim();
+    if (!label) return;
+    const nextField: IntakeField = {
+      key: uniqueFieldKey(slugifyFieldKey(label), usedKeys()),
+      label,
+      type: inferIntakeFieldType(label),
+      required: false,
+    };
+    setDraft((prev) => [...prev, nextField]);
+    setNewField("");
+    setStepIndex(draft.length);
+  };
+
+  const removeCurrent = () => {
+    if (!current) return;
+    setDraft((prev) => prev.filter((_, idx) => idx !== safeIndex));
+    setStepIndex((idx) => Math.max(0, idx - 1));
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="xl"
+      title="Configure intake fields"
+      footer={
+        <>
+          <div className="muted" style={{ marginRight: "auto", fontSize: "var(--fs-sm)" }}>
+            {draft.length} fields · {draft.filter((field) => field.required).length} required
+          </div>
+          <button className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn btn--accent" onClick={() => onSave(draft)}>
+            Save fields
+          </button>
+        </>
+      }
+    >
+      <div className="mapping-wizard">
+        <aside className="mapping-wizard__sidebar">
+          <div className="field__label">Fields</div>
+          <div className="mapping-wizard__list">
+            {draft.length === 0 && (
+              <div className="muted" style={{ padding: 8, fontSize: "var(--fs-sm)" }}>
+                Add a field below.
+              </div>
+            )}
+            {draft.map((field, idx) => (
+              <button
+                key={`${field.key}-${idx}`}
+                type="button"
+                className={`mapping-wizard__item${idx === safeIndex ? " is-active" : ""}`}
+                onClick={() => setStepIndex(idx)}
+              >
+                <span className="mapping-wizard__item-label">{field.label}</span>
+                <span className="mapping-wizard__item-badge is-done">{field.type}</span>
+              </button>
+            ))}
+          </div>
+          <div className="mapping-wizard__add">
+            <input
+              className="input"
+              placeholder="Add field label"
+              value={newField}
+              onChange={(event) => setNewField(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addField();
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={addField}
+              disabled={!newField.trim()}
+            >
+              <Plus size={12} /> Add
+            </button>
+          </div>
+        </aside>
+
+        <section className="mapping-wizard__main">
+          {!current ? (
+            <div className="muted" style={{ padding: 16 }}>
+              Add an intake field to configure launch form inputs.
+            </div>
+          ) : (
+            <>
+              <div className="mapping-wizard__stepper muted" style={{ fontSize: "var(--fs-xs)" }}>
+                Field {safeIndex + 1} of {draft.length}
+              </div>
+              <h3 className="mapping-wizard__field">{current.label}</h3>
+
+              <div className="intake-field-grid">
+                <Field label="Label">
+                  <input
+                    className="input"
+                    value={current.label}
+                    onChange={(event) => updateCurrent({ label: event.target.value })}
+                  />
+                </Field>
+                <Field label="Downstream key">
+                  <input
+                    className="input mono"
+                    value={current.key}
+                    onChange={(event) => updateCurrent({ key: event.target.value })}
+                  />
+                </Field>
+                <Field label="Type">
+                  <select
+                    className="input"
+                    value={current.type}
+                    onChange={(event) => updateCurrent({ type: event.target.value as IntakeFieldType })}
+                  >
+                    <option value="text">Text</option>
+                    <option value="textarea">Long text</option>
+                    <option value="email">Email</option>
+                    <option value="phone">Phone</option>
+                    <option value="date">Date</option>
+                    <option value="checkbox">Checkbox</option>
+                  </select>
+                </Field>
+                <Field label="Default value">
+                  {current.type === "checkbox" ? (
+                    <label className="workflow-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(current.defaultValue)}
+                        onChange={(event) => updateCurrent({ defaultValue: event.target.checked })}
+                      />
+                      <span>Checked by default</span>
+                    </label>
+                  ) : (
+                    <input
+                      className="input"
+                      value={typeof current.defaultValue === "string" ? current.defaultValue : ""}
+                      onChange={(event) => updateCurrent({ defaultValue: event.target.value })}
+                    />
+                  )}
+                </Field>
+              </div>
+
+              <label className="workflow-checkbox">
+                <input
+                  type="checkbox"
+                  checked={Boolean(current.required)}
+                  onChange={(event) => updateCurrent({ required: event.target.checked })}
+                />
+                <span>Required at launch</span>
+              </label>
+
+              <Field label="Help text">
+                <textarea
+                  className="textarea"
+                  rows={3}
+                  value={current.helpText ?? ""}
+                  onChange={(event) => updateCurrent({ helpText: event.target.value })}
+                />
+              </Field>
+
+              <div className="mapping-wizard__row-actions">
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={removeCurrent}
+                >
+                  <Trash2 size={12} /> Remove field
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+    </Modal>
+  );
+}
+
 function PdfFillSetup({
   node,
   cfg,
+  intakeFields,
   documents,
   recipeFields,
   onSave,
 }: {
   node: any;
   cfg: Record<string, any>;
+  intakeFields: IntakeField[];
   documents: any[];
   recipeFields: string[];
   onSave: (patch: Record<string, any>) => Promise<void>;
@@ -751,15 +1413,17 @@ function PdfFillSetup({
     (doc: any) => doc.mimeType === "application/pdf" || /\.pdf$/i.test(doc.fileName ?? ""),
   );
   const selectedDoc = pdfs.find((doc: any) => doc._id === cfg.templateDocumentId);
-  const currentFields: string[] = Array.isArray(cfg.fields) && cfg.fields.length > 0
-    ? cfg.fields
-    : recipeFields;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [mapperOpen, setMapperOpen] = useState(false);
 
   const mappings: Record<string, any> = (cfg.fieldMappings && typeof cfg.fieldMappings === "object")
     ? cfg.fieldMappings
     : {};
+  const currentFields: string[] = Array.isArray(cfg.fields) && cfg.fields.length > 0
+    ? cfg.fields
+    : recipeFields.length > 0
+      ? recipeFields
+      : Object.keys(mappings);
   const mappingSummary = summariseMappings(currentFields, mappings);
 
   return (
@@ -844,6 +1508,7 @@ function PdfFillSetup({
         onClose={() => setMapperOpen(false)}
         fields={currentFields}
         mappings={mappings}
+        intakeFields={intakeFields}
         onFieldsChange={(fields) => onSave({ fields })}
         onMappingsChange={(next) => onSave({ fieldMappings: next })}
       />
@@ -1025,7 +1690,7 @@ function PdfPreviewPane({ doc }: { doc: any }) {
   );
 }
 
-type MappingKind = "literal" | "dynamic" | "person" | "personRef" | "manager" | "empty";
+type MappingKind = "literal" | "dynamic" | "intake" | "person" | "personRef" | "manager" | "empty";
 
 type PersonCategory = "members" | "directors" | "volunteers" | "employees";
 
@@ -1034,7 +1699,7 @@ type FieldMapping = {
   // literal/default text
   value?: string;
   // dynamic: "today" | "today:long" | "now" | "society.name" | ...
-  // person/manager/personRef: "firstName" | "lastName" | "email" | "custom:<key>" | ...
+  // intake/person/manager/personRef: "firstName" | "lastName" | "email" | "custom:<key>" | ...
   source?: string;
   // personRef-specific: which category + which person
   category?: PersonCategory;
@@ -1075,10 +1740,16 @@ const PERSON_CATEGORIES: Array<{ value: PersonCategory; label: string }> = [
 
 // Heuristic: given a raw PDF AcroForm field name, guess a sensible mapping.
 // Returns null if nothing confident — the user sees "Empty" and picks manually.
-function suggestMappingForField(fieldName: string): FieldMapping | null {
+function suggestMappingForField(fieldName: string, intakeFields: IntakeField[] = []): FieldMapping | null {
   const norm = fieldName.toLowerCase().replace(/[_\-.]/g, " ").replace(/\s+/g, " ").trim();
   const contains = (needle: string) => norm.includes(needle);
   const match = (re: RegExp) => re.test(norm);
+  const intakeMatch = intakeFields.find((field) => {
+    const fieldLabel = field.label.toLowerCase().replace(/[_\-.]/g, " ").replace(/\s+/g, " ").trim();
+    const fieldKey = field.key.toLowerCase().replace(/[_\-.]/g, " ").replace(/\s+/g, " ").trim();
+    return fieldLabel === norm || fieldKey === norm;
+  });
+  if (intakeMatch) return { kind: "intake", source: intakeMatch.key };
 
   // Date signed / signature date / date of signature
   if (match(/(date.*sign|sign.*date|signature.*date)/)) {
@@ -1138,6 +1809,7 @@ function summariseMappings(fields: string[], mappings: Record<string, FieldMappi
   const counts: Record<MappingKind, number> = {
     literal: 0,
     dynamic: 0,
+    intake: 0,
     person: 0,
     personRef: 0,
     manager: 0,
@@ -1147,7 +1819,7 @@ function summariseMappings(fields: string[], mappings: Record<string, FieldMappi
     const m = mappings[field];
     if (!m || m.kind === "empty") continue;
     if (m.kind === "literal" && !(m.value ?? "").trim()) continue;
-    if ((m.kind === "dynamic" || m.kind === "person" || m.kind === "manager") && !m.source) continue;
+    if ((m.kind === "dynamic" || m.kind === "intake" || m.kind === "person" || m.kind === "manager") && !m.source) continue;
     if (m.kind === "personRef" && (!m.category || !m.personId || !m.source)) continue;
     counts[m.kind] += 1;
     mapped += 1;
@@ -1155,6 +1827,7 @@ function summariseMappings(fields: string[], mappings: Record<string, FieldMappi
   const parts: string[] = [];
   if (counts.literal) parts.push(`${counts.literal} literal`);
   if (counts.dynamic) parts.push(`${counts.dynamic} dynamic`);
+  if (counts.intake) parts.push(`${counts.intake} intake`);
   if (counts.person) parts.push(`${counts.person} person`);
   if (counts.personRef) parts.push(`${counts.personRef} record`);
   if (counts.manager) parts.push(`${counts.manager} manager`);
@@ -1166,6 +1839,7 @@ const KIND_LABEL: Record<MappingKind, string> = {
   empty: "Empty",
   literal: "Literal",
   dynamic: "Dynamic",
+  intake: "Intake",
   person: "Person",
   personRef: "Person record",
   manager: "Manager",
@@ -1176,6 +1850,7 @@ function FieldMappingWizardModal({
   onClose,
   fields,
   mappings,
+  intakeFields,
   onFieldsChange,
   onMappingsChange,
 }: {
@@ -1183,6 +1858,7 @@ function FieldMappingWizardModal({
   onClose: () => void;
   fields: string[];
   mappings: Record<string, FieldMapping>;
+  intakeFields: IntakeField[];
   onFieldsChange: (fields: string[]) => void | Promise<void>;
   onMappingsChange: (next: Record<string, FieldMapping>) => void | Promise<void>;
 }) {
@@ -1229,7 +1905,7 @@ function FieldMappingWizardModal({
     const name = newField.trim();
     if (!name || fields.includes(name)) return;
     onFieldsChange([...fields, name]);
-    const suggestion = suggestMappingForField(name);
+    const suggestion = suggestMappingForField(name, intakeFields);
     if (suggestion) {
       onMappingsChange({ ...mappings, [name]: suggestion });
     }
@@ -1260,9 +1936,9 @@ function FieldMappingWizardModal({
                   !existing ||
                   existing.kind === "empty" ||
                   (existing.kind === "literal" && !(existing.value ?? "").trim()) ||
-                  ((existing.kind === "dynamic" || existing.kind === "person" || existing.kind === "manager") && !existing.source);
+                  ((existing.kind === "dynamic" || existing.kind === "intake" || existing.kind === "person" || existing.kind === "manager") && !existing.source);
                 if (!isEmpty) continue;
-                const suggestion = suggestMappingForField(field);
+                const suggestion = suggestMappingForField(field, intakeFields);
                 if (!suggestion) continue;
                 next[field] = suggestion;
                 applied += 1;
@@ -1307,7 +1983,7 @@ function FieldMappingWizardModal({
                 m &&
                 m.kind !== "empty" &&
                 !(m.kind === "literal" && !(m.value ?? "").trim()) &&
-                !((m.kind === "dynamic" || m.kind === "person" || m.kind === "manager") && !m.source);
+                !((m.kind === "dynamic" || m.kind === "intake" || m.kind === "person" || m.kind === "manager") && !m.source);
               return (
                 <button
                   key={field}
@@ -1363,11 +2039,13 @@ function FieldMappingWizardModal({
               <h3 className="mapping-wizard__field mono">{currentField}</h3>
 
               {(() => {
-                const suggestion = suggestMappingForField(currentField);
+                const suggestion = suggestMappingForField(currentField, intakeFields);
                 if (!suggestion) return null;
                 const label =
                   suggestion.kind === "dynamic"
                     ? `Dynamic · ${DYNAMIC_SOURCES.find((s) => s.value === suggestion.source)?.label ?? suggestion.source}`
+                    : suggestion.kind === "intake"
+                      ? `Intake · ${intakeFields.find((field) => field.key === suggestion.source)?.label ?? suggestion.source}`
                     : suggestion.kind === "person"
                       ? `Person · ${PERSON_SOURCES.find((s) => s.value === suggestion.source)?.label ?? suggestion.source}`
                       : suggestion.kind === "manager"
@@ -1403,7 +2081,7 @@ function FieldMappingWizardModal({
 
               <div className="field__label">Source</div>
               <div className="mapping-wizard__kinds">
-                {(["literal", "dynamic", "person", "personRef", "manager", "empty"] as MappingKind[]).map((k) => (
+                {(["literal", "dynamic", "intake", "person", "personRef", "manager", "empty"] as MappingKind[]).map((k) => (
                   <button
                     key={k}
                     type="button"
@@ -1416,6 +2094,7 @@ function FieldMappingWizardModal({
                         {
                           literal: "A default string you type in",
                           dynamic: "Today / Now / society name etc.",
+                          intake: "Value collected by the intake form",
                           person: "Field from the affiliate (runtime input)",
                           personRef: "Specific person record (director, member, …)",
                           manager: "Field from the requesting manager",
@@ -1449,6 +2128,20 @@ function FieldMappingWizardModal({
                     {DYNAMIC_SOURCES.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {current.kind === "intake" && (
+                  <select
+                    className="input"
+                    value={current.source ?? ""}
+                    onChange={(e) => updateMapping({ source: e.target.value })}
+                  >
+                    <option value="">— Pick intake field —</option>
+                    {intakeFields.map((field) => (
+                      <option key={field.key} value={field.key}>
+                        {field.label}
                       </option>
                     ))}
                   </select>

@@ -253,6 +253,54 @@ const memberSubscriptions = [
   },
 ];
 
+const operatingSubscriptions = [
+  {
+    _id: "static_operating_subscription_workspace",
+    societyId: SOCIETY_ID,
+    name: "Google Workspace",
+    vendorName: "Google",
+    category: "Software",
+    amountCents: 4320,
+    currency: "CAD",
+    interval: "month",
+    status: "Active",
+    nextRenewalDate: "2026-05-01",
+    notes: "Six active seats for staff and board mailboxes.",
+    createdAtISO: "2026-04-01T16:00:00.000Z",
+    updatedAtISO: "2026-04-01T16:00:00.000Z",
+  },
+  {
+    _id: "static_operating_subscription_paperless",
+    societyId: SOCIETY_ID,
+    name: "Paperless archive hosting",
+    vendorName: "Local hosting provider",
+    category: "Records",
+    amountCents: 36000,
+    currency: "CAD",
+    interval: "year",
+    status: "Active",
+    nextRenewalDate: "2026-10-15",
+    notes: "Document archive hosting and backups.",
+    createdAtISO: "2026-04-01T16:00:00.000Z",
+    updatedAtISO: "2026-04-01T16:00:00.000Z",
+  },
+  {
+    _id: "static_operating_subscription_design",
+    societyId: SOCIETY_ID,
+    name: "Design tool seats",
+    vendorName: "Figma",
+    category: "Programs",
+    amountCents: 11400,
+    currency: "CAD",
+    interval: "quarter",
+    status: "Planned",
+    nextRenewalDate: "2026-07-01",
+    notes: "Potential program design workspace.",
+    createdAtISO: "2026-04-01T16:00:00.000Z",
+    updatedAtISO: "2026-04-01T16:00:00.000Z",
+  },
+];
+
 const committees = [
   {
     _id: "static_committee_finance",
@@ -1063,6 +1111,7 @@ const tables: Record<string, any[]> = {
   ],
   filings,
   financials,
+  operatingSubscriptions,
   waveCacheSnapshots,
   waveCacheResources,
   waveCacheStructures,
@@ -1438,6 +1487,13 @@ function financialSummary() {
     })),
     recentTransactions: financialTransactions,
   };
+}
+
+function staticMonthlyEstimateCents(amountCents: number, interval: string) {
+  if (interval === "week") return Math.round((amountCents * 52) / 12);
+  if (interval === "quarter") return Math.round(amountCents / 3);
+  if (interval === "year") return Math.round(amountCents / 12);
+  return amountCents;
 }
 
 function profitAndLoss(args: StaticArgs) {
@@ -1902,6 +1958,28 @@ function queryResult(name: string, args: StaticArgs) {
       return financialSummary();
     case "financialHub:transactions":
       return financialTransactions.slice(0, args?.limit ?? financialTransactions.length);
+    case "financialHub:transactionsForAccountExternalId": {
+      const account = financialAccounts.find((row) => row.externalId === args?.externalId) ?? null;
+      const rows = account
+        ? financialTransactions
+            .filter((row) => row.accountId === account._id)
+            .sort((a, b) => b.date.localeCompare(a.date))
+        : [];
+      return {
+        account,
+        transactions: rows.slice(0, args?.limit ?? 500),
+        total: rows.length,
+      };
+    }
+    case "financialHub:operatingSubscriptions":
+      return operatingSubscriptions.map((row) => {
+        const monthlyEstimateCents = staticMonthlyEstimateCents(row.amountCents, row.interval);
+        return {
+          ...row,
+          monthlyEstimateCents,
+          annualEstimateCents: monthlyEstimateCents * 12,
+        };
+      });
     case "waveCache:summary": {
       const snapshot = waveCacheSnapshots[0];
       return {

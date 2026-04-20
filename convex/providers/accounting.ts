@@ -145,7 +145,7 @@ export async function waveListAccounts(args: { allowDemo?: boolean } = {}): Prom
       if (!node || node.isArchived) continue;
       const typeValue = String(node.type?.value ?? "").toUpperCase();
       const subtypeValue = String(node.subtype?.value ?? "").toUpperCase();
-      rows.push({
+      const account = {
         externalId: node.id,
         name: node.name,
         currency: "CAD",
@@ -155,7 +155,8 @@ export async function waveListAccounts(args: { allowDemo?: boolean } = {}): Prom
         ),
         isRestricted: /grant|restricted|deferred/i.test(`${node.name} ${node.subtype?.value ?? ""}`),
         restrictedPurpose: /grant|restricted/i.test(node.name) ? node.name : undefined,
-      });
+      } satisfies WaveAccount;
+      if (shouldImportWaveAccount(account)) rows.push(account);
     }
     page += 1;
   } while (page <= totalPages);
@@ -174,6 +175,13 @@ function waveAccountType(
   if (typeValue === "LIABILITY") return "Liability";
   if (typeValue === "EQUITY") return "Equity";
   return "Asset";
+}
+
+function shouldImportWaveAccount(account: WaveAccount) {
+  if (account.accountType === "Bank" || account.accountType === "Credit") return true;
+  if (account.accountType === "Income" || account.accountType === "Expense") return true;
+  if (account.isRestricted) return true;
+  return account.balanceCents !== 0;
 }
 
 export async function waveListTransactions(args?: {

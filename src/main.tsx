@@ -33,6 +33,8 @@ const DeadlinesPage = React.lazy(() => import("./pages/Deadlines").then((m) => (
 const DocumentsPage = React.lazy(() => import("./pages/Documents").then((m) => ({ default: m.DocumentsPage })));
 const ConflictsPage = React.lazy(() => import("./pages/Conflicts").then((m) => ({ default: m.ConflictsPage })));
 const FinancialsPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.FinancialsPage })));
+const WaveAccountDetailPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.WaveAccountDetailPage })));
+const WaveResourceTablePage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.WaveResourceTablePage })));
 const PrivacyPage = React.lazy(() => import("./pages/Privacy").then((m) => ({ default: m.PrivacyPage })));
 const SettingsPage = React.lazy(() => import("./pages/Settings").then((m) => ({ default: m.SettingsPage })));
 const ApiKeysPage = React.lazy(() => import("./pages/ApiKeysPage").then((m) => ({ default: m.ApiKeysPage })));
@@ -218,6 +220,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="documents" element={<DocumentsPage />} />
             <Route path="conflicts" element={<ConflictsPage />} />
             <Route path="financials" element={<FinancialsPage />} />
+            <Route path="financials/wave/account/:resourceId" element={<WaveAccountDetailPage />} />
+            <Route path="financials/wave/:resourceType" element={<WaveResourceTablePage />} />
             <Route
               path="grants"
               element={withModule("grants", <GrantsPage />)}

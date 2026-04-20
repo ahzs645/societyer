@@ -79,6 +79,41 @@ export type WaveHealthCheckResult = {
   steps: WaveHealthStep[];
 };
 
+export type WaveInvoicePaymentProbeResult = {
+  provider: "wave";
+  checkedAtISO: string;
+  businessCount: number;
+  invoicesExamined: number;
+  paymentsFound: number;
+  businesses: Array<{
+    id: string;
+    name?: string;
+    invoiceCount: number;
+    invoicesExamined: number;
+    paymentsFound: number;
+  }>;
+  payments: Array<{
+    businessId: string;
+    businessName?: string;
+    invoiceId: string;
+    invoiceNumber?: string;
+    invoiceTitle?: string;
+    invoiceDate?: string;
+    invoiceStatus?: string;
+    customerName?: string;
+    paymentId: string;
+    paymentDate?: string;
+    amount?: string;
+    memo?: string;
+    paymentMethod?: string;
+    paymentProvider?: string;
+    transactionId?: string;
+    accountingTransactionId?: string;
+    accountId?: string;
+    accountName?: string;
+  }>;
+};
+
 const PAGE_SIZE = 100;
 
 const STRUCTURE_TYPES = [
@@ -372,6 +407,90 @@ function demoWaveSnapshot(businessId = "demo_wave_business"): WaveSnapshotPayloa
   };
 }
 
+export async function waveInvoicePaymentProbe(args: {
+  businessId?: string;
+  allAccessibleBusinesses?: boolean;
+  maxInvoices?: number;
+  maxPayments?: number;
+} = {}): Promise<WaveInvoicePaymentProbeResult> {
+  if (!waveEnv("WAVE_ACCESS_TOKEN")) {
+    throw new Error("Wave invoice payment probe requires WAVE_ACCESS_TOKEN.");
+  }
+
+  const checkedAtISO = new Date().toISOString();
+  const businesses = await waveListBusinesses();
+  const configuredBusinessId = waveEnv("WAVE_BUSINESS_ID")?.trim();
+  const selectedBusinessId = args.businessId?.trim() ?? configuredBusinessId ?? businesses[0]?.id;
+  const targets = args.allAccessibleBusinesses
+    ? businesses
+    : businesses.filter((row) => row.id === selectedBusinessId);
+
+  const maxInvoices = Math.max(1, Math.min(args.maxInvoices ?? 50, 250));
+  const maxPayments = Math.max(1, Math.min(args.maxPayments ?? 50, 500));
+  const summaries: WaveInvoicePaymentProbeResult["businesses"] = [];
+  const payments: WaveInvoicePaymentProbeResult["payments"] = [];
+  let invoicesExamined = 0;
+  let paymentsFound = 0;
+
+  for (const business of targets) {
+    const invoices = await waveInvoicePaymentInvoiceList(business.id, maxInvoices);
+    let businessInvoicesExamined = 0;
+    let businessPaymentsFound = 0;
+
+    for (const invoice of invoices.slice(0, maxInvoices)) {
+      businessInvoicesExamined += 1;
+      invoicesExamined += 1;
+
+      const detail = await waveInvoicePaymentDetail(business.id, invoice.id);
+      const invoicePayments = detail?.payments ?? [];
+      businessPaymentsFound += invoicePayments.length;
+      paymentsFound += invoicePayments.length;
+
+      for (const payment of invoicePayments) {
+        if (payments.length >= maxPayments) continue;
+        payments.push({
+          businessId: business.id,
+          businessName: business.name,
+          invoiceId: detail?.id ?? invoice.id,
+          invoiceNumber: detail?.invoiceNumber ?? invoice.invoiceNumber,
+          invoiceTitle: detail?.title ?? invoice.title,
+          invoiceDate: detail?.invoiceDate ?? invoice.invoiceDate,
+          invoiceStatus: detail?.status ?? invoice.status,
+          customerName: detail?.customer?.name ?? invoice.customer?.name,
+          paymentId: payment.id,
+          paymentDate: payment.paymentDate,
+          amount: payment.amount == null ? undefined : String(payment.amount),
+          memo: payment.memo,
+          paymentMethod: payment.paymentMethod,
+          paymentProvider: payment.paymentProvider,
+          transactionId: payment.transactionId,
+          accountingTransactionId: payment.accountingTransactionId,
+          accountId: payment.account?.id,
+          accountName: payment.account?.name,
+        });
+      }
+    }
+
+    summaries.push({
+      id: business.id,
+      name: business.name,
+      invoiceCount: invoices.length,
+      invoicesExamined: businessInvoicesExamined,
+      paymentsFound: businessPaymentsFound,
+    });
+  }
+
+  return {
+    provider: "wave",
+    checkedAtISO,
+    businessCount: summaries.length,
+    invoicesExamined,
+    paymentsFound,
+    businesses: summaries,
+    payments,
+  };
+}
+
 function demoWaveStructures(): WaveSnapshotStructure[] {
   const rows = [
     ["Business", "OBJECT", [{ name: "id" }, { name: "name" }, { name: "accounts" }]],
@@ -578,6 +697,28 @@ async function waveListBusinesses(): Promise<any[]> {
     }
   `;
   return await connectionPages<any>(query, {}, "businesses");
+}
+
+async function waveInvoicePaymentInvoiceList(businessId: string, maxInvoices: number): Promise<any[]> {
+  const rows: any[] = [];
+  let page = 1;
+  let totalPages = 1;
+  do {
+    const data = await waveGraphQL<any>(INVOICE_PAYMENT_LIST_QUERY, { businessId, page, pageSize: PAGE_SIZE });
+    const connection = data?.business?.invoices;
+    totalPages = connection?.pageInfo?.totalPages ?? page;
+    for (const edge of connection?.edges ?? []) {
+      if (edge?.node) rows.push(edge.node);
+      if (rows.length >= maxInvoices) return rows;
+    }
+    page += 1;
+  } while (page <= totalPages);
+  return rows;
+}
+
+async function waveInvoicePaymentDetail(businessId: string, invoiceId: string): Promise<any> {
+  const data = await waveGraphQL<any>(INVOICE_PAYMENT_DETAIL_QUERY, { businessId, invoiceId });
+  return data?.business?.invoice ?? null;
 }
 
 async function waveAccountsProbe(businessId: string): Promise<{ totalCount: number }> {
@@ -963,6 +1104,56 @@ const INVOICE_CONNECTION_QUERY = `
             lastSentVia
             lastViewedAt
           }
+        }
+      }
+    }
+  }
+`;
+
+const INVOICE_PAYMENT_LIST_QUERY = `
+  query($businessId: ID!, $page: Int!, $pageSize: Int!) {
+    business(id: $businessId) {
+      invoices(page: $page, pageSize: $pageSize) {
+        pageInfo { currentPage totalPages totalCount }
+        edges {
+          node {
+            id
+            status
+            title
+            invoiceNumber
+            invoiceDate
+            customer { id name email displayId }
+            amountPaid { ${MONEY} }
+            total { ${MONEY} }
+          }
+        }
+      }
+    }
+  }
+`;
+
+const INVOICE_PAYMENT_DETAIL_QUERY = `
+  query($businessId: ID!, $invoiceId: ID!) {
+    business(id: $businessId) {
+      invoice(id: $invoiceId) {
+        id
+        status
+        title
+        invoiceNumber
+        invoiceDate
+        customer { id name email displayId }
+        amountPaid { ${MONEY} }
+        total { ${MONEY} }
+        payments {
+          id
+          paymentDate
+          amount
+          memo
+          paymentMethod
+          paymentProvider
+          transactionId
+          accountingTransactionId
+          account { id name type { value } subtype { value } }
         }
       }
     }

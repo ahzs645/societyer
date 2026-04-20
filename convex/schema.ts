@@ -435,6 +435,23 @@ export default defineSchema({
     notes: v.optional(v.string()),
   }).index("by_society_fy", ["societyId", "fiscalYear"]),
 
+  operatingSubscriptions: defineTable({
+    societyId: v.id("societies"),
+    name: v.string(),
+    vendorName: v.optional(v.string()),
+    category: v.string(),
+    amountCents: v.number(),
+    currency: v.string(),
+    interval: v.string(), // week | month | quarter | year
+    status: v.string(), // Active | Planned | Paused
+    nextRenewalDate: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
+
   budgetSnapshots: defineTable({
     societyId: v.id("societies"),
     title: v.string(),

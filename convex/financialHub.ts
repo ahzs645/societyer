@@ -39,6 +39,36 @@ export const transactions = query({
       .take(limit ?? 100),
 });
 
+export const transactionsForAccountExternalId = query({
+  args: {
+    societyId: v.id("societies"),
+    externalId: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, { societyId, externalId, limit }) => {
+    const accounts = await ctx.db
+      .query("financialAccounts")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+    const account = accounts.find((row) => row.externalId === externalId);
+    if (!account) {
+      return { account: null, transactions: [], total: 0 };
+    }
+    const rows = await ctx.db
+      .query("financialTransactions")
+      .withIndex("by_account", (q) => q.eq("accountId", account._id))
+      .collect();
+    const transactions = rows
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, limit ?? 500);
+    return {
+      account,
+      transactions,
+      total: rows.length,
+    };
+  },
+});
+
 export const budgets = query({
   args: { societyId: v.id("societies"), fiscalYear: v.optional(v.string()) },
   handler: async (ctx, { societyId, fiscalYear }) => {
@@ -49,6 +79,26 @@ export const budgets = query({
       )
       .collect();
     return rows;
+  },
+});
+
+export const operatingSubscriptions = query({
+  args: { societyId: v.id("societies") },
+  handler: async (ctx, { societyId }) => {
+    const rows = await ctx.db
+      .query("operatingSubscriptions")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+    return rows
+      .map((row) => {
+        const monthlyEstimateCents = monthlyEquivalentCents(row.amountCents, row.interval);
+        return {
+          ...row,
+          monthlyEstimateCents,
+          annualEstimateCents: monthlyEstimateCents * 12,
+        };
+      })
+      .sort((a, b) => `${a.status}:${a.name}`.localeCompare(`${b.status}:${b.name}`));
   },
 });
 
@@ -77,6 +127,54 @@ export const upsertBudget = mutation({
   },
 });
 
+export const upsertOperatingSubscription = mutation({
+  args: {
+    id: v.optional(v.id("operatingSubscriptions")),
+    societyId: v.id("societies"),
+    name: v.string(),
+    vendorName: v.optional(v.string()),
+    category: v.string(),
+    amountCents: v.number(),
+    currency: v.string(),
+    interval: v.string(),
+    status: v.string(),
+    nextRenewalDate: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    actingUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, {
+      actingUserId: args.actingUserId,
+      societyId: args.societyId,
+      required: "Director",
+    });
+    const { id, actingUserId, ...rest } = args;
+    const now = new Date().toISOString();
+    if (id) {
+      const row = await ctx.db.get(id);
+      if (!row) throw new Error("Subscription cost row not found.");
+      if (row.societyId !== args.societyId) throw new Error("Subscription cost row belongs to another society.");
+      await ctx.db.patch(id, { ...rest, updatedAtISO: now });
+      return id;
+    }
+    return await ctx.db.insert("operatingSubscriptions", {
+      ...rest,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+  },
+});
+
+export const removeOperatingSubscription = mutation({
+  args: { id: v.id("operatingSubscriptions"), actingUserId: v.optional(v.id("users")) },
+  handler: async (ctx, { id, actingUserId }) => {
+    const row = await ctx.db.get(id);
+    if (!row) return;
+    await requireRole(ctx, { actingUserId, societyId: row.societyId, required: "Director" });
+    await ctx.db.delete(id);
+  },
+});
+
 export const removeBudget = mutation({
   args: { id: v.id("budgets"), actingUserId: v.optional(v.id("users")) },
   handler: async (ctx, { id, actingUserId }) => {
@@ -86,6 +184,13 @@ export const removeBudget = mutation({
     await ctx.db.delete(id);
   },
 });
+
+function monthlyEquivalentCents(amountCents: number, interval: string) {
+  if (interval === "week") return Math.round((amountCents * 52) / 12);
+  if (interval === "quarter") return Math.round(amountCents / 3);
+  if (interval === "year") return Math.round(amountCents / 12);
+  return amountCents;
+}
 
 export const oauthUrl = query({
   args: { societyId: v.id("societies") },

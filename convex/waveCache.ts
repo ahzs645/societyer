@@ -2,7 +2,7 @@
 import { v } from "convex/values";
 import { action, internalMutation, query } from "./_generated/server";
 import { api, internal } from "./_generated/api";
-import { waveFetchSnapshot, waveHealthCheck } from "./providers/waveData";
+import { waveFetchSnapshot, waveHealthCheck, waveInvoicePaymentProbe } from "./providers/waveData";
 import { redactWaveDiagnostic, waveEnvironmentStatus } from "./providers/waveDiagnostics";
 
 const resourceValidator = v.object({
@@ -176,6 +176,26 @@ export const healthCheck = action({
             message: redactWaveDiagnostic(err?.message ?? "Wave health check failed.", [businessId]),
           },
         ],
+      };
+    }
+  },
+});
+
+export const invoicePaymentProbe = action({
+  args: {
+    businessId: v.optional(v.string()),
+    allAccessibleBusinesses: v.optional(v.boolean()),
+    maxInvoices: v.optional(v.number()),
+    maxPayments: v.optional(v.number()),
+  },
+  handler: async (_ctx, args) => {
+    try {
+      return await waveInvoicePaymentProbe(args);
+    } catch (err: any) {
+      return {
+        provider: "wave",
+        ok: false,
+        error: redactWaveDiagnostic(err?.message ?? "Wave invoice payment probe failed.", [args.businessId]),
       };
     }
   },

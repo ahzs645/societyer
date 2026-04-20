@@ -3,13 +3,28 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Field, Flag } from "../components/ui";
+import { Badge, Drawer, Field, Flag } from "../components/ui";
+import { DataTable } from "../components/DataTable";
+import { Select } from "../components/Select";
 import { formatDate, formatDateTime, money } from "../lib/format";
 import { isDemoMode } from "../lib/demoMode";
-import { Braces, Database, ExternalLink, Link2, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { ArrowLeft, Braces, Database, ExternalLink, Link2, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
+
+const OPERATING_SUBSCRIPTION_INTERVALS = [
+  { value: "month", label: "Monthly" },
+  { value: "year", label: "Annual" },
+  { value: "quarter", label: "Quarterly" },
+  { value: "week", label: "Weekly" },
+];
+
+const OPERATING_SUBSCRIPTION_STATUSES = [
+  { value: "Active", label: "Active" },
+  { value: "Planned", label: "Planned" },
+  { value: "Paused", label: "Paused" },
+];
 
 export function FinancialsPage() {
   const society = useSociety();
@@ -31,6 +46,10 @@ export function FinancialsPage() {
     api.financialHub.transactions,
     society ? { societyId: society._id, limit: 25 } : "skip",
   );
+  const operatingSubscriptions = useQuery(
+    api.financialHub.operatingSubscriptions,
+    society ? { societyId: society._id } : "skip",
+  );
   const oauth = useQuery(
     api.financialHub.oauthUrl,
     society ? { societyId: society._id } : "skip",
@@ -46,16 +65,20 @@ export function FinancialsPage() {
   );
   const upsertBudget = useMutation(api.financialHub.upsertBudget);
   const removeBudget = useMutation(api.financialHub.removeBudget);
+  const upsertOperatingSubscription = useMutation(api.financialHub.upsertOperatingSubscription);
+  const removeOperatingSubscription = useMutation(api.financialHub.removeOperatingSubscription);
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [waveHealthBusy, setWaveHealthBusy] = useState(false);
   const [waveHealth, setWaveHealth] = useState<any>(null);
   const [budgetForm, setBudgetForm] = useState<{ category: string; planned: string } | null>(null);
+  const [subscriptionForm, setSubscriptionForm] = useState<any>(null);
   const [waveMode, setWaveMode] = useState<"resources" | "structures">("resources");
   const [waveResourceType, setWaveResourceType] = useState("account");
   const [waveSearch, setWaveSearch] = useState("");
   const [selectedWaveResourceId, setSelectedWaveResourceId] = useState<string | null>(null);
+  const [hideZeroWaveAccounts, setHideZeroWaveAccounts] = useState(false);
   const waveResources = useQuery(
     api.waveCache.resources,
     society
@@ -84,6 +107,11 @@ export function FinancialsPage() {
   const waveLive = oauth?.live === true;
   const waveDemoAvailable = !waveLive && isDemoMode() && oauth?.demoAvailable === true;
   const canConnectWave = waveLive || waveDemoAvailable;
+  const activeOperatingSubscriptions = (operatingSubscriptions ?? []).filter((row) => row.status === "Active");
+  const plannedOperatingSubscriptions = (operatingSubscriptions ?? []).filter((row) => row.status === "Planned");
+  const activeMonthlyCents = activeOperatingSubscriptions.reduce((sum, row) => sum + (row.monthlyEstimateCents ?? monthlyEstimateCents(row)), 0);
+  const plannedMonthlyCents = plannedOperatingSubscriptions.reduce((sum, row) => sum + (row.monthlyEstimateCents ?? monthlyEstimateCents(row)), 0);
+  const projectedMonthlyCents = activeMonthlyCents + plannedMonthlyCents;
   const waveResourceTypes = useMemo(() => {
     const counts = waveSummary?.resourceCounts ?? {};
     const ordered = ["account", "vendor", "product", "customer", "invoice", "estimate", "salesTax", "business", "availableBusiness"];
@@ -283,6 +311,9 @@ export function FinancialsPage() {
 
       {activeConnection && (
         <WaveCacheExplorer
+          societyId={society._id}
+          syncConnectionId={activeConnection?._id}
+          syncFinancials={sync}
           busy={busy}
           mode={waveMode}
           onModeChange={setWaveMode}
@@ -293,8 +324,10 @@ export function FinancialsPage() {
           search={waveSearch}
           selectedResource={selectedWaveResource}
           selectedResourceId={selectedWaveResourceId}
+          hideZeroAccounts={hideZeroWaveAccounts}
           structures={waveStructures ?? []}
           summary={waveSummary}
+          onHideZeroAccountsChange={setHideZeroWaveAccounts}
           onResourceTypeChange={(type) => {
             setWaveResourceType(type);
             setSelectedWaveResourceId(null);
@@ -303,6 +336,20 @@ export function FinancialsPage() {
           onSelectResource={(id) => setSelectedWaveResourceId(id)}
         />
       )}
+
+      <OperatingSubscriptionsCard
+        rows={operatingSubscriptions ?? []}
+        loading={operatingSubscriptions === undefined}
+        activeMonthlyCents={activeMonthlyCents}
+        plannedMonthlyCents={plannedMonthlyCents}
+        projectedMonthlyCents={projectedMonthlyCents}
+        onNew={() => setSubscriptionForm(newOperatingSubscriptionForm())}
+        onEdit={(row) => setSubscriptionForm(operatingSubscriptionFormFromRow(row))}
+        onRemove={async (row) => {
+          await removeOperatingSubscription({ id: row._id, actingUserId });
+          toast.info("Subscription cost removed");
+        }}
+      />
 
       {activeConnection && hub && hub.restrictedAccounts.length > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>
@@ -551,6 +598,539 @@ export function FinancialsPage() {
           </div>
         </>
       )}
+
+      <Drawer
+        open={!!subscriptionForm}
+        onClose={() => setSubscriptionForm(null)}
+        title={subscriptionForm?.id ? "Edit subscription cost" : "Add subscription cost"}
+        footer={
+          <>
+            <button className="btn" onClick={() => setSubscriptionForm(null)}>Cancel</button>
+            <button
+              className="btn btn--accent"
+              disabled={!subscriptionForm?.name || !subscriptionForm?.amountCad}
+              onClick={async () => {
+                if (!subscriptionForm) return;
+                await upsertOperatingSubscription({
+                  id: subscriptionForm.id,
+                  societyId: society._id,
+                  name: subscriptionForm.name,
+                  vendorName: optionalText(subscriptionForm.vendorName),
+                  category: subscriptionForm.category || "Operations",
+                  amountCents: Math.round(Number(subscriptionForm.amountCad) * 100),
+                  currency: "CAD",
+                  interval: subscriptionForm.interval,
+                  status: subscriptionForm.status,
+                  nextRenewalDate: optionalText(subscriptionForm.nextRenewalDate),
+                  notes: optionalText(subscriptionForm.notes),
+                  actingUserId,
+                });
+                toast.success("Subscription cost saved");
+                setSubscriptionForm(null);
+              }}
+            >
+              Save
+            </button>
+          </>
+        }
+      >
+        {subscriptionForm && (
+          <div>
+            <Field label="Service">
+              <input
+                className="input"
+                value={subscriptionForm.name}
+                onChange={(e) => setSubscriptionForm({ ...subscriptionForm, name: e.target.value })}
+                placeholder="e.g. Google Workspace"
+              />
+            </Field>
+            <Field label="Vendor">
+              <input
+                className="input"
+                value={subscriptionForm.vendorName ?? ""}
+                onChange={(e) => setSubscriptionForm({ ...subscriptionForm, vendorName: e.target.value })}
+                placeholder="e.g. Google"
+              />
+            </Field>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Category">
+                <input
+                  className="input"
+                  value={subscriptionForm.category}
+                  onChange={(e) => setSubscriptionForm({ ...subscriptionForm, category: e.target.value })}
+                  placeholder="Software"
+                />
+              </Field>
+              <Field label="Status">
+                <Select
+                  value={subscriptionForm.status}
+                  onChange={(value) => setSubscriptionForm({ ...subscriptionForm, status: value })}
+                  options={OPERATING_SUBSCRIPTION_STATUSES}
+                />
+              </Field>
+            </div>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Amount (CAD)">
+                <input
+                  className="input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={subscriptionForm.amountCad}
+                  onChange={(e) => setSubscriptionForm({ ...subscriptionForm, amountCad: e.target.value })}
+                  placeholder="49.00"
+                />
+              </Field>
+              <Field label="Billing cadence">
+                <Select
+                  value={subscriptionForm.interval}
+                  onChange={(value) => setSubscriptionForm({ ...subscriptionForm, interval: value })}
+                  options={OPERATING_SUBSCRIPTION_INTERVALS}
+                />
+              </Field>
+            </div>
+            <Field label="Next renewal">
+              <input
+                className="input"
+                type="date"
+                value={subscriptionForm.nextRenewalDate ?? ""}
+                onChange={(e) => setSubscriptionForm({ ...subscriptionForm, nextRenewalDate: e.target.value })}
+              />
+            </Field>
+            <Field label="Notes">
+              <textarea
+                className="textarea"
+                value={subscriptionForm.notes ?? ""}
+                onChange={(e) => setSubscriptionForm({ ...subscriptionForm, notes: e.target.value })}
+                placeholder="Seats, contract notes, cancellation owner, or review reminder."
+              />
+            </Field>
+            <div className="muted" style={{ fontSize: 13 }}>
+              Monthly estimate: {money(monthlyEstimateCents({
+                amountCents: Math.round(Number(subscriptionForm.amountCad || 0) * 100),
+                interval: subscriptionForm.interval,
+              }))}
+            </div>
+          </div>
+        )}
+      </Drawer>
+    </div>
+  );
+}
+
+export function WaveResourceTablePage() {
+  const society = useSociety();
+  const { resourceType: routeResourceType } = useParams();
+  const tableResourceType = normalizeWaveResourceType(routeResourceType ?? "account");
+  const queryResourceType = tableResourceType === "all" ? undefined : tableResourceType;
+  const connections = useQuery(
+    api.financialHub.connections,
+    society ? { societyId: society._id } : "skip",
+  );
+  const activeConnection = (connections ?? []).find((c) => c.status === "connected");
+  const waveSummary = useQuery(
+    api.waveCache.summary,
+    society ? { societyId: society._id } : "skip",
+  );
+  const waveResources = useQuery(
+    api.waveCache.resources,
+    society
+      ? {
+          societyId: society._id,
+          resourceType: queryResourceType,
+          limit: 1000,
+        }
+      : "skip",
+  );
+  const syncWaveCache = useAction(api.waveCache.sync);
+  const syncFinancials = useAction(api.financialHub.sync);
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [hideZeroWaveAccounts, setHideZeroWaveAccounts] = useState(false);
+  const [selectedWaveResourceId, setSelectedWaveResourceId] = useState<string | null>(null);
+  const selectedWaveResource = useQuery(
+    api.waveCache.resource,
+    selectedWaveResourceId ? { id: selectedWaveResourceId as any } : "skip",
+  );
+
+  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === null) return <SeedPrompt />;
+
+  const allResources = waveResources ?? [];
+  const rows = hideZeroWaveAccounts
+    ? allResources.filter((row) => row.resourceType !== "account" || !isZeroWaveAmount(row.amountValue))
+    : allResources;
+  const hiddenZeroAccounts = allResources.length - rows.length;
+  const selectedFallback = allResources.find((row) => row._id === selectedWaveResourceId) ?? null;
+  const title = tableResourceType === "all" ? "Wave Data" : `Wave ${waveTypeLabel(tableResourceType)}`;
+
+  const refreshWaveCache = async () => {
+    setBusy(true);
+    try {
+      const result = await syncWaveCache({
+        societyId: society._id,
+        connectionId: activeConnection?._id,
+      });
+      toast.success(`Cached ${result.resourceCount} Wave resources and ${result.structureCount} structures.`);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Wave cache refresh failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="page">
+      <PageHeader
+        title={title}
+        icon={<Database size={16} />}
+        iconColor="green"
+        subtitle={
+          waveSummary
+            ? `${waveSummary.businessName} · ${rows.length} rows${hiddenZeroAccounts > 0 ? ` · ${hiddenZeroAccounts} zero-balance hidden` : ""}`
+            : "Cached Wave resource table."
+        }
+        actions={
+          <>
+            <Link className="btn-action" to="/app/financials">
+              <ArrowLeft size={12} /> Financials
+            </Link>
+            {queryResourceType === "account" && (
+              <button
+                className="btn-action"
+                onClick={() => setHideZeroWaveAccounts(!hideZeroWaveAccounts)}
+              >
+                Zero-balance {hideZeroWaveAccounts ? "hidden" : "shown"}
+              </button>
+            )}
+            <button className="btn-action" disabled={busy} onClick={refreshWaveCache}>
+              <RefreshCw size={12} /> Refresh
+            </button>
+          </>
+        }
+      />
+
+      <DataTable
+        label={title}
+        icon={<Database size={14} />}
+        data={rows as any[]}
+        loading={waveResources === undefined}
+        rowKey={(row) => row._id}
+        onRowClick={(row) => setSelectedWaveResourceId(row._id)}
+        rowActionLabel={(row) => `Open ${row.label}`}
+        searchPlaceholder={`Search ${title.toLowerCase()}...`}
+        searchExtraFields={[(row) => row.searchText]}
+        defaultSort={{ columnId: "resource", dir: "asc" }}
+        viewsKey={`wave-cache-${tableResourceType}`}
+        pagination
+        initialPageSize={50}
+        pageSizeOptions={[25, 50, 100]}
+        columns={waveResourceColumns()}
+        renderRowActions={(row) => (
+          <button
+            className="btn btn--ghost btn--sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              setSelectedWaveResourceId(row._id);
+            }}
+          >
+            <ExternalLink size={12} /> Open
+          </button>
+        )}
+        emptyMessage={waveSummary ? "No cached Wave rows match this table." : "Refresh the Wave cache to load this table."}
+      />
+
+      <WaveResourceDrawer
+        open={Boolean(selectedWaveResourceId)}
+        societyId={society._id}
+        syncConnectionId={activeConnection?._id}
+        syncFinancials={syncFinancials}
+        resource={selectedWaveResource}
+        fallback={selectedFallback}
+        onClose={() => setSelectedWaveResourceId(null)}
+      />
+    </div>
+  );
+}
+
+export function WaveAccountDetailPage() {
+  const society = useSociety();
+  const { resourceId } = useParams();
+  const connections = useQuery(
+    api.financialHub.connections,
+    society ? { societyId: society._id } : "skip",
+  );
+  const activeConnection = (connections ?? []).find((c) => c.status === "connected");
+  const resource = useQuery(
+    api.waveCache.resource,
+    resourceId ? { id: resourceId as any } : "skip",
+  );
+  const syncFinancials = useAction(api.financialHub.sync);
+  const activity = useQuery(
+    api.financialHub.transactionsForAccountExternalId,
+    society && resource?.resourceType === "account" && resource.externalId
+      ? { societyId: society._id, externalId: resource.externalId, limit: 1000 }
+      : "skip",
+  );
+  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+  const [pullState, setPullState] = useState<"idle" | "pulling" | "pulled" | "error">("idle");
+  const [pullError, setPullError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPullState("idle");
+    setPullError(null);
+    setSelectedTransaction(null);
+  }, [resource?._id]);
+
+  useEffect(() => {
+    if (activity === undefined) return;
+    if (activity.account && activity.total !== 0) return;
+    if (!activeConnection?._id || pullState !== "idle") return;
+    let cancelled = false;
+    setPullState("pulling");
+    setPullError(null);
+    syncFinancials({ connectionId: activeConnection._id })
+      .then(() => {
+        if (!cancelled) setPullState("pulled");
+      })
+      .catch((err: any) => {
+        if (cancelled) return;
+        setPullError(err?.message ?? "Wave pull failed.");
+        setPullState("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeConnection?._id, activity?.account?._id, activity?.total, pullState, syncFinancials]);
+
+  if (society === undefined || resource === undefined) return <div className="page">Loading...</div>;
+  if (society === null) return <SeedPrompt />;
+  if (!resource || resource.resourceType !== "account") {
+    return (
+      <div className="page">
+        <PageHeader
+          title="Wave account"
+          icon={<Database size={16} />}
+          iconColor="green"
+          subtitle="This cached Wave account could not be found."
+          actions={
+            <Link className="btn-action" to="/app/financials/wave/account">
+              <ArrowLeft size={12} /> Accounts
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
+
+  const transactions = activity?.transactions ?? [];
+
+  return (
+    <div className="page">
+      <PageHeader
+        title={resource.label}
+        icon={<Database size={16} />}
+        iconColor="green"
+        subtitle={
+          activity?.account
+            ? `${waveTypeLabel(resource.resourceType)} · ${transactions.length} synced transaction${transactions.length === 1 ? "" : "s"}`
+            : "Cached Wave account details"
+        }
+        actions={
+          <>
+            <Link className="btn-action" to="/app/financials/wave/account">
+              <ArrowLeft size={12} /> Accounts
+            </Link>
+            <Link className="btn-action" to="/app/financials">
+              Financials
+            </Link>
+          </>
+        }
+      />
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">Account details</h2>
+          {resource.status && <Badge tone={resource.status === "archived" ? "neutral" : "info"}>{resource.status}</Badge>}
+        </div>
+        <div className="card__body">
+          <WaveResourceSummary resource={resource} />
+        </div>
+      </div>
+
+      {activity !== undefined && !activity?.account && (
+        <div style={{ marginBottom: 16 }}>
+          <Flag level={pullState === "error" ? "err" : "warn"}>
+            {pullState === "pulling"
+              ? "Pulling latest available Wave activity for this account..."
+              : pullState === "error"
+              ? `Wave pull failed: ${pullError ?? "unknown error"}`
+              : pullState === "pulled"
+              ? "Pulled latest available Wave data. This account is still not part of the synced financial account set, so there are no Societyer transactions to show yet."
+              : "This Wave account is available in the raw cache but is not part of the synced financial account set, so there are no Societyer transactions to show yet."}
+          </Flag>
+        </div>
+      )}
+
+      {activity?.account && pullState !== "idle" && transactions.length === 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <Flag level={pullState === "error" ? "err" : "warn"}>
+            {pullState === "pulling"
+              ? "Pulling latest available Wave activity for this account..."
+              : pullState === "error"
+              ? `Wave pull failed: ${pullError ?? "unknown error"}`
+              : "Pulled latest available Wave data. No synced transactions exist for this account; this Wave API connection exposes account balances but not general-ledger card/bank transaction lines."}
+          </Flag>
+        </div>
+      )}
+
+      <DataTable
+        label="Account transactions"
+        icon={<Database size={14} />}
+        data={transactions as any[]}
+        loading={activity === undefined}
+        rowKey={(row) => row._id}
+        onRowClick={(row) => setSelectedTransaction(row)}
+        rowActionLabel={(row) => `Open transaction ${row.description}`}
+        searchPlaceholder="Search transactions..."
+        searchExtraFields={[(row) => row.counterparty]}
+        defaultSort={{ columnId: "date", dir: "desc" }}
+        viewsKey={`wave-account-transactions-${resource._id}`}
+        pagination
+        initialPageSize={25}
+        pageSizeOptions={[10, 25, 50, 100]}
+        columns={financialTransactionColumns(activity?.account)}
+        renderRowActions={(row) => (
+          <button
+            className="btn btn--ghost btn--sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              setSelectedTransaction(row);
+            }}
+          >
+            <ExternalLink size={12} /> Open
+          </button>
+        )}
+        emptyMessage={
+          pullState === "pulling"
+            ? "Pulling latest available Wave activity..."
+            : pullState === "pulled"
+            ? "Pulled latest available Wave data. No synced transactions exist for this account."
+            : activity?.account
+            ? "No synced transactions for this account yet."
+            : "This cached Wave account is not in the synced financial account set."
+        }
+      />
+
+      <TransactionDrawer
+        open={Boolean(selectedTransaction)}
+        transaction={selectedTransaction}
+        account={activity?.account}
+        onClose={() => setSelectedTransaction(null)}
+      />
+    </div>
+  );
+}
+
+function OperatingSubscriptionsCard({
+  rows,
+  loading,
+  activeMonthlyCents,
+  plannedMonthlyCents,
+  projectedMonthlyCents,
+  onNew,
+  onEdit,
+  onRemove,
+}: {
+  rows: any[];
+  loading: boolean;
+  activeMonthlyCents: number;
+  plannedMonthlyCents: number;
+  projectedMonthlyCents: number;
+  onNew: () => void;
+  onEdit: (row: any) => void;
+  onRemove: (row: any) => void | Promise<void>;
+}) {
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card__head">
+        <h2 className="card__title">Subscriptions & monthly cost estimate</h2>
+        <span className="card__subtitle">
+          Recurring software, services, and operating subscriptions converted to monthly equivalents.
+        </span>
+        <div style={{ marginLeft: "auto" }}>
+          <button className="btn-action" onClick={onNew}>
+            <PlusCircle size={12} /> Add subscription
+          </button>
+        </div>
+      </div>
+
+      <div className="stat-grid" style={{ margin: "0 16px 16px" }}>
+        <Stat label="Active monthly" value={money(activeMonthlyCents)} />
+        <Stat label="Planned monthly" value={money(plannedMonthlyCents)} />
+        <Stat label="Projected monthly" value={money(projectedMonthlyCents)} />
+        <Stat label="Annual run-rate" value={money(projectedMonthlyCents * 12)} />
+      </div>
+
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Service</th>
+            <th>Category</th>
+            <th>Status</th>
+            <th>Billing</th>
+            <th style={{ textAlign: "right" }}>Monthly est.</th>
+            <th>Renewal</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row._id}>
+              <td>
+                <strong>{row.name}</strong>
+                {row.vendorName && <div className="muted" style={{ fontSize: 12 }}>{row.vendorName}</div>}
+              </td>
+              <td><span className="cell-tag">{row.category}</span></td>
+              <td><Badge tone={operatingSubscriptionStatusTone(row.status)}>{row.status}</Badge></td>
+              <td>
+                <span className="table__cell--mono">{money(row.amountCents)}</span>
+                <span className="muted"> / {operatingSubscriptionIntervalLabel(row.interval)}</span>
+              </td>
+              <td className="table__cell--mono" style={{ textAlign: "right" }}>
+                {money(row.monthlyEstimateCents ?? monthlyEstimateCents(row))}
+              </td>
+              <td className="table__cell--mono">{row.nextRenewalDate ? formatDate(row.nextRenewalDate) : "—"}</td>
+              <td style={{ textAlign: "right" }}>
+                <button className="btn btn--ghost btn--sm" onClick={() => onEdit(row)}>
+                  Edit
+                </button>
+                <button
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Remove subscription cost ${row.name}`}
+                  onClick={() => onRemove(row)}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </td>
+            </tr>
+          ))}
+          {!loading && rows.length === 0 && (
+            <tr>
+              <td colSpan={7} className="muted" style={{ textAlign: "center", padding: 16 }}>
+                No subscription costs yet. Add software, services, or other recurring expenses to estimate monthly spend.
+              </td>
+            </tr>
+          )}
+          {loading && (
+            <tr>
+              <td colSpan={7} className="muted" style={{ textAlign: "center", padding: 16 }}>
+                Loading subscription costs...
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -704,6 +1284,9 @@ function businessSourceLabel(source?: string) {
 }
 
 function WaveCacheExplorer({
+  societyId,
+  syncConnectionId,
+  syncFinancials,
   busy,
   mode,
   onModeChange,
@@ -714,12 +1297,17 @@ function WaveCacheExplorer({
   search,
   selectedResource,
   selectedResourceId,
+  hideZeroAccounts,
   structures,
   summary,
+  onHideZeroAccountsChange,
   onResourceTypeChange,
   onSearchChange,
   onSelectResource,
 }: {
+  societyId: any;
+  syncConnectionId?: any;
+  syncFinancials?: (args: { connectionId: any }) => Promise<any>;
   busy: boolean;
   mode: "resources" | "structures";
   onModeChange: (mode: "resources" | "structures") => void;
@@ -730,19 +1318,22 @@ function WaveCacheExplorer({
   search: string;
   selectedResource: any;
   selectedResourceId: string | null;
+  hideZeroAccounts: boolean;
   structures: any[];
   summary: any;
+  onHideZeroAccountsChange: (value: boolean) => void;
   onResourceTypeChange: (type: string) => void;
   onSearchChange: (value: string) => void;
-  onSelectResource: (id: string) => void;
+  onSelectResource: (id: string | null) => void;
 }) {
   const counts = summary?.resourceCounts ?? {};
   const totalResources = Object.values(counts).reduce((sum: number, value: any) => sum + Number(value ?? 0), 0);
-  const selectedRaw = selectedResource?.raw
-    ? JSON.stringify(selectedResource.raw, null, 2)
-    : selectedResourceId
-    ? "Loading..."
-    : "";
+  const visibleResources = hideZeroAccounts
+    ? resources.filter((row) => row.resourceType !== "account" || !isZeroWaveAmount(row.amountValue))
+    : resources;
+  const hiddenZeroAccounts = resources.length - visibleResources.length;
+  const selectedFallback = resources.find((row) => row._id === selectedResourceId) ?? null;
+  const openTableType = resourceType || "all";
 
   return (
     <div className="card" style={{ marginBottom: 16 }}>
@@ -788,6 +1379,16 @@ function WaveCacheExplorer({
                 {waveTypeLabel(type)} <span className="muted">{counts[type] ?? 0}</span>
               </button>
             ))}
+            <button
+              className={hideZeroAccounts ? "btn btn--accent btn--sm" : "btn btn--ghost btn--sm"}
+              onClick={() => onHideZeroAccountsChange(!hideZeroAccounts)}
+              title="Toggle zero-balance account rows in this cache table. Raw Wave data is always stored."
+            >
+              Zero-balance <span className="muted">{hideZeroAccounts ? "hidden" : "shown"}</span>
+            </button>
+            <Link className="btn btn--ghost btn--sm" to={`/app/financials/wave/${openTableType}`}>
+              <ExternalLink size={12} /> Open table
+            </Link>
           </>
         )}
         <input
@@ -813,31 +1414,43 @@ function WaveCacheExplorer({
               </tr>
             </thead>
             <tbody>
-              {resources.map((row) => (
-                <tr key={row._id}>
-                  <td>
-                    <strong>{row.label}</strong>
-                    {row.secondaryLabel && <div className="muted" style={{ fontSize: 12 }}>{row.secondaryLabel}</div>}
-                  </td>
-                  <td>
-                    <Badge>{waveTypeLabel(row.resourceType)}</Badge>
-                    {(row.typeValue || row.subtypeValue) && (
-                      <div className="muted" style={{ fontSize: 12 }}>
-                        {[row.typeValue, row.subtypeValue].filter(Boolean).join(" / ")}
-                      </div>
-                    )}
-                  </td>
-                  <td>{row.status ? <Badge tone={row.status === "archived" ? "neutral" : "info"}>{row.status}</Badge> : "—"}</td>
-                  <td className="table__cell--mono">{formatWaveValue(row.amountValue, row.currencyCode)}</td>
-                  <td className="table__cell--mono">{row.dateValue ?? "—"}</td>
-                  <td style={{ textAlign: "right" }}>
-                    <button className="btn btn--ghost btn--sm" onClick={() => onSelectResource(row._id)}>
-                      <ExternalLink size={12} /> Raw
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {resources.length === 0 && (
+              {visibleResources.map((row) => {
+                const selected = selectedResourceId === row._id;
+                return (
+                  <tr
+                    key={row._id}
+                    onClick={() => onSelectResource(row._id)}
+                    style={{ cursor: "pointer", background: selected ? "var(--surface-muted)" : undefined }}
+                  >
+                    <td>
+                      <strong>{row.label}</strong>
+                    </td>
+                    <td>
+                      <Badge>{waveTypeLabel(row.resourceType)}</Badge>
+                      {(row.typeValue || row.subtypeValue) && (
+                        <div className="muted" style={{ fontSize: 12 }}>
+                          {[row.typeValue, row.subtypeValue].filter(Boolean).join(" / ")}
+                        </div>
+                      )}
+                    </td>
+                    <td>{row.status ? <Badge tone={row.status === "archived" ? "neutral" : "info"}>{row.status}</Badge> : "—"}</td>
+                    <td className="table__cell--mono">{formatWaveValue(row.amountValue, row.currencyCode)}</td>
+                    <td className="table__cell--mono">{row.dateValue ?? "—"}</td>
+                    <td style={{ textAlign: "right" }}>
+                      <button
+                        className="btn btn--ghost btn--sm"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onSelectResource(row._id);
+                        }}
+                      >
+                        <ExternalLink size={12} /> Open
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {visibleResources.length === 0 && (
                 <tr>
                   <td colSpan={6} className="muted" style={{ textAlign: "center", padding: 16 }}>
                     {summary ? "No cached rows match this view." : "Refresh the Wave cache to load data."}
@@ -847,14 +1460,19 @@ function WaveCacheExplorer({
             </tbody>
           </table>
 
-          {selectedResourceId && (
-            <div className="card__body" style={{ borderTop: "1px solid var(--border)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <Braces size={14} />
-                <strong>{selectedResource?.label ?? "Wave resource"}</strong>
-                {selectedResource?.externalId && <span className="muted table__cell--mono">{selectedResource.externalId}</span>}
-              </div>
-              <pre style={rawBlockStyle}>{selectedRaw}</pre>
+          <WaveResourceDrawer
+            open={Boolean(selectedResourceId)}
+            societyId={societyId}
+            syncConnectionId={syncConnectionId}
+            syncFinancials={syncFinancials}
+            resource={selectedResource}
+            fallback={selectedFallback}
+            onClose={() => onSelectResource(null)}
+          />
+
+          {hiddenZeroAccounts > 0 && (
+            <div className="card__body muted" style={{ borderTop: "1px solid var(--border)", fontSize: 12 }}>
+              Hidden {hiddenZeroAccounts} zero-balance account row{hiddenZeroAccounts === 1 ? "" : "s"} from this view.
             </div>
           )}
         </>
@@ -892,6 +1510,290 @@ function WaveCacheExplorer({
           </tbody>
         </table>
       )}
+    </div>
+  );
+}
+
+function WaveResourceDrawer({
+  open,
+  societyId,
+  syncConnectionId,
+  syncFinancials,
+  resource,
+  fallback,
+  onClose,
+}: {
+  open: boolean;
+  societyId: any;
+  syncConnectionId?: any;
+  syncFinancials?: (args: { connectionId: any }) => Promise<any>;
+  resource: any;
+  fallback: any;
+  onClose: () => void;
+}) {
+  const title = resource?.label ?? fallback?.label ?? "Wave resource";
+  return (
+    <Drawer open={open} onClose={onClose} title={title}>
+      <WaveResourceDetail
+        societyId={societyId}
+        syncConnectionId={syncConnectionId}
+        syncFinancials={syncFinancials}
+        resource={resource}
+        fallback={fallback}
+      />
+    </Drawer>
+  );
+}
+
+function WaveResourceDetail({
+  societyId,
+  syncConnectionId,
+  syncFinancials,
+  resource,
+  fallback,
+}: {
+  societyId: any;
+  syncConnectionId?: any;
+  syncFinancials?: (args: { connectionId: any }) => Promise<any>;
+  resource: any;
+  fallback: any;
+}) {
+  const [pullState, setPullState] = useState<"idle" | "pulling" | "pulled" | "error">("idle");
+  const [pullError, setPullError] = useState<string | null>(null);
+  const accountActivity = useQuery(
+    api.financialHub.transactionsForAccountExternalId,
+    societyId && resource?.resourceType === "account" && resource.externalId
+      ? { societyId, externalId: resource.externalId, limit: 10 }
+      : "skip",
+  );
+
+  useEffect(() => {
+    setPullState("idle");
+    setPullError(null);
+  }, [resource?._id]);
+
+  useEffect(() => {
+    if (resource?.resourceType !== "account") return;
+    if (accountActivity === undefined) return;
+    if (accountActivity.account && accountActivity.total !== 0) return;
+    if (!syncConnectionId || !syncFinancials || pullState !== "idle") return;
+    let cancelled = false;
+    setPullState("pulling");
+    setPullError(null);
+    syncFinancials({ connectionId: syncConnectionId })
+      .then(() => {
+        if (!cancelled) setPullState("pulled");
+      })
+      .catch((err: any) => {
+        if (cancelled) return;
+        setPullError(err?.message ?? "Wave pull failed.");
+        setPullState("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountActivity?.account?._id, accountActivity?.total, pullState, resource?.resourceType, syncConnectionId, syncFinancials]);
+
+  if (!resource) {
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Braces size={14} />
+          <strong>{fallback?.label ?? "Wave resource"}</strong>
+          <span className="muted">Loading Wave details...</span>
+        </div>
+      </div>
+    );
+  }
+
+  const accountPageHref = resource.resourceType === "account" ? `/app/financials/wave/account/${resource._id}` : null;
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 12,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <Braces size={14} />
+        <strong>{resource.label}</strong>
+        <Badge>{waveTypeLabel(resource.resourceType)}</Badge>
+        {resource.status && <Badge tone={resource.status === "archived" ? "neutral" : "info"}>{resource.status}</Badge>}
+        {accountPageHref && (
+          <Link className="btn btn--ghost btn--sm" to={accountPageHref}>
+            <ExternalLink size={12} /> Open account page
+          </Link>
+        )}
+      </div>
+
+      <WaveResourceSummary resource={resource} />
+
+      {resource.resourceType === "account" && (
+        <AccountTransactionsPreview
+          activity={accountActivity}
+          accountPageHref={accountPageHref}
+          pullState={pullState}
+          pullError={pullError}
+        />
+      )}
+    </div>
+  );
+}
+
+function WaveResourceSummary({ resource }: { resource: any }) {
+  const raw = resource.raw ?? {};
+  const fields = waveResourceDetailFields(resource, raw);
+  const description = typeof raw.description === "string" ? raw.description : undefined;
+
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      {description && (
+        <div className="muted" style={{ fontSize: 13 }}>
+          {description}
+        </div>
+      )}
+
+      <div
+        style={{
+          display: "grid",
+          gap: 10,
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+        }}
+      >
+        {fields.map((field) => (
+          <div key={field.label}>
+            <div className="muted" style={{ fontSize: 11, textTransform: "uppercase" }}>
+              {field.label}
+            </div>
+            <div
+              className={field.mono ? "table__cell--mono" : undefined}
+              style={{ fontSize: 13, overflowWrap: "anywhere" }}
+            >
+              {field.value}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AccountTransactionsPreview({
+  activity,
+  accountPageHref,
+  pullState,
+  pullError,
+}: {
+  activity: any;
+  accountPageHref: string | null;
+  pullState?: "idle" | "pulling" | "pulled" | "error";
+  pullError?: string | null;
+}) {
+  const rows = activity?.transactions ?? [];
+  return (
+    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <strong>Transactions</strong>
+        {activity?.total != null && <span className="muted">{activity.total} synced</span>}
+        {accountPageHref && (
+          <Link className="btn btn--ghost btn--sm" style={{ marginLeft: "auto" }} to={accountPageHref}>
+            <ExternalLink size={12} /> Open table
+          </Link>
+        )}
+      </div>
+      {pullState === "pulling" ? (
+        <div className="muted" style={{ fontSize: 13 }}>Pulling latest available Wave activity...</div>
+      ) : pullState === "error" ? (
+        <div className="muted" style={{ fontSize: 13 }}>
+          Wave pull failed: {pullError ?? "unknown error"}
+        </div>
+      ) : activity === undefined ? (
+        <div className="muted" style={{ fontSize: 13 }}>Loading transactions...</div>
+      ) : !activity.account ? (
+        <div className="muted" style={{ fontSize: 13 }}>
+          This cached Wave account is not in the synced financial account set, so there are no Societyer transactions to show.
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="muted" style={{ fontSize: 13 }}>
+          {pullState === "pulled"
+            ? "Pulled latest available Wave data. No synced transactions exist for this account; this Wave API connection exposes account balances but not general-ledger card/bank transaction lines."
+            : "No synced transactions for this account yet."}
+        </div>
+      ) : (
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Description</th>
+              <th style={{ textAlign: "right" }}>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, 10).map((row: any) => (
+              <tr key={row._id}>
+                <td className="table__cell--mono">{row.date}</td>
+                <td>
+                  <strong>{row.description}</strong>
+                  {row.category && <div className="muted" style={{ fontSize: 12 }}>{row.category}</div>}
+                </td>
+                <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(row.amountCents)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function TransactionDrawer({
+  open,
+  transaction,
+  account,
+  onClose,
+}: {
+  open: boolean;
+  transaction: any;
+  account: any;
+  onClose: () => void;
+}) {
+  return (
+    <Drawer open={open} onClose={onClose} title={transaction?.description ?? "Transaction"}>
+      {transaction && (
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <Badge tone={transaction.amountCents < 0 ? "warn" : "success"}>
+              {transaction.amountCents < 0 ? "expense" : "income"}
+            </Badge>
+            <strong>{money(transaction.amountCents)}</strong>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gap: 10,
+              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+            }}
+          >
+            <DetailCell label="Date" value={transaction.date} mono />
+            <DetailCell label="Account" value={account?.name ?? "—"} />
+            <DetailCell label="Category" value={transaction.category ?? "uncategorized"} />
+            <DetailCell label="Counterparty" value={transaction.counterparty ?? "—"} />
+            <DetailCell label="External reference" value={transaction.externalId ?? "—"} mono />
+          </div>
+        </div>
+      )}
+    </Drawer>
+  );
+}
+
+function DetailCell({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div>
+      <div className="muted" style={{ fontSize: 11, textTransform: "uppercase" }}>{label}</div>
+      <div className={mono ? "table__cell--mono" : undefined} style={{ fontSize: 13, overflowWrap: "anywhere" }}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -945,17 +1847,6 @@ function ProviderCard({
   );
 }
 
-const rawBlockStyle = {
-  maxHeight: 360,
-  overflow: "auto",
-  padding: 12,
-  border: "1px solid var(--border)",
-  borderRadius: 8,
-  background: "var(--surface-muted)",
-  fontSize: 12,
-  lineHeight: 1.5,
-} as const;
-
 function waveTypeLabel(type: string) {
   const labels: Record<string, string> = {
     availableBusiness: "Available business",
@@ -969,6 +1860,217 @@ function waveTypeLabel(type: string) {
     salesTax: "Sales taxes",
   };
   return labels[type] ?? type;
+}
+
+function newOperatingSubscriptionForm() {
+  return {
+    name: "",
+    vendorName: "",
+    category: "Software",
+    amountCad: "",
+    interval: "month",
+    status: "Active",
+    nextRenewalDate: "",
+    notes: "",
+  };
+}
+
+function operatingSubscriptionFormFromRow(row: any) {
+  return {
+    id: row._id,
+    name: row.name,
+    vendorName: row.vendorName ?? "",
+    category: row.category,
+    amountCad: String((row.amountCents ?? 0) / 100),
+    interval: row.interval,
+    status: row.status,
+    nextRenewalDate: row.nextRenewalDate ?? "",
+    notes: row.notes ?? "",
+  };
+}
+
+function optionalText(value?: string) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function monthlyEstimateCents(row: { amountCents: number; interval: string }) {
+  if (row.interval === "week") return Math.round((row.amountCents * 52) / 12);
+  if (row.interval === "quarter") return Math.round(row.amountCents / 3);
+  if (row.interval === "year") return Math.round(row.amountCents / 12);
+  return row.amountCents;
+}
+
+function operatingSubscriptionIntervalLabel(interval: string) {
+  return OPERATING_SUBSCRIPTION_INTERVALS.find((row) => row.value === interval)?.label.toLowerCase() ?? interval;
+}
+
+function operatingSubscriptionStatusTone(status: string): "success" | "warn" | "neutral" | "info" {
+  if (status === "Active") return "success";
+  if (status === "Planned") return "info";
+  if (status === "Paused") return "warn";
+  return "neutral";
+}
+
+function waveResourceColumns() {
+  return [
+    {
+      id: "resource",
+      header: "Resource",
+      sortable: true,
+      accessor: (row: any) => row.label,
+      render: (row: any) => <strong>{row.label}</strong>,
+    },
+    {
+      id: "type",
+      header: "Type",
+      sortable: true,
+      accessor: (row: any) => [waveTypeLabel(row.resourceType), row.typeValue, row.subtypeValue].filter(Boolean).join(" / "),
+      render: (row: any) => (
+        <>
+          <Badge>{waveTypeLabel(row.resourceType)}</Badge>
+          {(row.typeValue || row.subtypeValue) && (
+            <div className="muted" style={{ fontSize: 12 }}>
+              {[row.typeValue, row.subtypeValue].filter(Boolean).join(" / ")}
+            </div>
+          )}
+        </>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      sortable: true,
+      accessor: (row: any) => row.status ?? "",
+      render: (row: any) => row.status ? <Badge tone={row.status === "archived" ? "neutral" : "info"}>{row.status}</Badge> : "—",
+    },
+    {
+      id: "value",
+      header: "Value",
+      sortable: true,
+      align: "right" as const,
+      accessor: (row: any) => Number(row.amountValue ?? 0),
+      render: (row: any) => (
+        <span className="table__cell--mono">{formatWaveValue(row.amountValue, row.currencyCode)}</span>
+      ),
+    },
+    {
+      id: "date",
+      header: "Date",
+      sortable: true,
+      accessor: (row: any) => row.dateValue ?? "",
+      render: (row: any) => <span className="table__cell--mono">{row.dateValue ?? "—"}</span>,
+    },
+  ];
+}
+
+function financialTransactionColumns(account: any) {
+  return [
+    {
+      id: "date",
+      header: "Date",
+      sortable: true,
+      accessor: (row: any) => row.date,
+      render: (row: any) => <span className="table__cell--mono">{row.date}</span>,
+    },
+    {
+      id: "description",
+      header: "Description",
+      sortable: true,
+      accessor: (row: any) => row.description,
+      render: (row: any) => (
+        <>
+          <strong>{row.description}</strong>
+          {row.counterparty && <div className="muted" style={{ fontSize: 12 }}>{row.counterparty}</div>}
+        </>
+      ),
+    },
+    {
+      id: "account",
+      header: "Account",
+      accessor: () => account?.name ?? "",
+      render: () => <span className="muted">{account?.name ?? "—"}</span>,
+    },
+    {
+      id: "category",
+      header: "Category",
+      sortable: true,
+      accessor: (row: any) => row.category ?? "",
+      render: (row: any) => <Badge>{row.category ?? "uncategorized"}</Badge>,
+    },
+    {
+      id: "amount",
+      header: "Amount",
+      sortable: true,
+      align: "right" as const,
+      accessor: (row: any) => row.amountCents,
+      render: (row: any) => (
+        <span
+          className="table__cell--mono"
+          style={{ color: row.amountCents < 0 ? "var(--danger)" : "var(--success)" }}
+        >
+          {money(row.amountCents)}
+        </span>
+      ),
+    },
+  ];
+}
+
+function normalizeWaveResourceType(value: string) {
+  const aliases: Record<string, string> = {
+    data: "all",
+    resources: "all",
+    accounts: "account",
+    vendors: "vendor",
+    products: "product",
+    customers: "customer",
+    invoices: "invoice",
+    estimates: "estimate",
+    salesTaxes: "salesTax",
+    "sales-taxes": "salesTax",
+    businesses: "business",
+    availableBusinesses: "availableBusiness",
+    "available-businesses": "availableBusiness",
+  };
+  return aliases[value] ?? value;
+}
+
+function waveResourceDetailFields(resource: any, raw: any) {
+  const currencyCode = raw?.currency?.code ?? resource.currencyCode;
+  const balance = raw?.balance ?? resource.amountValue;
+  const businessBalance = raw?.balanceInBusinessCurrency;
+  const displayId = raw?.displayId ?? raw?.invoiceNumber ?? raw?.estimateNumber;
+  const fields = [
+    { label: "Resource", value: waveTypeLabel(resource.resourceType) },
+    { label: "Type", value: detailPair(raw?.type?.name, raw?.type?.value ?? resource.typeValue) },
+    { label: "Subtype", value: detailPair(raw?.subtype?.name, raw?.subtype?.value ?? resource.subtypeValue) },
+    { label: "Status", value: detailValue(resource.status) },
+    { label: "Currency", value: detailPair(raw?.currency?.name, currencyCode) },
+    { label: "Balance", value: balance == null ? undefined : formatWaveValue(String(balance), currencyCode) },
+    {
+      label: "Business balance",
+      value: businessBalance == null ? undefined : formatWaveValue(String(businessBalance), currencyCode),
+    },
+    { label: "Normal balance", value: detailValue(raw?.normalBalanceType) },
+    { label: "Display ID", value: detailValue(displayId), mono: true },
+    { label: "Archived", value: typeof raw?.isArchived === "boolean" ? detailValue(raw.isArchived) : undefined },
+  ];
+  return fields.filter((field) => field.value != null && field.value !== "");
+}
+
+function detailPair(label: unknown, value: unknown) {
+  return [detailValue(label), detailValue(value)].filter(Boolean).join(" · ") || undefined;
+}
+
+function detailValue(value: unknown) {
+  if (value == null || value === "") return undefined;
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return String(value);
+}
+
+function isZeroWaveAmount(value?: string) {
+  if (value == null || value === "") return false;
+  return Number(value) === 0;
 }
 
 function formatWaveValue(value?: string, currencyCode?: string) {
