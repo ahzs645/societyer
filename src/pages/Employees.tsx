@@ -4,6 +4,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field, InspectorNote, RecordChip } from "../components/ui";
+import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { Plus, Users, Trash2, Tag } from "lucide-react";
@@ -135,6 +136,15 @@ export function EmployeesPage() {
             <Field label="WorkSafeBC #"><input className="input" value={form.worksafeBCNumber ?? ""} onChange={(e) => setForm({ ...form, worksafeBCNumber: e.target.value })} /></Field>
             <label className="checkbox"><input type="checkbox" checked={form.cppExempt} onChange={(e) => setForm({ ...form, cppExempt: e.target.checked })} /> CPP exempt</label>
             <label className="checkbox"><input type="checkbox" checked={form.eiExempt} onChange={(e) => setForm({ ...form, eiExempt: e.target.checked })} /> EI exempt</label>
+            {form._id && (
+              <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
+                <CustomFieldsPanel
+                  societyId={society._id}
+                  entityType="employees"
+                  entityId={form._id}
+                />
+              </div>
+            )}
           </div>
         )}
       </Drawer>

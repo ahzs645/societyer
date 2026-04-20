@@ -8,6 +8,7 @@ import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { Toggle } from "../components/Controls";
 import { formatDate } from "../lib/format";
+import { JURISDICTION_OPTIONS } from "../lib/jurisdictionGuideTracks";
 
 export function SocietyPage() {
   const society = useSociety();
@@ -35,6 +36,7 @@ export function SocietyPage() {
         incorporationNumber: form.incorporationNumber,
         incorporationDate: form.incorporationDate,
         fiscalYearEnd: form.fiscalYearEnd,
+        jurisdictionCode: form.jurisdictionCode ?? "CA-BC",
         isCharity: form.isCharity,
         isMemberFunded: form.isMemberFunded,
         registeredOfficeAddress: form.registeredOfficeAddress,
@@ -144,6 +146,14 @@ export function SocietyPage() {
                 />
               )}
             </LockedField>
+
+            <Field label="Legal jurisdiction" hint="Used for statutory guide tracks and point-in-time legal sources.">
+              <Select
+                value={form.jurisdictionCode ?? "CA-BC"}
+                onChange={(value) => set("jurisdictionCode", value)}
+                options={JURISDICTION_OPTIONS}
+              />
+            </Field>
 
             <LockedField
               label="Status flags"

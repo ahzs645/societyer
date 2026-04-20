@@ -83,6 +83,7 @@ const WorkflowsPage = React.lazy(() => import("./pages/Workflows").then((m) => (
 const WorkflowDetailPage = React.lazy(() => import("./pages/WorkflowDetail").then((m) => ({ default: m.WorkflowDetailPage })));
 const WorkflowRunsPage = React.lazy(() => import("./pages/WorkflowRuns").then((m) => ({ default: m.WorkflowRunsPage })));
 const OutboxPage = React.lazy(() => import("./pages/Outbox").then((m) => ({ default: m.OutboxPage })));
+const CustomFieldsPage = React.lazy(() => import("./pages/CustomFields").then((m) => ({ default: m.CustomFieldsPage })));
 const PublicTransparencyPage = React.lazy(() => import("./pages/PublicTransparency").then((m) => ({ default: m.PublicTransparencyPage })));
 const VolunteerApplyPage = React.lazy(() => import("./pages/VolunteerApply").then((m) => ({ default: m.VolunteerApplyPage })));
 const GrantApplyPage = React.lazy(() => import("./pages/GrantApply").then((m) => ({ default: m.GrantApplyPage })));
@@ -341,6 +342,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               element={withModule("workflows", <WorkflowRunsPage />)}
             />
             <Route path="outbox" element={<OutboxPage />} />
+            <Route path="custom-fields" element={<CustomFieldsPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="settings/api-keys" element={<ApiKeysPage />} />
             </Route>

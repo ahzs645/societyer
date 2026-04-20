@@ -14,6 +14,7 @@ export const run = mutation({
       incorporationNumber: "S-0098142",
       incorporationDate: "2011-03-18",
       fiscalYearEnd: "03-31",
+      jurisdictionCode: "CA-BC",
       isCharity: true,
       isMemberFunded: false,
       registeredOfficeAddress: "2187 Commercial Drive, Vancouver, BC V5N 4B3",

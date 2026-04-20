@@ -185,9 +185,7 @@ function compareRuleSetsDesc(
 }
 
 function effectiveTimestamp(row: Doc<"bylawRuleSets">) {
-  return timestampOrNegativeInfinity(
-    row.effectiveFromISO ?? row.updatedAtISO,
-  );
+  return timestampOrNegativeInfinity(row.effectiveFromISO);
 }
 
 function timestampOrInfinity(value: string) {

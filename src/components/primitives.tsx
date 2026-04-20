@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { List, Filter, ArrowUpDown, MoreHorizontal, ChevronDown } from "lucide-react";
+import { List, Filter, FilterX, ArrowUpDown, MoreHorizontal, ChevronDown } from "lucide-react";
 import { Pill, TintedIconTile } from "./ui";
 
 export function ViewBar({
@@ -7,6 +7,8 @@ export function ViewBar({
   count,
   icon,
   onFilter,
+  onAdvanced,
+  advancedActive,
   onSort,
   onOptions,
   extra,
@@ -18,6 +20,8 @@ export function ViewBar({
   count?: number;
   icon?: ReactNode;
   onFilter?: () => void;
+  onAdvanced?: () => void;
+  advancedActive?: boolean;
   onSort?: () => void;
   onOptions?: () => void;
   extra?: ReactNode;
@@ -39,7 +43,7 @@ export function ViewBar({
         )}
         <ChevronDown size={12} style={{ color: "var(--text-tertiary)" }} />
       </button>
-      {(onFilter || onSort || onOptions) && (
+      {(onFilter || onAdvanced || onSort || onOptions) && (
         <>
           <div className="view-bar__sep" />
           <div className="view-bar__group">
@@ -47,6 +51,17 @@ export function ViewBar({
               <button className="view-bar__btn" type="button" onClick={onFilter} ref={filterBtnRef}>
                 <Filter size={12} style={{ marginRight: 4, verticalAlign: -2 }} />
                 Filter
+              </button>
+            )}
+            {onAdvanced && (
+              <button
+                className={`view-bar__btn${advancedActive ? " is-active" : ""}`}
+                type="button"
+                onClick={onAdvanced}
+                title="Advanced filter"
+              >
+                <FilterX size={12} style={{ marginRight: 4, verticalAlign: -2 }} />
+                Advanced
               </button>
             )}
             {onSort && (

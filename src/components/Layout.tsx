@@ -53,6 +53,7 @@ import {
   KeyRound,
   Workflow,
   History,
+  Sliders,
 } from "lucide-react";
 import {
   ComponentType,
@@ -242,6 +243,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/app/notifications", label: "Notifications", icon: Bell, color: "orange" },
       { to: "/app/users", label: "Users & roles", icon: UserCog, color: "blue" },
+      { to: "/app/custom-fields", label: "Custom fields", icon: Sliders, color: "purple" },
       { to: "/app/imports", label: "Import sessions", icon: FileJson, color: "purple" },
       { to: "/app/paperless", label: "Paperless-ngx", icon: Database, color: "gray", module: "paperless" },
       { to: "/app/settings", label: "Settings", icon: Settings, color: "gray" },

@@ -133,6 +133,7 @@ const NAV_ITEMS: CommandItem[] = [
 
   // System
   { id: "sys-users", label: "Users & roles", to: "/app/users", icon: UserCog, category: "System" },
+  { id: "sys-custom-fields", label: "Custom fields", to: "/app/custom-fields", icon: Settings, category: "System" },
   { id: "sys-imports", label: "Import sessions", to: "/app/imports", icon: FileJson, category: "System" },
   { id: "sys-paperless", label: "Paperless-ngx", to: "/app/paperless", icon: Database, category: "System", module: "paperless" },
   { id: "sys-audit", label: "Audit log", to: "/app/audit", icon: ShieldCheck, category: "System" },

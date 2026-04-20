@@ -7,9 +7,12 @@ import {
   AppliedFilter,
   FilterChips,
   FilterField,
+  FilterGroup,
   FilterPopover,
   applyFilters,
+  evaluateGroup,
 } from "./FilterBar";
+import { AdvancedFilterModal } from "./AdvancedFilter";
 import { MenuRow, MenuSectionLabel, Pill, Skeleton } from "./ui";
 import { mobileCardMediaQuery } from "../lib/breakpoints";
 import {
@@ -116,6 +119,8 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
 }) {
   const [q, setQ] = useState("");
   const [filters, setFilters] = useState<AppliedFilter[]>([]);
+  const [advanced, setAdvanced] = useState<FilterGroup | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [sort, setSort] = useState<SortState>(defaultSort ?? null);
@@ -138,6 +143,8 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   );
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => new Set());
   const [density, setDensity] = useState<"compact" | "comfortable">("compact");
+  const [focusedCell, setFocusedCell] = useState<{ row: number; col: number } | null>(null);
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [savedViews, setSavedViews] = useState<SavedView[]>(() =>
     viewsKey ? readSavedViews(viewsKey) : [],
@@ -159,6 +166,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
       setFilters(match.filters);
       setSort(match.sort);
       setHiddenColumns(new Set(match.hiddenColumns));
+      setColumnWidths(match.columnWidths ?? {});
       setDensity(match.density);
       setActiveViewId(match.id);
     }
@@ -187,10 +195,30 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
     [initialPageSize, pageSizeOptions],
   );
 
+  const effectiveFilterFields = useMemo<FilterField<T>[] | undefined>(() => {
+    if (!filterFields) return undefined;
+    const anyField: FilterField<T> = {
+      id: "__any__",
+      label: "Any field",
+      match: (record, query) => {
+        const ql = query.toLowerCase();
+        const pieces = [
+          ...columns.map((c) => c.accessor?.(record)),
+          ...(searchExtraFields?.map((fn) => fn(record)) ?? []),
+        ];
+        return pieces.some((p) => String(p ?? "").toLowerCase().includes(ql));
+      },
+    };
+    return [anyField, ...filterFields];
+  }, [filterFields, columns, searchExtraFields]);
+
   const filtered = useMemo(() => {
     let rows = data;
-    if (filterFields && filters.length > 0) {
-      rows = applyFilters(rows, filters, filterFields);
+    if (effectiveFilterFields && filters.length > 0) {
+      rows = applyFilters(rows, filters, effectiveFilterFields);
+    }
+    if (effectiveFilterFields && advanced && advanced.rules.length > 0) {
+      rows = rows.filter((r) => evaluateGroup(r, advanced, effectiveFilterFields));
     }
     if (q.trim()) {
       const ql = q.toLowerCase();
@@ -221,7 +249,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
       }
     }
     return rows;
-  }, [data, filters, q, sort, columns, filterFields, searchExtraFields]);
+  }, [data, filters, advanced, q, sort, columns, effectiveFilterFields, searchExtraFields]);
 
   const totalPages = pagination ? Math.max(1, Math.ceil(filtered.length / pageSize)) : 1;
   const visibleRows = pagination ? filtered.slice((page - 1) * pageSize, page * pageSize) : filtered;
@@ -253,6 +281,44 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
     () => (selectable ? filtered.filter((row) => selected.has(rowKey(row))) : []),
     [filtered, selected, selectable],
   );
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        const tag = target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable) return;
+      }
+      if (!focusedCell) return;
+      if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter", "Escape"].includes(event.key)) return;
+
+      const rowCount = visibleRows.length;
+      const colCount = visibleColumns.length;
+      if (rowCount === 0 || colCount === 0) return;
+      const current = focusedCell;
+
+      if (event.key === "Escape") {
+        setFocusedCell(null);
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const selector = `td[data-row-index="${current.row}"][data-col-index="${current.col}"] .editable-cell`;
+        const btn = document.querySelector<HTMLButtonElement>(selector);
+        if (btn) btn.click();
+        return;
+      }
+      event.preventDefault();
+      const next = { ...current };
+      if (event.key === "ArrowUp") next.row = Math.max(0, current.row - 1);
+      if (event.key === "ArrowDown") next.row = Math.min(rowCount - 1, current.row + 1);
+      if (event.key === "ArrowLeft") next.col = Math.max(0, current.col - 1);
+      if (event.key === "ArrowRight") next.col = Math.min(colCount - 1, current.col + 1);
+      setFocusedCell(next);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [visibleRows.length, visibleColumns.length, focusedCell]);
 
   const toast = useToast();
   useEffect(() => {
@@ -345,6 +411,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
       filters,
       sort,
       hiddenColumns: [...hiddenColumns],
+      columnWidths,
       density,
       createdAtISO: new Date().toISOString(),
     };
@@ -357,6 +424,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
     setFilters(view.filters);
     setSort(view.sort);
     setHiddenColumns(new Set(view.hiddenColumns));
+    setColumnWidths(view.columnWidths ?? {});
     setDensity(view.density);
     setActiveViewId(view.id);
     if (viewsKey) useUIStore.getState().setLastView(viewsKey, view.id);
@@ -413,6 +481,12 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
               }
             : undefined
         }
+        onAdvanced={
+          filterFields?.length
+            ? () => setAdvancedOpen(true)
+            : undefined
+        }
+        advancedActive={!!advanced && advanced.rules.length > 0}
         onSort={
           sortableColumns.length
             ? () => {
@@ -454,19 +528,29 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
           onClose={() => setOptionsOpen(false)}
         />
       )}
-      {filterFields && (
+      {effectiveFilterFields && (
         <FilterChips
           filters={filters}
-          fields={filterFields}
+          fields={effectiveFilterFields}
           onRemove={(i) => setFilters(filters.filter((_, idx) => idx !== i))}
         />
       )}
-      {filterOpen && filterFields && (
+      {filterOpen && effectiveFilterFields && (
         <FilterPopover
-          fields={filterFields}
+          fields={effectiveFilterFields}
           anchorRef={filterBtnRef as any}
           onAdd={(f) => setFilters([...filters, f])}
           onClose={() => setFilterOpen(false)}
+        />
+      )}
+      {effectiveFilterFields && (
+        <AdvancedFilterModal
+          open={advancedOpen}
+          onClose={() => setAdvancedOpen(false)}
+          fields={effectiveFilterFields}
+          initial={advanced}
+          onApply={setAdvanced}
+          onClear={() => { setAdvanced(null); setAdvancedOpen(false); }}
         />
       )}
       {sortOpen && (
@@ -610,8 +694,9 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
                     : undefined
                 }
                 style={{
-                  width: col.width,
+                  width: columnWidths[col.id] ?? col.width,
                   textAlign: col.align,
+                  position: "relative",
                 }}
               >
                 {col.sortable ? (
@@ -635,6 +720,10 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
                 ) : (
                   col.header
                 )}
+                <ColumnResizeHandle
+                  columnId={col.id}
+                  onResize={(width) => setColumnWidths((w) => ({ ...w, [col.id]: width }))}
+                />
               </th>
             ))}
             {renderRowActions && <th className="table__actions-col" />}
@@ -662,12 +751,13 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
                 </tr>
               ))
             : null}
-          {!loading && visibleRows.map((row) => {
+          {!loading && visibleRows.map((row, rowIndex) => {
             const id = rowKey(row);
             const isSelected = selectable && selected.has(id);
             return (
             <tr
               key={id}
+              data-row-index={rowIndex}
               className={`${renderRowActions ? "table__row--actions " : ""}${isSelected ? "is-selected" : ""}`.trim() || undefined}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               style={{ cursor: onRowClick ? "pointer" : undefined }}
@@ -692,12 +782,18 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
               {visibleColumns.map((col, index) => {
                 const cell = col.render ? col.render(row) : String(col.accessor?.(row) ?? "");
                 const isEditable = Boolean(col.editable);
+                const isFocused = focusedCell?.row === rowIndex && focusedCell?.col === index;
                 return (
                 <td
                   key={col.id}
-                  className={col.className}
+                  data-row-index={rowIndex}
+                  data-col-index={index}
+                  className={`${col.className ?? ""}${isFocused ? " is-focused" : ""}`.trim() || undefined}
                   style={{ textAlign: col.align }}
-                  onClick={isEditable ? (e) => e.stopPropagation() : undefined}
+                  onClick={(e) => {
+                    setFocusedCell({ row: rowIndex, col: index });
+                    if (isEditable) e.stopPropagation();
+                  }}
                 >
                   {isEditable ? (
                     <EditableCell row={row} column={col} display={cell} />
@@ -1245,6 +1341,49 @@ function EditPopover({
     >
       {children}
     </div>
+  );
+}
+
+function ColumnResizeHandle({
+  columnId,
+  onResize,
+}: {
+  columnId: string;
+  onResize: (width: number) => void;
+}) {
+  const dragging = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const onMouseDown = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const th = (event.currentTarget as HTMLElement).parentElement;
+    if (!th) return;
+    const startWidth = th.getBoundingClientRect().width;
+    dragging.current = { startX: event.clientX, startWidth };
+
+    const onMove = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      const delta = e.clientX - dragging.current.startX;
+      const next = Math.max(60, Math.round(dragging.current.startWidth + delta));
+      onResize(next);
+    };
+    const onUp = () => {
+      dragging.current = null;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+
+  return (
+    <span
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Resize column ${columnId}`}
+      className="table__resize-handle"
+      onMouseDown={onMouseDown}
+    />
   );
 }
 

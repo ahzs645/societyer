@@ -13,6 +13,10 @@ export type SavedView = {
   filters: AppliedFilter[];
   sort: SortState;
   hiddenColumns: string[];
+  /** Optional per-column widths in pixels, keyed by column id. */
+  columnWidths?: Record<string, number>;
+  /** Optional column id ordering. Missing ids render in their original order. */
+  columnOrder?: string[];
   density: "compact" | "comfortable";
   createdAtISO: string;
 };

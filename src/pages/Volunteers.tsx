@@ -5,6 +5,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
+import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { DataTable } from "../components/DataTable";
 import { HandHeart, Plus, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { useToast } from "../components/Toast";
@@ -427,6 +428,15 @@ export function VolunteersPage() {
               <Field label="Renewal due"><input className="input" type="date" value={volunteerDraft.renewalDueAtISO ?? ""} onChange={(e) => setVolunteerDraft({ ...volunteerDraft, renewalDueAtISO: e.target.value })} /></Field>
             </div>
             <Field label="Notes"><textarea className="textarea" value={volunteerDraft.notes ?? ""} onChange={(e) => setVolunteerDraft({ ...volunteerDraft, notes: e.target.value })} /></Field>
+            {volunteerDraft._id && (
+              <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
+                <CustomFieldsPanel
+                  societyId={society._id}
+                  entityType="volunteers"
+                  entityId={volunteerDraft._id}
+                />
+              </div>
+            )}
           </div>
         )}
       </Drawer>

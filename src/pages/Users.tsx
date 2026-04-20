@@ -150,6 +150,8 @@ export function UsersPage() {
         </table>
       </div>
 
+      <InvitationsPanel societyId={society._id} actingUserId={actingUserId} />
+
       <Drawer
         open={!!draft}
         onClose={() => setDraft(null)}
@@ -212,6 +214,165 @@ export function UsersPage() {
                   { value: "Invited", label: "Invited" },
                   { value: "Disabled", label: "Disabled" },
                 ]}
+              />
+            </Field>
+          </div>
+        )}
+      </Drawer>
+    </div>
+  );
+}
+
+function InvitationsPanel({
+  societyId,
+  actingUserId,
+}: {
+  societyId: any;
+  actingUserId?: any;
+}) {
+  const invitations = useQuery(api.invitations.list, { societyId });
+  const create = useMutation(api.invitations.create);
+  const revokeInvite = useMutation(api.invitations.revoke);
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [form, setForm] = useState<{ email: string; role: string } | null>(null);
+
+  const invite = async () => {
+    if (!form?.email.trim()) return;
+    await create({
+      societyId,
+      email: form.email.trim(),
+      role: form.role,
+      invitedByUserId: actingUserId,
+    });
+    setForm(null);
+    toast.success("Invitation created");
+  };
+
+  const copyLink = async (token: string) => {
+    const url = `${window.location.origin}/invite/${token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Invite link copied");
+    } catch {
+      toast.error("Clipboard unavailable");
+    }
+  };
+
+  const pending = (invitations ?? []).filter(
+    (i: any) => !i.acceptedAtISO && !i.revokedAtISO,
+  );
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <div className="card__head">
+        <h2 className="card__title">Invitations</h2>
+        <span className="card__subtitle">
+          Invite by email — share the copy-link in the meantime.
+        </span>
+        <button
+          className="btn-action btn-action--primary"
+          style={{ marginLeft: "auto" }}
+          onClick={() => setForm({ email: "", role: "Member" })}
+        >
+          <PlusCircle size={12} /> Invite
+        </button>
+      </div>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {(invitations ?? []).map((inv: any) => {
+            const status = inv.acceptedAtISO
+              ? "accepted"
+              : inv.revokedAtISO
+                ? "revoked"
+                : "pending";
+            return (
+              <tr key={inv._id}>
+                <td className="mono">{inv.email}</td>
+                <td><Badge>{inv.role}</Badge></td>
+                <td>
+                  <Badge tone={status === "accepted" ? "success" : status === "revoked" ? "danger" : "warn"}>
+                    {status}
+                  </Badge>
+                </td>
+                <td className="mono muted">{inv.createdAtISO?.slice(0, 10)}</td>
+                <td className="table__actions">
+                  {status === "pending" && (
+                    <>
+                      <button
+                        className="btn btn--sm btn--ghost"
+                        onClick={() => copyLink(inv.token)}
+                      >
+                        Copy link
+                      </button>
+                      <button
+                        className="btn btn--sm btn--ghost btn--icon"
+                        aria-label="Revoke invitation"
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: "Revoke invitation?",
+                            message: `${inv.email} will no longer be able to use this link.`,
+                            confirmLabel: "Revoke",
+                            tone: "danger",
+                          });
+                          if (!ok) return;
+                          await revokeInvite({ id: inv._id });
+                        }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+          {pending.length === 0 && (invitations ?? []).length === 0 && (
+            <tr>
+              <td colSpan={5} className="muted" style={{ textAlign: "center", padding: 16 }}>
+                No invitations yet.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      <Drawer
+        open={!!form}
+        onClose={() => setForm(null)}
+        title="Invite a user"
+        footer={
+          <>
+            <button className="btn" onClick={() => setForm(null)}>Cancel</button>
+            <button className="btn btn--accent" onClick={invite} disabled={!form?.email.trim()}>
+              Create invitation
+            </button>
+          </>
+        }
+      >
+        {form && (
+          <div>
+            <Field label="Email">
+              <input
+                className="input"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            </Field>
+            <Field label="Role">
+              <Select
+                value={form.role}
+                onChange={(v) => setForm({ ...form, role: v })}
+                options={ROLES.map((r) => ({ value: r, label: r }))}
               />
             </Field>
           </div>

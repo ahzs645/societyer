@@ -15,6 +15,8 @@ import { exportWordDoc, renderMinutesHtml } from "../lib/exportWord";
 import { redactText, RedactOptions } from "../lib/redactPii";
 import { EyeOff } from "lucide-react";
 import { SignaturePanel } from "../components/SignaturePanel";
+import { LegalGuideInline, LegalGuideTrackList } from "../components/LegalGuide";
+import { getLegalGuideRules, resolveJurisdictionCode } from "../lib/jurisdictionGuideTracks";
 
 export function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -67,13 +69,13 @@ export function MeetingDetailPage() {
   useEffect(() => {
     if (!meeting) return;
     if (meeting.quorumComputedAtISO && meeting.quorumSourceLabel) return;
-    void backfillMeetingQuorum({ id: meeting._id });
+    void backfillMeetingQuorum({ id: meeting._id }).catch(() => undefined);
   }, [backfillMeetingQuorum, meeting?._id, meeting?.quorumComputedAtISO, meeting?.quorumSourceLabel]);
 
   useEffect(() => {
     if (!minutes) return;
     if (minutes.quorumComputedAtISO && minutes.quorumSourceLabel && minutes.quorumRequired != null) return;
-    void backfillMinutesQuorum({ id: minutes._id });
+    void backfillMinutesQuorum({ id: minutes._id }).catch(() => undefined);
   }, [backfillMinutesQuorum, minutes?._id, minutes?.quorumComputedAtISO, minutes?.quorumRequired, minutes?.quorumSourceLabel]);
 
   if (society === undefined) return <div className="page">Loading…</div>;
@@ -92,6 +94,12 @@ export function MeetingDetailPage() {
     ? transcriptRecord?.provider ?? (minutesDraftTranscript ? "manual" : null)
     : null;
   const quorumSnapshot = getQuorumSnapshot(minutes, meeting);
+  const legalGuideDateISO = minutes?.heldAt ?? meeting.scheduledAt;
+  const quorumLegalGuides = getLegalGuideRules({
+    jurisdictionCode: resolveJurisdictionCode(society),
+    dateISO: legalGuideDateISO,
+    topics: ["quorum", "model_bylaws_quorum"],
+  });
   const transcriptStatusTone =
     transcriptionJob?.status === "complete"
       ? "success"
@@ -586,8 +594,13 @@ export function MeetingDetailPage() {
                         )}
                         <Badge tone="neutral">{minutes.absent.length} absent/regrets</Badge>
                         {quorumSnapshot.label && (
-                          <Badge tone="info">Rule: {quorumSnapshot.label}</Badge>
+                          <span className="muted" style={{ flexBasis: "100%", fontSize: "var(--fs-sm)" }}>
+                            Rule: {quorumSnapshot.label}
+                          </span>
                         )}
+                        <div style={{ flexBasis: "100%" }}>
+                          <LegalGuideInline rules={quorumLegalGuides} />
+                        </div>
                         <button className="btn-action" onClick={startAttendanceEdit}>
                           Edit attendance
                         </button>
@@ -696,10 +709,29 @@ export function MeetingDetailPage() {
               <Detail label="Location">{meeting.location ?? "—"}</Detail>
               <Detail label="Electronic">{meeting.electronic ? "Yes" : "No"}</Detail>
               <Detail label="Notice sent">{meeting.noticeSentAt ?? "—"}</Detail>
-              <Detail label="Quorum required">{meeting.quorumRequired ?? "—"}</Detail>
+              <Detail label="Quorum required">{quorumSnapshot.required ?? meeting.quorumRequired ?? "—"}</Detail>
               <Detail label="Quorum rule">{quorumSnapshot.label || meeting.quorumSourceLabel || "—"}</Detail>
+              <Detail label="Legal guide">
+                <LegalGuideInline rules={quorumLegalGuides} />
+              </Detail>
             </div>
           </div>
+
+          {quorumLegalGuides.length > 0 && (
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">Quorum guide tracks</h2>
+                <span className="card__subtitle">{formatDate(legalGuideDateISO)}</span>
+              </div>
+              <div className="card__body">
+                <LegalGuideTrackList
+                  rules={quorumLegalGuides}
+                  jurisdictionCode={resolveJurisdictionCode(society)}
+                  dateISO={legalGuideDateISO}
+                />
+              </div>
+            </div>
+          )}
 
           {minutes && (
             <div className="card">

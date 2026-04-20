@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field, Flag, InspectorNote, RecordChip } from "../components/ui";
+import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { Select } from "../components/Select";
@@ -296,6 +297,15 @@ export function DirectorsPage() {
               label="Written consent to act on file"
             />
             <Field label="Notes"><textarea className="textarea" value={selected.notes ?? ""} onChange={(e) => setSelected({ ...selected, notes: e.target.value })} /></Field>
+            {selected._id && (
+              <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
+                <CustomFieldsPanel
+                  societyId={society._id}
+                  entityType="directors"
+                  entityId={selected._id}
+                />
+              </div>
+            )}
           </div>
         )}
       </Drawer>

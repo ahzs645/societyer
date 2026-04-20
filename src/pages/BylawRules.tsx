@@ -8,6 +8,12 @@ import { Toggle } from "../components/Controls";
 import { Info, RefreshCw, Save, Scale } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
+import { LegalGuideTrackList } from "../components/LegalGuide";
+import {
+  getJurisdictionGuidePack,
+  getLegalGuideRules,
+  resolveJurisdictionCode,
+} from "../lib/jurisdictionGuideTracks";
 
 export function BylawRulesPage() {
   const { society, rules } = useBylawRules();
@@ -27,6 +33,31 @@ export function BylawRulesPage() {
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
   if (!form) return <div className="page">Loading…</div>;
+
+  const jurisdictionCode = resolveJurisdictionCode(society);
+  const jurisdictionPack = getJurisdictionGuidePack(jurisdictionCode);
+  const legalGuideDateISO = form.effectiveFromISO || new Date().toISOString();
+  const legalGuideRules = getLegalGuideRules({
+    jurisdictionCode,
+    dateISO: legalGuideDateISO,
+    topics: [
+      "bylaw_requirements",
+      "bylaw_effective_date",
+      "general_meeting_notice",
+      "agm_timing",
+      "annual_report",
+      "member_proposals",
+      "requisitioned_meetings",
+      "quorum",
+      "electronic_participation",
+      "proxy_voting",
+      "special_resolution",
+      "records",
+      "model_bylaws_quorum",
+      "model_bylaws_proxy",
+      "directors_quorum",
+    ],
+  });
 
   const save = async () => {
     await upsert({
@@ -112,6 +143,22 @@ export function BylawRulesPage() {
           </div>
         </div>
       )}
+
+      <div className="card bylaw-rules__card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">Legal minimum guide tracks</h2>
+          <span className="card__subtitle">
+            {jurisdictionPack.name} · {formatDate(legalGuideDateISO)}
+          </span>
+        </div>
+        <div className="card__body bylaw-rules__body">
+          <LegalGuideTrackList
+            rules={legalGuideRules}
+            jurisdictionCode={jurisdictionCode}
+            dateISO={legalGuideDateISO}
+          />
+        </div>
+      </div>
 
       <div className="card bylaw-rules__card" style={{ marginBottom: 16 }}>
         <div className="card__head">

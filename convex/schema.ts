@@ -7,6 +7,7 @@ export default defineSchema({
     incorporationNumber: v.optional(v.string()),
     incorporationDate: v.optional(v.string()),
     fiscalYearEnd: v.optional(v.string()),
+    jurisdictionCode: v.optional(v.string()),
     isCharity: v.boolean(),
     isMemberFunded: v.boolean(),
     registeredOfficeAddress: v.optional(v.string()),
@@ -770,6 +771,37 @@ export default defineSchema({
     demo: v.boolean(),
   }).index("by_meeting", ["meetingId"]),
 
+  // Per-category custom field definitions. Admins add a definition under
+  // members/directors/volunteers/employees, then each person in that
+  // category can have a value stored in customFieldValues.
+  customFieldDefinitions: defineTable({
+    societyId: v.id("societies"),
+    entityType: v.string(), // members | directors | volunteers | employees
+    key: v.string(), // machine key, e.g. "unbc_affiliate_role"
+    label: v.string(),
+    kind: v.string(), // text | number | date | boolean | email | phone
+    required: v.boolean(),
+    order: v.number(),
+    description: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_entity", ["societyId", "entityType"])
+    .index("by_society_entity_key", ["societyId", "entityType", "key"]),
+
+  customFieldValues: defineTable({
+    societyId: v.id("societies"),
+    definitionId: v.id("customFieldDefinitions"),
+    entityType: v.string(),
+    entityId: v.string(),
+    value: v.any(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_entity", ["entityType", "entityId"])
+    .index("by_definition", ["definitionId"])
+    .index("by_entity_def", ["entityType", "entityId", "definitionId"]),
+
   members: defineTable({
     societyId: v.id("societies"),
     firstName: v.string(),
@@ -1445,6 +1477,19 @@ export default defineSchema({
   })
     .index("by_entity", ["societyId", "entityType", "entityId"])
     .index("by_society", ["societyId"]),
+
+  invitations: defineTable({
+    societyId: v.id("societies"),
+    email: v.string(),
+    role: v.string(),
+    token: v.string(),
+    invitedByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+    acceptedAtISO: v.optional(v.string()),
+    revokedAtISO: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_token", ["token"]),
 
   // ========== Priority A additions ==========
 

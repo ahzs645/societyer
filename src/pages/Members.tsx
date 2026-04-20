@@ -5,6 +5,7 @@ import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field, RecordChip } from "../components/ui";
 import { DataTable } from "../components/DataTable";
+import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { FilterField } from "../components/FilterBar";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
@@ -15,8 +16,9 @@ import { Plus, Users, Trash2, Mail, Tag, CircleUser, Vote } from "lucide-react";
 import { formatDate, initials } from "../lib/format";
 import { patchInList } from "../lib/optimistic";
 import { useRegisterCommand } from "../lib/commands";
-import { Download, Pencil } from "lucide-react";
+import { Download, Pencil, GitMerge } from "lucide-react";
 import { BulkEditPanel } from "../components/BulkEditPanel";
+import { MergeRecordsModal } from "../components/MergeRecordsModal";
 
 const MEMBER_FIELDS: FilterField<any>[] = [
   { id: "name", label: "Name", icon: <CircleUser size={14} />, match: (m, q) => `${m.firstName} ${m.lastName}`.toLowerCase().includes(q.toLowerCase()) },
@@ -40,6 +42,8 @@ export function MembersPage() {
   const [selected, setSelected] = useState<any>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [bulkRows, setBulkRows] = useState<any[] | null>(null);
+  const [mergeRows, setMergeRows] = useState<any[] | null>(null);
+  const mergeMembers = useMutation(api.members.merge);
 
   const confirmRemove = async (r: any) => {
     const reason = await prompt({
@@ -238,7 +242,45 @@ export function MembersPage() {
             onRun: (rows) => { setBulkRows(rows); },
             keepSelection: true,
           },
+          {
+            id: "bulk-merge",
+            label: "Merge",
+            icon: <GitMerge size={12} />,
+            onRun: (rows) => {
+              if (rows.length < 2) {
+                toast.warn("Select at least 2 members to merge");
+                return;
+              }
+              setMergeRows(rows);
+            },
+            keepSelection: true,
+          },
         ]}
+      />
+
+      <MergeRecordsModal
+        open={!!mergeRows && mergeRows.length >= 2}
+        onClose={() => setMergeRows(null)}
+        rows={(mergeRows ?? []) as any[]}
+        label="members"
+        fields={[
+          { id: "firstName", label: "First name" },
+          { id: "lastName", label: "Last name" },
+          { id: "email", label: "Email" },
+          { id: "phone", label: "Phone" },
+          { id: "membershipClass", label: "Class" },
+          { id: "status", label: "Status" },
+          { id: "joinedAt", label: "Joined" },
+        ]}
+        onMerge={async (keepId, dropIds, merged) => {
+          await mergeMembers({
+            keepId: keepId as any,
+            dropIds: dropIds as any,
+            patch: merged,
+          });
+          toast.success(`Merged ${dropIds.length + 1} members`);
+          setMergeRows(null);
+        }}
       />
 
       <BulkEditPanel
@@ -302,6 +344,15 @@ export function MembersPage() {
               label="Voting rights"
             />
             <Field label="Notes"><textarea className="textarea" value={selected.notes ?? ""} onChange={(e) => setSelected({ ...selected, notes: e.target.value })} /></Field>
+            {selected._id && (
+              <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
+                <CustomFieldsPanel
+                  societyId={society._id}
+                  entityType="members"
+                  entityId={selected._id}
+                />
+              </div>
+            )}
           </div>
         )}
       </Drawer>

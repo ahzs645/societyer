@@ -1025,15 +1025,20 @@ function PdfPreviewPane({ doc }: { doc: any }) {
   );
 }
 
-type MappingKind = "literal" | "dynamic" | "person" | "manager" | "empty";
+type MappingKind = "literal" | "dynamic" | "person" | "personRef" | "manager" | "empty";
+
+type PersonCategory = "members" | "directors" | "volunteers" | "employees";
 
 type FieldMapping = {
   kind: MappingKind;
   // literal/default text
   value?: string;
   // dynamic: "today" | "today:long" | "now" | "society.name" | ...
-  // person/manager: "firstName" | "lastName" | "email" | ...
+  // person/manager/personRef: "firstName" | "lastName" | "email" | "custom:<key>" | ...
   source?: string;
+  // personRef-specific: which category + which person
+  category?: PersonCategory;
+  personId?: string;
 };
 
 const DYNAMIC_SOURCES: Array<{ value: string; label: string }> = [
@@ -1061,6 +1066,72 @@ const MANAGER_SOURCES: Array<{ value: string; label: string }> = [
   { value: "department", label: "Department / Organization" },
 ];
 
+const PERSON_CATEGORIES: Array<{ value: PersonCategory; label: string }> = [
+  { value: "members", label: "Members" },
+  { value: "directors", label: "Directors" },
+  { value: "volunteers", label: "Volunteers" },
+  { value: "employees", label: "Employees" },
+];
+
+// Heuristic: given a raw PDF AcroForm field name, guess a sensible mapping.
+// Returns null if nothing confident — the user sees "Empty" and picks manually.
+function suggestMappingForField(fieldName: string): FieldMapping | null {
+  const norm = fieldName.toLowerCase().replace(/[_\-.]/g, " ").replace(/\s+/g, " ").trim();
+  const contains = (needle: string) => norm.includes(needle);
+  const match = (re: RegExp) => re.test(norm);
+
+  // Date signed / signature date / date of signature
+  if (match(/(date.*sign|sign.*date|signature.*date)/)) {
+    return { kind: "dynamic", source: "today" };
+  }
+  // Society / organization's own name
+  if (match(/society.*name|organization.*name\b/) && !contains("manager")) {
+    return { kind: "dynamic", source: "society.name" };
+  }
+  // Manager/authorizer block — must run BEFORE the generic person matchers.
+  if (contains("manager") || contains("authoriz")) {
+    if (match(/(email|e-?mail)/)) return { kind: "manager", source: "email" };
+    if (match(/(phone|tel)/)) return { kind: "manager", source: "phone" };
+    if (match(/(department|organization|org|dept)/)) {
+      return { kind: "manager", source: "department" };
+    }
+    if (match(/(name|authoriz)/)) return { kind: "manager", source: "name" };
+  }
+  // Emergency contact — leave empty, the user probably wants a literal.
+  if (contains("emergency")) return null;
+  // Person/affiliate fields (runtime input from the workflow form).
+  if (match(/\bfirst\b.*\bname\b/) || match(/\bfirst.?name\b/) || match(/\bgiven.?name\b/)) {
+    return { kind: "person", source: "firstName" };
+  }
+  if (match(/\bmiddle\b.*\bname\b/)) {
+    // No middle-name source — fallback to empty so the user notices.
+    return null;
+  }
+  if (match(/\blast\b.*\bname\b/) || match(/\blast.?name\b/) || match(/\bsurname\b/) || match(/\bfamily.?name\b/)) {
+    return { kind: "person", source: "lastName" };
+  }
+  if (match(/(birth.?date|date.*birth|\bdob\b)/)) {
+    return { kind: "person", source: "birthdate" };
+  }
+  if (match(/(personal.*email|e-?mail.*address|^email$|\bemail\b)/)) {
+    return { kind: "person", source: "email" };
+  }
+  if (match(/(mailing.*address|home.*address|current.*address|^address$|\baddress\b)/)) {
+    return { kind: "person", source: "mailingAddress" };
+  }
+  if (match(/(phone|tel|mobile|cell)/)) {
+    return { kind: "person", source: "phone" };
+  }
+  // Check boxes — leave empty.
+  if (match(/^check\s*box/)) return null;
+  return null;
+}
+
+function mappingEqualsSuggestion(a: FieldMapping | undefined, b: FieldMapping | null): boolean {
+  if (!a || !b) return false;
+  return a.kind === b.kind && (a.source ?? "") === (b.source ?? "") && (a.value ?? "") === (b.value ?? "");
+}
+
 function summariseMappings(fields: string[], mappings: Record<string, FieldMapping>) {
   const total = fields.length;
   let mapped = 0;
@@ -1068,6 +1139,7 @@ function summariseMappings(fields: string[], mappings: Record<string, FieldMappi
     literal: 0,
     dynamic: 0,
     person: 0,
+    personRef: 0,
     manager: 0,
     empty: 0,
   };
@@ -1076,6 +1148,7 @@ function summariseMappings(fields: string[], mappings: Record<string, FieldMappi
     if (!m || m.kind === "empty") continue;
     if (m.kind === "literal" && !(m.value ?? "").trim()) continue;
     if ((m.kind === "dynamic" || m.kind === "person" || m.kind === "manager") && !m.source) continue;
+    if (m.kind === "personRef" && (!m.category || !m.personId || !m.source)) continue;
     counts[m.kind] += 1;
     mapped += 1;
   }
@@ -1083,6 +1156,7 @@ function summariseMappings(fields: string[], mappings: Record<string, FieldMappi
   if (counts.literal) parts.push(`${counts.literal} literal`);
   if (counts.dynamic) parts.push(`${counts.dynamic} dynamic`);
   if (counts.person) parts.push(`${counts.person} person`);
+  if (counts.personRef) parts.push(`${counts.personRef} record`);
   if (counts.manager) parts.push(`${counts.manager} manager`);
   const breakdown = parts.length > 0 ? parts.join(" · ") : "No mappings yet.";
   return { total, mapped, breakdown };
@@ -1093,6 +1167,7 @@ const KIND_LABEL: Record<MappingKind, string> = {
   literal: "Literal",
   dynamic: "Dynamic",
   person: "Person",
+  personRef: "Person record",
   manager: "Manager",
 };
 
@@ -1154,6 +1229,10 @@ function FieldMappingWizardModal({
     const name = newField.trim();
     if (!name || fields.includes(name)) return;
     onFieldsChange([...fields, name]);
+    const suggestion = suggestMappingForField(name);
+    if (suggestion) {
+      onMappingsChange({ ...mappings, [name]: suggestion });
+    }
     setNewField("");
     setStepIndex(fields.length); // jump to the newly added one
   };
@@ -1169,6 +1248,30 @@ function FieldMappingWizardModal({
           <div className="muted" style={{ marginRight: "auto", fontSize: "var(--fs-sm)" }}>
             {summary.mapped} of {summary.total} mapped · {summary.breakdown}
           </div>
+          <button
+            className="btn"
+            title="Apply the heuristic suggestion to every field that's currently empty."
+            onClick={() => {
+              const next = { ...mappings };
+              let applied = 0;
+              for (const field of fields) {
+                const existing = next[field];
+                const isEmpty =
+                  !existing ||
+                  existing.kind === "empty" ||
+                  (existing.kind === "literal" && !(existing.value ?? "").trim()) ||
+                  ((existing.kind === "dynamic" || existing.kind === "person" || existing.kind === "manager") && !existing.source);
+                if (!isEmpty) continue;
+                const suggestion = suggestMappingForField(field);
+                if (!suggestion) continue;
+                next[field] = suggestion;
+                applied += 1;
+              }
+              if (applied > 0) onMappingsChange(next);
+            }}
+          >
+            Auto-fill empty fields
+          </button>
           <button
             className="btn"
             onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
@@ -1259,9 +1362,48 @@ function FieldMappingWizardModal({
               </div>
               <h3 className="mapping-wizard__field mono">{currentField}</h3>
 
+              {(() => {
+                const suggestion = suggestMappingForField(currentField);
+                if (!suggestion) return null;
+                const label =
+                  suggestion.kind === "dynamic"
+                    ? `Dynamic · ${DYNAMIC_SOURCES.find((s) => s.value === suggestion.source)?.label ?? suggestion.source}`
+                    : suggestion.kind === "person"
+                      ? `Person · ${PERSON_SOURCES.find((s) => s.value === suggestion.source)?.label ?? suggestion.source}`
+                      : suggestion.kind === "manager"
+                        ? `Manager · ${MANAGER_SOURCES.find((s) => s.value === suggestion.source)?.label ?? suggestion.source}`
+                        : suggestion.kind === "literal"
+                          ? `Literal · "${suggestion.value ?? ""}"`
+                          : suggestion.kind;
+                const already = mappingEqualsSuggestion(current, suggestion);
+                return (
+                  <div className="mapping-wizard__suggestion">
+                    <span
+                      className={`mapping-wizard__suggestion-badge${already ? " is-applied" : ""}`}
+                    >
+                      {already ? "Suggestion applied" : "Suggested"}
+                    </span>
+                    <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                      {label}
+                    </span>
+                    {!already && (
+                      <button
+                        type="button"
+                        className="btn btn--accent btn--sm"
+                        onClick={() => {
+                          onMappingsChange({ ...mappings, [currentField]: suggestion });
+                        }}
+                      >
+                        Apply
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div className="field__label">Source</div>
               <div className="mapping-wizard__kinds">
-                {(["literal", "dynamic", "person", "manager", "empty"] as MappingKind[]).map((k) => (
+                {(["literal", "dynamic", "person", "personRef", "manager", "empty"] as MappingKind[]).map((k) => (
                   <button
                     key={k}
                     type="button"
@@ -1274,7 +1416,8 @@ function FieldMappingWizardModal({
                         {
                           literal: "A default string you type in",
                           dynamic: "Today / Now / society name etc.",
-                          person: "Field from the affiliate / person record",
+                          person: "Field from the affiliate (runtime input)",
+                          personRef: "Specific person record (director, member, …)",
                           manager: "Field from the requesting manager",
                           empty: "Leave blank at runtime",
                         }[k]
@@ -1324,6 +1467,14 @@ function FieldMappingWizardModal({
                     ))}
                   </select>
                 )}
+                {current.kind === "personRef" && (
+                  <PersonRefPicker
+                    category={current.category}
+                    personId={current.personId}
+                    source={current.source}
+                    onChange={(patch) => updateMapping(patch)}
+                  />
+                )}
                 {current.kind === "manager" && (
                   <select
                     className="input"
@@ -1359,6 +1510,140 @@ function FieldMappingWizardModal({
         </section>
       </div>
     </Modal>
+  );
+}
+
+function PersonRefPicker({
+  category,
+  personId,
+  source,
+  onChange,
+}: {
+  category?: PersonCategory;
+  personId?: string;
+  source?: string;
+  onChange: (patch: Partial<FieldMapping>) => void;
+}) {
+  const society = useSociety();
+  const societyArg = society ? { societyId: society._id } : "skip";
+  const members = useQuery(api.members.list, category === "members" ? societyArg : "skip");
+  const directors = useQuery(api.directors.list, category === "directors" ? societyArg : "skip");
+  const volunteers = useQuery(api.volunteers.list, category === "volunteers" ? societyArg : "skip");
+  const employees = useQuery(api.employees.list, category === "employees" ? societyArg : "skip");
+  const definitions = useQuery(
+    api.customFields.listDefinitions,
+    society && category ? { societyId: society._id, entityType: category } : "skip",
+  );
+
+  const peopleRaw: any[] =
+    category === "members"
+      ? members ?? []
+      : category === "directors"
+        ? directors ?? []
+        : category === "volunteers"
+          ? volunteers ?? []
+          : category === "employees"
+            ? employees ?? []
+            : [];
+
+  const displayName = (p: any) => {
+    const first = p.firstName ?? "";
+    const last = p.lastName ?? "";
+    const full = `${first} ${last}`.trim();
+    return full || p.name || p.email || "Unnamed";
+  };
+
+  const fieldOptionsFor = (cat?: PersonCategory) => {
+    const base: Array<{ value: string; label: string }> = [
+      { value: "firstName", label: "First name" },
+      { value: "lastName", label: "Last name" },
+      { value: "fullName", label: "Full name" },
+      { value: "email", label: "Email" },
+    ];
+    if (cat === "members") {
+      base.push(
+        { value: "phone", label: "Phone" },
+        { value: "address", label: "Mailing address" },
+        { value: "membershipClass", label: "Membership class" },
+      );
+    } else if (cat === "directors") {
+      base.push({ value: "position", label: "Position" });
+    } else if (cat === "volunteers") {
+      base.push({ value: "phone", label: "Phone" });
+    } else if (cat === "employees") {
+      base.push({ value: "role", label: "Role" });
+    }
+    return base;
+  };
+
+  return (
+    <div className="person-ref-picker">
+      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+        <select
+          className="input"
+          value={category ?? ""}
+          onChange={(e) =>
+            onChange({
+              category: (e.target.value || undefined) as PersonCategory | undefined,
+              personId: undefined,
+              source: undefined,
+            })
+          }
+        >
+          <option value="">— Pick category —</option>
+          {PERSON_CATEGORIES.map((c) => (
+            <option key={c.value} value={c.value}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+        <select
+          className="input"
+          value={personId ?? ""}
+          disabled={!category}
+          onChange={(e) =>
+            onChange({ personId: e.target.value || undefined, source: undefined })
+          }
+        >
+          <option value="">— Pick person —</option>
+          {peopleRaw.map((p: any) => (
+            <option key={p._id} value={p._id}>
+              {displayName(p)}
+              {p.email ? ` · ${p.email}` : ""}
+            </option>
+          ))}
+        </select>
+      </div>
+      <select
+        className="input"
+        value={source ?? ""}
+        disabled={!category || !personId}
+        onChange={(e) => onChange({ source: e.target.value || undefined })}
+      >
+        <option value="">— Pick field —</option>
+        <optgroup label="Built-in">
+          {fieldOptionsFor(category).map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </optgroup>
+        {definitions && definitions.length > 0 && (
+          <optgroup label="Custom">
+            {definitions.map((d: any) => (
+              <option key={d._id} value={`custom:${d.key}`}>
+                {d.label}
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+      {category && !peopleRaw.length && (
+        <div className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+          No {category} yet. Add some in <span className="mono">/app/{category}</span>.
+        </div>
+      )}
+    </div>
   );
 }
 

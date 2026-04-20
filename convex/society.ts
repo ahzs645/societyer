@@ -23,6 +23,7 @@ export const upsert = mutation({
     incorporationNumber: v.optional(v.string()),
     incorporationDate: v.optional(v.string()),
     fiscalYearEnd: v.optional(v.string()),
+    jurisdictionCode: v.optional(v.string()),
     isCharity: v.boolean(),
     isMemberFunded: v.boolean(),
     registeredOfficeAddress: v.optional(v.string()),

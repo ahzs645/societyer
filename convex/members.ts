@@ -60,3 +60,29 @@ export const remove = mutation({
     await ctx.db.delete(id);
   },
 });
+
+export const merge = mutation({
+  args: {
+    keepId: v.id("members"),
+    dropIds: v.array(v.id("members")),
+    patch: v.object({
+      firstName: v.optional(v.string()),
+      lastName: v.optional(v.string()),
+      email: v.optional(v.string()),
+      phone: v.optional(v.string()),
+      address: v.optional(v.string()),
+      membershipClass: v.optional(v.string()),
+      status: v.optional(v.string()),
+      joinedAt: v.optional(v.string()),
+      votingRights: v.optional(v.boolean()),
+      notes: v.optional(v.string()),
+    }),
+  },
+  handler: async (ctx, { keepId, dropIds, patch }) => {
+    await ctx.db.patch(keepId, patch);
+    for (const id of dropIds) {
+      if (id === keepId) continue;
+      await ctx.db.delete(id);
+    }
+  },
+});

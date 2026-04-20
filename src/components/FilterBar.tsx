@@ -9,6 +9,32 @@ function readCssPx(name: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+export type FilterOperator =
+  | "contains"
+  | "equals"
+  | "is"
+  | "is_not"
+  | "starts_with"
+  | "lt"
+  | "gt"
+  | "before"
+  | "after"
+  | "between";
+
+/** Default chip labels per operator — keep short so chips stay compact. */
+export const OPERATOR_LABELS: Record<FilterOperator, string> = {
+  contains: "contains",
+  equals: "equals",
+  is: "is",
+  is_not: "is not",
+  starts_with: "starts with",
+  lt: "<",
+  gt: ">",
+  before: "before",
+  after: "after",
+  between: "between",
+};
+
 export type FilterField<T = any> = {
   id: string;
   label: string;
@@ -17,9 +43,46 @@ export type FilterField<T = any> = {
   match: (record: T, query: string) => boolean;
   /** Optional list of preset values. If supplied, the popover shows a select instead of free-text. */
   options?: string[];
+  /** Operators the user can pick in the popover. If omitted, we default to
+   * `is` for options fields and `contains` for free-text fields. */
+  operators?: FilterOperator[];
+  /** Per-operator matcher. Falls back to `match` when omitted. */
+  matchWithOp?: (record: T, operator: FilterOperator, value: string) => boolean;
 };
 
-export type AppliedFilter = { fieldId: string; value: string };
+export type AppliedFilter = {
+  fieldId: string;
+  value: string;
+  operator?: FilterOperator;
+};
+
+/** Node in an advanced filter tree — either a leaf rule or a logical group. */
+export type FilterRuleNode =
+  | { kind: "rule"; rule: AppliedFilter }
+  | { kind: "group"; group: FilterGroup };
+
+export type FilterGroup = {
+  op: "and" | "or";
+  rules: FilterRuleNode[];
+};
+
+export function evaluateGroup<T>(
+  record: T,
+  group: FilterGroup,
+  fields: FilterField<T>[],
+): boolean {
+  const results = group.rules.map((node) => {
+    if (node.kind === "group") return evaluateGroup(record, node.group, fields);
+    const field = fields.find((f) => f.id === node.rule.fieldId);
+    if (!field) return true; // unknown field — ignore so we don't filter everything out
+    if (node.rule.operator && field.matchWithOp) {
+      return field.matchWithOp(record, node.rule.operator, node.rule.value);
+    }
+    return field.match(record, node.rule.value);
+  });
+  if (group.op === "and") return results.every(Boolean);
+  return results.length === 0 ? true : results.some(Boolean);
+}
 
 export function applyFilters<T>(
   records: T[],
@@ -28,19 +91,24 @@ export function applyFilters<T>(
 ): T[] {
   if (filters.length === 0) return records;
   // Group filters by fieldId — same-field values are OR'd together, different
-  // fields are AND'd. This matches the common expectation ("status is Open OR
-  // Closed" but "status=Open AND assignee=Alex").
-  const byField = new Map<string, string[]>();
+  // fields are AND'd. Pairs each value with its operator so matchWithOp can
+  // be invoked per entry.
+  const byFieldOrig = new Map<string, AppliedFilter[]>();
   for (const f of filters) {
-    const list = byField.get(f.fieldId) ?? [];
-    list.push(f.value);
-    byField.set(f.fieldId, list);
+    const list = byFieldOrig.get(f.fieldId) ?? [];
+    list.push(f);
+    byFieldOrig.set(f.fieldId, list);
   }
   return records.filter((r) => {
-    for (const [fieldId, values] of byField) {
+    for (const [fieldId, entries] of byFieldOrig) {
       const field = fields.find((x) => x.id === fieldId);
       if (!field) continue;
-      const anyMatch = values.some((v) => field.match(r, v));
+      const anyMatch = entries.some((entry) => {
+        if (entry.operator && field.matchWithOp) {
+          return field.matchWithOp(r, entry.operator, entry.value);
+        }
+        return field.match(r, entry.value);
+      });
       if (!anyMatch) return false;
     }
     return true;
@@ -59,6 +127,7 @@ export function FilterPopover<T>({
   onClose: () => void;
 }) {
   const [picked, setPicked] = useState<FilterField<T> | null>(null);
+  const [operator, setOperator] = useState<FilterOperator | null>(null);
   const [value, setValue] = useState("");
   const ref = useRef<HTMLDivElement>(null);
 
@@ -88,7 +157,7 @@ export function FilterPopover<T>({
 
   const commit = () => {
     if (!picked || !value.trim()) return;
-    onAdd({ fieldId: picked.id, value: value.trim() });
+    onAdd({ fieldId: picked.id, value: value.trim(), operator: operator ?? undefined });
     onClose();
   };
 
@@ -111,7 +180,23 @@ export function FilterPopover<T>({
         </>
       ) : (
         <>
-          <MenuSectionLabel>{picked.label}{picked.options ? "" : " contains"}</MenuSectionLabel>
+          <MenuSectionLabel>
+            {picked.label}
+            {" "}
+            {picked.operators && picked.operators.length > 1 ? (
+              <select
+                className="popover__op-select"
+                value={operator ?? picked.operators[0]}
+                onChange={(e) => setOperator(e.target.value as FilterOperator)}
+              >
+                {picked.operators.map((op) => (
+                  <option key={op} value={op}>{OPERATOR_LABELS[op]}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="muted">{picked.options ? "is" : "contains"}</span>
+            )}
+          </MenuSectionLabel>
           {picked.options ? (
             <>
               {picked.options.map((option) => (
@@ -119,7 +204,7 @@ export function FilterPopover<T>({
                   key={option}
                   label={option}
                   onClick={() => {
-                    onAdd({ fieldId: picked.id, value: option });
+                    onAdd({ fieldId: picked.id, value: option, operator: operator ?? undefined });
                     onClose();
                   }}
                 />
@@ -174,9 +259,15 @@ export function FilterChips({
       {filters.map((f, i) => {
         const field = fields.find((x) => x.id === f.fieldId);
         const isRepeat = (counts.get(f.fieldId) ?? 0) > 1;
-        // Use "or" when the same field has multiple values; "contains" otherwise.
         const firstIdxForField = filters.findIndex((other) => other.fieldId === f.fieldId);
-        const op = isRepeat ? (i === firstIdxForField ? "is" : "or") : "contains";
+        // If this entry isn't the first for its field, show "or" to hint the
+        // values are OR'd together.
+        const defaultOp: string = f.operator
+          ? OPERATOR_LABELS[f.operator]
+          : field?.options
+            ? "is"
+            : "contains";
+        const op = isRepeat && i !== firstIdxForField ? "or" : defaultOp;
         return (
           <span className="filter-chip" key={i}>
             {(!isRepeat || i === firstIdxForField) && (
