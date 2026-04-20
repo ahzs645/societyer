@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import type { ComponentType, ReactNode } from "react";
 
 export type CommandAction = {
@@ -13,9 +13,19 @@ export type CommandAction = {
 };
 
 const registry = new Map<string, CommandAction>();
-const listeners = new Set<() => void >();
+const listeners = new Set<() => void>();
+
+/** Cached snapshot. Mutated in lock-step with `registry` so
+ * `useSyncExternalStore` sees a stable reference between changes — passing a
+ * fresh `Array.from(...)` on every read causes infinite re-renders. */
+let snapshot: CommandAction[] = [];
+
+function rebuildSnapshot() {
+  snapshot = Array.from(registry.values());
+}
 
 function notify() {
+  rebuildSnapshot();
   for (const l of listeners) l();
 }
 
@@ -27,7 +37,7 @@ function subscribe(l: () => void) {
 }
 
 function getSnapshot(): CommandAction[] {
-  return Array.from(registry.values());
+  return snapshot;
 }
 
 /** Read all currently-registered actions. Re-renders when any component
@@ -38,15 +48,33 @@ export function useRegisteredCommands(): CommandAction[] {
 
 /** Register a contextual command while the caller is mounted. The id must
  * be stable per caller. Multiple callers with the same id overwrite — last
- * mount wins. */
+ * mount wins.
+ *
+ * Safe to call with a freshly-constructed action object each render: the
+ * effect only re-runs when the structural signature (id/label/shortcut)
+ * changes, and the wrapped `run` always calls the latest closure via a ref. */
 export function useRegisterCommand(action: CommandAction | null | undefined) {
+  const latestRef = useRef(action);
+  latestRef.current = action;
+
+  const id = action?.id ?? null;
+  const signature = action
+    ? `${action.id}\u0000${action.label}\u0000${action.shortcut ?? ""}`
+    : null;
+
   useEffect(() => {
-    if (!action) return;
-    registry.set(action.id, action);
+    if (!id || !action) return;
+    registry.set(id, {
+      ...action,
+      run: () => latestRef.current?.run() ?? undefined,
+    });
     notify();
     return () => {
-      registry.delete(action.id);
+      registry.delete(id);
       notify();
     };
-  }, [action]);
+    // `action` intentionally omitted — we re-register only on structural
+    // changes (tracked via `signature`); the ref keeps `run` current.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, signature]);
 }
