@@ -6,10 +6,12 @@ import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Progress, Segmented } from "../components/primitives";
+import { RecordBoard } from "../components/RecordBoard";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { Plus, Target } from "lucide-react";
 import { formatDate } from "../lib/format";
+import { patchInList } from "../lib/optimistic";
 
 const STATUSES = ["NotStarted", "OnTrack", "AtRisk", "OffTrack", "Completed"];
 const CATEGORIES = ["Strategic", "Operational", "Program", "Fundraising", "Governance"];
@@ -19,7 +21,13 @@ export function GoalsPage() {
   const goals = useQuery(api.goals.list, society ? { societyId: society._id } : "skip");
   const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.goals.create);
+  const update = useMutation(api.goals.update).withOptimisticUpdate(
+    (store, args) => {
+      patchInList(store, api.goals.list, String(args.id), args.patch);
+    },
+  );
   const [filter, setFilter] = useState<"all" | "active" | "atrisk" | "done">("all");
+  const [view, setView] = useState<"grid" | "board">("grid");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
 
@@ -71,6 +79,14 @@ export function GoalsPage() {
                 { id: "done", label: "Completed" },
               ]}
             />
+            <Segmented<"grid" | "board">
+              value={view}
+              onChange={setView}
+              items={[
+                { id: "grid", label: "Grid" },
+                { id: "board", label: "Board" },
+              ]}
+            />
             <button className="btn-action btn-action--primary" onClick={openNew}>
               <Plus size={12} /> New goal
             </button>
@@ -78,6 +94,39 @@ export function GoalsPage() {
         }
       />
 
+      {view === "board" && (
+        <RecordBoard<any>
+          items={filtered}
+          getItemId={(g) => g._id}
+          getColumnId={(g) => g.status}
+          onMove={(g, toColumnId) => update({ id: g._id, patch: { status: toColumnId } })}
+          columns={STATUSES.map((s) => ({
+            id: s,
+            label: labelStatus(s),
+            tone:
+              s === "Completed" ? ("success" as const)
+              : s === "OnTrack" ? ("info" as const)
+              : s === "AtRisk" ? ("warn" as const)
+              : s === "OffTrack" ? ("danger" as const)
+              : ("gray" as const),
+          }))}
+          renderCard={(g) => (
+            <Link to={`/app/goals/${g._id}`} className="col" style={{ gap: 6 }}>
+              <strong>{g.title}</strong>
+              <div className="row" style={{ gap: 6 }}>
+                <Badge>{g.category}</Badge>
+              </div>
+              <div className="row" style={{ gap: 6 }}>
+                <Progress value={g.progressPercent} />
+                <span className="mono" style={{ minWidth: 36, textAlign: "right" }}>{g.progressPercent}%</span>
+              </div>
+              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>Target {formatDate(g.targetDate)}</div>
+            </Link>
+          )}
+        />
+      )}
+
+      {view === "grid" && (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 360px), 1fr))", gap: 16 }}>
         {filtered.map((g: any) => {
           const committee = (committees ?? []).find((c: any) => c._id === g.committeeId);
@@ -119,6 +168,7 @@ export function GoalsPage() {
           </div>
         )}
       </div>
+      )}
 
       <Drawer
         open={open}

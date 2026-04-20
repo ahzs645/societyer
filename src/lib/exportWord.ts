@@ -91,6 +91,8 @@ export function renderMinutesHtml({
     attendees: string[];
     absent: string[];
     quorumMet: boolean;
+    quorumRequired?: number;
+    quorumSourceLabel?: string;
     discussion: string;
     motions: {
       text: string;
@@ -156,7 +158,9 @@ export function renderMinutesHtml({
         <td>${attendeeList(minutes.absent)}</td>
       </tr>
     </table>
-    <p><strong>Quorum:</strong> ${minutes.quorumMet ? "Met" : "Not met"}</p>
+    <p><strong>Quorum:</strong> ${minutes.quorumMet ? "Met" : "Not met"}${
+      minutes.quorumRequired != null ? ` · ${minutes.attendees.length} present / ${minutes.quorumRequired} required` : ""
+    }${minutes.quorumSourceLabel ? ` · Rule: ${eh(minutes.quorumSourceLabel)}` : ""}</p>
 
     <h2>Discussion</h2>
     <p>${eh(minutes.discussion).replace(/\n/g, "<br/>")}</p>

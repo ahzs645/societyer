@@ -5,12 +5,15 @@ import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
+import { CalendarView } from "../components/CalendarView";
+import { Segmented } from "../components/primitives";
 import { FilterField } from "../components/FilterBar";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
 import { Plus, Trash2, Calendar, Tag, CheckCircle2 } from "lucide-react";
 import { formatDate, relative } from "../lib/format";
+import { patchInList } from "../lib/optimistic";
 
 const DEADLINE_FIELDS: FilterField<any>[] = [
   { id: "title", label: "Title", icon: <Tag size={14} />, match: (d, q) => d.title.toLowerCase().includes(q.toLowerCase()) },
@@ -27,10 +30,15 @@ export function DeadlinesPage() {
   const society = useSociety();
   const items = useQuery(api.deadlines.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.deadlines.create);
-  const toggle = useMutation(api.deadlines.toggleDone);
+  const toggle = useMutation(api.deadlines.toggleDone).withOptimisticUpdate(
+    (store, args) => {
+      patchInList(store, api.deadlines.list, String(args.id), { done: args.done });
+    },
+  );
   const remove = useMutation(api.deadlines.remove);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const [view, setView] = useState<"list" | "calendar">("list");
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -51,16 +59,42 @@ export function DeadlinesPage() {
         iconColor="yellow"
         subtitle="Rolling calendar of compliance obligations — governance, tax, payroll, privacy."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
-            <Plus size={12} /> New deadline
-          </button>
+          <>
+            <Segmented<"list" | "calendar">
+              value={view}
+              onChange={setView}
+              items={[
+                { id: "list", label: "List" },
+                { id: "calendar", label: "Calendar" },
+              ]}
+            />
+            <button className="btn-action btn-action--primary" onClick={openNew}>
+              <Plus size={12} /> New deadline
+            </button>
+          </>
         }
       />
 
+      {view === "calendar" && (
+        <CalendarView
+          items={(items ?? []) as any[]}
+          getId={(r) => r._id}
+          getLabel={(r) => r.title}
+          getDate={(r) => r.dueDate}
+          getTone={(r) => {
+            if (r.done) return "success";
+            const overdue = new Date(r.dueDate).getTime() < now;
+            return overdue ? "danger" : "info";
+          }}
+        />
+      )}
+
+      {view === "list" && (
       <DataTable
         label="All deadlines"
         icon={<Calendar size={14} />}
         data={(items ?? []) as any[]}
+        loading={items === undefined}
         rowKey={(r) => r._id}
         filterFields={DEADLINE_FIELDS}
         searchPlaceholder="Search deadlines…"
@@ -120,6 +154,7 @@ export function DeadlinesPage() {
           </button>
         )}
       />
+      )}
 
       <Drawer
         open={open} onClose={() => setOpen(false)} title="Add deadline"

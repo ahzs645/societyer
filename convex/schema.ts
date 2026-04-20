@@ -621,6 +621,7 @@ export default defineSchema({
           label: v.string(),
           description: v.optional(v.string()),
           status: v.optional(v.string()),
+          config: v.optional(v.any()),
         }),
       ),
     ),
@@ -642,6 +643,36 @@ export default defineSchema({
   })
     .index("by_society", ["societyId"])
     .index("by_next_run", ["nextRunAtISO"]),
+
+  // Queued manual-send emails (the "outbox"). Used when no live email
+  // provider is configured, or when the workflow author explicitly wants a
+  // human to send the message from their own inbox.
+  pendingEmails: defineTable({
+    societyId: v.id("societies"),
+    workflowId: v.optional(v.id("workflows")),
+    workflowRunId: v.optional(v.id("workflowRuns")),
+    nodeKey: v.optional(v.string()),
+    to: v.string(),
+    cc: v.optional(v.string()),
+    bcc: v.optional(v.string()),
+    subject: v.string(),
+    body: v.string(),
+    attachments: v.array(
+      v.object({
+        documentId: v.id("documents"),
+        fileName: v.string(),
+      }),
+    ),
+    status: v.string(), // draft | ready | sent | cancelled
+    createdAtISO: v.string(),
+    createdByUserId: v.optional(v.id("users")),
+    sentAtISO: v.optional(v.string()),
+    sentByUserId: v.optional(v.id("users")),
+    sentChannel: v.optional(v.string()), // personal_email | other
+    notes: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
 
   workflowRuns: defineTable({
     societyId: v.id("societies"),
@@ -934,6 +965,11 @@ export default defineSchema({
     electronic: v.boolean(),
     noticeSentAt: v.optional(v.string()),
     quorumRequired: v.optional(v.number()),
+    bylawRuleSetId: v.optional(v.id("bylawRuleSets")),
+    quorumRuleVersion: v.optional(v.number()),
+    quorumRuleEffectiveFromISO: v.optional(v.string()),
+    quorumSourceLabel: v.optional(v.string()),
+    quorumComputedAtISO: v.optional(v.string()),
     status: v.string(),
     attendeeIds: v.array(v.string()),
     agendaJson: v.optional(v.string()),
@@ -951,6 +987,12 @@ export default defineSchema({
     attendees: v.array(v.string()),
     absent: v.array(v.string()),
     quorumMet: v.boolean(),
+    quorumRequired: v.optional(v.number()),
+    bylawRuleSetId: v.optional(v.id("bylawRuleSets")),
+    quorumRuleVersion: v.optional(v.number()),
+    quorumRuleEffectiveFromISO: v.optional(v.string()),
+    quorumSourceLabel: v.optional(v.string()),
+    quorumComputedAtISO: v.optional(v.string()),
     discussion: v.string(),
     motions: v.array(
       v.object({
@@ -1388,7 +1430,21 @@ export default defineSchema({
     action: v.string(),
     summary: v.string(),
     createdAtISO: v.string(),
-  }).index("by_society", ["societyId"]),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_entity", ["societyId", "entityType", "entityId"]),
+
+  notes: defineTable({
+    societyId: v.id("societies"),
+    entityType: v.string(),
+    entityId: v.string(),
+    author: v.string(),
+    body: v.string(),
+    createdAtISO: v.string(),
+    updatedAtISO: v.optional(v.string()),
+  })
+    .index("by_entity", ["societyId", "entityType", "entityId"])
+    .index("by_society", ["societyId"]),
 
   // ========== Priority A additions ==========
 

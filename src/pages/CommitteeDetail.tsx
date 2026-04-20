@@ -4,17 +4,19 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
-import { Tabs, Progress, AvatarGroup } from "../components/primitives";
+import { RecordShowPage } from "../components/RecordShowPage";
+import { ActivityTimeline } from "../components/ActivityTimeline";
+import { NotesPanel } from "../components/NotesPanel";
+import { useTrackRecentRecord } from "../hooks/useTrackRecentRecord";
+import { Progress, AvatarGroup } from "../components/primitives";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { ArrowLeft, Users, ListTodo, Target, Calendar, Plus, FileText, Trash2 } from "lucide-react";
+import { ArrowLeft, Users, ListTodo, Target, Calendar, Plus, FileText, Trash2, Activity, MessageSquare } from "lucide-react";
 import { formatDateTime, formatDate, initials } from "../lib/format";
-
-type Tab = "overview" | "members" | "meetings" | "tasks" | "goals";
 
 export function CommitteeDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -28,7 +30,6 @@ export function CommitteeDetailPage() {
   const updateTask = useMutation(api.tasks.update);
   const confirm = useConfirm();
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>("overview");
   const [memberDrawer, setMemberDrawer] = useState(false);
   const [memberForm, setMemberForm] = useState<any>(null);
   const [taskDrawer, setTaskDrawer] = useState(false);
@@ -40,6 +41,12 @@ export function CommitteeDetailPage() {
 
   const { committee, members, meetings, tasks, goals } = detail;
   const openTasks = tasks.filter((t: any) => t.status !== "Done").length;
+  useTrackRecentRecord(
+    "committee",
+    String(committee._id),
+    committee.name,
+    `/app/committees/${committee._id}`,
+  );
 
   const saveMember = async () => {
     await addMember({
@@ -67,42 +74,7 @@ export function CommitteeDetailPage() {
     setTaskDrawer(false);
   };
 
-  return (
-    <div className="page">
-      <Link to="/app/committees" className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
-        <ArrowLeft size={12} /> All committees
-      </Link>
-      <PageHeader
-        title={
-          (
-            <span className="row" style={{ gap: 10 }}>
-              <span className="color-chip" style={{ background: committee.color, width: 14, height: 14 }} />
-              {committee.name}
-            </span>
-          ) as any
-        }
-        subtitle={committee.description}
-        actions={
-          <>
-            <Badge>{committee.cadence}</Badge>
-            <Badge tone={committee.status === "Active" ? "success" : "warn"}>{committee.status}</Badge>
-          </>
-        }
-      />
-
-      <Tabs<Tab>
-        value={tab}
-        onChange={setTab}
-        items={[
-          { id: "overview", label: "Overview" },
-          { id: "members", label: "Members", count: members.length, icon: <Users size={12} /> },
-          { id: "meetings", label: "Meetings", count: meetings.length, icon: <Calendar size={12} /> },
-          { id: "tasks", label: "Tasks", count: openTasks || null, icon: <ListTodo size={12} /> },
-          { id: "goals", label: "Goals", count: goals.length, icon: <Target size={12} /> },
-        ]}
-      />
-
-      {tab === "overview" && (
+  const overviewContent = (
         <div className="two-col">
           <div className="col" style={{ gap: 16 }}>
             <div className="card">
@@ -167,9 +139,8 @@ export function CommitteeDetailPage() {
             </div>
           </div>
         </div>
-      )}
-
-      {tab === "members" && (
+  );
+  const membersContent = (
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">Members</h2>
@@ -221,9 +192,8 @@ export function CommitteeDetailPage() {
             </tbody>
           </table>
         </div>
-      )}
-
-      {tab === "meetings" && (
+  );
+  const meetingsContent = (
         <div className="card">
           <div className="card__head"><h2 className="card__title">Meetings</h2></div>
           <table className="table">
@@ -245,9 +215,8 @@ export function CommitteeDetailPage() {
             </tbody>
           </table>
         </div>
-      )}
-
-      {tab === "tasks" && (
+  );
+  const tasksContent = (
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">Tasks</h2>
@@ -284,9 +253,8 @@ export function CommitteeDetailPage() {
             </tbody>
           </table>
         </div>
-      )}
-
-      {tab === "goals" && (
+  );
+  const goalsContent = (
         <div className="col" style={{ gap: 12 }}>
           {goals.map((g: any) => (
             <Link key={g._id} to={`/app/goals/${g._id}`} className="card" style={{ display: "block" }}>
@@ -302,7 +270,56 @@ export function CommitteeDetailPage() {
           ))}
           {goals.length === 0 && <div className="muted">No goals linked yet.</div>}
         </div>
-      )}
+  );
+
+  return (
+    <div className="page">
+      <Link to="/app/committees" className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
+        <ArrowLeft size={12} /> All committees
+      </Link>
+      <RecordShowPage
+        title={
+          <span className="row" style={{ gap: 10 }}>
+            <span className="color-chip" style={{ background: committee.color, width: 14, height: 14 }} />
+            {committee.name}
+          </span>
+        }
+        subtitle={committee.description}
+        chips={
+          <>
+            <Badge>{committee.cadence}</Badge>
+            <Badge tone={committee.status === "Active" ? "success" : "warn"}>{committee.status}</Badge>
+          </>
+        }
+        summary={[
+          { label: "Cadence", value: committee.cadence },
+          { label: "Status", value: committee.status },
+          { label: "Members", value: members.length },
+          { label: "Open tasks", value: openTasks },
+          ...(committee.nextMeetingAt
+            ? [{ label: "Next meeting", value: formatDateTime(committee.nextMeetingAt) }]
+            : []),
+        ]}
+        tabs={[
+          { id: "overview", label: "Overview", content: overviewContent },
+          { id: "members", label: "Members", count: members.length, icon: <Users size={12} />, content: membersContent },
+          { id: "meetings", label: "Meetings", count: meetings.length, icon: <Calendar size={12} />, content: meetingsContent },
+          { id: "tasks", label: "Tasks", count: openTasks || null, icon: <ListTodo size={12} />, content: tasksContent },
+          { id: "goals", label: "Goals", count: goals.length, icon: <Target size={12} />, content: goalsContent },
+          {
+            id: "notes",
+            label: "Notes",
+            icon: <MessageSquare size={12} />,
+            content: <NotesPanel entityType="committee" entityId={String(committee._id)} />,
+          },
+          {
+            id: "activity",
+            label: "Activity",
+            icon: <Activity size={12} />,
+            content: <ActivityTimeline entityType="committee" entityId={String(committee._id)} />,
+          },
+        ]}
+      />
 
       <Drawer
         open={memberDrawer}

@@ -2,6 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import {
   getActiveBylawRuleSet,
+  getBylawRuleSetForDate,
   getNextBylawRuleVersion,
   getDefaultBylawRules,
 } from "./lib/bylawRules";
@@ -14,6 +15,32 @@ export const getActive = query({
       ...active,
       isFallback: !active._id,
     };
+  },
+});
+
+export const getForDate = query({
+  args: { societyId: v.id("societies"), dateISO: v.string() },
+  handler: async (ctx, { societyId, dateISO }) => {
+    const rules = await getBylawRuleSetForDate(ctx, societyId, dateISO);
+    return {
+      ...rules,
+      isFallback: !rules._id,
+    };
+  },
+});
+
+export const list = query({
+  args: { societyId: v.id("societies") },
+  handler: async (ctx, { societyId }) => {
+    const rows = await ctx.db
+      .query("bylawRuleSets")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+    return rows.sort((a, b) => {
+      const byEffective = timestamp(b.effectiveFromISO ?? b.updatedAtISO) - timestamp(a.effectiveFromISO ?? a.updatedAtISO);
+      if (byEffective !== 0) return byEffective;
+      return b.version - a.version;
+    });
   },
 });
 
@@ -53,16 +80,17 @@ export const upsertActive = mutation({
   },
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
+    const {
+      id: _previousId,
+      effectiveFromISO,
+      ...ruleValues
+    } = args;
     const payload = {
-      ...args,
+      ...ruleValues,
       status: "Active",
+      effectiveFromISO: effectiveFromISO || now,
       updatedAtISO: now,
     };
-
-    if (args.id) {
-      await ctx.db.patch(args.id, payload);
-      return args.id;
-    }
 
     const rows = await ctx.db
       .query("bylawRuleSets")
@@ -84,8 +112,11 @@ export const upsertActive = mutation({
 export const resetToDefault = mutation({
   args: { societyId: v.id("societies") },
   handler: async (ctx, { societyId }) => {
+    const now = new Date().toISOString();
     const defaults = {
       ...getDefaultBylawRules(societyId),
+      effectiveFromISO: now,
+      updatedAtISO: now,
       version: await getNextBylawRuleVersion(ctx, societyId),
     };
     const rows = await ctx.db
@@ -100,3 +131,9 @@ export const resetToDefault = mutation({
     return await ctx.db.insert("bylawRuleSets", defaults);
   },
 });
+
+function timestamp(value?: string) {
+  if (!value) return Number.NEGATIVE_INFINITY;
+  const ts = new Date(value).getTime();
+  return Number.isFinite(ts) ? ts : Number.NEGATIVE_INFINITY;
+}

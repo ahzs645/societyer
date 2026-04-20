@@ -1,0 +1,20 @@
+{
+  "name": "societyer-local",
+  "interface": {
+    "displayName": "Societyer Local"
+  },
+  "plugins": [
+    {
+      "name": "societyer-document-intake",
+      "source": {
+        "source": "local",
+        "path": "./plugins/societyer-document-intake"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

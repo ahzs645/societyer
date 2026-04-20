@@ -46,11 +46,15 @@ export function MeetingsPage() {
   const society = useSociety();
   const { rules } = useBylawRules();
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<any>(null);
+  const formRules = useQuery(
+    api.bylawRules.getForDate,
+    society && form?.scheduledAt ? { societyId: society._id, dateISO: form.scheduledAt } : "skip",
+  );
   const create = useMutation(api.meetings.create);
   const navigate = useNavigate();
   const toast = useToast();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<any>(null);
   const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
   const noticeMaxDays = rules?.generalNoticeMaxDays ?? 60;
 
@@ -65,18 +69,26 @@ export function MeetingsPage() {
       scheduledAt: toDateTimeLocalValue(new Date(Date.now() + noticeMinDays * 864e5)),
       location: "",
       electronic: !!rules?.allowElectronicMeetings,
-      quorumRequired: rules?.quorumType === "fixed" ? rules.quorumValue : undefined,
+      quorumRequired: "",
       status: "Scheduled",
       attendeeIds: [],
     });
     setOpen(true);
   };
   const save = async () => {
-    if (form && isGeneralMeeting(form.type) && !meetsNoticeWindow(form.scheduledAt, noticeMinDays, noticeMaxDays)) {
-      toast.error(`General meetings need ${noticeMinDays}–${noticeMaxDays} days of notice.`);
+    if (!form) return;
+    const effectiveRules = formRules ?? rules;
+    const effectiveNoticeMinDays = effectiveRules?.generalNoticeMinDays ?? noticeMinDays;
+    const effectiveNoticeMaxDays = effectiveRules?.generalNoticeMaxDays ?? noticeMaxDays;
+    if (isGeneralMeeting(form.type) && !meetsNoticeWindow(form.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays)) {
+      toast.error(`General meetings need ${effectiveNoticeMinDays}–${effectiveNoticeMaxDays} days of notice.`);
       return;
     }
-    await create({ societyId: society._id, ...form });
+    await create({
+      societyId: society._id,
+      ...form,
+      quorumRequired: numberOrUndefined(form.quorumRequired),
+    });
     setOpen(false);
     toast.success("Meeting scheduled", form.title);
   };
@@ -161,14 +173,19 @@ export function MeetingsPage() {
       >
         {form && (
           <div>
-            {isGeneralMeeting(form.type) && !meetsNoticeWindow(form.scheduledAt, noticeMinDays, noticeMaxDays) && (
+            {(() => {
+              const effectiveRules = formRules ?? rules;
+              const effectiveNoticeMinDays = effectiveRules?.generalNoticeMinDays ?? noticeMinDays;
+              const effectiveNoticeMaxDays = effectiveRules?.generalNoticeMaxDays ?? noticeMaxDays;
+              return isGeneralMeeting(form.type) && !meetsNoticeWindow(form.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays) ? (
               <div className="flag flag--warn" style={{ marginBottom: 12 }}>
                 <AlertTriangle />
                 <div>
-                  General meetings should be scheduled with {noticeMinDays}–{noticeMaxDays} days of notice under the active rule set.
+                  General meetings should be scheduled with {effectiveNoticeMinDays}–{effectiveNoticeMaxDays} days of notice under the rule set effective on this meeting date.
                 </div>
               </div>
-            )}
+              ) : null;
+            })()}
             <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Type">
@@ -186,18 +203,28 @@ export function MeetingsPage() {
             <Toggle
               checked={form.electronic}
               onChange={(v) => setForm({ ...form, electronic: v })}
-              disabled={!rules?.allowElectronicMeetings}
+              disabled={!(formRules ?? rules)?.allowElectronicMeetings}
               label="Electronic participation permitted"
             />
             <Field label="Quorum required">
-              <input className="input" type="number" value={form.quorumRequired} onChange={(e) => setForm({ ...form, quorumRequired: Number(e.target.value) })} />
+              <input
+                className="input"
+                type="number"
+                placeholder={
+                  (formRules ?? rules)?.quorumType === "fixed"
+                    ? String((formRules ?? rules)?.quorumValue ?? "")
+                    : "Computed for AGM/SGM"
+                }
+                value={form.quorumRequired ?? ""}
+                onChange={(e) => setForm({ ...form, quorumRequired: e.target.value })}
+              />
             </Field>
             <Field label="Notes"><textarea className="textarea" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
             {form.type === "AGM" && (
               <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                Reminder: AGM notice must be sent {noticeMinDays}–{noticeMaxDays} days in advance.
-                {rules?.requireAgmFinancialStatements ? " Financial statements must be presented." : ""}
-                {rules?.requireAgmElections ? " Elections are expected under the active rule set." : ""}
+                Reminder: AGM notice must be sent {(formRules ?? rules)?.generalNoticeMinDays ?? noticeMinDays}–{(formRules ?? rules)?.generalNoticeMaxDays ?? noticeMaxDays} days in advance.
+                {(formRules ?? rules)?.requireAgmFinancialStatements ? " Financial statements must be presented." : ""}
+                {(formRules ?? rules)?.requireAgmElections ? " Elections are expected under the effective rule set." : ""}
               </div>
             )}
             {(() => {
@@ -250,6 +277,12 @@ function meetsNoticeWindow(value: string, minDays: number, maxDays: number) {
   const min = now + minDays * 864e5;
   const max = now + maxDays * 864e5;
   return scheduled >= min && scheduled <= max;
+}
+
+function numberOrUndefined(value: unknown) {
+  if (value === "" || value == null) return undefined;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
 }
 
 function toDateTimeLocalValue(date: Date) {

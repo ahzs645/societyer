@@ -39,6 +39,7 @@ import {
   BookOpen,
   Scale,
   Mail,
+  Inbox,
   HandHeart,
   BadgeDollarSign,
   Globe,
@@ -66,6 +67,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { DemoBanner } from "./DemoBanner";
 import { CommandPalette } from "./CommandPalette";
+import { ShortcutHelp } from "./ShortcutHelp";
 import { NotificationBell } from "./NotificationBell";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { setStoredUserId } from "../hooks/useCurrentUser";
@@ -78,6 +80,7 @@ import { useTranslation } from "react-i18next";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { mobileSidebarMediaQuery } from "../lib/breakpoints";
 import { DEFAULT_PINNED_ROUTES } from "../lib/navConfig";
+import { useUIStore } from "../lib/store";
 
 function NotificationBellSafe() {
   return (
@@ -164,6 +167,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/app/deadlines", label: "Deadlines", icon: Calendar, color: "yellow" },
       { to: "/app/documents", label: "Documents", icon: FolderOpen, color: "gray" },
       { to: "/app/communications", label: "Communications", icon: Mail, color: "orange", module: "communications" },
+      { to: "/app/outbox", label: "Outbox", icon: Inbox, color: "orange" },
     ],
   },
   {
@@ -557,6 +561,7 @@ export function Layout() {
   const counts = useQuery(api.dashboard.summary, society ? { societyId: society._id } : "skip");
   const pinnedRouteSet = useMemo(() => new Set(pinnedRoutes), [pinnedRoutes]);
   const pinnedNav = useMemo(() => getPinnedNav(pinnedRoutes), [pinnedRoutes]);
+  const pinnedViews = useUIStore((s) => s.pinnedViews);
   const groupedNav = useMemo(() => getGroupedNav(pinnedRouteSet), [pinnedRouteSet]);
   const visiblePinnedNav = useMemo(
     () => pinnedNav.filter((item) => !item.module || isModuleEnabled(society, item.module)),
@@ -636,6 +641,7 @@ export function Layout() {
   return (
     <InspectorProvider>
       <CommandPalette />
+      <ShortcutHelp />
       <div className={shellClassName}>
         {isMobileNav && mobileSidebarOpen && (
           <button
@@ -734,6 +740,25 @@ export function Layout() {
                 handleNavItemContextMenu,
                 handleNavItemKeyDown,
               ),
+            )}
+            {pinnedViews.length > 0 && (
+              <>
+                {pinnedViews.map((pv) => (
+                  <NavLink
+                    key={`${pv.viewsKey}:${pv.viewId}`}
+                    to={`${pv.to}?view=${pv.viewId}`}
+                    className={({ isActive }) =>
+                      `sidebar__nav-item sidebar__nav-item--view${isActive ? " is-active" : ""}`
+                    }
+                    title={collapsed ? pv.label : undefined}
+                  >
+                    <span className="sidebar__nav-icon" aria-hidden="true">
+                      <Pin size={12} />
+                    </span>
+                    {!collapsed && <span className="sidebar__nav-label">{pv.label}</span>}
+                  </NavLink>
+                ))}
+              </>
             )}
             <div className="sidebar__section sidebar__section--compact">
               <span>{t("nav.allRecords")}</span>

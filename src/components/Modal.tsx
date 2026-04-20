@@ -46,13 +46,18 @@ export function Modal({
 }: ModalProps) {
   const titleId = useStableDomId("modal-title");
   const dialogRef = useDialogFocus<HTMLDivElement>(open, onClose);
+  const stackSlot = useDialogStackSlot(open);
 
   if (!open) return null;
   const maxWidth = width != null ? `${width}px` : MODAL_WIDTH_VARS[size];
+  const baseZ = 1000;
+  const backdropZ = baseZ + stackSlot * 2 - 1;
+  const modalZ = baseZ + stackSlot * 2;
   return createPortal(
     <>
       <div
         className="modal-backdrop"
+        style={{ zIndex: backdropZ }}
         onClick={() => dismissOnBackdrop && onClose()}
       />
       <div
@@ -62,7 +67,7 @@ export function Modal({
         aria-labelledby={titleId}
         ref={dialogRef}
         tabIndex={-1}
-        style={{ maxWidth }}
+        style={{ maxWidth, zIndex: modalZ }}
       >
         <div className="modal__head">
           <h2 className="modal__title" id={titleId}>{title}</h2>
@@ -279,6 +284,25 @@ const FOCUSABLE_SELECTOR = [
 function useStableDomId(prefix: string) {
   const id = useId();
   return `${prefix}-${id.replace(/:/g, "")}`;
+}
+
+/** Monotonic counter tracking how many dialogs are currently open. Each
+ * mounting dialog grabs the next slot so nested modals stack correctly, even
+ * when they render into the same portal root. */
+let openDialogCount = 0;
+
+export function useDialogStackSlot(open: boolean): number {
+  const [slot, setSlot] = useState(0);
+  useEffect(() => {
+    if (!open) return;
+    openDialogCount += 1;
+    const current = openDialogCount;
+    setSlot(current);
+    return () => {
+      openDialogCount = Math.max(0, openDialogCount - 1);
+    };
+  }, [open]);
+  return slot;
 }
 
 function useDialogFocus<T extends HTMLElement>(open: boolean, onClose: () => void) {

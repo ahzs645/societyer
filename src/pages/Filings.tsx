@@ -75,6 +75,7 @@ export function FilingsPage() {
         label="All filings"
         icon={<ClipboardList size={14} />}
         data={(filings ?? []) as any[]}
+        loading={filings === undefined}
         rowKey={(r) => r._id}
         filterFields={FILING_FIELDS}
         searchPlaceholder="Search kind, period, confirmation #…"

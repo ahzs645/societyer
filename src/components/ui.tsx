@@ -83,20 +83,35 @@ export function PageHeader({
 export function EmptyState({
   icon,
   title,
+  description,
   children,
   action,
+  align = "center",
+  size,
+  className,
 }: {
   icon?: ReactNode;
-  title: string;
+  title: ReactNode;
+  /** Secondary line. Prefer over `children` for new call sites. */
+  description?: ReactNode;
+  /** Deprecated: kept for backward compatibility — renders in the description slot. */
   children?: ReactNode;
   action?: ReactNode;
+  align?: "center" | "start";
+  size?: "sm" | "lg";
+  className?: string;
 }) {
+  const classes = ["empty-state"];
+  if (align === "start") classes.push("empty-state--start");
+  if (size) classes.push(`empty-state--${size}`);
+  if (className) classes.push(className);
+  const body = description ?? children;
   return (
-    <div className="empty-state">
+    <div className={classes.join(" ")}>
       {icon && <div className="empty-state__icon">{icon}</div>}
       <div className="empty-state__title">{title}</div>
-      {children && <div style={{ marginBottom: 12 }}>{children}</div>}
-      {action}
+      {body && <div className="empty-state__description">{body}</div>}
+      {action && <div className="empty-state__actions">{action}</div>}
     </div>
   );
 }

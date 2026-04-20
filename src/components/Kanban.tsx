@@ -1,4 +1,5 @@
-import { ReactNode, useState } from "react";
+import { ReactNode } from "react";
+import { RecordBoard } from "./RecordBoard";
 
 export type KanbanColumn<T> = {
   id: string;
@@ -7,6 +8,8 @@ export type KanbanColumn<T> = {
   items: T[];
 };
 
+/** Backwards-compatible wrapper around the generalized RecordBoard.
+ * Prefer importing RecordBoard directly for new uses. */
 export function Kanban<T extends { _id: string; status: string }>({
   columns,
   renderCard,
@@ -16,57 +19,15 @@ export function Kanban<T extends { _id: string; status: string }>({
   renderCard: (item: T) => ReactNode;
   onMove: (itemId: string, toStatus: string) => void;
 }) {
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [overCol, setOverCol] = useState<string | null>(null);
-
+  const flat = columns.flatMap((col) => col.items.map((item) => ({ col: col.id, item })));
   return (
-    <div className="kanban">
-      {columns.map((col) => (
-        <div className="kanban__col" key={col.id}>
-          <div className="kanban__head">
-            {col.accent && <span className="dot" style={{ color: col.accent }} />}
-            {col.label}
-            <span className="tab__count" style={{ marginLeft: "auto" }}>{col.items.length}</span>
-          </div>
-          <div
-            className={`kanban__body${overCol === col.id ? " is-dragging-over" : ""}`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setOverCol(col.id);
-            }}
-            onDragLeave={() => setOverCol((c) => (c === col.id ? null : c))}
-            onDrop={(e) => {
-              e.preventDefault();
-              if (dragId) onMove(dragId, col.id);
-              setDragId(null);
-              setOverCol(null);
-            }}
-          >
-            {col.items.map((item) => (
-              <div
-                key={item._id}
-                className={`kanban__card${dragId === item._id ? " is-dragging" : ""}`}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.effectAllowed = "move";
-                  setDragId(item._id);
-                }}
-                onDragEnd={() => {
-                  setDragId(null);
-                  setOverCol(null);
-                }}
-              >
-                {renderCard(item)}
-              </div>
-            ))}
-            {col.items.length === 0 && (
-              <div className="empty-state empty-state--sm">
-                Drop here
-              </div>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
+    <RecordBoard<{ col: string; item: T }>
+      columns={columns.map((col) => ({ id: col.id, label: col.label, count: col.items.length }))}
+      items={flat}
+      getItemId={(row) => row.item._id}
+      getColumnId={(row) => row.col}
+      renderCard={(row) => renderCard(row.item)}
+      onMove={(row, toColumnId) => onMove(row.item._id, toColumnId)}
+    />
   );
 }

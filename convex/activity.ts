@@ -13,6 +13,24 @@ export const list = query({
   },
 });
 
+export const listForRecord = query({
+  args: {
+    societyId: v.id("societies"),
+    entityType: v.string(),
+    entityId: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, { societyId, entityType, entityId, limit }) => {
+    return ctx.db
+      .query("activity")
+      .withIndex("by_entity", (q) =>
+        q.eq("societyId", societyId).eq("entityType", entityType).eq("entityId", entityId),
+      )
+      .order("desc")
+      .take(limit ?? 100);
+  },
+});
+
 export const log = mutation({
   args: {
     societyId: v.id("societies"),

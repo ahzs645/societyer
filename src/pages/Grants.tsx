@@ -481,6 +481,7 @@ export function GrantsPage() {
         label="Applications"
         icon={<Inbox size={14} />}
         data={(applications ?? []) as any[]}
+        loading={applications === undefined}
         rowKey={(row) => String(row._id)}
         searchPlaceholder="Search grant applications…"
         defaultSort={{ columnId: "submittedAtISO", dir: "desc" }}
@@ -552,6 +553,7 @@ export function GrantsPage() {
         label="Grant pipeline"
         icon={<BadgeDollarSign size={14} />}
         data={(grants ?? []) as any[]}
+        loading={grants === undefined}
         rowKey={(row) => String(row._id)}
         searchPlaceholder="Search grants…"
         defaultSort={{ columnId: "createdAtISO", dir: "desc" }}
@@ -669,6 +671,7 @@ export function GrantsPage() {
         label="Restricted-fund ledger"
         icon={<FileText size={14} />}
         data={(ledger ?? []) as any[]}
+        loading={ledger === undefined}
         rowKey={(row) => String(row._id)}
         searchPlaceholder="Search ledger…"
         defaultSort={{ columnId: "date", dir: "desc" }}

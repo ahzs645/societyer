@@ -7,7 +7,7 @@ import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { formatDate, formatDateTime } from "../lib/format";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sparkles, ArrowLeft, FileText, Save, Mic, FileDown, Gavel, ClipboardCheck, Upload, ExternalLink, Download, RefreshCw } from "lucide-react";
 import { MotionEditor, Motion } from "../components/MotionEditor";
 import { Checkbox } from "../components/Controls";
@@ -37,7 +37,9 @@ export function MeetingDetailPage() {
   const directorNames = (directors ?? []).map((d: any) => `${d.firstName} ${d.lastName}`);
   const generate = useAction(api.minutes.generateDraft);
   const updateMeeting = useMutation(api.meetings.update);
+  const backfillMeetingQuorum = useMutation(api.meetings.backfillQuorumSnapshot);
   const updateMinutes = useMutation(api.minutes.update);
+  const backfillMinutesQuorum = useMutation(api.minutes.backfillQuorumSnapshot);
   const saveTranscriptText = useMutation(api.transcripts.saveText);
   const importVtt = useMutation(api.transcripts.importVtt);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
@@ -62,6 +64,18 @@ export function MeetingDetailPage() {
   const [savingTranscript, setSavingTranscript] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
 
+  useEffect(() => {
+    if (!meeting) return;
+    if (meeting.quorumComputedAtISO && meeting.quorumSourceLabel) return;
+    void backfillMeetingQuorum({ id: meeting._id });
+  }, [backfillMeetingQuorum, meeting?._id, meeting?.quorumComputedAtISO, meeting?.quorumSourceLabel]);
+
+  useEffect(() => {
+    if (!minutes) return;
+    if (minutes.quorumComputedAtISO && minutes.quorumSourceLabel && minutes.quorumRequired != null) return;
+    void backfillMinutesQuorum({ id: minutes._id });
+  }, [backfillMinutesQuorum, minutes?._id, minutes?.quorumComputedAtISO, minutes?.quorumRequired, minutes?.quorumSourceLabel]);
+
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
   if (!meeting) return <div className="page">Loading…</div>;
@@ -77,6 +91,7 @@ export function MeetingDetailPage() {
   const transcriptProvider = transcriptOnFile
     ? transcriptRecord?.provider ?? (minutesDraftTranscript ? "manual" : null)
     : null;
+  const quorumSnapshot = getQuorumSnapshot(minutes, meeting);
   const transcriptStatusTone =
     transcriptionJob?.status === "complete"
       ? "success"
@@ -148,6 +163,8 @@ export function MeetingDetailPage() {
         attendees: minutes.attendees,
         absent: minutes.absent,
         quorumMet: minutes.quorumMet,
+        quorumRequired: quorumSnapshot.required,
+        quorumSourceLabel: quorumSnapshot.label,
         discussion: minutes.discussion,
         motions: minutes.motions as any,
         decisions: minutes.decisions,
@@ -183,6 +200,8 @@ export function MeetingDetailPage() {
         attendees: minutes.attendees.map(redact),
         absent: minutes.absent.map(redact),
         quorumMet: minutes.quorumMet,
+        quorumRequired: quorumSnapshot.required,
+        quorumSourceLabel: quorumSnapshot.label,
         discussion: redact(minutes.discussion),
         motions: (minutes.motions as any[]).map((m) => ({
           ...m,
@@ -512,13 +531,14 @@ export function MeetingDetailPage() {
           </div>
 
           {minutes ? (
-            <div className="card">
-              <div className="card__head">
-                <h2 className="card__title"><FileText size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />Minutes</h2>
-                <span className="card__subtitle">
-                  Quorum {minutes.quorumMet ? "met" : "not met"} · {minutes.attendees.length} attendees
-                </span>
-              </div>
+              <div className="card">
+                <div className="card__head">
+                  <h2 className="card__title"><FileText size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />Minutes</h2>
+                  <span className="card__subtitle">
+                    Quorum {minutes.quorumMet ? "met" : "not met"} · {minutes.attendees.length} present
+                    {quorumSnapshot.required != null ? ` / ${quorumSnapshot.required} required` : ""}
+                  </span>
+                </div>
               <div className="card__body">
                 <div className="minutes-section">
                   <h3>Attendance</h3>
@@ -561,7 +581,13 @@ export function MeetingDetailPage() {
                           Quorum {minutes.quorumMet ? "met" : "not met"}
                         </Badge>
                         <Badge tone="info">{minutes.attendees.length} present</Badge>
+                        {quorumSnapshot.required != null && (
+                          <Badge tone="neutral">{quorumSnapshot.required} required</Badge>
+                        )}
                         <Badge tone="neutral">{minutes.absent.length} absent/regrets</Badge>
+                        {quorumSnapshot.label && (
+                          <Badge tone="info">Rule: {quorumSnapshot.label}</Badge>
+                        )}
                         <button className="btn-action" onClick={startAttendanceEdit}>
                           Edit attendance
                         </button>
@@ -671,6 +697,7 @@ export function MeetingDetailPage() {
               <Detail label="Electronic">{meeting.electronic ? "Yes" : "No"}</Detail>
               <Detail label="Notice sent">{meeting.noticeSentAt ?? "—"}</Detail>
               <Detail label="Quorum required">{meeting.quorumRequired ?? "—"}</Detail>
+              <Detail label="Quorum rule">{quorumSnapshot.label || meeting.quorumSourceLabel || "—"}</Detail>
             </div>
           </div>
 
@@ -962,6 +989,26 @@ function sourceLabelForExternalId(externalId: string | undefined) {
 
 function formatSourceReferences(value: string) {
   return value.replace(/\bpaperless:(\d+)\b/gi, "Paperless #$1");
+}
+
+function getQuorumSnapshot(minutes: any, meeting: any) {
+  const required = minutes?.quorumRequired ?? meeting?.quorumRequired;
+  const version = minutes?.quorumRuleVersion ?? meeting?.quorumRuleVersion;
+  const effective =
+    minutes?.quorumRuleEffectiveFromISO ??
+    meeting?.quorumRuleEffectiveFromISO;
+  const sourceLabel = minutes?.quorumSourceLabel ?? meeting?.quorumSourceLabel ?? "";
+  const manualPrefix = /^Manual quorum override/i.test(sourceLabel)
+    ? "Manual quorum override; "
+    : "";
+  const label = version
+    ? `${manualPrefix}Bylaw rules v${version}${effective ? `, effective ${formatDate(effective)}` : ""}`
+    : humanizeQuorumSourceLabel(sourceLabel);
+  return { required, label };
+}
+
+function humanizeQuorumSourceLabel(value: string) {
+  return value.replace(/effective (\d{4}-\d{2}-\d{2})/i, (_match, date) => `effective ${formatDate(date)}`);
 }
 
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {

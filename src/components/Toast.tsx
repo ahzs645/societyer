@@ -21,9 +21,17 @@ type Toast = {
   description?: string;
   duration: number;
   action?: ToastAction;
+  dedupeKey?: string;
 };
 
-type ToastOpts = { description?: string; action?: ToastAction; duration?: number };
+type ToastOpts = {
+  description?: string;
+  action?: ToastAction;
+  duration?: number;
+  /** Suppresses duplicate toasts with the same key while one is visible —
+   * replaces the existing toast's content and resets its timer instead. */
+  dedupeKey?: string;
+};
 
 type ToastApi = {
   show: (t: Omit<Toast, "id" | "duration"> & { duration?: number }) => void;
@@ -57,11 +65,30 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const show = useCallback<ToastApi["show"]>(
-    ({ tone, title, description, duration, action }) => {
-      const id = idRef.current++;
+    ({ tone, title, description, duration, action, dedupeKey }) => {
       // Keep actionable toasts on screen a bit longer so the user can reach the Undo button.
       const d = duration ?? (action ? 8000 : tone === "error" ? 6000 : 3500);
-      setItems((xs) => [...xs, { id, tone, title, description, duration: d, action }]);
+      if (dedupeKey) {
+        let matched: Toast | undefined;
+        setItems((xs) => {
+          matched = xs.find((x) => x.dedupeKey === dedupeKey);
+          if (!matched) return xs;
+          return xs.map((x) =>
+            x.id === matched!.id
+              ? { ...x, tone, title, description, action, duration: d }
+              : x,
+          );
+        });
+        if (matched) {
+          const existing = timersRef.current.get(matched.id);
+          if (existing) window.clearTimeout(existing);
+          const handle = window.setTimeout(() => remove(matched!.id), d);
+          timersRef.current.set(matched.id, handle);
+          return;
+        }
+      }
+      const id = idRef.current++;
+      setItems((xs) => [...xs, { id, tone, title, description, duration: d, action, dedupeKey }]);
       const handle = window.setTimeout(() => remove(id), d);
       timersRef.current.set(id, handle);
     },

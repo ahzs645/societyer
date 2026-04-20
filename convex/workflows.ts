@@ -30,6 +30,7 @@ type NodePreview = {
   label: string;
   description?: string;
   status?: "draft" | "ready" | "needs_setup";
+  config?: Record<string, any>;
 };
 
 type RecipeKey =
@@ -205,20 +206,28 @@ function checkNodeSetup(
   providerConfig: { externalWebhookUrl?: string } | undefined,
 ): SetupCheck[] {
   const checks: SetupCheck[] = [];
+  const cfg: Record<string, any> = node.config ?? {};
+
   if (node.type === "pdf_fill") {
-    const hasTemplate = Boolean(env("UNBC_AFFILIATE_TEMPLATE_PATH"));
+    const hasTemplate = Boolean(cfg.templateDocumentId);
     checks.push({
       ok: hasTemplate,
-      message: hasTemplate
-        ? undefined
-        : "UNBC_AFFILIATE_TEMPLATE_PATH is not set on the Societyer server.",
+      message: hasTemplate ? undefined : "Pick a fillable PDF template from Documents.",
+    });
+    const fields: string[] = Array.isArray(cfg.fields) ? cfg.fields : [];
+    checks.push({
+      ok: fields.length > 0,
+      message:
+        fields.length > 0
+          ? undefined
+          : "Define at least one PDF field to fill (or auto-detect from the template).",
     });
     const hasSecret = Boolean(env("SOCIETYER_WORKFLOW_CALLBACK_SECRET"));
     checks.push({
       ok: hasSecret,
       message: hasSecret
         ? undefined
-        : "SOCIETYER_WORKFLOW_CALLBACK_SECRET is not set — n8n can't call back.",
+        : "SOCIETYER_WORKFLOW_CALLBACK_SECRET is not set — the filler can't call back.",
     });
     const hasWebhook = Boolean(providerConfig?.externalWebhookUrl);
     checks.push({
@@ -226,19 +235,43 @@ function checkNodeSetup(
       message: hasWebhook ? undefined : "No n8n webhook URL configured on this workflow.",
     });
   } else if (node.type === "external_n8n") {
-    const hasWebhook = Boolean(providerConfig?.externalWebhookUrl);
+    const overrideUrl = typeof cfg.webhookUrl === "string" ? cfg.webhookUrl : undefined;
+    const hasWebhook = Boolean(overrideUrl ?? providerConfig?.externalWebhookUrl);
     checks.push({
       ok: hasWebhook,
-      message: hasWebhook ? undefined : "No n8n webhook URL configured on this workflow.",
+      message: hasWebhook
+        ? undefined
+        : "Set an n8n webhook URL on the workflow or override it on this node.",
     });
   } else if (node.type === "email") {
+    const hasRecipient = Boolean(cfg.to);
+    checks.push({
+      ok: hasRecipient,
+      message: hasRecipient ? undefined : "Set a recipient (email address).",
+    });
+    const hasSubject = Boolean(cfg.subject);
+    checks.push({
+      ok: hasSubject,
+      message: hasSubject ? undefined : "Set a subject line.",
+    });
     const hasResend = Boolean(env("RESEND_API_KEY") && env("RESEND_FROM_EMAIL"));
-    // Email is marked "draft" by default — surface it as needs_setup only when
-    // the recipe author has explicitly flipped it to ready, but the server
-    // hasn't configured Resend.
     checks.push({
       ok: hasResend,
-      message: hasResend ? undefined : "Resend is not configured — notifications will be skipped.",
+      message: hasResend
+        ? undefined
+        : "Resend is not configured — notifications will be skipped until RESEND_API_KEY and RESEND_FROM_EMAIL are set.",
+    });
+  } else if (node.type === "form") {
+    const fields: string[] = Array.isArray(cfg.fields) ? cfg.fields : [];
+    checks.push({
+      ok: fields.length > 0,
+      message: fields.length > 0 ? undefined : "Define at least one intake field.",
+    });
+  } else if (node.type === "document_create") {
+    const hasCategory = Boolean(cfg.category);
+    checks.push({
+      ok: hasCategory,
+      message: hasCategory ? undefined : "Set the document category to file under.",
     });
   }
   return checks;
@@ -519,6 +552,38 @@ export const addNode = mutation({
   },
 });
 
+export const updateNodeConfig = mutation({
+  args: {
+    id: v.id("workflows"),
+    key: v.string(),
+    config: v.any(),
+    label: v.optional(v.string()),
+    description: v.optional(v.string()),
+    actingUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, { id, key, config, label, description, actingUserId }) => {
+    const wf = await ctx.db.get(id);
+    if (!wf) throw new Error("Workflow not found");
+    await requireRole(ctx, {
+      actingUserId,
+      societyId: wf.societyId,
+      required: "Director",
+    });
+    const existing: NodePreview[] = Array.isArray(wf.nodePreview) ? wf.nodePreview : [];
+    const idx = existing.findIndex((n) => n.key === key);
+    if (idx === -1) throw new Error(`Node ${key} not found on workflow ${id}`);
+    const prev = existing[idx];
+    const next = [...existing];
+    next[idx] = {
+      ...prev,
+      config: { ...(prev.config ?? {}), ...(config ?? {}) },
+      label: label ?? prev.label,
+      description: description ?? prev.description,
+    };
+    await ctx.db.patch(id, { nodePreview: next });
+  },
+});
+
 export const removeNode = mutation({
   args: {
     id: v.id("workflows"),
@@ -628,8 +693,70 @@ export const receiveExternalCallback = mutation({
     }
 
     await ctx.db.patch(args.runId, patch);
+
+    if (args.event === "run.completed") {
+      await enqueueEmailsForRunInline(ctx, args.runId);
+    }
   },
 });
+
+// When a workflow run succeeds, turn every configured email-type node into
+// a pendingEmails row for the Outbox. We only fire for nodes that have a
+// `to` configured (via updateNodeConfig), and we skip ones already enqueued
+// for this run so retries don't duplicate drafts.
+async function enqueueEmailsForRunInline(ctx: any, runId: any) {
+  const run = await ctx.db.get(runId);
+  if (!run) return;
+  const wf = await ctx.db.get(run.workflowId);
+  if (!wf) return;
+  const nodes: any[] = Array.isArray(wf.nodePreview) ? wf.nodePreview : [];
+  const emailNodes = nodes.filter(
+    (node) => node.type === "email" && node.config && typeof node.config.to === "string" && node.config.to.trim().length > 0,
+  );
+  if (emailNodes.length === 0) return;
+
+  const existing = await ctx.db
+    .query("pendingEmails")
+    .withIndex("by_society", (q: any) => q.eq("societyId", run.societyId))
+    .collect();
+  const alreadyEnqueued = new Set<string>(
+    existing
+      .filter((row: any) => row.workflowRunId === runId)
+      .map((row: any) => row.nodeKey),
+  );
+
+  const attachments: Array<{ documentId: any; fileName: string }> = [];
+  if (run.generatedDocumentId) {
+    const doc = await ctx.db.get(run.generatedDocumentId);
+    if (doc) {
+      attachments.push({
+        documentId: run.generatedDocumentId,
+        fileName: doc.fileName ?? doc.title ?? "attachment",
+      });
+    }
+  }
+
+  const nowISO = new Date().toISOString();
+  for (const node of emailNodes) {
+    if (alreadyEnqueued.has(node.key)) continue;
+    const cfg = node.config ?? {};
+    await ctx.db.insert("pendingEmails", {
+      societyId: run.societyId,
+      workflowId: run.workflowId,
+      workflowRunId: runId,
+      nodeKey: node.key,
+      to: String(cfg.to),
+      cc: typeof cfg.cc === "string" ? cfg.cc : undefined,
+      bcc: typeof cfg.bcc === "string" ? cfg.bcc : undefined,
+      subject: typeof cfg.subject === "string" && cfg.subject.length > 0 ? cfg.subject : node.label,
+      body: typeof cfg.body === "string" ? cfg.body : "",
+      attachments,
+      status: "ready",
+      createdAtISO: nowISO,
+      notes: `Queued by workflow ${wf.name} · node ${node.key}`,
+    });
+  }
+}
 
 // Any step still running/pending when a run fails needs to be resolved so
 // the timeline reflects where execution actually stopped. The first
@@ -811,6 +938,9 @@ export const _completeRun = internalMutation({
       output,
       steps,
     });
+    if (status === "success") {
+      await enqueueEmailsForRunInline(ctx, id);
+    }
   },
 });
 

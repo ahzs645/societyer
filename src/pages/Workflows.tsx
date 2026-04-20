@@ -6,7 +6,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Drawer, Field, Badge } from "../components/ui";
+import { Drawer, Field, Badge, EmptyState, Button } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import {
@@ -152,11 +152,23 @@ export function WorkflowsPage() {
         label="Configured workflows"
         icon={<WorkflowIcon size={14} />}
         data={(rows ?? []) as any[]}
+        loading={rows === undefined}
         rowKey={(r) => String(r._id)}
         searchPlaceholder="Search name, recipe, trigger…"
         defaultSort={{ columnId: "name", dir: "asc" }}
         viewsKey="workflows"
-        emptyMessage="No workflows yet. Pick a recipe from the catalog to get started."
+        emptyMessage={
+          <EmptyState
+            icon={<WorkflowIcon />}
+            title="No workflows yet"
+            description="Pick a recipe from the catalog to automate meetings, filings, or approvals."
+            action={
+              <Button variant="primary" icon={<Plus size={14} />} onClick={() => openNew()}>
+                New workflow
+              </Button>
+            }
+          />
+        }
         onRowClick={(r) => navigate(`/app/workflows/${r._id}`)}
         rowActionLabel={(r) => `Open ${r.name}`}
         filterFields={WORKFLOW_FILTERS(catalog ?? [])}

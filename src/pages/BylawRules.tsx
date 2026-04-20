@@ -1,15 +1,20 @@
 import { useEffect, useState } from "react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Field } from "../components/ui";
+import { Badge, Field } from "../components/ui";
 import { Toggle } from "../components/Controls";
 import { Info, RefreshCw, Save, Scale } from "lucide-react";
 import { useToast } from "../components/Toast";
+import { formatDate } from "../lib/format";
 
 export function BylawRulesPage() {
   const { society, rules } = useBylawRules();
+  const history = useQuery(
+    api.bylawRules.list,
+    society ? { societyId: society._id } : "skip",
+  );
   const upsert = useMutation(api.bylawRules.upsertActive);
   const reset = useMutation(api.bylawRules.resetToDefault);
   const toast = useToast();
@@ -68,6 +73,7 @@ export function BylawRulesPage() {
       unanimousWrittenSpecialResolution:
         !!form.unanimousWrittenSpecialResolution,
     });
+    setForm(null);
     toast.success("Bylaw rule set saved");
   };
 
@@ -91,7 +97,7 @@ export function BylawRulesPage() {
               <RefreshCw size={12} /> Reset to defaults
             </button>
             <button className="btn-action btn-action--primary" onClick={save}>
-              <Save size={12} /> Save rules
+              <Save size={12} /> Save new version
             </button>
           </>
         }
@@ -106,6 +112,73 @@ export function BylawRulesPage() {
           </div>
         </div>
       )}
+
+      <div className="card bylaw-rules__card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">Rule source timeline</h2>
+          <span className="card__subtitle">
+            {form.isFallback ? "Default assumptions" : `Editing from v${form.version}`}
+          </span>
+        </div>
+        <div className="card__body bylaw-rules__body">
+          <div className="bylaw-rules__field-grid">
+            <Field label="Effective from">
+              <input
+                className="input"
+                type="date"
+                value={toDateInputValue(form.effectiveFromISO)}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    effectiveFromISO: event.target.value
+                      ? `${event.target.value}T00:00:00.000Z`
+                      : "",
+                  })
+                }
+              />
+            </Field>
+            <Field label="Current version">
+              <div className="row" style={{ minHeight: 36, gap: 6 }}>
+                <Badge tone={form.isFallback ? "warn" : "info"}>
+                  {form.isFallback ? "Fallback" : `v${form.version}`}
+                </Badge>
+                <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  Saving creates v{Number(form.version ?? 0) + 1}
+                </span>
+              </div>
+            </Field>
+          </div>
+          <div className="col" style={{ gap: 6 }}>
+            {(history ?? []).slice(0, 6).map((row: any) => (
+              <div
+                key={row._id}
+                className="row"
+                style={{
+                  justifyContent: "space-between",
+                  gap: 10,
+                  padding: "8px 0",
+                  borderTop: "1px solid var(--border)",
+                }}
+              >
+                <div className="row" style={{ gap: 6 }}>
+                  <Badge tone={row.status === "Active" ? "success" : "neutral"}>
+                    v{row.version} · {row.status}
+                  </Badge>
+                  <span>{row.quorumType === "percentage" ? `${row.quorumValue}%` : `${row.quorumValue} present`}</span>
+                </div>
+                <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  Effective {row.effectiveFromISO ? formatDate(row.effectiveFromISO) : "from first use"}
+                </span>
+              </div>
+            ))}
+            {(history ?? []).length === 0 && (
+              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                No saved rule versions yet.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       <div className="bylaw-rules__layout">
         <div className="bylaw-rules__column">
@@ -434,4 +507,13 @@ export function BylawRulesPage() {
       </div>
     </div>
   );
+}
+
+function toDateInputValue(value: unknown) {
+  if (typeof value !== "string" || !value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value.slice(0, 10);
+  }
+  return date.toISOString().slice(0, 10);
 }

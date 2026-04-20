@@ -1,0 +1,1340 @@
+{
+  "name": "Societyer document transposition catalog",
+  "generatedFrom": [
+    "src/pages/ImportSessions.tsx",
+    "convex/importSessions.ts",
+    "convex/paperless.ts",
+    "convex/schema.ts"
+  ],
+  "generatedOn": "2026-04-20",
+  "reviewFlow": {
+    "stageBundleMutation": "importSessions.createFromBundle",
+    "paperlessMeetingAction": "paperless.createMeetingMinutesImportSession",
+    "paperlessDiscoveryAction": "paperless.createDiscoveryImportSession",
+    "paperlessTranspositionAction": "paperless.createTransposedImportSession",
+    "applyHistoryMutation": "importSessions.applyApprovedToOrgHistory",
+    "applyMeetingsMutation": "importSessions.applyApprovedMeetings",
+    "applyDocumentsMutation": "importSessions.applyApprovedDocuments",
+    "applySectionsMutation": "importSessions.applyApprovedSectionRecords",
+    "approvalRequired": true
+  },
+  "groups": {
+    "identity_and_profile": {
+      "routes": [
+        "/app/society",
+        "/app/org-history",
+        "/app/documents"
+      ],
+      "nativeRecordKinds": [
+        "source",
+        "fact",
+        "event",
+        "documentCandidate",
+        "sourceEvidence"
+      ],
+      "sourceSignals": [
+        "incorporation",
+        "constitution",
+        "purposes",
+        "registered office",
+        "mailing address",
+        "privacy officer",
+        "society profile",
+        "charity number"
+      ],
+      "privacyDefault": "standard",
+      "doNotTransposeDirectlyTo": [
+        "society profile final fields"
+      ],
+      "reviewNotes": "Stage profile facts as org-history/source evidence. Human review should update /app/society."
+    },
+    "governance": {
+      "routes": [
+        "/app/meetings",
+        "/app/meetings/:id",
+        "/app/org-history",
+        "/app/governance-registers",
+        "/app/meeting-evidence",
+        "/app/directors"
+      ],
+      "nativeRecordKinds": [
+        "meetingMinutes",
+        "motion",
+        "meetingAttendance",
+        "motionEvidence",
+        "boardRoleAssignment",
+        "boardRoleChange",
+        "signingAuthority",
+        "source",
+        "event",
+        "boardTerm"
+      ],
+      "sourceSignals": [
+        "minutes",
+        "AGM",
+        "SGM",
+        "board meeting",
+        "motion",
+        "moved by",
+        "seconded by",
+        "carried",
+        "defeated",
+        "quorum",
+        "director",
+        "officer",
+        "appointed",
+        "elected",
+        "resigned",
+        "removed",
+        "signing authority"
+      ],
+      "privacyDefault": "standard",
+      "doNotTransposeDirectlyTo": [
+        "directors legal register",
+        "elections",
+        "proxies",
+        "written resolutions"
+      ],
+      "reviewNotes": "Promote legal director register changes manually after source review. Do not infer ballots or signatures from OCR."
+    },
+    "compliance": {
+      "routes": [
+        "/app/filings",
+        "/app/deadlines",
+        "/app/filings/prefill",
+        "/app/documents"
+      ],
+      "nativeRecordKinds": [
+        "filing",
+        "deadline",
+        "documentCandidate",
+        "sourceEvidence"
+      ],
+      "sourceSignals": [
+        "annual report",
+        "BC Registry",
+        "registrar",
+        "Societies Online",
+        "Form 10",
+        "bylaw amendment",
+        "change of directors",
+        "change of address",
+        "T3010",
+        "T2",
+        "T4",
+        "GST",
+        "payroll remittance",
+        "due date",
+        "filing deadline"
+      ],
+      "privacyDefault": "standard",
+      "doNotTransposeDirectlyTo": [
+        "filing pre-fill forms",
+        "bylaw rules",
+        "legal register updates"
+      ],
+      "reviewNotes": "Create filing/deadline candidates with evidence documents. Marking filed needs confirmation and evidence review."
+    },
+    "records_and_archive": {
+      "routes": [
+        "/app/documents",
+        "/app/records-archive",
+        "/app/inspections",
+        "/app/retention",
+        "/app/imports"
+      ],
+      "nativeRecordKinds": [
+        "documentCandidate",
+        "source",
+        "sourceEvidence",
+        "recordsLocation",
+        "archiveAccession"
+      ],
+      "sourceSignals": [
+        "records location",
+        "registered office records",
+        "archives",
+        "archival agreement",
+        "accession",
+        "custody",
+        "box",
+        "binder",
+        "storage location",
+        "inspection",
+        "retention",
+        "source file"
+      ],
+      "privacyDefault": "standard",
+      "doNotTransposeDirectlyTo": [
+        "inspection request logs",
+        "retention archive actions"
+      ],
+      "reviewNotes": "Metadata can be staged broadly. Inspection requests, deletion flags, and archive actions stay manual."
+    },
+    "finance": {
+      "routes": [
+        "/app/financials",
+        "/app/finance-imports",
+        "/app/treasurer",
+        "/app/reconciliation",
+        "/app/documents"
+      ],
+      "nativeRecordKinds": [
+        "financialStatement",
+        "financialStatementImport",
+        "budgetSnapshot",
+        "treasurerReport",
+        "transactionCandidate",
+        "documentCandidate",
+        "sourceEvidence"
+      ],
+      "sourceSignals": [
+        "income statement",
+        "balance sheet",
+        "trial balance",
+        "financial statement",
+        "financial report",
+        "budget",
+        "forecast",
+        "variance",
+        "treasurer report",
+        "bank statement",
+        "invoice",
+        "receipt",
+        "cheque",
+        "deposit",
+        "payment",
+        "e-transfer"
+      ],
+      "privacyDefault": "restricted",
+      "doNotTransposeDirectlyTo": [
+        "donation receipts",
+        "payroll filings",
+        "membership billing plans",
+        "public transparency"
+      ],
+      "reviewNotes": "Keep raw banking/payroll/tax OCR restricted. Transactions should enter reconciliation as candidates only."
+    },
+    "grants": {
+      "routes": [
+        "/app/grants",
+        "/public/:slug/grant-apply",
+        "/app/documents",
+        "/app/deadlines"
+      ],
+      "nativeRecordKinds": [
+        "grant",
+        "deadline",
+        "documentCandidate",
+        "sourceEvidence"
+      ],
+      "sourceSignals": [
+        "grant",
+        "funding",
+        "proposal",
+        "subsidy",
+        "award",
+        "funder",
+        "program",
+        "reporting deadline",
+        "Canada Summer Jobs",
+        "restricted purpose",
+        "use of funds"
+      ],
+      "privacyDefault": "standard",
+      "doNotTransposeDirectlyTo": [
+        "public grant applications",
+        "communications campaigns",
+        "financial transactions unless finance evidence is explicit"
+      ],
+      "reviewNotes": "Current section apply fills core grant fields only. Requirements, contacts, answer library, and timeline details need manual enrichment."
+    },
+    "people": {
+      "routes": [
+        "/app/members",
+        "/app/volunteers",
+        "/app/employees",
+        "/app/pipa-training",
+        "/public/:slug/volunteer-apply"
+      ],
+      "nativeRecordKinds": [
+        "volunteer",
+        "employee",
+        "pipaTraining",
+        "documentCandidate",
+        "sourceEvidence"
+      ],
+      "sourceSignals": [
+        "member",
+        "membership",
+        "volunteer",
+        "application",
+        "orientation",
+        "screening",
+        "criminal record",
+        "privacy training",
+        "PIPA",
+        "CASL",
+        "employee",
+        "employment contract",
+        "contractor",
+        "WorkSafeBC"
+      ],
+      "privacyDefault": "restricted",
+      "doNotTransposeDirectlyTo": [
+        "legal member register",
+        "volunteer screening results",
+        "payroll",
+        "T4",
+        "TD1",
+        "ROE",
+        "public pages"
+      ],
+      "reviewNotes": "Member register changes are manual. Screening results and payroll/tax documents require restricted handling."
+    },
+    "access_and_secrets": {
+      "routes": [
+        "/app/access-custody",
+        "/app/documents",
+        "/app/audit"
+      ],
+      "nativeRecordKinds": [
+        "secretVaultItem",
+        "sourceEvidence",
+        "documentCandidate"
+      ],
+      "sourceSignals": [
+        "password",
+        "recovery key",
+        "API key",
+        "certificate",
+        "credential",
+        "account",
+        "username",
+        "registry key",
+        "vault",
+        "custodian",
+        "backup custodian",
+        "rotation",
+        "access review"
+      ],
+      "privacyDefault": "restricted",
+      "doNotTransposeDirectlyTo": [
+        "raw secret storage fields",
+        "public transparency",
+        "notes with secret values"
+      ],
+      "reviewNotes": "Only create metadata references. Never place raw secret values in AI output or import JSON."
+    },
+    "public_transparency": {
+      "routes": [
+        "/app/transparency",
+        "/public/:slug",
+        "/app/documents"
+      ],
+      "nativeRecordKinds": [
+        "publication",
+        "documentCandidate",
+        "sourceEvidence"
+      ],
+      "sourceSignals": [
+        "publish",
+        "public",
+        "annual report",
+        "bylaws",
+        "policy",
+        "notice",
+        "resource",
+        "transparency",
+        "public summary",
+        "website"
+      ],
+      "privacyDefault": "standard",
+      "doNotTransposeDirectlyTo": [
+        "published status without review",
+        "restricted finance data",
+        "restricted HR data",
+        "restricted member data"
+      ],
+      "reviewNotes": "Publications should default to draft/in-review. Human approval is required before making content public."
+    },
+    "manual_only": {
+      "routes": [
+        "/app/conflicts",
+        "/app/elections",
+        "/app/proxies",
+        "/app/receipts",
+        "/app/court-orders",
+        "/app/written-resolutions",
+        "/app/bylaw-rules",
+        "/app/workflows",
+        "/app/communications",
+        "/app/membership",
+        "/app/auditors",
+        "/app/proposals",
+        "/app/tasks",
+        "/app/goals"
+      ],
+      "nativeRecordKinds": [
+        "documentCandidate",
+        "sourceEvidence"
+      ],
+      "sourceSignals": [
+        "conflict disclosure",
+        "ballot",
+        "vote",
+        "proxy",
+        "charitable receipt",
+        "court order",
+        "written resolution",
+        "bylaw interpretation",
+        "workflow",
+        "campaign",
+        "membership plan",
+        "auditor appointment",
+        "member proposal"
+      ],
+      "privacyDefault": "restricted",
+      "doNotTransposeDirectlyTo": [
+        "final legal state",
+        "votes",
+        "receipts",
+        "court-order status",
+        "active bylaw rules",
+        "workflow automation"
+      ],
+      "reviewNotes": "Stage evidence and explain unsupported fields. Create a manual follow-up task only when requested."
+    }
+  },
+  "commonFields": {
+    "sourceExternalIds": "Array of source IDs such as paperless:123.",
+    "confidence": "High, Medium, or Review.",
+    "sensitivity": "standard or restricted.",
+    "notes": "Reviewer-facing notes. Do not paste restricted OCR into public notes.",
+    "sourceDate": "ISO date inferred from the source document."
+  },
+  "recordKinds": {
+    "source": {
+      "bundleKey": "sources",
+      "target": "documents as Org History Source or source placeholder",
+      "route": "/app/org-history",
+      "applyMutation": "importSessions.applyApprovedToOrgHistory",
+      "acceptedFields": [
+        "externalSystem",
+        "externalId",
+        "title",
+        "sourceDate",
+        "category",
+        "confidence",
+        "notes",
+        "url",
+        "localPath",
+        "fileName",
+        "mimeType",
+        "fileSizeBytes",
+        "sha256",
+        "sensitivity",
+        "tags"
+      ],
+      "minimumUsefulFields": [
+        "title",
+        "externalId"
+      ]
+    },
+    "fact": {
+      "bundleKey": "facts",
+      "target": "documents as Org History Item",
+      "route": "/app/org-history",
+      "applyMutation": "importSessions.applyApprovedToOrgHistory",
+      "acceptedFields": [
+        "label",
+        "value",
+        "category",
+        "sourceExternalIds",
+        "sourceIds",
+        "notes"
+      ],
+      "minimumUsefulFields": [
+        "label",
+        "value"
+      ]
+    },
+    "event": {
+      "bundleKey": "events",
+      "target": "documents as Org History Item",
+      "route": "/app/org-history",
+      "applyMutation": "importSessions.applyApprovedToOrgHistory",
+      "acceptedFields": [
+        "eventDate",
+        "title",
+        "summary",
+        "category",
+        "sourceExternalIds",
+        "sourceIds",
+        "notes"
+      ],
+      "minimumUsefulFields": [
+        "eventDate",
+        "title"
+      ]
+    },
+    "boardTerm": {
+      "bundleKey": "boardTerms",
+      "target": "documents as Org History Item",
+      "route": "/app/org-history",
+      "applyMutation": "importSessions.applyApprovedToOrgHistory",
+      "acceptedFields": [
+        "personName",
+        "position",
+        "committeeName",
+        "startDate",
+        "endDate",
+        "changeType",
+        "sourceExternalIds",
+        "sourceIds",
+        "notes"
+      ],
+      "minimumUsefulFields": [
+        "personName",
+        "position",
+        "startDate"
+      ]
+    },
+    "motion": {
+      "bundleKey": "motions",
+      "target": "meetings and minutes or org history item",
+      "route": "/app/meetings",
+      "applyMutation": "importSessions.applyApprovedMeetings",
+      "acceptedFields": [
+        "meetingDate",
+        "meetingTitle",
+        "motionText",
+        "outcome",
+        "movedByName",
+        "secondedByName",
+        "votesFor",
+        "votesAgainst",
+        "abstentions",
+        "resolutionType",
+        "voteSummary",
+        "pageRef",
+        "evidenceText",
+        "rawText",
+        "category",
+        "sourceExternalIds",
+        "notes"
+      ],
+      "minimumUsefulFields": [
+        "meetingDate",
+        "motionText"
+      ]
+    },
+    "meetingMinutes": {
+      "bundleKey": "meetingMinutes",
+      "target": "meetings and minutes",
+      "route": "/app/meetings",
+      "applyMutation": "importSessions.applyApprovedMeetings",
+      "acceptedFields": [
+        "meetingDate",
+        "meetingTitle",
+        "attendees",
+        "absent",
+        "quorumMet",
+        "agendaItems",
+        "discussion",
+        "motions",
+        "decisions",
+        "actionItems",
+        "sourceExternalIds",
+        "sourceDocumentTitle",
+        "sourceDocumentId",
+        "sectionIndex",
+        "pageRef",
+        "confidence",
+        "notes"
+      ],
+      "minimumUsefulFields": [
+        "meetingDate",
+        "meetingTitle"
+      ]
+    },
+    "budget": {
+      "bundleKey": "budgets",
+      "target": "documents as Org History Item",
+      "route": "/app/org-history",
+      "applyMutation": "importSessions.applyApprovedToOrgHistory",
+      "acceptedFields": [
+        "title",
+        "fiscalYear",
+        "sourceDate",
+        "currency",
+        "totalIncomeCents",
+        "totalExpenseCents",
+        "netCents",
+        "endingBalanceCents",
+        "lines",
+        "sourceExternalIds",
+        "notes"
+      ],
+      "minimumUsefulFields": [
+        "fiscalYear",
+        "title"
+      ]
+    },
+    "documentCandidate": {
+      "bundleKey": "documentMap",
+      "target": "documents",
+      "route": "/app/documents",
+      "applyMutation": "importSessions.applyApprovedDocuments",
+      "acceptedFields": [
+        "id",
+        "externalId",
+        "externalSystem",
+        "title",
+        "fileName",
+        "mimeType",
+        "fileSizeBytes",
+        "localPath",
+        "sha256",
+        "sections",
+        "tags",
+        "created",
+        "confidence",
+        "sensitivity",
+        "why",
+        "sourceExternalIds"
+      ],
+      "minimumUsefulFields": [
+        "title"
+      ]
+    },
+    "filing": {
+      "bundleKey": "filings",
+      "targetTable": "filings",
+      "route": "/app/filings",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "title",
+        "kind",
+        "periodLabel",
+        "dueDate",
+        "filedAt",
+        "submissionMethod",
+        "confirmationNumber",
+        "feePaidCents",
+        "submissionChecklist",
+        "registryUrl",
+        "status",
+        "notes",
+        "sourceDate",
+        "sourceExternalIds",
+        "confidence",
+        "sensitivity"
+      ],
+      "fallbacks": {
+        "kind": "Other",
+        "dueDate": "filedAt, sourceDate, or today",
+        "status": "NeedsReview"
+      }
+    },
+    "deadline": {
+      "bundleKey": "deadlines",
+      "targetTable": "deadlines",
+      "route": "/app/deadlines",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "title",
+        "description",
+        "dueDate",
+        "category",
+        "done",
+        "recurrence",
+        "sourceDate",
+        "sourceExternalIds",
+        "confidence",
+        "sensitivity"
+      ],
+      "fallbacks": {
+        "title": "Imported deadline",
+        "dueDate": "sourceDate or today",
+        "category": "Paperless"
+      }
+    },
+    "publication": {
+      "bundleKey": "publications",
+      "targetTable": "publications",
+      "route": "/app/transparency",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "title",
+        "category",
+        "url",
+        "publishedAtISO",
+        "publishedAt",
+        "status",
+        "reviewStatus",
+        "summary",
+        "sourceExternalIds",
+        "confidence",
+        "sensitivity"
+      ],
+      "fallbacks": {
+        "category": "Custom",
+        "status": "Draft",
+        "reviewStatus": "InReview"
+      }
+    },
+    "insurancePolicy": {
+      "bundleKey": "insurancePolicies",
+      "targetTable": "insurancePolicies",
+      "route": "/app/insurance",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "title",
+        "kind",
+        "insurer",
+        "broker",
+        "policyNumber",
+        "coverageCents",
+        "premiumCents",
+        "deductibleCents",
+        "coverageSummary",
+        "additionalInsureds",
+        "startDate",
+        "endDate",
+        "renewalDate",
+        "status",
+        "confidence",
+        "sensitivity",
+        "riskFlags",
+        "sourceDate",
+        "sourceExternalIds",
+        "notes"
+      ],
+      "fallbacks": {
+        "kind": "Other",
+        "insurer": "Needs review",
+        "policyNumber": "Needs review",
+        "startDate": "sourceDate or today",
+        "renewalDate": "endDate, sourceDate, or today",
+        "status": "Active"
+      }
+    },
+    "financialStatement": {
+      "bundleKey": "financialStatements",
+      "targetTable": "financials",
+      "route": "/app/financials",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "title",
+        "fiscalYear",
+        "periodEnd",
+        "revenueCents",
+        "expensesCents",
+        "netAssetsCents",
+        "restrictedFundsCents",
+        "auditStatus",
+        "auditorName",
+        "approvedByBoardAt",
+        "remunerationDisclosures",
+        "sourceDate",
+        "sourceExternalIds",
+        "confidence",
+        "sensitivity",
+        "notes"
+      ],
+      "fallbacks": {
+        "fiscalYear": "periodEnd/sourceDate fiscal year",
+        "periodEnd": "sourceDate or today",
+        "auditStatus": "NeedsReview"
+      }
+    },
+    "financialStatementImport": {
+      "bundleKey": "financialStatementImports",
+      "targetTable": "financialStatementImports",
+      "route": "/app/finance-imports",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "title",
+        "fiscalYear",
+        "statementType",
+        "periodStart",
+        "periodEnd",
+        "revenueCents",
+        "expensesCents",
+        "netAssetsCents",
+        "restrictedFundsCents",
+        "status",
+        "confidence",
+        "sourceDocumentIds",
+        "sourceExternalIds",
+        "notes",
+        "lines"
+      ],
+      "lineFields": [
+        "section",
+        "label",
+        "description",
+        "amountCents",
+        "confidence",
+        "notes"
+      ],
+      "fallbacks": {
+        "statementType": "full_statement",
+        "status": "NeedsReview"
+      }
+    },
+    "grant": {
+      "bundleKey": "grants",
+      "targetTable": "grants",
+      "route": "/app/grants",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "title",
+        "funder",
+        "program",
+        "status",
+        "amountRequestedCents",
+        "amountAwardedCents",
+        "restrictedPurpose",
+        "applicationDueDate",
+        "submittedAtISO",
+        "decisionAtISO",
+        "startDate",
+        "endDate",
+        "nextReportDueAtISO",
+        "sourceDate",
+        "sourceExternalIds",
+        "confidence",
+        "sensitivity",
+        "notes"
+      ],
+      "notAppliedByCurrentTransposer": [
+        "requirements",
+        "contacts",
+        "answerLibrary",
+        "timelineEvents",
+        "useOfFunds",
+        "complianceFlags"
+      ],
+      "fallbacks": {
+        "funder": "Needs review",
+        "status": "Drafting"
+      }
+    },
+    "recordsLocation": {
+      "bundleKey": "recordsLocations",
+      "targetTable": "recordsLocation",
+      "route": "/app/records-archive",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "title",
+        "address",
+        "noticePostedAtOffice",
+        "postedAtISO",
+        "computerProvidedForInspection",
+        "sourceDate",
+        "sourceExternalIds",
+        "confidence",
+        "sensitivity",
+        "notes"
+      ],
+      "fallbacks": {
+        "address": "Needs review"
+      }
+    },
+    "archiveAccession": {
+      "bundleKey": "archiveAccessions",
+      "targetTable": "archiveAccessions",
+      "route": "/app/records-archive",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "title",
+        "accessionNumber",
+        "containerType",
+        "location",
+        "custodian",
+        "dateReceived",
+        "dateRange",
+        "status",
+        "accessRestrictions",
+        "sourceDate",
+        "sourceExternalIds",
+        "confidence",
+        "sensitivity",
+        "notes"
+      ],
+      "fallbacks": {
+        "containerType": "other",
+        "location": "Needs review",
+        "status": "NeedsReview"
+      }
+    },
+    "boardRoleAssignment": {
+      "bundleKey": "boardRoleAssignments",
+      "targetTable": "boardRoleAssignments",
+      "route": "/app/governance-registers",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "title",
+        "personName",
+        "name",
+        "roleTitle",
+        "position",
+        "roleGroup",
+        "committeeName",
+        "roleType",
+        "startDate",
+        "endDate",
+        "status",
+        "confidence",
+        "importedFrom",
+        "sourceDate",
+        "sourceExternalIds",
+        "sensitivity",
+        "notes"
+      ],
+      "fallbacks": {
+        "personName": "Needs review",
+        "roleTitle": "Director",
+        "roleType": "observed",
+        "startDate": "sourceDate or today",
+        "status": "Observed"
+      }
+    },
+    "boardRoleChange": {
+      "bundleKey": "boardRoleChanges",
+      "targetTable": "boardRoleChanges",
+      "route": "/app/governance-registers",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "effectiveDate",
+        "changeType",
+        "roleTitle",
+        "position",
+        "personName",
+        "previousPersonName",
+        "motionEvidenceId",
+        "status",
+        "confidence",
+        "sourceDate",
+        "sourceExternalIds",
+        "sensitivity",
+        "notes"
+      ],
+      "fallbacks": {
+        "effectiveDate": "sourceDate or today",
+        "changeType": "needs_review",
+        "roleTitle": "Needs review",
+        "status": "NeedsReview"
+      }
+    },
+    "signingAuthority": {
+      "bundleKey": "signingAuthorities",
+      "targetTable": "signingAuthorities",
+      "route": "/app/governance-registers",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "personName",
+        "name",
+        "roleTitle",
+        "institutionName",
+        "bankName",
+        "accountLabel",
+        "authorityType",
+        "effectiveDate",
+        "endDate",
+        "status",
+        "confidence",
+        "sourceDate",
+        "sourceExternalIds",
+        "sensitivity",
+        "notes"
+      ],
+      "fallbacks": {
+        "personName": "Needs review",
+        "authorityType": "signing",
+        "effectiveDate": "sourceDate or today",
+        "status": "NeedsReview"
+      }
+    },
+    "meetingAttendance": {
+      "bundleKey": "meetingAttendance",
+      "targetTable": "meetingAttendanceRecords",
+      "route": "/app/meeting-evidence",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "meetingTitle",
+        "meetingDate",
+        "personName",
+        "name",
+        "roleTitle",
+        "attendanceStatus",
+        "quorumCounted",
+        "confidence",
+        "sourceDate",
+        "sourceExternalIds",
+        "sensitivity",
+        "notes"
+      ],
+      "fallbacks": {
+        "meetingTitle": "Imported meeting",
+        "meetingDate": "sourceDate or today",
+        "personName": "Needs review",
+        "attendanceStatus": "needs_review"
+      }
+    },
+    "motionEvidence": {
+      "bundleKey": "motionEvidence",
+      "targetTable": "motionEvidence",
+      "route": "/app/meeting-evidence",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "meetingTitle",
+        "meetingDate",
+        "motionText",
+        "evidenceText",
+        "movedBy",
+        "movedByName",
+        "secondedBy",
+        "secondedByName",
+        "outcome",
+        "voteSummary",
+        "pageRef",
+        "confidence",
+        "status",
+        "sourceDate",
+        "sourceExternalIds",
+        "sensitivity",
+        "notes"
+      ],
+      "fallbacks": {
+        "meetingTitle": "Imported meeting",
+        "meetingDate": "sourceDate or today",
+        "motionText": "Imported motion evidence",
+        "outcome": "NeedsReview",
+        "status": "Extracted"
+      }
+    },
+    "budgetSnapshot": {
+      "bundleKey": "budgetSnapshots",
+      "targetTable": "budgetSnapshots",
+      "route": "/app/finance-imports",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "title",
+        "fiscalYear",
+        "periodLabel",
+        "sourceDate",
+        "currency",
+        "totalIncomeCents",
+        "totalExpenseCents",
+        "netCents",
+        "endingBalanceCents",
+        "preparedByName",
+        "lastModifiedDate",
+        "sourcePageCount",
+        "importGroupKey",
+        "status",
+        "confidence",
+        "sourceExternalIds",
+        "notes",
+        "lines"
+      ],
+      "lineFields": [
+        "lineType",
+        "type",
+        "category",
+        "parentCategory",
+        "rowKind",
+        "sortOrder",
+        "description",
+        "amountCents",
+        "projectedCents",
+        "ytdCents",
+        "sourcePage",
+        "rawLabel",
+        "rawAmountText",
+        "confidence",
+        "notes"
+      ],
+      "fallbacks": {
+        "fiscalYear": "sourceDate fiscal year",
+        "currency": "CAD",
+        "status": "NeedsReview"
+      }
+    },
+    "treasurerReport": {
+      "bundleKey": "treasurerReports",
+      "targetTable": "treasurerReports",
+      "route": "/app/treasurer",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "title",
+        "fiscalYear",
+        "reportDate",
+        "authorName",
+        "cashBalanceCents",
+        "highlights",
+        "concerns",
+        "status",
+        "confidence",
+        "sourceDate",
+        "sourceExternalIds",
+        "sensitivity",
+        "notes"
+      ],
+      "fallbacks": {
+        "fiscalYear": "reportDate/sourceDate fiscal year",
+        "reportDate": "sourceDate or today",
+        "status": "NeedsReview"
+      }
+    },
+    "transactionCandidate": {
+      "bundleKey": "transactionCandidates",
+      "targetTable": "transactionCandidates",
+      "route": "/app/reconciliation",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "transactionDate",
+        "importGroupKey",
+        "periodLabel",
+        "sourcePage",
+        "rowOrder",
+        "description",
+        "amountCents",
+        "debitCents",
+        "creditCents",
+        "balanceCents",
+        "chequeNumber",
+        "checkNumber",
+        "comment",
+        "rawText",
+        "accountName",
+        "counterparty",
+        "category",
+        "debitCredit",
+        "status",
+        "sensitivity",
+        "confidence",
+        "sourceDate",
+        "sourceExternalIds",
+        "notes"
+      ],
+      "fallbacks": {
+        "transactionDate": "sourceDate or today",
+        "description": "Imported transaction candidate",
+        "status": "NeedsReview",
+        "sensitivity": "restricted"
+      }
+    },
+    "sourceEvidence": {
+      "bundleKey": "sourceEvidence",
+      "targetTable": "sourceEvidence",
+      "route": "/app/governance-registers",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "externalSystem",
+        "externalId",
+        "sourceExternalIds",
+        "sourceTitle",
+        "title",
+        "sourceDate",
+        "evidenceKind",
+        "targetTable",
+        "targetId",
+        "sensitivity",
+        "accessLevel",
+        "summary",
+        "excerpt",
+        "status",
+        "notes"
+      ],
+      "fallbacks": {
+        "externalSystem": "inferred from externalId",
+        "evidenceKind": "provenance",
+        "sensitivity": "standard",
+        "accessLevel": "restricted if sensitivity is restricted, otherwise internal",
+        "status": "NeedsReview"
+      }
+    },
+    "secretVaultItem": {
+      "bundleKey": "secretVaultItems",
+      "targetTable": "secretVaultItems",
+      "route": "/app/access-custody",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "name",
+        "title",
+        "service",
+        "credentialType",
+        "ownerRole",
+        "custodianPersonName",
+        "custodianName",
+        "ownerName",
+        "custodianEmail",
+        "backupCustodianName",
+        "backupCustodianEmail",
+        "username",
+        "accessUrl",
+        "storageMode",
+        "externalLocation",
+        "localPath",
+        "revealPolicy",
+        "lastVerifiedAtISO",
+        "rotationDueAtISO",
+        "status",
+        "sensitivity",
+        "accessLevel",
+        "sourceExternalIds",
+        "notes"
+      ],
+      "explicitlyUnsupportedFields": [
+        "secretEncrypted",
+        "rawSecret",
+        "password",
+        "recoveryKey",
+        "certificateBody"
+      ],
+      "fallbacks": {
+        "service": "Needs review",
+        "credentialType": "other",
+        "storageMode": "external_reference",
+        "revealPolicy": "owner_admin_custodian",
+        "status": "NeedsReview",
+        "sensitivity": "restricted",
+        "accessLevel": "restricted"
+      }
+    },
+    "pipaTraining": {
+      "bundleKey": "pipaTrainings",
+      "targetTable": "pipaTrainings",
+      "route": "/app/pipa-training",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "participantName",
+        "participantEmail",
+        "role",
+        "topic",
+        "completedAtISO",
+        "nextDueAtISO",
+        "trainer",
+        "sourceDate",
+        "sourceExternalIds",
+        "confidence",
+        "sensitivity",
+        "notes"
+      ],
+      "fallbacks": {
+        "participantName": "Needs review",
+        "role": "Staff",
+        "topic": "PIPA",
+        "completedAtISO": "sourceDate or today"
+      }
+    },
+    "employee": {
+      "bundleKey": "employees",
+      "targetTable": "employees",
+      "route": "/app/employees",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "name",
+        "firstName",
+        "lastName",
+        "email",
+        "role",
+        "startDate",
+        "endDate",
+        "employmentType",
+        "annualSalaryCents",
+        "hourlyWageCents",
+        "worksafeBCNumber",
+        "cppExempt",
+        "eiExempt",
+        "sourceDate",
+        "sourceExternalIds",
+        "confidence",
+        "sensitivity",
+        "notes"
+      ],
+      "paperlessSafetyExclusions": [
+        "payroll",
+        "TD1",
+        "T4",
+        "ROE",
+        "source deductions",
+        "SIN"
+      ],
+      "fallbacks": {
+        "firstName": "Needs",
+        "lastName": "Review",
+        "role": "Needs review",
+        "employmentType": "Contractor",
+        "startDate": "sourceDate or today"
+      }
+    },
+    "volunteer": {
+      "bundleKey": "volunteers",
+      "targetTable": "volunteers",
+      "route": "/app/volunteers",
+      "applyMutation": "importSessions.applyApprovedSectionRecords",
+      "acceptedFields": [
+        "name",
+        "firstName",
+        "lastName",
+        "email",
+        "phone",
+        "status",
+        "roleWanted",
+        "availability",
+        "interests",
+        "screeningRequired",
+        "orientationCompletedAtISO",
+        "trainingStatus",
+        "applicationReceivedAtISO",
+        "approvedAtISO",
+        "renewalDueAtISO",
+        "intakeSource",
+        "sourceDate",
+        "sourceExternalIds",
+        "confidence",
+        "sensitivity",
+        "notes"
+      ],
+      "paperlessSafetyExclusions": [
+        "criminal record",
+        "screening result",
+        "reference check result"
+      ],
+      "fallbacks": {
+        "firstName": "Needs",
+        "lastName": "Review",
+        "status": "Applied",
+        "intakeSource": "paperless"
+      }
+    }
+  },
+  "notNativeTranspositionTargets": [
+    "society profile",
+    "members",
+    "directors legal register",
+    "committees",
+    "conflicts",
+    "communications",
+    "goals",
+    "tasks",
+    "agenda builder",
+    "motion templates",
+    "membership billing plans",
+    "inspection requests",
+    "auditor appointments",
+    "member proposals",
+    "donation receipts",
+    "court orders",
+    "written resolutions",
+    "bylaw rules",
+    "elections",
+    "workflow definitions",
+    "paperless settings"
+  ]
+}

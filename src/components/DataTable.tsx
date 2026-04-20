@@ -1,5 +1,7 @@
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Pin, PinOff, Search, X } from "lucide-react";
+import { useLocation } from "react-router-dom";
 import { ViewBar } from "./primitives";
 import {
   AppliedFilter,
@@ -8,7 +10,7 @@ import {
   FilterPopover,
   applyFilters,
 } from "./FilterBar";
-import { MenuRow, MenuSectionLabel, Pill } from "./ui";
+import { MenuRow, MenuSectionLabel, Pill, Skeleton } from "./ui";
 import { mobileCardMediaQuery } from "../lib/breakpoints";
 import {
   makeViewId,
@@ -16,6 +18,23 @@ import {
   writeSavedViews,
   type SavedView,
 } from "../lib/savedViews";
+import { useUIStore } from "../lib/store";
+import { cellToText, copyAsTsv } from "../lib/clipboard";
+import { useToast } from "./Toast";
+
+const EMPTY_ARR: string[] = [];
+
+export type EditableCellConfig<T> = {
+  type: "text" | "number" | "select" | "date";
+  /** Current value (pre-edit). Defaults to the column accessor. */
+  getValue?: (row: T) => string | number | null | undefined;
+  /** For `select`, the option list. Can be static or per-row. */
+  options?: string[] | ((row: T) => string[]);
+  /** Commit callback — return a Promise to show loading state. Reject to show error. */
+  onCommit: (row: T, value: string) => void | Promise<void>;
+  /** Placeholder shown in the empty input. */
+  placeholder?: string;
+};
 
 export type Column<T> = {
   id: string;
@@ -28,6 +47,8 @@ export type Column<T> = {
   align?: "left" | "right" | "center";
   sortable?: boolean;
   className?: string;
+  /** Makes the cell click-to-edit via a portaled popover. */
+  editable?: EditableCellConfig<T>;
 };
 
 export type SortState = { columnId: string; dir: "asc" | "desc" } | null;
@@ -75,7 +96,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
   searchPlaceholder?: string;
-  emptyMessage?: string;
+  emptyMessage?: ReactNode;
   defaultSort?: SortState;
   /** Extra row getters searched alongside column accessors. */
   searchExtraFields?: ((row: T) => string | undefined | null)[];
@@ -103,7 +124,18 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   const [isMobileCards, setIsMobileCards] = useState(
     () => window.matchMedia(mobileCardMediaQuery).matches,
   );
-  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const selectionScope = viewsKey ?? `table:${label}`;
+  const selectionList = useUIStore((s) => s.selection[selectionScope] ?? EMPTY_ARR);
+  const selected = useMemo(() => new Set(selectionList), [selectionList]);
+  const setSelected = useCallback(
+    (next: Set<string> | ((prev: Set<string>) => Set<string>)) => {
+      const store = useUIStore.getState();
+      const prev = new Set(store.selection[selectionScope] ?? []);
+      const resolved = typeof next === "function" ? (next as any)(prev) : next;
+      store.setSelection(selectionScope, Array.from(resolved));
+    },
+    [selectionScope],
+  );
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => new Set());
   const [density, setDensity] = useState<"compact" | "comfortable">("compact");
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -111,6 +143,28 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
     viewsKey ? readSavedViews(viewsKey) : [],
   );
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!viewsKey) return;
+    if (activeViewId) return; // don't clobber a manual selection
+    const params = new URLSearchParams(location.search);
+    const target =
+      params.get("view") ??
+      useUIStore.getState().lastViewByModule[viewsKey] ??
+      null;
+    if (!target) return;
+    const match = savedViews.find((v) => v.id === target);
+    if (match) {
+      setFilters(match.filters);
+      setSort(match.sort);
+      setHiddenColumns(new Set(match.hiddenColumns));
+      setDensity(match.density);
+      setActiveViewId(match.id);
+    }
+    // one-shot on mount per route
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewsKey, location.pathname, location.search]);
   const filterBtnRef = useRef<HTMLButtonElement>(null);
   const sortBtnRef = useRef<HTMLButtonElement>(null);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
@@ -199,19 +253,68 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
     () => (selectable ? filtered.filter((row) => selected.has(rowKey(row))) : []),
     [filtered, selected, selectable],
   );
+
+  const toast = useToast();
+  useEffect(() => {
+    if (!selectable) return;
+    const onKey = async (event: KeyboardEvent) => {
+      const mod = event.metaKey || event.ctrlKey;
+      if (!mod || event.key.toLowerCase() !== "c") return;
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        const tag = target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) return;
+      }
+      if (selectedRows.length === 0) return;
+      const selection = window.getSelection?.();
+      if (selection && selection.toString().length > 0) return;
+      event.preventDefault();
+      const header = visibleColumns.map((c) =>
+        typeof c.header === "string" ? c.header : c.id,
+      );
+      const body = selectedRows.map((row) =>
+        visibleColumns.map((c) =>
+          c.render ? cellToText(c.render(row)) : String(c.accessor?.(row) ?? ""),
+        ),
+      );
+      const ok = await copyAsTsv([header, ...body]);
+      if (ok) toast.success(`Copied ${selectedRows.length} row${selectedRows.length === 1 ? "" : "s"}`);
+      else toast.error("Clipboard not available");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectable, selectedRows, visibleColumns, toast]);
   const allVisibleSelected =
     selectable && filtered.length > 0 && filtered.every((row) => selected.has(rowKey(row)));
   const someVisibleSelected =
     selectable && !allVisibleSelected && filtered.some((row) => selected.has(rowKey(row)));
 
-  const toggleRow = (row: T) => {
+  const lastRowIndexRef = useRef<number | null>(null);
+  const toggleRow = (row: T, event?: React.MouseEvent | React.ChangeEvent) => {
     const id = rowKey(row);
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    const native = (event as any)?.nativeEvent ?? event;
+    const shift = native instanceof Event
+      ? (native as MouseEvent).shiftKey === true
+      : (event as React.MouseEvent)?.shiftKey === true;
+    const currentIndex = filtered.findIndex((r) => rowKey(r) === id);
+    if (shift && lastRowIndexRef.current != null && currentIndex >= 0) {
+      const [from, to] = [lastRowIndexRef.current, currentIndex].sort((a, b) => a - b);
+      setSelected((prev) => {
+        const next = new Set(prev);
+        for (let i = from; i <= to; i += 1) {
+          next.add(rowKey(filtered[i]));
+        }
+        return next;
+      });
+    } else {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    }
+    lastRowIndexRef.current = currentIndex;
   };
   const toggleAllVisible = () => {
     setSelected((prev) => {
@@ -256,6 +359,21 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
     setHiddenColumns(new Set(view.hiddenColumns));
     setDensity(view.density);
     setActiveViewId(view.id);
+    if (viewsKey) useUIStore.getState().setLastView(viewsKey, view.id);
+  };
+  const togglePin = (view: SavedView) => {
+    if (!viewsKey) return;
+    const s = useUIStore.getState();
+    if (s.isViewPinned(viewsKey, view.id)) {
+      s.unpinView(viewsKey, view.id);
+    } else {
+      s.pinView({
+        viewsKey,
+        viewId: view.id,
+        label: view.name,
+        to: location.pathname,
+      });
+    }
   };
   const deleteView = (id: string) => {
     if (!viewsKey) return;
@@ -327,6 +445,8 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
           onDensity={setDensity}
           savedViews={viewsKey ? savedViews : undefined}
           activeViewId={activeViewId}
+          viewsKey={viewsKey}
+          onTogglePinView={togglePin}
           onApplyView={applyView}
           onSaveView={saveView}
           onDeleteView={deleteView}
@@ -458,7 +578,8 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
           )}
         </div>
       ) : (
-      <table className={`table${density === "comfortable" ? " table--comfortable" : ""}`}>
+      <TableScrollWrap stickyFirst={visibleColumns.length >= 6}>
+      <table className={`table${density === "comfortable" ? " table--comfortable" : ""}${visibleColumns.length >= 6 ? " table--sticky-first" : ""}`}>
         <caption className="sr-only">{label}</caption>
         <thead>
           <tr>
@@ -558,19 +679,29 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
                     type="checkbox"
                     aria-label={isSelected ? `Deselect row` : `Select row`}
                     checked={isSelected}
-                    onChange={() => toggleRow(row)}
+                    onChange={(e) => toggleRow(row, e)}
+                    onClick={(e) => {
+                      if (e.shiftKey) {
+                        e.preventDefault();
+                        toggleRow(row, e);
+                      }
+                    }}
                   />
                 </td>
               )}
               {visibleColumns.map((col, index) => {
                 const cell = col.render ? col.render(row) : String(col.accessor?.(row) ?? "");
+                const isEditable = Boolean(col.editable);
                 return (
                 <td
                   key={col.id}
                   className={col.className}
                   style={{ textAlign: col.align }}
+                  onClick={isEditable ? (e) => e.stopPropagation() : undefined}
                 >
-                  {onRowClick && index === 0 ? (
+                  {isEditable ? (
+                    <EditableCell row={row} column={col} display={cell} />
+                  ) : onRowClick && index === 0 ? (
                     <button
                       type="button"
                       className="table__cell-button"
@@ -601,7 +732,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
             </tr>
             );
           })}
-          {filtered.length === 0 && (
+          {!loading && filtered.length === 0 && (
             <tr>
               <td
                 colSpan={visibleColumns.length + (renderRowActions ? 1 : 0) + (selectable ? 1 : 0)}
@@ -613,6 +744,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
           )}
         </tbody>
       </table>
+      </TableScrollWrap>
       )}
       {selectable && selectedRows.length > 0 && (
         <div className="table-bulkbar" role="region" aria-label="Bulk actions">
@@ -767,9 +899,11 @@ function OptionsPopover<T>({
   onDensity,
   savedViews,
   activeViewId,
+  viewsKey,
   onApplyView,
   onSaveView,
   onDeleteView,
+  onTogglePinView,
   anchorRef,
   onClose,
 }: {
@@ -781,9 +915,11 @@ function OptionsPopover<T>({
   onDensity: (d: "compact" | "comfortable") => void;
   savedViews?: SavedView[];
   activeViewId?: string | null;
+  viewsKey?: string;
   onApplyView?: (view: SavedView) => void;
   onSaveView?: (name: string) => void;
   onDeleteView?: (id: string) => void;
+  onTogglePinView?: (view: SavedView) => void;
   anchorRef: React.RefObject<HTMLElement>;
   onClose: () => void;
 }) {
@@ -825,7 +961,9 @@ function OptionsPopover<T>({
               No saved views yet.
             </div>
           )}
-          {savedViews.map((view) => (
+          {savedViews.map((view) => {
+            const pinned = viewsKey ? useUIStore.getState().isViewPinned(viewsKey, view.id) : false;
+            return (
             <div key={view.id} className="options-popover__view-row">
               <button
                 type="button"
@@ -835,6 +973,17 @@ function OptionsPopover<T>({
               >
                 {view.name}
               </button>
+              {onTogglePinView && (
+                <button
+                  type="button"
+                  className="options-popover__view-del"
+                  onClick={() => onTogglePinView(view)}
+                  aria-label={pinned ? `Unpin ${view.name}` : `Pin ${view.name} to sidebar`}
+                  title={pinned ? "Unpin from sidebar" : "Pin to sidebar"}
+                >
+                  {pinned ? <PinOff size={10} /> : <Pin size={10} />}
+                </button>
+              )}
               <button
                 type="button"
                 className="options-popover__view-del"
@@ -844,7 +993,8 @@ function OptionsPopover<T>({
                 <X size={10} />
               </button>
             </div>
-          ))}
+            );
+          })}
           <div className="options-popover__save-row">
             <input
               className="options-popover__save-input"
@@ -921,6 +1071,221 @@ function OptionsPopover<T>({
           <MenuRow label="Reset columns" subtle onClick={onResetColumns} />
         </>
       )}
+    </div>
+  );
+}
+
+function EditableCell<T>({
+  row,
+  column,
+  display,
+}: {
+  row: T;
+  column: Column<T>;
+  display: ReactNode;
+}) {
+  const config = column.editable!;
+  const initialValue = String(
+    (config.getValue ? config.getValue(row) : column.accessor?.(row)) ?? "",
+  );
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(initialValue);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const anchorRef = useRef<HTMLButtonElement | null>(null);
+  const [rect, setRect] = useState<DOMRect | null>(null);
+
+  useLayoutEffect(() => {
+    if (!editing) return;
+    const update = () => {
+      if (anchorRef.current) setRect(anchorRef.current.getBoundingClientRect());
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [editing]);
+
+  const open = () => {
+    setValue(initialValue);
+    setError(null);
+    setEditing(true);
+  };
+
+  const close = () => {
+    setEditing(false);
+    setError(null);
+  };
+
+  const commit = async () => {
+    if (saving) return;
+    if (value === initialValue) {
+      close();
+      return;
+    }
+    setSaving(true);
+    try {
+      await config.onCommit(row, value);
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const options =
+    typeof config.options === "function"
+      ? config.options(row)
+      : config.options ?? [];
+
+  return (
+    <>
+      <button
+        ref={anchorRef}
+        type="button"
+        className="editable-cell"
+        onClick={open}
+        aria-label="Edit cell"
+      >
+        <span className="editable-cell__display">
+          {display || <span className="editable-cell__placeholder">—</span>}
+        </span>
+      </button>
+      {editing && rect &&
+        createPortal(
+          <EditPopover
+            rect={rect}
+            onDismiss={close}
+            onCommit={commit}
+          >
+            {config.type === "select" ? (
+              <select
+                className="editable-cell__input"
+                autoFocus
+                value={value}
+                disabled={saving}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); commit(); }
+                  if (e.key === "Escape") { e.preventDefault(); close(); }
+                }}
+              >
+                <option value="">—</option>
+                {options.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                className="editable-cell__input"
+                autoFocus
+                type={config.type === "number" ? "number" : config.type === "date" ? "date" : "text"}
+                value={value}
+                placeholder={config.placeholder}
+                disabled={saving}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); commit(); }
+                  if (e.key === "Escape") { e.preventDefault(); close(); }
+                }}
+              />
+            )}
+            {saving && <span className="editable-cell__spinner" aria-label="Saving" />}
+            {error && <div className="editable-cell__error" role="alert">{error}</div>}
+          </EditPopover>,
+          document.body,
+        )}
+    </>
+  );
+}
+
+function EditPopover({
+  rect,
+  onDismiss,
+  onCommit,
+  children,
+}: {
+  rect: DOMRect;
+  onDismiss: () => void;
+  onCommit: () => void;
+  children: ReactNode;
+}) {
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (!popoverRef.current) return;
+      if (e.target instanceof Node && popoverRef.current.contains(e.target)) return;
+      onCommit();
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [onCommit]);
+
+  useEffect(() => {
+    const onScroll = () => onDismiss();
+    window.addEventListener("scroll", onScroll, true);
+    return () => window.removeEventListener("scroll", onScroll, true);
+  }, [onDismiss]);
+
+  return (
+    <div
+      ref={popoverRef}
+      className="editable-cell__popover"
+      style={{
+        position: "fixed",
+        top: rect.top,
+        left: rect.left,
+        minWidth: rect.width,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function TableScrollWrap({
+  stickyFirst,
+  children,
+}: {
+  stickyFirst: boolean;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => {
+      const { scrollLeft, scrollWidth, clientWidth } = el;
+      setEdges({
+        left: scrollLeft > 0,
+        right: scrollLeft + clientWidth < scrollWidth - 1,
+      });
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", update);
+      ro.disconnect();
+    };
+  }, []);
+
+  const classes = ["table-scroll"];
+  if (stickyFirst) classes.push("table-scroll--sticky");
+  if (edges.left) classes.push("is-scrolled-left");
+  if (edges.right) classes.push("is-scrolled-right");
+
+  return (
+    <div ref={ref} className={classes.join(" ")}>
+      {children}
     </div>
   );
 }

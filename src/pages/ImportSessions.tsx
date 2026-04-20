@@ -6,6 +6,7 @@ import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
 import { Segmented } from "../components/primitives";
 import { useToast } from "../components/Toast";
+import { ImportWizard } from "../components/ImportWizard";
 import {
   Archive,
   Check,
@@ -75,6 +76,7 @@ export function ImportSessionsPage() {
   const detail = useQuery(api.importSessions.get, activeSessionId ? { sessionId: activeSessionId } : "skip");
 
   const createSession = useMutation(api.importSessions.createFromBundle);
+  const createMember = useMutation(api.members.create);
   const updateRecord = useMutation(api.importSessions.updateRecord);
   const bulkSetStatus = useMutation(api.importSessions.bulkSetStatus);
   const removeSession = useMutation(api.importSessions.removeSession);
@@ -88,6 +90,7 @@ export function ImportSessionsPage() {
   const scanPaperlessTransposed = useAction(api.paperless.createTransposedImportSession);
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [csvOpen, setCsvOpen] = useState(false);
   const [createName, setCreateName] = useState("Paperless import");
   const [importText, setImportText] = useState("");
   const [importError, setImportError] = useState("");
@@ -273,10 +276,46 @@ export function ImportSessionsPage() {
         iconColor="purple"
         subtitle="Stage converted Paperless records, review each item, then apply approved records into app modules."
         actions={
+          <>
+          <button className="btn-action" onClick={() => setCsvOpen(true)}>
+            <Upload size={12} /> Import members CSV
+          </button>
           <button className="btn-action btn-action--primary" onClick={() => setCreateOpen(true)}>
             <Plus size={12} /> New session
           </button>
+          </>
         }
+      />
+
+      <ImportWizard
+        open={csvOpen}
+        onClose={() => setCsvOpen(false)}
+        target={{
+          id: "members",
+          label: "Members",
+          fields: [
+            { id: "firstName", label: "First name", required: true },
+            { id: "lastName", label: "Last name", required: true },
+            { id: "email", label: "Email", validate: (v) => (/.+@.+\..+/.test(v) ? null : "Not an email") },
+            { id: "phone", label: "Phone" },
+            { id: "membershipClass", label: "Class" },
+            { id: "status", label: "Status" },
+            { id: "joinedAt", label: "Joined (YYYY-MM-DD)" },
+          ],
+          onImportRow: async (row) => {
+            await createMember({
+              societyId: society._id,
+              firstName: row.firstName,
+              lastName: row.lastName,
+              email: row.email || undefined,
+              phone: row.phone || undefined,
+              membershipClass: row.membershipClass || "Regular",
+              status: row.status || "Active",
+              joinedAt: row.joinedAt || new Date().toISOString().slice(0, 10),
+              votingRights: true,
+            });
+          },
+        }}
       />
 
       <div className="stat-grid">

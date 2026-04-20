@@ -35,6 +35,7 @@ const ConflictsPage = React.lazy(() => import("./pages/Conflicts").then((m) => (
 const FinancialsPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.FinancialsPage })));
 const PrivacyPage = React.lazy(() => import("./pages/Privacy").then((m) => ({ default: m.PrivacyPage })));
 const SettingsPage = React.lazy(() => import("./pages/Settings").then((m) => ({ default: m.SettingsPage })));
+const ApiKeysPage = React.lazy(() => import("./pages/ApiKeysPage").then((m) => ({ default: m.ApiKeysPage })));
 const CommitteesPage = React.lazy(() => import("./pages/Committees").then((m) => ({ default: m.CommitteesPage })));
 const CommitteeDetailPage = React.lazy(() => import("./pages/CommitteeDetail").then((m) => ({ default: m.CommitteeDetailPage })));
 const GoalsPage = React.lazy(() => import("./pages/Goals").then((m) => ({ default: m.GoalsPage })));
@@ -81,6 +82,7 @@ const PaperlessPage = React.lazy(() => import("./pages/Paperless").then((m) => (
 const WorkflowsPage = React.lazy(() => import("./pages/Workflows").then((m) => ({ default: m.WorkflowsPage })));
 const WorkflowDetailPage = React.lazy(() => import("./pages/WorkflowDetail").then((m) => ({ default: m.WorkflowDetailPage })));
 const WorkflowRunsPage = React.lazy(() => import("./pages/WorkflowRuns").then((m) => ({ default: m.WorkflowRunsPage })));
+const OutboxPage = React.lazy(() => import("./pages/Outbox").then((m) => ({ default: m.OutboxPage })));
 const PublicTransparencyPage = React.lazy(() => import("./pages/PublicTransparency").then((m) => ({ default: m.PublicTransparencyPage })));
 const VolunteerApplyPage = React.lazy(() => import("./pages/VolunteerApply").then((m) => ({ default: m.VolunteerApplyPage })));
 const GrantApplyPage = React.lazy(() => import("./pages/GrantApply").then((m) => ({ default: m.GrantApplyPage })));
@@ -338,7 +340,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               path="workflow-runs"
               element={withModule("workflows", <WorkflowRunsPage />)}
             />
+            <Route path="outbox" element={<OutboxPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="settings/api-keys" element={<ApiKeysPage />} />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import {
@@ -17,6 +17,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { Badge, Drawer, Field } from "../components/ui";
+import { Modal } from "../components/Modal";
 import { SeedPrompt } from "./_helpers";
 import {
   ArrowLeft,
@@ -68,9 +69,14 @@ export function WorkflowDetailPage() {
   const runs = useQuery(api.workflows.runsForWorkflow, id ? { workflowId: id as any } : "skip");
   const catalog = useQuery(api.workflows.listCatalog, {});
   const nodeTypeCatalog = useQuery(api.workflows.listNodeTypes, {});
+  const documents = useQuery(
+    api.documents.list,
+    society ? { societyId: society._id } : "skip",
+  );
   const setStatus = useMutation(api.workflows.setStatus);
   const addNode = useMutation(api.workflows.addNode);
   const removeNode = useMutation(api.workflows.removeNode);
+  const updateNodeConfig = useMutation(api.workflows.updateNodeConfig);
   const run = useAction(api.workflows.run);
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
@@ -265,29 +271,24 @@ export function WorkflowDetailPage() {
                   </button>
                 </div>
               )}
-              {selectedNode.key === "fill_pdf" && (
-                <div className="workflow-sidepanel__section">
-                  <div className="field__label">PDF setup</div>
-                  <p className="muted">
-                    n8n calls Societyer&apos;s PDF fill endpoint. The server reads the template from
-                    <span className="mono"> UNBC_AFFILIATE_TEMPLATE_PATH</span>.
-                  </p>
-                </div>
-              )}
+              <NodeSetupPanel
+                key={selectedNode.key}
+                node={selectedNode}
+                workflow={workflow}
+                documents={documents ?? []}
+                onSave={async (patch) => {
+                  await updateNodeConfig({
+                    id: workflow._id,
+                    key: selectedNode.key,
+                    config: patch,
+                    actingUserId,
+                  });
+                }}
+              />
               {workflow.provider === "n8n" && (
                 <div className="workflow-sidepanel__section">
-                  <div className="field__label">n8n webhook</div>
+                  <div className="field__label">Workflow-level n8n webhook</div>
                   <div className="workflow-codebox">{providerConfig.externalWebhookUrl ?? "Not configured"}</div>
-                </div>
-              )}
-              {isUnbc && (
-                <div className="workflow-sidepanel__section">
-                  <div className="field__label">UNBC PDF fields</div>
-                  <div className="workflow-field-list">
-                    {FIELD_LABELS.map((field) => (
-                      <span key={field}>{field}</span>
-                    ))}
-                  </div>
                 </div>
               )}
             </>
@@ -487,4 +488,1045 @@ function checkboxLabel(field: string) {
   if (field === "Check Box0") return "Previous UNBC ID - yes";
   if (field === "Check Box1") return "Previous UNBC ID - no";
   return field;
+}
+
+type NodeSetupPanelProps = {
+  node: any;
+  workflow: any;
+  documents: any[];
+  onSave: (patch: Record<string, any>) => Promise<void>;
+};
+
+function NodeSetupPanel({ node, workflow, documents, onSave }: NodeSetupPanelProps) {
+  const cfg = node.config ?? {};
+  const recipeCfg = workflow?.config ?? {};
+
+  const blurbs: Record<string, string> = {
+    manual_trigger: "A person starts this workflow from inside Societyer. No external setup required.",
+    form: "Collects structured input before handing off to later steps. Define the fields to collect.",
+    pdf_fill: "Picks up a fillable PDF from Documents, fills mapped AcroForm fields, and saves the output as a new document version.",
+    document_create: "Saves the output of a prior step into Documents with a category and retention policy.",
+    email: "Sends a templated email via Resend. Will be skipped until Resend is configured on the server.",
+    external_n8n: "Hands execution to an n8n workflow via its webhook URL. n8n then calls back to progress the timeline.",
+  };
+
+  return (
+    <div className="workflow-sidepanel__section workflow-setup">
+      <div className="field__label">Setup</div>
+      <p className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 8 }}>
+        {blurbs[node.type] ?? "No setup options for this node type."}
+      </p>
+
+      {node.type === "manual_trigger" && (
+        <LabeledInput
+          label="Trigger label"
+          value={cfg.launchLabel ?? ""}
+          placeholder="Launch"
+          onSave={(v) => onSave({ launchLabel: v })}
+        />
+      )}
+
+      {node.type === "form" && (
+        <FieldListEditor
+          label="Intake fields"
+          hint="One field per line. Saved when focus leaves the box."
+          value={Array.isArray(cfg.fields) ? cfg.fields : []}
+          onSave={(fields) => onSave({ fields })}
+        />
+      )}
+
+      {node.type === "pdf_fill" && (
+        <PdfFillSetup
+          node={node}
+          cfg={cfg}
+          documents={documents}
+          recipeFields={Array.isArray(recipeCfg.pdfFields) ? recipeCfg.pdfFields : []}
+          onSave={onSave}
+        />
+      )}
+
+      {node.type === "document_create" && (
+        <>
+          <LabeledInput
+            label="Category"
+            value={cfg.category ?? ""}
+            placeholder="WorkflowGenerated"
+            onSave={(v) => onSave({ category: v })}
+          />
+          <LabeledInput
+            label="Tags (comma-separated)"
+            value={(Array.isArray(cfg.tags) ? cfg.tags : []).join(", ")}
+            placeholder="workflow-generated, unbc-affiliate-id"
+            onSave={(v) =>
+              onSave({
+                tags: v
+                  .split(",")
+                  .map((t) => t.trim())
+                  .filter(Boolean),
+              })
+            }
+          />
+        </>
+      )}
+
+      {node.type === "email" && (
+        <>
+          <LabeledInput
+            label="To"
+            value={cfg.to ?? ""}
+            placeholder="recipient@example.com"
+            onSave={(v) => onSave({ to: v })}
+          />
+          <LabeledInput
+            label="Subject"
+            value={cfg.subject ?? ""}
+            placeholder="UNBC affiliate ID ready for review"
+            onSave={(v) => onSave({ subject: v })}
+          />
+          <LabeledTextarea
+            label="Body"
+            value={cfg.body ?? ""}
+            placeholder="Hi {{manager}}, the affiliate request for {{affiliate}} is ready for your signature."
+            onSave={(v) => onSave({ body: v })}
+          />
+        </>
+      )}
+
+      {node.type === "external_n8n" && (
+        <>
+          <LabeledInput
+            label="Webhook URL override"
+            value={cfg.webhookUrl ?? ""}
+            placeholder={workflow?.providerConfig?.externalWebhookUrl ?? "https://n8n.example.com/webhook/..."}
+            onSave={(v) => onSave({ webhookUrl: v })}
+          />
+          <LabeledInput
+            label="n8n node name"
+            value={cfg.nodeName ?? ""}
+            placeholder="Fill UNBC ID PDF"
+            onSave={(v) => onSave({ nodeName: v })}
+          />
+        </>
+      )}
+
+      <div className="workflow-setup__footer">
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          disabled
+          title="Test harness ships with Phase 2 — executing nodes individually."
+        >
+          <Play size={12} /> Test node
+        </button>
+        <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+          Runner support for user-edited nodes is staged; config saved here will wire in once execution lands.
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function LabeledInput({
+  label,
+  value,
+  placeholder,
+  onSave,
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  onSave: (next: string) => void | Promise<void>;
+}) {
+  const [draft, setDraft] = useState(value);
+  // Reset local draft when the parent value changes (e.g. selecting a different node).
+  const lastExternal = useRef(value);
+  if (lastExternal.current !== value) {
+    lastExternal.current = value;
+    if (draft !== value) setDraft(value);
+  }
+  return (
+    <Field label={label}>
+      <input
+        className="input"
+        value={draft}
+        placeholder={placeholder}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          if (draft !== value) onSave(draft);
+        }}
+      />
+    </Field>
+  );
+}
+
+function LabeledTextarea({
+  label,
+  value,
+  placeholder,
+  onSave,
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  onSave: (next: string) => void | Promise<void>;
+}) {
+  const [draft, setDraft] = useState(value);
+  const lastExternal = useRef(value);
+  if (lastExternal.current !== value) {
+    lastExternal.current = value;
+    if (draft !== value) setDraft(value);
+  }
+  return (
+    <Field label={label}>
+      <textarea
+        className="textarea"
+        value={draft}
+        placeholder={placeholder}
+        rows={4}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          if (draft !== value) onSave(draft);
+        }}
+      />
+    </Field>
+  );
+}
+
+function FieldListEditor({
+  label,
+  hint,
+  value,
+  onSave,
+}: {
+  label: string;
+  hint?: string;
+  value: string[];
+  onSave: (next: string[]) => void | Promise<void>;
+}) {
+  const asText = value.join("\n");
+  const [draft, setDraft] = useState(asText);
+  const lastExternal = useRef(asText);
+  if (lastExternal.current !== asText) {
+    lastExternal.current = asText;
+    if (draft !== asText) setDraft(asText);
+  }
+  return (
+    <Field label={label}>
+      <textarea
+        className="textarea"
+        rows={5}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const next = draft
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean);
+          if (next.join("\n") !== value.join("\n")) onSave(next);
+        }}
+      />
+      {hint && (
+        <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 4 }}>
+          {hint}
+        </div>
+      )}
+    </Field>
+  );
+}
+
+function PdfFillSetup({
+  node,
+  cfg,
+  documents,
+  recipeFields,
+  onSave,
+}: {
+  node: any;
+  cfg: Record<string, any>;
+  documents: any[];
+  recipeFields: string[];
+  onSave: (patch: Record<string, any>) => Promise<void>;
+}) {
+  const pdfs = (documents ?? []).filter(
+    (doc: any) => doc.mimeType === "application/pdf" || /\.pdf$/i.test(doc.fileName ?? ""),
+  );
+  const selectedDoc = pdfs.find((doc: any) => doc._id === cfg.templateDocumentId);
+  const currentFields: string[] = Array.isArray(cfg.fields) && cfg.fields.length > 0
+    ? cfg.fields
+    : recipeFields;
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [mapperOpen, setMapperOpen] = useState(false);
+
+  const mappings: Record<string, any> = (cfg.fieldMappings && typeof cfg.fieldMappings === "object")
+    ? cfg.fieldMappings
+    : {};
+  const mappingSummary = summariseMappings(currentFields, mappings);
+
+  return (
+    <>
+      <Field label="PDF template">
+        <div className="pdf-picker-trigger">
+          <div className="pdf-picker-trigger__label">
+            {selectedDoc ? (
+              <>
+                <strong>{selectedDoc.title ?? selectedDoc.fileName}</strong>
+                {selectedDoc.fileName && selectedDoc.fileName !== selectedDoc.title && (
+                  <span className="muted mono" style={{ fontSize: "var(--fs-xs)" }}>
+                    {selectedDoc.fileName}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="muted">No template selected.</span>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={() => setPickerOpen(true)}
+            >
+              {selectedDoc ? "Change template" : "Browse PDFs"}
+            </button>
+            {selectedDoc && (
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={() => onSave({ templateDocumentId: undefined })}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+        {pdfs.length === 0 && (
+          <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 4 }}>
+            Upload a fillable PDF in <span className="mono">/app/documents</span> to see it here.
+          </div>
+        )}
+      </Field>
+
+      <PdfPickerModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        pdfs={pdfs}
+        selectedId={cfg.templateDocumentId}
+        onPick={async (id) => {
+          await onSave({ templateDocumentId: id });
+          setPickerOpen(false);
+        }}
+      />
+
+      <Field label="Field mapping">
+        <div className="pdf-picker-trigger">
+          <div className="pdf-picker-trigger__label">
+            <strong>
+              {mappingSummary.mapped} of {mappingSummary.total} fields mapped
+            </strong>
+            <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+              {mappingSummary.mapped === 0
+                ? "Open the wizard to map each AcroForm field to a value."
+                : mappingSummary.breakdown}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={() => setMapperOpen(true)}
+          >
+            {mappingSummary.mapped === 0 ? "Start mapping" : "Edit mapping"}
+          </button>
+        </div>
+      </Field>
+
+      <FieldMappingWizardModal
+        open={mapperOpen}
+        onClose={() => setMapperOpen(false)}
+        fields={currentFields}
+        mappings={mappings}
+        onFieldsChange={(fields) => onSave({ fields })}
+        onMappingsChange={(next) => onSave({ fieldMappings: next })}
+      />
+
+      <div style={{ marginTop: 8 }}>
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          disabled
+          title="Auto-detection reads AcroForm field names from the selected PDF. Coming in Phase 2."
+        >
+          Auto-detect fields
+        </button>
+      </div>
+    </>
+  );
+}
+
+// Full-screen picker with a left list + right preview iframe.
+function PdfPickerModal({
+  open,
+  onClose,
+  pdfs,
+  selectedId,
+  onPick,
+}: {
+  open: boolean;
+  onClose: () => void;
+  pdfs: any[];
+  selectedId?: string;
+  onPick: (id: string) => void | Promise<void>;
+}) {
+  const [search, setSearch] = useState("");
+  const [focusedId, setFocusedId] = useState<string | undefined>(selectedId);
+
+  useEffect(() => {
+    if (open) setFocusedId(selectedId);
+  }, [open, selectedId]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return pdfs;
+    return pdfs.filter((doc: any) =>
+      [doc.title, doc.fileName, doc.category]
+        .filter(Boolean)
+        .some((field) => String(field).toLowerCase().includes(q)),
+    );
+  }, [search, pdfs]);
+
+  const focused = filtered.find((d: any) => d._id === focusedId) ?? filtered[0];
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="xl"
+      title="Select a fillable PDF template"
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="btn btn--accent"
+            disabled={!focused}
+            onClick={() => focused && onPick(focused._id)}
+          >
+            Select template
+          </button>
+        </>
+      }
+    >
+      <div className="pdf-picker">
+        <aside className="pdf-picker__list">
+          <input
+            className="input"
+            placeholder="Search title, filename, category…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div className="pdf-picker__items">
+            {filtered.length === 0 && (
+              <div className="muted" style={{ padding: 12 }}>
+                No PDFs match.
+              </div>
+            )}
+            {filtered.map((doc: any) => (
+              <button
+                key={doc._id}
+                type="button"
+                className={`pdf-picker__item${
+                  focused && focused._id === doc._id ? " is-active" : ""
+                }`}
+                onClick={() => setFocusedId(doc._id)}
+                onDoubleClick={() => onPick(doc._id)}
+              >
+                <strong>{doc.title ?? doc.fileName}</strong>
+                {doc.fileName && doc.fileName !== doc.title && (
+                  <span className="muted mono" style={{ fontSize: "var(--fs-xs)" }}>
+                    {doc.fileName}
+                  </span>
+                )}
+                {doc.category && (
+                  <span className="cell-tag" style={{ alignSelf: "flex-start" }}>
+                    {doc.category}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </aside>
+        <section className="pdf-picker__preview">
+          {focused ? (
+            <PdfPreviewPane doc={focused} />
+          ) : (
+            <div className="muted" style={{ padding: 24 }}>
+              Pick a document on the left to preview it here.
+            </div>
+          )}
+        </section>
+      </div>
+    </Modal>
+  );
+}
+
+function PdfPreviewPane({ doc }: { doc: any }) {
+  const latest = useQuery(api.documentVersions.latest, { documentId: doc._id });
+  const getDownloadUrl = useAction(api.documentVersions.getDownloadUrl);
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setUrl(null);
+    setError(null);
+    if (!latest?._id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const next = await getDownloadUrl({ versionId: latest._id });
+        if (!cancelled) setUrl(next ?? null);
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message ?? "Unable to load preview.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [latest?._id, getDownloadUrl]);
+
+  return (
+    <div className="pdf-preview">
+      <div className="pdf-preview__meta">
+        <strong>{doc.title ?? doc.fileName}</strong>
+        <div className="muted mono" style={{ fontSize: "var(--fs-xs)" }}>
+          {doc.fileName ?? "—"} · {doc.category ?? "—"}
+        </div>
+      </div>
+      <div className="pdf-preview__frame">
+        {error && (
+          <div className="muted" style={{ padding: 16 }}>
+            {error}
+          </div>
+        )}
+        {!error && url && (
+          <iframe title="PDF preview" src={url} className="pdf-preview__iframe" />
+        )}
+        {!error && !url && latest?._id && (
+          <div className="muted" style={{ padding: 16 }}>
+            Loading preview…
+          </div>
+        )}
+        {!error && !latest?._id && (
+          <div className="muted" style={{ padding: 16 }}>
+            No file attached to this document yet.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+type MappingKind = "literal" | "dynamic" | "person" | "manager" | "empty";
+
+type FieldMapping = {
+  kind: MappingKind;
+  // literal/default text
+  value?: string;
+  // dynamic: "today" | "today:long" | "now" | "society.name" | ...
+  // person/manager: "firstName" | "lastName" | "email" | ...
+  source?: string;
+};
+
+const DYNAMIC_SOURCES: Array<{ value: string; label: string }> = [
+  { value: "today", label: "Today (YYYY-MM-DD)" },
+  { value: "today:long", label: "Today (Apr 20, 2026)" },
+  { value: "now", label: "Now (ISO timestamp)" },
+  { value: "society.name", label: "Society name" },
+  { value: "currentUser.name", label: "Current user name" },
+  { value: "currentUser.email", label: "Current user email" },
+];
+
+const PERSON_SOURCES: Array<{ value: string; label: string }> = [
+  { value: "firstName", label: "First name" },
+  { value: "lastName", label: "Last name" },
+  { value: "email", label: "Email" },
+  { value: "phone", label: "Phone" },
+  { value: "mailingAddress", label: "Mailing address" },
+  { value: "birthdate", label: "Birthdate" },
+];
+
+const MANAGER_SOURCES: Array<{ value: string; label: string }> = [
+  { value: "name", label: "Name" },
+  { value: "email", label: "Email" },
+  { value: "phone", label: "Phone" },
+  { value: "department", label: "Department / Organization" },
+];
+
+function summariseMappings(fields: string[], mappings: Record<string, FieldMapping>) {
+  const total = fields.length;
+  let mapped = 0;
+  const counts: Record<MappingKind, number> = {
+    literal: 0,
+    dynamic: 0,
+    person: 0,
+    manager: 0,
+    empty: 0,
+  };
+  for (const field of fields) {
+    const m = mappings[field];
+    if (!m || m.kind === "empty") continue;
+    if (m.kind === "literal" && !(m.value ?? "").trim()) continue;
+    if ((m.kind === "dynamic" || m.kind === "person" || m.kind === "manager") && !m.source) continue;
+    counts[m.kind] += 1;
+    mapped += 1;
+  }
+  const parts: string[] = [];
+  if (counts.literal) parts.push(`${counts.literal} literal`);
+  if (counts.dynamic) parts.push(`${counts.dynamic} dynamic`);
+  if (counts.person) parts.push(`${counts.person} person`);
+  if (counts.manager) parts.push(`${counts.manager} manager`);
+  const breakdown = parts.length > 0 ? parts.join(" · ") : "No mappings yet.";
+  return { total, mapped, breakdown };
+}
+
+const KIND_LABEL: Record<MappingKind, string> = {
+  empty: "Empty",
+  literal: "Literal",
+  dynamic: "Dynamic",
+  person: "Person",
+  manager: "Manager",
+};
+
+function FieldMappingWizardModal({
+  open,
+  onClose,
+  fields,
+  mappings,
+  onFieldsChange,
+  onMappingsChange,
+}: {
+  open: boolean;
+  onClose: () => void;
+  fields: string[];
+  mappings: Record<string, FieldMapping>;
+  onFieldsChange: (fields: string[]) => void | Promise<void>;
+  onMappingsChange: (next: Record<string, FieldMapping>) => void | Promise<void>;
+}) {
+  const [stepIndex, setStepIndex] = useState(0);
+  const [newField, setNewField] = useState("");
+
+  useEffect(() => {
+    if (open) setStepIndex(0);
+  }, [open, fields.length]);
+
+  const safeIndex = Math.min(stepIndex, Math.max(0, fields.length - 1));
+  const currentField = fields[safeIndex];
+  const current: FieldMapping = mappings[currentField] ?? { kind: "empty" };
+
+  const summary = summariseMappings(fields, mappings);
+
+  const updateMapping = (patch: Partial<FieldMapping>) => {
+    if (!currentField) return;
+    const existing = mappings[currentField] ?? { kind: "empty" as MappingKind };
+    const next = { ...mappings, [currentField]: { ...existing, ...patch } };
+    onMappingsChange(next);
+  };
+
+  const pickKind = (kind: MappingKind) => {
+    if (!currentField) return;
+    const next = {
+      ...mappings,
+      [currentField]: { kind, value: undefined, source: undefined } as FieldMapping,
+    };
+    onMappingsChange(next);
+  };
+
+  const removeField = (field: string) => {
+    const nextFields = fields.filter((f) => f !== field);
+    onFieldsChange(nextFields);
+    if (mappings[field]) {
+      const { [field]: _drop, ...rest } = mappings;
+      onMappingsChange(rest);
+    }
+    setStepIndex((i) => Math.max(0, Math.min(i, nextFields.length - 1)));
+  };
+
+  const addField = () => {
+    const name = newField.trim();
+    if (!name || fields.includes(name)) return;
+    onFieldsChange([...fields, name]);
+    setNewField("");
+    setStepIndex(fields.length); // jump to the newly added one
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="xl"
+      title="Map PDF fields"
+      footer={
+        <>
+          <div className="muted" style={{ marginRight: "auto", fontSize: "var(--fs-sm)" }}>
+            {summary.mapped} of {summary.total} mapped · {summary.breakdown}
+          </div>
+          <button
+            className="btn"
+            onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
+            disabled={safeIndex <= 0}
+          >
+            Previous
+          </button>
+          <button
+            className="btn"
+            onClick={() => setStepIndex((i) => Math.min(fields.length - 1, i + 1))}
+            disabled={safeIndex >= fields.length - 1}
+          >
+            Next
+          </button>
+          <button className="btn btn--accent" onClick={onClose}>
+            Done
+          </button>
+        </>
+      }
+    >
+      <div className="mapping-wizard">
+        <aside className="mapping-wizard__sidebar">
+          <div className="field__label">Fields</div>
+          <div className="mapping-wizard__list">
+            {fields.length === 0 && (
+              <div className="muted" style={{ padding: 8, fontSize: "var(--fs-sm)" }}>
+                No fields yet. Add one below.
+              </div>
+            )}
+            {fields.map((field, idx) => {
+              const m = mappings[field];
+              const isDone =
+                m &&
+                m.kind !== "empty" &&
+                !(m.kind === "literal" && !(m.value ?? "").trim()) &&
+                !((m.kind === "dynamic" || m.kind === "person" || m.kind === "manager") && !m.source);
+              return (
+                <button
+                  key={field}
+                  type="button"
+                  className={`mapping-wizard__item${idx === safeIndex ? " is-active" : ""}`}
+                  onClick={() => setStepIndex(idx)}
+                >
+                  <span className="mapping-wizard__item-label mono">{field}</span>
+                  <span
+                    className={`mapping-wizard__item-badge${isDone ? " is-done" : ""}`}
+                    aria-label={isDone ? "Mapped" : "Not yet mapped"}
+                  >
+                    {isDone ? KIND_LABEL[m.kind] : "—"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mapping-wizard__add">
+            <input
+              className="input"
+              placeholder="Add field name"
+              value={newField}
+              onChange={(e) => setNewField(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addField();
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={addField}
+              disabled={!newField.trim()}
+            >
+              <Plus size={12} /> Add
+            </button>
+          </div>
+        </aside>
+
+        <section className="mapping-wizard__main">
+          {!currentField ? (
+            <div className="muted" style={{ padding: 16 }}>
+              Add a PDF field in the sidebar to start mapping.
+            </div>
+          ) : (
+            <>
+              <div className="mapping-wizard__stepper muted" style={{ fontSize: "var(--fs-xs)" }}>
+                Field {safeIndex + 1} of {fields.length}
+              </div>
+              <h3 className="mapping-wizard__field mono">{currentField}</h3>
+
+              <div className="field__label">Source</div>
+              <div className="mapping-wizard__kinds">
+                {(["literal", "dynamic", "person", "manager", "empty"] as MappingKind[]).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    className={`mapping-wizard__kind${current.kind === k ? " is-active" : ""}`}
+                    onClick={() => pickKind(k)}
+                  >
+                    <strong>{KIND_LABEL[k]}</strong>
+                    <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+                      {
+                        {
+                          literal: "A default string you type in",
+                          dynamic: "Today / Now / society name etc.",
+                          person: "Field from the affiliate / person record",
+                          manager: "Field from the requesting manager",
+                          empty: "Leave blank at runtime",
+                        }[k]
+                      }
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="field__label" style={{ marginTop: 16 }}>
+                Value
+              </div>
+              <div className="mapping-wizard__value">
+                {current.kind === "literal" && (
+                  <input
+                    className="input"
+                    value={current.value ?? ""}
+                    placeholder="Default value"
+                    onChange={(e) => updateMapping({ value: e.target.value })}
+                  />
+                )}
+                {current.kind === "dynamic" && (
+                  <select
+                    className="input"
+                    value={current.source ?? ""}
+                    onChange={(e) => updateMapping({ source: e.target.value })}
+                  >
+                    <option value="">— Pick token —</option>
+                    {DYNAMIC_SOURCES.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {current.kind === "person" && (
+                  <select
+                    className="input"
+                    value={current.source ?? ""}
+                    onChange={(e) => updateMapping({ source: e.target.value })}
+                  >
+                    <option value="">— Pick person field —</option>
+                    {PERSON_SOURCES.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {current.kind === "manager" && (
+                  <select
+                    className="input"
+                    value={current.source ?? ""}
+                    onChange={(e) => updateMapping({ source: e.target.value })}
+                  >
+                    <option value="">— Pick manager field —</option>
+                    {MANAGER_SOURCES.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {current.kind === "empty" && (
+                  <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                    This field will be left blank at runtime.
+                  </span>
+                )}
+              </div>
+
+              <div className="mapping-wizard__row-actions">
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => removeField(currentField)}
+                >
+                  <Trash2 size={12} /> Remove field
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+    </Modal>
+  );
+}
+
+function FieldMappingEditor({
+  fields,
+  mappings,
+  onFieldsChange,
+  onMappingsChange,
+}: {
+  fields: string[];
+  mappings: Record<string, FieldMapping>;
+  onFieldsChange: (fields: string[]) => void | Promise<void>;
+  onMappingsChange: (next: Record<string, FieldMapping>) => void | Promise<void>;
+}) {
+  const [newField, setNewField] = useState("");
+
+  const updateMapping = (field: string, patch: Partial<FieldMapping>) => {
+    const next = { ...mappings, [field]: { ...(mappings[field] ?? { kind: "empty" }), ...patch } };
+    onMappingsChange(next);
+  };
+
+  const removeField = (field: string) => {
+    const nextFields = fields.filter((f) => f !== field);
+    onFieldsChange(nextFields);
+    if (mappings[field]) {
+      const { [field]: _drop, ...rest } = mappings;
+      onMappingsChange(rest);
+    }
+  };
+
+  const addField = () => {
+    const name = newField.trim();
+    if (!name || fields.includes(name)) return;
+    onFieldsChange([...fields, name]);
+    setNewField("");
+  };
+
+  return (
+    <div className="field-mapping">
+      <div className="field-mapping__head">
+        <div className="field__label">PDF field mapping</div>
+        <div className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+          Each field can be filled from a literal value, a dynamic token, a person record, or the
+          requesting manager. Auto-detection of fields from the template ships with Phase 2.
+        </div>
+      </div>
+
+      {fields.length === 0 && (
+        <div className="muted" style={{ fontSize: "var(--fs-sm)", padding: "8px 0" }}>
+          No fields yet. Add one below.
+        </div>
+      )}
+
+      <div className="field-mapping__rows">
+        {fields.map((field) => {
+          const mapping: FieldMapping = mappings[field] ?? { kind: "empty" };
+          return (
+            <div key={field} className="field-mapping__row">
+              <div className="field-mapping__name mono">{field}</div>
+              <select
+                className="input field-mapping__kind"
+                value={mapping.kind}
+                onChange={(e) =>
+                  updateMapping(field, {
+                    kind: e.target.value as MappingKind,
+                    value: undefined,
+                    source: undefined,
+                  })
+                }
+              >
+                <option value="empty">— Empty —</option>
+                <option value="literal">Literal / default</option>
+                <option value="dynamic">Dynamic token</option>
+                <option value="person">Person field</option>
+                <option value="manager">Manager field</option>
+              </select>
+              <div className="field-mapping__value">
+                {mapping.kind === "literal" && (
+                  <input
+                    className="input"
+                    value={mapping.value ?? ""}
+                    placeholder="Default value"
+                    onChange={(e) => updateMapping(field, { value: e.target.value })}
+                  />
+                )}
+                {mapping.kind === "dynamic" && (
+                  <select
+                    className="input"
+                    value={mapping.source ?? ""}
+                    onChange={(e) => updateMapping(field, { source: e.target.value })}
+                  >
+                    <option value="">— Pick token —</option>
+                    {DYNAMIC_SOURCES.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {mapping.kind === "person" && (
+                  <select
+                    className="input"
+                    value={mapping.source ?? ""}
+                    onChange={(e) => updateMapping(field, { source: e.target.value })}
+                  >
+                    <option value="">— Pick person field —</option>
+                    {PERSON_SOURCES.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {mapping.kind === "manager" && (
+                  <select
+                    className="input"
+                    value={mapping.source ?? ""}
+                    onChange={(e) => updateMapping(field, { source: e.target.value })}
+                  >
+                    <option value="">— Pick manager field —</option>
+                    {MANAGER_SOURCES.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {mapping.kind === "empty" && (
+                  <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                    No value at runtime.
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm btn--icon"
+                aria-label={`Remove field ${field}`}
+                onClick={() => removeField(field)}
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="field-mapping__add">
+        <input
+          className="input"
+          placeholder="Add PDF field name (e.g. Legal First Name of Affiliate)"
+          value={newField}
+          onChange={(e) => setNewField(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addField();
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          onClick={addField}
+          disabled={!newField.trim()}
+        >
+          <Plus size={12} /> Add field
+        </button>
+      </div>
+    </div>
+  );
 }

@@ -40,11 +40,14 @@ import {
   Newspaper,
   KeyRound,
   Clock,
+  Inbox,
 } from "lucide-react";
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
+import { useUIStore } from "../lib/store";
+import { useRegisteredCommands } from "../lib/commands";
 
 type CommandCategory =
   | "Recent"
@@ -85,6 +88,7 @@ const NAV_ITEMS: CommandItem[] = [
   { id: "nav-deadlines", label: "Deadlines", to: "/app/deadlines", icon: Calendar, category: "Navigation" },
   { id: "nav-volunteers", label: "Volunteers", to: "/app/volunteers", icon: HandHeart, category: "Navigation", module: "volunteers" },
   { id: "nav-communications", label: "Communications", to: "/app/communications", icon: Mail, category: "Navigation", module: "communications" },
+  { id: "nav-outbox", label: "Outbox", to: "/app/outbox", icon: Inbox, category: "Navigation" },
   { id: "nav-notifications", label: "Notifications", to: "/app/notifications", icon: Mail, category: "Navigation" },
 
   // Governance
@@ -138,12 +142,12 @@ const NAV_ITEMS: CommandItem[] = [
 
 const CATEGORY_ORDER: CommandCategory[] = [
   "Recent",
+  "Actions",
   "Navigation",
   "Governance",
   "Finance",
   "Compliance",
   "System",
-  "Actions",
 ];
 
 const RECENTS_KEY = "societyer.kbar.recents";
@@ -220,18 +224,42 @@ export function CommandPalette() {
     }
   }, [open]);
 
+  const recentRecords = useUIStore((s) => s.recentRecords);
+  const registeredCommands = useRegisteredCommands();
+
   const { flat, groups } = useMemo(() => {
+    const dynamicActions: CommandItem[] = registeredCommands.map((a) => ({
+      id: a.id,
+      label: a.label,
+      icon: a.icon,
+      category: "Actions",
+      run: a.run,
+      shortcut: a.shortcut,
+    }));
     const all = [
       ...NAV_ITEMS.filter((item) => !item.module || isModuleEnabled(society, item.module)),
       ...actions,
+      ...dynamicActions,
     ];
+    const recordItems: CommandItem[] = recentRecords.map((r) => ({
+      id: `recent-record:${r.entityType}:${r.id}`,
+      label: r.label,
+      icon: Clock,
+      category: "Recent" as const,
+      to: r.to,
+    }));
     const ql = q.trim().toLowerCase();
-    const matches = ql ? all.filter((i) => i.label.toLowerCase().includes(ql)) : all;
+    const searchable = [...all, ...recordItems];
+    const matches = ql
+      ? searchable.filter((i) => i.label.toLowerCase().includes(ql))
+      : all;
 
     // When idle (no query), promote the last-used items into a "Recent" group.
     const recentItems: CommandItem[] = [];
     if (!ql) {
+      for (const rec of recordItems) recentItems.push(rec);
       for (const id of recents) {
+        if (recentItems.some((i) => i.id === id)) continue;
         const found = all.find((item) => item.id === id);
         if (found) recentItems.push({ ...found, category: "Recent" });
       }
@@ -256,7 +284,7 @@ export function CommandPalette() {
       flat.push(...items);
     }
     return { flat, groups };
-  }, [q, society, actions, recents]);
+  }, [q, society, actions, recents, recentRecords, registeredCommands]);
 
   if (!open) return null;
 

@@ -83,8 +83,50 @@ services:
       - n8n-data:/home/node/.n8n
     restart: unless-stopped
 
+  # Societyer auth + API gateway (server/auth-server.ts).
+  # Serves Better Auth routes, the REST API gateway, and the local
+  # /api/v1/workflow-generated-documents/:key endpoint the PDF preview
+  # iframe calls. On first boot it installs node_modules into a named
+  # volume so native binaries (better-sqlite3 etc.) are built for Linux
+  # instead of reusing the host's darwin binaries.
+  auth-server:
+    # Node 22+ is required: better-auth imports `node:sqlite`, which only
+    # exists on Node 22.5+.
+    image: node:22-bookworm-slim
+    container_name: societyer-auth-server
+    working_dir: /workspace
+    command: >
+      bash -lc "if [ ! -f node_modules/.societyer-linux-installed ]; then
+        apt-get update &&
+        apt-get install -y --no-install-recommends python3 make g++ ca-certificates &&
+        rm -rf /var/lib/apt/lists/* &&
+        npm install --no-audit --no-fund &&
+        touch node_modules/.societyer-linux-installed;
+      fi;
+      exec npx tsx server/auth-server.ts"
+    env_file:
+      - .env.local
+    environment:
+      # Inside the compose network the backend container is reachable as
+      # "backend:3210". Overrides whatever .env.local has for host access.
+      - CONVEX_SELF_HOSTED_URL=http://backend:3210
+      - AUTH_SERVER_PORT=8787
+      - NODE_ENV=development
+      # Public URL the browser uses when the gateway hands out links.
+      - SOCIETYER_API_PUBLIC_URL=http://127.0.0.1:8787
+    ports:
+      - "8787:8787"
+    volumes:
+      - .:/workspace
+      - societyer-auth-server-node-modules:/workspace/node_modules
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   convex-data:
   rustfs-data:
   rustfs-logs:
   n8n-data:
+  societyer-auth-server-node-modules:

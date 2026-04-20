@@ -13,6 +13,10 @@ import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Plus, Users, Trash2, Mail, Tag, CircleUser, Vote } from "lucide-react";
 import { formatDate, initials } from "../lib/format";
+import { patchInList } from "../lib/optimistic";
+import { useRegisterCommand } from "../lib/commands";
+import { Download, Pencil } from "lucide-react";
+import { BulkEditPanel } from "../components/BulkEditPanel";
 
 const MEMBER_FIELDS: FilterField<any>[] = [
   { id: "name", label: "Name", icon: <CircleUser size={14} />, match: (m, q) => `${m.firstName} ${m.lastName}`.toLowerCase().includes(q.toLowerCase()) },
@@ -26,11 +30,16 @@ export function MembersPage() {
   const society = useSociety();
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.members.create);
-  const update = useMutation(api.members.update);
+  const update = useMutation(api.members.update).withOptimisticUpdate(
+    (store, args) => {
+      patchInList(store, api.members.list, String(args.id), args.patch);
+    },
+  );
   const prompt = usePrompt();
   const toast = useToast();
   const [selected, setSelected] = useState<any>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [bulkRows, setBulkRows] = useState<any[] | null>(null);
 
   const confirmRemove = async (r: any) => {
     const reason = await prompt({
@@ -41,6 +50,12 @@ export function MembersPage() {
       required: true,
     });
     if (!reason) return;
+    const prev = {
+      status: r.status,
+      leftAt: r.leftAt,
+      votingRights: r.votingRights,
+      notes: r.notes,
+    };
     await update({
       id: r._id,
       patch: {
@@ -52,8 +67,40 @@ export function MembersPage() {
     });
     toast.success(`Archived ${r.firstName} ${r.lastName}`, {
       description: "The member record remains available for audit and retention.",
+      dedupeKey: `member-archive-${r._id}`,
+      action: {
+        label: "Undo",
+        onClick: async () => {
+          await update({ id: r._id, patch: prev });
+        },
+      },
     });
   };
+
+  useRegisterCommand(
+    members && members.length > 0
+      ? {
+          id: "members-export-csv",
+          label: "Export members to CSV",
+          icon: Download,
+          run: () => {
+            const header = "First,Last,Email,Class,Status,Joined";
+            const lines = (members ?? []).map((m: any) =>
+              [m.firstName, m.lastName, m.email ?? "", m.membershipClass, m.status, m.joinedAt]
+                .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+                .join(","),
+            );
+            const blob = new Blob([[header, ...lines].join("\n")], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `members-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+          },
+        }
+      : null,
+  );
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -96,6 +143,7 @@ export function MembersPage() {
         label="All members"
         icon={<Users size={14} />}
         data={(members ?? []) as any[]}
+        loading={members === undefined}
         rowKey={(r) => r._id}
         filterFields={MEMBER_FIELDS}
         searchPlaceholder="Search name, email, class…"
@@ -122,6 +170,13 @@ export function MembersPage() {
             sortable: true,
             accessor: (r) => r.membershipClass,
             render: (r) => <span className="cell-tag">{r.membershipClass}</span>,
+            editable: {
+              type: "select",
+              options: ["Regular", "Honorary", "Student", "Associate"],
+              onCommit: async (row, value) => {
+                await update({ id: row._id, patch: { membershipClass: value } });
+              },
+            },
           },
           {
             id: "status",
@@ -129,6 +184,13 @@ export function MembersPage() {
             sortable: true,
             accessor: (r) => r.status,
             render: (r) => <Badge tone={r.status === "Active" ? "success" : "warn"}>{r.status}</Badge>,
+            editable: {
+              type: "select",
+              options: ["Active", "Inactive", "Suspended"],
+              onCommit: async (row, value) => {
+                await update({ id: row._id, patch: { status: value } });
+              },
+            },
           },
           {
             id: "voting",
@@ -150,6 +212,13 @@ export function MembersPage() {
             sortable: true,
             accessor: (r) => r.email ?? "",
             render: (r) => <span className="muted">{r.email ?? "—"}</span>,
+            editable: {
+              type: "text",
+              placeholder: "name@example.com",
+              onCommit: async (row, value) => {
+                await update({ id: row._id, patch: { email: value || undefined } });
+              },
+            },
           },
         ]}
         renderRowActions={(r) => (
@@ -161,6 +230,31 @@ export function MembersPage() {
             <Trash2 size={12} />
           </button>
         )}
+        bulkActions={[
+          {
+            id: "bulk-edit",
+            label: "Edit",
+            icon: <Pencil size={12} />,
+            onRun: (rows) => { setBulkRows(rows); },
+            keepSelection: true,
+          },
+        ]}
+      />
+
+      <BulkEditPanel
+        open={!!bulkRows}
+        onClose={() => setBulkRows(null)}
+        selectedCount={bulkRows?.length ?? 0}
+        fields={[
+          { id: "status", label: "Status", type: "select", options: ["Active", "Inactive", "Suspended"] },
+          { id: "membershipClass", label: "Class", type: "select", options: ["Regular", "Honorary", "Student", "Associate"] },
+        ]}
+        onCommit={async (fieldId, value) => {
+          if (!bulkRows) return;
+          for (const row of bulkRows) {
+            await update({ id: row._id, patch: { [fieldId]: value } });
+          }
+        }}
       />
 
       <Drawer

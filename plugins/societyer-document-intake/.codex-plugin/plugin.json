@@ -1,0 +1,41 @@
+{
+  "name": "societyer-document-intake",
+  "version": "0.1.0",
+  "description": "AI guidance for transposing source documents into Societyer import sessions and supported app sections.",
+  "author": {
+    "name": "Societyer maintainers",
+    "email": "[TODO: maintainer email]",
+    "url": "[TODO: maintainer URL]"
+  },
+  "homepage": "[TODO: Societyer document intake documentation URL]",
+  "repository": "[TODO: Societyer repository URL]",
+  "license": "[TODO: MIT]",
+  "keywords": [
+    "societyer",
+    "document-intake",
+    "paperless",
+    "transposition"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Societyer Document Intake",
+    "shortDescription": "Transpose documents into Societyer review records.",
+    "longDescription": "Guides an AI through Societyer's document intake surface: supported import bundle shapes, page-by-page fields, privacy gates, and review-first transposition into Convex-backed modules.",
+    "developerName": "Societyer maintainers",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write",
+      "Data extraction"
+    ],
+    "websiteURL": "[TODO: Societyer website URL]",
+    "privacyPolicyURL": "[TODO: Societyer privacy policy URL]",
+    "termsOfServiceURL": "[TODO: Societyer terms URL]",
+    "defaultPrompt": [
+      "Map these documents to Societyer import records.",
+      "Tell me which fields this document can transpose.",
+      "Create a review bundle for /app/imports."
+    ],
+    "brandColor": "#2563EB"
+  }
+}

@@ -2,6 +2,8 @@ import { query, mutation, action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 import { summarizeMinutes } from "./providers/llm";
+import { buildQuorumSnapshot, QuorumSnapshot } from "./lib/bylawRules";
+import { Doc } from "./_generated/dataModel";
 
 const motion = v.object({
   text: v.string(),
@@ -49,6 +51,12 @@ export const create = mutation({
     attendees: v.array(v.string()),
     absent: v.array(v.string()),
     quorumMet: v.boolean(),
+    quorumRequired: v.optional(v.number()),
+    bylawRuleSetId: v.optional(v.id("bylawRuleSets")),
+    quorumRuleVersion: v.optional(v.number()),
+    quorumRuleEffectiveFromISO: v.optional(v.string()),
+    quorumSourceLabel: v.optional(v.string()),
+    quorumComputedAtISO: v.optional(v.string()),
     discussion: v.string(),
     motions: v.array(motion),
     decisions: v.array(v.string()),
@@ -58,7 +66,14 @@ export const create = mutation({
     draftTranscript: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const id = await ctx.db.insert("minutes", args);
+    const meeting = await ctx.db.get(args.meetingId);
+    const snapshot = meeting
+      ? await quorumSnapshotForMeeting(ctx, meeting, args.quorumRequired)
+      : null;
+    const id = await ctx.db.insert("minutes", {
+      ...args,
+      ...minutesSnapshotFields(args, snapshot),
+    });
     await ctx.db.patch(args.meetingId, { minutesId: id });
     return id;
   },
@@ -72,6 +87,12 @@ export const update = mutation({
       attendees: v.optional(v.array(v.string())),
       absent: v.optional(v.array(v.string())),
       quorumMet: v.optional(v.boolean()),
+      quorumRequired: v.optional(v.number()),
+      bylawRuleSetId: v.optional(v.id("bylawRuleSets")),
+      quorumRuleVersion: v.optional(v.number()),
+      quorumRuleEffectiveFromISO: v.optional(v.string()),
+      quorumSourceLabel: v.optional(v.string()),
+      quorumComputedAtISO: v.optional(v.string()),
       discussion: v.optional(v.string()),
       motions: v.optional(v.array(motion)),
       decisions: v.optional(v.array(v.string())),
@@ -97,6 +118,12 @@ export const upsertFromDraft = mutation({
     attendees: v.array(v.string()),
     absent: v.array(v.string()),
     quorumMet: v.boolean(),
+    quorumRequired: v.optional(v.number()),
+    bylawRuleSetId: v.optional(v.id("bylawRuleSets")),
+    quorumRuleVersion: v.optional(v.number()),
+    quorumRuleEffectiveFromISO: v.optional(v.string()),
+    quorumSourceLabel: v.optional(v.string()),
+    quorumComputedAtISO: v.optional(v.string()),
     discussion: v.string(),
     motions: v.array(motion),
     decisions: v.array(v.string()),
@@ -106,17 +133,68 @@ export const upsertFromDraft = mutation({
     draftTranscript: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const meeting = await ctx.db.get(args.meetingId);
+    const snapshot = meeting
+      ? await quorumSnapshotForMeeting(ctx, meeting, args.quorumRequired)
+      : null;
+    const quorumRequired = args.quorumRequired ?? snapshot?.quorumRequired;
+    const payload = {
+      ...args,
+      ...minutesSnapshotFields(args, snapshot),
+      quorumMet:
+        quorumRequired == null
+          ? args.quorumMet
+          : args.attendees.length >= quorumRequired,
+    };
     const existing = await ctx.db
       .query("minutes")
       .withIndex("by_meeting", (q) => q.eq("meetingId", args.meetingId))
       .collect();
     if (existing[0]) {
-      await ctx.db.patch(existing[0]._id, args);
+      await ctx.db.patch(existing[0]._id, payload);
       return existing[0]._id;
     }
-    const id = await ctx.db.insert("minutes", args);
+    const id = await ctx.db.insert("minutes", payload);
     await ctx.db.patch(args.meetingId, { minutesId: id });
     return id;
+  },
+});
+
+export const backfillQuorumSnapshot = mutation({
+  args: { id: v.id("minutes") },
+  handler: async (ctx, { id }) => {
+    const minutes = await ctx.db.get(id);
+    if (!minutes) return null;
+    const meeting = await ctx.db.get(minutes.meetingId);
+    if (!meeting) return null;
+    const snapshot = await quorumSnapshotForMeeting(
+      ctx,
+      meeting,
+      minutes.quorumRequired ?? meeting.quorumRequired,
+    );
+    const patch: any = {};
+    if (minutes.quorumRequired == null && snapshot.quorumRequired != null) {
+      patch.quorumRequired = snapshot.quorumRequired;
+    }
+    if (!minutes.bylawRuleSetId && snapshot.bylawRuleSetId) {
+      patch.bylawRuleSetId = snapshot.bylawRuleSetId;
+    }
+    if (minutes.quorumRuleVersion == null && snapshot.quorumRuleVersion != null) {
+      patch.quorumRuleVersion = snapshot.quorumRuleVersion;
+    }
+    if (!minutes.quorumRuleEffectiveFromISO && snapshot.quorumRuleEffectiveFromISO) {
+      patch.quorumRuleEffectiveFromISO = snapshot.quorumRuleEffectiveFromISO;
+    }
+    if (!minutes.quorumSourceLabel) {
+      patch.quorumSourceLabel = snapshot.quorumSourceLabel;
+    }
+    if (!minutes.quorumComputedAtISO) {
+      patch.quorumComputedAtISO = snapshot.quorumComputedAtISO;
+    }
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(id, patch);
+    }
+    return { patched: Object.keys(patch) };
   },
 });
 
@@ -150,3 +228,39 @@ export const generateDraft = action({
     });
   },
 });
+
+async function quorumSnapshotForMeeting(
+  ctx: any,
+  meeting: Doc<"meetings">,
+  quorumRequiredOverride?: number,
+) {
+  return await buildQuorumSnapshot(ctx, {
+    societyId: meeting.societyId,
+    meetingDateISO: meeting.scheduledAt,
+    meetingType: meeting.type,
+    quorumRequiredOverride,
+  });
+}
+
+function minutesSnapshotFields(
+  args: {
+    quorumRequired?: number;
+    bylawRuleSetId?: any;
+    quorumRuleVersion?: number;
+    quorumRuleEffectiveFromISO?: string;
+    quorumSourceLabel?: string;
+    quorumComputedAtISO?: string;
+  },
+  snapshot: QuorumSnapshot | null,
+) {
+  return {
+    quorumRequired: args.quorumRequired ?? snapshot?.quorumRequired,
+    bylawRuleSetId: args.bylawRuleSetId ?? snapshot?.bylawRuleSetId,
+    quorumRuleVersion: args.quorumRuleVersion ?? snapshot?.quorumRuleVersion,
+    quorumRuleEffectiveFromISO:
+      args.quorumRuleEffectiveFromISO ??
+      snapshot?.quorumRuleEffectiveFromISO,
+    quorumSourceLabel: args.quorumSourceLabel ?? snapshot?.quorumSourceLabel,
+    quorumComputedAtISO: args.quorumComputedAtISO ?? snapshot?.quorumComputedAtISO,
+  };
+}

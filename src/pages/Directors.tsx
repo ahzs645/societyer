@@ -176,6 +176,7 @@ export function DirectorsPage() {
         label="All directors"
         icon={<UserCog size={14} />}
         data={(directors ?? []) as any[]}
+        loading={directors === undefined}
         rowKey={(r) => r._id}
         filterFields={DIRECTOR_FIELDS}
         searchPlaceholder="Search directors…"

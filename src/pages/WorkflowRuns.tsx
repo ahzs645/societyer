@@ -98,6 +98,7 @@ export function WorkflowRunsPage() {
         label="Recent runs"
         icon={<History size={14} />}
         data={visibleRuns as any[]}
+        loading={runs === undefined}
         rowKey={(r) => String(r._id)}
         searchPlaceholder="Search workflow, recipe, status…"
         defaultSort={{ columnId: "startedAtISO", dir: "desc" }}
