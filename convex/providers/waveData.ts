@@ -145,9 +145,10 @@ async function waveGraphQL<T>(query: string, variables: Record<string, unknown> 
   return payload.data as T;
 }
 
-export async function waveFetchSnapshot(args?: { businessId?: string }): Promise<WaveSnapshotPayload> {
+export async function waveFetchSnapshot(args?: { businessId?: string; allowDemo?: boolean }): Promise<WaveSnapshotPayload> {
   if (!waveEnv("WAVE_ACCESS_TOKEN")) {
-    return demoWaveSnapshot(args?.businessId ?? waveEnv("WAVE_BUSINESS_ID"));
+    if (args?.allowDemo) return demoWaveSnapshot(args?.businessId ?? waveEnv("WAVE_BUSINESS_ID"));
+    throw new Error("Wave data cache requires WAVE_ACCESS_TOKEN.");
   }
 
   const businesses = await waveListBusinesses();
@@ -741,16 +742,21 @@ function resource(
     resourceType,
     externalId: raw.id,
     label,
-    secondaryLabel: meta.secondaryLabel,
-    typeValue: meta.typeValue,
-    subtypeValue: meta.subtypeValue,
-    status: meta.status,
-    currencyCode: meta.currencyCode,
+    secondaryLabel: optionalString(meta.secondaryLabel),
+    typeValue: optionalString(meta.typeValue),
+    subtypeValue: optionalString(meta.subtypeValue),
+    status: optionalString(meta.status),
+    currencyCode: optionalString(meta.currencyCode),
     amountValue: meta.amountValue == null ? undefined : String(meta.amountValue),
-    dateValue: meta.dateValue,
+    dateValue: optionalString(meta.dateValue),
     searchText,
     rawJson,
   };
+}
+
+function optionalString(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  return String(value);
 }
 
 function variableStrings(variables: Record<string, unknown>) {

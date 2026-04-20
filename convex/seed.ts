@@ -21,6 +21,7 @@ export const run = mutation({
       mailingAddress: "PO Box 4421 Stn Terminal, Vancouver, BC V6B 3Z7",
       purposes:
         "To operate a community space that supports arts programming, food security initiatives and youth mentorship in East Vancouver.",
+      demoMode: true,
       privacyOfficerName: "Amara Okonkwo",
       privacyOfficerEmail: "privacy@riversidecs.ca",
       boardCadence: "Monthly",

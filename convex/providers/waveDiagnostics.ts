@@ -20,6 +20,12 @@ const WAVE_ENV_VARS = [
     purpose: "OAuth connect link client id; value is never returned in diagnostics",
   },
   {
+    name: "WAVE_CLIENT_SECRET",
+    required: false,
+    secret: true,
+    purpose: "OAuth connect client secret; value is never returned in diagnostics",
+  },
+  {
     name: "WAVE_GRAPHQL_ENDPOINT",
     required: false,
     secret: false,

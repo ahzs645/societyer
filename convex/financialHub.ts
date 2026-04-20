@@ -89,11 +89,13 @@ export const removeBudget = mutation({
 
 export const oauthUrl = query({
   args: { societyId: v.id("societies") },
-  handler: async (_ctx, { societyId: _societyId }) => {
+  handler: async (ctx, { societyId }) => {
     const p = providers.accounting();
+    const society = await ctx.db.get(societyId);
     return {
       provider: p.id,
       live: p.live,
+      demoAvailable: society?.demoMode === true,
     };
   },
 });
@@ -113,6 +115,10 @@ export const markConnectionConnected = mutation({
       societyId: args.societyId,
       required: "Admin",
     });
+    const society = await ctx.db.get(args.societyId);
+    if (args.demo && society?.demoMode !== true) {
+      throw new Error("Demo Wave data can only be connected to a demo society.");
+    }
     const existing = await ctx.db
       .query("financialConnections")
       .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
@@ -142,6 +148,93 @@ export const disconnect = mutation({
     if (!conn) return;
     await requireRole(ctx, { actingUserId, societyId: conn.societyId, required: "Admin" });
     await ctx.db.patch(connectionId, { status: "disconnected" });
+  },
+});
+
+export const removeDemoData = mutation({
+  args: { societyId: v.id("societies"), actingUserId: v.optional(v.id("users")) },
+  handler: async (ctx, { societyId, actingUserId }) => {
+    await requireRole(ctx, { actingUserId, societyId, required: "Admin" });
+
+    const connections = await ctx.db
+      .query("financialConnections")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+    const demoConnections = connections.filter(isDemoFinancialConnection);
+    const demoConnectionIds = new Set(demoConnections.map((row) => row._id));
+
+    const counts = {
+      connections: 0,
+      accounts: 0,
+      transactions: 0,
+      waveCacheSnapshots: 0,
+      waveCacheResources: 0,
+      waveCacheStructures: 0,
+      notifications: 0,
+    };
+
+    const transactions = await ctx.db
+      .query("financialTransactions")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+    for (const row of transactions) {
+      if (!demoConnectionIds.has(row.connectionId)) continue;
+      await ctx.db.delete(row._id);
+      counts.transactions += 1;
+    }
+
+    const accounts = await ctx.db
+      .query("financialAccounts")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+    for (const row of accounts) {
+      if (!demoConnectionIds.has(row.connectionId)) continue;
+      await ctx.db.delete(row._id);
+      counts.accounts += 1;
+    }
+
+    const snapshots = await ctx.db
+      .query("waveCacheSnapshots")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+    for (const snapshot of snapshots) {
+      if (!isDemoWaveSnapshot(snapshot, demoConnectionIds)) continue;
+      const resources = await ctx.db
+        .query("waveCacheResources")
+        .withIndex("by_snapshot", (q) => q.eq("snapshotId", snapshot._id))
+        .collect();
+      for (const row of resources) {
+        await ctx.db.delete(row._id);
+        counts.waveCacheResources += 1;
+      }
+      const structures = await ctx.db
+        .query("waveCacheStructures")
+        .withIndex("by_snapshot", (q) => q.eq("snapshotId", snapshot._id))
+        .collect();
+      for (const row of structures) {
+        await ctx.db.delete(row._id);
+        counts.waveCacheStructures += 1;
+      }
+      await ctx.db.delete(snapshot._id);
+      counts.waveCacheSnapshots += 1;
+    }
+
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+    for (const row of notifications) {
+      if (!isDemoFinancialNotification(row)) continue;
+      await ctx.db.delete(row._id);
+      counts.notifications += 1;
+    }
+
+    for (const row of demoConnections) {
+      await ctx.db.delete(row._id);
+      counts.connections += 1;
+    }
+
+    return counts;
   },
 });
 
@@ -234,9 +327,16 @@ export const sync = action({
   handler: async (ctx, { connectionId }) => {
     const conn = await ctx.runQuery(api.financialHub.getConnection, { id: connectionId });
     if (!conn) throw new Error("Connection not found.");
+    const society = await ctx.runQuery(api.society.getById, { id: conn.societyId });
+    const allowDemo = conn.demo === true && society?.demoMode === true;
     try {
-      const { accounts } = await waveListAccounts();
-      const { transactions } = await waveListTransactions();
+      const accountResult = await waveListAccounts({ allowDemo });
+      const transactionResult = await waveListTransactions({ allowDemo });
+      const { accounts } = accountResult;
+      const { transactions } = transactionResult;
+      if ((accountResult.provider === "demo" || transactionResult.provider === "demo") && !allowDemo) {
+        throw new Error("Live Wave credentials are not configured; refusing to sync demo data into this society.");
+      }
       await ctx.runMutation(internal.financialHub._replaceSyncedData, {
         societyId: conn.societyId,
         connectionId,
@@ -316,3 +416,29 @@ export const summary = query({
     };
   },
 });
+
+function isDemoFinancialConnection(row: any) {
+  return (
+    row.demo === true ||
+    row.externalBusinessId === "biz_demo_01" ||
+    row.externalBusinessId === "demo_wave_business" ||
+    /riverside demo book/i.test(row.accountLabel ?? "")
+  );
+}
+
+function isDemoWaveSnapshot(row: any, demoConnectionIds: Set<string>) {
+  return (
+    (row.connectionId && demoConnectionIds.has(row.connectionId)) ||
+    row.businessId === "biz_demo_01" ||
+    row.businessId === "demo_wave_business" ||
+    /riverside demo book/i.test(row.businessName ?? "")
+  );
+}
+
+function isDemoFinancialNotification(row: any) {
+  if (row.linkHref !== "/financials") return false;
+  return (
+    /riverside demo book/i.test(row.title ?? "") ||
+    (row.title === "Synced 9 accounts from wave" && row.body === "10 transactions imported.")
+  );
+}

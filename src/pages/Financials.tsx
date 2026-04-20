@@ -81,6 +81,9 @@ export function FinancialsPage() {
   const fiscalYear = latest?.fiscalYear ?? new Date().getFullYear().toString();
   const activeConnection = (connections ?? []).find((c) => c.status === "connected");
   const importedBudgetCount = (orgHistory?.budgets ?? []).length;
+  const waveLive = oauth?.live === true;
+  const waveDemoAvailable = !waveLive && isDemoMode() && oauth?.demoAvailable === true;
+  const canConnectWave = waveLive || waveDemoAvailable;
   const waveResourceTypes = useMemo(() => {
     const counts = waveSummary?.resourceCounts ?? {};
     const ordered = ["account", "vendor", "product", "customer", "invoice", "estimate", "salesTax", "business", "availableBusiness"];
@@ -96,9 +99,13 @@ export function FinancialsPage() {
 
   const connect = async () => {
     if (!society) return;
+    if (!canConnectWave) {
+      toast.warn("Wave credentials are not configured for this workspace.");
+      return;
+    }
     setBusy(true);
     try {
-      const demo = isDemoMode() || oauth?.live !== true;
+      const demo = !waveLive && waveDemoAvailable;
       const connectionId = await markConnected({
         societyId: society._id,
         provider: "wave",
@@ -211,7 +218,12 @@ export function FinancialsPage() {
             </>
           ) : (
             <>
-              <button className="btn-action btn-action--primary" disabled={busy} onClick={connect}>
+              <button
+                className="btn-action btn-action--primary"
+                disabled={busy || !canConnectWave}
+                onClick={connect}
+                title={!canConnectWave ? "Configure Wave credentials before connecting this workspace." : undefined}
+              >
                 <Link2 size={12} /> Connect Wave
               </button>
               <button
@@ -234,13 +246,21 @@ export function FinancialsPage() {
               Pull balances, transactions and restricted-fund splits from Wave.{" "}
               {oauth?.live ? (
                 <>Live mode — sync uses configured Wave API credentials.</>
-              ) : (
+              ) : waveDemoAvailable ? (
                 <>Demo mode — connecting seeds a fictional book so the dashboard lights up.</>
+              ) : (
+                <>Wave credentials are not configured, so this workspace will not receive demo financial data.</>
               )}
             </span>
           </div>
           <div className="card__body" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <ProviderCard name="Wave" desc="Free bookkeeping, REST + GraphQL API." status={oauth?.live ? "live" : "demo"} onConnect={connect} busy={busy} />
+            <ProviderCard
+              name="Wave"
+              desc="Free bookkeeping, REST + GraphQL API."
+              status={waveLive ? "live" : waveDemoAvailable ? "demo" : "setup"}
+              onConnect={canConnectWave ? connect : undefined}
+              busy={busy}
+            />
             <ProviderCard name="QuickBooks" desc="Coming soon — OAuth flow planned." status="planned" />
             <ProviderCard name="Xero" desc="Coming soon — for multi-currency orgs." status="planned" />
           </div>
@@ -885,10 +905,12 @@ function ProviderCard({
 }: {
   name: string;
   desc: string;
-  status: "live" | "demo" | "planned";
+  status: "live" | "demo" | "setup" | "planned";
   onConnect?: () => void;
   busy?: boolean;
 }) {
+  const statusLabel = status === "setup" ? "setup required" : status;
+  const statusTone = status === "live" ? "success" : status === "demo" ? "info" : status === "setup" ? "warn" : "neutral";
   return (
     <div
       className="panel"
@@ -901,9 +923,7 @@ function ProviderCard({
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <strong>{name}</strong>
-        <Badge tone={status === "live" ? "success" : status === "demo" ? "info" : "neutral"}>
-          {status}
-        </Badge>
+        <Badge tone={statusTone}>{statusLabel}</Badge>
       </div>
       <div className="muted" style={{ fontSize: 12, margin: "6px 0 10px" }}>
         {desc}
@@ -911,6 +931,10 @@ function ProviderCard({
       {onConnect ? (
         <button className="btn btn--accent btn--sm" disabled={busy} onClick={onConnect}>
           <Link2 size={12} /> Connect
+        </button>
+      ) : status === "setup" ? (
+        <button className="btn btn--ghost btn--sm" disabled>
+          Configure Wave
         </button>
       ) : (
         <button className="btn btn--ghost btn--sm" disabled>

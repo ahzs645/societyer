@@ -16,6 +16,11 @@ export const list = query({
   handler: async (ctx) => ctx.db.query("societies").collect(),
 });
 
+export const getById = query({
+  args: { id: v.id("societies") },
+  handler: async (ctx, { id }) => ctx.db.get(id),
+});
+
 export const upsert = mutation({
   args: {
     id: v.optional(v.id("societies")),

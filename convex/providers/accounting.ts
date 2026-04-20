@@ -93,9 +93,12 @@ function variableStrings(variables: Record<string, unknown>) {
   return Object.values(variables).filter((value): value is string => typeof value === "string");
 }
 
-export async function waveListAccounts(): Promise<{ provider: "wave" | "demo"; accounts: WaveAccount[] }> {
+export async function waveListAccounts(args: { allowDemo?: boolean } = {}): Promise<{ provider: "wave" | "demo"; accounts: WaveAccount[] }> {
   const p = providers.accounting();
-  if (p.id === "demo") return { provider: "demo", accounts: DEMO_ACCOUNTS };
+  if (p.id === "demo") {
+    if (args.allowDemo) return { provider: "demo", accounts: DEMO_ACCOUNTS };
+    throw new Error("Live Wave sync requires WAVE_ACCESS_TOKEN.");
+  }
   const businessId = env("WAVE_BUSINESS_ID");
   if (!businessId) {
     throw new Error("Live Wave sync requires WAVE_BUSINESS_ID.");
@@ -140,20 +143,13 @@ export async function waveListAccounts(): Promise<{ provider: "wave" | "demo"; a
     for (const edge of connection?.edges ?? []) {
       const node = edge?.node;
       if (!node || node.isArchived) continue;
+      const typeValue = String(node.type?.value ?? "").toUpperCase();
+      const subtypeValue = String(node.subtype?.value ?? "").toUpperCase();
       rows.push({
         externalId: node.id,
         name: node.name,
         currency: "CAD",
-        accountType:
-          node.type?.value === "BANK"
-            ? "Bank"
-            : node.type?.value === "CREDIT_CARD"
-            ? "Credit"
-            : node.type?.value === "INCOME"
-            ? "Income"
-            : node.type?.value === "EXPENSE"
-            ? "Expense"
-            : "Asset",
+        accountType: waveAccountType(typeValue, subtypeValue),
         balanceCents: Math.round(
           Number(node.balanceInBusinessCurrency ?? node.balance ?? 0) * 100,
         ),
@@ -167,11 +163,26 @@ export async function waveListAccounts(): Promise<{ provider: "wave" | "demo"; a
   return { provider: "wave", accounts: rows };
 }
 
+function waveAccountType(
+  typeValue: string,
+  subtypeValue: string,
+): WaveAccount["accountType"] {
+  if (subtypeValue === "CASH_AND_BANK" || typeValue === "BANK") return "Bank";
+  if (subtypeValue === "CREDIT_CARD" || typeValue === "CREDIT_CARD") return "Credit";
+  if (typeValue === "INCOME") return "Income";
+  if (typeValue === "EXPENSE") return "Expense";
+  if (typeValue === "LIABILITY") return "Liability";
+  if (typeValue === "EQUITY") return "Equity";
+  return "Asset";
+}
+
 export async function waveListTransactions(args?: {
   sinceISO?: string;
+  allowDemo?: boolean;
 }): Promise<{ provider: "wave" | "demo"; transactions: WaveTransaction[] }> {
   const p = providers.accounting();
   if (p.id === "demo") {
+    if (!args?.allowDemo) throw new Error("Live Wave sync requires WAVE_ACCESS_TOKEN.");
     const filtered = args?.sinceISO
       ? DEMO_TX.filter((t) => t.date >= args!.sinceISO!)
       : DEMO_TX;

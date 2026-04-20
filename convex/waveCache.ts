@@ -114,9 +114,12 @@ export const sync = action({
     const connection = connectionId
       ? await ctx.runQuery(api.financialHub.getConnection, { id: connectionId })
       : await findWaveConnection(ctx, societyId);
+    const society = await ctx.runQuery(api.society.getById, { id: societyId });
+    const allowDemo = connection?.demo === true && society?.demoMode === true;
     try {
       const snapshot = await waveFetchSnapshot({
         businessId: businessId ?? connection?.externalBusinessId,
+        allowDemo,
       });
       const snapshotId = await ctx.runMutation(internal.waveCache._replaceSnapshot, {
         societyId,
