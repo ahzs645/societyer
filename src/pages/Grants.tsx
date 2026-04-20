@@ -1141,22 +1141,19 @@ export function GrantEditPage() {
         }
       />
 
-      <div className="card">
-        <div className="card__body">
-          {grantDraft && (
-            <GrantEditorForm
-              grantDraft={grantDraft}
-              setGrantDraft={setGrantDraft}
-              committees={committees ?? []}
-              users={users ?? []}
-              accounts={accounts ?? []}
-              documents={documents ?? []}
-              reports={reports ?? []}
-              accountById={accountById}
-            />
-          )}
-        </div>
-      </div>
+      {grantDraft && (
+        <GrantEditorForm
+          grantDraft={grantDraft}
+          setGrantDraft={setGrantDraft}
+          committees={committees ?? []}
+          users={users ?? []}
+          accounts={accounts ?? []}
+          documents={documents ?? []}
+          reports={reports ?? []}
+          accountById={accountById}
+          layout="page"
+        />
+      )}
     </div>
   );
 }
@@ -1255,6 +1252,7 @@ function GrantEditorForm({
   documents,
   reports,
   accountById,
+  layout = "drawer",
 }: {
   grantDraft: any;
   setGrantDraft: (draft: any) => void;
@@ -1264,7 +1262,22 @@ function GrantEditorForm({
   documents: any[];
   reports: any[];
   accountById: Map<string, any>;
+  layout?: "drawer" | "page";
 }) {
+  if (layout === "page") {
+    return (
+      <GrantEditorPageLayout
+        grantDraft={grantDraft}
+        setGrantDraft={setGrantDraft}
+        committees={committees}
+        users={users}
+        accounts={accounts}
+        documents={documents}
+        reports={reports}
+        accountById={accountById}
+      />
+    );
+  }
   return (
     <div>
       <InspectorNote title="Public intake">
@@ -1388,6 +1401,228 @@ function GrantEditorForm({
         <textarea className="textarea" rows={3} value={grantDraft.sourceNotes ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, sourceNotes: e.target.value })} />
       </Field>
       <Field label="Notes"><textarea className="textarea" value={grantDraft.notes ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, notes: e.target.value })} /></Field>
+    </div>
+  );
+}
+
+function EditSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="grant-edit-section">
+      <header className="grant-edit-section__head">
+        <h3 className="grant-edit-section__title">{title}</h3>
+        {description && <p className="grant-edit-section__desc">{description}</p>}
+      </header>
+      <div className="grant-edit-section__body">{children}</div>
+    </section>
+  );
+}
+
+function GrantEditorPageLayout({
+  grantDraft,
+  setGrantDraft,
+  committees,
+  users,
+  accounts,
+  documents,
+  reports,
+  accountById,
+}: {
+  grantDraft: any;
+  setGrantDraft: (draft: any) => void;
+  committees: any[];
+  users: any[];
+  accounts: any[];
+  documents: any[];
+  reports: any[];
+  accountById: Map<string, any>;
+}) {
+  const update = (patch: Record<string, any>) => setGrantDraft({ ...grantDraft, ...patch });
+
+  return (
+    <div className="grant-edit-layout">
+      <div className="grant-edit-layout__main">
+        <EditSection title="Overview" description="Funder, program, and high-level positioning.">
+          <Field label="Title">
+            <input className="input" value={grantDraft.title} onChange={(e) => update({ title: e.target.value })} />
+          </Field>
+          <div className="grant-edit-grid grant-edit-grid--2">
+            <Field label="Funder">
+              <input className="input" value={grantDraft.funder} onChange={(e) => update({ funder: e.target.value })} />
+            </Field>
+            <Field label="Program">
+              <input className="input" value={grantDraft.program ?? ""} onChange={(e) => update({ program: e.target.value })} />
+            </Field>
+          </div>
+          <div className="grant-edit-grid grant-edit-grid--3">
+            <Field label="Opportunity type">
+              <select className="input" value={grantDraft.opportunityType ?? ""} onChange={(e) => update({ opportunityType: e.target.value })}>
+                <option value="">Unspecified</option>
+                <option>Government</option>
+                <option>Foundation</option>
+                <option>Corporate</option>
+                <option>Internal</option>
+                <option>Other</option>
+              </select>
+            </Field>
+            <Field label="Priority">
+              <select className="input" value={grantDraft.priority ?? ""} onChange={(e) => update({ priority: e.target.value })}>
+                <option value="">Unspecified</option>
+                <option>High</option>
+                <option>Medium</option>
+                <option>Low</option>
+              </select>
+            </Field>
+            <Field label="Fit score" hint="0 to 100">
+              <input className="input" type="number" inputMode="numeric" min="0" max="100" step="1" value={grantDraft.fitScore ?? ""} onChange={(e) => update({ fitScore: e.target.value })} />
+            </Field>
+          </div>
+          <Field label="Opportunity URL">
+            <input className="input" type="url" value={grantDraft.opportunityUrl ?? ""} onChange={(e) => update({ opportunityUrl: e.target.value })} />
+          </Field>
+        </EditSection>
+
+        <EditSection title="Status & amounts" description="Pipeline stage, committee, and the money that goes with it.">
+          <div className="grant-edit-grid grant-edit-grid--2">
+            <Field label="Status">
+              <select className="input" value={grantDraft.status} onChange={(e) => update({ status: e.target.value })}>
+                <option>Prospecting</option>
+                <option>Drafting</option>
+                <option>Submitted</option>
+                <option>Awarded</option>
+                <option>Declined</option>
+                <option>Active</option>
+                <option>Closed</option>
+              </select>
+            </Field>
+            <Field label="Committee">
+              <select className="input" value={grantDraft.committeeId ?? ""} onChange={(e) => update({ committeeId: e.target.value })}>
+                <option value="">None</option>
+                {committees.map((committee) => <option key={committee._id} value={committee._id}>{committee.name}</option>)}
+              </select>
+            </Field>
+          </div>
+          <div className="grant-edit-grid grant-edit-grid--2">
+            <Field label="Requested" hint="Dollars">
+              <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountRequestedDollars ?? ""} onChange={(e) => update({ amountRequestedDollars: e.target.value })} />
+            </Field>
+            <Field label="Awarded" hint="Dollars">
+              <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountAwardedDollars ?? ""} onChange={(e) => update({ amountAwardedDollars: e.target.value })} />
+            </Field>
+          </div>
+          <Field label="Next action">
+            <input className="input" value={grantDraft.nextAction ?? ""} onChange={(e) => update({ nextAction: e.target.value })} />
+          </Field>
+          <Field label="Restricted purpose">
+            <textarea className="textarea" value={grantDraft.restrictedPurpose ?? ""} onChange={(e) => update({ restrictedPurpose: e.target.value })} />
+          </Field>
+        </EditSection>
+
+        <EditSection title="Readiness checklist" description="Documents, financials, confirmations, and post-award obligations.">
+          <GrantRequirementsEditor
+            draft={grantDraft}
+            documents={documents}
+            onChange={setGrantDraft}
+          />
+        </EditSection>
+
+        <EditSection title="Public intake" description="Only enable when the opportunity is open to outside applicants.">
+          <label className="checkbox">
+            <input type="checkbox" checked={!!grantDraft.allowPublicApplications} onChange={(e) => update({ allowPublicApplications: e.target.checked })} /> Accept public applications
+          </label>
+          <Field label="Public description">
+            <textarea className="textarea" rows={4} value={grantDraft.publicDescription ?? ""} onChange={(e) => update({ publicDescription: e.target.value })} />
+          </Field>
+          <Field label="Application instructions">
+            <textarea className="textarea" rows={4} value={grantDraft.applicationInstructions ?? ""} onChange={(e) => update({ applicationInstructions: e.target.value })} />
+          </Field>
+        </EditSection>
+
+        <EditSection title="Timeline & ownership" description="Deadlines, project window, and who's accountable.">
+          <div className="grant-edit-grid grant-edit-grid--4">
+            <Field label="Application due">
+              <input className="input" type="date" value={grantDraft.applicationDueDate ?? ""} onChange={(e) => update({ applicationDueDate: e.target.value })} />
+            </Field>
+            <Field label="Next report">
+              <input className="input" type="date" value={grantDraft.nextReportDueAtISO ?? ""} onChange={(e) => update({ nextReportDueAtISO: e.target.value })} />
+            </Field>
+            <Field label="Start">
+              <input className="input" type="date" value={grantDraft.startDate ?? ""} onChange={(e) => update({ startDate: e.target.value })} />
+            </Field>
+            <Field label="End">
+              <input className="input" type="date" value={grantDraft.endDate ?? ""} onChange={(e) => update({ endDate: e.target.value })} />
+            </Field>
+          </div>
+          <div className="grant-edit-grid grant-edit-grid--2">
+            <Field label="Board owner">
+              <select className="input" value={grantDraft.boardOwnerUserId ?? ""} onChange={(e) => update({ boardOwnerUserId: e.target.value })}>
+                <option value="">None</option>
+                {users.map((user) => <option key={user._id} value={user._id}>{user.displayName}</option>)}
+              </select>
+            </Field>
+            <Field label="Linked financial account">
+              <select className="input" value={grantDraft.linkedFinancialAccountId ?? ""} onChange={(e) => update({ linkedFinancialAccountId: e.target.value })}>
+                <option value="">None</option>
+                {accounts.map((account) => <option key={account._id} value={account._id}>{account.name}</option>)}
+              </select>
+            </Field>
+          </div>
+          {grantDraft.linkedFinancialAccountId && (
+            <div className="muted" style={{ fontSize: 12 }}>
+              Current linked balance: {money(accountById.get(String(grantDraft.linkedFinancialAccountId))?.balanceCents ?? 0)}
+            </div>
+          )}
+        </EditSection>
+
+        <EditSection title="Provenance & notes" description="Import IDs, review markers, and free-form notes.">
+          <Field label="Source external IDs" hint="Comma-separated Paperless, local, or external IDs used for provenance.">
+            <input className="input" value={grantDraft.sourceExternalIdsInput ?? ""} onChange={(e) => update({ sourceExternalIdsInput: e.target.value })} />
+          </Field>
+          <div className="grant-edit-grid grant-edit-grid--2">
+            <Field label="Confidence">
+              <select className="input" value={grantDraft.confidence ?? ""} onChange={(e) => update({ confidence: e.target.value })}>
+                <option value="">Unspecified</option>
+                <option>High</option>
+                <option>Medium</option>
+                <option>Review</option>
+              </select>
+            </Field>
+            <Field label="Sensitivity">
+              <select className="input" value={grantDraft.sensitivity ?? ""} onChange={(e) => update({ sensitivity: e.target.value })}>
+                <option value="">Standard</option>
+                <option value="restricted">Restricted</option>
+              </select>
+            </Field>
+          </div>
+          <Field label="Risk flags" hint="Comma-separated review markers.">
+            <input className="input" value={grantDraft.riskFlagsInput ?? ""} onChange={(e) => update({ riskFlagsInput: e.target.value })} />
+          </Field>
+          <Field label="Source notes">
+            <textarea className="textarea" rows={3} value={grantDraft.sourceNotes ?? ""} onChange={(e) => update({ sourceNotes: e.target.value })} />
+          </Field>
+          <Field label="Notes">
+            <textarea className="textarea" value={grantDraft.notes ?? ""} onChange={(e) => update({ notes: e.target.value })} />
+          </Field>
+        </EditSection>
+      </div>
+
+      <aside className="grant-edit-layout__aside">
+        <div className="grant-edit-layout__aside-inner">
+          <div className="grant-edit-aside__label">Reference dossier</div>
+          <GrantDossierStack
+            grant={grantDraft}
+            documents={documents}
+            reports={reports}
+          />
+        </div>
+      </aside>
     </div>
   );
 }

@@ -182,7 +182,7 @@ export function OrganizationHistoryPage() {
     + sources.filter((item: any) => item.confidence === "Review").length
     + boardTerms.filter((item: any) => item.status !== "Verified").length
     + motions.filter((item: any) => !isPositiveMotionOutcome(item.outcome)).length
-    + budgets.filter((item: any) => item.status !== "Verified").length;
+    + budgets.filter((item: any) => item.status === "NeedsReview").length;
 
   const sourceById = useMemo(() => {
     return new Map(sources.map((source: any) => [source._id, source]));

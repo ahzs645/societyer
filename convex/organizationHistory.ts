@@ -154,6 +154,65 @@ export const saveItem = mutation({
   },
 });
 
+export const bulkSetItemReviewStatus = mutation({
+  args: {
+    updates: v.array(
+      v.object({
+        id: v.id("documents"),
+        kind: v.string(),
+        status: v.string(),
+        confidence: v.optional(v.string()),
+        notes: v.optional(v.string()),
+      }),
+    ),
+  },
+  handler: async (ctx, { updates }) => {
+    const results: any[] = [];
+
+    for (const update of updates) {
+      if (!isItemKind(update.kind)) {
+        results.push({ id: String(update.id), updated: false, reason: "invalid-kind" });
+        continue;
+      }
+
+      const existing = await ctx.db.get(update.id);
+      if (!isHistoryItem(existing)) {
+        results.push({ id: String(update.id), updated: false, reason: "not-history-item" });
+        continue;
+      }
+
+      const current = hydrateItem(existing);
+      if (current.kind !== update.kind) {
+        results.push({ id: String(update.id), updated: false, reason: "kind-mismatch" });
+        continue;
+      }
+
+      const next = stripRuntimeFields({
+        ...current,
+        kind: update.kind,
+        status: update.status,
+        confidence: update.confidence ?? current.confidence,
+        notes: update.notes ? appendUniqueNote(current.notes, update.notes) : current.notes,
+      });
+
+      await ctx.db.patch(update.id, {
+        title: itemTitle(update.kind, next),
+        content: JSON.stringify(next),
+        tags: itemTags(update.kind),
+      });
+
+      results.push({
+        id: String(update.id),
+        updated: true,
+        previousStatus: optionalText(current.status),
+        status: update.status,
+      });
+    }
+
+    return results;
+  },
+});
+
 export const extractBudgetSourceDetails = mutation({
   args: {
     societyId: v.id("societies"),
