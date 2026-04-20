@@ -124,9 +124,61 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Optional browser-backed connector runtime. Start with:
+  #   docker compose --profile connectors up -d connector-runner
+  #
+  # BlitzBrowser owns the Chrome processes and persistent browser user data.
+  # The connector runner owns Societyer-specific connector actions and talks to
+  # BlitzBrowser over CDP.
+  blitzbrowser:
+    profiles: ["connectors"]
+    image: ghcr.io/blitzbrowser/blitzbrowser:latest
+    platform: linux/amd64
+    container_name: societyer-blitzbrowser
+    ports:
+      - "9999:9999"
+    environment:
+      - MAX_BROWSER_INSTANCES=${BLITZBROWSER_MAX_BROWSER_INSTANCES:-4}
+    volumes:
+      - blitzbrowser-user-data:/blitzbrowser/user-data
+    cap_add:
+      - SYS_ADMIN
+    shm_size: "2gb"
+    restart: unless-stopped
+
+  blitzbrowser-dashboard:
+    profiles: ["connectors"]
+    image: ghcr.io/blitzbrowser/dashboard:latest
+    platform: linux/amd64
+    container_name: societyer-blitzbrowser-dashboard
+    ports:
+      - "3003:3000"
+    depends_on:
+      - blitzbrowser
+    restart: unless-stopped
+
+  connector-runner:
+    profiles: ["connectors"]
+    build:
+      context: ./services/connector-runner
+    container_name: societyer-connector-runner
+    environment:
+      - CONNECTOR_RUNNER_PORT=8890
+      - CONNECTOR_RUNNER_SECRET=${CONNECTOR_RUNNER_SECRET:-change-me-before-using-connectors}
+      - CONNECTOR_BROWSER_PROVIDER=${CONNECTOR_BROWSER_PROVIDER:-blitz}
+      - BLITZBROWSER_CDP_URL=ws://blitzbrowser:9999
+      - BLITZBROWSER_DASHBOARD_URL=${BLITZBROWSER_DASHBOARD_URL:-http://127.0.0.1:3003}
+      - NODE_ENV=development
+    ports:
+      - "8890:8890"
+    depends_on:
+      - blitzbrowser
+    restart: unless-stopped
+
 volumes:
   convex-data:
   rustfs-data:
   rustfs-logs:
   n8n-data:
   societyer-auth-server-node-modules:
+  blitzbrowser-user-data:
