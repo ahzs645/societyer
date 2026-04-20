@@ -1770,7 +1770,10 @@ function queryResult(name: string, args: StaticArgs) {
     case "attestations:missingForYear":
       return directors.filter((director) => director._id === "static_director_sam");
     case "bylawRules:getActive":
+    case "bylawRules:getForDate":
       return bylawRules;
+    case "bylawRules:list":
+      return tables.bylawRuleSets;
     case "committees:detail":
       return { committee: byId(committees, args?.id), members: [], meetings: [], tasks, goals };
     case "dashboard:summary":
