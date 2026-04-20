@@ -6,6 +6,7 @@ import {
   action,
   internalMutation,
   internalAction,
+  internalQuery,
 } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { requireRole } from "./users";
@@ -1132,6 +1133,13 @@ async function runExternalWorkflow(ctx: any, wf: any, runId: any, args: any) {
       note: "Waiting for n8n PDF fill step.",
     });
 
+    const affiliate = normalizeAffiliateInput(args.input?.affiliate ?? args.input);
+    const resolved = await resolveFieldMappings(ctx, wf, args);
+    // Resolved values take priority, falling back to form-supplied affiliate
+    // input whenever the mapping is empty or skipped.
+    const fieldValues: Record<string, any> = { ...affiliate, ...resolved };
+    const templateDocumentId = findFillPdfNode(wf)?.config?.templateDocumentId;
+
     const payload = {
       workflowId: args.workflowId,
       runId,
@@ -1141,8 +1149,11 @@ async function runExternalWorkflow(ctx: any, wf: any, runId: any, args: any) {
       callbackSecret,
       pdfFillUrl,
       input: {
-        affiliate: normalizeAffiliateInput(args.input?.affiliate ?? args.input),
+        affiliate: fieldValues,
+        fieldValues,
+        mapping: resolved,
         pdfTemplateKey: "unbc_affiliate_id",
+        pdfTemplateDocumentId: templateDocumentId,
       },
     };
 
@@ -1303,4 +1314,193 @@ function env(name: string) {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+// ---- runtime mapping resolution ---------------------------------------
+
+function findFillPdfNode(wf: any) {
+  const nodes = Array.isArray(wf?.nodePreview) ? wf.nodePreview : [];
+  return nodes.find((n: any) => n?.type === "pdf_fill");
+}
+
+function dynamicValue(source: string | undefined): string | undefined {
+  if (!source) return undefined;
+  const now = new Date();
+  if (source === "today") return now.toISOString().slice(0, 10);
+  if (source === "today:long") {
+    return now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+  if (source === "now") return now.toISOString();
+  return undefined; // society.name / currentUser.* filled in via gathered context
+}
+
+function personFieldValue(person: any, source?: string): string | undefined {
+  if (!person || !source) return undefined;
+  if (source.startsWith("custom:")) return undefined; // handled separately
+  if (source === "fullName") {
+    const full = `${person.firstName ?? ""} ${person.lastName ?? ""}`.trim();
+    return full || undefined;
+  }
+  if (source === "mailingAddress") return person.address ?? person.mailingAddress ?? undefined;
+  const v = person[source];
+  return typeof v === "string" ? v : v == null ? undefined : String(v);
+}
+
+// Called from within the run() action — gathers everything we need for
+// resolution in one round-trip.
+export const _gatherMappingContext = internalQuery({
+  args: {
+    societyId: v.id("societies"),
+    actingUserId: v.optional(v.id("users")),
+    personRefs: v.array(v.object({ category: v.string(), personId: v.string() })),
+  },
+  handler: async (ctx, { societyId, actingUserId, personRefs }) => {
+    const society = await ctx.db.get(societyId);
+    const actor = actingUserId ? await ctx.db.get(actingUserId) : null;
+
+    const byKey: Record<
+      string,
+      { person: any; customValues: Record<string, any> }
+    > = {};
+    for (const ref of personRefs) {
+      const key = `${ref.category}:${ref.personId}`;
+      if (byKey[key]) continue;
+      let person: any = null;
+      try {
+        person = await ctx.db.get(ref.personId as any);
+      } catch {
+        person = null;
+      }
+      const defs = await ctx.db
+        .query("customFieldDefinitions")
+        .withIndex("by_society_entity", (q) =>
+          q.eq("societyId", societyId).eq("entityType", ref.category),
+        )
+        .collect();
+      const defKeyById = new Map<string, string>(defs.map((d: any) => [String(d._id), d.key]));
+      const values = await ctx.db
+        .query("customFieldValues")
+        .withIndex("by_entity", (q) =>
+          q.eq("entityType", ref.category).eq("entityId", ref.personId),
+        )
+        .collect();
+      const customValues: Record<string, any> = {};
+      for (const v of values) {
+        const k = defKeyById.get(String(v.definitionId));
+        if (k) customValues[k] = v.value;
+      }
+      byKey[key] = { person, customValues };
+    }
+    return {
+      societyName: society?.name ?? "",
+      actingUser: actor
+        ? { name: actor.displayName ?? "", email: actor.email ?? "" }
+        : null,
+      personRefs: byKey,
+    };
+  },
+});
+
+// Resolve each PDF field mapping into a flat {fieldName: string} map.
+// Unmapped fields are left out so callers can fall back to form input.
+async function resolveFieldMappings(
+  ctx: any,
+  wf: any,
+  args: any,
+): Promise<Record<string, string>> {
+  const node = findFillPdfNode(wf);
+  const mappings: Record<string, any> = node?.config?.fieldMappings ?? {};
+  if (!mappings || Object.keys(mappings).length === 0) return {};
+
+  const personRefs: Array<{ category: string; personId: string }> = [];
+  for (const m of Object.values(mappings) as any[]) {
+    if (m?.kind === "personRef" && m.category && m.personId) {
+      personRefs.push({ category: m.category, personId: m.personId });
+    }
+  }
+
+  const gathered: any = await ctx.runQuery(internal.workflows._gatherMappingContext, {
+    societyId: wf.societyId,
+    actingUserId: args.actingUserId,
+    personRefs,
+  });
+
+  const personInput = args.input?.person ?? args.input?.affiliate ?? args.input ?? {};
+  const managerInput = args.input?.manager ?? {};
+
+  const result: Record<string, string> = {};
+  for (const [field, m] of Object.entries(mappings) as [string, any][]) {
+    const value = computeMappingValue(m, gathered, personInput, managerInput);
+    if (value !== undefined && value !== null && value !== "") {
+      result[field] = String(value);
+    }
+  }
+  return result;
+}
+
+function computeMappingValue(
+  m: any,
+  gathered: any,
+  personInput: any,
+  managerInput: any,
+): string | undefined {
+  if (!m) return undefined;
+  switch (m.kind) {
+    case "literal":
+      return typeof m.value === "string" ? m.value : undefined;
+    case "dynamic": {
+      if (m.source === "society.name") return gathered?.societyName ?? undefined;
+      if (m.source === "currentUser.name") return gathered?.actingUser?.name ?? undefined;
+      if (m.source === "currentUser.email") return gathered?.actingUser?.email ?? undefined;
+      return dynamicValue(m.source);
+    }
+    case "person": {
+      if (!m.source) return undefined;
+      // Common aliases mapped from the form / affiliate payload.
+      const keyMap: Record<string, string[]> = {
+        firstName: ["firstName", "Legal First Name of Affiliate"],
+        lastName: ["lastName", "Legal Last Name of Affiliate"],
+        email: ["email", "Personal email address"],
+        phone: ["phone", "ManagerPhone"],
+        mailingAddress: ["mailingAddress", "address", "Current Mailing Address"],
+        birthdate: ["birthdate", "Birthdate of Affiliate (MM/DD/YYYY)"],
+      };
+      const candidates = keyMap[m.source] ?? [m.source];
+      for (const k of candidates) {
+        const v = personInput?.[k];
+        if (v != null && v !== "") return String(v);
+      }
+      return undefined;
+    }
+    case "manager": {
+      if (!m.source) return undefined;
+      const keyMap: Record<string, string[]> = {
+        name: ["name", "Name of requesting Manager"],
+        email: ["email", "Manager Email"],
+        phone: ["phone", "ManagerPhone"],
+        department: ["department", "UNBC Department/Organization"],
+      };
+      const candidates = keyMap[m.source] ?? [m.source];
+      for (const k of candidates) {
+        const v = managerInput?.[k];
+        if (v != null && v !== "") return String(v);
+      }
+      return undefined;
+    }
+    case "personRef": {
+      if (!m.category || !m.personId || !m.source) return undefined;
+      const key = `${m.category}:${m.personId}`;
+      const bundle = gathered?.personRefs?.[key];
+      if (!bundle?.person) return undefined;
+      if (typeof m.source === "string" && m.source.startsWith("custom:")) {
+        const customKey = m.source.slice("custom:".length);
+        const raw = bundle.customValues?.[customKey];
+        return raw == null ? undefined : String(raw);
+      }
+      return personFieldValue(bundle.person, m.source);
+    }
+    case "empty":
+    default:
+      return undefined;
+  }
 }
