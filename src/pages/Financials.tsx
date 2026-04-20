@@ -138,9 +138,9 @@ export function FinancialsPage() {
     if (!society) return;
     setWaveHealthBusy(true);
     try {
-      const result = await checkWaveHealth({
+      const result = redactWaveHealthResult(await checkWaveHealth({
         businessId: activeConnection?.externalBusinessId,
-      });
+      }));
       setWaveHealth(result);
       if (result.ok) {
         toast.success("Wave health check passed");
@@ -233,7 +233,7 @@ export function FinancialsPage() {
             <span className="card__subtitle">
               Pull balances, transactions and restricted-fund splits from Wave.{" "}
               {oauth?.live ? (
-                <>Live mode — clicking Connect opens Wave's OAuth.</>
+                <>Live mode — sync uses configured Wave API credentials.</>
               ) : (
                 <>Demo mode — connecting seeds a fictional book so the dashboard lights up.</>
               )}
@@ -581,7 +581,7 @@ function WaveHealthPanel({ result }: { result: any }) {
                   {row.required && <Badge tone="warn">required</Badge>}
                   {row.secret && <Badge tone="info">secret</Badge>}
                 </div>
-                <div className="muted" style={{ fontSize: 12 }}>{row.purpose}</div>
+                <div className="muted" style={{ fontSize: 12 }}>{redactCredentialText(row.purpose)}</div>
               </div>
             ))}
           </div>
@@ -591,8 +591,8 @@ function WaveHealthPanel({ result }: { result: any }) {
           <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>Probe result</div>
           {result.business && (
             <div style={{ marginBottom: 10 }}>
-              <strong>{result.business.name ?? "Selected business"}</strong>
-              {result.business.currencyCode && <span className="muted"> · {result.business.currencyCode}</span>}
+              <strong>{redactCredentialText(result.business.name ?? "Selected business")}</strong>
+              {result.business.currencyCode && <span className="muted"> · {redactCredentialText(result.business.currencyCode)}</span>}
               <div className="muted" style={{ fontSize: 12 }}>Business source: {businessSourceLabel(result.business.source)}</div>
             </div>
           )}
@@ -603,11 +603,11 @@ function WaveHealthPanel({ result }: { result: any }) {
                   <Badge tone={healthTone(step.status)}>{healthLabel(step.status)}</Badge>
                   <strong>{step.label}</strong>
                 </div>
-                <div className="muted" style={{ fontSize: 12 }}>{step.message}</div>
+                <div className="muted" style={{ fontSize: 12 }}>{redactCredentialText(step.message)}</div>
                 {step.detail && (
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {Object.entries(step.detail).map(([key, value]) => (
-                      <span key={key} className="cell-tag">{key}: {String(value)}</span>
+                      <span key={key} className="cell-tag">{redactCredentialText(key)}: {formatWaveHealthDetail(value)}</span>
                     ))}
                   </div>
                 )}
@@ -618,6 +618,48 @@ function WaveHealthPanel({ result }: { result: any }) {
       </div>
     </div>
   );
+}
+
+function redactWaveHealthResult(result: any) {
+  return {
+    ...result,
+    business: result?.business
+      ? {
+          ...result.business,
+          name: result.business.name ? redactCredentialText(result.business.name) : result.business.name,
+          currencyCode: result.business.currencyCode ? redactCredentialText(result.business.currencyCode) : result.business.currencyCode,
+        }
+      : result?.business,
+    steps: (result?.steps ?? []).map((step: any) => ({
+      ...step,
+      label: redactCredentialText(step.label),
+      message: redactCredentialText(step.message),
+      detail: step.detail ? redactWaveHealthDetail(step.detail) : step.detail,
+    })),
+  };
+}
+
+function redactWaveHealthDetail(detail: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(detail).map(([key, value]) => [
+      redactCredentialText(key),
+      typeof value === "string" ? redactCredentialText(value) : value,
+    ]),
+  );
+}
+
+function formatWaveHealthDetail(value: unknown) {
+  return typeof value === "string" ? redactCredentialText(value) : String(value);
+}
+
+function redactCredentialText(value: unknown) {
+  return String(value ?? "")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi, "Bearer [redacted]")
+    .replace(/(Authorization\s*:\s*)[^\s,;")]+/gi, "$1[redacted]")
+    .replace(/\b(access[_-]?token|refresh[_-]?token|client[_-]?(?:id|secret)|authorization|code)=([^&\s]+)/gi, "$1=[redacted]")
+    .replace(/(["']?(?:access[_-]?token|refresh[_-]?token|client[_-]?(?:id|secret)|authorization|api[_-]?key|token|secret|code)["']?\s*[:=]\s*["']?)([^"',}\s;]+)/gi, "$1[redacted]")
+    .replace(/\bwave_[A-Za-z0-9._~-]{4,}\b/g, "wave_[redacted]")
+    .replace(/\b[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, "[redacted-token]");
 }
 
 function healthTone(status?: string): "success" | "warn" | "danger" | "neutral" {

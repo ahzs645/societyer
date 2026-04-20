@@ -17,6 +17,7 @@ const HISTORY_KINDS = ["fact", "event", "boardTerm", "motion", "budget"] as cons
 const SECTION_RECORD_KINDS = [
   "filing",
   "deadline",
+  "bylawAmendment",
   "publication",
   "insurancePolicy",
   "financialStatement",
@@ -859,6 +860,37 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
     });
   }
 
+  if (record.recordKind === "bylawAmendment") {
+    const now = new Date().toISOString();
+    const status = cleanText(payload.status) || "Draft";
+    const title = cleanText(payload.title) || record.title || "Imported bylaw amendment";
+    const sourceExternalIds = unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]);
+    const history = bylawImportHistory(payload, status, sourceExternalIds);
+    return await ctx.db.insert("bylawAmendments", {
+      societyId,
+      title,
+      baseText: cleanText(payload.baseText) || "",
+      proposedText: cleanText(payload.proposedText) || cleanText(payload.currentText) || "",
+      status,
+      createdByName: cleanText(payload.createdByName) || cleanText(payload.filedBy) || "Import review",
+      createdAtISO: cleanDateTime(payload.createdAtISO) || cleanDateTime(payload.sourceDate) || now,
+      updatedAtISO: cleanDateTime(payload.updatedAtISO) || cleanDateTime(payload.filedAtISO) || now,
+      consultationStartedAtISO: cleanDateTime(payload.consultationStartedAtISO),
+      consultationEndedAtISO: cleanDateTime(payload.consultationEndedAtISO),
+      resolutionPassedAtISO: cleanDateTime(payload.resolutionPassedAtISO) || cleanDateTime(payload.specialResolutionDate),
+      votesFor: numberOrUndefined(payload.votesFor),
+      votesAgainst: numberOrUndefined(payload.votesAgainst),
+      abstentions: numberOrUndefined(payload.abstentions),
+      filedAtISO: cleanDateTime(payload.filedAtISO) || cleanDateTime(payload.filedAt),
+      sourceDocumentIds,
+      sourceExternalIds,
+      importedFrom: cleanText(payload.importedFrom) || "Import session",
+      confidence: confidenceFor(payload),
+      notes: sourceNote,
+      history,
+    });
+  }
+
   if (record.recordKind === "publication") {
     return await ctx.db.insert("publications", {
       societyId,
@@ -955,6 +987,11 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
   }
 
   if (record.recordKind === "grant") {
+    const sourceExternalIds = unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]);
+    const riskFlags = unique([...(record.riskFlags ?? []), ...arrayOf(payload.riskFlags).map(String)])
+      .map(cleanText)
+      .filter(Boolean);
+    const now = new Date().toISOString();
     return await ctx.db.insert("grants", {
       societyId,
       title: cleanText(payload.title) || record.title || "Imported grant",
@@ -970,8 +1007,14 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       startDate: cleanDate(payload.startDate),
       endDate: cleanDate(payload.endDate),
       nextReportDueAtISO: cleanDate(payload.nextReportDueAtISO),
+      sourceDocumentIds,
+      sourceExternalIds,
+      confidence: confidenceFor(payload),
+      sensitivity: cleanText(payload.sensitivity) || (riskFlags.includes("restricted") ? "restricted" : undefined),
+      riskFlags,
       notes: sourceNote,
-      createdAtISO: new Date().toISOString(),
+      createdAtISO: now,
+      updatedAtISO: now,
     });
   }
 
@@ -1007,10 +1050,13 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
 
   if (record.recordKind === "boardRoleAssignment") {
     const personName = cleanText(payload.personName) || cleanText(payload.name) || "Needs review";
+    const personLinks = await resolvePersonLinks(ctx, societyId, personName);
     return await ctx.db.insert("boardRoleAssignments", {
       societyId,
       personName,
       personKey: personKey(personName),
+      memberId: personLinks.memberId,
+      directorId: personLinks.directorId,
       roleTitle: cleanText(payload.roleTitle) || cleanText(payload.position) || "Director",
       roleGroup: cleanText(payload.roleGroup) || cleanText(payload.committeeName),
       roleType: cleanText(payload.roleType) || "observed",
@@ -1027,6 +1073,8 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
   }
 
   if (record.recordKind === "boardRoleChange") {
+    const personLinks = await resolvePersonLinks(ctx, societyId, payload.personName);
+    const previousPersonLinks = await resolvePersonLinks(ctx, societyId, payload.previousPersonName);
     return await ctx.db.insert("boardRoleChanges", {
       societyId,
       effectiveDate: cleanDate(payload.effectiveDate) || cleanDate(payload.sourceDate) || todayDate(),
@@ -1034,6 +1082,10 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       roleTitle: cleanText(payload.roleTitle) || cleanText(payload.position) || "Needs review",
       personName: cleanText(payload.personName),
       previousPersonName: cleanText(payload.previousPersonName),
+      memberId: personLinks.memberId,
+      directorId: personLinks.directorId,
+      previousMemberId: previousPersonLinks.memberId,
+      previousDirectorId: previousPersonLinks.directorId,
       motionEvidenceId: cleanText(payload.motionEvidenceId),
       status: cleanText(payload.status) || "NeedsReview",
       confidence: confidenceFor(payload),
@@ -1064,11 +1116,18 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
   }
 
   if (record.recordKind === "meetingAttendance") {
+    const personName = cleanText(payload.personName) || cleanText(payload.name) || "Needs review";
+    const personLinks = await resolvePersonLinks(ctx, societyId, personName);
+    const meetingTarget = await resolveMeetingTargetForEvidence(ctx, societyId, payload, record);
     return await ctx.db.insert("meetingAttendanceRecords", {
       societyId,
+      meetingId: meetingTarget?.meetingId,
+      minutesId: meetingTarget?.minutesId,
       meetingTitle: cleanText(payload.meetingTitle) || record.title || "Imported meeting",
       meetingDate: cleanDate(payload.meetingDate) || cleanDate(payload.sourceDate) || todayDate(),
-      personName: cleanText(payload.personName) || cleanText(payload.name) || "Needs review",
+      personName,
+      memberId: personLinks.memberId,
+      directorId: personLinks.directorId,
       roleTitle: cleanText(payload.roleTitle),
       attendanceStatus: cleanText(payload.attendanceStatus) || "needs_review",
       quorumCounted: payload.quorumCounted == null ? undefined : Boolean(payload.quorumCounted),
@@ -1081,13 +1140,24 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
   }
 
   if (record.recordKind === "motionEvidence") {
+    const movedBy = cleanText(payload.movedBy) || cleanText(payload.movedByName);
+    const secondedBy = cleanText(payload.secondedBy) || cleanText(payload.secondedByName);
+    const movedByLinks = await resolvePersonLinks(ctx, societyId, movedBy);
+    const secondedByLinks = await resolvePersonLinks(ctx, societyId, secondedBy);
+    const meetingTarget = await resolveMeetingTargetForEvidence(ctx, societyId, payload, record);
     return await ctx.db.insert("motionEvidence", {
       societyId,
+      meetingId: meetingTarget?.meetingId,
+      minutesId: meetingTarget?.minutesId,
       meetingTitle: cleanText(payload.meetingTitle) || record.title || "Imported meeting",
       meetingDate: cleanDate(payload.meetingDate) || cleanDate(payload.sourceDate) || todayDate(),
       motionText: cleanText(payload.motionText) || cleanText(payload.evidenceText) || "Imported motion evidence",
-      movedBy: cleanText(payload.movedBy) || cleanText(payload.movedByName),
-      secondedBy: cleanText(payload.secondedBy) || cleanText(payload.secondedByName),
+      movedBy,
+      movedByMemberId: movedByLinks.memberId,
+      movedByDirectorId: movedByLinks.directorId,
+      secondedBy,
+      secondedByMemberId: secondedByLinks.memberId,
+      secondedByDirectorId: secondedByLinks.directorId,
       outcome: cleanText(payload.outcome) || "NeedsReview",
       voteSummary: cleanText(payload.voteSummary),
       pageRef: cleanText(payload.pageRef),
@@ -1343,6 +1413,76 @@ async function findExistingMeetingImport(
   return existing?.minutesId ? { meetingId: existing._id, minutesId: existing.minutesId } : null;
 }
 
+async function resolveMeetingTargetForEvidence(ctx: any, societyId: string, payload: any, record: any) {
+  const meetingDate = cleanDate(payload.meetingDate) || cleanDate(payload.sourceDate);
+  const meetingTitle = cleanText(payload.meetingTitle) || cleanText(record.title);
+  if (!meetingDate) return null;
+  const sourceExternalIds = unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]);
+  const exact = await findExistingMeetingImport(
+    ctx,
+    societyId,
+    toMeetingDateTime(meetingDate),
+    meetingTitle ?? "",
+    sourceExternalIds,
+  );
+  if (exact) return exact;
+
+  const titleKey = normalizeLookupText(meetingTitle);
+  if (!titleKey) return null;
+  const meetings = await ctx.db
+    .query("meetings")
+    .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+    .collect();
+  const matches = meetings.filter(
+    (meeting: any) =>
+      String(meeting.scheduledAt ?? "").slice(0, 10) === meetingDate &&
+      normalizeLookupText(meeting.title) === titleKey &&
+      meeting.minutesId,
+  );
+  if (matches.length !== 1) return null;
+  return { meetingId: matches[0]._id, minutesId: matches[0].minutesId };
+}
+
+async function resolvePersonLinks(ctx: any, societyId: string, value: unknown) {
+  const key = normalizePersonLookupName(value);
+  if (!key) return {};
+  const [members, directors] = await Promise.all([
+    ctx.db.query("members").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
+    ctx.db.query("directors").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
+  ]);
+  const member = members.find((row: any) => personLookupKeys(row).includes(key));
+  const director = directors.find((row: any) => personLookupKeys(row).includes(key));
+  return { memberId: member?._id, directorId: director?._id };
+}
+
+function personLookupKeys(row: any) {
+  return unique([
+    `${row?.firstName ?? ""} ${row?.lastName ?? ""}`,
+    `${row?.lastName ?? ""}, ${row?.firstName ?? ""}`,
+    row?.name,
+  ]).map(normalizePersonLookupName).filter(Boolean);
+}
+
+function normalizePersonLookupName(value: unknown) {
+  const text = cleanText(value);
+  if (!text) return undefined;
+  const withoutFormer = text.replace(/\([^)]*\)/g, " ");
+  const commaMatch = withoutFormer.match(/^\s*([^,]+),\s*(.+?)\s*$/);
+  const name = commaMatch ? `${commaMatch[2]} ${commaMatch[1]}` : withoutFormer;
+  return normalizeLookupText(name);
+}
+
+function normalizeLookupText(value: unknown) {
+  return cleanText(value)
+    ?.normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
 function importedMeetingAgenda(title: string, motions: any[], sourceExternalIds: string[]) {
   return [
     "Call to order",
@@ -1495,6 +1635,7 @@ function recordsFromBundle(bundle: any) {
   for (const budget of arrayOf(bundle?.budgets)) records.push(makeRecord("budget", "Budgets", budget));
   for (const filing of arrayOf(bundle?.filings)) records.push(makeRecord("filing", "filings", filing));
   for (const deadline of arrayOf(bundle?.deadlines)) records.push(makeRecord("deadline", "deadlines", deadline));
+  for (const amendment of arrayOf(bundle?.bylawAmendments)) records.push(makeRecord("bylawAmendment", "bylawAmendments", amendment));
   for (const publication of arrayOf(bundle?.publications)) records.push(makeRecord("publication", "publications", publication));
   for (const policy of arrayOf(bundle?.insurancePolicies)) records.push(makeRecord("insurancePolicy", "insurance", policy));
   for (const financial of arrayOf(bundle?.financialStatements)) records.push(makeRecord("financialStatement", "financials", financial));
@@ -1671,6 +1812,7 @@ function titleForRecord(recordKind: string, payload: any) {
   if (recordKind === "budget") return cleanText(payload?.title) || cleanText(payload?.fiscalYear) || "Budget snapshot";
   if (recordKind === "filing") return cleanText(payload?.title) || cleanText(payload?.kind) || "Filing";
   if (recordKind === "deadline") return cleanText(payload?.title) || "Deadline";
+  if (recordKind === "bylawAmendment") return cleanText(payload?.title) || cleanText(payload?.filedAtISO) || "Bylaw amendment";
   if (recordKind === "publication") return cleanText(payload?.title) || "Publication";
   if (recordKind === "insurancePolicy") return cleanText(payload?.title) || cleanText(payload?.policyNumber) || "Insurance policy";
   if (recordKind === "financialStatement") return cleanText(payload?.title) || cleanText(payload?.fiscalYear) || "Financial statement";
@@ -1707,6 +1849,7 @@ function descriptionForRecord(recordKind: string, payload: any) {
       payload?.sourceDate,
       payload?.dueDate,
       payload?.filedAt,
+      payload?.filedAtISO,
       payload?.status,
       payload?.category,
       payload?.notes,
@@ -1760,6 +1903,7 @@ function targetTableForRecordKind(kind: string) {
   return ({
     filing: "filings",
     deadline: "deadlines",
+    bylawAmendment: "bylawAmendments",
     publication: "publications",
     insurancePolicy: "insurancePolicies",
     financialStatement: "financials",
@@ -2017,6 +2161,42 @@ function sourceNoteFor(record: any, sourceDocumentIds: any[]) {
   return parts.join("\n");
 }
 
+function bylawImportHistory(payload: any, status: string, sourceExternalIds: string[]) {
+  const now = new Date().toISOString();
+  const actor = cleanText(payload.createdByName) || cleanText(payload.filedBy) || "Import review";
+  const createdAt = cleanDateTime(payload.createdAtISO) || cleanDateTime(payload.sourceDate) || now;
+  const history = [
+    {
+      atISO: createdAt,
+      actor,
+      action: "created",
+      note: [
+        "Created from approved import-session record.",
+        sourceExternalIds.length ? `Sources: ${sourceExternalIds.join(", ")}` : undefined,
+      ].filter(Boolean).join(" "),
+    },
+  ];
+  const resolutionAt = cleanDateTime(payload.resolutionPassedAtISO) || cleanDateTime(payload.specialResolutionDate);
+  if (resolutionAt) {
+    history.push({
+      atISO: resolutionAt,
+      actor,
+      action: "resolution_passed",
+      note: "Resolution date imported from source document.",
+    });
+  }
+  const filedAt = cleanDateTime(payload.filedAtISO) || cleanDateTime(payload.filedAt);
+  if (status === "Filed" && filedAt) {
+    history.push({
+      atISO: filedAt,
+      actor,
+      action: "filed",
+      note: "Filing date imported from source document.",
+    });
+  }
+  return history;
+}
+
 function cleanDate(value: unknown) {
   const text = cleanText(value);
   if (!text) return undefined;
@@ -2027,6 +2207,14 @@ function cleanDate(value: unknown) {
   const year = text.match(/\b(19|20)\d{2}\b/)?.[0];
   if (year) return `${year}-01-01`;
   return undefined;
+}
+
+function cleanDateTime(value: unknown) {
+  const text = cleanText(value);
+  if (!text) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(text)) return text;
+  const date = cleanDate(text);
+  return date ? `${date}T00:00:00.000Z` : undefined;
 }
 
 function todayDate() {

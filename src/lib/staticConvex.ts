@@ -1897,7 +1897,7 @@ function queryResult(name: string, args: StaticArgs) {
     case "financialHub:getConnection":
       return byId(financialConnections, args?.id) ?? financialConnections[0];
     case "financialHub:oauthUrl":
-      return { provider: "wave", live: false, url: "#", demo: true };
+      return { provider: "wave", live: false };
     case "financialHub:summary":
       return financialSummary();
     case "financialHub:transactions":
@@ -2050,7 +2050,7 @@ function mutationResult(name: string, args: StaticArgs) {
       env: [
         { name: "WAVE_ACCESS_TOKEN", required: true, secret: true, purpose: "Wave GraphQL bearer token", present: false },
         { name: "WAVE_BUSINESS_ID", required: true, secret: false, purpose: "Business selected for live sync", present: false },
-        { name: "WAVE_CLIENT_ID", required: false, secret: false, purpose: "OAuth connect link client id", present: false },
+        { name: "WAVE_CLIENT_ID", required: false, secret: true, purpose: "OAuth connect link client id; value is never returned in diagnostics", present: false },
         { name: "WAVE_GRAPHQL_ENDPOINT", required: false, secret: false, purpose: "GraphQL endpoint override", present: false },
       ],
       business: {
@@ -2066,10 +2066,10 @@ function mutationResult(name: string, args: StaticArgs) {
           message: "Static demo uses fixture Wave data without local secrets.",
         },
         {
-          id: "auth",
-          label: "Wave auth",
+          id: "api-probe",
+          label: "Wave API probe",
           status: "pass",
-          message: "Static demo auth probe resolved against fixture data.",
+          message: "Static demo API probe resolved against fixture data.",
         },
         {
           id: "accounts",

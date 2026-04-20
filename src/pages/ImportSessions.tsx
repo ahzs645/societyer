@@ -45,6 +45,7 @@ const KIND_LABELS: Record<string, string> = {
   documentCandidate: "Document",
   filing: "Filing",
   deadline: "Deadline",
+  bylawAmendment: "Bylaw amendment",
   publication: "Publication",
   insurancePolicy: "Insurance",
   financialStatement: "Financial",
@@ -756,6 +757,47 @@ function renderPayloadEditor(form: any, onChange: (form: any) => void) {
       </>
     );
   }
+  if (form.recordKind === "grant") {
+    return (
+      <>
+        <Field label="Title"><input className="input" value={payload.title ?? ""} onChange={(event) => set({ title: event.target.value })} /></Field>
+        <div className="row" style={{ gap: 12 }}>
+          <Field label="Funder"><input className="input" value={payload.funder ?? ""} onChange={(event) => set({ funder: event.target.value })} /></Field>
+          <Field label="Program"><input className="input" value={payload.program ?? ""} onChange={(event) => set({ program: event.target.value })} /></Field>
+        </div>
+        <div className="row" style={{ gap: 12 }}>
+          <Field label="Status">
+            <select className="input" value={payload.status ?? "Drafting"} onChange={(event) => set({ status: event.target.value })}>
+              <option>Prospecting</option>
+              <option>Drafting</option>
+              <option>Submitted</option>
+              <option>Awarded</option>
+              <option>Declined</option>
+              <option>Active</option>
+              <option>Closed</option>
+              <option>NeedsReview</option>
+            </select>
+          </Field>
+          <Field label="Requested cents"><input className="input" type="number" value={payload.amountRequestedCents ?? ""} onChange={(event) => set({ amountRequestedCents: numericInput(event.target.value) })} /></Field>
+          <Field label="Awarded cents"><input className="input" type="number" value={payload.amountAwardedCents ?? ""} onChange={(event) => set({ amountAwardedCents: numericInput(event.target.value) })} /></Field>
+        </div>
+        <div className="row" style={{ gap: 12 }}>
+          <Field label="Application due"><input className="input" type="date" value={payload.applicationDueDate ?? ""} onChange={(event) => set({ applicationDueDate: event.target.value })} /></Field>
+          <Field label="Submitted"><input className="input" type="date" value={payload.submittedAtISO ?? ""} onChange={(event) => set({ submittedAtISO: event.target.value })} /></Field>
+        </div>
+        <div className="row" style={{ gap: 12 }}>
+          <Field label="Decision"><input className="input" type="date" value={payload.decisionAtISO ?? ""} onChange={(event) => set({ decisionAtISO: event.target.value })} /></Field>
+          <Field label="Next report"><input className="input" type="date" value={payload.nextReportDueAtISO ?? ""} onChange={(event) => set({ nextReportDueAtISO: event.target.value })} /></Field>
+        </div>
+        <div className="row" style={{ gap: 12 }}>
+          <Field label="Start"><input className="input" type="date" value={payload.startDate ?? ""} onChange={(event) => set({ startDate: event.target.value })} /></Field>
+          <Field label="End"><input className="input" type="date" value={payload.endDate ?? ""} onChange={(event) => set({ endDate: event.target.value })} /></Field>
+        </div>
+        <Field label="Restricted purpose"><textarea className="textarea" rows={3} value={payload.restrictedPurpose ?? ""} onChange={(event) => set({ restrictedPurpose: event.target.value })} /></Field>
+        <Field label="Notes"><textarea className="textarea" rows={4} value={payload.notes ?? ""} onChange={(event) => set({ notes: event.target.value })} /></Field>
+      </>
+    );
+  }
   return (
     <Field label="Payload JSON">
       <textarea className="textarea mono" rows={12} value={form.payloadText} onChange={(event) => onChange({ ...form, payloadText: event.target.value })} />
@@ -778,7 +820,7 @@ function recordPayloadFromForm(form: any) {
   if (form.recordKind === "budget") {
     payload = { ...payload, lines: parseJsonArray(form.linesText) };
   }
-  if (!["source", "fact", "event", "boardTerm", "motion", "budget"].includes(form.recordKind)) {
+  if (!["source", "fact", "event", "boardTerm", "motion", "budget", "grant"].includes(form.recordKind)) {
     payload = parseJsonObject(form.payloadText);
   }
   return {

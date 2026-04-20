@@ -245,14 +245,3 @@ export async function waveListTransactions(args?: {
 
   return { provider: "wave", transactions: rows };
 }
-
-export function waveOAuthUrl(args: { redirectUri: string; state: string }): string {
-  // Wave's OAuth endpoint. This URL is used as a deep link from the Connect
-  // screen. In demo mode the UI short-circuits back to itself instead of
-  // bouncing through Wave.
-  const p = providers.accounting();
-  if (p.id === "demo") return `#demo-wave-oauth?state=${encodeURIComponent(args.state)}`;
-  const clientId = (globalThis as any).process?.env?.WAVE_CLIENT_ID ?? "missing";
-  const scope = "business:read account:read transaction:read";
-  return `https://api.waveapps.com/oauth2/authorize/?client_id=${encodeURIComponent(clientId)}&response_type=code&scope=${encodeURIComponent(scope)}&redirect_uri=${encodeURIComponent(args.redirectUri)}&state=${encodeURIComponent(args.state)}`;
-}

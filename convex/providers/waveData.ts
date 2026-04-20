@@ -3,6 +3,7 @@
 // every Wave object is a financial transaction.
 import {
   redactWaveDiagnostic,
+  redactWaveDiagnosticPayload,
   waveEnvironmentStatus,
   waveEnv,
   waveGraphQLEndpoint,
@@ -429,16 +430,16 @@ export async function waveHealthCheck(args: { businessId?: string } = {}): Promi
 
   if (!token) {
     steps.push({
-      id: "auth",
-      label: "Wave auth",
+      id: "api-probe",
+      label: "Wave API probe",
       status: "skip",
-      message: "Skipped because WAVE_ACCESS_TOKEN is not configured.",
+      message: "Skipped because Wave live credentials are not configured.",
     });
     steps.push({
       id: "accounts",
       label: "Accounts probe",
       status: "skip",
-      message: "Skipped because Wave auth could not run.",
+      message: "Skipped because the Wave API probe could not run.",
     });
     return finish("not_configured");
   }
@@ -447,16 +448,16 @@ export async function waveHealthCheck(args: { businessId?: string } = {}): Promi
   try {
     businesses = await waveListBusinesses();
     steps.push({
-      id: "auth",
-      label: "Wave auth",
+      id: "api-probe",
+      label: "Wave API probe",
       status: "pass",
-      message: "Wave accepted the access token.",
+      message: "Wave returned accessible businesses.",
       detail: { accessibleBusinesses: businesses.length },
     });
   } catch (error) {
     steps.push({
-      id: "auth",
-      label: "Wave auth",
+      id: "api-probe",
+      label: "Wave API probe",
       status: "fail",
       message: redactWaveDiagnostic(error),
     });
@@ -464,7 +465,7 @@ export async function waveHealthCheck(args: { businessId?: string } = {}): Promi
       id: "accounts",
       label: "Accounts probe",
       status: "skip",
-      message: "Skipped because Wave auth failed.",
+      message: "Skipped because the Wave API probe failed.",
     });
     return finish("live");
   }
@@ -492,7 +493,7 @@ export async function waveHealthCheck(args: { businessId?: string } = {}): Promi
       id: "business-selection",
       label: "Business selection",
       status: "fail",
-      message: "Wave auth worked, but no accessible business was returned.",
+      message: "Wave API probe worked, but no accessible business was returned.",
     });
     steps.push({
       id: "accounts",
@@ -696,12 +697,14 @@ async function waveStructures(): Promise<WaveSnapshotStructure[]> {
       const raw = data?.__type;
       if (!raw) return null;
       const fields = raw.fields ?? raw.inputFields ?? raw.enumValues ?? raw.possibleTypes ?? [];
+      const safeRaw = redactWaveDiagnosticPayload(raw);
+      const safeFields = redactWaveDiagnosticPayload(fields);
       return {
         typeName,
         kind: raw.kind,
         fieldCount: fields.length,
-        fieldsJson: JSON.stringify(fields),
-        rawJson: JSON.stringify(raw),
+        fieldsJson: JSON.stringify(safeFields),
+        rawJson: JSON.stringify(safeRaw),
       };
     }),
   );
@@ -713,7 +716,7 @@ function resource(
   raw: any,
   meta: Partial<WaveSnapshotResource>,
 ): WaveSnapshotResource {
-  const rawJson = JSON.stringify(raw);
+  const rawJson = JSON.stringify(redactWaveDiagnosticPayload(raw));
   const label = meta.label ?? raw.name ?? raw.title ?? raw.id ?? resourceType;
   const searchText = [
     resourceType,

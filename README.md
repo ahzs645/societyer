@@ -2,8 +2,6 @@
 
 A React + Convex app for tracking **BC Societies Act** compliance — registers, meetings & minutes, filings, deadlines, documents, conflicts of interest, financial statements, and PIPA privacy.
 
-The UI is inspired by [Twenty](https://github.com/twentyhq/twenty) (dense sidebar, monochrome + blue accent, data-first tables, command palette with `⌘K`).
-
 > Not legal advice. Statutory references (s.11, s.20, s.42, s.56, s.36 etc.) are based on the BC Societies Act as summarised in the accompanying compliance notes — verify against the current Act and your bylaws before acting.
 
 ---
@@ -126,7 +124,7 @@ npm run dev:full
 
 - **Resend**: set `RESEND_API_KEY` plus `RESEND_FROM_EMAIL` to turn digest emails and communications into real outbound email.
 - **Stripe**: set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` to enable real hosted checkout. Point Stripe webhooks at Convex HTTP route `/stripe/webhook`.
-- **Wave**: set `WAVE_ACCESS_TOKEN` and `WAVE_BUSINESS_ID` to switch the accounting sync from demo data to live GraphQL fetches. `WAVE_CLIENT_ID` only powers the OAuth connect link, and `WAVE_GRAPHQL_ENDPOINT` is an optional override for the default Wave GraphQL endpoint. The Financials page includes a Wave health check that reports only present/missing env status plus redacted provider diagnostics.
+- **Wave**: set `WAVE_ACCESS_TOKEN` and `WAVE_BUSINESS_ID` to switch the accounting sync from demo data to live GraphQL fetches. `WAVE_CLIENT_ID` is reserved for OAuth setup and is reported only as present/missing in diagnostics; `WAVE_GRAPHQL_ENDPOINT` is an optional override for the default Wave GraphQL endpoint. The Financials page includes a Wave health check that reports only present/missing env status plus redacted provider diagnostics.
 - **Paperless-ngx**: set `PAPERLESS_NGX_URL` and `PAPERLESS_NGX_TOKEN`, then enable the Paperless-ngx module at `/app/paperless`. Documents can be sent to Paperless from `/app/documents`; Societyer creates contextual tags such as document category, filing kind, grant report, PIPA training, election evidence, and volunteer screening.
 - **Access custody vault**: set `SECRET_VAULT_ENCRYPTION_KEY` before storing client credentials in production. `/app/access-custody` encrypts stored values, keeps them hidden by default, and logs explicit reveals to the activity trail.
 - **Filing evidence**: BC still has no public Societies Online filing API. This build improves the manual path by storing submission method, confirmation number, fee paid, and linked receipt/evidence documents when a filing is marked filed.

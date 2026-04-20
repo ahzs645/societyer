@@ -27,6 +27,7 @@ const DIRECTOR_FIELDS: FilterField<any>[] = [
 export function DirectorsPage() {
   const society = useSociety();
   const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
+  const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const orgHistory = useQuery(api.organizationHistory.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.directors.create);
   const update = useMutation(api.directors.update);
@@ -264,6 +265,21 @@ export function DirectorsPage() {
               <Field label="Last name"><input className="input" value={selected.lastName} onChange={(e) => setSelected({ ...selected, lastName: e.target.value })} /></Field>
             </div>
             <Field label="Email"><input className="input" value={selected.email ?? ""} onChange={(e) => setSelected({ ...selected, email: e.target.value })} /></Field>
+            <Field label="Linked member">
+              <select
+                className="input"
+                value={selected.memberId ?? ""}
+                onChange={(event) => setSelected({ ...selected, memberId: event.target.value || undefined })}
+              >
+                <option value="">No linked member</option>
+                {(members ?? []).map((member: any) => (
+                  <option key={member._id} value={member._id}>
+                    {member.firstName} {member.lastName}
+                    {member.email ? ` · ${member.email}` : ""}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <Field label="Position">
               <Select
                 value={selected.position}

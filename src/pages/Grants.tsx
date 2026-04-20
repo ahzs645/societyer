@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -132,6 +133,18 @@ function cleanStringList(value: unknown) {
     .filter(Boolean);
 }
 
+function splitStringList(value: unknown) {
+  if (Array.isArray(value)) return cleanStringList(value);
+  return Array.from(
+    new Set(
+      String(value ?? "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
 function asUseOfFunds(value: unknown): GrantUseOfFundsLine[] {
   if (!Array.isArray(value)) return [];
   return value.map((item: any) => ({
@@ -257,6 +270,13 @@ function requirementStatusTone(status: GrantRequirementStatus): "success" | "war
   return "info";
 }
 
+function grantRiskFlags(draft: any) {
+  const flags = new Set(splitStringList(draft.riskFlagsInput ?? draft.riskFlags));
+  if (draft.sensitivity === "restricted") flags.add("restricted");
+  if ((draft.confidence ?? "") === "Review") flags.add("needs review");
+  return Array.from(flags);
+}
+
 function buildGrantPayload(draft: any, societyId: any, actingUserId: any) {
   return {
     id: draft.id,
@@ -277,6 +297,11 @@ function buildGrantPayload(draft: any, societyId: any, actingUserId: any) {
     sourcePath: optionalString(draft.sourcePath),
     sourceImportedAtISO: optionalString(draft.sourceImportedAtISO),
     sourceFileCount: optionalNumber(draft.sourceFileCount),
+    sourceDocumentIds: cleanStringList(draft.sourceDocumentIds) as any,
+    sourceExternalIds: splitStringList(draft.sourceExternalIdsInput ?? draft.sourceExternalIds),
+    confidence: optionalString(draft.confidence),
+    sensitivity: optionalString(draft.sensitivity),
+    riskFlags: grantRiskFlags(draft),
     sourceNotes: optionalString(draft.sourceNotes),
     keyFacts: cleanStringList(draft.keyFacts),
     useOfFunds: sanitizeUseOfFunds(draft.useOfFunds),
@@ -409,6 +434,9 @@ export function GrantsPage() {
         subtitle="Grant pipeline, public intake, reporting deadlines, and restricted-fund ledger tracking."
         actions={
           <>
+            <Link className="btn-action" to="/app/imports">
+              <FileText size={12} /> Review imports
+            </Link>
             <button
               className="btn-action"
               onClick={() =>
@@ -454,6 +482,11 @@ export function GrantsPage() {
                   opportunityUrl: "",
                   applicationDueDate: new Date().toISOString().slice(0, 10),
                   allowPublicApplications: false,
+                  sourceDocumentIds: [],
+                  sourceExternalIdsInput: "",
+                  confidence: "",
+                  sensitivity: "",
+                  riskFlagsInput: "",
                   requirements: [],
                   keyFacts: [],
                   useOfFunds: [],
@@ -556,6 +589,11 @@ export function GrantsPage() {
         loading={grants === undefined}
         rowKey={(row) => String(row._id)}
         searchPlaceholder="Search grants…"
+        searchExtraFields={[
+          (row) => (row.sourceExternalIds ?? []).join(" "),
+          (row) => (row.riskFlags ?? []).join(" "),
+          (row) => row.sourceNotes,
+        ]}
         defaultSort={{ columnId: "createdAtISO", dir: "desc" }}
         columns={[
           {
@@ -614,6 +652,14 @@ export function GrantsPage() {
             render: (row) => <span className="mono">{row.applicationDueDate ? formatDate(row.applicationDueDate) : "—"}</span>,
           },
           {
+            id: "sources",
+            header: "Sources",
+            sortable: true,
+            align: "right",
+            accessor: (row) => (row.sourceExternalIds ?? []).length,
+            render: (row) => (row.sourceExternalIds?.length ? <Badge tone="info">{row.sourceExternalIds.length}</Badge> : "—"),
+          },
+          {
             id: "publicIntake",
             header: "Public intake",
             sortable: true,
@@ -637,6 +683,11 @@ export function GrantsPage() {
                   ...row,
                   id: row._id,
                   fitScore: row.fitScore ?? "",
+                  sourceDocumentIds: cleanStringList(row.sourceDocumentIds),
+                  sourceExternalIdsInput: (row.sourceExternalIds ?? []).join(", "),
+                  confidence: row.confidence ?? "",
+                  sensitivity: row.sensitivity ?? "",
+                  riskFlagsInput: (row.riskFlags ?? []).join(", "),
                   amountRequestedDollars: centsToDollarInput(row.amountRequestedCents),
                   amountAwardedDollars: centsToDollarInput(row.amountAwardedCents),
                   requirements: asRequirements(row.requirements),
@@ -860,6 +911,31 @@ export function GrantsPage() {
                 Current linked balance: {money(accountById.get(String(grantDraft.linkedFinancialAccountId))?.balanceCents ?? 0)}
               </div>
             )}
+            <Field label="Source external IDs" hint="Comma-separated Paperless, local, or external IDs used for provenance.">
+              <input className="input" value={grantDraft.sourceExternalIdsInput ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, sourceExternalIdsInput: e.target.value })} />
+            </Field>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Confidence">
+                <select className="input" value={grantDraft.confidence ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, confidence: e.target.value })}>
+                  <option value="">Unspecified</option>
+                  <option>High</option>
+                  <option>Medium</option>
+                  <option>Review</option>
+                </select>
+              </Field>
+              <Field label="Sensitivity">
+                <select className="input" value={grantDraft.sensitivity ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, sensitivity: e.target.value })}>
+                  <option value="">Standard</option>
+                  <option value="restricted">Restricted</option>
+                </select>
+              </Field>
+            </div>
+            <Field label="Risk flags" hint="Comma-separated review markers.">
+              <input className="input" value={grantDraft.riskFlagsInput ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, riskFlagsInput: e.target.value })} />
+            </Field>
+            <Field label="Source notes">
+              <textarea className="textarea" rows={3} value={grantDraft.sourceNotes ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, sourceNotes: e.target.value })} />
+            </Field>
             <Field label="Notes"><textarea className="textarea" value={grantDraft.notes ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, notes: e.target.value })} /></Field>
           </div>
         )}
@@ -989,7 +1065,8 @@ function GrantDossierStack({
     asComplianceFlags(grant.complianceFlags).length > 0 ||
     asContacts(grant.contacts).length > 0 ||
     asAnswerLibrary(grant.answerLibrary).length > 0 ||
-    cleanStringList(grant.keyFacts).length > 0;
+    cleanStringList(grant.keyFacts).length > 0 ||
+    cleanStringList(grant.sourceExternalIds).length > 0;
 
   if (!hasDossierData) return null;
 
@@ -1208,7 +1285,16 @@ function GrantAnswerLibraryPanel({ grant }: { grant: any }) {
 
 function GrantSourceNotesPanel({ grant }: { grant: any }) {
   const keyFacts = cleanStringList(grant.keyFacts);
-  const hasSource = grant.sourcePath || grant.sourceImportedAtISO || grant.sourceFileCount || grant.sourceNotes || keyFacts.length > 0;
+  const sourceExternalIds = cleanStringList(grant.sourceExternalIds);
+  const hasSource =
+    grant.sourcePath ||
+    grant.sourceImportedAtISO ||
+    grant.sourceFileCount ||
+    grant.sourceNotes ||
+    sourceExternalIds.length > 0 ||
+    grant.confidence ||
+    grant.sensitivity ||
+    keyFacts.length > 0;
   if (!hasSource) return null;
 
   return (
@@ -1218,7 +1304,14 @@ function GrantSourceNotesPanel({ grant }: { grant: any }) {
           <DossierFact label="Imported from" value={grant.sourcePath} />
           <DossierFact label="Import date" value={grant.sourceImportedAtISO ? formatDate(grant.sourceImportedAtISO) : undefined} />
           <DossierFact label="Linked files" value={grant.sourceFileCount ? String(grant.sourceFileCount) : undefined} />
+          <DossierFact label="Confidence" value={grant.confidence} />
+          <DossierFact label="Sensitivity" value={grant.sensitivity} />
         </div>
+        {sourceExternalIds.length > 0 && (
+          <div className="muted mono" style={{ fontSize: 12, overflowWrap: "anywhere" }}>
+            Sources: {sourceExternalIds.join(", ")}
+          </div>
+        )}
         {keyFacts.length > 0 && (
           <ul style={{ ...documentListStyle, marginTop: 0 }}>
             {keyFacts.map((fact) => <li key={fact}>{fact}</li>)}
@@ -1298,8 +1391,10 @@ function grantPacketKey(grant: any) {
 
 function grantRelatedDocuments(grant: any, documents: any[]) {
   const linkedIds = new Set(
-    asRequirements(grant.requirements)
-      .map((requirement) => requirement.documentId)
+    [
+      ...asRequirements(grant.requirements).map((requirement) => requirement.documentId),
+      ...cleanStringList(grant.sourceDocumentIds),
+    ]
       .filter(Boolean)
       .map(String),
   );

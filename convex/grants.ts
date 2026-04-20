@@ -276,6 +276,11 @@ export const upsertGrant = mutation({
     sourcePath: v.optional(v.string()),
     sourceImportedAtISO: v.optional(v.string()),
     sourceFileCount: v.optional(v.number()),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
+    confidence: v.optional(v.string()),
+    sensitivity: v.optional(v.string()),
+    riskFlags: v.optional(v.array(v.string())),
     sourceNotes: v.optional(v.string()),
     keyFacts: v.optional(v.array(v.string())),
     useOfFunds: v.optional(v.array(grantUseOfFundsLine)),
@@ -306,13 +311,15 @@ export const upsertGrant = mutation({
       required: "Director",
     });
     const { id, actingUserId, ...rest } = args;
+    const now = isoNow();
     if (id) {
-      await ctx.db.patch(id, rest);
+      await ctx.db.patch(id, { ...rest, updatedAtISO: now });
       return id;
     }
     return await ctx.db.insert("grants", {
       ...rest,
-      createdAtISO: isoNow(),
+      createdAtISO: now,
+      updatedAtISO: now,
     });
   },
 });

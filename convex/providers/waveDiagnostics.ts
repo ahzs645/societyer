@@ -16,8 +16,8 @@ const WAVE_ENV_VARS = [
   {
     name: "WAVE_CLIENT_ID",
     required: false,
-    secret: false,
-    purpose: "OAuth connect link client id",
+    secret: true,
+    purpose: "OAuth connect link client id; value is never returned in diagnostics",
   },
   {
     name: "WAVE_GRAPHQL_ENDPOINT",
@@ -26,6 +26,31 @@ const WAVE_ENV_VARS = [
     purpose: "GraphQL endpoint override",
   },
 ] as const;
+
+const WAVE_REDACTION_ENV_NAMES = [
+  "WAVE_ACCESS_TOKEN",
+  "WAVE_REFRESH_TOKEN",
+  "WAVE_CLIENT_ID",
+  "WAVE_CLIENT_SECRET",
+  "WAVE_BUSINESS_ID",
+  "WAVE_GRAPHQL_ENDPOINT",
+] as const;
+
+const SENSITIVE_DIAGNOSTIC_KEYS = new Set([
+  "accesstoken",
+  "access_token",
+  "refreshtoken",
+  "refresh_token",
+  "clientid",
+  "client_id",
+  "clientsecret",
+  "client_secret",
+  "authorization",
+  "auth",
+  "bearer",
+  "secret",
+  "token",
+]);
 
 export type WaveEnvStatus = {
   name: string;
@@ -61,8 +86,8 @@ export function redactWaveDiagnostic(input: unknown, extraValues: Array<string |
     ? input
     : stringifyDiagnostic(input);
 
-  const configuredValues = WAVE_ENV_VARS
-    .map((row) => waveEnv(row.name))
+  const configuredValues = WAVE_REDACTION_ENV_NAMES
+    .map((name) => waveEnv(name))
     .concat(extraValues)
     .filter((value): value is string => typeof value === "string" && value.length >= 4)
     .sort((a, b) => b.length - a.length);
@@ -74,11 +99,16 @@ export function redactWaveDiagnostic(input: unknown, extraValues: Array<string |
   text = text
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi, "Bearer [redacted]")
     .replace(/(Authorization\s*:\s*)[^\s,;")]+/gi, "$1[redacted]")
-    .replace(/\b(access_token|refresh_token|client_secret|authorization|code)=([^&\s]+)/gi, "$1=[redacted]")
+    .replace(/\b(access[_-]?token|refresh[_-]?token|client[_-]?(?:id|secret)|authorization|code)=([^&\s]+)/gi, "$1=[redacted]")
+    .replace(/(["']?(?:access[_-]?token|refresh[_-]?token|client[_-]?(?:id|secret)|authorization|api[_-]?key|token|secret|code)["']?\s*[:=]\s*["']?)([^"',}\s;]+)/gi, "$1[redacted]")
     .replace(/\bwave_[A-Za-z0-9._~-]{4,}\b/g, "wave_[redacted]")
     .replace(/\b[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, "[redacted-token]");
 
   return text.length > 800 ? `${text.slice(0, 800)}...` : text;
+}
+
+export function redactWaveDiagnosticPayload<T>(input: T): T {
+  return redactValue(input, 0) as T;
 }
 
 function stringifyDiagnostic(input: unknown): string {
@@ -87,4 +117,24 @@ function stringifyDiagnostic(input: unknown): string {
   } catch {
     return String(input);
   }
+}
+
+function redactValue(input: unknown, depth: number): unknown {
+  if (depth > 12) return "[redacted]";
+  if (typeof input === "string") return redactWaveDiagnostic(input);
+  if (input == null || typeof input !== "object") return input;
+  if (Array.isArray(input)) return input.map((value) => redactValue(value, depth + 1));
+
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    out[key] = isSensitiveDiagnosticKey(key)
+      ? "[redacted]"
+      : redactValue(value, depth + 1);
+  }
+  return out;
+}
+
+function isSensitiveDiagnosticKey(key: string) {
+  const normalized = key.replace(/[^a-z0-9_]/gi, "").toLowerCase();
+  return SENSITIVE_DIAGNOSTIC_KEYS.has(normalized);
 }

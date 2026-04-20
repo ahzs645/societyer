@@ -92,6 +92,11 @@ for (const spec of grantSpecs) {
     sourcePath: ROOT,
     sourceImportedAtISO: today,
     sourceFileCount: spec.sourceFileCount,
+    sourceDocumentIds: uniqueIds(spec.requirements.map((requirement) => requirement.documentId)),
+    sourceExternalIds: spec.sourceExternalIds,
+    confidence: "High",
+    sensitivity: "restricted",
+    riskFlags: ["restricted"],
     sourceNotes: spec.sourceNotes,
     keyFacts: spec.keyFacts,
     useOfFunds: spec.useOfFunds,
@@ -243,6 +248,10 @@ function fileCountFor(folderName) {
   ).length;
 }
 
+function uniqueIds(ids) {
+  return Array.from(new Set(ids.filter(Boolean).map(String)));
+}
+
 function buildGrantSpecs() {
   return [
     {
@@ -255,6 +264,7 @@ function buildGrantSpecs() {
       fitScore: 90,
       amountRequestedCents: 7_500_000,
       confirmationCode: "1238069",
+      sourceExternalIds: ["ote-grant:bc-community-gaming-2025", "bc-gaming:1238069"],
       sourceFileCount: fileCountFor("BC Gaming Grant"),
       submittedAtISO: "2025-01-22",
       nextReportDueAtISO: "2025-07-29",
@@ -422,6 +432,7 @@ function buildGrantSpecs() {
       fitScore: 85,
       amountRequestedCents: 1_149_120,
       confirmationCode: "A001242170",
+      sourceExternalIds: ["ote-grant:canada-summer-jobs-2025", "csj:A001242170"],
       sourceFileCount: fileCountFor("Canada Summer Jobs"),
       submittedAtISO: "2024-12-10",
       startDate: "2025-04-21",

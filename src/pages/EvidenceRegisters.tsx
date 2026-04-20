@@ -36,14 +36,14 @@ export function GovernanceRegistersPage() {
         rows={roles}
         empty="Approve board role assignment imports to build the timeline."
         columns={["Person", "Role", "Group", "Start", "Status"]}
-        render={(row) => [row.personName, row.roleTitle, row.roleGroup ?? "-", formatDate(row.startDate), <Status key="s" value={row.status} />]}
+        render={(row) => [<PersonCell key="p" row={row} name={row.personName} />, row.roleTitle, row.roleGroup ?? "-", formatDate(row.startDate), <Status key="s" value={row.status} />]}
       />
       <RegisterTable
         title="Board role changes"
         rows={changes}
         empty="Approve role-change imports to track appointments, removals, vacancies, and renamed positions."
         columns={["Effective", "Change", "Role", "Person", "Status"]}
-        render={(row) => [formatDate(row.effectiveDate), row.changeType, row.roleTitle, row.personName ?? "-", <Status key="s" value={row.status} />]}
+        render={(row) => [formatDate(row.effectiveDate), row.changeType, row.roleTitle, <PersonCell key="p" row={row} name={row.personName} />, <Status key="s" value={row.status} />]}
       />
       <RegisterTable
         title="Signing authorities"
@@ -84,14 +84,14 @@ export function MeetingEvidencePage() {
         rows={attendance}
         empty="Approve attendance imports to populate this register."
         columns={["Meeting", "Date", "Person", "Attendance", "Confidence"]}
-        render={(row) => [row.meetingTitle, formatDate(row.meetingDate), row.personName, row.attendanceStatus, <Confidence key="c" value={row.confidence} />]}
+        render={(row) => [<MeetingCell key="m" row={row} />, formatDate(row.meetingDate), <PersonCell key="p" row={row} name={row.personName} />, row.attendanceStatus, <Confidence key="c" value={row.confidence} />]}
       />
       <RegisterTable
         title="Motion evidence"
         rows={motions}
         empty="Approve motion-evidence imports to build a source-backed motion trail."
         columns={["Meeting", "Date", "Motion", "Outcome", "Status"]}
-        render={(row) => [row.meetingTitle, formatDate(row.meetingDate), truncate(row.motionText, 100), row.outcome, <Status key="s" value={row.status} />]}
+        render={(row) => [<MeetingCell key="m" row={row} />, formatDate(row.meetingDate), truncate(row.motionText, 100), row.outcome, <Status key="s" value={row.status} />]}
       />
     </div>
   );
@@ -260,6 +260,24 @@ function Stat({ label, value, tone }: { label: string; value: number | string; t
 function Status({ value }: { value?: string }) {
   const tone = value === "Verified" || value === "Linked" ? "success" : value === "Rejected" ? "danger" : "warn";
   return <Badge tone={tone}>{value ?? "NeedsReview"}</Badge>;
+}
+
+function PersonCell({ row, name }: { row: any; name?: string }) {
+  const label = name || "-";
+  const linked = Boolean(row.directorId || row.memberId);
+  const to = row.directorId ? "/app/directors" : row.memberId ? "/app/members" : null;
+  const content = (
+    <span className="row" style={{ gap: 4, flexWrap: "wrap" }}>
+      <span>{label}</span>
+      {linked && <Badge tone="success">Linked</Badge>}
+    </span>
+  );
+  return to ? <Link to={to}>{content}</Link> : content;
+}
+
+function MeetingCell({ row }: { row: any }) {
+  const label = row.meetingTitle || "-";
+  return row.meetingId ? <Link to={`/app/meetings/${row.meetingId}`}>{label}</Link> : label;
 }
 
 function Confidence({ value }: { value?: string }) {

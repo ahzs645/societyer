@@ -34,6 +34,7 @@ export const update = mutation({
     patch: v.object({
       firstName: v.optional(v.string()),
       lastName: v.optional(v.string()),
+      memberId: v.optional(v.id("members")),
       email: v.optional(v.string()),
       position: v.optional(v.string()),
       isBCResident: v.optional(v.boolean()),

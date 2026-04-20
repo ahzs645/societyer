@@ -837,6 +837,8 @@ export default defineSchema({
     societyId: v.id("societies"),
     personName: v.string(),
     personKey: v.optional(v.string()),
+    memberId: v.optional(v.id("members")),
+    directorId: v.optional(v.id("directors")),
     roleTitle: v.string(),
     roleGroup: v.optional(v.string()),
     roleType: v.string(), // director | officer | committee | staff | observed
@@ -861,6 +863,10 @@ export default defineSchema({
     roleTitle: v.string(),
     personName: v.optional(v.string()),
     previousPersonName: v.optional(v.string()),
+    memberId: v.optional(v.id("members")),
+    directorId: v.optional(v.id("directors")),
+    previousMemberId: v.optional(v.id("members")),
+    previousDirectorId: v.optional(v.id("directors")),
     meetingId: v.optional(v.id("meetings")),
     minutesId: v.optional(v.id("minutes")),
     motionEvidenceId: v.optional(v.string()),
@@ -1063,6 +1069,8 @@ export default defineSchema({
     meetingTitle: v.string(),
     meetingDate: v.string(),
     personName: v.string(),
+    memberId: v.optional(v.id("members")),
+    directorId: v.optional(v.id("directors")),
     roleTitle: v.optional(v.string()),
     attendanceStatus: v.string(), // present | absent | regrets | guest | needs_review
     quorumCounted: v.optional(v.boolean()),
@@ -1084,7 +1092,11 @@ export default defineSchema({
     meetingDate: v.string(),
     motionText: v.string(),
     movedBy: v.optional(v.string()),
+    movedByMemberId: v.optional(v.id("members")),
+    movedByDirectorId: v.optional(v.id("directors")),
     secondedBy: v.optional(v.string()),
+    secondedByMemberId: v.optional(v.id("members")),
+    secondedByDirectorId: v.optional(v.id("directors")),
     outcome: v.string(),
     voteSummary: v.optional(v.string()),
     pageRef: v.optional(v.string()),
@@ -1153,6 +1165,11 @@ export default defineSchema({
     sourcePath: v.optional(v.string()),
     sourceImportedAtISO: v.optional(v.string()),
     sourceFileCount: v.optional(v.number()),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
+    confidence: v.optional(v.string()),
+    sensitivity: v.optional(v.string()),
+    riskFlags: v.optional(v.array(v.string())),
     sourceNotes: v.optional(v.string()),
     keyFacts: v.optional(v.array(v.string())),
     useOfFunds: v.optional(
@@ -1220,6 +1237,7 @@ export default defineSchema({
     nextReportDueAtISO: v.optional(v.string()),
     notes: v.optional(v.string()),
     createdAtISO: v.string(),
+    updatedAtISO: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
     .index("by_society_status", ["societyId", "status"]),
@@ -1847,6 +1865,10 @@ export default defineSchema({
     abstentions: v.optional(v.number()),
     filingId: v.optional(v.id("filings")),
     filedAtISO: v.optional(v.string()),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
+    importedFrom: v.optional(v.string()),
+    confidence: v.optional(v.string()),
     notes: v.optional(v.string()),
     history: v.array(
       v.object({

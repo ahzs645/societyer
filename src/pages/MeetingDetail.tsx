@@ -36,6 +36,10 @@ export function MeetingDetailPage() {
     api.directors.list,
     society ? { societyId: society._id } : "skip",
   );
+  const members = useQuery(
+    api.members.list,
+    society ? { societyId: society._id } : "skip",
+  );
   const directorNames = (directors ?? []).map((d: any) => `${d.firstName} ${d.lastName}`);
   const generate = useAction(api.minutes.generateDraft);
   const updateMeeting = useMutation(api.meetings.update);
@@ -605,7 +609,11 @@ export function MeetingDetailPage() {
                           Edit attendance
                         </button>
                       </div>
-                      <AttendanceDetails present={minutes.attendees} absent={minutes.absent} />
+                      <AttendanceDetails
+                        present={minutes.attendees}
+                        absent={minutes.absent}
+                        people={personLinkCandidates(members, directors)}
+                      />
                     </div>
                   )}
                 </div>
@@ -790,7 +798,15 @@ export function MeetingDetailPage() {
   );
 }
 
-function AttendanceDetails({ present, absent }: { present: string[]; absent: string[] }) {
+function AttendanceDetails({
+  present,
+  absent,
+  people,
+}: {
+  present: string[];
+  absent: string[];
+  people: PersonLinkCandidate[];
+}) {
   const rows = [
     ...present.map((name) => ({ status: "Present", ...parseAttendanceName(name) })),
     ...absent.map((name) => ({ status: "Absent / regrets", ...parseAttendanceName(name) })),
@@ -825,7 +841,7 @@ function AttendanceDetails({ present, absent }: { present: string[]; absent: str
             {rows.map((row, index) => (
               <tr key={`${row.status}-${row.name}-${index}`}>
                 <td>{row.status}</td>
-                <td>{row.name}</td>
+                <td><LinkedPersonName name={row.name} people={people} /></td>
                 <td>{row.role || "—"}</td>
               </tr>
             ))}
@@ -834,6 +850,48 @@ function AttendanceDetails({ present, absent }: { present: string[]; absent: str
       </div>
     </details>
   );
+}
+
+type PersonLinkCandidate = {
+  id: string;
+  name: string;
+  kind: "member" | "director";
+};
+
+function personLinkCandidates(members: any[] | undefined, directors: any[] | undefined): PersonLinkCandidate[] {
+  return [
+    ...(members ?? []).map((member: any) => ({
+      id: String(member._id),
+      name: `${member.firstName} ${member.lastName}`.trim(),
+      kind: "member" as const,
+    })),
+    ...(directors ?? []).map((director: any) => ({
+      id: String(director._id),
+      name: `${director.firstName} ${director.lastName}`.trim(),
+      kind: "director" as const,
+    })),
+  ];
+}
+
+function LinkedPersonName({ name, people }: { name: string; people: PersonLinkCandidate[] }) {
+  const match = people.find((person) => normalizePersonName(person.name) === normalizePersonName(name));
+  if (!match) return <span>{name}</span>;
+  return (
+    <span className="row" style={{ gap: 4, flexWrap: "wrap" }}>
+      <Link to={match.kind === "director" ? "/app/directors" : "/app/members"}>{name}</Link>
+      <Badge tone="success">Linked</Badge>
+    </span>
+  );
+}
+
+function normalizePersonName(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 function parseAttendanceName(value: string) {

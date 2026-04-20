@@ -7,7 +7,6 @@ import { requireRole } from "./users";
 import {
   waveListAccounts,
   waveListTransactions,
-  waveOAuthUrl,
 } from "./providers/accounting";
 import { providers } from "./providers/env";
 import { redactWaveDiagnostic } from "./providers/waveDiagnostics";
@@ -90,15 +89,11 @@ export const removeBudget = mutation({
 
 export const oauthUrl = query({
   args: { societyId: v.id("societies") },
-  handler: async (_ctx, { societyId }) => {
+  handler: async (_ctx, { societyId: _societyId }) => {
     const p = providers.accounting();
     return {
       provider: p.id,
       live: p.live,
-      url: waveOAuthUrl({
-        redirectUri: "http://localhost:5173/financials",
-        state: societyId,
-      }),
     };
   },
 });

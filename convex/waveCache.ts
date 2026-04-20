@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { action, internalMutation, query } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { waveFetchSnapshot, waveHealthCheck } from "./providers/waveData";
-import { redactWaveDiagnostic } from "./providers/waveDiagnostics";
+import { redactWaveDiagnostic, waveEnvironmentStatus } from "./providers/waveDiagnostics";
 
 const resourceValidator = v.object({
   resourceType: v.string(),
@@ -153,7 +153,28 @@ export const healthCheck = action({
     businessId: v.optional(v.string()),
   },
   handler: async (_ctx, { businessId }) => {
-    return await waveHealthCheck({ businessId });
+    try {
+      return await waveHealthCheck({ businessId });
+    } catch (err: any) {
+      const env = waveEnvironmentStatus();
+      const live = env.some((row) => row.name === "WAVE_ACCESS_TOKEN" && row.present);
+      return {
+        provider: "wave",
+        mode: live ? "live" : "not_configured",
+        ok: false,
+        status: "fail",
+        checkedAtISO: new Date().toISOString(),
+        env,
+        steps: [
+          {
+            id: "health-check",
+            label: "Health check",
+            status: "fail",
+            message: redactWaveDiagnostic(err?.message ?? "Wave health check failed.", [businessId]),
+          },
+        ],
+      };
+    }
   },
 });
 
