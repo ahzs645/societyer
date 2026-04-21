@@ -5,12 +5,13 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field, Flag } from "../components/ui";
 import { DataTable } from "../components/DataTable";
+import { RecordShowPage } from "../components/RecordShowPage";
 import { Select } from "../components/Select";
 import { formatDate, formatDateTime, money } from "../lib/format";
 import { isDemoMode } from "../lib/demoMode";
 import { ArrowLeft, Braces, Database, ExternalLink, Link2, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
 
 const OPERATING_SUBSCRIPTION_INTERVALS = [
@@ -39,6 +40,7 @@ function auditStatusLabel(status: string) {
 
 export function FinancialsPage() {
   const society = useSociety();
+  const navigate = useNavigate();
   const items = useQuery(api.financials.list, society ? { societyId: society._id } : "skip");
   const orgHistory = useQuery(api.organizationHistory.list, society ? { societyId: society._id } : "skip");
   const connections = useQuery(
@@ -114,6 +116,7 @@ export function FinancialsPage() {
   const latest = sorted[0];
   const fiscalYear = latest?.fiscalYear ?? new Date().getFullYear().toString();
   const activeConnection = (connections ?? []).find((c) => c.status === "connected");
+  const browserBackedWaveConnection = isBrowserBackedWaveConnection(activeConnection);
   const importedBudgetReviewCount = (orgHistory?.budgets ?? []).filter((budget: any) => budget.status === "NeedsReview").length;
   const waveLive = oauth?.live === true;
   const waveDemoAvailable = !waveLive && isDemoMode() && oauth?.demoAvailable === true;
@@ -135,6 +138,10 @@ export function FinancialsPage() {
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
+
+  const openFinancialYear = (fiscalYear: string) => {
+    navigate(`/app/financials/fy/${encodeURIComponent(fiscalYear)}`);
+  };
 
   const connect = async () => {
     if (!society) return;
@@ -324,7 +331,7 @@ export function FinancialsPage() {
         <WaveCacheExplorer
           societyId={society._id}
           syncConnectionId={activeConnection?._id}
-          syncFinancials={sync}
+          syncFinancials={browserBackedWaveConnection ? undefined : sync}
           busy={busy}
           mode={waveMode}
           onModeChange={setWaveMode}
@@ -562,7 +569,18 @@ export function FinancialsPage() {
           </thead>
           <tbody>
             {sorted.map((f) => (
-              <tr key={f._id}>
+              <tr
+                key={f._id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open FY ${f.fiscalYear} financial detail`}
+                onClick={() => openFinancialYear(f.fiscalYear)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  openFinancialYear(f.fiscalYear);
+                }}
+              >
                 <td><strong>{f.fiscalYear}</strong></td>
                 <td className="table__cell--mono">{formatDate(f.periodEnd)}</td>
                 <td className="table__cell--mono">{money(f.revenueCents)}</td>
@@ -729,9 +747,327 @@ export function FinancialsPage() {
   );
 }
 
+export function FinancialYearDetailPage() {
+  const society = useSociety();
+  const { fiscalYear: routeFiscalYear } = useParams();
+  const fiscalYear = routeFiscalYear ? decodeURIComponent(routeFiscalYear) : "";
+  const detail = useQuery(
+    api.financials.detailByFiscalYear,
+    society && fiscalYear ? { societyId: society._id, fiscalYear } : "skip",
+  );
+
+  if (society === undefined || detail === undefined) return <div className="page">Loading…</div>;
+  if (society === null) return <SeedPrompt />;
+
+  const financial = detail.financial;
+  const imports = detail.imports ?? [];
+  const exactImports = financial ? imports.filter((row: any) => isExactStatementImport(financial, row)) : [];
+  const relatedImports = imports.filter((row: any) => !exactImports.some((exact: any) => exact._id === row._id));
+  const statementImports = exactImports.length > 0 ? [...exactImports, ...relatedImports] : imports;
+  const documents = detail.documents ?? [];
+  const lineCount = imports.reduce((sum: number, row: any) => sum + (row.lines?.length ?? 0), 0);
+
+  if (!financial && imports.length === 0) {
+    return (
+      <div className="page">
+        <PageHeader
+          title={`FY ${fiscalYear || "financials"}`}
+          icon={<PiggyBank size={16} />}
+          iconColor="green"
+          subtitle="No financial statement rows or import evidence were found for this fiscal year."
+          actions={<Link className="btn-action" to="/app/financials"><ArrowLeft size={12} /> Back to financials</Link>}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <RecordShowPage
+      title={`FY ${fiscalYear} financials`}
+      subtitle={financial ? `Period end ${formatDate(financial.periodEnd)}` : "Import evidence without an approved financial row."}
+      icon={<PiggyBank size={16} />}
+      iconColor="green"
+      actions={<Link className="btn-action" to="/app/financials"><ArrowLeft size={12} /> Back</Link>}
+      chips={
+        <>
+          {financial && <Badge tone={auditStatusTone(financial.auditStatus)}>{auditStatusLabel(financial.auditStatus)}</Badge>}
+          {exactImports.length > 0 && <Badge tone="success">{exactImports.length} matched import{exactImports.length === 1 ? "" : "s"}</Badge>}
+          {documents.length > 0 && <Badge tone="info">{documents.length} source document{documents.length === 1 ? "" : "s"}</Badge>}
+          {lineCount > 0 && <Badge tone="neutral">{lineCount} line item{lineCount === 1 ? "" : "s"}</Badge>}
+        </>
+      }
+      summary={[
+        { label: "Revenue", value: financial ? moneyDetailed(financial.revenueCents) : "—" },
+        { label: "Expenses", value: financial ? moneyDetailed(financial.expensesCents) : "—" },
+        {
+          label: "Net surplus / (deficit)",
+          value: financial ? moneyDetailed(financial.revenueCents - financial.expensesCents) : "—",
+        },
+        { label: "Net assets", value: financial ? moneyDetailed(financial.netAssetsCents) : "—" },
+        { label: "Restricted", value: financial ? moneyDetailed(financial.restrictedFundsCents) : "—" },
+        { label: "Board approval", value: financial?.approvedByBoardAt ? formatDate(financial.approvedByBoardAt) : "—" },
+      ]}
+      tabs={[
+        {
+          id: "tables",
+          label: "Tables",
+          count: lineCount,
+          icon: <Database size={14} />,
+          content: (
+            <StatementImportTables
+              imports={statementImports}
+              exactImportIds={new Set(exactImports.map((row: any) => row._id))}
+            />
+          ),
+        },
+        {
+          id: "docs",
+          label: "Docs",
+          count: documents.length,
+          icon: <Link2 size={14} />,
+          content: <SourceDocumentsTable documents={documents} />,
+        },
+        {
+          id: "imports",
+          label: "Imports",
+          count: imports.length,
+          icon: <Braces size={14} />,
+          content: (
+            <ImportSummaryTable
+              imports={imports}
+              exactImportIds={new Set(exactImports.map((row: any) => row._id))}
+            />
+          ),
+        },
+      ]}
+      inspector={
+        <div className="card">
+          <div className="card__head">
+            <h2 className="card__title">Evidence status</h2>
+          </div>
+          <div className="card__body col">
+            <DetailCell label="Financial row" value={financial?._id ?? "Not created"} mono />
+            <DetailCell label="Matched imports" value={String(exactImports.length)} />
+            <DetailCell label="Related imports" value={String(relatedImports.length)} />
+            <DetailCell label="Source documents" value={String(documents.length)} />
+            <DetailCell label="Line items" value={String(lineCount)} />
+            <DetailCell label="Presented at meeting" value={detail.presentedAtMeeting?.title ?? "—"} />
+          </div>
+        </div>
+      }
+    />
+  );
+}
+
+function StatementImportTables({
+  imports,
+  exactImportIds,
+}: {
+  imports: any[];
+  exactImportIds: Set<string>;
+}) {
+  if (imports.length === 0) {
+    return <div className="card"><div className="card__body muted">No statement import tables are linked to this fiscal year.</div></div>;
+  }
+
+  return (
+    <div className="col" style={{ gap: 16 }}>
+      {imports.map((row) => (
+        <div className="card" key={row._id}>
+          <div className="card__head">
+            <div>
+              <h2 className="card__title">{row.title}</h2>
+              <span className="card__subtitle">
+                {formatDate(row.periodEnd)} · {row.lines?.length ?? 0} line{(row.lines?.length ?? 0) === 1 ? "" : "s"}
+              </span>
+            </div>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              {exactImportIds.has(row._id) && <Badge tone="success">Matches table row</Badge>}
+              <Badge tone={row.status === "Verified" ? "success" : row.status === "Rejected" ? "danger" : "warn"}>{row.status}</Badge>
+              <Badge tone={row.confidence === "High" ? "success" : row.confidence === "Medium" ? "info" : "warn"}>{row.confidence}</Badge>
+            </div>
+          </div>
+          <div className="stat-grid" style={{ margin: "0 16px 16px" }}>
+            <Stat label="Revenue" value={moneyDetailed(row.revenueCents)} />
+            <Stat label="Expenses" value={moneyDetailed(row.expensesCents)} />
+            <Stat label="Net assets" value={moneyDetailed(row.netAssetsCents)} />
+            <Stat label="Restricted" value={moneyDetailed(row.restrictedFundsCents)} />
+          </div>
+          {row.lines?.length > 0 ? (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Section</th>
+                  <th>Line</th>
+                  <th style={{ textAlign: "right" }}>Amount</th>
+                  <th>Confidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {row.lines.map((line: any) => (
+                  <tr key={line._id}>
+                    <td>{line.section}</td>
+                    <td>{line.label}</td>
+                    <td className="table__cell--mono" style={{ textAlign: "right" }}>{moneyDetailed(line.amountCents)}</td>
+                    <td><Badge tone={line.confidence === "High" ? "success" : line.confidence === "Medium" ? "info" : "warn"}>{line.confidence}</Badge></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="card__body muted">No line items were extracted for this import.</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SourceDocumentsTable({ documents }: { documents: any[] }) {
+  if (documents.length === 0) {
+    return <div className="card"><div className="card__body muted">No source documents are linked to this fiscal year.</div></div>;
+  }
+
+  return (
+    <div className="card">
+      <div className="card__head">
+        <h2 className="card__title">Source documents</h2>
+        <span className="card__subtitle">{documents.length} linked document{documents.length === 1 ? "" : "s"}</span>
+      </div>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Source</th>
+            <th>Category</th>
+            <th>Created</th>
+            <th>Access</th>
+          </tr>
+        </thead>
+        <tbody>
+          {documents.map((doc) => (
+            <tr key={doc._id}>
+              <td>
+                <strong>{doc.title}</strong>
+                {doc.fileName && <div className="mono muted" style={{ fontSize: 11 }}>{doc.fileName}</div>}
+              </td>
+              <td className="table__cell--mono">{documentExternalId(doc) ?? "—"}</td>
+              <td><Badge tone={documentCategoryTone(doc.category)}>{doc.category ?? "Document"}</Badge></td>
+              <td className="table__cell--mono">{formatDate(doc.createdAtISO)}</td>
+              <td>
+                {doc.url ? (
+                  <a className="btn btn--ghost btn--sm" href={doc.url} target="_blank" rel="noreferrer">
+                    <ExternalLink size={12} /> Open
+                  </a>
+                ) : (
+                  <span className="muted">Metadata only</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ImportSummaryTable({ imports, exactImportIds }: { imports: any[]; exactImportIds: Set<string> }) {
+  if (imports.length === 0) {
+    return <div className="card"><div className="card__body muted">No import records are linked to this fiscal year.</div></div>;
+  }
+
+  return (
+    <div className="card">
+      <div className="card__head">
+        <h2 className="card__title">Financial statement imports</h2>
+        <span className="card__subtitle">Matched and related records for this fiscal year.</span>
+      </div>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Import</th>
+            <th>Period end</th>
+            <th>Status</th>
+            <th>Revenue</th>
+            <th>Expenses</th>
+            <th>Net assets</th>
+            <th>Lines</th>
+            <th>Sources</th>
+          </tr>
+        </thead>
+        <tbody>
+          {imports.map((row) => (
+            <tr key={row._id}>
+              <td>
+                <strong>{row.title}</strong>
+                {exactImportIds.has(row._id) && <div><Badge tone="success">Matches table row</Badge></div>}
+              </td>
+              <td className="table__cell--mono">{formatDate(row.periodEnd)}</td>
+              <td><Badge tone={row.status === "Verified" ? "success" : row.status === "Rejected" ? "danger" : "warn"}>{row.status}</Badge></td>
+              <td className="table__cell--mono">{moneyDetailed(row.revenueCents)}</td>
+              <td className="table__cell--mono">{moneyDetailed(row.expensesCents)}</td>
+              <td className="table__cell--mono">{moneyDetailed(row.netAssetsCents)}</td>
+              <td className="table__cell--mono">{row.lines?.length ?? 0}</td>
+              <td>
+                <div className="tag-list">
+                  {(row.sourceExternalIds ?? []).map((id: string) => <Badge key={id}>{id}</Badge>)}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function isExactStatementImport(financial: any, statementImport: any) {
+  if (statementImport.periodEnd !== financial.periodEnd) return false;
+  return (
+    optionalCentsMatch(statementImport.revenueCents, financial.revenueCents) &&
+    optionalCentsMatch(statementImport.expensesCents, financial.expensesCents) &&
+    optionalCentsMatch(statementImport.netAssetsCents, financial.netAssetsCents)
+  );
+}
+
+function optionalCentsMatch(importValue: number | undefined, financialValue: number | undefined) {
+  return importValue == null || importValue === financialValue;
+}
+
+function moneyDetailed(cents?: number) {
+  if (cents == null) return "—";
+  return new Intl.NumberFormat("en-CA", {
+    style: "currency",
+    currency: "CAD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(cents / 100);
+}
+
+function documentExternalId(doc: any) {
+  if (Array.isArray(doc.tags)) {
+    const tag = doc.tags.find((value: string) => value.startsWith("paperless:"));
+    if (tag) return tag;
+  }
+  try {
+    const parsed = JSON.parse(doc.content ?? "{}");
+    return parsed.externalId;
+  } catch {
+    return null;
+  }
+}
+
+function documentCategoryTone(category: string): "success" | "warn" | "info" | "neutral" {
+  if (category === "FinancialStatement") return "warn";
+  if (category === "Restricted Paperless Source") return "warn";
+  if (category === "Org History Source") return "info";
+  return "neutral";
+}
+
 export function WaveResourceTablePage() {
   const society = useSociety();
   const { resourceType: routeResourceType } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const tableResourceType = normalizeWaveResourceType(routeResourceType ?? "account");
   const queryResourceType = tableResourceType === "all" ? undefined : tableResourceType;
   const connections = useQuery(
@@ -739,6 +1075,7 @@ export function WaveResourceTablePage() {
     society ? { societyId: society._id } : "skip",
   );
   const activeConnection = (connections ?? []).find((c) => c.status === "connected");
+  const browserBackedWaveConnection = isBrowserBackedWaveConnection(activeConnection);
   const waveSummary = useQuery(
     api.waveCache.summary,
     society ? { societyId: society._id } : "skip",
@@ -758,11 +1095,18 @@ export function WaveResourceTablePage() {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [hideZeroWaveAccounts, setHideZeroWaveAccounts] = useState(false);
-  const [selectedWaveResourceId, setSelectedWaveResourceId] = useState<string | null>(null);
+  const [selectedWaveResourceId, setSelectedWaveResourceId] = useState<string | null>(() => searchParams.get("resourceId"));
   const selectedWaveResource = useQuery(
     api.waveCache.resource,
     selectedWaveResourceId ? { id: selectedWaveResourceId as any } : "skip",
   );
+
+  useEffect(() => {
+    const resourceId = searchParams.get("resourceId");
+    if (resourceId !== selectedWaveResourceId) {
+      setSelectedWaveResourceId(resourceId);
+    }
+  }, [searchParams, selectedWaveResourceId]);
 
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
@@ -774,6 +1118,20 @@ export function WaveResourceTablePage() {
   const hiddenZeroAccounts = allResources.length - rows.length;
   const selectedFallback = allResources.find((row) => row._id === selectedWaveResourceId) ?? null;
   const title = tableResourceType === "all" ? "Wave Data" : `Wave ${waveTypeLabel(tableResourceType)}`;
+
+  const openWaveResource = (resourceId: string) => {
+    setSelectedWaveResourceId(resourceId);
+    const next = new URLSearchParams(searchParams);
+    next.set("resourceId", resourceId);
+    setSearchParams(next, { replace: true });
+  };
+
+  const closeWaveResource = () => {
+    setSelectedWaveResourceId(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete("resourceId");
+    setSearchParams(next, { replace: true });
+  };
 
   const refreshWaveCache = async () => {
     setBusy(true);
@@ -827,7 +1185,7 @@ export function WaveResourceTablePage() {
         data={rows as any[]}
         loading={waveResources === undefined}
         rowKey={(row) => row._id}
-        onRowClick={(row) => setSelectedWaveResourceId(row._id)}
+        onRowClick={(row) => openWaveResource(row._id)}
         rowActionLabel={(row) => `Open ${row.label}`}
         searchPlaceholder={`Search ${title.toLowerCase()}...`}
         searchExtraFields={[(row) => row.searchText]}
@@ -842,7 +1200,7 @@ export function WaveResourceTablePage() {
             className="btn btn--ghost btn--sm"
             onClick={(event) => {
               event.stopPropagation();
-              setSelectedWaveResourceId(row._id);
+              openWaveResource(row._id);
             }}
           >
             <ExternalLink size={12} /> Open
@@ -855,10 +1213,10 @@ export function WaveResourceTablePage() {
         open={Boolean(selectedWaveResourceId)}
         societyId={society._id}
         syncConnectionId={activeConnection?._id}
-        syncFinancials={syncFinancials}
+        syncFinancials={browserBackedWaveConnection ? undefined : syncFinancials}
         resource={selectedWaveResource}
         fallback={selectedFallback}
-        onClose={() => setSelectedWaveResourceId(null)}
+        onClose={closeWaveResource}
       />
     </div>
   );
@@ -872,6 +1230,7 @@ export function WaveAccountDetailPage() {
     society ? { societyId: society._id } : "skip",
   );
   const activeConnection = (connections ?? []).find((c) => c.status === "connected");
+  const browserBackedWaveConnection = isBrowserBackedWaveConnection(activeConnection);
   const resource = useQuery(
     api.waveCache.resource,
     resourceId ? { id: resourceId as any } : "skip",
@@ -896,6 +1255,7 @@ export function WaveAccountDetailPage() {
   useEffect(() => {
     if (activity === undefined) return;
     if (activity.account && activity.total !== 0) return;
+    if (browserBackedWaveConnection) return;
     if (!activeConnection?._id || pullState !== "idle") return;
     let cancelled = false;
     setPullState("pulling");
@@ -912,7 +1272,7 @@ export function WaveAccountDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeConnection?._id, activity?.account?._id, activity?.total, pullState, syncFinancials]);
+  }, [activeConnection?._id, activity?.account?._id, activity?.total, browserBackedWaveConnection, pullState, syncFinancials]);
 
   if (society === undefined || resource === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
@@ -1036,6 +1396,7 @@ export function WaveAccountDetailPage() {
       <TransactionDrawer
         open={Boolean(selectedTransaction)}
         transaction={selectedTransaction}
+        societyId={society._id}
         account={activity?.account}
         onClose={() => setSelectedTransaction(null)}
       />
@@ -1577,6 +1938,12 @@ function WaveResourceDetail({
       ? { societyId, externalId: resource.externalId, limit: 10 }
       : "skip",
   );
+  const counterpartyActivity = useQuery(
+    api.financialHub.transactionsForCounterpartyExternalId,
+    societyId && isWaveCounterpartyResource(resource) && resource.externalId
+      ? { societyId, externalId: resource.externalId, resourceType: resource.resourceType, limit: 10 }
+      : "skip",
+  );
 
   useEffect(() => {
     setPullState("idle");
@@ -1646,6 +2013,12 @@ function WaveResourceDetail({
           accountPageHref={accountPageHref}
           pullState={pullState}
           pullError={pullError}
+        />
+      )}
+      {isWaveCounterpartyResource(resource) && (
+        <CounterpartyTransactionsPreview
+          activity={counterpartyActivity}
+          resource={resource}
         />
       )}
     </div>
@@ -1758,17 +2131,98 @@ function AccountTransactionsPreview({
   );
 }
 
+function CounterpartyTransactionsPreview({
+  activity,
+  resource,
+}: {
+  activity: any;
+  resource: any;
+}) {
+  const rows = activity?.transactions ?? [];
+  return (
+    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <strong>Transactions</strong>
+        {activity?.total != null && (
+          <span className="muted">
+            {activity.total} linked to this {waveTypeLabel(resource.resourceType).toLowerCase()}
+          </span>
+        )}
+      </div>
+      {activity === undefined ? (
+        <div className="muted" style={{ fontSize: 13 }}>Loading linked transactions...</div>
+      ) : rows.length === 0 ? (
+        <div className="muted" style={{ fontSize: 13 }}>
+          No synced transactions are linked to this {waveTypeLabel(resource.resourceType).toLowerCase()} yet.
+          Reimport Wave browser transactions to backfill vendor and customer links for older rows.
+        </div>
+      ) : (
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Description</th>
+              <th>Account</th>
+              <th>Category</th>
+              <th style={{ textAlign: "right" }}>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, 10).map((row: any) => {
+              const accountHref = row.accountResource?._id ? `/app/financials/wave/account/${row.accountResource._id}` : null;
+              return (
+                <tr key={row._id}>
+                  <td className="table__cell--mono">{row.date}</td>
+                  <td>
+                    <strong>{row.description}</strong>
+                    {row.externalId && <div className="muted table__cell--mono" style={{ fontSize: 11 }}>{row.externalId}</div>}
+                  </td>
+                  <td>
+                    {accountHref ? (
+                      <Link to={accountHref}>{row.account?.name ?? row.accountResource?.label ?? "Wave account"}</Link>
+                    ) : (
+                      <span className="muted">{row.account?.name ?? "—"}</span>
+                    )}
+                  </td>
+                  <td>{row.category ? <Badge>{row.category}</Badge> : <span className="muted">uncategorized</span>}</td>
+                  <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(row.amountCents)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 function TransactionDrawer({
   open,
   transaction,
+  societyId,
   account,
   onClose,
 }: {
   open: boolean;
   transaction: any;
+  societyId?: any;
   account: any;
   onClose: () => void;
 }) {
+  const counterpartyResource = useQuery(
+    api.waveCache.resourceByExternalId,
+    societyId && transaction?.counterpartyExternalId
+      ? {
+          societyId,
+          externalId: transaction.counterpartyExternalId,
+          ...(transaction.counterpartyResourceType ? { resourceType: transaction.counterpartyResourceType } : {}),
+        }
+      : "skip",
+  );
+  const counterpartyHref = counterpartyResource
+    ? `/app/financials/wave/${counterpartyResource.resourceType}?resourceId=${counterpartyResource._id}`
+    : null;
+
   return (
     <Drawer open={open} onClose={onClose} title={transaction?.description ?? "Transaction"}>
       {transaction && (
@@ -1789,7 +2243,12 @@ function TransactionDrawer({
             <DetailCell label="Date" value={transaction.date} mono />
             <DetailCell label="Account" value={account?.name ?? "—"} />
             <DetailCell label="Category" value={transaction.category ?? "uncategorized"} />
-            <DetailCell label="Counterparty" value={transaction.counterparty ?? "—"} />
+            <DetailCell
+              label="Counterparty"
+              value={transaction.counterparty ?? "—"}
+              href={counterpartyHref}
+              suffix={counterpartyResource ? waveTypeLabel(counterpartyResource.resourceType) : undefined}
+            />
             <DetailCell label="External reference" value={transaction.externalId ?? "—"} mono />
           </div>
         </div>
@@ -1798,12 +2257,25 @@ function TransactionDrawer({
   );
 }
 
-function DetailCell({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function DetailCell({
+  label,
+  value,
+  mono,
+  href,
+  suffix,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  href?: string | null;
+  suffix?: string;
+}) {
   return (
     <div>
       <div className="muted" style={{ fontSize: 11, textTransform: "uppercase" }}>{label}</div>
       <div className={mono ? "table__cell--mono" : undefined} style={{ fontSize: 13, overflowWrap: "anywhere" }}>
-        {value}
+        {href ? <Link to={href}>{value}</Link> : value}
+        {suffix && <div className="muted" style={{ fontSize: 11 }}>{suffix}</div>}
       </div>
     </div>
   );
@@ -2046,6 +2518,10 @@ function normalizeWaveResourceType(value: string) {
   return aliases[value] ?? value;
 }
 
+function isWaveCounterpartyResource(resource: any) {
+  return resource?.resourceType === "vendor" || resource?.resourceType === "customer";
+}
+
 function waveResourceDetailFields(resource: any, raw: any) {
   const currencyCode = raw?.currency?.code ?? resource.currencyCode;
   const balance = raw?.balance ?? resource.amountValue;
@@ -2082,6 +2558,13 @@ function detailValue(value: unknown) {
 function isZeroWaveAmount(value?: string) {
   if (value == null || value === "") return false;
   return Number(value) === 0;
+}
+
+function isBrowserBackedWaveConnection(connection: any) {
+  return (
+    connection?.provider === "wave" &&
+    (connection?.syncMode === "browser" || /wave browser/i.test(connection?.accountLabel ?? ""))
+  );
 }
 
 function formatWaveValue(value?: string, currencyCode?: string) {

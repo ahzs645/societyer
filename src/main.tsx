@@ -33,6 +33,7 @@ const DeadlinesPage = React.lazy(() => import("./pages/Deadlines").then((m) => (
 const DocumentsPage = React.lazy(() => import("./pages/Documents").then((m) => ({ default: m.DocumentsPage })));
 const ConflictsPage = React.lazy(() => import("./pages/Conflicts").then((m) => ({ default: m.ConflictsPage })));
 const FinancialsPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.FinancialsPage })));
+const FinancialYearDetailPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.FinancialYearDetailPage })));
 const WaveAccountDetailPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.WaveAccountDetailPage })));
 const WaveResourceTablePage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.WaveResourceTablePage })));
 const PrivacyPage = React.lazy(() => import("./pages/Privacy").then((m) => ({ default: m.PrivacyPage })));
@@ -83,6 +84,7 @@ const GrantDetailPage = React.lazy(() => import("./pages/Grants").then((m) => ({
 const GrantEditPage = React.lazy(() => import("./pages/Grants").then((m) => ({ default: m.GrantEditPage })));
 const TransparencyPage = React.lazy(() => import("./pages/Transparency").then((m) => ({ default: m.TransparencyPage })));
 const PaperlessPage = React.lazy(() => import("./pages/Paperless").then((m) => ({ default: m.PaperlessPage })));
+const BrowserConnectorsPage = React.lazy(() => import("./pages/BrowserConnectors").then((m) => ({ default: m.BrowserConnectorsPage })));
 const WorkflowsPage = React.lazy(() => import("./pages/Workflows").then((m) => ({ default: m.WorkflowsPage })));
 const WorkflowDetailPage = React.lazy(() => import("./pages/WorkflowDetail").then((m) => ({ default: m.WorkflowDetailPage })));
 const WorkflowRunsPage = React.lazy(() => import("./pages/WorkflowRuns").then((m) => ({ default: m.WorkflowRunsPage })));
@@ -222,6 +224,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="documents" element={<DocumentsPage />} />
             <Route path="conflicts" element={<ConflictsPage />} />
             <Route path="financials" element={<FinancialsPage />} />
+            <Route path="financials/fy/:fiscalYear" element={<FinancialYearDetailPage />} />
             <Route path="financials/wave/account/:resourceId" element={<WaveAccountDetailPage />} />
             <Route path="financials/wave/:resourceType" element={<WaveResourceTablePage />} />
             <Route
@@ -342,6 +345,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route
               path="paperless"
               element={withModule("paperless", <PaperlessPage />)}
+            />
+            <Route
+              path="browser-connectors"
+              element={withModule("browserConnectors", <BrowserConnectorsPage />)}
             />
             <Route
               path="workflows"

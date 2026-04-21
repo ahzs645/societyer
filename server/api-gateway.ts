@@ -499,6 +499,7 @@ export function mountApiGateway(app: express.Express) {
   router.use(express.json({ limit: "10mb" }));
 
   mountPlatformRoutes(router, client);
+  mountBrowserConnectorRoutes(router, client);
   mountWorkflowBridgeRoutes(router, client);
   for (const route of RESOURCE_ROUTES) mountResourceRoute(router, client, route);
   for (const route of ACTION_ROUTES) mountActionRoute(router, client, route);
@@ -666,6 +667,187 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
         subscriptionId: req.query.subscriptionId,
       });
       res.json(listResponse(rows));
+    }),
+  );
+}
+
+function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
+  router.get(
+    "/browser-connectors/connectors",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (_req, res) => {
+      res.json(await connectorRunnerRequest("GET", "/connectors"));
+    }),
+  );
+
+  router.get(
+    "/browser-connectors/health",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (_req, res) => {
+      res.json(singleResponse(await connectorRunnerRequest("GET", "/healthz")));
+    }),
+  );
+
+  router.get(
+    "/browser-connectors/sessions",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (_req, res) => {
+      res.json(await connectorRunnerRequest("GET", "/sessions"));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/sessions/start-login",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      const body = stripActor(req.body ?? {});
+      res.status(201).json(singleResponse(await connectorRunnerRequest("POST", "/sessions/start-login", body)));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/sessions/:sessionId/finish-login",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      res.json(singleResponse(await connectorRunnerRequest("POST", `/sessions/${encodeURIComponent(req.params.sessionId)}/finish-login`)));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/sessions/:sessionId/stop",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      res.json(singleResponse(await connectorRunnerRequest("POST", `/sessions/${encodeURIComponent(req.params.sessionId)}/stop`)));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/sessions/:sessionId/paste",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      res.json(singleResponse(await connectorRunnerRequest(
+        "POST",
+        `/sessions/${encodeURIComponent(req.params.sessionId)}/paste`,
+        stripActor(req.body ?? {}),
+      )));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/profiles/validate",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      res.json(singleResponse(await connectorRunnerRequest("POST", "/profiles/validate", stripActor(req.body ?? {}))));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/runs/open-page",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      res.json(singleResponse(await connectorRunnerRequest("POST", "/runs/open-page", stripActor(req.body ?? {}))));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/connectors/:connectorId/auth/start",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      const connectorId = encodeURIComponent(String(req.params.connectorId));
+      res.status(201).json(singleResponse(await connectorRunnerRequest("POST", `/connectors/${connectorId}/auth/start`, stripActor(req.body ?? {}))));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/connectors/:connectorId/auth/verify",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      const connectorId = encodeURIComponent(String(req.params.connectorId));
+      res.json(singleResponse(await connectorRunnerRequest("POST", `/connectors/${connectorId}/auth/verify`, stripActor(req.body ?? {}))));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/connectors/:connectorId/auth/sessions/:sessionId/confirm",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      const connectorId = encodeURIComponent(String(req.params.connectorId));
+      const sessionId = encodeURIComponent(String(req.params.sessionId));
+      res.json(singleResponse(await connectorRunnerRequest("POST", `/connectors/${connectorId}/auth/sessions/${sessionId}/confirm`, stripActor(req.body ?? {}))));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/connectors/:connectorId/auth/sessions/:sessionId/actions/:actionId",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      const connectorId = encodeURIComponent(String(req.params.connectorId));
+      const sessionId = encodeURIComponent(String(req.params.sessionId));
+      const actionId = encodeURIComponent(String(req.params.actionId));
+      res.json(singleResponse(await connectorRunnerRequest("POST", `/connectors/${connectorId}/auth/sessions/${sessionId}/actions/${actionId}`, stripActor(req.body ?? {}))));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/connectors/wave/auth/sessions/:sessionId/import-transactions",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      const sessionId = encodeURIComponent(String(req.params.sessionId));
+      const body = stripActor(req.body ?? {});
+      const runnerOutput: any = await connectorRunnerRequest(
+        "POST",
+        `/connectors/wave/auth/sessions/${sessionId}/actions/importTransactions`,
+        body,
+      );
+      const normalized = runnerOutput?.normalized;
+      if (!runnerOutput?.businessId || !normalized?.accounts || !normalized?.transactions) {
+        throw httpError(502, "connector_import_invalid", "Wave connector did not return normalized transaction data.");
+      }
+      const importResult = await convexCall(client, mutation("financialHub.importBrowserWaveTransactions"), dropUndefined({
+        societyId: societyIdFrom(req, req.actor!),
+        businessId: runnerOutput.businessId,
+        profileKey: runnerOutput.profileKey ?? body.profileKey,
+        accounts: normalized.accounts,
+        transactions: normalized.transactions,
+        actingUserId: req.actor?.userId,
+      }));
+      res.json(singleResponse({ ...runnerOutput, import: importResult }));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/connectors/wave/import-transactions",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      const body = stripActor(req.body ?? {});
+      const runnerOutput: any = await connectorRunnerRequest(
+        "POST",
+        "/connectors/wave/actions/importTransactions",
+        body,
+      );
+      const normalized = runnerOutput?.normalized;
+      if (!runnerOutput?.businessId || !normalized?.accounts || !normalized?.transactions) {
+        throw httpError(502, "connector_import_invalid", "Wave connector did not return normalized transaction data.");
+      }
+      const importResult = await convexCall(client, mutation("financialHub.importBrowserWaveTransactions"), dropUndefined({
+        societyId: societyIdFrom(req, req.actor!),
+        businessId: runnerOutput.businessId,
+        profileKey: runnerOutput.profileKey ?? body.profileKey,
+        accounts: normalized.accounts,
+        transactions: normalized.transactions,
+        actingUserId: req.actor?.userId,
+      }));
+      res.json(singleResponse({ ...runnerOutput, import: importResult }));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/connectors/:connectorId/actions/:actionId",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      const connectorId = encodeURIComponent(String(req.params.connectorId));
+      const actionId = encodeURIComponent(String(req.params.actionId));
+      res.json(singleResponse(await connectorRunnerRequest("POST", `/connectors/${connectorId}/actions/${actionId}`, stripActor(req.body ?? {}))));
     }),
   );
 }
@@ -967,6 +1149,34 @@ async function emitWebhookEvent(client: ConvexHttpClient, actor: Actor, type: st
   });
   for (const subscription of subscriptions ?? []) {
     void deliverWebhook(client, subscription, event, 0);
+  }
+}
+
+async function connectorRunnerRequest(method: "GET" | "POST", path: string, body?: Record<string, unknown>) {
+  const baseUrl = process.env.CONNECTOR_RUNNER_BASE_URL ?? "http://127.0.0.1:8890";
+  const secret = process.env.CONNECTOR_RUNNER_SECRET;
+  const response = await fetch(new URL(path, baseUrl).toString(), {
+    method,
+    headers: {
+      ...(body ? { "content-type": "application/json" } : {}),
+      ...(secret ? { "x-connector-runner-secret": secret } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await response.text();
+  const data = text ? safeJson(text) : null;
+  if (!response.ok) {
+    const message = data?.message ?? data?.error ?? `Connector runner returned ${response.status}.`;
+    throw httpError(response.status, "connector_runner_error", message);
+  }
+  return data;
+}
+
+function safeJson(text: string) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { text };
   }
 }
 

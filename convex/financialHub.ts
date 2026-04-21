@@ -69,6 +69,64 @@ export const transactionsForAccountExternalId = query({
   },
 });
 
+export const transactionsForCounterpartyExternalId = query({
+  args: {
+    societyId: v.id("societies"),
+    externalId: v.string(),
+    resourceType: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, { societyId, externalId, resourceType, limit }) => {
+    const [accounts, allRows, snapshots] = await Promise.all([
+      ctx.db
+        .query("financialAccounts")
+        .withIndex("by_society", (q) => q.eq("societyId", societyId))
+        .collect(),
+      ctx.db
+        .query("financialTransactions")
+        .withIndex("by_society", (q) => q.eq("societyId", societyId))
+        .collect(),
+      ctx.db
+        .query("waveCacheSnapshots")
+        .withIndex("by_society_provider", (q) => q.eq("societyId", societyId).eq("provider", "wave"))
+        .order("desc")
+        .take(1),
+    ]);
+    const accountById = new Map(accounts.map((account) => [account._id, account]));
+    const accountResourceByExternalId = new Map<string, any>();
+    const latestSnapshot = snapshots[0];
+    if (latestSnapshot) {
+      const waveResources = await ctx.db
+        .query("waveCacheResources")
+        .withIndex("by_snapshot", (q) => q.eq("snapshotId", latestSnapshot._id))
+        .collect();
+      for (const resource of waveResources) {
+        if (resource.resourceType === "account" && resource.externalId) {
+          accountResourceByExternalId.set(resource.externalId, {
+            _id: resource._id,
+            label: resource.label,
+            resourceType: resource.resourceType,
+          });
+        }
+      }
+    }
+    const rows = allRows
+      .filter((row) => row.counterpartyExternalId === externalId)
+      .filter((row) => !resourceType || row.counterpartyResourceType === resourceType)
+      .sort((a, b) => b.date.localeCompare(a.date));
+    return {
+      transactions: rows.slice(0, limit ?? 500).map((row) => ({
+        ...row,
+        account: accountById.get(row.accountId) ?? null,
+        accountResource: accountById.get(row.accountId)?.externalId
+          ? accountResourceByExternalId.get(accountById.get(row.accountId)!.externalId) ?? null
+          : null,
+      })),
+      total: rows.length,
+    };
+  },
+});
+
 export const budgets = query({
   args: { societyId: v.id("societies"), fiscalYear: v.optional(v.string()) },
   handler: async (ctx, { societyId, fiscalYear }) => {
@@ -235,6 +293,7 @@ export const markConnectionConnected = mutation({
       status: "connected",
       accountLabel: args.accountLabel,
       externalBusinessId: args.externalBusinessId,
+      syncMode: args.demo ? "demo" : "public_api",
       connectedAtISO: new Date().toISOString(),
       demo: args.demo,
     };
@@ -369,6 +428,8 @@ export const _replaceSyncedData = internalMutation({
         amountCents: v.number(),
         category: v.optional(v.string()),
         counterparty: v.optional(v.string()),
+        counterpartyExternalId: v.optional(v.string()),
+        counterpartyResourceType: v.optional(v.string()),
       }),
     ),
   },
@@ -416,6 +477,8 @@ export const _replaceSyncedData = internalMutation({
         amountCents: t.amountCents,
         category: t.category,
         counterparty: t.counterparty,
+        counterpartyExternalId: t.counterpartyExternalId,
+        counterpartyResourceType: t.counterpartyResourceType,
       });
     }
 
@@ -427,11 +490,169 @@ export const _replaceSyncedData = internalMutation({
   },
 });
 
+export const importBrowserWaveTransactions = mutation({
+  args: {
+    societyId: v.id("societies"),
+    businessId: v.string(),
+    profileKey: v.optional(v.string()),
+    accounts: v.array(
+      v.object({
+        externalId: v.string(),
+        name: v.string(),
+        currency: v.string(),
+        accountType: v.string(),
+        balanceCents: v.optional(v.number()),
+        isRestricted: v.boolean(),
+        restrictedPurpose: v.optional(v.string()),
+      }),
+    ),
+    transactions: v.array(
+      v.object({
+        externalId: v.string(),
+        accountExternalId: v.string(),
+        date: v.string(),
+        description: v.string(),
+        amountCents: v.number(),
+        category: v.optional(v.string()),
+        counterparty: v.optional(v.string()),
+        counterpartyExternalId: v.optional(v.string()),
+        counterpartyResourceType: v.optional(v.string()),
+      }),
+    ),
+    actingUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, {
+      actingUserId: args.actingUserId,
+      societyId: args.societyId,
+      required: "Admin",
+    });
+
+    const now = new Date().toISOString();
+    const existingConnections = await ctx.db
+      .query("financialConnections")
+      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+      .collect();
+    const connection =
+      existingConnections.find((row) => row.provider === "wave" && row.externalBusinessId === args.businessId) ??
+      existingConnections.find((row) => row.provider === "wave");
+
+    const connectionPayload = {
+      societyId: args.societyId,
+      provider: "wave",
+      status: "connected",
+      accountLabel: args.profileKey ? `Wave browser profile ${args.profileKey}` : "Wave browser connector",
+      externalBusinessId: args.businessId,
+      syncMode: "browser",
+      connectedAtISO: connection?.connectedAtISO ?? now,
+      lastSyncAtISO: now,
+      lastError: undefined,
+      demo: false,
+    };
+    const connectionId = connection
+      ? (await ctx.db.patch(connection._id, connectionPayload), connection._id)
+      : await ctx.db.insert("financialConnections", connectionPayload);
+
+    const existingAccounts = await ctx.db
+      .query("financialAccounts")
+      .withIndex("by_connection", (q) => q.eq("connectionId", connectionId))
+      .collect();
+    const existingByExternal = new Map(existingAccounts.map((account) => [account.externalId, account]));
+    const accountIdByExternal = new Map(existingAccounts.map((account) => [account.externalId, account._id]));
+
+    const uniqueAccounts = new Map(args.accounts.map((account) => [account.externalId, account]));
+    for (const account of uniqueAccounts.values()) {
+      const existing = existingByExternal.get(account.externalId);
+      const payload = {
+        societyId: args.societyId,
+        connectionId,
+        externalId: account.externalId,
+        name: account.name,
+        currency: account.currency,
+        accountType: account.accountType,
+        balanceCents: account.balanceCents ?? existing?.balanceCents ?? 0,
+        isRestricted: account.isRestricted,
+        restrictedPurpose: account.restrictedPurpose,
+      };
+      if (existing) {
+        await ctx.db.patch(existing._id, payload);
+        accountIdByExternal.set(account.externalId, existing._id);
+      } else {
+        const id = await ctx.db.insert("financialAccounts", payload);
+        accountIdByExternal.set(account.externalId, id);
+      }
+    }
+
+    const previousTransactions = await ctx.db
+      .query("financialTransactions")
+      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+      .collect();
+    for (const transaction of previousTransactions) {
+      if (transaction.connectionId === connectionId) await ctx.db.delete(transaction._id);
+    }
+
+    let insertedTransactions = 0;
+    let skippedTransactions = 0;
+    const seenTransactionIds = new Set<string>();
+    for (const transaction of args.transactions) {
+      if (seenTransactionIds.has(transaction.externalId)) continue;
+      seenTransactionIds.add(transaction.externalId);
+
+      let accountId = accountIdByExternal.get(transaction.accountExternalId);
+      if (!accountId) {
+        accountId = await ctx.db.insert("financialAccounts", {
+          societyId: args.societyId,
+          connectionId,
+          externalId: transaction.accountExternalId,
+          name: "Wave account",
+          currency: "CAD",
+          accountType: "Asset",
+          balanceCents: 0,
+          isRestricted: false,
+        });
+        accountIdByExternal.set(transaction.accountExternalId, accountId);
+      }
+
+      if (!transaction.date) {
+        skippedTransactions += 1;
+        continue;
+      }
+
+      await ctx.db.insert("financialTransactions", {
+        societyId: args.societyId,
+        connectionId,
+        accountId,
+        externalId: transaction.externalId,
+        date: transaction.date,
+        description: transaction.description,
+        amountCents: transaction.amountCents,
+        category: transaction.category,
+        counterparty: transaction.counterparty,
+        counterpartyExternalId: transaction.counterpartyExternalId,
+        counterpartyResourceType: transaction.counterpartyResourceType,
+      });
+      insertedTransactions += 1;
+    }
+
+    return {
+      connectionId,
+      accounts: accountIdByExternal.size,
+      importedAccounts: uniqueAccounts.size,
+      transactions: insertedTransactions,
+      skippedTransactions,
+      syncedAtISO: now,
+    };
+  },
+});
+
 export const sync = action({
   args: { connectionId: v.id("financialConnections") },
   handler: async (ctx, { connectionId }) => {
     const conn = await ctx.runQuery(api.financialHub.getConnection, { id: connectionId });
     if (!conn) throw new Error("Connection not found.");
+    if (isBrowserWaveConnection(conn)) {
+      throw new Error("This Wave connection is browser-backed. Refresh it from Plugin connections with Pull all & save so the public Wave API does not overwrite ledger transactions.");
+    }
     const society = await ctx.runQuery(api.society.getById, { id: conn.societyId });
     const allowDemo = conn.demo === true && society?.demoMode === true;
     try {
@@ -528,6 +749,13 @@ function isDemoFinancialConnection(row: any) {
     row.externalBusinessId === "biz_demo_01" ||
     row.externalBusinessId === "demo_wave_business" ||
     /riverside demo book/i.test(row.accountLabel ?? "")
+  );
+}
+
+function isBrowserWaveConnection(row: any) {
+  return (
+    row.provider === "wave" &&
+    (row.syncMode === "browser" || /wave browser/i.test(row.accountLabel ?? ""))
   );
 }
 

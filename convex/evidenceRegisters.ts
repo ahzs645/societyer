@@ -64,6 +64,111 @@ export const updateReview = mutation({
   },
 });
 
+export const finishFinancePaperlessReview = mutation({
+  args: { societyId: v.id("societies") },
+  handler: async (ctx, { societyId }) => {
+    const completedAt = todayDate();
+    const counts = {
+      budgetVerified: 0,
+      budgetSuperseded: 0,
+      statementsVerified: 0,
+      statementsRejected: 0,
+      transactionsMatched: 0,
+      transactionsIgnored: 0,
+    };
+
+    const budgets = await ctx.db
+      .query("budgetSnapshots")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .collect();
+    for (const row of budgets) {
+      if (hasSource(row, "paperless:1412") && row.title === "2005 Fall Budget") {
+        await ctx.db.patch(row._id, {
+          totalIncomeCents: 2172000,
+          totalExpenseCents: 2029300,
+          netCents: 142700,
+          endingBalanceCents: undefined,
+          status: "Verified",
+          confidence: "High",
+          notes: appendReviewNote(
+            row.notes,
+            `Finance source review completed ${completedAt}: verified against the rendered Paperless budget page. The source shows total income $21,720.00 and total expenses $20,293.00; the previous expense value repeated the income total.`,
+          ),
+        });
+        counts.budgetVerified += 1;
+        continue;
+      }
+
+      await ctx.db.patch(row._id, {
+        status: "Superseded",
+        notes: appendReviewNote(
+          row.notes,
+          `Finance source review completed ${completedAt}: not promoted to official budget data. The imported figures came from OCR or sheet line-item extraction and were not reliable budget totals on visual review.`,
+        ),
+      });
+      counts.budgetSuperseded += 1;
+    }
+
+    const statements = await ctx.db
+      .query("financialStatementImports")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .collect();
+    for (const row of statements) {
+      if (row.status === "Verified" || shouldVerifyReviewedStatement(row)) {
+        await ctx.db.patch(row._id, {
+          status: "Verified",
+          confidence: row.confidence === "Review" ? "High" : row.confidence,
+          notes: appendReviewNote(
+            row.notes,
+            `Finance source review completed ${completedAt}: statement figures were retained as source-backed. Revenue and expense totals were confirmed where visible; net-asset values may be derived from the paired balance sheet, retained earnings, or trial balance support.`,
+          ),
+        });
+        counts.statementsVerified += 1;
+        continue;
+      }
+
+      await ctx.db.patch(row._id, {
+        status: "Rejected",
+        notes: appendReviewNote(
+          row.notes,
+          `Finance source review completed ${completedAt}: rejected as an authoritative financial statement import. This row was metadata-only, a budget/forecast/tax support artifact, or an Office/OCR parser result rather than a confirmed statement total.`,
+        ),
+      });
+      counts.statementsRejected += 1;
+    }
+
+    const transactions = await ctx.db
+      .query("transactionCandidates")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .collect();
+    for (const row of transactions) {
+      if (isSourceBackedLedgerTransaction(row)) {
+        await ctx.db.patch(row._id, {
+          status: "Matched",
+          confidence: row.confidence === "Review" ? "High" : row.confidence,
+          notes: appendReviewNote(
+            row.notes,
+            `Finance source review completed ${completedAt}: source-backed ledger row retained. Amount, debit/credit direction, reference, and running balance were present in the reviewed source text.`,
+          ),
+        });
+        counts.transactionsMatched += 1;
+        continue;
+      }
+
+      await ctx.db.patch(row._id, {
+        status: "Ignored",
+        notes: appendReviewNote(
+          row.notes,
+          `Finance source review completed ${completedAt}: ignored as a transaction candidate. Visual review showed these generic OCR/Office candidates frequently represented document-level amounts, line items, dates, or statement balances rather than posted transactions.`,
+        ),
+      });
+      counts.transactionsIgnored += 1;
+    }
+
+    return counts;
+  },
+});
+
 export const createManual = mutation({
   args: {
     societyId: v.id("societies"),
@@ -155,4 +260,33 @@ function arrayOf(value: unknown) {
 
 function personKey(value: unknown) {
   return cleanText(value)?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function hasSource(row: any, sourceExternalId: string) {
+  return arrayOf(row.sourceExternalIds).includes(sourceExternalId);
+}
+
+function shouldVerifyReviewedStatement(row: any) {
+  return [
+    "FY2022 retained earnings letter review",
+    "Fall 2013 semester finance report review",
+    "October 2005 monthly income statement review",
+  ].includes(cleanText(row.title) ?? "");
+}
+
+function isSourceBackedLedgerTransaction(row: any) {
+  const notes = cleanText(row.notes) ?? "";
+  return (
+    hasSource(row, "paperless:1345") &&
+    /\bSource paperless:1345\b/.test(notes) &&
+    /\b(amount|Cheque\/reference|Running balance)\b/i.test(notes) &&
+    typeof row.amountCents === "number"
+  );
+}
+
+function appendReviewNote(existing: unknown, note: string) {
+  const current = cleanText(existing);
+  if (!current) return note;
+  if (current.includes(note)) return current;
+  return `${current}\n\n${note}`;
 }

@@ -325,6 +325,7 @@ export default defineSchema({
     status: v.string(), // connected | disconnected | error
     accountLabel: v.optional(v.string()),
     externalBusinessId: v.optional(v.string()),
+    syncMode: v.optional(v.string()), // public_api | browser | demo
     connectedAtISO: v.string(),
     lastSyncAtISO: v.optional(v.string()),
     lastError: v.optional(v.string()),
@@ -415,6 +416,8 @@ export default defineSchema({
     amountCents: v.number(),
     category: v.optional(v.string()),
     counterparty: v.optional(v.string()),
+    counterpartyExternalId: v.optional(v.string()),
+    counterpartyResourceType: v.optional(v.string()), // vendor | customer
     // Reconciliation — match this bank line to an internal record so we can
     // prove the general ledger agrees with the bank statement.
     reconciledAtISO: v.optional(v.string()),

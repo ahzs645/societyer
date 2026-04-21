@@ -17,6 +17,7 @@ export const MODULE_DEFAULTS = {
   membershipBilling: true,
   employees: true,
   paperless: true,
+  browserConnectors: true,
   workflows: true,
 } as const;
 
@@ -177,6 +178,13 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     category: "Integrations",
     description: "External document storage, OCR, and Paperless tag sync for Societyer files.",
     includes: ["Paperless-ngx plugin", "Document sync", "Cross-module tagging"],
+  },
+  {
+    key: "browserConnectors",
+    label: "Plugin connections",
+    category: "Integrations",
+    description: "User-authorized browser profiles for plugins that need website access.",
+    includes: ["Plugin login sessions", "Saved browser profiles", "Pipeline connector actions"],
   },
   {
     key: "workflows",

@@ -79,6 +79,28 @@ export const resource = query({
   },
 });
 
+export const resourceByExternalId = query({
+  args: {
+    societyId: v.id("societies"),
+    externalId: v.string(),
+    resourceType: v.optional(v.string()),
+  },
+  handler: async (ctx, { societyId, externalId, resourceType }) => {
+    const snapshot = await latestSnapshot(ctx, societyId);
+    if (!snapshot) return null;
+    const rows = await ctx.db
+      .query("waveCacheResources")
+      .withIndex("by_society_external", (q) => q.eq("societyId", societyId).eq("externalId", externalId))
+      .collect();
+    const row = rows.find((candidate) => candidate.snapshotId === snapshot._id && (!resourceType || candidate.resourceType === resourceType));
+    if (!row) return null;
+    return {
+      ...row,
+      raw: parseJson(row.rawJson, null),
+    };
+  },
+});
+
 export const structures = query({
   args: {
     societyId: v.id("societies"),

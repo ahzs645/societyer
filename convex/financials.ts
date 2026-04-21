@@ -12,6 +12,64 @@ export const list = query({
       .collect(),
 });
 
+export const detailByFiscalYear = query({
+  args: { societyId: v.id("societies"), fiscalYear: v.string() },
+  handler: async (ctx, { societyId, fiscalYear }) => {
+    const rows = await ctx.db
+      .query("financials")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+    const financials = rows
+      .filter((row) => row.fiscalYear === fiscalYear)
+      .sort((a, b) => String(b.periodEnd ?? "").localeCompare(String(a.periodEnd ?? "")));
+    const financial = financials[0] ?? null;
+
+    const imports = await ctx.db
+      .query("financialStatementImports")
+      .withIndex("by_society_fy", (q) => q.eq("societyId", societyId).eq("fiscalYear", fiscalYear))
+      .collect();
+    const importsWithLines = await Promise.all(
+      imports
+        .sort((a, b) => String(b.periodEnd ?? "").localeCompare(String(a.periodEnd ?? "")))
+        .map(async (row) => {
+          const lines = await ctx.db
+            .query("financialStatementImportLines")
+            .withIndex("by_statement_import", (q) => q.eq("statementImportId", row._id))
+            .collect();
+          return {
+            ...row,
+            lines: lines.sort((a, b) => a._creationTime - b._creationTime),
+          };
+        }),
+    );
+
+    const documentIds = new Set<string>();
+    if (financial?.statementsDocId) documentIds.add(financial.statementsDocId);
+    for (const row of importsWithLines) {
+      for (const id of row.sourceDocumentIds ?? []) documentIds.add(id);
+    }
+    const documents = (await Promise.all(Array.from(documentIds).map((id) => ctx.db.get(id as any))))
+      .filter(Boolean);
+
+    const budgets = await ctx.db
+      .query("budgets")
+      .withIndex("by_society_fy", (q) => q.eq("societyId", societyId).eq("fiscalYear", fiscalYear))
+      .collect();
+    const presentedAtMeeting = financial?.presentedAtMeetingId
+      ? await ctx.db.get(financial.presentedAtMeetingId)
+      : null;
+
+    return {
+      financial,
+      financials,
+      imports: importsWithLines,
+      documents,
+      budgets,
+      presentedAtMeeting,
+    };
+  },
+});
+
 export const create = mutation({
   args: {
     societyId: v.id("societies"),

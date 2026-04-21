@@ -868,6 +868,8 @@ const financialTransactions = [
     amountCents: 1500000,
     category: "Grant revenue",
     counterparty: "Harbour Foundation",
+    counterpartyExternalId: "vendor_harbour",
+    counterpartyResourceType: "vendor",
   },
   {
     _id: "static_tx_space",
@@ -880,6 +882,8 @@ const financialTransactions = [
     amountCents: -42000,
     category: "Facilities",
     counterparty: "Riverside Hall",
+    counterpartyExternalId: "vendor_city",
+    counterpartyResourceType: "vendor",
   },
 ];
 
@@ -2024,6 +2028,18 @@ function queryResult(name: string, args: StaticArgs) {
         })),
         feeCad: 40,
       };
+    case "financials:detailByFiscalYear": {
+      const financial = financials.find((row) => row.fiscalYear === args?.fiscalYear) ?? null;
+      const financialDocument = documents.find((row) => row._id === "static_document_financials");
+      return {
+        financial,
+        financials: financial ? [financial] : [],
+        imports: [],
+        documents: financialDocument ? [financialDocument] : [],
+        budgets: [],
+        presentedAtMeeting: null,
+      };
+    }
     case "financialHub:accounts":
       return financialAccounts;
     case "financialHub:connections":
@@ -2046,6 +2062,22 @@ function queryResult(name: string, args: StaticArgs) {
       return {
         account,
         transactions: rows.slice(0, args?.limit ?? 500),
+        total: rows.length,
+      };
+    }
+    case "financialHub:transactionsForCounterpartyExternalId": {
+      const rows = financialTransactions
+        .filter((row) => row.counterpartyExternalId === args?.externalId)
+        .filter((row) => !args?.resourceType || row.counterpartyResourceType === args.resourceType)
+        .sort((a, b) => b.date.localeCompare(a.date));
+      return {
+        transactions: rows.slice(0, args?.limit ?? 500).map((row) => {
+          const account = financialAccounts.find((candidate) => candidate._id === row.accountId) ?? null;
+          const accountResource = account
+            ? waveCacheResources.find((resource) => resource.resourceType === "account" && resource.externalId === account.externalId) ?? null
+            : null;
+          return { ...row, account, accountResource };
+        }),
         total: rows.length,
       };
     }
@@ -2075,6 +2107,14 @@ function queryResult(name: string, args: StaticArgs) {
     }
     case "waveCache:resource": {
       const row = byId(waveCacheResources, args?.id);
+      return row ? { ...row, raw: JSON.parse(row.rawJson) } : null;
+    }
+    case "waveCache:resourceByExternalId": {
+      const row = waveCacheResources.find(
+        (resource) =>
+          resource.externalId === args?.externalId &&
+          (!args?.resourceType || resource.resourceType === args.resourceType),
+      );
       return row ? { ...row, raw: JSON.parse(row.rawJson) } : null;
     }
     case "waveCache:structures":

@@ -114,6 +114,8 @@ services:
       - NODE_ENV=development
       # Public URL the browser uses when the gateway hands out links.
       - SOCIETYER_API_PUBLIC_URL=http://127.0.0.1:8787
+      - CONNECTOR_RUNNER_BASE_URL=${CONNECTOR_RUNNER_BASE_URL:-http://connector-runner:8890}
+      - CONNECTOR_RUNNER_SECRET=${CONNECTOR_RUNNER_SECRET:-change-me-before-using-connectors}
     ports:
       - "8787:8787"
     volumes:
@@ -168,6 +170,7 @@ services:
       - CONNECTOR_BROWSER_PROVIDER=${CONNECTOR_BROWSER_PROVIDER:-blitz}
       - BLITZBROWSER_CDP_URL=ws://blitzbrowser:9999
       - BLITZBROWSER_DASHBOARD_URL=${BLITZBROWSER_DASHBOARD_URL:-http://127.0.0.1:3003}
+      - CONNECTOR_RUNNER_PUBLIC_WS_URL=${CONNECTOR_RUNNER_PUBLIC_WS_URL:-ws://127.0.0.1:8890}
       - NODE_ENV=development
     ports:
       - "8890:8890"
