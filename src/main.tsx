@@ -35,6 +35,7 @@ const ConflictsPage = React.lazy(() => import("./pages/Conflicts").then((m) => (
 const FinancialsPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.FinancialsPage })));
 const FinancialYearDetailPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.FinancialYearDetailPage })));
 const WaveAccountDetailPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.WaveAccountDetailPage })));
+const WaveResourceDetailPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.WaveResourceDetailPage })));
 const WaveResourceTablePage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.WaveResourceTablePage })));
 const PrivacyPage = React.lazy(() => import("./pages/Privacy").then((m) => ({ default: m.PrivacyPage })));
 const SettingsPage = React.lazy(() => import("./pages/Settings").then((m) => ({ default: m.SettingsPage })));
@@ -226,6 +227,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="financials" element={<FinancialsPage />} />
             <Route path="financials/fy/:fiscalYear" element={<FinancialYearDetailPage />} />
             <Route path="financials/wave/account/:resourceId" element={<WaveAccountDetailPage />} />
+            <Route path="financials/wave/:resourceType/:resourceId" element={<WaveResourceDetailPage />} />
             <Route path="financials/wave/:resourceType" element={<WaveResourceTablePage />} />
             <Route
               path="grants"

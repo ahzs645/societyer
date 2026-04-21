@@ -691,7 +691,7 @@ const waveCacheSnapshots = [
     fetchedAtISO: "2026-04-16T16:00:00.000Z",
     resourceCountsJson: JSON.stringify({
       business: 1,
-      account: 2,
+      account: 4,
       vendor: 2,
       product: 2,
       invoice: 1,
@@ -723,6 +723,22 @@ const waveCacheResources = [
     type: { value: "ASSET", name: "Asset" },
     subtype: { value: "CASH_AND_BANK", name: "Cash and Bank" },
     balanceInBusinessCurrency: "27500.00",
+    currency: { code: "CAD" },
+  }),
+  waveResource("static_wave_account_grant_revenue", "account", "cat_grant_revenue", "Grant revenue", "INCOME / INCOME", {
+    id: "cat_grant_revenue",
+    name: "Grant revenue",
+    type: { value: "INCOME", name: "Income" },
+    subtype: { value: "INCOME", name: "Income" },
+    balanceInBusinessCurrency: "15000.00",
+    currency: { code: "CAD" },
+  }),
+  waveResource("static_wave_account_facilities", "account", "cat_facilities", "Facilities", "EXPENSE / EXPENSE", {
+    id: "cat_facilities",
+    name: "Facilities",
+    type: { value: "EXPENSE", name: "Expense" },
+    subtype: { value: "EXPENSE", name: "Expense" },
+    balanceInBusinessCurrency: "420.00",
     currency: { code: "CAD" },
   }),
   waveResource("static_wave_vendor_harbour", "vendor", "vendor_harbour", "Harbour Print Co.", "print@example.org", {
@@ -867,6 +883,7 @@ const financialTransactions = [
     description: "Foundation grant deposit",
     amountCents: 1500000,
     category: "Grant revenue",
+    categoryAccountExternalId: "cat_grant_revenue",
     counterparty: "Harbour Foundation",
     counterpartyExternalId: "vendor_harbour",
     counterpartyResourceType: "vendor",
@@ -881,6 +898,7 @@ const financialTransactions = [
     description: "Community hall rental",
     amountCents: -42000,
     category: "Facilities",
+    categoryAccountExternalId: "cat_facilities",
     counterparty: "Riverside Hall",
     counterpartyExternalId: "vendor_city",
     counterpartyResourceType: "vendor",
@@ -1508,6 +1526,34 @@ function byId(rows: any[], id: string | undefined) {
   return rows.find((row) => row._id === id) ?? null;
 }
 
+function staticCounterpartyStats(externalId?: string) {
+  if (!externalId) return {};
+  const rows = financialTransactions.filter((row) => row.counterpartyExternalId === externalId);
+  if (rows.length === 0) return {};
+  return {
+    linkedTransactionCount: rows.length,
+    linkedTransactionTotalCents: rows.reduce((sum, row) => sum + row.amountCents, 0),
+  };
+}
+
+function staticCategoryAccountStats(externalId?: string, label?: string) {
+  if (!externalId && !label) return {};
+  const normalizedLabel = normalizeStaticCategoryLabel(label);
+  const rows = financialTransactions.filter((row) => {
+    if (externalId && row.categoryAccountExternalId === externalId) return true;
+    return Boolean(normalizedLabel && normalizeStaticCategoryLabel(row.category) === normalizedLabel);
+  });
+  if (rows.length === 0) return {};
+  return {
+    linkedCategoryTransactionCount: rows.length,
+    linkedCategoryTransactionTotalCents: rows.reduce((sum, row) => sum + row.amountCents, 0),
+  };
+}
+
+function normalizeStaticCategoryLabel(value?: string) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 function scopedRows(rows: any[], args: StaticArgs) {
   if (!args?.societyId) return rows;
   return rows.filter((row) => !row.societyId || row.societyId === args.societyId);
@@ -2079,6 +2125,27 @@ function queryResult(name: string, args: StaticArgs) {
           return { ...row, account, accountResource };
         }),
         total: rows.length,
+        linkedTotalCents: rows.reduce((sum, row) => sum + row.amountCents, 0),
+      };
+    }
+    case "financialHub:transactionsForCategoryAccountExternalId": {
+      const normalizedLabel = normalizeStaticCategoryLabel(args?.label);
+      const rows = financialTransactions
+        .filter((row) => {
+          if (row.categoryAccountExternalId === args?.externalId) return true;
+          return Boolean(!row.categoryAccountExternalId && normalizedLabel && normalizeStaticCategoryLabel(row.category) === normalizedLabel);
+        })
+        .sort((a, b) => b.date.localeCompare(a.date));
+      return {
+        transactions: rows.slice(0, args?.limit ?? 500).map((row) => {
+          const account = financialAccounts.find((candidate) => candidate._id === row.accountId) ?? null;
+          const accountResource = account
+            ? waveCacheResources.find((resource) => resource.resourceType === "account" && resource.externalId === account.externalId) ?? null
+            : null;
+          return { ...row, account, accountResource };
+        }),
+        total: rows.length,
+        linkedTotalCents: rows.reduce((sum, row) => sum + row.amountCents, 0),
       };
     }
     case "financialHub:operatingSubscriptions":
@@ -2103,11 +2170,18 @@ function queryResult(name: string, args: StaticArgs) {
         .filter((row) => !args?.resourceType || row.resourceType === args.resourceType)
         .filter((row) => !needle || row.searchText.includes(needle))
         .slice(0, args?.limit ?? waveCacheResources.length)
-        .map(({ rawJson, ...row }) => ({ ...row, hasRawJson: Boolean(rawJson) }));
+        .map(({ rawJson, ...row }) => ({
+          ...row,
+          ...staticCounterpartyStats(row.externalId),
+          ...staticCategoryAccountStats(row.externalId, row.label),
+          hasRawJson: Boolean(rawJson),
+        }));
     }
     case "waveCache:resource": {
       const row = byId(waveCacheResources, args?.id);
-      return row ? { ...row, raw: JSON.parse(row.rawJson) } : null;
+      return row
+        ? { ...row, ...staticCounterpartyStats(row.externalId), ...staticCategoryAccountStats(row.externalId, row.label), raw: JSON.parse(row.rawJson) }
+        : null;
     }
     case "waveCache:resourceByExternalId": {
       const row = waveCacheResources.find(
@@ -2115,7 +2189,9 @@ function queryResult(name: string, args: StaticArgs) {
           resource.externalId === args?.externalId &&
           (!args?.resourceType || resource.resourceType === args.resourceType),
       );
-      return row ? { ...row, raw: JSON.parse(row.rawJson) } : null;
+      return row
+        ? { ...row, ...staticCounterpartyStats(row.externalId), ...staticCategoryAccountStats(row.externalId, row.label), raw: JSON.parse(row.rawJson) }
+        : null;
     }
     case "waveCache:structures":
       return waveCacheStructures.slice(0, args?.limit ?? waveCacheStructures.length).map((row) => ({

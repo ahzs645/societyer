@@ -705,6 +705,7 @@
   overflow: auto;
 }
 
+/* ----- Tablet + phone (<= 980px): sidebar becomes a slide-over drawer ----- */
 @media (max-width: 980px) {
   .app-shell.is-mobile {
     overflow: visible;
@@ -713,6 +714,8 @@
   .app-shell.is-mobile .sidebar {
     position: fixed;
     inset: 0 auto 0 0;
+    /* Twenty's drawer is generous: ~320px on tablet, full-width on phone.
+     * This default covers the tablet band; the phone rule below overrides it. */
     width: min(320px, calc(100vw - 56px));
     height: 100dvh;
     z-index: var(--z-sidebar);
@@ -758,6 +761,23 @@
   .app-shell.is-mobile .sidebar__footer,
   .app-shell.is-mobile .sidebar__nav {
     width: 100%;
+  }
+
+  /* Twenty pads the drawer contents with spacing[5] (20px) on mobile and uses
+   * a 12px gap between sections — matches NavigationDrawer.tsx lines 71-75. */
+  .app-shell.is-mobile .sidebar__nav {
+    padding: var(--s-3) var(--s-5);
+    gap: var(--s-3);
+  }
+  .app-shell.is-mobile .sidebar__brand {
+    padding: var(--s-3) var(--s-5);
+    height: auto;
+    min-height: var(--topbar-h);
+  }
+  .app-shell.is-mobile .sidebar__identity,
+  .app-shell.is-mobile .sidebar__spotlight {
+    padding-left: var(--s-5);
+    padding-right: var(--s-5);
   }
 
   .app-shell.is-mobile .main {
@@ -810,26 +830,92 @@
     transform: translateX(0);
   }
 
+  /* Twenty uses spacing[5] (20px) horizontal padding on mobile page content. */
   .app-shell.is-mobile .page {
-    padding: var(--s-4);
+    padding: var(--s-5);
   }
 }
 
+/* ----- Phone (<= 768px): full-width drawer, larger nav type, wider padding.
+ * Mirrors twenty-ui's MOBILE_VIEWPORT (768px) — see NavigationDrawer.tsx
+ * styled-component `StyledAnimatedContainer` which sets width: 100% on mobile. */
+@media (max-width: 768px) {
+  .app-shell.is-mobile .sidebar,
+  .app-shell.is-mobile.is-collapsed .sidebar {
+    /* Full-width drawer on phones (twenty's StyledAnimatedContainer @ 768px).
+     * The backdrop sits on top and is dismissed by tapping anywhere. */
+    width: 100vw;
+    max-width: 100vw;
+  }
+  .app-shell.is-mobile.is-mobile-nav-open .sidebar-backdrop {
+    /* Drawer covers the whole screen — no content peeking through behind. */
+    left: 0;
+    background: transparent;
+  }
+
+  /* Nav items scale up to font size LG (19.7px) with taller rows for
+   * comfortable tap targets. Matches twenty's NavigationDrawerItem sizing on
+   * mobile (font.size.lg + larger vertical padding). */
+  .app-shell.is-mobile .sidebar__item {
+    font-size: var(--fs-lg);
+    padding: 10px 10px;
+    gap: 12px;
+  }
+  .app-shell.is-mobile .sidebar__item svg,
+  .app-shell.is-mobile .sidebar__icon-chip svg {
+    width: 18px;
+    height: 18px;
+  }
+  .app-shell.is-mobile .sidebar__section {
+    font-size: var(--fs-sm);
+    padding-top: var(--s-4);
+  }
+  .app-shell.is-mobile .sidebar__group-toggle {
+    font-size: var(--fs-md);
+    padding: 8px 10px;
+  }
+
+  /* Inspector becomes a full-screen sheet on phones (twenty's drawer pattern). */
+  .app-shell.is-mobile .inspector {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    border: 0;
+    border-radius: 0;
+  }
+}
+
+/* ----- Phone (<= 760px): page header collapses to a vertical stack with a
+ * thin divider — mirrors twenty's quiet mobile page chrome (no bordered
+ * cards, generous spacing, hairline separators). */
 @media (max-width: 760px) {
   .page {
-    padding: var(--s-4);
+    padding: var(--s-5) var(--s-5) calc(var(--s-6) + env(safe-area-inset-bottom, 0));
   }
 
   .page__header {
     gap: var(--s-2);
     margin-bottom: var(--s-4);
-    padding: 12px;
+    padding: 0 0 var(--s-3);
+    min-height: 0;
+  }
+
+  .page__title {
+    /* Twenty sizes page titles a bit smaller on phones so the header doesn't
+     * dominate the viewport. Still semibold, still -0.03em tracking. */
+    font-size: clamp(18px, 4.5vw, 22px);
+  }
+
+  .page__subtitle {
+    font-size: var(--fs-xs);
   }
 
   .page__actions {
     width: 100%;
     margin-left: 0;
     justify-content: flex-start;
+    gap: var(--s-2);
   }
 
   .page__header-main {
@@ -837,7 +923,11 @@
   }
 }
 
-/* Bottom navigation bar — mobile only */
+/* Bottom navigation bar — mobile only.
+ * Twenty's MobileNavigationBar is deliberately quiet: it sits on the primary
+ * app surface (not a second tone), uses a single hairline top border, and
+ * keeps icons at 16px with a soft rounded-rect active pill rather than a
+ * color accent. We port that look here. */
 .bottom-nav {
   display: none;
 }
@@ -850,10 +940,12 @@
     left: 0;
     right: 0;
     z-index: var(--z-bottom-nav);
-    height: 56px;
-    padding-bottom: env(safe-area-inset-bottom, 0);
-    background: var(--bg-base);
-    border-top: 1px solid var(--border);
+    /* Twenty uses a compact 48px bar (theme spacing[12]); we keep 52px as a
+     * balance between their density and the five items Societyer pins. */
+    height: 52px;
+    padding: 0 var(--s-2) env(safe-area-inset-bottom, 0);
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border-color-light);
     align-items: stretch;
     justify-content: space-around;
   }
@@ -868,23 +960,32 @@
     min-width: 0;
     color: var(--text-tertiary);
     font-size: 10px;
-    font-weight: 500;
+    font-weight: var(--fw-medium);
     border: 0;
     background: transparent;
+    /* Rounded-rect hit area — matches twenty's nav item chrome. */
+    margin: 6px 2px;
     padding: 4px 2px;
-    transition: color 0.1s ease;
+    border-radius: var(--r-sm);
+    transition: background var(--anim-fast) var(--anim-ease), color var(--anim-fast) var(--anim-ease);
     -webkit-tap-highlight-color: transparent;
   }
   .bottom-nav__item:active {
+    background: var(--bg-transparent-light);
     color: var(--text-primary);
   }
   .bottom-nav__item.is-active {
-    color: var(--accent);
+    /* Twenty signals active state with a subtle neutral fill + primary text
+     * color, not a saturated brand color — keeps the bar from competing with
+     * page content. */
+    background: var(--bg-transparent-light);
+    color: var(--text-primary);
   }
   .bottom-nav__item svg {
-    width: 20px;
-    height: 20px;
-    stroke-width: 1.8;
+    /* 16px at stroke-width 2 matches twenty's icon.size.md default. */
+    width: 16px;
+    height: 16px;
+    stroke-width: 2;
   }
   .bottom-nav__item span {
     white-space: nowrap;
@@ -895,7 +996,7 @@
 
   /* Adjust main area to leave room for bottom nav */
   .app-shell.is-mobile .main {
-    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0));
+    padding-bottom: calc(52px + env(safe-area-inset-bottom, 0));
   }
 
   /* Hide sidebar-peek on mobile when bottom nav provides the "More" button */

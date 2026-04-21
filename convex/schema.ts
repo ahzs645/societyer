@@ -415,6 +415,7 @@ export default defineSchema({
     description: v.string(),
     amountCents: v.number(),
     category: v.optional(v.string()),
+    categoryAccountExternalId: v.optional(v.string()),
     counterparty: v.optional(v.string()),
     counterpartyExternalId: v.optional(v.string()),
     counterpartyResourceType: v.optional(v.string()), // vendor | customer

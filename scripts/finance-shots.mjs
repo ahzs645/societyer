@@ -45,19 +45,6 @@ try {
       colorScheme: "light",
     });
     const page = await ctx.newPage();
-    const errorsByRoute = {};
-    page.on("pageerror", (err) => {
-      const key = page.url();
-      (errorsByRoute[key] = errorsByRoute[key] || []).push(err.message);
-    });
-    page.on("console", (msg) => {
-      if (msg.type() === "error") {
-        const key = page.url();
-        (errorsByRoute[key] = errorsByRoute[key] || []).push(
-          `[console.error] ${msg.text()}`,
-        );
-      }
-    });
 
     for (const route of ROUTES) {
       const url = BASE + route.path;
@@ -70,29 +57,51 @@ try {
         console.warn("goto timed out for", url, e.message);
       }
       // Wait a bit for shimmer/suspense
-      await page.waitForTimeout(600);
-      const hasShell = await page.locator(".app-shell").isVisible().catch(() => false);
-      const file = `${OUT}/${route.slug}-${vp.name}.png`;
-      await page.screenshot({ path: file, fullPage: true });
-      const bodyBB = await page.evaluate(() => ({
-        scrollHeight: document.body.scrollHeight,
-        scrollWidth: document.body.scrollWidth,
-        innerWidth: window.innerWidth,
-        innerHeight: window.innerHeight,
-      }));
-      // Also capture above-the-fold
+      await page.waitForTimeout(800);
+
+      // Find the scrollable main content area for a "full" capture
+      const metrics = await page.evaluate(() => {
+        const main = document.querySelector(".main");
+        const pageEl = document.querySelector(".page");
+        const bodyW = document.documentElement.clientWidth;
+        const pageScroll = pageEl
+          ? { sh: pageEl.scrollHeight, ch: pageEl.clientHeight, sw: pageEl.scrollWidth }
+          : null;
+        const mainScroll = main
+          ? { sh: main.scrollHeight, ch: main.clientHeight, sw: main.scrollWidth }
+          : null;
+        return { bodyW, pageScroll, mainScroll };
+      });
+
+      // Capture above-the-fold
       const foldPath = `${OUT}/${route.slug}-${vp.name}-fold.png`;
       await page.screenshot({ path: foldPath, fullPage: false });
-      const overflow = bodyBB.scrollWidth > bodyBB.innerWidth + 1;
+
+      // For a "full content" capture, resize viewport to the content height
+      // so the whole scroll container is visible in one screenshot.
+      const contentH = Math.max(
+        metrics.mainScroll?.sh || 0,
+        metrics.pageScroll?.sh || 0,
+        vp.height,
+      );
+      const tallVp = Math.min(contentH + 40, 6000);
+      if (tallVp > vp.height + 10) {
+        await page.setViewportSize({ width: vp.width, height: tallVp });
+        await page.waitForTimeout(300);
+        const fullPath = `${OUT}/${route.slug}-${vp.name}-full.png`;
+        await page.screenshot({ path: fullPath, fullPage: false });
+        // Reset viewport for next route
+        await page.setViewportSize({ width: vp.width, height: vp.height });
+      }
+
+      const overflow = (metrics.mainScroll?.sw || 0) > metrics.bodyW + 1;
       console.log(
         JSON.stringify({
           vp: vp.name,
           path: route.path,
-          shell: hasShell,
+          contentH,
           overflow,
-          body: bodyBB,
           errors: pageErrors,
-          file,
         }),
       );
       page.off("pageerror", listener);

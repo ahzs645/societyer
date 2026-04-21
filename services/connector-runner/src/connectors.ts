@@ -5,15 +5,23 @@ export type ConnectorManifest = {
   id: string;
   name: string;
   description: string;
+  category?: string;
   auth: {
     startUrl: string;
     allowedOrigins: string[];
+    profileKeyPrefix?: string;
+    confirmMode?: "verified" | "profile";
   };
   actions: Array<{
     id: string;
     name: string;
     description: string;
   }>;
+  utility?: {
+    title: string;
+    description: string;
+    steps: string[];
+  };
 };
 
 export class ConnectorActionError extends Error {
@@ -30,10 +38,13 @@ export const connectors: ConnectorManifest[] = [
   {
     id: "wave",
     name: "Wave",
+    category: "Accounting",
     description: "User-authorized Wave browser connector for transaction exports beyond the public API.",
     auth: {
       startUrl: "https://next.waveapps.com/",
       allowedOrigins: ["https://next.waveapps.com", "https://gql.waveapps.com"],
+      profileKeyPrefix: "wave",
+      confirmMode: "verified",
     },
     actions: [
       {
@@ -47,6 +58,43 @@ export const connectors: ConnectorManifest[] = [
         description: "Fetch all available Wave transactions and normalize them for Societyer financial records.",
       },
     ],
+    utility: {
+      title: "Wave data import",
+      description: "Pull browser-session transactions and save normalized account rows into Societyer.",
+      steps: [
+        "Open Wave in the live browser and finish login.",
+        "Confirm the saved profile or pull while the live session is active.",
+        "Run Preview pull or Pull all & save from the Wave import panel.",
+      ],
+    },
+  },
+  {
+    id: "bc-registry",
+    name: "BC Registry",
+    category: "Registry",
+    description: "Browser utility profile for authenticated BC Registry filing-history exports.",
+    auth: {
+      startUrl: "https://www.bcregistry.ca/societies/",
+      allowedOrigins: ["https://www.bcregistry.ca"],
+      profileKeyPrefix: "bc-registry",
+      confirmMode: "profile",
+    },
+    actions: [
+      {
+        id: "filingHistoryExport",
+        name: "Filing history export",
+        description: "Use a filing-history page utility to download digital PDFs and a CSV table of all filing records.",
+      },
+    ],
+    utility: {
+      title: "BC Registry filing export",
+      description: "Save a BC Registry browser profile, then run a page utility or Chrome extension on a society filing-history page.",
+      steps: [
+        "Open BC Registry in the live browser and navigate to the target society filing history.",
+        "Save the profile so authenticated registry cookies remain available to browser-backed utilities.",
+        "Run the filing-history export utility on the current page to create the CSV and download every digital document.",
+      ],
+    },
   },
 ];
 
@@ -93,6 +141,7 @@ export type WaveNormalizedTransaction = {
   description: string;
   amountCents: number;
   category?: string;
+  categoryAccountExternalId?: string;
   counterparty?: string;
   counterpartyExternalId?: string;
   counterpartyResourceType?: "vendor" | "customer";
@@ -511,6 +560,7 @@ function normalizeWaveTransactionExport(businessAccounts: any[], transactions: a
     if (!account) continue;
 
     const categoryLine = transaction?.lineItems?.find((line: any) => line?.account?.id && line.account.id !== account.externalId);
+    const categoryAccount = upsertNormalizedAccount(accountsByExternalId, categoryLine?.account, transaction?.currency?.code);
     const partyLine = transaction?.lineItems?.find((line: any) => line?.vendor?.name || line?.customer?.name);
     const counterpartyVendor = partyLine?.vendor;
     const counterpartyCustomer = partyLine?.customer;
@@ -527,7 +577,8 @@ function normalizeWaveTransactionExport(businessAccounts: any[], transactions: a
       date,
       description: String(transaction.description ?? transaction.origin?.description ?? "Wave transaction"),
       amountCents,
-      category: categoryLine?.account?.name ?? categoryLine?.account?.subtype?.name,
+      category: categoryAccount?.name ?? categoryLine?.account?.name ?? categoryLine?.account?.subtype?.name,
+      categoryAccountExternalId: categoryAccount?.externalId,
       counterparty,
       counterpartyExternalId,
       counterpartyResourceType,

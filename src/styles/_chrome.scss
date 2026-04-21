@@ -1151,31 +1151,44 @@
   }
 }
 
-/* Mobile card list — replaces the table below 760 px */
+/* Mobile card list — replaces the table below 760 px.
+ * Styled after twenty's mobile record rows: no inter-item dividers inside a
+ * bordered shell, generous 12×16 padding, primary text at body size, and a
+ * subtle secondary-background press state (not an accent color). */
 .card-list {
   display: flex;
   flex-direction: column;
+  border: 1px solid var(--border-color-light);
+  border-radius: var(--r-md);
+  background: var(--bg-panel);
+  overflow: hidden;
 }
 .card-list__item {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--border-color-light);
   background: var(--bg-panel);
+}
+.card-list__item:last-child {
+  border-bottom: 0;
 }
 .card-list__item--interactive {
   cursor: pointer;
+  transition: background var(--anim-fast) var(--anim-ease);
 }
 .card-list__item--interactive:active {
-  background: var(--bg-hover);
+  background: var(--bg-transparent-light);
 }
 .card-list__primary {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s-2);
 }
 .card-list__primary-cell {
   flex: 1;
   min-width: 0;
-  font-weight: 500;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
+  color: var(--text-primary);
 }
 .card-list__actions {
   flex-shrink: 0;
@@ -1194,7 +1207,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   min-width: 0;
 }
 .card-list__detail-label {
@@ -1304,6 +1317,27 @@
   align-items: center;
   gap: var(--s-2);
   flex-shrink: 0;
+}
+
+/* Mobile: collapse PageHeader into a stacked layout with slightly tighter
+ * chrome. Matches twenty's mobile page headers where the title sits on its
+ * own line and actions wrap below at full-width. */
+@media (max-width: 760px) {
+  .page-header {
+    gap: var(--s-2);
+    padding: var(--s-2) 0;
+    margin-bottom: var(--s-3);
+  }
+  .page-header__title {
+    font-size: var(--fs-md);
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  .page-header__actions {
+    flex-wrap: wrap;
+    gap: var(--s-1);
+  }
 }
 
 .empty-state {

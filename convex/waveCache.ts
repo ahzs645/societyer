@@ -54,6 +54,10 @@ export const resources = query({
       .query("waveCacheResources")
       .withIndex("by_snapshot", (q) => q.eq("snapshotId", snapshot._id))
       .collect();
+    const [counterpartyStats, categoryStats] = await Promise.all([
+      linkedTransactionStatsByExternalId(ctx, societyId),
+      linkedCategoryStatsByAccountExternalId(ctx, societyId, rows),
+    ]);
     const needle = search?.trim().toLowerCase();
     return rows
       .filter((row) => !resourceType || row.resourceType === resourceType)
@@ -62,6 +66,8 @@ export const resources = query({
       .slice(0, limit ?? 500)
       .map(({ rawJson, ...row }) => ({
         ...row,
+        ...counterpartyStats.get(row.externalId ?? ""),
+        ...categoryStats.get(row.externalId ?? ""),
         hasRawJson: Boolean(rawJson),
       }));
   },
@@ -72,8 +78,18 @@ export const resource = query({
   handler: async (ctx, { id }) => {
     const row = await ctx.db.get(id);
     if (!row) return null;
+    const snapshotRows = await ctx.db
+      .query("waveCacheResources")
+      .withIndex("by_snapshot", (q) => q.eq("snapshotId", row.snapshotId))
+      .collect();
+    const [counterpartyStats, categoryStats] = await Promise.all([
+      linkedTransactionStatsByExternalId(ctx, row.societyId),
+      linkedCategoryStatsByAccountExternalId(ctx, row.societyId, snapshotRows),
+    ]);
     return {
       ...row,
+      ...counterpartyStats.get(row.externalId ?? ""),
+      ...categoryStats.get(row.externalId ?? ""),
       raw: parseJson(row.rawJson, null),
     };
   },
@@ -94,8 +110,18 @@ export const resourceByExternalId = query({
       .collect();
     const row = rows.find((candidate) => candidate.snapshotId === snapshot._id && (!resourceType || candidate.resourceType === resourceType));
     if (!row) return null;
+    const snapshotRows = await ctx.db
+      .query("waveCacheResources")
+      .withIndex("by_snapshot", (q) => q.eq("snapshotId", snapshot._id))
+      .collect();
+    const [counterpartyStats, categoryStats] = await Promise.all([
+      linkedTransactionStatsByExternalId(ctx, societyId),
+      linkedCategoryStatsByAccountExternalId(ctx, societyId, snapshotRows),
+    ]);
     return {
       ...row,
+      ...counterpartyStats.get(row.externalId ?? ""),
+      ...categoryStats.get(row.externalId ?? ""),
       raw: parseJson(row.rawJson, null),
     };
   },
@@ -323,4 +349,64 @@ function parseJson(value: string, fallback: any) {
   } catch {
     return fallback;
   }
+}
+
+async function linkedTransactionStatsByExternalId(ctx: any, societyId: string) {
+  const rows = await ctx.db
+    .query("financialTransactions")
+    .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .collect();
+  const stats = new Map<string, { linkedTransactionCount: number; linkedTransactionTotalCents: number }>();
+  for (const transaction of rows) {
+    if (!transaction.counterpartyExternalId) continue;
+    const current = stats.get(transaction.counterpartyExternalId) ?? {
+      linkedTransactionCount: 0,
+      linkedTransactionTotalCents: 0,
+    };
+    current.linkedTransactionCount += 1;
+    current.linkedTransactionTotalCents += transaction.amountCents;
+    stats.set(transaction.counterpartyExternalId, current);
+  }
+  return stats;
+}
+
+async function linkedCategoryStatsByAccountExternalId(ctx: any, societyId: string, resources: any[]) {
+  const rows = await ctx.db
+    .query("financialTransactions")
+    .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .collect();
+  const accountIdsByLabel = new Map<string, string[]>();
+  for (const resource of resources) {
+    if (resource.resourceType !== "account" || !resource.externalId) continue;
+    const label = normalizeCategoryLabel(resource.label);
+    if (!label) continue;
+    const ids = accountIdsByLabel.get(label) ?? [];
+    ids.push(resource.externalId);
+    accountIdsByLabel.set(label, ids);
+  }
+
+  const stats = new Map<string, { linkedCategoryTransactionCount: number; linkedCategoryTransactionTotalCents: number }>();
+  for (const transaction of rows) {
+    const matchedExternalIds = new Set<string>();
+    if (transaction.categoryAccountExternalId) {
+      matchedExternalIds.add(transaction.categoryAccountExternalId);
+    }
+    const categoryMatches = accountIdsByLabel.get(normalizeCategoryLabel(transaction.category)) ?? [];
+    for (const externalId of categoryMatches) matchedExternalIds.add(externalId);
+
+    for (const externalId of matchedExternalIds) {
+      const current = stats.get(externalId) ?? {
+        linkedCategoryTransactionCount: 0,
+        linkedCategoryTransactionTotalCents: 0,
+      };
+      current.linkedCategoryTransactionCount += 1;
+      current.linkedCategoryTransactionTotalCents += transaction.amountCents;
+      stats.set(externalId, current);
+    }
+  }
+  return stats;
+}
+
+function normalizeCategoryLabel(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
 }

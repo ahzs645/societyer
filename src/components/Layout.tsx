@@ -945,20 +945,23 @@ export function Layout() {
         </div>
         {isMobileNav && (
           <nav className="bottom-nav" aria-label={t("sidebar.navigation")}>
+            {/* Icon size 16px matches twenty's icon.size.md — the CSS also
+             * clamps to 16px, but passing it through to the SVG avoids the
+             * initial over-render before styles kick in. */}
             <NavLink to="/app" end className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}>
-              <LayoutDashboard size={18} />
+              <LayoutDashboard size={16} strokeWidth={2} />
               <span>{t("nav.dashboard", "Dashboard")}</span>
             </NavLink>
             <NavLink to="/app/tasks" className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}>
-              <ListTodo size={18} />
+              <ListTodo size={16} strokeWidth={2} />
               <span>{t("nav.tasks", "Tasks")}</span>
             </NavLink>
             <NavLink to="/app/meetings" className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}>
-              <Calendar size={18} />
+              <Calendar size={16} strokeWidth={2} />
               <span>{t("nav.meetingsItem", "Meetings")}</span>
             </NavLink>
             <NavLink to="/app/documents" className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}>
-              <FolderOpen size={18} />
+              <FolderOpen size={16} strokeWidth={2} />
               <span>{t("nav.documents", "Docs")}</span>
             </NavLink>
             <button
@@ -966,7 +969,7 @@ export function Layout() {
               className="bottom-nav__item"
               onClick={openSidebar}
             >
-              <Menu size={18} />
+              <Menu size={16} strokeWidth={2} />
               <span>{t("sidebar.more", "More")}</span>
             </button>
           </nav>

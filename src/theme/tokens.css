@@ -215,7 +215,14 @@
   --popover-h-md: 260px;
 
   /* ---------------- Layout — breakpoints (numeric, used by JS via readCssNumber) ---------------- */
+  /* --bp-mobile-sidebar is the point where the sidebar becomes a slide-over drawer
+   * and the bottom nav appears (tablet + phone).
+   * --bp-mobile is twenty-ui's MOBILE_VIEWPORT (768px): the viewport below which
+   * we swap to phone-optimized affordances — full-width drawer, larger tap
+   * targets, more generous page padding. Keep both in sync with the SCSS media
+   * queries below. */
   --bp-mobile-sidebar: 980;
+  --bp-mobile:         768;
   --bp-mobile-card:    760;
 }
 

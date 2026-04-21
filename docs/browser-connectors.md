@@ -57,6 +57,64 @@ curl -X POST http://127.0.0.1:8890/runs/open-page \
   }'
 ```
 
+## Browser utility manifests
+
+Named connectors are the source of truth for browser utility profile defaults:
+
+- `auth.startUrl` controls the first live-browser page.
+- `auth.allowedOrigins` documents where the profile is expected to be used.
+- `auth.profileKeyPrefix` produces the default local profile key.
+- `auth.confirmMode` is either `verified` for connectors with a custom login
+  verifier or `profile` for generic browser utilities where saving the current
+  browser profile is enough.
+- `actions` describe the utility work available for that profile. They can
+  point at built-in runner actions, a page content script, or a Chrome
+  extension workflow.
+
+This keeps the Plugin connections page provider-neutral while allowing
+provider-specific panels, such as the Wave transaction import controls, to stay
+available when that connector is selected.
+
+## BC Registry filing-history utility
+
+`bc-registry` is a generic browser profile connector for BC Registry filing
+history exports. It starts at `https://www.bcregistry.ca/societies/` and saves a
+persistent profile without a custom login verifier.
+
+Start a BC Registry browser session:
+
+```bash
+curl -X POST http://127.0.0.1:8890/connectors/bc-registry/auth/start \
+  -H "content-type: application/json" \
+  -H "x-connector-runner-secret: $CONNECTOR_RUNNER_SECRET" \
+  -d '{
+    "profileKey": "bc-registry-local-demo",
+    "liveView": true
+  }'
+```
+
+After the user navigates to the target society filing history, save the profile:
+
+```bash
+curl -X POST http://127.0.0.1:8890/connectors/bc-registry/auth/sessions/<sessionId>/confirm \
+  -H "content-type: application/json" \
+  -H "x-connector-runner-secret: $CONNECTOR_RUNNER_SECRET" \
+  -d '{}'
+```
+
+The filing export itself is best implemented as a Chrome extension/content
+script on `https://www.bcregistry.ca/societies/*/filingHistory`:
+
+- Wait for the DataTables instance to initialize.
+- Read every row from `$('#filings-table').DataTable().rows().nodes()` rather
+  than clicking through pagination.
+- Extract each document link and build a queue of PDF URLs.
+- Generate the filing-history CSV before starting downloads.
+- Download PDFs sequentially with `fetch(url, { credentials: "include" })`,
+  a blob URL, and a short delay between files.
+- Confirm each response is `application/pdf`; treat redirects or HTML responses
+  as session-expired failures.
+
 ## Wave connector
 
 Wave is the first named connector on top of the generic browser runner. The

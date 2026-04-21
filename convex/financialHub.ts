@@ -11,6 +11,10 @@ import {
 import { providers } from "./providers/env";
 import { redactWaveDiagnostic } from "./providers/waveDiagnostics";
 
+function normalizeCategoryLabel(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 export const connections = query({
   args: { societyId: v.id("societies") },
   handler: async (ctx, { societyId }) =>
@@ -114,6 +118,7 @@ export const transactionsForCounterpartyExternalId = query({
       .filter((row) => row.counterpartyExternalId === externalId)
       .filter((row) => !resourceType || row.counterpartyResourceType === resourceType)
       .sort((a, b) => b.date.localeCompare(a.date));
+    const linkedTotalCents = rows.reduce((sum, row) => sum + row.amountCents, 0);
     return {
       transactions: rows.slice(0, limit ?? 500).map((row) => ({
         ...row,
@@ -123,6 +128,72 @@ export const transactionsForCounterpartyExternalId = query({
           : null,
       })),
       total: rows.length,
+      linkedTotalCents,
+    };
+  },
+});
+
+export const transactionsForCategoryAccountExternalId = query({
+  args: {
+    societyId: v.id("societies"),
+    externalId: v.string(),
+    label: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, { societyId, externalId, label, limit }) => {
+    const [accounts, allRows, snapshots] = await Promise.all([
+      ctx.db
+        .query("financialAccounts")
+        .withIndex("by_society", (q) => q.eq("societyId", societyId))
+        .collect(),
+      ctx.db
+        .query("financialTransactions")
+        .withIndex("by_society", (q) => q.eq("societyId", societyId))
+        .collect(),
+      ctx.db
+        .query("waveCacheSnapshots")
+        .withIndex("by_society_provider", (q) => q.eq("societyId", societyId).eq("provider", "wave"))
+        .order("desc")
+        .take(1),
+    ]);
+    const accountById = new Map(accounts.map((account) => [account._id, account]));
+    const accountResourceByExternalId = new Map<string, any>();
+    const latestSnapshot = snapshots[0];
+    if (latestSnapshot) {
+      const waveResources = await ctx.db
+        .query("waveCacheResources")
+        .withIndex("by_snapshot", (q) => q.eq("snapshotId", latestSnapshot._id))
+        .collect();
+      for (const resource of waveResources) {
+        if (resource.resourceType === "account" && resource.externalId) {
+          accountResourceByExternalId.set(resource.externalId, {
+            _id: resource._id,
+            label: resource.label,
+            resourceType: resource.resourceType,
+          });
+        }
+      }
+    }
+    const normalizedLabel = normalizeCategoryLabel(label);
+    const rows = allRows
+      .filter((row) => {
+        if (row.categoryAccountExternalId === externalId) return true;
+        if (!row.categoryAccountExternalId && normalizedLabel && normalizeCategoryLabel(row.category) === normalizedLabel) return true;
+        return false;
+      })
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const linkedTotalCents = rows.reduce((sum, row) => sum + row.amountCents, 0);
+    return {
+      transactions: rows.slice(0, limit ?? 500).map((row) => {
+        const account = accountById.get(row.accountId) ?? null;
+        return {
+          ...row,
+          account,
+          accountResource: account?.externalId ? accountResourceByExternalId.get(account.externalId) ?? null : null,
+        };
+      }),
+      total: rows.length,
+      linkedTotalCents,
     };
   },
 });
@@ -427,6 +498,7 @@ export const _replaceSyncedData = internalMutation({
         description: v.string(),
         amountCents: v.number(),
         category: v.optional(v.string()),
+        categoryAccountExternalId: v.optional(v.string()),
         counterparty: v.optional(v.string()),
         counterpartyExternalId: v.optional(v.string()),
         counterpartyResourceType: v.optional(v.string()),
@@ -476,6 +548,7 @@ export const _replaceSyncedData = internalMutation({
         description: t.description,
         amountCents: t.amountCents,
         category: t.category,
+        categoryAccountExternalId: t.categoryAccountExternalId,
         counterparty: t.counterparty,
         counterpartyExternalId: t.counterpartyExternalId,
         counterpartyResourceType: t.counterpartyResourceType,
@@ -514,6 +587,7 @@ export const importBrowserWaveTransactions = mutation({
         description: v.string(),
         amountCents: v.number(),
         category: v.optional(v.string()),
+        categoryAccountExternalId: v.optional(v.string()),
         counterparty: v.optional(v.string()),
         counterpartyExternalId: v.optional(v.string()),
         counterpartyResourceType: v.optional(v.string()),
@@ -627,6 +701,7 @@ export const importBrowserWaveTransactions = mutation({
         description: transaction.description,
         amountCents: transaction.amountCents,
         category: transaction.category,
+        categoryAccountExternalId: transaction.categoryAccountExternalId,
         counterparty: transaction.counterparty,
         counterpartyExternalId: transaction.counterpartyExternalId,
         counterpartyResourceType: transaction.counterpartyResourceType,

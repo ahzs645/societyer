@@ -10,6 +10,7 @@ import {
   activeWaveListTransactionsSchema,
   businessIdFromWaveUrl,
   businessUuidFromWaveBusinessId,
+  type ConnectorManifest,
   ConnectorActionError,
   connectors,
   installWaveBearerCapture,
@@ -64,6 +65,7 @@ const profilePageSchema = z.object({
   browserVersion: z.string().optional(),
   proxyUrl: z.string().url().optional(),
 });
+type ProfilePageInput = z.infer<typeof profilePageSchema>;
 
 const sessionPasteSchema = z.object({
   text: z.string().min(1).max(20_000),
@@ -100,10 +102,37 @@ function asyncRoute(
   };
 }
 
-async function connectSession(cdpUrl: string) {
+async function fullscreenBrowserWindow(page: Page) {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const client = await page.context().newCDPSession(page);
+    try {
+      const result = await client.send("Browser.getWindowForTarget") as { windowId?: number };
+      if (typeof result.windowId !== "number") return;
+      await client.send("Browser.setWindowBounds", {
+        windowId: result.windowId,
+        bounds: { windowState: "fullscreen" },
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    } finally {
+      await client.detach().catch(() => undefined);
+    }
+  }
+
+  console.warn("Could not fullscreen live-view browser window.", lastError);
+}
+
+async function connectSession(cdpUrl: string, options?: { fullscreenWindow?: boolean }) {
   const browser = await chromium.connectOverCDP(cdpUrl);
   const context = browser.contexts()[0] ?? await browser.newContext();
   const page = context.pages()[0] ?? await context.newPage();
+  if (options?.fullscreenWindow) {
+    await fullscreenBrowserWindow(page);
+  }
   return { browser, context, page };
 }
 
@@ -167,6 +196,51 @@ async function selectorVisible(page: Page, selector?: string) {
   }
 }
 
+function connectorOriginStatus(connector: ConnectorManifest, url: string) {
+  try {
+    const origin = new URL(url).origin;
+    const allowed = connector.auth.allowedOrigins;
+    return {
+      origin,
+      allowedOrigin: allowed.length === 0 || allowed.includes(origin),
+    };
+  } catch {
+    return {
+      origin: undefined,
+      allowedOrigin: undefined,
+    };
+  }
+}
+
+async function verifyGenericConnectorProfile(page: Page, connector: ConnectorManifest, input: ProfilePageInput) {
+  await page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 45_000 });
+  if (input.waitForSelector) {
+    await page.waitForSelector(input.waitForSelector, { timeout: 10_000 });
+  }
+  await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
+
+  const unauthenticated = await selectorVisible(page, input.unauthenticatedSelector);
+  const authenticated = await selectorVisible(page, input.authenticatedSelector);
+  const currentUrl = page.url();
+  const bodyText = input.includeBodyText
+    ? (await page.locator("body").innerText({ timeout: 5_000 }).catch(() => "")).slice(0, 4000)
+    : undefined;
+
+  return {
+    connectorId: connector.id,
+    profileKey: input.profileKey,
+    currentUrl,
+    title: await page.title().catch(() => undefined),
+    authenticated:
+      authenticated === true ? true :
+      unauthenticated === true ? false :
+      undefined,
+    ...connectorOriginStatus(connector, currentUrl),
+    checkedAtISO: new Date().toISOString(),
+    bodyText,
+  };
+}
+
 async function openWaveTransactionsPage(page: Page, businessId: string) {
   const businessUuid = businessUuidFromWaveBusinessId(businessId);
   if (!businessUuid) return;
@@ -227,7 +301,9 @@ app.post("/sessions/start-login", asyncRoute(async (req, res) => {
     proxyUrl: input.proxyUrl,
   });
 
-  const { browser, context, page } = await connectSession(browserSession.cdpUrl);
+  const { browser, context, page } = await connectSession(browserSession.cdpUrl, {
+    fullscreenWindow: browserSession.liveViewEnabled,
+  });
   if (input.startUrl) {
     await page.goto(input.startUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
   }
@@ -390,7 +466,9 @@ app.post("/connectors/:connectorId/auth/start", asyncRoute(async (req, res) => {
     proxyUrl: input.proxyUrl,
   });
 
-  const { browser, context, page } = await connectSession(browserSession.cdpUrl);
+  const { browser, context, page } = await connectSession(browserSession.cdpUrl, {
+    fullscreenWindow: browserSession.liveViewEnabled,
+  });
   await page.goto(input.startUrl!, { waitUntil: "domcontentloaded", timeout: 45_000 });
   const vncPort = input.liveView ? await detectNewVncPort(beforeVncPorts, vncHost) : undefined;
 
@@ -434,13 +512,15 @@ app.post("/connectors/:connectorId/auth/verify", asyncRoute(async (req, res) => 
     proxyUrl: input.proxyUrl,
   });
 
-  const { browser, page } = await connectSession(browserSession.cdpUrl);
+  const { browser, page } = await connectSession(browserSession.cdpUrl, {
+    fullscreenWindow: browserSession.liveViewEnabled,
+  });
   try {
     if (connector.id === "wave") {
       res.json(await verifyWaveAuth(page));
       return;
     }
-    res.json({ connectorId: connector.id, authenticated: undefined, checkedAtISO: new Date().toISOString() });
+    res.json(await verifyGenericConnectorProfile(page, connector, input));
   } finally {
     await browser.close().catch(() => undefined);
   }
@@ -460,12 +540,21 @@ app.post("/connectors/:connectorId/auth/sessions/:sessionId/confirm", asyncRoute
     return;
   }
 
-  if (connector.id !== "wave") {
-    throw new ConnectorActionError(404, "connector_verifier_not_found", `Connector "${connector.id}" does not define an auth verifier.`);
-  }
+  const finalUrl = session.page.url();
+  const title = await session.page.title().catch(() => undefined);
+  const auth = connector.id === "wave"
+    ? await verifyWaveAuth(session.page)
+    : {
+      connectorId: connector.id,
+      currentUrl: finalUrl,
+      title,
+      authenticated: undefined,
+      reauthRequired: undefined,
+      ...connectorOriginStatus(connector, finalUrl),
+      checkedAtISO: new Date().toISOString(),
+    };
 
-  const auth = await verifyWaveAuth(session.page);
-  if (!auth.authenticated) {
+  if (connector.id === "wave" && !auth.authenticated) {
     res.status(409).json({
       ...auth,
       sessionId: session.sessionId,
@@ -484,7 +573,7 @@ app.post("/connectors/:connectorId/auth/sessions/:sessionId/confirm", asyncRoute
     saved: true,
     savedAtISO: new Date().toISOString(),
     finalUrl: session.page.url(),
-    title: await session.page.title().catch(() => undefined),
+    title: auth.title ?? title,
   };
   await closeActiveSession(session);
   res.json(result);
@@ -580,7 +669,9 @@ app.post("/connectors/:connectorId/actions/:actionId", asyncRoute(async (req, re
     readOnly: true,
   });
 
-  const { browser, page } = await connectSession(browserSession.cdpUrl);
+  const { browser, page } = await connectSession(browserSession.cdpUrl, {
+    fullscreenWindow: browserSession.liveViewEnabled,
+  });
   const runId = crypto.randomUUID();
   const startedAtISO = new Date().toISOString();
   let bearer: string | undefined;
@@ -631,7 +722,9 @@ app.post("/profiles/validate", asyncRoute(async (req, res) => {
     proxyUrl: input.proxyUrl,
   });
 
-  const { browser, page } = await connectSession(browserSession.cdpUrl);
+  const { browser, page } = await connectSession(browserSession.cdpUrl, {
+    fullscreenWindow: browserSession.liveViewEnabled,
+  });
   try {
     await page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 45_000 });
     if (input.waitForSelector) {
@@ -673,7 +766,9 @@ app.post("/runs/open-page", asyncRoute(async (req, res) => {
     proxyUrl: input.proxyUrl,
   });
 
-  const { browser, page } = await connectSession(browserSession.cdpUrl);
+  const { browser, page } = await connectSession(browserSession.cdpUrl, {
+    fullscreenWindow: browserSession.liveViewEnabled,
+  });
   const startedAtISO = new Date().toISOString();
   try {
     await page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 45_000 });
