@@ -75,7 +75,7 @@ export function AttestationsPage() {
 
       {missing && missing.length > 0 && (
         <div className="col" style={{ marginBottom: 16, gap: 6 }}>
-          <Flag level="warn">
+          <Flag level="warn" citationId="BC-SOC-DIRECTOR-QUALIFICATIONS">
             {missing.length} director{missing.length === 1 ? "" : "s"} have not yet attested for {year}.
           </Flag>
         </div>

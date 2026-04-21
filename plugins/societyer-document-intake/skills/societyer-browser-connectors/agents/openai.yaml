@@ -1,0 +1,4 @@
+interface:
+  display_name: "Societyer Browser Connectors"
+  short_description: "Operate Societyer browser-backed connector sessions."
+  default_prompt: "Use Societyer browser connectors to start or inspect a live session, guide login, run a connector action, and verify the result."

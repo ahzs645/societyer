@@ -59,10 +59,10 @@ export function PrivacyPage() {
 
       <div className="two-col">
         <div className="col" style={{ gap: 12 }}>
-          <Flag level={hasPolicy ? "ok" : "warn"}>
+          <Flag level={hasPolicy ? "ok" : "warn"} citationId="PIPA-POLICY">
             {hasPolicy ? "PIPA privacy policy on file." : "No PIPA privacy policy uploaded. Add one in Documents."}
           </Flag>
-          <Flag level={hasOfficer ? "ok" : "warn"}>
+          <Flag level={hasOfficer ? "ok" : "warn"} citationId="PIPA-OFFICER">
             {hasOfficer ? (
               <>
                 Privacy officer: <strong>{society.privacyOfficerName}</strong> ({society.privacyOfficerEmail})
@@ -71,14 +71,20 @@ export function PrivacyPage() {
               "No privacy officer designated. Add one on the Society page."
             )}
           </Flag>
-          <Flag level={!communicationsEnabled || missingPrefCoverage ? "warn" : "ok"}>
+          <Flag
+            level={!communicationsEnabled || missingPrefCoverage ? "warn" : "ok"}
+            citationIds={["PIPA-CONSENT", "CASL-CONSENT"]}
+          >
             {!communicationsEnabled
               ? "Communications module is disabled, so member consent preferences are not being tracked in-app."
               : missingPrefCoverage
                 ? `${prefCoverage}/${activeMembers.length} active member communication preference records are on file.`
                 : "Communication preference records are on file for active members."}
           </Flag>
-          <Flag level={!trainingEnabled || caslTrainingCount > 0 ? "ok" : "warn"}>
+          <Flag
+            level={!trainingEnabled || caslTrainingCount > 0 ? "ok" : "warn"}
+            citationIds={["PIPA-POLICY", "CASL-CONSENT"]}
+          >
             {!trainingEnabled
               ? "PIPA training module is disabled, so training records are being handled outside this workspace."
               : caslTrainingCount > 0

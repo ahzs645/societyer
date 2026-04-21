@@ -181,10 +181,10 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   },
   {
     key: "browserConnectors",
-    label: "Plugin connections",
+    label: "Browser apps",
     category: "Integrations",
-    description: "User-authorized browser profiles for plugins that need website access.",
-    includes: ["Plugin login sessions", "Saved browser profiles", "Pipeline connector actions"],
+    description: "User-authorized browser app profiles for imports, downloads, and site utilities.",
+    includes: ["App login sessions", "Saved browser profiles", "Browser utility actions"],
   },
   {
     key: "workflows",

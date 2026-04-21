@@ -84,7 +84,13 @@ export function TreasurerPage() {
           </label>
           <label className="row" style={{ gap: 6 }}>
             <span className="muted">FY</span>
-            <input className="input" value={fy} onChange={(e) => setFy(e.target.value)} style={{ width: 80 }} />
+            <input
+              className="input"
+              value={fy}
+              onChange={(e) => setFy(e.target.value)}
+              inputMode="numeric"
+              style={{ width: 90, maxWidth: "100%" }}
+            />
           </label>
         </div>
       </div>

@@ -545,6 +545,20 @@
   padding: 22px 24px 24px;
   background: transparent;
   flex: 1;
+  /* Belt-and-braces: prevent horizontal overflow at the page root. Any child
+   * that exceeds the viewport width (wide grids, inline-style fixed widths,
+   * etc.) now causes vertical layout adjustments rather than pushing the
+   * whole page horizontally. Long strings/URLs wrap instead of truncating. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Images and media never break out of their container on mobile. */
+.page img,
+.page video,
+.page canvas,
+.page iframe {
+  max-width: 100%;
+  height: auto;
 }
 .page--flush {
   padding: 0;

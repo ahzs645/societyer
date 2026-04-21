@@ -3,7 +3,11 @@
 .flag--ok { background: var(--success-soft); color: var(--success); }
 .flag--warn { background: var(--warn-soft); color: var(--warn); }
 .flag--err { background: var(--danger-soft); color: var(--danger); }
-.flag svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 2px; }
+.flag > svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 2px; }
+
+.flag__body { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+.flag__text { min-width: 0; }
+.flag__citations { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 
 /* Timeline */
 .timeline { display: flex; flex-direction: column; gap: var(--s-3); }
@@ -1884,4 +1888,21 @@
   .grant-edit-grid--4 {
     grid-template-columns: 1fr;
   }
+}
+
+/* Budget line editor rows (OrganizationHistory). On phones the 4-column grid
+ * collapses to a 2-row layout: section/remove button on top, label/amount
+ * below. Keeps the trash button reachable without horizontal scroll. */
+@media (max-width: 560px) {
+  .budget-line-row {
+    grid-template-columns: minmax(0, 1fr) 34px !important;
+    grid-template-areas:
+      "section remove"
+      "label   label"
+      "amount  amount";
+  }
+  .budget-line-row > select { grid-area: section; }
+  .budget-line-row > input[placeholder="Line label"] { grid-area: label; }
+  .budget-line-row > input[placeholder="Amount"] { grid-area: amount; }
+  .budget-line-row > button { grid-area: remove; }
 }

@@ -234,7 +234,7 @@ const NAV_GROUPS: NavGroup[] = [
     id: "workflows",
     label: "Workflows",
     items: [
-      { to: "/app/browser-connectors", label: "Plugin connections", icon: MonitorPlay, color: "orange", module: "browserConnectors" },
+      { to: "/app/browser-connectors", label: "Browser apps", icon: MonitorPlay, color: "orange", module: "browserConnectors" },
       { to: "/app/workflows", label: "Workflows", icon: Workflow, color: "orange", module: "workflows" },
       { to: "/app/workflow-runs", label: "Workflow runs", icon: History, color: "gray", module: "workflows" },
     ],
@@ -359,7 +359,7 @@ const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   Reconciliation: "nav.reconciliation",
   "Donation receipts": "nav.donationReceipts",
   "Membership & billing": "nav.membership",
-  "Plugin connections": "nav.browserConnectors",
+  "Browser apps": "nav.browserConnectors",
   Workflows: "nav.workflows",
   "Workflow runs": "nav.workflowRuns",
   Notifications: "nav.notifications",

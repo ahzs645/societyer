@@ -107,7 +107,7 @@ export function AgendaBuilderPage() {
             className="input"
             value={newMeetingId}
             onChange={(e) => setNewMeetingId(e.target.value)}
-            style={{ minWidth: 260 }}
+            style={{ flex: "1 1 220px", minWidth: 0 }}
           >
             <option value="">Select meeting…</option>
             {(meetings ?? []).map((m: any) => (
@@ -121,7 +121,7 @@ export function AgendaBuilderPage() {
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             placeholder="Agenda title (e.g. Board — May 2026)"
-            style={{ flex: 1, minWidth: 240 }}
+            style={{ flex: "1 1 220px", minWidth: 0 }}
           />
           <button className="btn btn--accent" onClick={handleCreate}>
             <Plus size={14} /> Create

@@ -127,7 +127,7 @@ export function GoalsPage() {
       )}
 
       {view === "grid" && (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 360px), 1fr))", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 280px), 1fr))", gap: 16 }}>
         {filtered.map((g: any) => {
           const committee = (committees ?? []).find((c: any) => c._id === g.committeeId);
           const total = g.milestones.length;

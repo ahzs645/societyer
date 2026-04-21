@@ -243,7 +243,7 @@ export function CommitteeDetailPage() {
                       size="sm"
                       value={t.status}
                       onChange={(v) => updateTask({ id: t._id, patch: { status: v } })}
-                      style={{ width: 120 }}
+                      style={{ width: 120, maxWidth: "100%" }}
                       options={["Todo", "InProgress", "Blocked", "Done"].map((s) => ({ value: s, label: s }))}
                     />
                   </td>

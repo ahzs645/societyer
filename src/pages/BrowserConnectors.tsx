@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, ClipboardPaste, ExternalLink, KeyRound, MonitorPlay, Play, PlugZap, RefreshCw, ShieldCheck, Square, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardPaste, ExternalLink, MonitorPlay, Play, RefreshCw, ShieldCheck, Square, XCircle } from "lucide-react";
 import { PageHeader, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { LiveBrowserView } from "../components/LiveBrowserView";
@@ -133,6 +133,32 @@ function confirmModeFor(connector: ConnectorManifest | undefined) {
   return connector?.auth.confirmMode ?? (connector?.id === "wave" ? "verified" : "profile");
 }
 
+function mergeConnectorManifests(remoteConnectors: ConnectorManifest[]) {
+  const byId = new Map(FALLBACK_CONNECTORS.map((connector) => [connector.id, connector]));
+  for (const connector of remoteConnectors) {
+    const fallback = byId.get(connector.id);
+    byId.set(connector.id, {
+      ...fallback,
+      ...connector,
+      auth: {
+        ...(fallback?.auth ?? { startUrl: connector.auth.startUrl, allowedOrigins: [] }),
+        ...connector.auth,
+      },
+      actions: connector.actions?.length ? connector.actions : fallback?.actions ?? [],
+      utility: connector.utility ?? fallback?.utility,
+    });
+  }
+  return [...byId.values()];
+}
+
+function connectorForSession(session: BrowserSession, availableConnectors: ConnectorManifest[]) {
+  return availableConnectors.find((connector) => connector.id === session.connectorId)
+    ?? availableConnectors.find((connector) => {
+      const prefix = connector.auth.profileKeyPrefix ?? connector.id;
+      return session.profileKey.startsWith(`${prefix}-`);
+    });
+}
+
 export function BrowserConnectorsPage() {
   const society = useSociety();
   const toast = useToast();
@@ -151,18 +177,26 @@ export function BrowserConnectorsPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [pasteText, setPasteText] = useState("");
+  const [workspaceConnectorId, setWorkspaceConnectorId] = useState<string | null>(null);
 
-  const availableConnectors = connectors.length ? connectors : FALLBACK_CONNECTORS;
+  const availableConnectors = mergeConnectorManifests(connectors);
+  const workspaceConnector = workspaceConnectorId
+    ? availableConnectors.find((connector) => connector.id === workspaceConnectorId) ?? null
+    : null;
   const activeSession = sessions[0] ?? null;
   const activeWaveSession = sessions.find((session) => session.connectorId === "wave") ?? null;
   const activeWaveNeedsLogin = Boolean(activeWaveSession && /auth\.waveapps\.com|\/login|identifier/i.test(activeWaveSession.currentUrl));
-  const selectedConnector = availableConnectors.find((connector) => connector.id === connectorId) ?? availableConnectors[0];
-  const selectedConfirmMode = confirmModeFor(selectedConnector);
+  const selectedConnector = workspaceConnector ?? availableConnectors.find((connector) => connector.id === connectorId) ?? availableConnectors[0];
+  const selectedConnectorRegistered = selectedConnector ? connectorRegistered(selectedConnector) : false;
   const runnerReady = Boolean(health?.ok && health.browser?.ok);
+  const liveSession = workspaceConnector ? sessionForConnector(workspaceConnector) : activeSession;
+  const visibleSessions = workspaceConnector
+    ? sessions.filter((session) => connectorForSession(session, availableConnectors)?.id === workspaceConnector.id)
+    : sessions;
   const liveViewUrl = useMemo(() => {
-    if (!activeSession?.dashboardUrl) return activeDashboardUrl;
-    return activeSession.dashboardUrl;
-  }, [activeDashboardUrl, activeSession?.dashboardUrl]);
+    if (!liveSession?.dashboardUrl) return activeDashboardUrl;
+    return liveSession.dashboardUrl;
+  }, [activeDashboardUrl, liveSession?.dashboardUrl]);
 
   useEffect(() => {
     refresh();
@@ -215,32 +249,52 @@ export function BrowserConnectorsPage() {
     }
   }
 
-  function chooseConnector(nextConnectorId: string) {
+  function connectorRegistered(connector: ConnectorManifest) {
+    return connectors.some((item) => item.id === connector.id);
+  }
+
+  function sessionForConnector(connector: ConnectorManifest) {
+    return sessions.find((session) => connectorForSession(session, availableConnectors)?.id === connector.id) ?? null;
+  }
+
+  function profileKeyForWorkspace(connector: ConnectorManifest) {
+    return sessionForConnector(connector)?.profileKey ?? profileKeyFor(connector);
+  }
+
+  function openWorkspace(nextConnectorId: string) {
     const connector = availableConnectors.find((item) => item.id === nextConnectorId);
+    setWorkspaceConnectorId(nextConnectorId);
     setConnectorId(nextConnectorId);
     setStartUrl(connector?.auth.startUrl ?? DEFAULT_URL);
-    setProfileKey(profileKeyFor(connector));
+    setProfileKey(connector ? profileKeyForWorkspace(connector) : `${nextConnectorId}-local-demo`);
     setAuthCheck(null);
     setSavedConnection(null);
     setLastRun(null);
   }
 
-  async function startLogin() {
+  function backToApps() {
+    setWorkspaceConnectorId(null);
+    setAuthCheck(null);
+    setSavedConnection(null);
+    setLastRun(null);
+  }
+
+  async function startLoginFor(connector: ConnectorManifest | undefined, nextProfileKey: string, nextStartUrl: string) {
     setBusy(true);
     try {
-      const path = selectedConnector ? `/connectors/${selectedConnector.id}/auth/start` : "/sessions/start-login";
+      const path = connector && connectorRegistered(connector) ? `/connectors/${connector.id}/auth/start` : "/sessions/start-login";
       const payload = await apiFetch<{ data: StartLoginResponse }>(path, {
         method: "POST",
         body: JSON.stringify({
           societyId: society._id,
-          profileKey,
-          startUrl,
+          profileKey: nextProfileKey,
+          startUrl: nextStartUrl,
           liveView: true,
         }),
       });
       if (payload.data.dashboardUrl) setActiveDashboardUrl(payload.data.dashboardUrl);
       setProfileKey(payload.data.profileKey);
-      toast.success("Browser session started", payload.data.currentUrl);
+      toast.success("Browser app session started", payload.data.currentUrl);
       await refresh();
     } catch (error: any) {
       toast.error(error?.message ?? "Could not start browser session");
@@ -249,22 +303,41 @@ export function BrowserConnectorsPage() {
     }
   }
 
+  async function startLogin() {
+    await startLoginFor(selectedConnector, profileKey, startUrl);
+  }
+
+  async function launchApp(nextConnectorId: string) {
+    const connector = availableConnectors.find((item) => item.id === nextConnectorId);
+    const nextProfileKey = connector ? profileKeyForWorkspace(connector) : `${nextConnectorId}-local-demo`;
+    const nextStartUrl = connector?.auth.startUrl ?? DEFAULT_URL;
+    setWorkspaceConnectorId(nextConnectorId);
+    setConnectorId(nextConnectorId);
+    setProfileKey(nextProfileKey);
+    setStartUrl(nextStartUrl);
+    await startLoginFor(connector, nextProfileKey, nextStartUrl);
+  }
+
   async function verifyAuth() {
     if (!selectedConnector) return;
     setBusy(true);
     try {
-      const payload = await apiFetch<{ data: any }>(`/connectors/${selectedConnector.id}/auth/verify`, {
+      const path = selectedConnectorRegistered ? `/connectors/${selectedConnector.id}/auth/verify` : "/profiles/validate";
+      const payload = await apiFetch<{ data: any }>(path, {
         method: "POST",
         body: JSON.stringify({
           societyId: society._id,
           profileKey,
+          url: startUrl,
         }),
       });
       setAuthCheck(payload.data);
       if (payload.data?.authenticated) {
         toast.success(`${selectedConnector.name} profile is authenticated`, payload.data?.currentUrl);
-      } else {
+      } else if (payload.data?.authenticated === false) {
         toast.error(`${selectedConnector.name} needs login`, payload.data?.currentUrl);
+      } else {
+        toast.success(`${selectedConnector.name} profile checked`, payload.data?.currentUrl);
       }
       await refresh();
     } catch (error: any) {
@@ -373,7 +446,7 @@ export function BrowserConnectorsPage() {
         method: "POST",
         body: JSON.stringify({ societyId: society._id }),
       });
-      toast.success("Login session saved");
+      toast.success("Browser profile saved");
       await refresh();
     } catch (error: any) {
       toast.error(error?.message ?? "Could not finish session");
@@ -455,379 +528,390 @@ export function BrowserConnectorsPage() {
   return (
     <div className="page">
       <PageHeader
-        title="Plugin connections"
+        title={workspaceConnector ? workspaceConnector.name : "Browser apps"}
         icon={<MonitorPlay size={16} />}
         iconColor="orange"
-        subtitle="Authorize browser-backed utilities with a user-controlled session, then save the profile for plugin actions."
+        subtitle={workspaceConnector
+          ? `Live browser workspace for ${workspaceConnector.name}.`
+          : "Open an installed browser app for imports, downloads, and page utilities."}
         actions={
           <>
+            {workspaceConnector && (
+              <button className="btn-action" disabled={busy} onClick={backToApps}>
+                <ArrowLeft size={12} /> Apps
+              </button>
+            )}
             <button className="btn-action" disabled={busy} onClick={refresh}>
               <RefreshCw size={12} /> Refresh
             </button>
             <a className="btn-action" href={activeDashboardUrl} target="_blank" rel="noreferrer">
-              <ExternalLink size={12} /> Runtime console
+              <ExternalLink size={12} /> Open runtime
             </a>
           </>
         }
       />
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: 12,
-          marginBottom: 16,
-        }}
-      >
-        <div className="panel" style={{ padding: 14 }}>
-          <div className="row" style={{ gap: 8, marginBottom: 6 }}>
-            <PlugZap size={15} />
-            <strong>1. Launch browser session</strong>
+      {!workspaceConnector && (
+        <>
+          <div className="card__head" style={{ marginBottom: 8 }}>
+            <h2 className="card__title">Installed apps</h2>
+            <span className="card__subtitle">Choose an app to open its live browser workspace.</span>
           </div>
-          <div className="muted">Open {selectedConnector?.name ?? "the selected utility"} in an isolated browser profile owned by the runner.</div>
-        </div>
-        <div className="panel" style={{ padding: 14 }}>
-          <div className="row" style={{ gap: 8, marginBottom: 6 }}>
-            <ShieldCheck size={15} />
-            <strong>2. {selectedConfirmMode === "verified" ? "Confirm & save" : "Save profile"}</strong>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+              gap: 12,
+              marginBottom: 16,
+            }}
+          >
+            {availableConnectors.map((connector) => {
+              const appSession = sessionForConnector(connector);
+              const isRegistered = connectorRegistered(connector);
+              return (
+                <div key={connector.id} className="card">
+                  <div className="card__head">
+                    <h2 className="card__title">{connector.name}</h2>
+                    <span className="card__subtitle">{connector.category ?? "Browser app"}</span>
+                  </div>
+                  <div className="card__body col" style={{ gap: 12 }}>
+                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                      {appSession && <Badge tone="success">Running</Badge>}
+                      {!isRegistered && <Badge tone="gray">Template</Badge>}
+                      {isRegistered && !appSession && <Badge tone="info">Installed</Badge>}
+                    </div>
+                    <div className="muted">{connector.description}</div>
+                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                      <button className="btn btn--accent btn--sm" disabled={busy} onClick={() => openWorkspace(connector.id)}>
+                        <MonitorPlay size={12} /> Open workspace
+                      </button>
+                      <button className="btn btn--sm" disabled={busy || !runnerReady} onClick={() => launchApp(connector.id)}>
+                        <Play size={12} /> Launch browser
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <div className="muted">
-            {selectedConfirmMode === "verified"
-              ? "After login, Societyer verifies the plugin session and closes the browser to persist the profile."
-              : "Close the live browser from Societyer to persist the profile for later utility runs."}
-          </div>
-        </div>
-        <div className="panel" style={{ padding: 14 }}>
-          <div className="row" style={{ gap: 8, marginBottom: 6 }}>
-            <KeyRound size={15} />
-            <strong>3. Run utility</strong>
-          </div>
-          <div className="muted">Connector actions and page utilities reuse the saved profile. Tokens stay inside the connector runner.</div>
-        </div>
-      </div>
 
-      <div className="grid two" style={{ marginBottom: 16 }}>
-        <div className="card">
-          <div className="card__head">
-            <h2 className="card__title">Runner</h2>
-            <span className="card__subtitle">Optional Docker profile: connectors</span>
-          </div>
-          <div className="card__body col" style={{ gap: 12 }}>
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <span className="muted">Status</span>
-              <Badge tone={runnerReady ? "success" : "danger"}>
-                {runnerReady ? "Ready" : "Unavailable"}
-              </Badge>
+          <div className="card">
+            <div className="card__head">
+              <h2 className="card__title">Browser runtime</h2>
+              <span className="card__subtitle">Local runner status and active app sessions.</span>
             </div>
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <span className="muted">Provider</span>
-              <Badge tone="info">{health?.browser?.provider ?? "blitz"}</Badge>
-            </div>
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <span className="muted">Active sessions</span>
-              <span className="mono">{health?.activeSessions ?? sessions.length}</span>
-            </div>
-            {health?.browser?.detail && <div className="alert alert--danger">{health.browser.detail}</div>}
-            <div className="muted">
-              Start with <code className="mono">npm run docker:connectors</code> if the runner is unavailable.
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card__head">
-            <h2 className="card__title">Plugin connection</h2>
-            <span className="card__subtitle">{selectedConnector?.description ?? "Browser-backed utility profile."}</span>
-          </div>
-          <div className="card__body col" style={{ gap: 12 }}>
-            <Field label="Service">
-              <select className="input" value={connectorId} onChange={(event) => chooseConnector(event.target.value)}>
-                {availableConnectors.map((connector) => (
-                  <option key={connector.id} value={connector.id}>{connector.name}</option>
-                ))}
-              </select>
-            </Field>
-            {selectedConnector?.category && (
+            <div className="card__body col" style={{ gap: 12 }}>
               <div className="row" style={{ justifyContent: "space-between" }}>
-                <span className="muted">Category</span>
-                <Badge tone="info">{selectedConnector.category}</Badge>
+                <span className="muted">Status</span>
+                <Badge tone={runnerReady ? "success" : "danger"}>{runnerReady ? "Ready" : "Unavailable"}</Badge>
               </div>
-            )}
-            <Field label="Profile key">
-              <input className="input" value={profileKey} onChange={(event) => setProfileKey(event.target.value)} />
-            </Field>
-            <Field label="Start URL">
-              <input className="input" value={startUrl} onChange={(event) => setStartUrl(event.target.value)} />
-            </Field>
-            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-              <button className="btn btn--accent" disabled={busy || !runnerReady} onClick={startLogin}>
-                <MonitorPlay size={14} /> Open {selectedConnector?.name ?? "plugin"} session
-              </button>
-              <button className="btn" disabled={busy || !runnerReady || !selectedConnector} onClick={verifyAuth}>
-                <CheckCircle2 size={14} /> Check saved profile
-              </button>
-              <button className="btn" disabled={busy || !runnerReady} onClick={openPage}>
-                <Play size={14} /> Debug open URL
-              </button>
-            </div>
-            {selectedConnector && (
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <span className="muted">Provider</span>
+                <Badge tone="info">{health?.browser?.provider ?? "blitz"}</Badge>
+              </div>
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <span className="muted">Active sessions</span>
+                <span className="mono">{health?.activeSessions ?? sessions.length}</span>
+              </div>
+              {health?.browser?.detail && <div className="alert alert--danger">{health.browser.detail}</div>}
               <div className="muted">
-                Allowed origins: {selectedConnector.auth.allowedOrigins.length ? selectedConnector.auth.allowedOrigins.join(", ") : "not restricted"}
+                Start with <code className="mono">npm run docker:connectors</code> if the runner is unavailable.
               </div>
-            )}
+            </div>
           </div>
-        </div>
-      </div>
-
-      {connectorId !== "wave" && selectedConnector && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card__head">
-            <h2 className="card__title">{selectedConnector.utility?.title ?? `${selectedConnector.name} utility`}</h2>
-            <span className="card__subtitle">{selectedConnector.utility?.description ?? selectedConnector.description}</span>
-          </div>
-          <div className="card__body col" style={{ gap: 12 }}>
-            {savedConnection && (
-              <div className="panel" style={{ padding: 12 }}>
-                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                  <Badge tone="success">Saved profile</Badge>
-                  <strong>{savedConnection.profileKey}</strong>
-                </div>
-                <div className="muted" style={{ marginTop: 4, overflowWrap: "anywhere" }}>
-                  Saved {formatDateTime(savedConnection.savedAtISO)} from {savedConnection.finalUrl ?? savedConnection.currentUrl}
-                </div>
-              </div>
-            )}
-            {selectedConnector.utility?.steps?.length ? (
-              <div className="grid two">
-                {selectedConnector.utility.steps.map((step, index) => (
-                  <div key={step} className="panel" style={{ padding: 12 }}>
-                    <div className="row" style={{ gap: 8 }}>
-                      <Badge tone="gray">{index + 1}</Badge>
-                      <span>{step}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            {selectedConnector.actions.length > 0 && (
-              <div className="col" style={{ gap: 8 }}>
-                <div className="muted">Registered utility actions</div>
-                {selectedConnector.actions.map((action) => (
-                  <div key={action.id} className="panel" style={{ padding: 12 }}>
-                    <div className="row" style={{ justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                      <strong>{action.name}</strong>
-                      <span className="mono muted">{action.id}</span>
-                    </div>
-                    <div className="muted" style={{ marginTop: 4 }}>{action.description}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {authCheck && (
-              <Badge tone={authCheck.authenticated === false ? "warn" : "success"}>
-                {authCheck.authenticated === true
-                  ? `${selectedConnector.name} authenticated`
-                  : authCheck.authenticated === false
-                  ? `${selectedConnector.name} login needed`
-                  : `${selectedConnector.name} profile checked`}
-              </Badge>
-            )}
-          </div>
-        </div>
+        </>
       )}
 
-      {connectorId === "wave" && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card__head">
-            <h2 className="card__title">Wave data import</h2>
-            <span className="card__subtitle">Pull all available browser-session transactions and save them to Societyer accounts.</span>
-          </div>
-          <div className="card__body col" style={{ gap: 12 }}>
-            {savedConnection && (
-              <div className="panel" style={{ padding: 12 }}>
-                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                  <Badge tone="success">Pipeline-ready profile</Badge>
-                  <strong>{savedConnection.profileKey}</strong>
-                </div>
-                <div className="muted" style={{ marginTop: 4, overflowWrap: "anywhere" }}>
-                  Saved {formatDateTime(savedConnection.savedAtISO)} from {savedConnection.finalUrl ?? savedConnection.currentUrl}
-                </div>
+      {workspaceConnector && selectedConnector && (
+        <>
+          <div className="grid two" style={{ marginBottom: 16 }}>
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">App details</h2>
+                <span className="card__subtitle">{selectedConnector.description}</span>
               </div>
-            )}
-            {activeWaveSession && (
-              <div className="panel" style={{ padding: 12 }}>
+              <div className="card__body col" style={{ gap: 12 }}>
+                <div className="row" style={{ justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                  <span className="muted">App type</span>
+                  <div className="row" style={{ gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    {selectedConnector.category && <Badge tone="info">{selectedConnector.category}</Badge>}
+                    {liveSession && <Badge tone="success">Running</Badge>}
+                    {!selectedConnectorRegistered && <Badge tone="gray">Template</Badge>}
+                  </div>
+                </div>
+                {!selectedConnectorRegistered && (
+                  <div className="muted">
+                    This app can use the generic browser session flow. Restart the connector runner to expose its named connector actions.
+                  </div>
+                )}
+                <Field label="Browser profile">
+                  <input className="input" value={profileKey} onChange={(event) => setProfileKey(event.target.value)} />
+                </Field>
+                <Field label="Launch URL">
+                  <input className="input" value={startUrl} onChange={(event) => setStartUrl(event.target.value)} />
+                </Field>
                 <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                  <Badge tone={activeWaveNeedsLogin ? "warn" : "success"}>
-                    {activeWaveNeedsLogin ? "Wave login in progress" : "Active Wave session"}
+                  <button className="btn btn--accent" disabled={busy || !runnerReady} onClick={startLogin}>
+                    <MonitorPlay size={14} /> Launch browser
+                  </button>
+                  <button className="btn" disabled={busy || !runnerReady} onClick={verifyAuth}>
+                    <CheckCircle2 size={14} /> Check profile
+                  </button>
+                  <button className="btn" disabled={busy || !runnerReady} onClick={openPage}>
+                    <Play size={14} /> Open URL
+                  </button>
+                </div>
+                <div className="muted">
+                  Trusted origins: {selectedConnector.auth.allowedOrigins.length ? selectedConnector.auth.allowedOrigins.join(", ") : "not restricted"}
+                </div>
+                {authCheck && (
+                  <Badge tone={authCheck.authenticated === false ? "warn" : "success"}>
+                    {authCheck.authenticated === true
+                      ? `${selectedConnector.name} authenticated`
+                      : authCheck.authenticated === false
+                      ? `${selectedConnector.name} login needed`
+                      : `${selectedConnector.name} profile checked`}
                   </Badge>
-                  <strong>{activeWaveSession.profileKey}</strong>
-                </div>
-                <div className="muted" style={{ marginTop: 4 }}>
-                  {activeWaveNeedsLogin
-                    ? "Finish login in the live browser. Then pull and save while this session is active."
-                    : "Business ID can be inferred from the active Wave dashboard URL. Import before confirming if Wave only exposes its bearer during the live session."}
-                </div>
+                )}
               </div>
-            )}
-            <Field label="Business ID">
-              <input className="input" value={businessId} onChange={(event) => setBusinessId(event.target.value)} placeholder={activeWaveSession ? "Optional while Wave session is active" : "QnVzaW5lc3M6..."} />
-            </Field>
-            <div className="grid two">
-              <Field label="Start date (optional)">
-                <input className="input" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-              </Field>
-              <Field label="End date (optional)">
-                <input className="input" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
-              </Field>
             </div>
-            <div className="muted">
-              Leave dates blank to pull every transaction Wave returns for the active business. The import stores normalized account rows and transaction rows; raw bearer tokens stay inside the connector runner.
-            </div>
-            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-              <button className="btn" disabled={busy || !runnerReady || connectorId !== "wave" || activeWaveNeedsLogin} onClick={pullWaveTransactions}>
-                <Play size={14} /> Preview pull
-              </button>
-              <button className="btn btn--accent" disabled={busy || !runnerReady || connectorId !== "wave" || activeWaveNeedsLogin} onClick={importWaveTransactions}>
-                <Play size={14} /> Pull all & save
-              </button>
-              {authCheck && (
-                <Badge tone={authCheck.authenticated ? "success" : "warn"}>
-                  {authCheck.authenticated ? "Wave authenticated" : "Wave login needed"}
-                </Badge>
-              )}
+
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">Live browser</h2>
+                <span className="card__subtitle">{liveSession ? liveSession.currentUrl : "No active browser for this app."}</span>
+              </div>
+              <div className="card__body" style={{ padding: 0 }}>
+                {runnerReady ? (
+                  liveSession?.vncWebSocketUrl ? (
+                    <LiveBrowserView
+                      sessionId={liveSession.sessionId}
+                      webSocketUrl={liveSession.vncWebSocketUrl}
+                      onPasteText={(text) => pasteIntoSession(liveSession.sessionId, text)}
+                    />
+                  ) : liveSession ? (
+                    <iframe
+                      title="BlitzBrowser dashboard"
+                      src={liveViewUrl}
+                      style={{
+                        width: "100%",
+                        height: 720,
+                        border: 0,
+                        display: "block",
+                        background: "var(--bg-surface)",
+                      }}
+                    />
+                  ) : (
+                    <div className="empty-state empty-state--start" style={{ padding: 24 }}>
+                      <MonitorPlay size={18} />
+                      <div className="empty-state__title">No live browser open</div>
+                      <div className="empty-state__description">Launch this app to sign in, inspect pages, or run utilities.</div>
+                      <button className="btn btn--accent" disabled={busy} onClick={startLogin}>
+                        <MonitorPlay size={14} /> Launch browser
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  <div className="empty-state empty-state--start" style={{ padding: 24 }}>
+                    <XCircle size={18} />
+                    <div className="empty-state__title">Browser runtime unavailable</div>
+                    <div className="empty-state__description">Start the optional connector stack, then refresh this page.</div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card__head">
-          <h2 className="card__title">Active sessions</h2>
-          <span className="card__subtitle">Save or verify browser sessions for later connector runs.</span>
-        </div>
-        <div className="card__body col" style={{ gap: 8 }}>
-          {sessions.length === 0 && <div className="muted">No active browser sessions.</div>}
-          {activeSession && (
-            <div className="panel" style={{ padding: 12 }}>
-              <Field label="Paste bridge">
-                <textarea
-                  className="input"
-                  value={pasteText}
-                  onChange={(event) => setPasteText(event.target.value)}
-                  placeholder="Paste text here"
-                  rows={3}
-                  style={{ resize: "vertical" }}
-                />
-              </Field>
-              <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                <button className="btn btn--sm" disabled={busy || !pasteText} onClick={() => pasteIntoSession(activeSession.sessionId, pasteText)}>
-                  <ClipboardPaste size={12} /> Paste to browser
-                </button>
-                <button className="btn btn--ghost btn--sm" disabled={busy} onClick={() => pasteClipboardIntoSession(activeSession.sessionId)}>
-                  <ClipboardPaste size={12} /> Read clipboard & paste
-                </button>
+          {selectedConnector.id !== "wave" && (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card__head">
+                <h2 className="card__title">{selectedConnector.utility?.title ?? `${selectedConnector.name} utilities`}</h2>
+                <span className="card__subtitle">{selectedConnector.utility?.description ?? selectedConnector.description}</span>
+              </div>
+              <div className="card__body col" style={{ gap: 12 }}>
+                {selectedConnector.utility?.steps?.length ? (
+                  <div className="grid two">
+                    {selectedConnector.utility.steps.map((step, index) => (
+                      <div key={step} className="panel" style={{ padding: 12 }}>
+                        <div className="row" style={{ gap: 8 }}>
+                          <Badge tone="gray">{index + 1}</Badge>
+                          <span>{step}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {selectedConnector.actions.length > 0 && (
+                  <div className="col" style={{ gap: 8 }}>
+                    <div className="muted">Available actions</div>
+                    {selectedConnector.actions.map((action) => (
+                      <div key={action.id} className="panel" style={{ padding: 12 }}>
+                        <div className="row" style={{ justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                          <strong>{action.name}</strong>
+                          <span className="mono muted">{action.id}</span>
+                        </div>
+                        <div className="muted" style={{ marginTop: 4 }}>{action.description}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
-          {sessions.map((session) => {
-            const sessionConnector = availableConnectors.find((connector) => connector.id === session.connectorId);
-            const sessionConfirmMode = confirmModeFor(sessionConnector);
-            return (
-            <div key={session.sessionId} className="panel" style={{ padding: 12 }}>
-              <div className="row" style={{ justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
-                <div style={{ flex: "1 1 520px", minWidth: 0 }}>
-                  <div className="row" style={{ gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                    <Badge tone="success">Running</Badge>
-                    {sessionConnector && <Badge tone="info">{sessionConnector.name}</Badge>}
-                    <strong>{session.profileKey}</strong>
+
+          {selectedConnector.id === "wave" && (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card__head">
+                <h2 className="card__title">Wave transactions</h2>
+                <span className="card__subtitle">Preview or import transactions through the active Wave browser profile.</span>
+              </div>
+              <div className="card__body col" style={{ gap: 12 }}>
+                {savedConnection && (
+                  <div className="panel" style={{ padding: 12 }}>
+                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                      <Badge tone="success">Saved profile</Badge>
+                      <strong>{savedConnection.profileKey}</strong>
+                    </div>
+                    <div className="muted" style={{ marginTop: 4, overflowWrap: "anywhere" }}>
+                      Saved {formatDateTime(savedConnection.savedAtISO)} from {savedConnection.finalUrl ?? savedConnection.currentUrl}
+                    </div>
                   </div>
-                  <div className="muted mono" style={{ fontSize: "var(--fs-sm)", overflowWrap: "anywhere" }}>{session.sessionId}</div>
-                  <div className="muted" style={{ marginTop: 4, overflowWrap: "anywhere", wordBreak: "break-word" }}>
-                    {session.currentUrl} · started {formatDateTime(session.startedAtISO)}
+                )}
+                {activeWaveSession && (
+                  <div className="panel" style={{ padding: 12 }}>
+                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                      <Badge tone={activeWaveNeedsLogin ? "warn" : "success"}>
+                        {activeWaveNeedsLogin ? "Wave login in progress" : "Active Wave session"}
+                      </Badge>
+                      <strong>{activeWaveSession.profileKey}</strong>
+                    </div>
+                    <div className="muted" style={{ marginTop: 4 }}>
+                      {activeWaveNeedsLogin
+                        ? "Finish login in the live browser. Then pull and save while this session is active."
+                        : "Business ID can be inferred from the active Wave dashboard URL. Import before confirming if Wave only exposes its bearer during the live session."}
+                    </div>
                   </div>
+                )}
+                <Field label="Business ID">
+                  <input className="input" value={businessId} onChange={(event) => setBusinessId(event.target.value)} placeholder={activeWaveSession ? "Optional while Wave session is active" : "QnVzaW5lc3M6..."} />
+                </Field>
+                <div className="grid two">
+                  <Field label="Start date (optional)">
+                    <input className="input" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+                  </Field>
+                  <Field label="End date (optional)">
+                    <input className="input" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+                  </Field>
                 </div>
-                <div className="row" style={{ gap: 8, flex: "0 0 auto", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                  {session.connectorId && (
-                    <button className="btn btn--accent btn--sm" disabled={busy} onClick={() => confirmAndSaveSession(session)}>
-                      <ShieldCheck size={12} /> {sessionConfirmMode === "verified" ? "Confirm & save" : "Save profile"}
-                    </button>
-                  )}
-                  {!session.connectorId && (
-                    <button className="btn btn--sm" disabled={busy} onClick={() => finishSession(session.sessionId)}>
-                      <CheckCircle2 size={12} /> Finish
-                    </button>
-                  )}
-                  <button className="btn btn--ghost btn--sm" disabled={busy} onClick={() => stopSession(session.sessionId)}>
-                    <Square size={12} /> Stop
+                <div className="muted">
+                  Leave dates blank to pull every transaction Wave returns for the active business. Raw bearer tokens stay inside the connector runner.
+                </div>
+                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                  <button className="btn" disabled={busy || !runnerReady || activeWaveNeedsLogin} onClick={pullWaveTransactions}>
+                    <Play size={14} /> Preview pull
+                  </button>
+                  <button className="btn btn--accent" disabled={busy || !runnerReady || activeWaveNeedsLogin} onClick={importWaveTransactions}>
+                    <Play size={14} /> Pull all & save
                   </button>
                 </div>
               </div>
             </div>
-            );
-          })}
-          {lastRun && (
-            <div className="panel" style={{ padding: 12 }}>
-              <div className="row" style={{ gap: 8 }}>
-                <CheckCircle2 size={14} />
-                <strong>Last run</strong>
-              </div>
-              <div className="muted">
-                {lastRun.import
-                  ? `${lastRun.import.transactions} imported transactions across ${lastRun.import.accounts} account(s)`
-                  : lastRun.transactionCount != null
-                  ? `${lastRun.transactionCount} transactions across ${lastRun.pageCount} page(s)`
-                  : lastRun.title ?? lastRun.currentUrl}
-              </div>
-              {lastRun.normalized?.transactionsByAccount?.length > 0 && (
-                <div className="row" style={{ gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                  {lastRun.normalized.transactionsByAccount.slice(0, 5).map((row: any) => (
-                    <span key={row.accountExternalId} className="pill pill--sm">
-                      {row.accountName}: {row.transactionCount}
-                    </span>
-                  ))}
+          )}
+
+          <div className="card">
+            <div className="card__head">
+              <h2 className="card__title">Sessions</h2>
+              <span className="card__subtitle">Live browser sessions for {selectedConnector.name}.</span>
+            </div>
+            <div className="card__body col" style={{ gap: 8 }}>
+              {visibleSessions.length === 0 && <div className="muted">No active browser sessions for this app.</div>}
+              {liveSession && (
+                <div className="panel" style={{ padding: 12 }}>
+                  <Field label="Paste bridge">
+                    <textarea
+                      className="input"
+                      value={pasteText}
+                      onChange={(event) => setPasteText(event.target.value)}
+                      placeholder="Paste text here"
+                      rows={3}
+                      style={{ resize: "vertical" }}
+                    />
+                  </Field>
+                  <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                    <button className="btn btn--sm" disabled={busy || !pasteText} onClick={() => pasteIntoSession(liveSession.sessionId, pasteText)}>
+                      <ClipboardPaste size={12} /> Paste to browser
+                    </button>
+                    <button className="btn btn--ghost btn--sm" disabled={busy} onClick={() => pasteClipboardIntoSession(liveSession.sessionId)}>
+                      <ClipboardPaste size={12} /> Read clipboard & paste
+                    </button>
+                  </div>
                 </div>
               )}
-              <div className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>{lastRun.runId}</div>
+              {visibleSessions.map((session) => {
+                const sessionConnector = connectorForSession(session, availableConnectors);
+                const sessionConfirmMode = confirmModeFor(sessionConnector);
+                return (
+                  <div key={session.sessionId} className="panel" style={{ padding: 12 }}>
+                    <div className="row" style={{ justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                      <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+                        <div className="row" style={{ gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                          <Badge tone="success">Running</Badge>
+                          {sessionConnector && <Badge tone="info">{sessionConnector.name}</Badge>}
+                          <strong>{session.profileKey}</strong>
+                        </div>
+                        <div className="muted mono" style={{ fontSize: "var(--fs-sm)", overflowWrap: "anywhere" }}>{session.sessionId}</div>
+                        <div className="muted" style={{ marginTop: 4, overflowWrap: "anywhere", wordBreak: "break-word" }}>
+                          {session.currentUrl} · started {formatDateTime(session.startedAtISO)}
+                        </div>
+                      </div>
+                      <div className="row" style={{ gap: 8, flex: "0 0 auto", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        {session.connectorId && (
+                          <button className="btn btn--accent btn--sm" disabled={busy} onClick={() => confirmAndSaveSession(session)}>
+                            <ShieldCheck size={12} /> {sessionConfirmMode === "verified" ? "Confirm & save" : "Save profile"}
+                          </button>
+                        )}
+                        {!session.connectorId && (
+                          <button className="btn btn--sm" disabled={busy} onClick={() => finishSession(session.sessionId)}>
+                            <CheckCircle2 size={12} /> Save profile
+                          </button>
+                        )}
+                        <button className="btn btn--ghost btn--sm" disabled={busy} onClick={() => stopSession(session.sessionId)}>
+                          <Square size={12} /> Stop
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {lastRun && (
+                <div className="panel" style={{ padding: 12 }}>
+                  <div className="row" style={{ gap: 8 }}>
+                    <CheckCircle2 size={14} />
+                    <strong>Last run</strong>
+                  </div>
+                  <div className="muted">
+                    {lastRun.import
+                      ? `${lastRun.import.transactions} imported transactions across ${lastRun.import.accounts} account(s)`
+                      : lastRun.transactionCount != null
+                      ? `${lastRun.transactionCount} transactions across ${lastRun.pageCount} page(s)`
+                      : lastRun.title ?? lastRun.currentUrl}
+                  </div>
+                  {lastRun.normalized?.transactionsByAccount?.length > 0 && (
+                    <div className="row" style={{ gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                      {lastRun.normalized.transactionsByAccount.slice(0, 5).map((row: any) => (
+                        <span key={row.accountExternalId} className="pill pill--sm">
+                          {row.accountName}: {row.transactionCount}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>{lastRun.runId}</div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card__head">
-          <h2 className="card__title">Runtime console</h2>
-          <span className="card__subtitle">Infrastructure view for opening the live browser when a login session is active.</span>
-        </div>
-        <div className="card__body" style={{ padding: 0 }}>
-          {runnerReady ? (
-            activeSession?.vncWebSocketUrl ? (
-              <LiveBrowserView
-                sessionId={activeSession.sessionId}
-                webSocketUrl={activeSession.vncWebSocketUrl}
-                onPasteText={(text) => pasteIntoSession(activeSession.sessionId, text)}
-              />
-            ) : (
-              <iframe
-                title="BlitzBrowser dashboard"
-                src={liveViewUrl}
-                style={{
-                  width: "100%",
-                  height: 720,
-                  border: 0,
-                  display: "block",
-                  background: "var(--bg-surface)",
-                }}
-              />
-            )
-          ) : (
-            <div className="empty-state empty-state--start" style={{ padding: 24 }}>
-              <XCircle size={18} />
-              <div className="empty-state__title">Connector runner unavailable</div>
-              <div className="empty-state__description">Start the optional connector stack, then refresh this page.</div>
-            </div>
-          )}
-        </div>
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

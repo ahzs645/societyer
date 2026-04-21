@@ -2042,7 +2042,16 @@ function BudgetLinesEditor({ lines, onChange }: { lines: any[]; onChange: (lines
   return (
     <div className="col" style={{ gap: 10 }}>
       {lines.map((line, index) => (
-        <div key={index} style={{ display: "grid", gridTemplateColumns: "110px 1fr 120px 34px", gap: 8, alignItems: "center" }}>
+        <div
+          key={index}
+          className="budget-line-row"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(90px, 110px) minmax(0, 1fr) minmax(96px, 120px) 34px",
+            gap: 8,
+            alignItems: "center",
+          }}
+        >
           <select className="input" value={line.section ?? "note"} onChange={(e) => updateLine(index, { section: e.target.value })}>
             {LINE_SECTION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
           </select>

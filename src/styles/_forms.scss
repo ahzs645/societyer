@@ -404,7 +404,12 @@
 }
 
 /* Misc */
-.row { display: flex; align-items: center; gap: var(--s-3); min-width: 0; }
+/* .row — the workhorse horizontal layout. `flex-wrap: wrap` is the default so
+ * children can stack on narrow containers without each page needing a media
+ * query. Individual uses can opt out with `.row--nowrap` if wrapping isn't
+ * desired (e.g. for tightly-coupled inline controls). */
+.row { display: flex; align-items: center; gap: var(--s-3); min-width: 0; flex-wrap: wrap; }
+.row--nowrap { flex-wrap: nowrap; }
 .row > * { min-width: 0; }
 .row > .field { flex: 1 1 220px; align-items: stretch; align-self: stretch; }
 .col { display: flex; flex-direction: column; gap: var(--s-2); }
@@ -412,6 +417,12 @@
 .mono { font-family: var(--font-mono); font-size: var(--fs-sm); }
 .spacer-4 { height: var(--s-4); }
 .spacer-6 { height: var(--s-6); }
+/* Halve the vertical rhythm on phones — a 32px spacer between sections
+ * feels cavernous on a 360px viewport. */
+@media (max-width: 760px) {
+  .spacer-4 { height: var(--s-3); }
+  .spacer-6 { height: var(--s-4); }
+}
 .hr { height: 1px; background: var(--border); margin: var(--s-3) 0; }
 .tag-list { display: flex; flex-wrap: wrap; gap: 4px; }
 
@@ -484,5 +495,20 @@
 
   .row {
     flex-wrap: wrap;
+  }
+
+  /* On phones, fields in a row stack full-width instead of squishing to
+   * their 220px flex-basis. Without this, a 2-field row on a 360px device
+   * renders each field at 170px — too narrow for most labels/values. */
+  .row > .field {
+    flex-basis: 100%;
+  }
+
+  /* Also collapse inline-styled minWidth on children of rows that bypass the
+   * .field wrapper (common pattern in older pages). Caps them at 100%. */
+  .row > input,
+  .row > select,
+  .row > textarea {
+    max-width: 100%;
   }
 }

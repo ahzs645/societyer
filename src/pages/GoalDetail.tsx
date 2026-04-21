@@ -140,7 +140,7 @@ export function GoalDetailPage() {
                   size="sm"
                   value={goal.status}
                   onChange={(v) => update({ id: goal._id, patch: { status: v } })}
-                  style={{ width: 140 }}
+                  style={{ width: 140, maxWidth: "100%" }}
                   options={[
                     { value: "NotStarted", label: "Not started" },
                     { value: "OnTrack", label: "On track" },

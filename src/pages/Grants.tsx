@@ -1181,7 +1181,7 @@ function GrantReadPanel({
         reports={reports}
       />
       <DossierSection title="Administrative Details">
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 8 }}>
           <DossierFact label="Status">
             <Badge tone={grantStatusTone(grant.status)}>{grant.status ?? "Not set"}</Badge>
           </DossierFact>
@@ -1675,7 +1675,7 @@ function GrantDossierSummary({ grant }: { grant: any }) {
 
   return (
     <DossierSection title="Grant Dossier Summary">
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 8 }}>
         <DossierFact label="Funder" value={grant.funder ?? grant.funderName} />
         <DossierFact label="Program" value={grant.program} />
         <DossierFact label="Requested" value={grant.amountRequestedCents ? money(grant.amountRequestedCents) : undefined} />
@@ -1879,7 +1879,7 @@ function GrantSourceNotesPanel({ grant }: { grant: any }) {
   return (
     <DossierSection title="Imported Source Notes">
       <div style={{ display: "grid", gap: 8 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 8 }}>
           <DossierFact label="Imported from" value={grant.sourcePath} />
           <DossierFact label="Import date" value={grant.sourceImportedAtISO ? formatDate(grant.sourceImportedAtISO) : undefined} />
           <DossierFact label="Linked files" value={grant.sourceFileCount ? String(grant.sourceFileCount) : undefined} />

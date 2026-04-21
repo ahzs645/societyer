@@ -5,31 +5,24 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Drawer, Field, InspectorNote } from "../components/ui";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { useToast } from "../components/Toast";
-import { Plus, Check, ClipboardList, Tag, Calendar, Bot } from "lucide-react";
-import { centsToDollarInput, dollarInputToCents, formatDate, money } from "../lib/format";
-import { kindLabel, renderFilingStatus } from "./Dashboard";
+import { Plus, Check, ClipboardList, Bot } from "lucide-react";
+import { centsToDollarInput, dollarInputToCents } from "../lib/format";
+import { kindLabel } from "./Dashboard";
 import { FilingBotRunner } from "../components/FilingBotRunner";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 const KINDS = ["AnnualReport", "ChangeOfDirectors", "ChangeOfAddress", "BylawAmendment", "T2", "T1044", "T3010", "T4", "GSTHST"] as const;
-
-const FILING_FIELDS: FilterField<any>[] = [
-  { id: "kind", label: "Kind", icon: <Tag size={14} />, options: KINDS.map(kindLabel), match: (r, q) => kindLabel(r.kind) === q },
-  {
-    id: "status", label: "Status", icon: <Tag size={14} />, options: ["Filed", "Upcoming", "Overdue"],
-    match: (r, q) => {
-      if (r.status === "Filed") return q === "Filed";
-      const overdue = new Date(r.dueDate).getTime() < Date.now();
-      return q === (overdue ? "Overdue" : "Upcoming");
-    },
-  },
-  { id: "period", label: "Period label", icon: <Tag size={14} />, match: (r, q) => (r.periodLabel ?? "").toLowerCase().includes(q.toLowerCase()) },
-  { id: "dueYear", label: "Due in year", icon: <Calendar size={14} />, match: (r, q) => (r.dueDate ?? "").startsWith(q) },
-];
 
 export function FilingsPage() {
   const society = useSociety();
@@ -38,6 +31,8 @@ export function FilingsPage() {
   const [form, setForm] = useState<any>(null);
   const [botFor, setBotFor] = useState<{ id: any; label: string } | null>(null);
   const [completeDraft, setCompleteDraft] = useState<any | null>(null);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
   const filings = useQuery(api.filings.list, society ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const filingGuidance = useQuery(
@@ -45,8 +40,15 @@ export function FilingsPage() {
     completeDraft?.kind ? { kind: completeDraft.kind } : "skip",
   );
   const create = useMutation(api.filings.create);
+  const update = useMutation(api.filings.update);
   const markFiled = useMutation(api.filings.markFiled);
   const toast = useToast();
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "filing",
+    viewId: currentViewId,
+  });
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -56,6 +58,9 @@ export function FilingsPage() {
     setOpen(true);
   };
   const save = async () => { await create({ societyId: society._id, ...form, submittedByUserId: actingUserId }); setOpen(false); };
+
+  const records = (filings ?? []) as any[];
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   return (
     <div className="page">
@@ -71,61 +76,83 @@ export function FilingsPage() {
         }
       />
 
-      <DataTable
-        label="All filings"
-        icon={<ClipboardList size={14} />}
-        data={(filings ?? []) as any[]}
-        loading={filings === undefined}
-        rowKey={(r) => r._id}
-        filterFields={FILING_FIELDS}
-        searchPlaceholder="Search kind, period, confirmation #…"
-        defaultSort={{ columnId: "dueDate", dir: "asc" }}
-        columns={[
-          { id: "kind", header: "Kind", sortable: true, accessor: (r) => kindLabel(r.kind), render: (r) => <strong>{kindLabel(r.kind)}</strong> },
-          { id: "periodLabel", header: "Period", sortable: true, accessor: (r) => r.periodLabel ?? "", render: (r) => <span className="muted">{r.periodLabel ?? "—"}</span> },
-          { id: "dueDate", header: "Due", sortable: true, accessor: (r) => r.dueDate, render: (r) => <span className="mono">{formatDate(r.dueDate)}</span> },
-          { id: "filedAt", header: "Filed", sortable: true, accessor: (r) => r.filedAt ?? "", render: (r) => <span className="mono">{r.filedAt ? formatDate(r.filedAt) : "—"}</span> },
-          { id: "confirmationNumber", header: "Confirmation #", accessor: (r) => r.confirmationNumber ?? "", render: (r) => <span className="mono">{r.confirmationNumber ?? "—"}</span> },
-          { id: "submissionMethod", header: "Method", sortable: true, accessor: (r) => r.submissionMethod ?? "", render: (r) => <span className="muted">{r.submissionMethod ?? "—"}</span> },
-          { id: "fee", header: "Fee", sortable: true, align: "right", accessor: (r) => r.feePaidCents ?? 0, render: (r) => <span className="mono">{money(r.feePaidCents)}</span> },
-          { id: "status", header: "Status", sortable: true, accessor: (r) => r.status, render: (r) => renderFilingStatus(r) },
-        ]}
-        renderRowActions={(r) =>
-          r.status !== "Filed" ? (
-            <>
-              {["AnnualReport", "BylawAmendment", "ChangeOfDirectors"].includes(r.kind) && (
-                <button
-                  className="btn btn--sm"
-                  onClick={() => setBotFor({ id: r._id, label: `${r.kind}: ${r.periodLabel ?? r.dueDate}` })}
-                  title="Run the Societies Online filing bot"
-                >
-                  <Bot size={12} /> Bot
-                </button>
-              )}
-              <button
-                className="btn btn--sm"
-                onClick={() =>
-                  setCompleteDraft({
-                    id: r._id,
-                    kind: r.kind,
-                    filedAt: new Date().toISOString().slice(0, 10),
-                    submissionMethod: r.submissionMethod ?? "ManualPortal",
-                    confirmationNumber: r.confirmationNumber ?? "",
-                    feePaidDollars: centsToDollarInput(r.feePaidCents),
-                    receiptDocumentId: r.receiptDocumentId ?? "",
-                    stagedPacketDocumentId: r.stagedPacketDocumentId ?? "",
-                    evidenceNotes: r.evidenceNotes ?? "",
-                    submissionChecklist: r.submissionChecklist ?? [],
-                    registryUrl: r.registryUrl ?? "",
-                  })
-                }
-              >
-                <Check size={12} /> Mark filed
-              </button>
-            </>
-          ) : null
-        }
-      />
+      {showMetadataWarning ? (
+        <div className="record-table__empty">
+          <div className="record-table__empty-title">Metadata not seeded</div>
+          <div className="record-table__empty-desc">
+            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+            filing object metadata + default view.
+          </div>
+        </div>
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="filings"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+          onUpdate={async ({ recordId, fieldName, value }) => {
+            await update({
+              id: recordId as Id<"filings">,
+              patch: { [fieldName]: value } as any,
+            });
+          }}
+        >
+          <RecordTableToolbar
+            icon={<ClipboardList size={14} />}
+            label="All filings"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || filings === undefined}
+            renderRowActions={(r) =>
+              r.status !== "Filed" ? (
+                <>
+                  {["AnnualReport", "BylawAmendment", "ChangeOfDirectors"].includes(r.kind) && (
+                    <button
+                      className="btn btn--sm"
+                      onClick={() => setBotFor({ id: r._id, label: `${r.kind}: ${r.periodLabel ?? r.dueDate}` })}
+                      title="Run the Societies Online filing bot"
+                    >
+                      <Bot size={12} /> Bot
+                    </button>
+                  )}
+                  <button
+                    className="btn btn--sm"
+                    onClick={() =>
+                      setCompleteDraft({
+                        id: r._id,
+                        kind: r.kind,
+                        filedAt: new Date().toISOString().slice(0, 10),
+                        submissionMethod: r.submissionMethod ?? "ManualPortal",
+                        confirmationNumber: r.confirmationNumber ?? "",
+                        feePaidDollars: centsToDollarInput(r.feePaidCents),
+                        receiptDocumentId: r.receiptDocumentId ?? "",
+                        stagedPacketDocumentId: r.stagedPacketDocumentId ?? "",
+                        evidenceNotes: r.evidenceNotes ?? "",
+                        submissionChecklist: r.submissionChecklist ?? [],
+                        registryUrl: r.registryUrl ?? "",
+                      })
+                    }
+                  >
+                    <Check size={12} /> Mark filed
+                  </button>
+                </>
+              ) : null
+            }
+          />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="record-table__loading-row" />
+          ))}
+        </div>
+      )}
 
       <Drawer
         open={open} onClose={() => setOpen(false)} title="Add filing"

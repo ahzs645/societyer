@@ -1,5 +1,6 @@
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { useState } from "react";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Flag } from "../components/ui";
@@ -63,7 +64,12 @@ export function Dashboard() {
             </div>
             <div className="card__body" style={{ display: "grid", gap: 6 }}>
               {complianceFlags.map((f, i) => (
-                <Flag key={i} level={f.level}>
+                <Flag
+                  key={i}
+                  level={f.level}
+                  citationId={(f as any).citationId}
+                  citationIds={(f as any).citationIds}
+                >
                   {f.text}
                 </Flag>
               ))}
@@ -265,8 +271,23 @@ function Stat({
   tone?: "danger" | "ok";
   icon?: React.ReactNode;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  // The description (`sub`) is hidden on mobile by CSS and revealed when the
+  // user taps the cell. Desktop users see it inline as before — the handler
+  // still toggles `.is-expanded` but has no visual effect above 760px.
+  const expandable = Boolean(sub);
+  const handleToggle = expandable ? () => setExpanded((v) => !v) : undefined;
   return (
-    <div className="stat">
+    <div
+      className={`stat${expandable ? " stat--expandable" : ""}${expanded ? " is-expanded" : ""}`}
+      onClick={handleToggle}
+      onKeyDown={expandable ? (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpanded((v) => !v); }
+      } : undefined}
+      role={expandable ? "button" : undefined}
+      tabIndex={expandable ? 0 : undefined}
+      aria-expanded={expandable ? expanded : undefined}
+    >
       <div className="stat__label">
         {icon} {label}
       </div>

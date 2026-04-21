@@ -1,7 +1,7 @@
 {
   "name": "societyer-document-intake",
   "version": "0.1.0",
-  "description": "AI guidance for transposing source documents into Societyer import sessions and supported app sections.",
+  "description": "AI guidance for Societyer document intake, import review bundles, and browser-backed connector operation.",
   "author": {
     "name": "Societyer maintainers",
     "email": "[TODO: maintainer email]",
@@ -14,19 +14,22 @@
     "societyer",
     "document-intake",
     "paperless",
-    "transposition"
+    "transposition",
+    "browser-connectors",
+    "wave"
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "Societyer Document Intake",
-    "shortDescription": "Transpose documents into Societyer review records.",
-    "longDescription": "Guides an AI through Societyer's document intake surface: supported import bundle shapes, page-by-page fields, privacy gates, and review-first transposition into Convex-backed modules.",
+    "displayName": "Societyer Local Workflows",
+    "shortDescription": "Operate Societyer document intake and browser connectors.",
+    "longDescription": "Guides an AI through Societyer's document intake surface and browser-backed connector workflows: supported import bundle shapes, privacy gates, live browser login sessions, Wave imports, and connector-runner verification.",
     "developerName": "Societyer maintainers",
     "category": "Productivity",
     "capabilities": [
       "Interactive",
       "Write",
-      "Data extraction"
+      "Data extraction",
+      "Browser automation"
     ],
     "websiteURL": "[TODO: Societyer website URL]",
     "privacyPolicyURL": "[TODO: Societyer privacy policy URL]",
@@ -34,7 +37,8 @@
     "defaultPrompt": [
       "Map these documents to Societyer import records.",
       "Tell me which fields this document can transpose.",
-      "Create a review bundle for /app/imports."
+      "Create a review bundle for /app/imports.",
+      "Use the browser connector to inspect or import Wave transactions."
     ],
     "brandColor": "#2563EB"
   }

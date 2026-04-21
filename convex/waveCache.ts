@@ -390,9 +390,10 @@ async function linkedCategoryStatsByAccountExternalId(ctx: any, societyId: strin
     const matchedExternalIds = new Set<string>();
     if (transaction.categoryAccountExternalId) {
       matchedExternalIds.add(transaction.categoryAccountExternalId);
+    } else {
+      const categoryMatches = accountIdsByLabel.get(normalizeCategoryLabel(transaction.category)) ?? [];
+      for (const externalId of categoryMatches) matchedExternalIds.add(externalId);
     }
-    const categoryMatches = accountIdsByLabel.get(normalizeCategoryLabel(transaction.category)) ?? [];
-    for (const externalId of categoryMatches) matchedExternalIds.add(externalId);
 
     for (const externalId of matchedExternalIds) {
       const current = stats.get(externalId) ?? {

@@ -136,7 +136,7 @@ export function TasksPage() {
           clearable
           clearLabel="All committees"
           placeholder="All committees"
-          style={{ width: 200 }}
+          style={{ width: 200, maxWidth: "100%" }}
           options={(committees ?? []).map((c: any) => ({ value: c._id, label: c.name }))}
         />
         <div className="muted" style={{ marginLeft: "auto", fontSize: "var(--fs-sm)" }}>
@@ -214,7 +214,7 @@ export function TasksPage() {
                         size="sm"
                         value={t.status}
                         onChange={(v) => update({ id: t._id, patch: { status: v } })}
-                        style={{ width: 120 }}
+                        style={{ width: 120, maxWidth: "100%" }}
                         options={COLS.map((c) => ({ value: c.id, label: c.label }))}
                       />
                     </td>

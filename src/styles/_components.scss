@@ -775,6 +775,133 @@
 }
 
 /* ============================================================
+   Regulatory citation badge + popover
+   ============================================================ */
+/* The badge sits inline next to compliance copy (for example in a Flag).
+   Clicking it opens the source in a new tab; hovering/focusing reveals a
+   portal popover with the exact rule quote and full citation. */
+.citation-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-height: 20px;
+  padding: 2px 6px;
+  border: 1px solid currentColor;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-xs);
+  line-height: 1.2;
+  cursor: help;
+  opacity: 0.85;
+  text-decoration: none;
+  white-space: normal;
+}
+
+.citation-badge > svg { flex-shrink: 0; }
+
+.citation-badge > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.citation-badge:hover,
+.citation-badge:focus-visible {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.25);
+  outline: none;
+}
+
+.flag--ok .citation-badge:hover,
+.flag--ok .citation-badge:focus-visible { background: var(--success-soft); }
+.flag--warn .citation-badge:hover,
+.flag--warn .citation-badge:focus-visible { background: var(--warn-soft); }
+.flag--err .citation-badge:hover,
+.flag--err .citation-badge:focus-visible { background: var(--danger-soft); }
+
+.citation-badge--icon-only { padding: 3px; }
+
+.citation-badge--missing {
+  cursor: help;
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.citation-popover {
+  position: fixed;
+  z-index: var(--z-tooltip);
+  width: max-content;
+  min-width: min(320px, calc(100vw - 16px));
+  max-width: min(440px, calc(100vw - 16px));
+  padding: 12px 14px;
+  background: var(--bg-inverse);
+  color: var(--text-inverse);
+  border-radius: var(--r-md, 10px);
+  box-shadow: var(--shadow-md);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  text-align: left;
+  animation: tooltipIn 0.1s ease-out;
+}
+
+.citation-popover__bridge {
+  position: fixed;
+  z-index: var(--z-tooltip);
+  /* invisible hover bridge so the popover stays open when the cursor
+     crosses the gap between the badge and the popover */
+  background: transparent;
+}
+
+.citation-popover__source {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.citation-popover__quote {
+  margin: 0 0 6px;
+  padding: 0;
+  font-style: italic;
+  opacity: 0.92;
+}
+
+.citation-popover__caveat {
+  margin: 0 0 6px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-xs);
+  opacity: 0.85;
+}
+
+.citation-popover__meta {
+  margin-bottom: 8px;
+  font-size: var(--fs-xs);
+  opacity: 0.7;
+}
+
+.citation-popover__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.citation-popover__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+  font-size: var(--fs-xs);
+  text-decoration: none;
+}
+.citation-popover__link:hover { text-decoration: underline; }
+.citation-popover__link--muted { color: inherit; opacity: 0.7; }
+
+/* ============================================================
    Checkbox / Toggle / Radio
    ============================================================ */
 .check-row {

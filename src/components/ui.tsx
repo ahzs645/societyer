@@ -16,6 +16,7 @@ import { ChevronRight, X, AlertTriangle, CheckCircle2, Info, Lock, Unlock, type 
 import { Link } from "react-router-dom";
 import { useConfirm } from "./Modal";
 import { useInspectorPanel } from "./InspectorPanel";
+import { CitationBadge } from "./CitationTooltip";
 
 export type Breadcrumb = {
   label: ReactNode;
@@ -723,15 +724,40 @@ export function LockedField({
 export function Flag({
   level,
   children,
+  citationId,
+  citationIds,
 }: {
   level: "ok" | "warn" | "err";
   children: ReactNode;
+  /**
+   * Regulatory citation id to surface next to the flag copy. Hovering the
+   * badge reveals the source quote, full citation, and a link to the
+   * authoritative text. Use for flags that rest on a statute, regulation,
+   * or published agency guidance. See src/lib/regulatoryCitations.ts.
+   */
+  citationId?: string;
+  /** Several citations (primary rendered first). */
+  citationIds?: string[];
 }) {
   const Icon = level === "ok" ? CheckCircle2 : level === "warn" ? Info : AlertTriangle;
+  const ids = citationIds && citationIds.length > 0
+    ? citationIds
+    : citationId
+      ? [citationId]
+      : [];
   return (
     <div className={`flag flag--${level}`}>
       <Icon />
-      <div>{children}</div>
+      <div className="flag__body">
+        <div className="flag__text">{children}</div>
+        {ids.length > 0 && (
+          <div className="flag__citations">
+            {ids.map((id) => (
+              <CitationBadge key={id} citationId={id} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -102,37 +102,17 @@ function asyncRoute(
   };
 }
 
-async function fullscreenBrowserWindow(page: Page) {
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const client = await page.context().newCDPSession(page);
-    try {
-      const result = await client.send("Browser.getWindowForTarget") as { windowId?: number };
-      if (typeof result.windowId !== "number") return;
-      await client.send("Browser.setWindowBounds", {
-        windowId: result.windowId,
-        bounds: { windowState: "fullscreen" },
-      });
-      return;
-    } catch (error) {
-      lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 150));
-    } finally {
-      await client.detach().catch(() => undefined);
-    }
-  }
-
-  console.warn("Could not fullscreen live-view browser window.", lastError);
-}
-
-async function connectSession(cdpUrl: string, options?: { fullscreenWindow?: boolean }) {
+async function connectSession(cdpUrl: string) {
   const browser = await chromium.connectOverCDP(cdpUrl);
   const context = browser.contexts()[0] ?? await browser.newContext();
-  const page = context.pages()[0] ?? await context.newPage();
-  if (options?.fullscreenWindow) {
-    await fullscreenBrowserWindow(page);
-  }
+  const pages = context.pages();
+  const page = pages[0] ?? await context.newPage();
+  await Promise.all(
+    pages
+      .filter((candidate) => candidate !== page)
+      .map((candidate) => candidate.close().catch(() => undefined)),
+  );
+  await page.bringToFront().catch(() => undefined);
   return { browser, context, page };
 }
 
@@ -301,9 +281,7 @@ app.post("/sessions/start-login", asyncRoute(async (req, res) => {
     proxyUrl: input.proxyUrl,
   });
 
-  const { browser, context, page } = await connectSession(browserSession.cdpUrl, {
-    fullscreenWindow: browserSession.liveViewEnabled,
-  });
+  const { browser, context, page } = await connectSession(browserSession.cdpUrl);
   if (input.startUrl) {
     await page.goto(input.startUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
   }
@@ -466,9 +444,7 @@ app.post("/connectors/:connectorId/auth/start", asyncRoute(async (req, res) => {
     proxyUrl: input.proxyUrl,
   });
 
-  const { browser, context, page } = await connectSession(browserSession.cdpUrl, {
-    fullscreenWindow: browserSession.liveViewEnabled,
-  });
+  const { browser, context, page } = await connectSession(browserSession.cdpUrl);
   await page.goto(input.startUrl!, { waitUntil: "domcontentloaded", timeout: 45_000 });
   const vncPort = input.liveView ? await detectNewVncPort(beforeVncPorts, vncHost) : undefined;
 
@@ -512,9 +488,7 @@ app.post("/connectors/:connectorId/auth/verify", asyncRoute(async (req, res) => 
     proxyUrl: input.proxyUrl,
   });
 
-  const { browser, page } = await connectSession(browserSession.cdpUrl, {
-    fullscreenWindow: browserSession.liveViewEnabled,
-  });
+  const { browser, page } = await connectSession(browserSession.cdpUrl);
   try {
     if (connector.id === "wave") {
       res.json(await verifyWaveAuth(page));
@@ -669,9 +643,7 @@ app.post("/connectors/:connectorId/actions/:actionId", asyncRoute(async (req, re
     readOnly: true,
   });
 
-  const { browser, page } = await connectSession(browserSession.cdpUrl, {
-    fullscreenWindow: browserSession.liveViewEnabled,
-  });
+  const { browser, page } = await connectSession(browserSession.cdpUrl);
   const runId = crypto.randomUUID();
   const startedAtISO = new Date().toISOString();
   let bearer: string | undefined;
@@ -722,9 +694,7 @@ app.post("/profiles/validate", asyncRoute(async (req, res) => {
     proxyUrl: input.proxyUrl,
   });
 
-  const { browser, page } = await connectSession(browserSession.cdpUrl, {
-    fullscreenWindow: browserSession.liveViewEnabled,
-  });
+  const { browser, page } = await connectSession(browserSession.cdpUrl);
   try {
     await page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 45_000 });
     if (input.waitForSelector) {
@@ -766,9 +736,7 @@ app.post("/runs/open-page", asyncRoute(async (req, res) => {
     proxyUrl: input.proxyUrl,
   });
 
-  const { browser, page } = await connectSession(browserSession.cdpUrl, {
-    fullscreenWindow: browserSession.liveViewEnabled,
-  });
+  const { browser, page } = await connectSession(browserSession.cdpUrl);
   const startedAtISO = new Date().toISOString();
   try {
     await page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 45_000 });

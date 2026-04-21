@@ -3,30 +3,28 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field, RecordChip } from "../components/ui";
-import { DataTable } from "../components/DataTable";
+import { Drawer, Field } from "../components/ui";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
-import { FilterField } from "../components/FilterBar";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
 import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Plus, Users, Trash2, Mail, Tag, CircleUser, Vote } from "lucide-react";
-import { formatDate, initials } from "../lib/format";
+import { Plus, Users, Trash2, Pencil, GitMerge, Download } from "lucide-react";
 import { patchInList } from "../lib/optimistic";
 import { useRegisterCommand } from "../lib/commands";
-import { Download, Pencil, GitMerge } from "lucide-react";
 import { BulkEditPanel } from "../components/BulkEditPanel";
 import { MergeRecordsModal } from "../components/MergeRecordsModal";
-
-const MEMBER_FIELDS: FilterField<any>[] = [
-  { id: "name", label: "Name", icon: <CircleUser size={14} />, match: (m, q) => `${m.firstName} ${m.lastName} ${(m.aliases ?? []).join(" ")}`.toLowerCase().includes(q.toLowerCase()) },
-  { id: "email", label: "Email", icon: <Mail size={14} />, match: (m, q) => (m.email ?? "").toLowerCase().includes(q.toLowerCase()) },
-  { id: "class", label: "Class", icon: <Tag size={14} />, options: ["Regular", "Honorary", "Student", "Associate"], match: (m, q) => m.membershipClass === q },
-  { id: "status", label: "Status", icon: <Tag size={14} />, options: ["Active", "Inactive", "Suspended"], match: (m, q) => m.status === q },
-  { id: "voting", label: "Voting rights", icon: <Vote size={14} />, options: ["Yes", "No"], match: (m, q) => (m.votingRights ? "Yes" : "No") === q },
-];
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  RecordTableBulkBar,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 export function MembersPage() {
   const society = useSociety();
@@ -43,7 +41,15 @@ export function MembersPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [bulkRows, setBulkRows] = useState<any[] | null>(null);
   const [mergeRows, setMergeRows] = useState<any[] | null>(null);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
   const mergeMembers = useMutation(api.members.merge);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "member",
+    viewId: currentViewId,
+  });
 
   const confirmRemove = async (r: any) => {
     const reason = await prompt({
@@ -131,6 +137,10 @@ export function MembersPage() {
     setDrawerOpen(false);
   };
 
+  const records = (members ?? []) as any[];
+  const metadataLoading = tableData.loading;
+  const showMetadataWarning = !metadataLoading && !tableData.objectMetadata;
+
   return (
     <div className="page">
       <PageHeader
@@ -145,120 +155,89 @@ export function MembersPage() {
         }
       />
 
-      <DataTable
-        label="All members"
-        icon={<Users size={14} />}
-        data={(members ?? []) as any[]}
-        loading={members === undefined}
-        rowKey={(r) => r._id}
-        filterFields={MEMBER_FIELDS}
-        searchPlaceholder="Search name, email, class…"
-        defaultSort={{ columnId: "name", dir: "asc" }}
-        viewsKey="members"
-        onRowClick={(row) => { setSelected(row); setDrawerOpen(true); }}
-        columns={[
-          {
-            id: "name",
-            header: "Name",
-            sortable: true,
-            accessor: (r) => `${r.firstName} ${r.lastName}`,
-            render: (r) => (
-              <RecordChip
-                tone="blue"
-                avatar={initials(r.firstName, r.lastName)}
-                label={`${r.firstName} ${r.lastName}`}
-              />
-            ),
-          },
-          {
-            id: "membershipClass",
-            header: "Class",
-            sortable: true,
-            accessor: (r) => r.membershipClass,
-            render: (r) => <span className="cell-tag">{r.membershipClass}</span>,
-            editable: {
-              type: "select",
-              options: ["Regular", "Honorary", "Student", "Associate"],
-              onCommit: async (row, value) => {
-                await update({ id: row._id, patch: { membershipClass: value } });
+      {showMetadataWarning ? (
+        <div className="record-table__empty">
+          <div className="record-table__empty-title">Metadata not seeded</div>
+          <div className="record-table__empty-desc">
+            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+            member object metadata + default view.
+          </div>
+        </div>
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="members"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+          onRecordClick={(_, record) => {
+            setSelected(record);
+            setDrawerOpen(true);
+          }}
+          onUpdate={async ({ recordId, fieldName, value }) => {
+            await update({
+              id: recordId as Id<"members">,
+              patch: { [fieldName]: value } as any,
+            });
+          }}
+        >
+          <RecordTableToolbar
+            icon={<Users size={14} />}
+            label="All members"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+
+          <RecordTable
+            selectable
+            loading={metadataLoading || members === undefined}
+          />
+
+          <RecordTableBulkBar
+            actions={[
+              {
+                id: "bulk-edit",
+                label: "Edit",
+                icon: <Pencil size={12} />,
+                keepSelection: true,
+                onRun: (_ids, rows) => setBulkRows(rows),
               },
-            },
-          },
-          {
-            id: "status",
-            header: "Status",
-            sortable: true,
-            accessor: (r) => r.status,
-            render: (r) => <Badge tone={r.status === "Active" ? "success" : "warn"}>{r.status}</Badge>,
-            editable: {
-              type: "select",
-              options: ["Active", "Inactive", "Suspended"],
-              onCommit: async (row, value) => {
-                await update({ id: row._id, patch: { status: value } });
+              {
+                id: "bulk-merge",
+                label: "Merge",
+                icon: <GitMerge size={12} />,
+                keepSelection: true,
+                onRun: (_ids, rows) => {
+                  if (rows.length < 2) {
+                    toast.warn("Select at least 2 members to merge");
+                    return;
+                  }
+                  setMergeRows(rows);
+                },
               },
-            },
-          },
-          {
-            id: "voting",
-            header: "Voting",
-            sortable: true,
-            accessor: (r) => (r.votingRights ? 1 : 0),
-            render: (r) => r.votingRights ? <Badge tone="info">Voting</Badge> : <span className="muted">—</span>,
-          },
-          {
-            id: "joinedAt",
-            header: "Joined",
-            sortable: true,
-            accessor: (r) => r.joinedAt,
-            render: (r) => <span className="mono">{formatDate(r.joinedAt)}</span>,
-          },
-          {
-            id: "email",
-            header: "Email",
-            sortable: true,
-            accessor: (r) => r.email ?? "",
-            render: (r) => <span className="muted">{r.email ?? "—"}</span>,
-            editable: {
-              type: "text",
-              placeholder: "name@example.com",
-              onCommit: async (row, value) => {
-                await update({ id: row._id, patch: { email: value || undefined } });
+              {
+                id: "bulk-archive",
+                label: "Archive",
+                icon: <Trash2 size={12} />,
+                tone: "danger",
+                onRun: async (_ids, rows) => {
+                  for (const r of rows) await confirmRemove(r);
+                },
               },
-            },
-          },
-        ]}
-        renderRowActions={(r) => (
-          <button
-            className="btn btn--ghost btn--sm btn--icon"
-            aria-label={`Remove ${r.firstName} ${r.lastName}`}
-            onClick={() => confirmRemove(r)}
-          >
-            <Trash2 size={12} />
-          </button>
-        )}
-        bulkActions={[
-          {
-            id: "bulk-edit",
-            label: "Edit",
-            icon: <Pencil size={12} />,
-            onRun: (rows) => { setBulkRows(rows); },
-            keepSelection: true,
-          },
-          {
-            id: "bulk-merge",
-            label: "Merge",
-            icon: <GitMerge size={12} />,
-            onRun: (rows) => {
-              if (rows.length < 2) {
-                toast.warn("Select at least 2 members to merge");
-                return;
-              }
-              setMergeRows(rows);
-            },
-            keepSelection: true,
-          },
-        ]}
-      />
+            ]}
+          />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="record-table__loading-row" />
+          ))}
+        </div>
+      )}
 
       <MergeRecordsModal
         open={!!mergeRows && mergeRows.length >= 2}

@@ -27,6 +27,8 @@ const OPERATING_SUBSCRIPTION_STATUSES = [
   { value: "Paused", label: "Paused" },
 ];
 
+type WaveAccountView = "working" | "transaction" | "category" | "ledger" | "all";
+
 function auditStatusTone(status: string) {
   if (status === "Audited") return "success";
   if (["ReviewEngagement", "Review engagement", "Compilation", "Compiled", "T2/GIFI"].includes(status)) return "info";
@@ -89,6 +91,7 @@ export function FinancialsPage() {
   const [subscriptionForm, setSubscriptionForm] = useState<any>(null);
   const [waveMode, setWaveMode] = useState<"resources" | "structures">("resources");
   const [waveResourceType, setWaveResourceType] = useState("account");
+  const [waveAccountView, setWaveAccountView] = useState<WaveAccountView>("transaction");
   const [waveSearch, setWaveSearch] = useState("");
   const [selectedWaveResourceId, setSelectedWaveResourceId] = useState<string | null>(null);
   const [hideZeroWaveAccounts, setHideZeroWaveAccounts] = useState(false);
@@ -339,6 +342,7 @@ export function FinancialsPage() {
           resources={waveResources ?? []}
           resourceType={waveResourceType}
           resourceTypes={waveResourceTypes}
+          accountView={waveAccountView}
           search={waveSearch}
           selectedResource={selectedWaveResource}
           selectedResourceId={selectedWaveResourceId}
@@ -346,6 +350,7 @@ export function FinancialsPage() {
           structures={waveStructures ?? []}
           summary={waveSummary}
           onHideZeroAccountsChange={setHideZeroWaveAccounts}
+          onAccountViewChange={setWaveAccountView}
           onResourceTypeChange={(type) => {
             setWaveResourceType(type);
             setSelectedWaveResourceId(null);
@@ -1095,6 +1100,7 @@ export function WaveResourceTablePage() {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [hideZeroWaveAccounts, setHideZeroWaveAccounts] = useState(false);
+  const [accountView, setAccountView] = useState<WaveAccountView>(() => normalizeWaveAccountView(searchParams.get("accountView") ?? "transaction"));
   const [selectedWaveResourceId, setSelectedWaveResourceId] = useState<string | null>(() => searchParams.get("resourceId"));
   const selectedWaveResource = useQuery(
     api.waveCache.resource,
@@ -1108,14 +1114,21 @@ export function WaveResourceTablePage() {
     }
   }, [searchParams, selectedWaveResourceId]);
 
+  useEffect(() => {
+    const nextAccountView = normalizeWaveAccountView(searchParams.get("accountView") ?? "transaction");
+    if (nextAccountView !== accountView) setAccountView(nextAccountView);
+  }, [accountView, searchParams]);
+
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
 
   const allResources = waveResources ?? [];
-  const rows = hideZeroWaveAccounts
-    ? allResources.filter((row) => row.resourceType !== "account" || !isZeroWaveAmount(row.amountValue))
-    : allResources;
-  const hiddenZeroAccounts = allResources.length - rows.length;
+  const rows = filterWaveResourcesForView(allResources, {
+    accountView,
+    hideZeroAccounts: hideZeroWaveAccounts,
+    applyAccountView: tableResourceType === "account" || tableResourceType === "all",
+  });
+  const hiddenRows = allResources.length - rows.length;
   const selectedFallback = allResources.find((row) => row._id === selectedWaveResourceId) ?? null;
   const title = tableResourceType === "all" ? "Wave Data" : `Wave ${waveTypeLabel(tableResourceType)}`;
 
@@ -1130,6 +1143,14 @@ export function WaveResourceTablePage() {
     setSelectedWaveResourceId(null);
     const next = new URLSearchParams(searchParams);
     next.delete("resourceId");
+    setSearchParams(next, { replace: true });
+  };
+
+  const changeAccountView = (nextView: WaveAccountView) => {
+    setAccountView(nextView);
+    const next = new URLSearchParams(searchParams);
+    if (nextView === "transaction") next.delete("accountView");
+    else next.set("accountView", nextView);
     setSearchParams(next, { replace: true });
   };
 
@@ -1156,7 +1177,7 @@ export function WaveResourceTablePage() {
         iconColor="green"
         subtitle={
           waveSummary
-            ? `${waveSummary.businessName} · ${rows.length} rows${hiddenZeroAccounts > 0 ? ` · ${hiddenZeroAccounts} zero-balance hidden` : ""}`
+            ? `${waveSummary.businessName} · ${rows.length} rows${hiddenRows > 0 ? ` · ${hiddenRows} hidden by view` : ""}`
             : "Cached Wave resource table."
         }
         actions={
@@ -1178,6 +1199,15 @@ export function WaveResourceTablePage() {
           </>
         }
       />
+
+      {(tableResourceType === "account" || tableResourceType === "all") && (
+        <WaveAccountViewControls
+          rows={allResources}
+          value={accountView}
+          onChange={changeAccountView}
+          style={{ marginBottom: 12 }}
+        />
+      )}
 
       <DataTable
         label={title}
@@ -1206,7 +1236,7 @@ export function WaveResourceTablePage() {
             <ExternalLink size={12} /> Details
           </Link>
         )}
-        emptyMessage={waveSummary ? "No cached Wave rows match this table." : "Refresh the Wave cache to load this table."}
+        emptyMessage={waveSummary ? "No cached Wave rows match this account view." : "Refresh the Wave cache to load this table."}
       />
 
       <WaveResourceDrawer
@@ -1237,7 +1267,8 @@ export function WaveAccountDetailPage() {
   );
   const syncFinancials = useAction(api.financialHub.sync);
   const isTransactionAccount = resource?.resourceType === "account" && isWaveTransactionAccount(resource);
-  const isCategoryAccount = resource?.resourceType === "account" && !isWaveTransactionAccount(resource);
+  const isCategoryAccount = resource?.resourceType === "account" && isWaveCategoryAccount(resource);
+  const isLedgerAccount = resource?.resourceType === "account" && isWaveLedgerArtifactAccount(resource);
   const accountActivity = useQuery(
     api.financialHub.transactionsForAccountExternalId,
     society && isTransactionAccount && resource.externalId
@@ -1250,7 +1281,7 @@ export function WaveAccountDetailPage() {
       ? { societyId: society._id, externalId: resource.externalId, label: resource.label, limit: 1000 }
       : "skip",
   );
-  const activity = isTransactionAccount ? accountActivity : categoryActivity;
+  const activity = isTransactionAccount ? accountActivity : isCategoryAccount ? categoryActivity : undefined;
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [pullState, setPullState] = useState<"idle" | "pulling" | "pulled" | "error">("idle");
   const [pullError, setPullError] = useState<string | null>(null);
@@ -1316,7 +1347,9 @@ export function WaveAccountDetailPage() {
         icon={<Database size={16} />}
         iconColor="green"
         subtitle={
-          activity !== undefined
+          isLedgerAccount
+            ? `${capitalize(accountKind)} · Cached Wave ledger row`
+            : activity !== undefined
             ? `${capitalize(accountKind)} · ${activity.total ?? transactions.length} ${transactionLabel}${(activity.total ?? transactions.length) === 1 ? "" : "s"}${isCategoryAccount ? ` · ${money(linkedTotalCents)}` : ""}`
             : `Cached Wave ${accountKind} details`
         }
@@ -1368,45 +1401,51 @@ export function WaveAccountDetailPage() {
         </div>
       )}
 
-      <DataTable
-        label={isCategoryAccount ? "Categorized transactions" : "Account transactions"}
-        icon={<Database size={14} />}
-        data={transactions as any[]}
-        loading={activity === undefined}
-        rowKey={(row) => row._id}
-        onRowClick={(row) => setSelectedTransaction(row)}
-        rowActionLabel={(row) => `Open transaction ${row.description}`}
-        searchPlaceholder="Search transactions..."
-        searchExtraFields={[(row) => row.counterparty, (row) => row.account?.name, (row) => row.category]}
-        defaultSort={{ columnId: "date", dir: "desc" }}
-        viewsKey={`wave-account-transactions-${resource._id}`}
-        pagination
-        initialPageSize={25}
-        pageSizeOptions={[10, 25, 50, 100]}
-        columns={isCategoryAccount ? categoryAccountTransactionColumns() : financialTransactionColumns(activity?.account)}
-        renderRowActions={(row) => (
-          <button
-            className="btn btn--ghost btn--sm"
-            onClick={(event) => {
-              event.stopPropagation();
-              setSelectedTransaction(row);
-            }}
-          >
-            <ExternalLink size={12} /> Open
-          </button>
-        )}
-        emptyMessage={
-          pullState === "pulling"
-            ? "Pulling latest available Wave activity..."
-            : pullState === "pulled"
-            ? "Pulled latest available Wave data. No synced transactions exist for this account."
-            : isCategoryAccount
-            ? "No synced transactions are categorized to this Wave account yet."
-            : activity?.account
-            ? "No synced transactions for this account yet."
-            : "This cached Wave account is not in the synced financial account set."
-        }
-      />
+      {isLedgerAccount ? (
+        <Flag level="warn">
+          Wave ledger/system row. Usually payable or transfer clearing internals, not a reusable transaction category.
+        </Flag>
+      ) : (
+        <DataTable
+          label={isCategoryAccount ? "Categorized transactions" : "Account transactions"}
+          icon={<Database size={14} />}
+          data={transactions as any[]}
+          loading={activity === undefined}
+          rowKey={(row) => row._id}
+          onRowClick={(row) => setSelectedTransaction(row)}
+          rowActionLabel={(row) => `Open transaction ${row.description}`}
+          searchPlaceholder="Search transactions..."
+          searchExtraFields={[(row) => row.counterparty, (row) => row.account?.name, (row) => row.category]}
+          defaultSort={{ columnId: "date", dir: "desc" }}
+          viewsKey={`wave-account-transactions-${resource._id}`}
+          pagination
+          initialPageSize={25}
+          pageSizeOptions={[10, 25, 50, 100]}
+          columns={isCategoryAccount ? categoryAccountTransactionColumns() : financialTransactionColumns(activity?.account)}
+          renderRowActions={(row) => (
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={(event) => {
+                event.stopPropagation();
+                setSelectedTransaction(row);
+              }}
+            >
+              <ExternalLink size={12} /> Open
+            </button>
+          )}
+          emptyMessage={
+            pullState === "pulling"
+              ? "Pulling latest available Wave activity..."
+              : pullState === "pulled"
+              ? "Pulled latest available Wave data. No synced transactions exist for this account."
+              : isCategoryAccount
+              ? "No synced transactions are categorized to this Wave account yet."
+              : activity?.account
+              ? "No synced transactions for this account yet."
+              : "This cached Wave account is not in the synced financial account set."
+          }
+        />
+      )}
 
       <TransactionDrawer
         open={Boolean(selectedTransaction)}
@@ -1679,7 +1718,7 @@ function WaveHealthPanel({ result }: { result: any }) {
         style={{
           display: "grid",
           gap: 16,
-          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
         }}
       >
         <div>
@@ -1808,6 +1847,7 @@ function WaveCacheExplorer({
   resources,
   resourceType,
   resourceTypes,
+  accountView,
   search,
   selectedResource,
   selectedResourceId,
@@ -1815,6 +1855,7 @@ function WaveCacheExplorer({
   structures,
   summary,
   onHideZeroAccountsChange,
+  onAccountViewChange,
   onResourceTypeChange,
   onSearchChange,
   onSelectResource,
@@ -1829,6 +1870,7 @@ function WaveCacheExplorer({
   resources: any[];
   resourceType: string;
   resourceTypes: string[];
+  accountView: WaveAccountView;
   search: string;
   selectedResource: any;
   selectedResourceId: string | null;
@@ -1836,18 +1878,22 @@ function WaveCacheExplorer({
   structures: any[];
   summary: any;
   onHideZeroAccountsChange: (value: boolean) => void;
+  onAccountViewChange: (value: WaveAccountView) => void;
   onResourceTypeChange: (type: string) => void;
   onSearchChange: (value: string) => void;
   onSelectResource: (id: string | null) => void;
 }) {
   const counts = summary?.resourceCounts ?? {};
   const totalResources = Object.values(counts).reduce((sum: number, value: any) => sum + Number(value ?? 0), 0);
-  const visibleResources = hideZeroAccounts
-    ? resources.filter((row) => row.resourceType !== "account" || !isZeroWaveAmount(row.amountValue))
-    : resources;
-  const hiddenZeroAccounts = resources.length - visibleResources.length;
+  const visibleResources = filterWaveResourcesForView(resources, {
+    accountView,
+    hideZeroAccounts,
+    applyAccountView: resourceType === "account" || resourceType === "all",
+  });
+  const hiddenResourceCount = resources.length - visibleResources.length;
   const selectedFallback = resources.find((row) => row._id === selectedResourceId) ?? null;
   const openTableType = resourceType || "all";
+  const openTableHref = `/app/financials/wave/${openTableType}${accountView === "transaction" ? "" : `?accountView=${accountView}`}`;
 
   return (
     <div className="card" style={{ marginBottom: 16 }}>
@@ -1875,44 +1921,22 @@ function WaveCacheExplorer({
         </div>
       </div>
 
-      <div className="card__body" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        {mode === "resources" && (
-          <>
-            <button
-              className={resourceType === "all" ? "btn btn--accent btn--sm" : "btn btn--ghost btn--sm"}
-              onClick={() => onResourceTypeChange("all")}
-            >
-              All <span className="muted">{totalResources}</span>
-            </button>
-            {resourceTypes.map((type) => (
-              <button
-                key={type}
-                className={resourceType === type ? "btn btn--accent btn--sm" : "btn btn--ghost btn--sm"}
-                onClick={() => onResourceTypeChange(type)}
-              >
-                {waveTypeLabel(type)} <span className="muted">{counts[type] ?? 0}</span>
-              </button>
-            ))}
-            <button
-              className={hideZeroAccounts ? "btn btn--accent btn--sm" : "btn btn--ghost btn--sm"}
-              onClick={() => onHideZeroAccountsChange(!hideZeroAccounts)}
-              title="Toggle zero-balance account rows in this cache table. Raw Wave data is always stored."
-            >
-              Zero-balance <span className="muted">{hideZeroAccounts ? "hidden" : "shown"}</span>
-            </button>
-            <Link className="btn btn--ghost btn--sm" to={`/app/financials/wave/${openTableType}`}>
-              <ExternalLink size={12} /> Open table
-            </Link>
-          </>
-        )}
-        <input
-          className="input"
-          value={search}
-          onChange={(event) => onSearchChange(event.target.value)}
-          placeholder={mode === "resources" ? "Search cached Wave data" : "Search structures"}
-          style={{ marginLeft: "auto", maxWidth: 280 }}
-        />
-      </div>
+      <WaveCacheControls
+        mode={mode}
+        resourceType={resourceType}
+        resourceTypes={resourceTypes}
+        counts={counts}
+        totalResources={totalResources}
+        accountView={accountView}
+        resources={resources}
+        hideZeroAccounts={hideZeroAccounts}
+        search={search}
+        openTableHref={openTableHref}
+        onResourceTypeChange={onResourceTypeChange}
+        onAccountViewChange={onAccountViewChange}
+        onHideZeroAccountsChange={onHideZeroAccountsChange}
+        onSearchChange={onSearchChange}
+      />
 
       {mode === "resources" ? (
         <>
@@ -1984,9 +2008,9 @@ function WaveCacheExplorer({
             onClose={() => onSelectResource(null)}
           />
 
-          {hiddenZeroAccounts > 0 && (
+          {hiddenResourceCount > 0 && (
             <div className="card__body muted" style={{ borderTop: "1px solid var(--border)", fontSize: 12 }}>
-              Hidden {hiddenZeroAccounts} zero-balance account row{hiddenZeroAccounts === 1 ? "" : "s"} from this view.
+              Hidden {hiddenResourceCount} Wave row{hiddenResourceCount === 1 ? "" : "s"} from this view. Use Raw accounts to inspect imported ledger artifacts.
             </div>
           )}
         </>
@@ -2075,7 +2099,8 @@ function WaveResourceDetail({
   const [pullState, setPullState] = useState<"idle" | "pulling" | "pulled" | "error">("idle");
   const [pullError, setPullError] = useState<string | null>(null);
   const isTransactionAccount = resource?.resourceType === "account" && isWaveTransactionAccount(resource);
-  const isCategoryAccount = resource?.resourceType === "account" && !isWaveTransactionAccount(resource);
+  const isCategoryAccount = resource?.resourceType === "account" && isWaveCategoryAccount(resource);
+  const isLedgerAccount = resource?.resourceType === "account" && isWaveLedgerArtifactAccount(resource);
   const accountActivity = useQuery(
     api.financialHub.transactionsForAccountExternalId,
     societyId && isTransactionAccount && resource.externalId
@@ -2158,7 +2183,7 @@ function WaveResourceDetail({
 
       <WaveResourceSummary resource={resource} />
 
-      {resource.resourceType === "account" && (
+      {resource.resourceType === "account" && (isTransactionAccount || isCategoryAccount) && (
         <AccountTransactionsPreview
           activity={isTransactionAccount ? accountActivity : categoryActivity}
           accountPageHref={accountPageHref}
@@ -2166,6 +2191,13 @@ function WaveResourceDetail({
           pullState={pullState}
           pullError={pullError}
         />
+      )}
+      {isLedgerAccount && (
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+          <Flag level="warn">
+            Wave ledger/system row. Usually payable or transfer clearing internals, not a reusable transaction category.
+          </Flag>
+        </div>
       )}
       {isWaveCounterpartyResource(resource) && (
         <CounterpartyTransactionsPreview
@@ -2175,6 +2207,110 @@ function WaveResourceDetail({
         />
       )}
     </div>
+  );
+}
+
+function WaveCacheControls({
+  mode,
+  resourceType,
+  resourceTypes,
+  counts,
+  totalResources,
+  accountView,
+  resources,
+  hideZeroAccounts,
+  search,
+  openTableHref,
+  onResourceTypeChange,
+  onAccountViewChange,
+  onHideZeroAccountsChange,
+  onSearchChange,
+}: {
+  mode: "resources" | "structures";
+  resourceType: string;
+  resourceTypes: string[];
+  counts: Record<string, any>;
+  totalResources: number;
+  accountView: WaveAccountView;
+  resources: any[];
+  hideZeroAccounts: boolean;
+  search: string;
+  openTableHref: string;
+  onResourceTypeChange: (type: string) => void;
+  onAccountViewChange: (value: WaveAccountView) => void;
+  onHideZeroAccountsChange: (value: boolean) => void;
+  onSearchChange: (value: string) => void;
+}) {
+  const showAccountViews = mode === "resources" && (resourceType === "account" || resourceType === "all");
+
+  return (
+    <div className="card__body" style={{ display: "grid", gap: 12 }}>
+      {mode === "resources" && (
+        <>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <ControlGroupLabel>Resource</ControlGroupLabel>
+            <button
+              className={resourceType === "all" ? "btn btn--accent btn--sm" : "btn btn--ghost btn--sm"}
+              onClick={() => onResourceTypeChange("all")}
+            >
+              All <span className="muted">{totalResources}</span>
+            </button>
+            {resourceTypes.map((type) => (
+              <button
+                key={type}
+                className={resourceType === type ? "btn btn--accent btn--sm" : "btn btn--ghost btn--sm"}
+                onClick={() => onResourceTypeChange(type)}
+              >
+                {waveTypeLabel(type)} <span className="muted">{counts[type] ?? 0}</span>
+              </button>
+            ))}
+          </div>
+
+          {showAccountViews && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <ControlGroupLabel>Account view</ControlGroupLabel>
+              <WaveAccountViewControls
+                rows={resources}
+                value={accountView}
+                onChange={onAccountViewChange}
+              />
+            </div>
+          )}
+        </>
+      )}
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <input
+          className="input"
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+          placeholder={mode === "resources" ? "Search cached Wave data" : "Search structures"}
+          style={{ minWidth: 220, flex: "1 1 280px", maxWidth: 420 }}
+        />
+        {showAccountViews && (
+          <button
+            className={hideZeroAccounts ? "btn btn--accent btn--sm" : "btn btn--ghost btn--sm"}
+            onClick={() => onHideZeroAccountsChange(!hideZeroAccounts)}
+            title="Toggle zero-balance account rows in this cache table. Raw Wave data is always stored."
+          >
+            Zero balance {hideZeroAccounts ? "hidden" : "shown"}
+          </button>
+        )}
+        {mode === "resources" && (
+          <Link className="btn btn--ghost btn--sm" to={openTableHref}>
+            <ExternalLink size={12} /> Open table
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ControlGroupLabel({ children }: { children: string }) {
+  return (
+    <span className="muted" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0, textTransform: "uppercase" }}>
+      {children}
+    </span>
   );
 }
 
@@ -2195,7 +2331,7 @@ function WaveResourceSummary({ resource }: { resource: any }) {
         style={{
           display: "grid",
           gap: 10,
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
         }}
       >
         {fields.map((field) => (
@@ -2212,6 +2348,46 @@ function WaveResourceSummary({ resource }: { resource: any }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function WaveAccountViewControls({
+  rows,
+  value,
+  onChange,
+  style,
+}: {
+  rows: any[];
+  value: WaveAccountView;
+  onChange: (value: WaveAccountView) => void;
+  style?: Record<string, any>;
+}) {
+  const accountRows = rows.filter((row) => row.resourceType === "account");
+  if (accountRows.length === 0) return null;
+  const options: Array<{ value: WaveAccountView; label: string; title: string }> = [
+    { value: "transaction", label: "Money accounts", title: "Bank, cash, credit card, and payroll clearing accounts." },
+    { value: "category", label: "Categories", title: "Income, expense, equity, tax, payroll, and other chart-of-account categories." },
+    { value: "working", label: "Working set", title: "Money accounts and chart categories, excluding Wave ledger artifacts." },
+    { value: "ledger", label: "Ledger/system", title: "Wave-generated payable and transfer clearing rows hidden from the default view." },
+    { value: "all", label: "Raw accounts", title: "Every Wave account row exactly as cached." },
+  ];
+
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", ...style }}>
+      {options.map((option) => {
+        const count = accountRows.filter((row) => waveAccountMatchesView(row, option.value)).length;
+        return (
+          <button
+            key={option.value}
+            className={value === option.value ? "btn btn--accent btn--sm" : "btn btn--ghost btn--sm"}
+            onClick={() => onChange(option.value)}
+            title={option.title}
+          >
+            {option.label} <span className="muted">{count}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -2422,7 +2598,7 @@ function TransactionDrawer({
             style={{
               display: "grid",
               gap: 10,
-              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
             }}
           >
             <DetailCell label="Date" value={transaction.date} mono />
@@ -2830,6 +3006,19 @@ function WaveResourceValue({ row }: { row: any }) {
     }
     return <span className="muted">0 txns</span>;
   }
+  if (isWaveLedgerArtifactAccount(row) && row.externalId) {
+    const count = Number(row.linkedCategoryTransactionCount ?? 0);
+    return (
+      <>
+        {formatWaveValue(row.amountValue, row.currencyCode)}
+        {count > 0 && (
+          <div className="muted" style={{ fontSize: 11 }}>
+            {count} ledger txn{count === 1 ? "" : "s"}
+          </div>
+        )}
+      </>
+    );
+  }
   if (isWaveCategoryAccount(row) && row.externalId) {
     const count = Number(row.linkedCategoryTransactionCount ?? 0);
     return (
@@ -2856,6 +3045,31 @@ function waveResourceValueSort(row: any) {
   return Number(row.amountValue ?? 0);
 }
 
+function normalizeWaveAccountView(value: string): WaveAccountView {
+  if (value === "working" || value === "category" || value === "ledger" || value === "all") return value;
+  return "transaction";
+}
+
+function filterWaveResourcesForView(
+  rows: any[],
+  options: { accountView: WaveAccountView; hideZeroAccounts: boolean; applyAccountView: boolean },
+) {
+  return rows.filter((row) => {
+    if (row.resourceType !== "account") return true;
+    if (options.hideZeroAccounts && isZeroWaveAmount(row.amountValue)) return false;
+    if (!options.applyAccountView) return true;
+    return waveAccountMatchesView(row, options.accountView);
+  });
+}
+
+function waveAccountMatchesView(row: any, view: WaveAccountView) {
+  const role = waveAccountRole(row);
+  if (view === "all") return row.resourceType === "account";
+  if (view === "working") return row.resourceType === "account" && role !== "ledger";
+  if (view === "category") return role === "category" && !isZeroInactiveWaveCategoryAccount(row);
+  return role === view;
+}
+
 function normalizeWaveResourceType(value: string) {
   const aliases: Record<string, string> = {
     data: "all",
@@ -2879,8 +3093,16 @@ function isWaveCounterpartyResource(resource: any) {
   return resource?.resourceType === "vendor" || resource?.resourceType === "customer";
 }
 
+function waveAccountRole(resource: any): "transaction" | "category" | "ledger" | undefined {
+  if (resource?.resourceType !== "account") return undefined;
+  if (isWaveLedgerArtifactAccount(resource)) return "ledger";
+  if (isWaveTransactionAccount(resource)) return "transaction";
+  return "category";
+}
+
 function isWaveTransactionAccount(resource: any) {
   if (resource?.resourceType !== "account") return false;
+  if (isWaveLedgerArtifactAccount(resource)) return false;
   const type = String(resource.typeValue ?? resource.raw?.type?.value ?? "").toUpperCase();
   const subtype = String(resource.subtypeValue ?? resource.raw?.subtype?.value ?? "").toUpperCase();
   return (
@@ -2888,22 +3110,47 @@ function isWaveTransactionAccount(resource: any) {
     type === "CREDIT_CARD" ||
     subtype === "CASH_AND_BANK" ||
     subtype === "CREDIT_CARD" ||
-    subtype === "MONEY_IN_TRANSIT" ||
-    subtype === "TRANSFERS"
+    subtype === "MONEY_IN_TRANSIT"
   );
 }
 
+function isWaveLedgerArtifactAccount(resource: any) {
+  if (resource?.resourceType !== "account") return false;
+  const subtype = String(resource.subtypeValue ?? resource.raw?.subtype?.value ?? "").toUpperCase();
+  const label = String(resource.label ?? "").trim().toLowerCase();
+  const linkedCategoryCount = Number(resource.linkedCategoryTransactionCount ?? 0);
+  const zeroBalance = isZeroWaveAmount(resource.amountValue);
+  if (subtype === "TRANSFERS" && zeroBalance) return true;
+  if (["PAYABLE_BILLS", "PAYABLE_OTHER"].includes(subtype) && zeroBalance && linkedCategoryCount <= 2) return true;
+  return label === "accounts payable" && zeroBalance && linkedCategoryCount <= 2;
+}
+
 function isWaveCategoryAccount(resource: any) {
-  return resource?.resourceType === "account" && !isWaveTransactionAccount(resource);
+  return waveAccountRole(resource) === "category";
+}
+
+function isZeroInactiveWaveCategoryAccount(resource: any) {
+  if (waveAccountRole(resource) !== "category") return false;
+  return isZeroWaveAmount(resource.amountValue) && Number(resource.linkedCategoryTransactionCount ?? 0) === 0;
 }
 
 function waveResourceBadgeLabel(resource: any) {
-  if (resource?.resourceType === "account") return isWaveTransactionAccount(resource) ? "Transaction account" : "Category account";
+  if (resource?.resourceType === "account") {
+    const role = waveAccountRole(resource);
+    if (role === "transaction") return "Money account";
+    if (role === "ledger") return "Ledger/system";
+    return "Category account";
+  }
   return waveTypeLabel(resource?.resourceType);
 }
 
 function waveResourceSingularLabel(resource: any) {
-  if (resource?.resourceType === "account") return isWaveTransactionAccount(resource) ? "transaction account" : "category account";
+  if (resource?.resourceType === "account") {
+    const role = waveAccountRole(resource);
+    if (role === "transaction") return "money account";
+    if (role === "ledger") return "ledger/system account";
+    return "category account";
+  }
   return waveSingularTypeLabel(resource?.resourceType);
 }
 
@@ -2943,6 +3190,9 @@ function waveResourceDetailFields(resource: any, raw: any) {
       : undefined,
     isWaveCategoryAccount(resource) && Number(resource.linkedCategoryTransactionCount ?? 0) > 0
       ? { label: "Categorized activity", value: `${money(Number(resource.linkedCategoryTransactionTotalCents ?? 0))} · ${resource.linkedCategoryTransactionCount} txn${resource.linkedCategoryTransactionCount === 1 ? "" : "s"}` }
+      : undefined,
+    isWaveLedgerArtifactAccount(resource) && Number(resource.linkedCategoryTransactionCount ?? 0) > 0
+      ? { label: "Ledger activity", value: `${money(Number(resource.linkedCategoryTransactionTotalCents ?? 0))} · ${resource.linkedCategoryTransactionCount} txn${resource.linkedCategoryTransactionCount === 1 ? "" : "s"}` }
       : undefined,
     {
       label: "Business balance",

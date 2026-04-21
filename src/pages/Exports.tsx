@@ -244,7 +244,7 @@ export function ExportsPage() {
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
               placeholder="Search tables..."
-              style={{ width: 220 }}
+              style={{ width: 220, maxWidth: "100%" }}
             />
             <label className="row muted" style={{ gap: 6, alignItems: "center", fontSize: "var(--fs-sm)" }}>
               <input type="checkbox" checked={hideEmpty} onChange={(event) => setHideEmpty(event.target.checked)} />
@@ -256,7 +256,7 @@ export function ExportsPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))",
               gap: 8,
             }}
           >

@@ -60,36 +60,67 @@ export const summary = query({
   },
 });
 
+// Optional citationId points at an entry in src/lib/regulatoryCitations.ts
+// and surfaces the exact statute/regulation quote in the dashboard UI.
+type DashboardFlag = {
+  level: "ok" | "warn" | "err";
+  text: string;
+  citationId?: string;
+  citationIds?: string[];
+};
+
 function buildFlags(args: {
   society: any;
   activeDirectors: any[];
   bcResidents: number;
   members: any[];
   rules: any;
-}) {
-  const flags: { level: "ok" | "warn" | "err"; text: string }[] = [];
+}): DashboardFlag[] {
+  const flags: DashboardFlag[] = [];
   const { society, activeDirectors, bcResidents } = args;
   if (!society) return flags;
   if (activeDirectors.length < 3 && !society.isMemberFunded)
-    flags.push({ level: "err", text: "Fewer than 3 active directors (s.42 Societies Act)." });
+    flags.push({
+      level: "err",
+      text: "Fewer than 3 active directors (s.42 Societies Act).",
+      citationId: "BC-SOC-DIRECTORS-MIN",
+    });
   if (bcResidents < 1)
-    flags.push({ level: "err", text: "No BC-resident director on record." });
+    flags.push({
+      level: "err",
+      text: "No BC-resident director on record.",
+      citationId: "BC-SOC-DIRECTORS-BC-RESIDENT",
+    });
   const missingConsent = activeDirectors.filter((d) => !d.consentOnFile);
   if (missingConsent.length)
     flags.push({
       level: "warn",
       text: `${missingConsent.length} director(s) missing written consent.`,
+      citationId: "BC-SOC-DIRECTOR-CONSENT",
     });
   if (!society.privacyPolicyDocId)
-    flags.push({ level: "warn", text: "No PIPA privacy policy on file." });
+    flags.push({
+      level: "warn",
+      text: "No PIPA privacy policy on file.",
+      citationId: "PIPA-POLICY",
+    });
   if (!society.constitutionDocId)
-    flags.push({ level: "warn", text: "Constitution not uploaded." });
+    flags.push({
+      level: "warn",
+      text: "Constitution not uploaded.",
+      citationId: "BC-SOC-RECORDS",
+    });
   if (!society.bylawsDocId)
-    flags.push({ level: "warn", text: "Bylaws not uploaded." });
+    flags.push({
+      level: "warn",
+      text: "Bylaws not uploaded.",
+      citationId: "BC-SOC-RECORDS",
+    });
   if (!args.rules?._id)
     flags.push({
       level: "warn",
       text: "Bylaw rule set not configured — governance workflows are using BC defaults.",
+      citationId: "BC-SOC-MODEL-BYLAWS-QUORUM",
     });
   if (flags.length === 0)
     flags.push({ level: "ok", text: "No compliance issues detected." });

@@ -9,6 +9,11 @@ stack:
 - `connector-runner`: Societyer-owned API that starts login sessions and runs
   Playwright actions against the persisted browser profile.
 
+AI agents working in this repo should use the plugin skill at
+`plugins/societyer-document-intake/skills/societyer-browser-connectors/SKILL.md`
+before operating live browser sessions. The skill contains the safe workflow,
+credential rules, and command cookbook.
+
 Start the optional stack:
 
 ```bash
@@ -18,7 +23,8 @@ npm run docker:connectors
 Check health:
 
 ```bash
-curl http://127.0.0.1:8890/healthz
+curl -H "x-connector-runner-secret: $CONNECTOR_RUNNER_SECRET" \
+  http://127.0.0.1:8890/healthz
 ```
 
 Authenticated runner calls require `CONNECTOR_RUNNER_SECRET`:
@@ -71,7 +77,7 @@ Named connectors are the source of truth for browser utility profile defaults:
   point at built-in runner actions, a page content script, or a Chrome
   extension workflow.
 
-This keeps the Plugin connections page provider-neutral while allowing
+This keeps the Browser apps page provider-neutral while allowing
 provider-specific panels, such as the Wave transaction import controls, to stay
 available when that connector is selected.
 
@@ -192,6 +198,73 @@ existing account balances when the browser payload does not include balances.
 The Wave action captures the short-lived Wave GraphQL bearer token only inside
 the connector-runner process while the action is running. The token is not
 stored, logged, or returned to Societyer.
+
+### Wave transaction categories
+
+Wave chart-of-accounts rows can also act as transaction category labels. For
+example, an account resource such as `Professional Fees` or
+`Dues & Subscriptions` is an `Accounts` resource in the cache, but transactions
+can point to it as their category.
+
+The browser import stores that relationship as
+`financialTransactions.categoryAccountExternalId`. UI and Convex queries should
+prefer this exact Wave account id when linking category rows to transactions.
+Name matching is only a legacy fallback for older imported transactions that do
+not have `categoryAccountExternalId`; otherwise duplicate account names such as
+`Accounts Payable` can incorrectly inherit each other's transaction totals.
+
+The financial UI splits Wave `account` resources into account views:
+
+- **Money accounts**: bank, cash, credit card, and money-in-transit accounts.
+- **Categories**: reusable income, expense, liability, equity, tax, payroll, and
+  other chart-of-account categories.
+- **Working set**: money accounts plus categories.
+- **Ledger/system**: zero-balance payable and transfer-clearing rows generated
+  by Wave internals.
+- **Raw accounts**: every cached Wave account row.
+
+The default account table opens on Money accounts. The noisy `PAYABLE_BILLS`
+and `TRANSFERS` rows, such as hundreds of single-use `Accounts Payable` rows,
+stay available under Ledger/system or Raw accounts but are hidden from default
+working views.
+
+Useful verification commands:
+
+```bash
+npx convex run waveCache:resources \
+  '{"societyId":"<societyId>","resourceType":"account","search":"Dues & Subscriptions","limit":5}'
+```
+
+```bash
+npx convex run financialHub:transactionsForCategoryAccountExternalId \
+  '{"societyId":"<societyId>","externalId":"<waveAccountExternalId>","label":"Dues & Subscriptions","limit":5}'
+```
+
+If a Wave account row has a chart-of-accounts balance but zero linked
+transactions, it means the browser transaction pull did not return rows
+categorized to that exact account id in the imported set. That can happen even
+when Wave shows a balance on the account resource.
+
+## Live browser troubleshooting
+
+Inspect active sessions:
+
+```bash
+curl -H "x-connector-runner-secret: $CONNECTOR_RUNNER_SECRET" \
+  http://127.0.0.1:8890/sessions
+```
+
+If the embedded live browser is blank or white:
+
+- compare with the direct Blitz dashboard at `http://127.0.0.1:3003`;
+- confirm the session `currentUrl` is the expected app page;
+- start a fresh session if the foreground tab is stale;
+- do not force remote Chromium fullscreen as a fix.
+
+Remote fullscreen previously made Blitz live view paint white for otherwise
+healthy sessions. If the embedded view needs less surrounding chrome, use a
+client-side crop or layout treatment instead of changing the remote browser
+window state.
 
 The runner currently supports the `blitz` backend. The code is structured
 around a `BrowserBackend` interface so Steel Browser can be added later without

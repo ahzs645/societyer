@@ -2044,4 +2044,126 @@ export default defineSchema({
     .index("by_society", ["societyId"])
     .index("by_society_date", ["societyId", "dateReceived"]),
 
+  // =========================================================================
+  // Record Table metadata — Twenty-style architecture.
+  //
+  // These four tables power the generic RecordTable. An "Object" (members,
+  // directors, filings, …) has "Fields", and a "View" defines how that object
+  // is rendered (columns, sort, filters). Columns are ViewFields that
+  // reference a FieldMetadata row — so every cell in every table knows its
+  // field type at runtime and can be dispatched to the right renderer.
+  // =========================================================================
+
+  objectMetadata: defineTable({
+    societyId: v.id("societies"),
+    // Stable identifier — matches the physical Convex table name, e.g. "members".
+    nameSingular: v.string(),      // "member"
+    namePlural: v.string(),        // "members" — usually matches the Convex table
+    labelSingular: v.string(),     // "Member"
+    labelPlural: v.string(),       // "Members"
+    description: v.optional(v.string()),
+    icon: v.optional(v.string()),  // lucide icon name
+    iconColor: v.optional(v.string()),
+    // Field id used as the record's "identifier" — shown as the headline cell,
+    // becomes the click target. References fieldMetadata.name, resolved lazily.
+    labelIdentifierFieldName: v.optional(v.string()),
+    imageIdentifierFieldName: v.optional(v.string()),
+    isSystem: v.boolean(),
+    isActive: v.boolean(),
+    // Route for viewing the index page (e.g. "/app/members").
+    routePath: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_name", ["societyId", "nameSingular"])
+    .index("by_society_name_plural", ["societyId", "namePlural"]),
+
+  fieldMetadata: defineTable({
+    societyId: v.id("societies"),
+    objectMetadataId: v.id("objectMetadata"),
+    name: v.string(),              // property on the record, e.g. "firstName"
+    label: v.string(),             // "First name"
+    description: v.optional(v.string()),
+    icon: v.optional(v.string()),  // lucide icon name
+    // Drives cell rendering. Must be one of FIELD_TYPES from the frontend registry.
+    fieldType: v.string(),
+    // Type-specific config, stored as JSON for forward compat.
+    //   TEXT:        { placeholder? }
+    //   NUMBER:      { decimals?, prefix?, suffix? }
+    //   CURRENCY:    { currencyCode?: "USD" | "CAD" | ... }
+    //   DATE/DATETIME: { includeTime? }
+    //   BOOLEAN:     { trueLabel?, falseLabel? }
+    //   SELECT:      { options: [{ value, label, color? }] }
+    //   MULTI_SELECT:same as SELECT
+    //   EMAIL / PHONE / LINK: {}
+    //   RELATION:    { targetObjectMetadataId, kind: "many-to-one" | "one-to-many" }
+    //   RATING:      { max?: number }
+    configJson: v.optional(v.string()),
+    // Default value for new records (serialized).
+    defaultValueJson: v.optional(v.string()),
+    // When true, the field can't be removed and its type can't be changed.
+    isSystem: v.boolean(),
+    // When true, the field stays hidden from field pickers — used for
+    // internal fields like `_id` / `_creationTime`.
+    isHidden: v.boolean(),
+    isNullable: v.boolean(),
+    // Field position on the default detail page.
+    position: v.number(),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_object", ["objectMetadataId"])
+    .index("by_object_name", ["objectMetadataId", "name"]),
+
+  views: defineTable({
+    societyId: v.id("societies"),
+    objectMetadataId: v.id("objectMetadata"),
+    name: v.string(),              // "All members"
+    icon: v.optional(v.string()),
+    type: v.string(),              // "table" | "kanban" | "board"
+    // When kanban, which SELECT/RELATION field splits columns.
+    kanbanFieldMetadataId: v.optional(v.id("fieldMetadata")),
+    // Filter & sort live on the view, not on each load — serialized.
+    //   filtersJson: [{ fieldMetadataId, operator, value, operandKind }]
+    //   sortsJson:   [{ fieldMetadataId, direction }]
+    filtersJson: v.optional(v.string()),
+    sortsJson: v.optional(v.string()),
+    // Search term pre-applied to the view.
+    searchTerm: v.optional(v.string()),
+    // Compact vs comfortable.
+    density: v.optional(v.string()),
+    // "Shared" views are visible to the whole society; personal views only
+    // to the creator.
+    isShared: v.boolean(),
+    // System views are seeded (e.g. "All members") — users can't delete them
+    // but can clone them.
+    isSystem: v.boolean(),
+    createdByUserId: v.optional(v.id("users")),
+    position: v.number(),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_object", ["objectMetadataId"])
+    .index("by_object_position", ["objectMetadataId", "position"]),
+
+  viewFields: defineTable({
+    societyId: v.id("societies"),
+    viewId: v.id("views"),
+    fieldMetadataId: v.id("fieldMetadata"),
+    isVisible: v.boolean(),
+    position: v.number(),
+    size: v.number(), // pixels
+    // Aggregation displayed in the table footer for this column
+    // ("sum" | "avg" | "count" | "min" | "max" | "countUniqueValues" | null).
+    aggregateOperation: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_view", ["viewId"])
+    .index("by_view_position", ["viewId", "position"])
+    .index("by_field", ["fieldMetadataId"]),
+
 });

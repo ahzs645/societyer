@@ -1586,10 +1586,26 @@ function dashboardSummary() {
     upcomingFilings,
     overdueFilings,
     complianceFlags: [
-      { level: "ok", text: "At least three active directors are on record." },
-      { level: "ok", text: "At least one BC-resident director is on record." },
-      { level: "warn", text: "1 director is missing written consent." },
-      { level: "warn", text: "Annual report package is prepared but not filed." },
+      {
+        level: "ok",
+        text: "At least three active directors are on record.",
+        citationId: "BC-SOC-DIRECTORS-MIN",
+      },
+      {
+        level: "ok",
+        text: "At least one BC-resident director is on record.",
+        citationId: "BC-SOC-DIRECTORS-BC-RESIDENT",
+      },
+      {
+        level: "warn",
+        text: "1 director is missing written consent.",
+        citationId: "BC-SOC-DIRECTOR-CONSENT",
+      },
+      {
+        level: "warn",
+        text: "Annual report package is prepared but not filed.",
+        citationId: "BC-SOC-AGM",
+      },
     ],
   };
 }

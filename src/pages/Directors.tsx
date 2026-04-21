@@ -4,25 +4,25 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field, Flag, InspectorNote, RecordChip } from "../components/ui";
+import { Badge, Drawer, Field, Flag, InspectorNote } from "../components/ui";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Plus, Trash2, UserCog, Tag, MapPin, CheckCircle2, CircleUser } from "lucide-react";
-import { formatDate, initials } from "../lib/format";
-
-const DIRECTOR_FIELDS: FilterField<any>[] = [
-  { id: "name", label: "Name", icon: <CircleUser size={14} />, match: (d, q) => `${d.firstName} ${d.lastName} ${(d.aliases ?? []).join(" ")}`.toLowerCase().includes(q.toLowerCase()) },
-  { id: "position", label: "Position", icon: <Tag size={14} />, options: ["President", "Vice President", "Treasurer", "Secretary", "Director"], match: (d, q) => d.position === q },
-  { id: "status", label: "Status", icon: <Tag size={14} />, options: ["Active", "Resigned", "Removed"], match: (d, q) => d.status === q },
-  { id: "bc", label: "BC resident", icon: <MapPin size={14} />, options: ["Yes", "No"], match: (d, q) => (d.isBCResident ? "Yes" : "No") === q },
-  { id: "consent", label: "Consent on file", icon: <CheckCircle2 size={14} />, options: ["Yes", "No"], match: (d, q) => (d.consentOnFile ? "Yes" : "No") === q },
-];
+import { Plus, Trash2, UserCog } from "lucide-react";
+import { formatDate } from "../lib/format";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  RecordTableBulkBar,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 export function DirectorsPage() {
   const society = useSociety();
@@ -36,6 +36,14 @@ export function DirectorsPage() {
   const toast = useToast();
   const [selected, setSelected] = useState<any>(null);
   const [open, setOpen] = useState(false);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "director",
+    viewId: currentViewId,
+  });
 
   const active = (directors ?? []).filter((d: any) => d.status === "Active");
   const bcResidents = active.filter((d: any) => d.isBCResident).length;
@@ -75,6 +83,9 @@ export function DirectorsPage() {
     }
     setOpen(false);
   };
+
+  const records = (directors ?? []) as any[];
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   return (
     <div className="page">
@@ -121,74 +132,71 @@ export function DirectorsPage() {
         </div>
       )}
 
-      <DataTable
-        label="Current legal director register"
-        icon={<UserCog size={14} />}
-        data={(directors ?? []) as any[]}
-        loading={directors === undefined}
-        rowKey={(r) => r._id}
-        filterFields={DIRECTOR_FIELDS}
-        searchPlaceholder="Search directors…"
-        defaultSort={{ columnId: "name", dir: "asc" }}
-        onRowClick={(row) => { setSelected(row); setOpen(true); }}
-        columns={[
-          {
-            id: "name", header: "Name", sortable: true,
-            accessor: (r) => `${r.firstName} ${r.lastName}`,
-            render: (r) => (
-              <RecordChip
-                tone="blue"
-                avatar={initials(r.firstName, r.lastName)}
-                label={`${r.firstName} ${r.lastName}`}
-              />
-            ),
-          },
-          {
-            id: "position", header: "Position", sortable: true,
-            accessor: (r) => r.position,
-            render: (r) => <span className="cell-tag">{r.position}</span>,
-          },
-          {
-            id: "termStart", header: "Term start", sortable: true,
-            accessor: (r) => r.termStart,
-            render: (r) => <span className="mono">{formatDate(r.termStart)}</span>,
-          },
-          {
-            id: "bc", header: "BC resident", sortable: true,
-            accessor: (r) => (r.isBCResident ? 1 : 0),
-            render: (r) => r.isBCResident ? <Badge tone="success">Yes</Badge> : <Badge tone="warn">No</Badge>,
-          },
-          {
-            id: "consent", header: "Consent", sortable: true,
-            accessor: (r) => (r.consentOnFile ? 1 : 0),
-            render: (r) => r.consentOnFile ? <Badge tone="success">On file</Badge> : <Badge tone="danger">Missing</Badge>,
-          },
-          {
-            id: "status", header: "Status", sortable: true,
-            accessor: (r) => r.status,
-            render: (r) => <Badge tone={r.status === "Active" ? "success" : "warn"}>{r.status}</Badge>,
-          },
-        ]}
-        renderRowActions={(r) => (
-          <button
-            className="btn btn--ghost btn--sm btn--icon"
-            aria-label={`Remove ${r.firstName} ${r.lastName}`}
-            onClick={async () => {
-              const ok = await confirm({
-                title: "Remove director?",
-                message: `${r.firstName} ${r.lastName} will be removed from the director register.`,
-                confirmLabel: "Remove",
+      {showMetadataWarning ? (
+        <div className="record-table__empty">
+          <div className="record-table__empty-title">Metadata not seeded</div>
+          <div className="record-table__empty-desc">
+            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+            director object metadata + default view.
+          </div>
+        </div>
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="directors"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+          onRecordClick={(_, record) => {
+            setSelected(record);
+            setOpen(true);
+          }}
+          onUpdate={async ({ recordId, fieldName, value }) => {
+            await update({
+              id: recordId as Id<"directors">,
+              patch: { [fieldName]: value } as any,
+            });
+          }}
+        >
+          <RecordTableToolbar
+            icon={<UserCog size={14} />}
+            label="Current legal director register"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable selectable loading={tableData.loading || directors === undefined} />
+          <RecordTableBulkBar
+            actions={[
+              {
+                id: "bulk-remove",
+                label: "Remove",
+                icon: <Trash2 size={12} />,
                 tone: "danger",
-              });
-              if (!ok) return;
-              await remove({ id: r._id });
-              toast.success("Director removed");
-            }}
-          >
-            <Trash2 size={12} />
-          </button>
-        )}
-      />
+                onRun: async (_ids, rows) => {
+                  const ok = await confirm({
+                    title: `Remove ${rows.length} director${rows.length === 1 ? "" : "s"}?`,
+                    message: "They will be removed from the director register.",
+                    confirmLabel: "Remove",
+                    tone: "danger",
+                  });
+                  if (!ok) return;
+                  for (const r of rows) await remove({ id: r._id });
+                  toast.success(`Removed ${rows.length} director${rows.length === 1 ? "" : "s"}`);
+                },
+              },
+            ]}
+          />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="record-table__loading-row" />
+          ))}
+        </div>
+      )}
 
       {roleTerms.length > 0 && (
         <div className="card" style={{ marginTop: 16 }}>
