@@ -18,7 +18,7 @@ import { MergeRecordsModal } from "../components/MergeRecordsModal";
 import {
   RecordTable,
   RecordTableScope,
-  RecordTableToolbar,
+  RecordTableViewToolbar,
   RecordTableFilterChips,
   RecordTableFilterPopover,
   RecordTableBulkBar,
@@ -180,7 +180,9 @@ export function MembersPage() {
             });
           }}
         >
-          <RecordTableToolbar
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
             icon={<Users size={14} />}
             label="All members"
             views={tableData.views}

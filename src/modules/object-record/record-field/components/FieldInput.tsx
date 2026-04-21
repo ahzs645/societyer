@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react";
 import type { FieldMetadata, SelectFieldConfig } from "../../types";
 import { FIELD_TYPES } from "../../types";
+import { Select } from "@/components/Select";
+import type { TagColor } from "@/components/Tag";
 
 /**
  * Edit-mode input for a cell. Renders a type-appropriate control, wires
@@ -81,34 +83,68 @@ function NumberInput({ value, onCommit, onCancel, field }: FieldInputProps) {
   );
 }
 
+/**
+ * SELECT inline editor. Renders a Twenty-style floating menu anchored to
+ * the parent table cell — no visible trigger, just the dropdown itself.
+ *
+ * The menu shows colored tag chips so users see the same visual as the
+ * read-only cell. Search/keyboard nav come from the shared `<Select />`
+ * component.
+ */
 function SelectInput({ value, onCommit, onCancel, field }: FieldInputProps) {
   const config = field.config as SelectFieldConfig;
-  const options = config.options ?? [];
-  const ref = useRef<HTMLSelectElement>(null);
-  useEffect(() => {
-    ref.current?.focus();
+  const options = (config.options ?? []).map((o) => ({
+    value: o.value,
+    label: o.label,
+    color: o.color as TagColor | undefined,
+  }));
+  // Use a ref (not state) to track whether the user picked something
+  // before the menu closed. State updates can race with the parent's
+  // unmount; a ref is synchronous.
+  const hasCommittedRef = useRef(false);
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  const [anchorRect, setAnchorRect] = useState<{
+    top: number;
+    bottom: number;
+    left: number;
+    width: number;
+  } | null>(null);
+
+  // Anchor to the parent cell so the dropdown aligns to the column,
+  // not just the little placeholder span we render inline.
+  useLayoutEffect(() => {
+    const cell = anchorRef.current?.closest("td");
+    if (!cell) return;
+    const r = cell.getBoundingClientRect();
+    setAnchorRect({ top: r.top, bottom: r.bottom, left: r.left, width: r.width });
   }, []);
+
   return (
-    <select
-      ref={ref}
-      className="record-cell__input"
-      defaultValue={value == null ? "" : String(value)}
-      onChange={(e) => onCommit(e.target.value)}
-      onBlur={onCancel}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          onCancel();
-        }
-      }}
+    <span
+      ref={anchorRef}
+      className="record-cell__select-anchor"
+      style={{ display: "inline-block", minHeight: 20 }}
     >
-      {field.isNullable && <option value="">—</option>}
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
+      {anchorRect && (
+        <Select
+          size="sm"
+          triggerless
+          anchorRect={anchorRect}
+          defaultOpen
+          value={value == null ? "" : String(value)}
+          options={options}
+          clearable={field.isNullable}
+          clearLabel={field.isNullable ? `No ${field.label.toLowerCase()}` : undefined}
+          onChange={(v) => {
+            hasCommittedRef.current = true;
+            onCommit(v === "" ? null : v);
+          }}
+          onClose={() => {
+            if (!hasCommittedRef.current) onCancel();
+          }}
+        />
+      )}
+    </span>
   );
 }
 
@@ -175,7 +211,21 @@ export function FieldInput(props: FieldInputProps) {
   return <Component {...props} />;
 }
 
-/** Types that support inline-edit today. Everything else stays read-only. */
+/**
+ * Whether a field supports inline-edit. Three things must hold:
+ *   1. Not flagged read-only by the schema (computed/timestamp columns).
+ *   2. Its fieldType has a registered input component.
+ *   3. For SELECT, an `options` config must be present — a SELECT with
+ *      no options is a misconfiguration and should stay read-only
+ *      rather than render an empty dropdown.
+ */
 export function isFieldEditable(field: FieldMetadata): boolean {
-  return Boolean(INPUT_BY_TYPE[field.fieldType]);
+  if (field.isReadOnly) return false;
+  const input = INPUT_BY_TYPE[field.fieldType];
+  if (!input) return false;
+  if (field.fieldType === "SELECT") {
+    const options = (field.config as SelectFieldConfig)?.options;
+    if (!options || options.length === 0) return false;
+  }
+  return true;
 }

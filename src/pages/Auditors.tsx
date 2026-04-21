@@ -3,26 +3,40 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
-import { Plus, Calculator, Trash2, Tag } from "lucide-react";
-import { formatDate } from "../lib/format";
+import { Drawer, Field } from "../components/ui";
+import { Plus, Calculator, Trash2 } from "lucide-react";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
-const FIELDS: FilterField<any>[] = [
-  { id: "engagementType", label: "Engagement", icon: <Tag size={14} />, options: ["Audit", "ReviewEngagement", "CompilationEngagement"], match: (r, q) => r.engagementType === q },
-  { id: "status", label: "Status", icon: <Tag size={14} />, options: ["Active", "Completed", "Resigned", "Replaced"], match: (r, q) => r.status === q },
-  { id: "appointedBy", label: "Appointed by", icon: <Tag size={14} />, options: ["Directors", "Members"], match: (r, q) => r.appointedBy === q },
-];
-
+/**
+ * Auditor appointments. Metadata-driven table — the page still owns the
+ * "New appointment" drawer because engagement-letter attachment needs a
+ * document picker that doesn't fit the generic inline editor.
+ */
 export function AuditorsPage() {
   const society = useSociety();
   const items = useQuery(api.auditors.list, society ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.auditors.create);
+  const update = useMutation(api.auditors.update);
   const remove = useMutation(api.auditors.remove);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "auditorAppointment",
+    viewId: currentViewId,
+  });
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -44,6 +58,9 @@ export function AuditorsPage() {
     setOpen(false);
   };
 
+  const records = (items ?? []) as any[];
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+
   return (
     <div className="page">
       <PageHeader
@@ -58,29 +75,59 @@ export function AuditorsPage() {
         }
       />
 
-      <DataTable
-        label="All appointments"
-        icon={<Calculator size={14} />}
-        data={(items ?? []) as any[]}
-        rowKey={(r) => r._id}
-        filterFields={FIELDS}
-        searchPlaceholder="Search firm, fiscal year…"
-        defaultSort={{ columnId: "appointedAtISO", dir: "desc" }}
-        columns={[
-          { id: "firmName", header: "Firm", sortable: true, accessor: (r) => r.firmName, render: (r) => <strong>{r.firmName}</strong> },
-          { id: "engagementType", header: "Engagement", sortable: true, accessor: (r) => r.engagementType, render: (r) => <Badge tone={r.engagementType === "Audit" ? "success" : "info"}>{r.engagementType}</Badge> },
-          { id: "fiscalYear", header: "FY", sortable: true, accessor: (r) => r.fiscalYear, render: (r) => <span className="mono">{r.fiscalYear}</span> },
-          { id: "appointedBy", header: "Appointed by", sortable: true, accessor: (r) => r.appointedBy, render: (r) => <span className="cell-tag">{r.appointedBy}</span> },
-          { id: "appointedAtISO", header: "Date", sortable: true, accessor: (r) => r.appointedAtISO, render: (r) => <span className="mono">{formatDate(r.appointedAtISO)}</span> },
-          { id: "independenceAttested", header: "Independent", sortable: true, accessor: (r) => (r.independenceAttested ? 1 : 0), render: (r) => r.independenceAttested ? <Badge tone="success">Yes</Badge> : <Badge tone="danger">No</Badge> },
-          { id: "status", header: "Status", sortable: true, accessor: (r) => r.status, render: (r) => <Badge tone={r.status === "Active" ? "success" : "warn"}>{r.status}</Badge> },
-        ]}
-        renderRowActions={(r) => (
-          <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete auditor ${r.firmName}`} onClick={() => remove({ id: r._id })}>
-            <Trash2 size={12} />
-          </button>
-        )}
-      />
+      {showMetadataWarning ? (
+        <div className="record-table__empty">
+          <div className="record-table__empty-title">Metadata not seeded</div>
+          <div className="record-table__empty-desc">
+            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+            auditor-appointment object metadata + default view.
+          </div>
+        </div>
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="auditors"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+          onUpdate={async ({ recordId, fieldName, value }) => {
+            await update({
+              id: recordId as Id<"auditorAppointments">,
+              patch: { [fieldName]: value } as any,
+            });
+          }}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Calculator size={14} />}
+            label="All appointments"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || items === undefined}
+            renderRowActions={(r) => (
+              <button
+                className="btn btn--ghost btn--sm btn--icon"
+                aria-label={`Delete auditor ${r.firmName}`}
+                onClick={() => remove({ id: r._id })}
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
+          />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="record-table__loading-row" />
+          ))}
+        </div>
+      )}
 
       <Drawer
         open={open}

@@ -8,6 +8,7 @@ import { z } from "zod";
 import { createBrowserBackend } from "./browserBackend.js";
 import {
   activeWaveListTransactionsSchema,
+  bcRegistryFilingHistorySchema,
   businessIdFromWaveUrl,
   businessUuidFromWaveBusinessId,
   type ConnectorManifest,
@@ -15,6 +16,7 @@ import {
   connectors,
   installWaveBearerCapture,
   requireKnownConnector,
+  runBcRegistryFilingHistoryExport,
   runWaveListTransactions,
   verifyWaveAuth,
   waitForWaveBearer,
@@ -566,6 +568,23 @@ app.post("/connectors/:connectorId/auth/sessions/:sessionId/actions/:actionId", 
     res.status(409).json({ error: `Session belongs to ${session.connectorId}, not ${connector.id}.` });
     return;
   }
+  if (connector.id === "bc-registry" && actionId === "filingHistoryExport") {
+    const input = bcRegistryFilingHistorySchema.parse(req.body);
+    const startedAtISO = new Date().toISOString();
+    const output = await runBcRegistryFilingHistoryExport(session.page, input);
+    res.json({
+      runId: crypto.randomUUID(),
+      connectorId: connector.id,
+      actionId,
+      sessionId: session.sessionId,
+      profileKey: session.profileKey,
+      provider: backend.provider,
+      startedAtISO,
+      completedAtISO: new Date().toISOString(),
+      ...output,
+    });
+    return;
+  }
   if (connector.id !== "wave" || !["listTransactions", "importTransactions"].includes(actionId)) {
     throw new ConnectorActionError(404, "connector_action_not_found", `Action "${actionId}" is not registered for ${connector.id}.`);
   }
@@ -631,6 +650,33 @@ app.post("/connectors/:connectorId/auth/sessions/:sessionId/actions/:actionId", 
 app.post("/connectors/:connectorId/actions/:actionId", asyncRoute(async (req, res) => {
   const connector = requireKnownConnector(String(req.params.connectorId));
   const actionId = String(req.params.actionId);
+  if (connector.id === "bc-registry" && actionId === "filingHistoryExport") {
+    const input = bcRegistryFilingHistorySchema.extend({ profileKey: z.string().min(1) }).parse(req.body);
+    const browserSession = await backend.createSession({
+      profileKey: input.profileKey,
+      persist: true,
+      liveView: false,
+      readOnly: true,
+    });
+    const { browser, page } = await connectSession(browserSession.cdpUrl);
+    const startedAtISO = new Date().toISOString();
+    try {
+      const output = await runBcRegistryFilingHistoryExport(page, input);
+      res.json({
+        runId: crypto.randomUUID(),
+        connectorId: connector.id,
+        actionId,
+        profileKey: browserSession.profileKey,
+        provider: backend.provider,
+        startedAtISO,
+        completedAtISO: new Date().toISOString(),
+        ...output,
+      });
+    } finally {
+      await browser.close().catch(() => undefined);
+    }
+    return;
+  }
   if (connector.id !== "wave" || !["listTransactions", "importTransactions"].includes(actionId)) {
     throw new ConnectorActionError(404, "connector_action_not_found", `Action "${actionId}" is not registered for ${connector.id}.`);
   }

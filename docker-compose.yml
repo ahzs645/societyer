@@ -171,9 +171,13 @@ services:
       - BLITZBROWSER_CDP_URL=ws://blitzbrowser:9999
       - BLITZBROWSER_DASHBOARD_URL=${BLITZBROWSER_DASHBOARD_URL:-http://127.0.0.1:3003}
       - CONNECTOR_RUNNER_PUBLIC_WS_URL=${CONNECTOR_RUNNER_PUBLIC_WS_URL:-ws://127.0.0.1:8890}
+      - CONNECTOR_EXPORT_DIR=/exports
+      - CONNECTOR_EXPORT_PUBLIC_DIR=browser-connector-exports
       - NODE_ENV=development
     ports:
       - "8890:8890"
+    volumes:
+      - ./browser-connector-exports:/exports
     depends_on:
       - blitzbrowser
     restart: unless-stopped

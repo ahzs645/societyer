@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { FIELD_TYPES, type ViewFilterOperator } from "../../types";
+import { Select } from "@/components/Select";
 
 const DEFAULT_OPERATORS: Record<string, ViewFilterOperator[]> = {
   [FIELD_TYPES.TEXT]: ["contains", "eq", "neq", "startsWith", "endsWith", "isEmpty", "isNotEmpty"],
@@ -88,35 +89,28 @@ export function RecordTableFilterPopover({
   return (
     <div className="record-table__filter-popover">
       <div className="record-table__filter-popover-row">
-        <select
+        <Select
+          size="sm"
+          placeholder="Choose field…"
           value={fieldId}
-          onChange={(e) => {
-            setFieldId(e.target.value);
-            const c = columns.find((x) => x.fieldMetadataId === e.target.value);
+          onChange={(v) => {
+            setFieldId(v);
+            const c = columns.find((x) => x.fieldMetadataId === v);
             if (c) {
               const ops = DEFAULT_OPERATORS[c.field.fieldType] ?? [];
               setOperator(ops[0] ?? "contains");
             }
           }}
-        >
-          <option value="">Choose field…</option>
-          {columns.map((c) => (
-            <option key={c.fieldMetadataId} value={c.fieldMetadataId}>
-              {c.field.label}
-            </option>
-          ))}
-        </select>
-        <select
+          options={columns.map((c) => ({ value: c.fieldMetadataId, label: c.field.label }))}
+          searchable={columns.length > 6}
+        />
+        <Select
+          size="sm"
           value={operator}
-          onChange={(e) => setOperator(e.target.value as ViewFilterOperator)}
+          onChange={(v) => setOperator(v as ViewFilterOperator)}
+          options={availableOps.map((op) => ({ value: op, label: OPERATOR_LABELS[op] }))}
           disabled={!selectedColumn}
-        >
-          {availableOps.map((op) => (
-            <option key={op} value={op}>
-              {OPERATOR_LABELS[op]}
-            </option>
-          ))}
-        </select>
+        />
         {!VALUELESS.includes(operator) && (
           <input
             type={

@@ -136,11 +136,14 @@ export const update = mutation({
       submittedByUserId: v.optional(v.id("users")),
       receiptDocumentId: v.optional(v.id("documents")),
       stagedPacketDocumentId: v.optional(v.id("documents")),
+      sourceDocumentIds: v.optional(v.array(v.id("documents"))),
       submissionChecklist: v.optional(v.array(v.string())),
       registryUrl: v.optional(v.string()),
       evidenceNotes: v.optional(v.string()),
       attestedByUserId: v.optional(v.id("users")),
       attestedAtISO: v.optional(v.string()),
+      sourceExternalIds: v.optional(v.array(v.string())),
+      sourcePayloadJson: v.optional(v.string()),
       notes: v.optional(v.string()),
     }),
   },
@@ -156,6 +159,101 @@ export const update = mutation({
         existing.submissionChecklist ??
         defaults.checklist,
     });
+  },
+});
+
+export const importBcRegistryHistory = mutation({
+  args: {
+    societyId: v.id("societies"),
+    records: v.array(
+      v.object({
+        kind: v.string(),
+        periodLabel: v.optional(v.string()),
+        dueDate: v.string(),
+        filedAt: v.optional(v.string()),
+        submissionMethod: v.optional(v.string()),
+        confirmationNumber: v.optional(v.string()),
+        feePaidCents: v.optional(v.number()),
+        receiptDocumentId: v.optional(v.id("documents")),
+        stagedPacketDocumentId: v.optional(v.id("documents")),
+        sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+        submissionChecklist: v.optional(v.array(v.string())),
+        registryUrl: v.optional(v.string()),
+        evidenceNotes: v.optional(v.string()),
+        sourceExternalIds: v.array(v.string()),
+        sourcePayloadJson: v.optional(v.string()),
+        status: v.string(),
+        notes: v.optional(v.string()),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("filings")
+      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+      .collect();
+    let inserted = 0;
+    let updated = 0;
+    const ids: any[] = [];
+    const nowISO = new Date().toISOString();
+    const claimed = new Set<string>();
+
+    for (const record of args.records) {
+      const defaults = filingDefaults(record.kind);
+      const uniqueSourceIds = record.sourceExternalIds.filter(
+        (sourceId) => !sourceId.startsWith("bc-registry:corp:"),
+      );
+      const match = existing.find((row) => {
+        if (claimed.has(String(row._id))) return false;
+        const rowSourceIds = row.sourceExternalIds ?? [];
+        return uniqueSourceIds.some((sourceId) => rowSourceIds.includes(sourceId));
+      }) ?? existing.find((row) => {
+        if (claimed.has(String(row._id))) return false;
+        if (row.sourceExternalIds?.length) return false;
+        return row.filedAt === record.filedAt && row.periodLabel === record.periodLabel;
+      });
+      const payload = {
+        societyId: args.societyId,
+        ...record,
+        registryUrl: record.registryUrl ?? defaults.registryUrl,
+        submissionChecklist: record.submissionChecklist ?? defaults.checklist,
+      };
+
+      if (match) {
+        claimed.add(String(match._id));
+        await ctx.db.patch(match._id, {
+          ...payload,
+          confirmationNumber: record.confirmationNumber ?? match.confirmationNumber,
+          feePaidCents: record.feePaidCents ?? match.feePaidCents,
+          receiptDocumentId: record.receiptDocumentId ?? match.receiptDocumentId,
+          stagedPacketDocumentId: record.stagedPacketDocumentId ?? match.stagedPacketDocumentId,
+          attestedByUserId: match.attestedByUserId,
+          attestedAtISO: match.attestedAtISO,
+        });
+        updated += 1;
+        ids.push(match._id);
+      } else {
+        const id = await ctx.db.insert("filings", payload);
+        existing.push({ _id: id, ...payload } as any);
+        claimed.add(String(id));
+        inserted += 1;
+        ids.push(id);
+      }
+    }
+
+    if (inserted || updated) {
+      await ctx.db.insert("activity", {
+        societyId: args.societyId,
+        actor: "BC Registry connector",
+        entityType: "filing",
+        entityId: args.societyId,
+        action: "filings-imported",
+        summary: `Imported BC Registry filing history: ${inserted} created, ${updated} updated.`,
+        createdAtISO: nowISO,
+      });
+    }
+
+    return { inserted, updated, total: args.records.length, ids };
   },
 });
 

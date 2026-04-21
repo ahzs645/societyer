@@ -83,9 +83,10 @@ available when that connector is selected.
 
 ## BC Registry filing-history utility
 
-`bc-registry` is a generic browser profile connector for BC Registry filing
-history exports. It starts at `https://www.bcregistry.ca/societies/` and saves a
-persistent profile without a custom login verifier.
+`bc-registry` is a browser utility connector for BC Registry filing-history
+exports. It starts at `https://www.bcregistry.ca/societies/`. In testing, BCeID
+cookies did not reliably survive closing and reopening the saved profile, so run
+the filing export while the live browser session is still authenticated.
 
 Start a BC Registry browser session:
 
@@ -99,7 +100,79 @@ curl -X POST http://127.0.0.1:8890/connectors/bc-registry/auth/start \
   }'
 ```
 
-After the user navigates to the target society filing history, save the profile:
+After the user signs in, run the filing-history export against the live session:
+
+```bash
+curl -X POST http://127.0.0.1:8890/connectors/bc-registry/auth/sessions/<sessionId>/actions/filingHistoryExport \
+  -H "content-type: application/json" \
+  -H "x-connector-runner-secret: $CONNECTOR_RUNNER_SECRET" \
+  -d '{
+    "corpNum": "S0048345",
+    "includePdfProbe": true,
+    "downloadPdfs": true
+  }'
+```
+
+The action navigates to `/societies/<corpNum>/filingHistory`, extracts the full
+DataTables filing history, returns `filings`, `documents`, `csv`, `csvFilename`,
+and can verify one sample PDF endpoint with `includePdfProbe`. With
+`downloadPdfs: true`, it fetches PDFs inside the authenticated browser context
+and writes the CSV plus PDFs to `browser-connector-exports/<corp>-<timestamp>/`.
+
+Societyer can then fill missing Society governance document links from that
+export:
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/v1/browser-connectors/governance-documents/import \
+  -H "content-type: application/json" \
+  -d '{
+    "societyId": "<societyId>",
+    "corpNum": "S0048345"
+  }'
+```
+
+The import first reuses the latest local
+`browser-connector-exports/<corp>-<timestamp>/` export. If no export exists, or
+`refresh: true` is supplied, it looks for an active `bc-registry` browser
+session and runs `filingHistoryExport` before importing.
+
+Governance matching rules:
+
+- Constitution: prefer a standalone `Constitution` document.
+- Bylaws: prefer the newest `Bylaws` document in the filing-history order.
+- Combined constitution/bylaws: if no standalone constitution exists but a
+  bylaws PDF exists, import that PDF as `constitutionAndBylaws` so the same
+  document can satisfy both missing links.
+- PIPA policy: leave missing unless the filing history actually contains a
+  privacy/PIPA document. BC Registry filing history usually does not.
+
+The same export can be transposed into `/app/filings` as registry filing
+records:
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/v1/browser-connectors/filing-history/import \
+  -H "content-type: application/json" \
+  -d '{
+    "societyId": "<societyId>",
+    "corpNum": "S0048345",
+    "importDocuments": true
+  }'
+```
+
+Filing import behavior:
+
+- Creates or updates one `RegistryRecord` row per BC Registry filing-history
+  event, including paper-only rows.
+- Uses `Date Filed` as `filedAt`; annual-report due dates are inferred as AGM
+  date plus 30 days when the AGM date is present.
+- Leaves `feePaidCents` and `confirmationNumber` blank until receipt parsing is
+  added.
+- Imports each downloaded PDF as a document, merges provenance for reused PDFs,
+  and links the filing to its source document IDs.
+- Stores source event IDs, document URLs, and the original CSV rows in
+  `sourceExternalIds` / `sourcePayloadJson` for re-runs and review.
+
+Save or stop the browser after export:
 
 ```bash
 curl -X POST http://127.0.0.1:8890/connectors/bc-registry/auth/sessions/<sessionId>/confirm \
@@ -108,12 +181,14 @@ curl -X POST http://127.0.0.1:8890/connectors/bc-registry/auth/sessions/<session
   -d '{}'
 ```
 
-The filing export itself is best implemented as a Chrome extension/content
-script on `https://www.bcregistry.ca/societies/*/filingHistory`:
+For a Chrome extension/content script on
+`https://www.bcregistry.ca/societies/*/filingHistory`, use the same extraction
+strategy:
 
 - Wait for the DataTables instance to initialize.
-- Read every row from `$('#filings-table').DataTable().rows().nodes()` rather
-  than clicking through pagination.
+- Iterate DataTables pages with `page.info().pages` and
+  `page(index).draw("page")`; the current BC Registry table only exposes the
+  current page's row nodes.
 - Extract each document link and build a queue of PDF URLs.
 - Generate the filing-history CSV before starting downloads.
 - Download PDFs sequentially with `fetch(url, { credentials: "include" })`,

@@ -30,6 +30,7 @@ export const EXPORTABLE_TABLES = [
   "financialAccounts",
   "financialTransactions",
   "budgets",
+  "operatingSubscriptions",
   "budgetSnapshots",
   "budgetSnapshotLines",
   "financialStatementImports",
@@ -42,11 +43,18 @@ export const EXPORTABLE_TABLES = [
   "pendingEmails",
   "workflowRuns",
   "subscriptionPlans",
+  "membershipFeePeriods",
   "memberSubscriptions",
+  "fundingSources",
+  "fundingSourceEvents",
   "transcripts",
   "transcriptionJobs",
   "customFieldDefinitions",
   "customFieldValues",
+  "objectMetadata",
+  "fieldMetadata",
+  "views",
+  "viewFields",
   "members",
   "directors",
   "boardRoleAssignments",
@@ -108,7 +116,7 @@ export const EXPORTABLE_TABLES = [
 
 const EXPORTABLE_SET = new Set<string>(EXPORTABLE_TABLES);
 const REDACTED_FIELDS = new Set(["secretEncrypted", "tokenHash", "storageId"]);
-const NO_BY_SOCIETY_INDEX = new Set(["transcriptionJobs", "electionEligibleVoters", "electionBallots"]);
+const NO_BY_SOCIETY_INDEX = new Set(["transcriptionJobs", "electionEligibleVoters", "electionBallots", "viewFields"]);
 const SOCIETY_INDEX_BY_TABLE: Record<string, string> = {
   budgets: "by_society_fy",
 };

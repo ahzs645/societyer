@@ -1,15 +1,22 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { DataTable } from "../components/DataTable";
-import { Drawer, Field, Badge, Button, Banner, EmptyState } from "../components/ui";
+import { Drawer, Field, Button, Banner } from "../components/ui";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { KeyRound, Plus, Trash2, Copy, Check } from "lucide-react";
-import { formatDateTime } from "../lib/format";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
@@ -26,12 +33,21 @@ function randomToken(): string {
   return `sk_${base}`;
 }
 
+/**
+ * API keys page — two stacked record tables. Clients (top) allow
+ * inline edits for name/description/kind/status via `updateClient`.
+ * Tokens (bottom) are fully read-only (their backend mutation set is
+ * create / revoke only — you can't retitle a minted token); the
+ * `clientName` column is projected client-side from the clients
+ * query since tokens only store the FK `clientId`.
+ */
 export function ApiKeysPage() {
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
   const clients = useQuery(api.apiPlatform.listClients, society ? { societyId: society._id } : "skip");
   const tokens = useQuery(api.apiPlatform.listTokens, society ? { societyId: society._id } : "skip");
   const createClient = useMutation(api.apiPlatform.createClient);
+  const updateClient = useMutation(api.apiPlatform.updateClient);
   const createToken = useMutation(api.apiPlatform.createToken);
   const revokeToken = useMutation(api.apiPlatform.revokeToken);
   const confirm = useConfirm();
@@ -43,6 +59,35 @@ export function ApiKeysPage() {
   const [tokenForm, setTokenForm] = useState({ clientId: "", name: "", scopes: "read:records" });
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const [clientsViewId, setClientsViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [clientsFilterOpen, setClientsFilterOpen] = useState(false);
+  const [tokensViewId, setTokensViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [tokensFilterOpen, setTokensFilterOpen] = useState(false);
+
+  const clientsTableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "apiClient",
+    viewId: clientsViewId,
+  });
+  const tokensTableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "apiToken",
+    viewId: tokensViewId,
+  });
+
+  const clientById = useMemo(
+    () => new Map<string, any>((clients ?? []).map((c: any) => [String(c._id), c])),
+    [clients],
+  );
+  const tokenRecords = useMemo(
+    () =>
+      (tokens ?? []).map((t: any) => ({
+        ...t,
+        clientName: clientById.get(String(t.clientId))?.name ?? "—",
+      })),
+    [tokens, clientById],
+  );
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -88,8 +133,8 @@ export function ApiKeysPage() {
     }
   };
 
-  const clientName = (id: string) =>
-    (clients ?? []).find((c: any) => String(c._id) === id)?.name ?? "—";
+  const clientsShowMetadataWarning = !clientsTableData.loading && !clientsTableData.objectMetadata;
+  const tokensShowMetadataWarning = !tokensTableData.loading && !tokensTableData.objectMetadata;
 
   return (
     <div className="page">
@@ -139,66 +184,119 @@ export function ApiKeysPage() {
       )}
 
       <h2 style={{ marginTop: 24, fontSize: "var(--fs-md)" }}>Clients</h2>
-      <DataTable
-        label="API clients"
-        icon={<KeyRound size={14} />}
-        data={(clients ?? []) as any[]}
-        loading={clients === undefined}
-        rowKey={(r) => String(r._id)}
-        emptyMessage={
-          <EmptyState
-            icon={<KeyRound size={18} />}
-            title="No API clients yet"
-            description="Clients group tokens by use-case (e.g. public API, mobile, Zapier)."
+      {clientsShowMetadataWarning ? (
+        <div className="record-table__empty">
+          <div className="record-table__empty-title">Metadata not seeded</div>
+          <div className="record-table__empty-desc">
+            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+            apiClient object metadata + default view.
+          </div>
+        </div>
+      ) : clientsTableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="api-clients"
+          objectMetadata={clientsTableData.objectMetadata}
+          hydratedView={clientsTableData.hydratedView}
+          records={(clients ?? []) as any[]}
+          onUpdate={async ({ recordId, fieldName, value }) => {
+            if (!["name", "description", "kind", "status"].includes(fieldName)) return;
+            await updateClient({
+              id: recordId as Id<"apiClients">,
+              patch: { [fieldName]: value } as any,
+            });
+          }}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={clientsTableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<KeyRound size={14} />}
+            label="API clients"
+            views={clientsTableData.views}
+            currentViewId={clientsViewId ?? clientsTableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setClientsViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setClientsFilterOpen((x) => !x)}
           />
-        }
-        columns={[
-          { id: "name", header: "Name", accessor: (r) => r.name, render: (r) => <strong>{r.name}</strong> },
-          { id: "kind", header: "Kind", accessor: (r) => r.kind, render: (r) => <Badge>{r.kind}</Badge> },
-          { id: "status", header: "Status", accessor: (r) => r.status, render: (r) => <Badge tone={r.status === "active" ? "success" : "warn"}>{r.status}</Badge> },
-          { id: "createdAtISO", header: "Created", accessor: (r) => r.createdAtISO, render: (r) => <span className="mono">{formatDateTime(r.createdAtISO)}</span> },
-        ]}
-      />
+          <RecordTableFilterPopover
+            open={clientsFilterOpen}
+            onClose={() => setClientsFilterOpen(false)}
+          />
+          <RecordTableFilterChips />
+          <RecordTable loading={clientsTableData.loading || clients === undefined} />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="record-table__loading-row" />
+          ))}
+        </div>
+      )}
 
       <div style={{ height: 24 }} />
       <h2 style={{ fontSize: "var(--fs-md)" }}>Tokens</h2>
-      <DataTable
-        label="API tokens"
-        icon={<KeyRound size={14} />}
-        data={(tokens ?? []) as any[]}
-        loading={tokens === undefined}
-        rowKey={(r) => String(r._id)}
-        emptyMessage="No tokens yet."
-        columns={[
-          { id: "name", header: "Name", accessor: (r) => r.name, render: (r) => <strong>{r.name}</strong> },
-          { id: "client", header: "Client", accessor: (r) => clientName(r.clientId), render: (r) => <span>{clientName(r.clientId)}</span> },
-          { id: "tokenStart", header: "Token", accessor: (r) => r.tokenStart, render: (r) => <span className="mono">{r.tokenStart}…</span> },
-          { id: "scopes", header: "Scopes", accessor: (r) => (r.scopes ?? []).join(" "), render: (r) => <span className="muted">{(r.scopes ?? []).join(", ") || "—"}</span> },
-          { id: "status", header: "Status", accessor: (r) => r.status, render: (r) => <Badge tone={r.status === "active" ? "success" : "danger"}>{r.status}</Badge> },
-          { id: "createdAtISO", header: "Created", accessor: (r) => r.createdAtISO, render: (r) => <span className="mono">{formatDateTime(r.createdAtISO)}</span> },
-        ]}
-        renderRowActions={(r) =>
-          r.status === "active" ? (
-            <button
-              className="btn btn--ghost btn--sm btn--icon"
-              aria-label={`Revoke token ${r.name}`}
-              onClick={async () => {
-                const ok = await confirm({
-                  title: "Revoke token?",
-                  message: "Revoking is permanent and will break any integrations using this token.",
-                  confirmLabel: "Revoke",
-                  tone: "danger",
-                });
-                if (!ok) return;
-                await revokeToken({ id: r._id });
-                toast.success("Token revoked");
-              }}
-            >
-              <Trash2 size={12} />
-            </button>
-          ) : null
-        }
-      />
+      {tokensShowMetadataWarning ? (
+        <div className="record-table__empty">
+          <div className="record-table__empty-title">Metadata not seeded</div>
+          <div className="record-table__empty-desc">
+            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+            apiToken object metadata + default view.
+          </div>
+        </div>
+      ) : tokensTableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="api-tokens"
+          objectMetadata={tokensTableData.objectMetadata}
+          hydratedView={tokensTableData.hydratedView}
+          records={tokenRecords}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tokensTableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<KeyRound size={14} />}
+            label="API tokens"
+            views={tokensTableData.views}
+            currentViewId={tokensViewId ?? tokensTableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setTokensViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setTokensFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover
+            open={tokensFilterOpen}
+            onClose={() => setTokensFilterOpen(false)}
+          />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tokensTableData.loading || tokens === undefined}
+            renderRowActions={(r) =>
+              r.status === "active" ? (
+                <button
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Revoke token ${r.name}`}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const ok = await confirm({
+                      title: "Revoke token?",
+                      message:
+                        "Revoking is permanent and will break any integrations using this token.",
+                      confirmLabel: "Revoke",
+                      tone: "danger",
+                    });
+                    if (!ok) return;
+                    await revokeToken({ id: r._id });
+                    toast.success("Token revoked");
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              ) : null
+            }
+          />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="record-table__loading-row" />
+          ))}
+        </div>
+      )}
 
       <Drawer
         open={clientOpen}

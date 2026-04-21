@@ -16,6 +16,36 @@ export const PIPA_POLICY_REQUIREMENTS = [
   "Member notice preferences: how consent and communication preferences are recorded.",
 ];
 
+export const PIPA_TEMPLATE_RESOURCES = [
+  {
+    title: "Societyer starter policy draft",
+    body:
+      "Use this as drafting language only. Tailor it to the society's real records, systems, roles, complaint process, retention rules, and member-data situation before adoption.",
+    citationIds: ["PIPA-POLICY", "OIPC-PIPA-PRIVACY-POLICY-GUIDE"],
+  },
+  {
+    title: "BC OIPC privacy policy guidance",
+    body:
+      "BC-specific guidance for what a PIPA privacy policy should cover. This is the authoritative drafting reference, not a fill-in-the-blanks template.",
+    href: "https://www.oipc.bc.ca/documents/guidance-documents/2164",
+    citationIds: ["OIPC-PIPA-PRIVACY-POLICY-GUIDE"],
+  },
+  {
+    title: "BC OIPC PrivacyRight policy webinar",
+    body:
+      "Plain-language training on how to write a privacy policy for an organization.",
+    href: "https://www.oipc.bc.ca/privacyright/webinars/webinar-2b/",
+    citationIds: ["OIPC-PRIVACYRIGHT-WRITE-POLICY"],
+  },
+  {
+    title: "Federal OPC privacy plan tool",
+    body:
+      "Interactive tool with sample privacy-policy and privacy-plan outputs. Useful for drafting ideas, but supplemental because it is PIPEDA-oriented rather than BC PIPA-specific.",
+    href: "https://services.priv.gc.ca/outil-tool",
+    citationIds: ["OPC-PRIVACY-PLAN-TOOL"],
+  },
+];
+
 export const RECORDS_INSPECTION_GUIDANCE = [
   "Members and directors may inspect most society records; bylaws can restrict accounting records and directors' minutes.",
   "Public inspection of member registers depends on the active bylaw and statutory access rules.",

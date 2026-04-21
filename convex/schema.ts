@@ -18,6 +18,13 @@ export default defineSchema({
     privacyPolicyDocId: v.optional(v.id("documents")),
     privacyOfficerName: v.optional(v.string()),
     privacyOfficerEmail: v.optional(v.string()),
+    privacyProgramStatus: v.optional(v.string()), // Unknown | Documented | Needs review | Not started
+    privacyProgramReviewedAtISO: v.optional(v.string()),
+    privacyProgramNotes: v.optional(v.string()),
+    memberDataAccessStatus: v.optional(v.string()), // Unknown | Society-controlled | Partially available | Institution-held | Not applicable
+    memberDataGapDocumented: v.optional(v.boolean()),
+    memberDataAccessReviewedAtISO: v.optional(v.string()),
+    memberDataAccessNotes: v.optional(v.string()),
     boardCadence: v.optional(v.string()),
     boardCadenceDayOfWeek: v.optional(v.string()),
     boardCadenceTime: v.optional(v.string()),
@@ -739,6 +746,25 @@ export default defineSchema({
     active: v.boolean(),
   }).index("by_society", ["societyId"]),
 
+  membershipFeePeriods: defineTable({
+    societyId: v.id("societies"),
+    planId: v.optional(v.id("subscriptionPlans")),
+    membershipClass: v.optional(v.string()),
+    label: v.string(),
+    priceCents: v.number(),
+    currency: v.string(),
+    interval: v.string(), // month | year | semester | one_time
+    effectiveFrom: v.string(),
+    effectiveTo: v.optional(v.string()),
+    status: v.string(), // planned | active | retired
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_plan", ["planId"])
+    .index("by_society_effective_from", ["societyId", "effectiveFrom"]),
+
   memberSubscriptions: defineTable({
     societyId: v.id("societies"),
     planId: v.id("subscriptionPlans"),
@@ -758,6 +784,62 @@ export default defineSchema({
     .index("by_society", ["societyId"])
     .index("by_member", ["memberId"])
     .index("by_email", ["email"]),
+
+  fundingSources: defineTable({
+    societyId: v.id("societies"),
+    name: v.string(),
+    sourceType: v.string(), // Member dues | Donor | Grant funder | Sponsor | Government | Program revenue | Other
+    status: v.string(), // Active | Prospect | Paused | Ended
+    contactName: v.optional(v.string()),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    website: v.optional(v.string()),
+    collectionAgentName: v.optional(v.string()),
+    collectionModel: v.optional(v.string()), // direct | third_party | unknown
+    memberDisclosureLevel: v.optional(v.string()), // named_members | aggregate_count | aggregate_amount | unknown
+    estimatedMemberCount: v.optional(v.number()),
+    collectionFrequency: v.optional(v.string()), // annual | semester | monthly | one_time | irregular | unknown
+    collectionScheduleNotes: v.optional(v.string()),
+    nextExpectedCollectionDate: v.optional(v.string()),
+    reconciliationCadence: v.optional(v.string()),
+    linkedMemberId: v.optional(v.id("members")),
+    linkedGrantId: v.optional(v.id("grants")),
+    expectedAnnualCents: v.optional(v.number()),
+    committedCents: v.optional(v.number()),
+    receivedToDateCents: v.optional(v.number()),
+    currency: v.string(),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    restrictedPurpose: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_type", ["societyId", "sourceType"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  fundingSourceEvents: defineTable({
+    societyId: v.id("societies"),
+    sourceId: v.id("fundingSources"),
+    eventDate: v.string(),
+    kind: v.string(), // Pledged | Received | Agreement | Report | Renewal | Contact | Other
+    label: v.string(),
+    amountCents: v.optional(v.number()),
+    memberCount: v.optional(v.number()),
+    periodStart: v.optional(v.string()),
+    periodEnd: v.optional(v.string()),
+    attributionStatus: v.optional(v.string()), // named | aggregate | unknown
+    notes: v.optional(v.string()),
+    financialTransactionId: v.optional(v.id("financialTransactions")),
+    donationReceiptId: v.optional(v.id("donationReceipts")),
+    documentId: v.optional(v.id("documents")),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_source", ["sourceId"])
+    .index("by_society_date", ["societyId", "eventDate"]),
 
   transcripts: defineTable({
     societyId: v.id("societies"),
@@ -1152,11 +1234,14 @@ export default defineSchema({
     feePaidCents: v.optional(v.number()),
     receiptDocumentId: v.optional(v.id("documents")),
     stagedPacketDocumentId: v.optional(v.id("documents")),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     submissionChecklist: v.optional(v.array(v.string())),
     registryUrl: v.optional(v.string()),
     evidenceNotes: v.optional(v.string()),
     attestedByUserId: v.optional(v.id("users")),
     attestedAtISO: v.optional(v.string()),
+    sourceExternalIds: v.optional(v.array(v.string())),
+    sourcePayloadJson: v.optional(v.string()),
     status: v.string(),
     notes: v.optional(v.string()),
   })
@@ -1354,6 +1439,8 @@ export default defineSchema({
     flaggedForDeletion: v.boolean(),
     archivedAtISO: v.optional(v.string()),
     archivedReason: v.optional(v.string()),
+    sourceExternalIds: v.optional(v.array(v.string())),
+    sourcePayloadJson: v.optional(v.string()),
     importSessionId: v.optional(v.id("documents")),
     importRecordKind: v.optional(v.string()),
     tags: v.array(v.string()),
@@ -2108,6 +2195,11 @@ export default defineSchema({
     // internal fields like `_id` / `_creationTime`.
     isHidden: v.boolean(),
     isNullable: v.boolean(),
+    // When true, the cell is rendered but the inline editor is disabled.
+    // Use for computed / server-managed columns (timestamps, identifiers,
+    // joined data, derived status). Defaults to false so existing rows
+    // keep their current behaviour.
+    isReadOnly: v.optional(v.boolean()),
     // Field position on the default detail page.
     position: v.number(),
     createdAtISO: v.string(),

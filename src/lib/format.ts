@@ -31,10 +31,12 @@ export function relative(value?: DateInput) {
 
 export function money(cents?: number) {
   if (cents == null) return "—";
+  const hasCents = Math.abs(cents) % 100 !== 0;
   return new Intl.NumberFormat("en-CA", {
     style: "currency",
     currency: "CAD",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: hasCents ? 2 : 0,
+    maximumFractionDigits: 2,
   }).format(cents / 100);
 }
 

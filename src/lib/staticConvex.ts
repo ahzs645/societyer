@@ -36,6 +36,13 @@ const society = {
   purposes: "Community education, neighbourhood resilience, and low-barrier civic programs in British Columbia.",
   privacyOfficerName: "Avery Santos",
   privacyOfficerEmail: "privacy@riverside.example",
+  privacyProgramStatus: "Documented",
+  privacyProgramReviewedAtISO: "2026-04-21",
+  privacyProgramNotes: "Demo privacy program includes a PIPA policy, complaint process, privacy officer contact, and annual training.",
+  memberDataAccessStatus: "Partially available",
+  memberDataGapDocumented: true,
+  memberDataAccessReviewedAtISO: "2026-04-21",
+  memberDataAccessNotes: "Demo funding records include aggregate university fee remittances without a member-level remittance list.",
   publicSlug: "riverside-community-society",
   publicSummary: "A fictional BC society used to show Societyer's governance workflows.",
   publicContactEmail: "hello@riverside.example",
@@ -299,6 +306,142 @@ const operatingSubscriptions = [
     notes: "Potential program design workspace.",
     createdAtISO: "2026-04-01T16:00:00.000Z",
     updatedAtISO: "2026-04-01T16:00:00.000Z",
+  },
+];
+
+const membershipFeePeriods = [
+  {
+    _id: "static_fee_regular_2022",
+    societyId: SOCIETY_ID,
+    planId: "static_plan_regular",
+    membershipClass: "Regular",
+    label: "Regular member",
+    priceCents: 2000,
+    currency: "CAD",
+    interval: "year",
+    effectiveFrom: "2022-04-01",
+    effectiveTo: "2025-03-31",
+    status: "retired",
+    notes: "Original annual dues before AGM approval.",
+    createdAtISO: "2022-04-01T16:00:00.000Z",
+    updatedAtISO: "2025-03-31T23:59:59.000Z",
+  },
+  {
+    _id: "static_fee_regular_2025",
+    societyId: SOCIETY_ID,
+    planId: "static_plan_regular",
+    membershipClass: "Regular",
+    label: "Regular member",
+    priceCents: 2500,
+    currency: "CAD",
+    interval: "year",
+    effectiveFrom: "2025-04-01",
+    status: "active",
+    notes: "Current AGM-approved regular member fee.",
+    createdAtISO: "2025-04-01T16:00:00.000Z",
+    updatedAtISO: "2025-04-01T16:00:00.000Z",
+  },
+  {
+    _id: "static_fee_student_2024",
+    societyId: SOCIETY_ID,
+    planId: "static_plan_student",
+    membershipClass: "Student",
+    label: "Student",
+    priceCents: 500,
+    currency: "CAD",
+    interval: "year",
+    effectiveFrom: "2024-09-01",
+    status: "active",
+    notes: "Reduced annual dues for students.",
+    createdAtISO: "2024-09-01T16:00:00.000Z",
+    updatedAtISO: "2024-09-01T16:00:00.000Z",
+  },
+  {
+    _id: "static_fee_sustainer_2026",
+    societyId: SOCIETY_ID,
+    planId: "static_plan_sustainer",
+    label: "Sustainer",
+    priceCents: 1500,
+    currency: "CAD",
+    interval: "month",
+    effectiveFrom: "2026-01-01",
+    status: "active",
+    notes: "Monthly recurring support tier.",
+    createdAtISO: "2026-01-01T16:00:00.000Z",
+    updatedAtISO: "2026-01-01T16:00:00.000Z",
+  },
+];
+
+const fundingSources = [
+  {
+    _id: "static_funding_harbour",
+    societyId: SOCIETY_ID,
+    name: "Harbour Foundation",
+    sourceType: "Grant funder",
+    status: "Active",
+    contactName: "Program officer",
+    email: "programs@harbour.example",
+    expectedAnnualCents: 500000,
+    committedCents: 500000,
+    receivedToDateCents: 500000,
+    currency: "CAD",
+    startDate: "2026-04-03",
+    restrictedPurpose: "Youth resilience grant",
+    notes: "Institutional grant funder tracked for reporting and renewal planning.",
+    createdAtISO: "2026-04-03T16:00:00.000Z",
+    updatedAtISO: "2026-04-03T16:00:00.000Z",
+  },
+  {
+    _id: "static_funding_member_dues",
+    societyId: SOCIETY_ID,
+    name: "University student-fee remittance",
+    sourceType: "Member dues",
+    status: "Active",
+    collectionAgentName: "University finance office",
+    collectionModel: "third_party",
+    memberDisclosureLevel: "aggregate_amount",
+    estimatedMemberCount: 120,
+    collectionFrequency: "semester",
+    collectionScheduleNotes: "Collected for Fall and Winter semesters. Summer semester is excluded unless a special agreement is recorded.",
+    nextExpectedCollectionDate: "2026-09-30",
+    reconciliationCadence: "term",
+    expectedAnnualCents: 300000,
+    receivedToDateCents: 125000,
+    currency: "CAD",
+    startDate: "2025-04-01",
+    notes: "Aggregate member-fee revenue collected by the university without a member-level remittance list.",
+    createdAtISO: "2025-04-01T16:00:00.000Z",
+    updatedAtISO: "2026-04-01T16:05:00.000Z",
+  },
+];
+
+const fundingSourceEvents = [
+  {
+    _id: "static_funding_event_harbour_received",
+    societyId: SOCIETY_ID,
+    sourceId: "static_funding_harbour",
+    eventDate: "2026-04-03",
+    kind: "Received",
+    label: "Grant deposit received",
+    amountCents: 500000,
+    notes: "Receipt RCS-2026-0012 issued.",
+    createdAtISO: "2026-04-03T16:00:00.000Z",
+    updatedAtISO: "2026-04-03T16:00:00.000Z",
+  },
+  {
+    _id: "static_funding_event_member_renewal",
+    societyId: SOCIETY_ID,
+    sourceId: "static_funding_member_dues",
+    eventDate: "2026-04-01",
+    kind: "Received",
+    label: "Spring term fee remittance",
+    amountCents: 125000,
+    memberCount: 50,
+    periodStart: "2026-01-01",
+    periodEnd: "2026-04-30",
+    attributionStatus: "aggregate",
+    createdAtISO: "2026-04-01T16:05:00.000Z",
+    updatedAtISO: "2026-04-01T16:05:00.000Z",
   },
 ];
 
@@ -1376,6 +1519,7 @@ const tables: Record<string, any[]> = {
   meetings,
   memberProposals: [],
   memberSubscriptions,
+  membershipFeePeriods,
   members,
   minutes,
   notifications,
@@ -1405,6 +1549,8 @@ const tables: Record<string, any[]> = {
   reconciliation: [],
   subscriptionPlans,
   subscriptions: memberSubscriptions,
+  fundingSources,
+  fundingSourceEvents,
   tasks,
   transparency: [
     {
@@ -1634,6 +1780,7 @@ function financialSummary() {
 }
 
 function staticMonthlyEstimateCents(amountCents: number, interval: string) {
+  if (interval === "semester") return Math.round((amountCents * 2) / 12);
   if (interval === "week") return Math.round((amountCents * 52) / 12);
   if (interval === "quarter") return Math.round(amountCents / 3);
   if (interval === "year") return Math.round(amountCents / 12);
@@ -1704,6 +1851,136 @@ function restrictedFunds() {
       status: "Active",
     },
   ];
+}
+
+function staticFundingSourcesList() {
+  return fundingSources.map((source) => {
+    const events = fundingSourceEvents
+      .filter((event) => event.sourceId === source._id)
+      .sort((a, b) => b.eventDate.localeCompare(a.eventDate));
+    const receivedFromEventsCents = events
+      .filter((event) => event.kind === "Received")
+      .reduce((sum, event) => sum + (event.amountCents ?? 0), 0);
+    const committedFromEventsCents = events
+      .filter((event) => event.kind === "Pledged" || event.kind === "Agreement")
+      .reduce((sum, event) => sum + (event.amountCents ?? 0), 0);
+    return {
+      ...source,
+      events,
+      eventCount: events.length,
+      lastEventDate: events[0]?.eventDate,
+      committedTotalCents: (source.committedCents ?? 0) + committedFromEventsCents,
+      receivedTotalCents: (source.receivedToDateCents ?? 0) + receivedFromEventsCents,
+    };
+  });
+}
+
+function staticFundingRollup(args: StaticArgs) {
+  const from = args?.from;
+  const to = args?.to;
+  const inRange = (date?: string) => {
+    if (!date) return true;
+    const day = date.slice(0, 10);
+    return (!from || day >= from) && (!to || day <= to);
+  };
+  const groups = new Map<string, any>();
+  const group = (name: string, sourceType: string) => {
+    const key = `${sourceType}:${name}`.toLowerCase();
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        name,
+        sourceType,
+        plannedCents: 0,
+        committedCents: 0,
+        receivedCents: 0,
+        sourceCount: 0,
+        observedFrom: [],
+        restrictedPurposes: [],
+        collectionAgents: [],
+        memberDisclosureLevels: [],
+        collectionFrequencies: [],
+        collectionScheduleNotes: [],
+      });
+    }
+    return groups.get(key);
+  };
+  const observe = (row: any, label: string) => {
+    if (!row.observedFrom.includes(label)) row.observedFrom.push(label);
+  };
+  const activity = (row: any, date?: string) => {
+    if (date && (!row.lastActivityDate || date > row.lastActivityDate)) row.lastActivityDate = date;
+  };
+
+  for (const source of fundingSources) {
+    const row = group(source.name, source.sourceType);
+    row.sourceCount += 1;
+    row.plannedCents += source.expectedAnnualCents ?? 0;
+    row.committedCents += source.committedCents ?? 0;
+    row.receivedCents += source.receivedToDateCents ?? 0;
+    if (source.restrictedPurpose && !row.restrictedPurposes.includes(source.restrictedPurpose)) {
+      row.restrictedPurposes.push(source.restrictedPurpose);
+    }
+    if (source.collectionAgentName && !row.collectionAgents.includes(source.collectionAgentName)) {
+      row.collectionAgents.push(source.collectionAgentName);
+    }
+    if (source.memberDisclosureLevel && !row.memberDisclosureLevels.includes(source.memberDisclosureLevel)) {
+      row.memberDisclosureLevels.push(source.memberDisclosureLevel);
+    }
+    if (source.collectionFrequency && !row.collectionFrequencies.includes(source.collectionFrequency)) {
+      row.collectionFrequencies.push(source.collectionFrequency);
+    }
+    if (source.collectionScheduleNotes && !row.collectionScheduleNotes.includes(source.collectionScheduleNotes)) {
+      row.collectionScheduleNotes.push(source.collectionScheduleNotes);
+    }
+    if (source.nextExpectedCollectionDate && (!row.nextExpectedCollectionDate || source.nextExpectedCollectionDate < row.nextExpectedCollectionDate)) {
+      row.nextExpectedCollectionDate = source.nextExpectedCollectionDate;
+    }
+    if (source.estimatedMemberCount != null) {
+      row.estimatedMemberCount = (row.estimatedMemberCount ?? 0) + source.estimatedMemberCount;
+    }
+    observe(row, "register");
+    activity(row, source.startDate);
+  }
+  for (const event of fundingSourceEvents.filter((event) => inRange(event.eventDate))) {
+    const source = fundingSources.find((candidate) => candidate._id === event.sourceId);
+    if (!source) continue;
+    const row = group(source.name, source.sourceType);
+    if (event.kind === "Received") row.receivedCents += event.amountCents ?? 0;
+    if (event.kind === "Pledged" || event.kind === "Agreement") row.committedCents += event.amountCents ?? 0;
+    if (event.attributionStatus && !row.memberDisclosureLevels.includes(event.attributionStatus)) {
+      row.memberDisclosureLevels.push(event.attributionStatus);
+    }
+    if (event.memberCount != null) {
+      row.estimatedMemberCount = (row.estimatedMemberCount ?? 0) + event.memberCount;
+    }
+    observe(row, "funding events");
+    activity(row, event.eventDate);
+  }
+  for (const receipt of tables.receipts.filter((receipt) => inRange(receipt.issuedAtISO))) {
+    const row = group(receipt.donorName, "Donor");
+    row.receivedCents += receipt.amountCents ?? 0;
+    observe(row, "receipts");
+    activity(row, receipt.issuedAtISO);
+  }
+  for (const subscription of memberSubscriptions.filter((subscription) => subscription.status !== "canceled")) {
+    const plan = subscriptionPlans.find((plan) => plan._id === subscription.planId);
+    const row = group(subscription.fullName, "Member dues");
+    if (subscription.status === "active" && plan) {
+      row.plannedCents += plan.interval === "month" ? plan.priceCents * 12 : plan.interval === "semester" ? plan.priceCents * 2 : plan.priceCents;
+    }
+    if (inRange(subscription.lastPaymentAtISO)) row.receivedCents += subscription.lastPaymentCents ?? 0;
+    observe(row, "member billing");
+    activity(row, subscription.lastPaymentAtISO ?? subscription.startedAtISO);
+  }
+
+  const rows = Array.from(groups.values()).sort((a, b) => b.receivedCents - a.receivedCents || a.name.localeCompare(b.name));
+  return {
+    rows,
+    totalPlannedCents: rows.reduce((sum, row) => sum + row.plannedCents, 0),
+    totalCommittedCents: rows.reduce((sum, row) => sum + row.committedCents, 0),
+    totalReceivedCents: rows.reduce((sum, row) => sum + row.receivedCents, 0),
+  };
 }
 
 function grantsSummary() {
@@ -1816,6 +2093,7 @@ const STATIC_EXPORT_TABLES = [
   "financialAccounts",
   "financialTransactions",
   "budgets",
+  "operatingSubscriptions",
   "budgetSnapshots",
   "budgetSnapshotLines",
   "financialStatementImports",
@@ -1828,11 +2106,18 @@ const STATIC_EXPORT_TABLES = [
   "pendingEmails",
   "workflowRuns",
   "subscriptionPlans",
+  "membershipFeePeriods",
   "memberSubscriptions",
+  "fundingSources",
+  "fundingSourceEvents",
   "transcripts",
   "transcriptionJobs",
   "customFieldDefinitions",
   "customFieldValues",
+  "objectMetadata",
+  "fieldMetadata",
+  "views",
+  "viewFields",
   "members",
   "directors",
   "boardRoleAssignments",
@@ -2173,6 +2458,10 @@ function queryResult(name: string, args: StaticArgs) {
           annualEstimateCents: monthlyEstimateCents * 12,
         };
       });
+    case "fundingSources:list":
+      return staticFundingSourcesList();
+    case "fundingSources:rollup":
+      return staticFundingRollup(args);
     case "waveCache:summary": {
       const snapshot = waveCacheSnapshots[0];
       return {
@@ -2249,6 +2538,14 @@ function queryResult(name: string, args: StaticArgs) {
       return memberSubscriptions;
     case "subscriptions:getPlan":
       return byId(subscriptionPlans, args?.id);
+    case "subscriptions:feeTimeline":
+      return membershipFeePeriods
+        .map((period) => ({
+          ...period,
+          planName: subscriptionPlans.find((plan) => plan._id === period.planId)?.name,
+          activePlan: subscriptionPlans.find((plan) => plan._id === period.planId)?.active,
+        }))
+        .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom) || a.label.localeCompare(b.label));
     case "subscriptions:plans":
       return subscriptionPlans;
     case "transcripts:getByMeeting":
@@ -2378,6 +2675,14 @@ function mutationResult(name: string, args: StaticArgs) {
     return {
       url: `demo://checkout/${args?.planId ?? "membership"}`,
       demo: true,
+    };
+  }
+  if (name === "fundingSources:importStudentLevy") {
+    return {
+      sourceId: "static_student_levy_source",
+      fundingSourceAction: "created",
+      createdFeePeriods: args?.feePeriods?.length ?? 0,
+      updatedFeePeriods: 0,
     };
   }
   if (name.endsWith(":create") || name.includes(":upsert") || name.includes(":issue")) {

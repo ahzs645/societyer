@@ -61,6 +61,7 @@ export const create = mutation({
     isSystem: v.optional(v.boolean()),
     isHidden: v.optional(v.boolean()),
     isNullable: v.optional(v.boolean()),
+    isReadOnly: v.optional(v.boolean()),
     position: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -87,6 +88,7 @@ export const create = mutation({
       isSystem: args.isSystem ?? false,
       isHidden: args.isHidden ?? false,
       isNullable: args.isNullable ?? true,
+      isReadOnly: args.isReadOnly ?? false,
       position,
       createdAtISO: now,
       updatedAtISO: now,
@@ -106,6 +108,7 @@ export const update = mutation({
       defaultValueJson: v.optional(v.string()),
       isHidden: v.optional(v.boolean()),
       isNullable: v.optional(v.boolean()),
+      isReadOnly: v.optional(v.boolean()),
       position: v.optional(v.number()),
     }),
   },

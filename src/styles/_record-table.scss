@@ -80,6 +80,24 @@
   color: var(--accent);
 }
 
+// "Save changes" button shown when the view has unsaved edits. Yellow
+// tone so it reads as a pending action, not a destructive one.
+.record-table__toolbar-button--dirty {
+  background: var(--warn-soft, rgba(234, 179, 8, 0.12));
+  color: var(--warn, #b45309);
+  border-color: var(--warn-border, rgba(234, 179, 8, 0.35));
+  font-weight: 600;
+
+  &:hover:not(:disabled) {
+    background: var(--warn-soft-strong, rgba(234, 179, 8, 0.2));
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: progress;
+  }
+}
+
 .record-table__search {
   display: inline-flex;
   align-items: center;
@@ -490,27 +508,41 @@
   font-size: 11px;
 }
 
-.record-cell__chip {
-  display: inline-block;
-  padding: 2px 8px;
-  font-size: 11px;
-  font-weight: 500;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  line-height: 1.4;
-}
-
+// Shared palette used by `.record-cell__chip` *and* `.ui-tag`. Adding a
+// new tone here teaches both the table cell chip and the standalone
+// `<Tag />` component about the new color in one step.
 $chip-tones: (
-  "blue": (bg: #dbeafe, fg: #1e40af),
-  "green": (bg: #dcfce7, fg: #166534),
-  "red": (bg: #fee2e2, fg: #991b1b),
-  "amber": (bg: #fef3c7, fg: #92400e),
-  "purple": (bg: #ede9fe, fg: #5b21b6),
-  "teal": (bg: #ccfbf1, fg: #115e59),
-  "gray": (bg: #e5e7eb, fg: #374151),
-  "pink": (bg: #fce7f3, fg: #9d174d),
-  "violet": (bg: #ede9fe, fg: #5b21b6),
+  "blue": (bg: #dbeafe, fg: #1e40af, border: #93c5fd),
+  "green": (bg: #dcfce7, fg: #166534, border: #86efac),
+  "red": (bg: #fee2e2, fg: #991b1b, border: #fca5a5),
+  "amber": (bg: #fef3c7, fg: #92400e, border: #fcd34d),
+  "purple": (bg: #ede9fe, fg: #5b21b6, border: #c4b5fd),
+  "teal": (bg: #ccfbf1, fg: #115e59, border: #5eead4),
+  "gray": (bg: #e5e7eb, fg: #374151, border: #d1d5db),
+  "pink": (bg: #fce7f3, fg: #9d174d, border: #f9a8d4),
+  "violet": (bg: #ede9fe, fg: #5b21b6, border: #c4b5fd),
 );
+
+// Table-cell chip — Twenty-style: 20px tall, 4px radius, 8px horiz
+// padding. No icon slot here; use `<Tag />` when you need one.
+.record-cell__chip {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  line-height: 1;
+  max-width: 100%;
+
+  > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
 
 @each $name, $tones in $chip-tones {
   .record-cell__chip--#{$name} {
@@ -522,7 +554,74 @@ $chip-tones: (
 .record-cell__chip-group {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 3px;
+  gap: 4px;
+}
+
+/* -------------------------- Tag (shared) -------------------------- */
+// Standalone tag used inside dropdown options, status badges, etc. Same
+// palette as `.record-cell__chip` but with variant support (solid /
+// outline / border) and an optional leading icon.
+
+.ui-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  font-size: 12px;
+  line-height: 1;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  max-width: 100%;
+}
+
+.ui-tag--medium { font-weight: 500; }
+.ui-tag--regular { font-weight: 400; }
+
+.ui-tag__icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.ui-tag__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@each $name, $tones in $chip-tones {
+  .ui-tag--#{$name}.ui-tag--solid {
+    background: map-get($tones, bg);
+    color: map-get($tones, fg);
+  }
+  .ui-tag--#{$name}.ui-tag--outline {
+    background: transparent;
+    color: map-get($tones, fg);
+    border-style: dashed;
+    border-color: map-get($tones, border);
+  }
+  .ui-tag--#{$name}.ui-tag--border {
+    background: transparent;
+    color: map-get($tones, fg);
+    border-color: map-get($tones, border);
+  }
+}
+
+.ui-tag--transparent.ui-tag--solid,
+.ui-tag--transparent.ui-tag--outline,
+.ui-tag--transparent.ui-tag--border {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.ui-tag--transparent.ui-tag--outline {
+  border-style: dashed;
+  border-color: var(--border);
+}
+
+.ui-tag--transparent.ui-tag--border {
+  border-color: var(--border);
 }
 
 .record-cell__link {

@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import type { Page } from "playwright";
 import { z } from "zod";
 
@@ -88,11 +90,11 @@ export const connectors: ConnectorManifest[] = [
     ],
     utility: {
       title: "BC Registry filing export",
-      description: "Save a BC Registry browser profile, then run a page utility or Chrome extension on a society filing-history page.",
+      description: "Run a live BC Registry page utility on a society filing-history page.",
       steps: [
         "Open BC Registry in the live browser and navigate to the target society filing history.",
-        "Save the profile so authenticated registry cookies remain available to browser-backed utilities.",
-        "Run the filing-history export utility on the current page to create the CSV and download every digital document.",
+        "Run the filing-history export while the live browser is still signed in.",
+        "Save or stop the browser after export; closed BC Registry profiles can require a fresh login.",
       ],
     },
   },
@@ -123,6 +125,15 @@ export const activeWaveListTransactionsSchema = waveListTransactionsSchema.omit(
 export type ActiveWaveListTransactionsInput = z.infer<typeof activeWaveListTransactionsSchema> & {
   businessId: string;
 };
+
+export const bcRegistryFilingHistorySchema = z.object({
+  corpNum: z.string().min(1).optional(),
+  url: z.string().url().optional(),
+  includePdfProbe: z.boolean().default(false),
+  downloadPdfs: z.boolean().default(false),
+});
+
+export type BcRegistryFilingHistoryInput = z.infer<typeof bcRegistryFilingHistorySchema>;
 
 export type WaveNormalizedAccount = {
   externalId: string;
@@ -667,6 +678,343 @@ export function businessUuidFromWaveBusinessId(businessId: string) {
   } catch {
     return undefined;
   }
+}
+
+function bcRegistryCorpNumFromUrl(url: string) {
+  try {
+    return new URL(url).pathname.match(/\/societies\/([^/]+)(?:\/|$)/)?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+export async function runBcRegistryFilingHistoryExport(page: Page, input: BcRegistryFilingHistoryInput) {
+  const currentCorpNum = bcRegistryCorpNumFromUrl(page.url());
+  const corpNum = input.corpNum?.trim() || currentCorpNum;
+  const targetUrl = input.url
+    ?? (page.url().includes("/filingHistory") ? page.url() : undefined)
+    ?? (corpNum ? `https://www.bcregistry.ca/societies/${encodeURIComponent(corpNum)}/filingHistory` : undefined);
+
+  if (!targetUrl) {
+    throw new ConnectorActionError(
+      400,
+      "bc_registry_target_required",
+      "Open a BC Registry society page or provide corpNum/url before running the filing-history export.",
+    );
+  }
+
+  await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
+  await page.waitForSelector("table", { timeout: 10_000 }).catch(() => undefined);
+
+  const currentUrl = page.url();
+  const bodyText = (await page.locator("body").innerText({ timeout: 5_000 }).catch(() => "")).slice(0, 2_000);
+  if (/logon\d*\.gov\.bc\.ca/i.test(currentUrl) || /requires you to login|Log in with|User ID/i.test(bodyText)) {
+    throw new ConnectorActionError(
+      401,
+      "reauth_required",
+      "BC Registry redirected to login. Finish login in the live browser, then run the filing-history export before saving the profile.",
+    );
+  }
+
+  const extracted: any = await page.evaluate(`(async () => {
+    const includePdfProbe = ${JSON.stringify(input.includePdfProbe)};
+    const clean = (value) => String(value ?? "").replace(/\\s+/g, " ").trim();
+    const slug = (value) => clean(value)
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 90) || "item";
+    const dateSlug = (value) => slug(clean(value).split(" ").slice(0, 3).join(" "));
+    const current = new URL(location.href);
+    const currentCorpNum = current.pathname.match(/\\/societies\\/([^/]+)\\/filingHistory/)?.[1] ?? "";
+    const headingText = [...document.querySelectorAll("h1,h2,h3")]
+      .map((element) => clean(element.textContent))
+      .find((text) => /society/i.test(text));
+    const orgName = headingText ?? clean(document.querySelector("h2")?.textContent);
+    const tables = [...document.querySelectorAll("table")];
+    const table = document.querySelector("#filings-table")
+      ?? tables.find((candidate) => /Filing\\s+Date Filed\\s+Details\\s+View Documents/i.test(clean(candidate.textContent)))
+      ?? tables[0];
+
+    const rowsByKey = new Map();
+    const readVisibleRows = () => {
+      const rowNodes = table
+        ? [...table.querySelectorAll("tbody tr")].filter((row) => row.querySelectorAll("td").length >= 4)
+        : [];
+      for (const row of rowNodes) {
+        const cells = [...row.querySelectorAll("td")];
+        const filing = clean(cells[0]?.textContent);
+        const dateFiled = clean(cells[1]?.textContent);
+        const details = clean(cells[2]?.textContent);
+        const key = [filing, dateFiled, details].join("::");
+        if (filing || dateFiled || details) rowsByKey.set(key, row);
+      }
+    };
+
+    const jquery = window.jQuery ?? window.$;
+    try {
+      const dataTable = jquery && table ? jquery(table).DataTable?.() : undefined;
+      const pageInfo = dataTable?.page?.info?.();
+      if (pageInfo && Number.isFinite(pageInfo.pages)) {
+        const originalPage = pageInfo.page ?? 0;
+        for (let pageIndex = 0; pageIndex < pageInfo.pages; pageIndex += 1) {
+          dataTable.page(pageIndex).draw("page");
+          await new Promise((resolve) => setTimeout(resolve, 150));
+          readVisibleRows();
+        }
+        dataTable.page(originalPage).draw("page");
+      }
+    } catch {
+      // Fall through to visible-row pagination.
+    }
+
+    if (!rowsByKey.size && table) {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        readVisibleRows();
+        const controls = [...document.querySelectorAll("a,button")];
+        const next = controls.find((candidate) => {
+          const text = clean(candidate.textContent);
+          const disabled = candidate.closest(".disabled") || candidate.getAttribute("aria-disabled") === "true" || candidate.disabled;
+          return !disabled && /^(next|›|>)$/i.test(text);
+        });
+        if (!next) break;
+        next.click();
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
+
+    const rowNodes = [...rowsByKey.values()];
+    const filings = rowNodes
+      .map((row, rowIndex) => {
+        const cells = [...row.querySelectorAll("td")];
+        const filing = clean(cells[0]?.textContent);
+        const dateFiled = clean(cells[1]?.textContent);
+        const details = clean(cells[2]?.textContent);
+        const docCell = cells[3];
+        const documents = [...(docCell?.querySelectorAll("a[href]") ?? [])].map((link) => {
+          const href = link.getAttribute("href") ?? "";
+          const absoluteUrl = new URL(href, location.origin).href;
+          const documentUrl = new URL(absoluteUrl);
+          const reportName = documentUrl.searchParams.get("reportName") ?? slug(link.textContent);
+          const eventId = documentUrl.searchParams.get("eventId") ?? "";
+          const endpoint = documentUrl.pathname.split("/").pop() ?? "";
+          return {
+            name: clean(link.textContent) || reportName,
+            reportName,
+            eventId,
+            endpoint,
+            url: absoluteUrl,
+            filename: \`\${currentCorpNum}_\${dateSlug(dateFiled)}_\${slug(filing)}_\${slug(reportName)}_\${eventId}.pdf\`,
+          };
+        });
+
+        return {
+          rowIndex,
+          filing,
+          dateFiled,
+          details,
+          paperOnly: documents.length === 0 && /paper only/i.test(clean(docCell?.textContent)),
+          documentCount: documents.length,
+          documents,
+        };
+      })
+      .filter((row) => row.filing || row.dateFiled || row.details || row.paperOnly || row.documents.length > 0);
+
+    const documents = filings.flatMap((filing) =>
+      filing.documents.map((document) => ({
+        filing: filing.filing,
+        dateFiled: filing.dateFiled,
+        ...document,
+      })),
+    );
+
+    let pdfProbe = null;
+    if (includePdfProbe && documents[0]) {
+      const response = await fetch(documents[0].url, { credentials: "include" });
+      const buffer = await response.arrayBuffer();
+      pdfProbe = {
+        status: response.status,
+        contentType: response.headers.get("content-type"),
+        byteLength: buffer.byteLength,
+        startsWithPdf: new TextDecoder().decode(buffer.slice(0, 8)).startsWith("%PDF"),
+        sampleFilename: documents[0].filename,
+      };
+    }
+
+    const csvRows = [
+      [
+        "Corp Number",
+        "Organization",
+        "Filing",
+        "Date Filed",
+        "Details",
+        "Paper Only",
+        "Document Name",
+        "Report Name",
+        "Event ID",
+        "Endpoint",
+        "URL",
+        "Filename",
+      ],
+      ...filings.flatMap((filing) => (
+        filing.documents.length
+          ? filing.documents.map((document) => [
+            currentCorpNum,
+            orgName,
+            filing.filing,
+            filing.dateFiled,
+            filing.details,
+            "false",
+            document.name,
+            document.reportName,
+            document.eventId,
+            document.endpoint,
+            document.url,
+            document.filename,
+          ])
+          : [[
+            currentCorpNum,
+            orgName,
+            filing.filing,
+            filing.dateFiled,
+            filing.details,
+            filing.paperOnly ? "true" : "false",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+          ]]
+      )),
+    ];
+    const csv = csvRows
+      .map((row) => row.map((value) => \`"\${String(value ?? "").replace(/"/g, '""')}"\`).join(","))
+      .join("\\n");
+
+    return {
+      currentUrl: location.href,
+      title: document.title,
+      corpNum: currentCorpNum,
+      orgName,
+      filingCount: filings.length,
+      digitalFilingCount: filings.filter((row) => row.documentCount > 0).length,
+      paperOnlyCount: filings.filter((row) => row.paperOnly).length,
+      documentCount: documents.length,
+      endpoints: [...new Set(documents.map((document) => document.endpoint))].sort(),
+      filings,
+      documents,
+      csv,
+      csvFilename: \`\${currentCorpNum || "bc-registry"}_filing_history.csv\`,
+      pdfProbe,
+    };
+  })()`);
+
+  if (!input.downloadPdfs) return extracted;
+
+  const download = await downloadBcRegistryDocuments(page, extracted);
+  return {
+    ...extracted,
+    download,
+  };
+}
+
+function safeExportFilename(value: string) {
+  return value
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180) || "file";
+}
+
+async function downloadBcRegistryDocuments(page: Page, extracted: any) {
+  const exportRoot = process.env.CONNECTOR_EXPORT_DIR ?? "/tmp/societyer-browser-exports";
+  const exportPublicRoot = process.env.CONNECTOR_EXPORT_PUBLIC_DIR;
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const folderName = `${safeExportFilename(extracted.corpNum || "bc-registry")}-${stamp}`;
+  const exportDirectory = path.join(exportRoot, folderName);
+  const pdfDirectory = path.join(exportDirectory, "pdfs");
+  await fs.mkdir(pdfDirectory, { recursive: true });
+
+  const csvFilename = safeExportFilename(extracted.csvFilename || "bc-registry_filing_history.csv");
+  const csvPath = path.join(exportDirectory, csvFilename);
+  await fs.writeFile(csvPath, extracted.csv ?? "", "utf8");
+
+  const files: Array<Record<string, unknown>> = [];
+
+  for (const document of extracted.documents ?? []) {
+    const filename = safeExportFilename(String(document.filename ?? `${document.reportName ?? "document"}_${document.eventId ?? ""}.pdf`));
+    const filePath = path.join(pdfDirectory, filename);
+    try {
+      const browserFetch: any = await page.evaluate(`(async () => {
+        const response = await fetch(${JSON.stringify(String(document.url))}, {
+          credentials: "include",
+          headers: { accept: "application/pdf,*/*" },
+        });
+        const buffer = await response.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = "";
+        const chunkSize = 0x8000;
+        for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+          binary += String.fromCharCode(...bytes.slice(offset, offset + chunkSize));
+        }
+        return {
+          status: response.status,
+          contentType: response.headers.get("content-type"),
+          byteLength: bytes.byteLength,
+          startsWithPdf: new TextDecoder().decode(bytes.slice(0, 8)).startsWith("%PDF"),
+          base64: btoa(binary),
+        };
+      })()`);
+      const buffer = Buffer.from(String(browserFetch.base64 ?? ""), "base64");
+      if (browserFetch.status < 200 || browserFetch.status >= 300 || !browserFetch.startsWithPdf) {
+        files.push({
+          status: "error",
+          filename,
+          url: document.url,
+          httpStatus: browserFetch.status,
+          contentType: browserFetch.contentType,
+          byteLength: browserFetch.byteLength,
+          error: browserFetch.startsWithPdf ? `HTTP ${browserFetch.status}` : "Response was not a PDF.",
+        });
+      } else {
+        await fs.writeFile(filePath, buffer);
+        files.push({
+          status: "ok",
+          filename,
+          url: document.url,
+          httpStatus: browserFetch.status,
+          contentType: browserFetch.contentType,
+          byteLength: buffer.byteLength,
+          filePath,
+          publicPath: exportPublicRoot ? path.posix.join(exportPublicRoot, folderName, "pdfs", filename) : undefined,
+        });
+      }
+    } catch (error: any) {
+      files.push({
+        status: "error",
+        filename,
+        url: document.url,
+        error: error?.message ?? "PDF download failed.",
+      });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  const downloadedCount = files.filter((file) => file.status === "ok").length;
+  const failedCount = files.filter((file) => file.status !== "ok").length;
+  return {
+    exportRoot,
+    exportDirectory,
+    exportPublicDirectory: exportPublicRoot ? path.posix.join(exportPublicRoot, folderName) : undefined,
+    csvPath,
+    csvPublicPath: exportPublicRoot ? path.posix.join(exportPublicRoot, folderName, csvFilename) : undefined,
+    pdfDirectory,
+    downloadedCount,
+    failedCount,
+    totalByteLength: files.reduce((sum, file) => sum + Number(file.byteLength ?? 0), 0),
+    files,
+  };
 }
 
 export function requireKnownConnector(connectorId: string) {

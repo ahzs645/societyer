@@ -65,6 +65,21 @@ export const create = mutation({
   },
 });
 
+export const update = mutation({
+  args: {
+    id: v.id("proxies"),
+    patch: v.object({
+      grantorName: v.optional(v.string()),
+      proxyHolderName: v.optional(v.string()),
+      instructions: v.optional(v.string()),
+      signedAtISO: v.optional(v.string()),
+    }),
+  },
+  handler: async (ctx, { id, patch }) => {
+    await ctx.db.patch(id, patch);
+  },
+});
+
 export const revoke = mutation({
   args: { id: v.id("proxies") },
   handler: async (ctx, { id }) => {

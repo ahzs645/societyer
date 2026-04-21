@@ -4,6 +4,7 @@ import { FieldDisplay } from "../../record-field/components/FieldDisplay";
 import { FieldInput, isFieldEditable } from "../../record-field/components/FieldInput";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { useRecordTableRowContextOrThrow } from "../contexts/RecordTableRowContext";
+import type { RecordTableCellRenderer } from "./RecordTable";
 
 /**
  * One body cell. Double-click enters edit mode (for editable fields).
@@ -13,10 +14,12 @@ export function RecordTableCell({
   recordField,
   isLabelIdentifier,
   columnIndex,
+  renderCell,
 }: {
   recordField: RecordField;
   isLabelIdentifier: boolean;
   columnIndex: number;
+  renderCell?: RecordTableCellRenderer;
 }) {
   const tableCtx = useRecordTableContextOrThrow();
   const { record, recordId } = useRecordTableRowContextOrThrow();
@@ -65,7 +68,11 @@ export function RecordTableCell({
           onCancel={() => setEditing(false)}
         />
       ) : (
-        <FieldDisplay value={value} record={record} field={recordField.field} />
+        // Custom renderer first; `undefined` falls through to the
+        // metadata-driven default so pages only override what they need.
+        renderCell?.({ record, field: recordField.field, value }) ?? (
+          <FieldDisplay value={value} record={record} field={recordField.field} />
+        )
       )}
     </td>
   );

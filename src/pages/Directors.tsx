@@ -16,7 +16,7 @@ import { formatDate } from "../lib/format";
 import {
   RecordTable,
   RecordTableScope,
-  RecordTableToolbar,
+  RecordTableViewToolbar,
   RecordTableFilterChips,
   RecordTableFilterPopover,
   RecordTableBulkBar,
@@ -157,7 +157,9 @@ export function DirectorsPage() {
             });
           }}
         >
-          <RecordTableToolbar
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
             icon={<UserCog size={14} />}
             label="Current legal director register"
             views={tableData.views}

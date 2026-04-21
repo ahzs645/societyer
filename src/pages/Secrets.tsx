@@ -5,26 +5,31 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
+import { Drawer, Field } from "../components/ui";
 import {
   CheckCircle2,
   Copy,
   Eye,
   EyeOff,
   FileSearch,
-  KeyRound,
   LockKeyhole,
   Pencil,
   Plus,
   ShieldAlert,
-  Tag,
   Trash2,
   UserRound,
   UsersRound,
 } from "lucide-react";
 import { formatDate } from "../lib/format";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 const CREDENTIAL_TYPES = ["recovery_key", "registry_key", "api_key", "password", "certificate", "other"];
 const STORAGE_MODES = ["stored_encrypted", "external_reference", "encrypted_elsewhere", "not_stored"];
@@ -35,19 +40,14 @@ const REVEAL_POLICIES = [
   { value: "owner_only", label: "Owner only" },
 ];
 
-const FIELDS: FilterField<any>[] = [
-  { id: "status", label: "Status", icon: <Tag size={14} />, options: STATUSES, match: (r, q) => r.status === q },
-  { id: "type", label: "Credential", icon: <KeyRound size={14} />, options: CREDENTIAL_TYPES, match: (r, q) => r.credentialType === q },
-  { id: "storage", label: "Storage", icon: <ShieldAlert size={14} />, options: STORAGE_MODES, match: (r, q) => r.storageMode === q },
-  {
-    id: "custodian",
-    label: "Custodian",
-    icon: <UserRound size={14} />,
-    options: ["Assigned", "Unassigned"],
-    match: (r, q) => q === "Assigned" ? Boolean(r.custodianPersonName || r.custodianUserId) : !r.custodianPersonName && !r.custodianUserId,
-  },
-];
-
+/**
+ * Access-custody / secret-vault page. The record table surfaces the
+ * "daily ops" fields (name, service, credential type, custodian,
+ * storage, status, review dates) with inline editing routed through
+ * `api.secrets.update`. The reveal flow, backup custodians, stored
+ * value replacement, and full source/note fields still live inside
+ * the drawer — opening a row from the table hands off to `openEdit`.
+ */
 export function SecretsPage() {
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
@@ -65,6 +65,14 @@ export function SecretsPage() {
   const [revealedSecret, setRevealedSecret] = useState("");
   const [showRevealedSecret, setShowRevealedSecret] = useState(false);
   const [error, setError] = useState("");
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "secretVaultItem",
+    viewId: currentViewId,
+  });
 
   const rows = (items ?? []) as any[];
   const people = useMemo(
@@ -185,6 +193,8 @@ export function SecretsPage() {
     });
   };
 
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+
   return (
     <div className="page">
       <PageHeader
@@ -216,77 +226,89 @@ export function SecretsPage() {
         </div>
       </div>
 
-      <DataTable
-        label="Access records"
-        icon={<LockKeyhole size={14} />}
-        data={rows}
-        rowKey={(r) => r._id}
-        filterFields={FIELDS}
-        searchPlaceholder="Search service, custodian, account..."
-        searchExtraFields={[
-          (r) => r.custodianPersonName,
-          (r) => r.custodianEmail,
-          (r) => r.backupCustodianName,
-          (r) => r.ownerRole,
-          (r) => r.notes,
-          (r) => r.username,
-          (r) => r.externalLocation,
-        ]}
-        defaultSort={{ columnId: "status", dir: "asc" }}
-        emptyMessage="No access custody records yet."
-        onRowClick={openEdit}
-        rowActionLabel={(r) => `Open access custody record ${r.name}`}
-        columns={[
-          {
-            id: "name",
-            header: "Record",
-            sortable: true,
-            accessor: (r) => r.name,
-            render: (r) => (
-              <div>
-                <strong>{r.name}</strong>
-                <div className="muted">{r.service || "Service not set"}</div>
-              </div>
-            ),
-          },
-          { id: "credentialType", header: "Credential", sortable: true, accessor: (r) => r.credentialType, render: (r) => <span className="cell-tag">{typeLabel(r.credentialType)}</span> },
-          {
-            id: "custodian",
-            header: "Custodian",
-            sortable: true,
-            accessor: (r) => r.custodianPersonName ?? r.ownerRole ?? "",
-            render: (r) => r.custodianPersonName ? (
-              <div>
-                <strong>{r.custodianPersonName}</strong>
-                <div className="muted">{r.ownerRole || r.custodianEmail || "Responsible person"}</div>
-              </div>
-            ) : (
-              <Badge tone="danger">Unassigned</Badge>
-            ),
-          },
-          { id: "value", header: "Value", sortable: true, accessor: (r) => Boolean(r.hasSecretValue), render: (r) => r.hasSecretValue ? <Badge tone="success">{r.secretPreview || "Stored"}</Badge> : <Badge tone="warn">External only</Badge> },
-          { id: "storageMode", header: "Storage", sortable: true, accessor: (r) => r.storageMode, render: (r) => <Badge tone={storageTone(r.storageMode)}>{storageLabel(r.storageMode)}</Badge> },
-          {
-            id: "review",
-            header: "Review",
-            sortable: true,
-            accessor: (r) => r.rotationDueAtISO ?? r.lastVerifiedAtISO ?? "",
-            render: (r) => <ReviewCell row={r} />,
-          },
-          { id: "status", header: "Status", sortable: true, accessor: (r) => r.status, render: (r) => <Badge tone={statusTone(r.status)}>{statusLabel(r.status)}</Badge> },
-          { id: "sources", header: "Sources", align: "right", accessor: (r) => r.sourceExternalIds?.length ?? 0, render: (r) => r.sourceExternalIds?.length ? <Badge tone="info">{r.sourceExternalIds.length}</Badge> : "—" },
-        ]}
-        renderRowActions={(r) => (
-          <>
-            <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Edit access custody record ${r.name}`} onClick={() => openEdit(r)}>
-              <Pencil size={12} />
-            </button>
-            <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete access custody record ${r.name}`} onClick={() => remove({ id: r._id, actingUserId })}>
-              <Trash2 size={12} />
-            </button>
-          </>
-        )}
-      />
+      {showMetadataWarning ? (
+        <div className="record-table__empty">
+          <div className="record-table__empty-title">Metadata not seeded</div>
+          <div className="record-table__empty-desc">
+            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+            access-record object metadata + default view.
+          </div>
+        </div>
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="secrets"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={rows}
+          onRecordClick={(_, record) => openEdit(record)}
+          onUpdate={async ({ recordId, fieldName, value }) => {
+            // Only allow inline edits for columns exposed in the
+            // default view. `lastVerifiedAtISO` is read-only (updates
+            // whenever the detail drawer marks a review complete).
+            const editable = new Set([
+              "name",
+              "service",
+              "credentialType",
+              "custodianPersonName",
+              "storageMode",
+              "status",
+              "rotationDueAtISO",
+            ]);
+            if (!editable.has(fieldName)) return;
+            await update({
+              id: recordId as Id<"secretVaultItems">,
+              actingUserId,
+              patch: { [fieldName]: value } as any,
+            });
+          }}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<LockKeyhole size={14} />}
+            label="Access records"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || items === undefined}
+            renderRowActions={(r) => (
+              <>
+                <button
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Edit access custody record ${r.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openEdit(r);
+                  }}
+                >
+                  <Pencil size={12} />
+                </button>
+                <button
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Delete access custody record ${r.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    remove({ id: r._id, actingUserId });
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </>
+            )}
+          />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="record-table__loading-row" />
+          ))}
+        </div>
+      )}
 
       <Drawer
         open={open}
@@ -420,19 +442,6 @@ function Stat({ label, value, sub, tone }: { label: string; value: number; sub: 
   );
 }
 
-function ReviewCell({ row }: { row: any }) {
-  if (!row.rotationDueAtISO && !row.lastVerifiedAtISO) return <Badge tone="warn">Not scheduled</Badge>;
-  const due = reviewDue(row.rotationDueAtISO);
-  if (due === "late") return <Badge tone="danger">Overdue {formatDate(row.rotationDueAtISO)}</Badge>;
-  if (due === "soon") return <Badge tone="warn">Due {formatDate(row.rotationDueAtISO)}</Badge>;
-  return (
-    <div>
-      <span className="mono">{formatDate(row.rotationDueAtISO ?? row.lastVerifiedAtISO)}</span>
-      {row.lastVerifiedAtISO && <div className="muted">Reviewed {formatDate(row.lastVerifiedAtISO)}</div>}
-    </div>
-  );
-}
-
 function summarize(rows: any[]) {
   return {
     total: rows.length,
@@ -479,20 +488,7 @@ function storageLabel(value: string) {
   return typeLabel(value);
 }
 
-function storageTone(value: string): "neutral" | "success" | "warn" {
-  if (value === "stored_encrypted" || value === "encrypted_elsewhere") return "success";
-  if (value === "not_stored") return "warn";
-  return "neutral";
-}
-
 function statusLabel(status: string) {
   if (status === "NeedsReview") return "Needs review";
   return status;
-}
-
-function statusTone(status: string): "success" | "warn" | "danger" | "neutral" {
-  if (status === "Active") return "success";
-  if (status === "Revoked") return "danger";
-  if (status === "Rotated") return "neutral";
-  return "warn";
 }

@@ -3,24 +3,41 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
-import { Plus, ShieldCheck, Trash2, Tag } from "lucide-react";
+import { Drawer, Field, Badge } from "../components/ui";
+import { Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
-const FIELDS: FilterField<any>[] = [
-  { id: "role", label: "Role", icon: <Tag size={14} />, options: ["Director", "Staff", "Volunteer"], match: (r, q) => r.role === q },
-  { id: "topic", label: "Topic", icon: <Tag size={14} />, options: ["PIPA", "CASL", "Privacy-refresh"], match: (r, q) => r.topic === q },
-];
-
+/**
+ * PIPA + CASL training records. The record table shows the date
+ * columns as plain ISO; the "next due" chip (overdue / in N days) is
+ * kept as a `renderCell` override so the muted/warn/danger styling
+ * continues to reflect the days-left heuristic.
+ */
 export function PipaTrainingPage() {
   const society = useSociety();
   const items = useQuery(api.pipaTraining.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.pipaTraining.create);
+  const update = useMutation(api.pipaTraining.update);
   const remove = useMutation(api.pipaTraining.remove);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "pipaTraining",
+    viewId: currentViewId,
+  });
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -40,6 +57,9 @@ export function PipaTrainingPage() {
     setOpen(false);
   };
 
+  const records = (items ?? []) as any[];
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+
   return (
     <div className="page">
       <PageHeader
@@ -54,35 +74,76 @@ export function PipaTrainingPage() {
         }
       />
 
-      <DataTable
-        label="All training records"
-        icon={<ShieldCheck size={14} />}
-        data={(items ?? []) as any[]}
-        rowKey={(r) => r._id}
-        filterFields={FIELDS}
-        searchPlaceholder="Search participant, topic…"
-        defaultSort={{ columnId: "completedAtISO", dir: "desc" }}
-        columns={[
-          { id: "participantName", header: "Participant", sortable: true, accessor: (r) => r.participantName, render: (r) => <strong>{r.participantName}</strong> },
-          { id: "role", header: "Role", sortable: true, accessor: (r) => r.role, render: (r) => <Badge>{r.role}</Badge> },
-          { id: "topic", header: "Topic", sortable: true, accessor: (r) => r.topic, render: (r) => <span className="cell-tag">{r.topic}</span> },
-          { id: "completedAtISO", header: "Completed", sortable: true, accessor: (r) => r.completedAtISO, render: (r) => <span className="mono">{formatDate(r.completedAtISO)}</span> },
-          {
-            id: "nextDueAtISO", header: "Next due", sortable: true, accessor: (r) => r.nextDueAtISO ?? "",
-            render: (r) => {
-              if (!r.nextDueAtISO) return <span className="muted">—</span>;
-              const days = Math.floor((new Date(r.nextDueAtISO).getTime() - Date.now()) / 86_400_000);
-              return <><span className="mono">{formatDate(r.nextDueAtISO)}</span> <Badge tone={days < 0 ? "danger" : days <= 30 ? "warn" : "info"}>{days < 0 ? `${-days}d overdue` : `in ${days}d`}</Badge></>;
-            },
-          },
-          { id: "trainer", header: "Trainer", accessor: (r) => r.trainer ?? "", render: (r) => <span className="muted">{r.trainer ?? "—"}</span> },
-        ]}
-        renderRowActions={(r) => (
-          <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete training record for ${r.personName}`} onClick={() => remove({ id: r._id })}>
-            <Trash2 size={12} />
-          </button>
-        )}
-      />
+      {showMetadataWarning ? (
+        <div className="record-table__empty">
+          <div className="record-table__empty-title">Metadata not seeded</div>
+          <div className="record-table__empty-desc">
+            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+            PIPA-training object metadata + default view.
+          </div>
+        </div>
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="pipa-training"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+          onUpdate={async ({ recordId, fieldName, value }) => {
+            await update({
+              id: recordId as Id<"pipaTrainings">,
+              patch: { [fieldName]: value } as any,
+            });
+          }}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<ShieldCheck size={14} />}
+            label="All training records"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || items === undefined}
+            renderCell={({ field, value }) => {
+              if (field.name === "nextDueAtISO") {
+                if (!value) return <span className="muted">—</span>;
+                const days = Math.floor(
+                  (new Date(String(value)).getTime() - Date.now()) / 86_400_000,
+                );
+                return (
+                  <span className="row" style={{ gap: 6, alignItems: "center" }}>
+                    <span className="mono">{formatDate(String(value))}</span>
+                    <Badge tone={days < 0 ? "danger" : days <= 30 ? "warn" : "info"}>
+                      {days < 0 ? `${-days}d overdue` : `in ${days}d`}
+                    </Badge>
+                  </span>
+                );
+              }
+              return undefined;
+            }}
+            renderRowActions={(r) => (
+              <button
+                className="btn btn--ghost btn--sm btn--icon"
+                aria-label={`Delete training record for ${r.participantName}`}
+                onClick={() => remove({ id: r._id })}
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
+          />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="record-table__loading-row" />
+          ))}
+        </div>
+      )}
 
       <Drawer
         open={open}

@@ -4,38 +4,28 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge } from "../components/ui";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
 import { useConfirm, usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Scale, Link2, Undo2, Tag } from "lucide-react";
+import { Scale, Link2, Undo2 } from "lucide-react";
 import { formatDate, money } from "../lib/format";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
-const FIELDS: FilterField<any>[] = [
-  {
-    id: "status",
-    label: "Status",
-    icon: <Tag size={14} />,
-    options: ["Reconciled", "Has suggestion", "Unmatched"],
-    match: (r, q) => {
-      if (r.txn.reconciledAtISO) return q === "Reconciled";
-      if ((r.candidates?.length ?? 0) > 0) return q === "Has suggestion";
-      return q === "Unmatched";
-    },
-  },
-  {
-    id: "direction",
-    label: "Direction",
-    options: ["Inflow", "Outflow"],
-    match: (r, q) => (r.txn.amountCents > 0 ? "Inflow" : "Outflow") === q,
-  },
-  {
-    id: "year",
-    label: "Year",
-    match: (r, q) => (r.txn.date ?? "").startsWith(q),
-  },
-];
-
+/**
+ * Bank reconciliation page. The record table on the left is purely
+ * read-only — rows are projected from `reconciliation.overview` into
+ * the shape the seed expects (`date`, `description`, `counterparty`,
+ * `amountCents`, `status`). All match/unmatch/manual-mark mutations
+ * still run from the side panel's buttons; clicking a row sets
+ * `selected` so the panel rehydrates with that transaction.
+ */
 export function ReconciliationPage() {
   const society = useSociety();
   const overview = useQuery(
@@ -50,9 +40,34 @@ export function ReconciliationPage() {
   const toast = useToast();
 
   const [selected, setSelected] = useState<string | null>(null);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "reconciliationTransaction",
+    viewId: currentViewId,
+  });
 
   const rows = overview?.rows ?? [];
   const summary = overview?.summary ?? { total: 0, reconciled: 0, withSuggestions: 0, unmatched: 0 };
+
+  const records = useMemo(
+    () =>
+      rows.map((r: any) => ({
+        _id: r.txn._id,
+        date: r.txn.date,
+        description: r.txn.description,
+        counterparty: r.txn.counterparty ?? "",
+        amountCents: r.txn.amountCents,
+        status: r.txn.reconciledAtISO
+          ? "Reconciled"
+          : (r.candidates?.length ?? 0) > 0
+            ? "Has suggestion"
+            : "Unmatched",
+      })),
+    [rows],
+  );
 
   const selectedRow = useMemo(
     () => rows.find((r: any) => (r.txn._id as any) === selected) ?? null,
@@ -92,6 +107,7 @@ export function ReconciliationPage() {
   };
 
   const percent = summary.total ? Math.round((summary.reconciled / summary.total) * 100) : 0;
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   return (
     <div className="page">
@@ -130,61 +146,45 @@ export function ReconciliationPage() {
       </div>
 
       <div className="two-col">
-        <DataTable<any>
-          label="All transactions"
-          icon={<Scale size={14} />}
-          data={rows as any[]}
-          rowKey={(r) => r.txn._id}
-          filterFields={FIELDS}
-          searchPlaceholder="Search description, counterparty…"
-          searchExtraFields={[(r) => r.txn.description, (r) => r.txn.counterparty]}
-          defaultSort={{ columnId: "date", dir: "desc" }}
-          onRowClick={(r) => setSelected(r.txn._id)}
-          columns={[
-            {
-              id: "date",
-              header: "Date",
-              sortable: true,
-              accessor: (r) => r.txn.date,
-              render: (r) => <span className="mono">{formatDate(r.txn.date)}</span>,
-            },
-            {
-              id: "description",
-              header: "Description",
-              sortable: true,
-              accessor: (r) => r.txn.description,
-              render: (r) => (
-                <div>
-                  <strong>{r.txn.description}</strong>
-                  {r.txn.counterparty && (
-                    <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{r.txn.counterparty}</div>
-                  )}
-                </div>
-              ),
-            },
-            {
-              id: "amount",
-              header: "Amount",
-              sortable: true,
-              align: "right",
-              accessor: (r) => r.txn.amountCents,
-              render: (r) => (
-                <span className="mono" style={{ color: r.txn.amountCents < 0 ? "var(--danger)" : "var(--success)" }}>
-                  {r.txn.amountCents < 0 ? "−" : "+"}{money(Math.abs(r.txn.amountCents))}
-                </span>
-              ),
-            },
-            {
-              id: "status",
-              header: "Status",
-              render: (r) => {
-                if (r.txn.reconciledAtISO) return <Badge tone="success">Reconciled</Badge>;
-                if (r.candidates.length > 0) return <Badge tone="accent">{r.candidates.length} suggestion{r.candidates.length === 1 ? "" : "s"}</Badge>;
-                return <Badge tone="warn">Unmatched</Badge>;
-              },
-            },
-          ]}
-        />
+        <div>
+          {showMetadataWarning ? (
+            <div className="record-table__empty">
+              <div className="record-table__empty-title">Metadata not seeded</div>
+              <div className="record-table__empty-desc">
+                Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+                reconciliation object metadata + default view.
+              </div>
+            </div>
+          ) : tableData.objectMetadata ? (
+            <RecordTableScope
+              tableId="reconciliation"
+              objectMetadata={tableData.objectMetadata}
+              hydratedView={tableData.hydratedView}
+              records={records}
+              onRecordClick={(_, record) => setSelected(record._id)}
+            >
+              <RecordTableViewToolbar
+                societyId={society._id}
+                objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+                icon={<Scale size={14} />}
+                label="All transactions"
+                views={tableData.views}
+                currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+                onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+                onOpenFilter={() => setFilterOpen((x) => !x)}
+              />
+              <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+              <RecordTableFilterChips />
+              <RecordTable loading={tableData.loading || overview === undefined} />
+            </RecordTableScope>
+          ) : (
+            <div className="record-table__loading">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="record-table__loading-row" />
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="col" style={{ gap: 16 }}>
           {!selectedRow && (

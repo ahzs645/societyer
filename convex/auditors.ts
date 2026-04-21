@@ -34,6 +34,7 @@ export const update = mutation({
       engagementType: v.optional(v.string()),
       fiscalYear: v.optional(v.string()),
       appointedBy: v.optional(v.string()),
+      appointedAtISO: v.optional(v.string()),
       engagementLetterDocId: v.optional(v.id("documents")),
       independenceAttested: v.optional(v.boolean()),
       status: v.optional(v.string()),

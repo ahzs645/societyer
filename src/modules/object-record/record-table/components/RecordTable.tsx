@@ -6,6 +6,19 @@ import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { RecordTableHeader } from "./RecordTableHeader";
 import { RecordTableRow } from "./RecordTableRow";
 import { RecordTableEmpty } from "./RecordTableEmpty";
+import type { FieldMetadata } from "../../types";
+
+/**
+ * Opt-in escape hatch for pages that need a custom cell renderer on
+ * specific fields (links, badges with domain-specific tones, composite
+ * content). Return `undefined` to fall through to the default
+ * metadata-driven `FieldDisplay`.
+ */
+export type RecordTableCellRenderer = (ctx: {
+  record: any;
+  field: FieldMetadata;
+  value: unknown;
+}) => ReactNode | undefined;
 
 /**
  * The table itself — headers + virtualized body. Requires a surrounding
@@ -20,6 +33,7 @@ export function RecordTable({
   loading = false,
   virtualizeAbove = 40,
   renderRowActions,
+  renderCell,
 }: {
   selectable?: boolean;
   emptyState?: ReactNode;
@@ -32,6 +46,13 @@ export function RecordTable({
    * actions belong in RecordTableBulkBar instead.
    */
   renderRowActions?: (record: any) => ReactNode;
+  /**
+   * Optional per-cell renderer override. Return undefined to fall
+   * through to the default metadata-driven display. Use sparingly —
+   * prefer adding a proper field type + display component when a
+   * pattern recurs.
+   */
+  renderCell?: RecordTableCellRenderer;
 }) {
   const columns = useRecordTableState((s) => s.columns);
   const density = useRecordTableState((s) => s.density);
@@ -98,6 +119,7 @@ export function RecordTable({
                   rowIndex={i}
                   selectable={selectable}
                   renderRowActions={renderRowActions}
+                  renderCell={renderCell}
                 />
               </tr>
             ))}
@@ -128,6 +150,7 @@ export function RecordTable({
           rowIndex={index}
           selectable={selectable}
           renderRowActions={renderRowActions}
+          renderCell={renderCell}
         />
       )}
     />

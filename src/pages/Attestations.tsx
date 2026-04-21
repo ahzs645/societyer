@@ -1,23 +1,76 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field, Flag, InspectorNote, RecordChip } from "../components/ui";
-import { DataTable } from "../components/DataTable";
-import { ShieldCheck, PenLine, Tag } from "lucide-react";
+import { ShieldCheck, PenLine } from "lucide-react";
 import { formatDate, initials } from "../lib/format";
 import { DIRECTOR_ATTESTATION_COPY, LEGAL_COPY_REVIEWED } from "../lib/legalCopy";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
+/**
+ * Director attestations. Each table row is a director × current-year
+ * attestation join — attestations are written by the sign-drawer, not
+ * edited inline, so the whole grid stays read-only. The "name" column
+ * gets a `renderCell` override to keep the avatar+RecordChip we had
+ * before.
+ */
 export function AttestationsPage() {
   const society = useSociety();
   const year = new Date().getFullYear();
   const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
   const attestations = useQuery(api.attestations.list, society ? { societyId: society._id } : "skip");
-  const missing = useQuery(api.attestations.missingForYear, society ? { societyId: society._id, year } : "skip");
+  const missing = useQuery(
+    api.attestations.missingForYear,
+    society ? { societyId: society._id, year } : "skip",
+  );
   const sign = useMutation(api.attestations.sign);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "directorAttestation",
+    viewId: currentViewId,
+  });
+
+  // Project a flat row per Active director (joined with their
+  // current-year attestation, if any). The RecordTable doesn't know
+  // how to follow relations, so the page does the join client-side.
+  const records = useMemo(() => {
+    const signedByDirYear = new Map<string, any>();
+    (attestations ?? []).forEach((a: any) => signedByDirYear.set(`${a.directorId}-${a.year}`, a));
+    return (directors ?? [])
+      .filter((d: any) => d.status === "Active")
+      .map((d: any) => {
+        const a = signedByDirYear.get(`${d._id}-${year}`);
+        return {
+          _id: d._id,
+          name: `${d.firstName} ${d.lastName}`,
+          position: d.position,
+          signed: !!a,
+          signedAtISO: a?.signedAtISO,
+          allTrue:
+            a &&
+            a.isAtLeast18 &&
+            a.notBankrupt &&
+            a.notDisqualified &&
+            a.stillResidentOrEligible,
+          director: d,
+        };
+      });
+  }, [directors, attestations, year]);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -39,30 +92,7 @@ export function AttestationsPage() {
     setOpen(false);
   };
 
-  // Build table rows: one row per director with their current-year attestation status
-  const signedByDirYear = new Map<string, any>();
-  (attestations ?? []).forEach((a: any) => {
-    signedByDirYear.set(`${a.directorId}-${a.year}`, a);
-  });
-  const rows = (directors ?? [])
-    .filter((d: any) => d.status === "Active")
-    .map((d: any) => {
-      const a = signedByDirYear.get(`${d._id}-${year}`);
-      return {
-        _id: d._id,
-        name: `${d.firstName} ${d.lastName}`,
-        position: d.position,
-        signed: !!a,
-        signedAtISO: a?.signedAtISO,
-        allTrue:
-          a &&
-          a.isAtLeast18 &&
-          a.notBankrupt &&
-          a.notDisqualified &&
-          a.stillResidentOrEligible,
-        director: d,
-      };
-    });
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   return (
     <div className="page">
@@ -81,45 +111,66 @@ export function AttestationsPage() {
         </div>
       )}
 
-      <DataTable
-        label={`Attestations · ${year}`}
-        icon={<ShieldCheck size={14} />}
-        data={rows}
-        rowKey={(r) => String(r._id)}
-        searchPlaceholder="Search directors…"
-        defaultSort={{ columnId: "name", dir: "asc" }}
-        columns={[
-          {
-            id: "name", header: "Director", sortable: true,
-            accessor: (r) => r.name,
-            render: (r) => (
-              <RecordChip
-                tone="blue"
-                avatar={initials(r.director.firstName, r.director.lastName)}
-                label={r.name}
-              />
-            ),
-          },
-          { id: "position", header: "Position", sortable: true, accessor: (r) => r.position, render: (r) => <span className="cell-tag">{r.position}</span> },
-          {
-            id: "signed", header: "Status", sortable: true,
-            accessor: (r) => (r.signed ? 1 : 0),
-            render: (r) =>
-              !r.signed ? (
-                <Badge tone="warn">Not signed</Badge>
-              ) : r.allTrue ? (
-                <Badge tone="success">Attested {formatDate(r.signedAtISO)}</Badge>
-              ) : (
-                <Badge tone="danger">Attested with issues</Badge>
-              ),
-          },
-        ]}
-        renderRowActions={(r) => (
-          <button className="btn-action btn-action--primary" onClick={() => openSign(String(r._id))}>
-            <PenLine size={12} /> {r.signed ? "Re-sign" : "Sign"}
-          </button>
-        )}
-      />
+      {showMetadataWarning ? (
+        <div className="record-table__empty">
+          <div className="record-table__empty-title">Metadata not seeded</div>
+          <div className="record-table__empty-desc">
+            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+            director-attestation object metadata + default view.
+          </div>
+        </div>
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="attestations"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+        >
+          <RecordTableToolbar
+            icon={<ShieldCheck size={14} />}
+            label={`Attestations · ${year}`}
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || directors === undefined || attestations === undefined}
+            renderCell={({ record, field, value }) => {
+              if (field.name === "name") {
+                return (
+                  <RecordChip
+                    tone="blue"
+                    avatar={initials(record.director.firstName, record.director.lastName)}
+                    label={String(value ?? "")}
+                  />
+                );
+              }
+              if (field.name === "signed") {
+                if (!record.signed) return <Badge tone="warn">Not signed</Badge>;
+                if (record.allTrue) {
+                  return <Badge tone="success">Attested {formatDate(record.signedAtISO)}</Badge>;
+                }
+                return <Badge tone="danger">Attested with issues</Badge>;
+              }
+              return undefined;
+            }}
+            renderRowActions={(r) => (
+              <button className="btn-action btn-action--primary" onClick={() => openSign(String(r._id))}>
+                <PenLine size={12} /> {r.signed ? "Re-sign" : "Sign"}
+              </button>
+            )}
+          />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="record-table__loading-row" />
+          ))}
+        </div>
+      )}
 
       <Drawer
         open={open}

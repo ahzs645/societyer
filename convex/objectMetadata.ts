@@ -70,6 +70,89 @@ export const getWithFields = query({
   },
 });
 
+/**
+ * Everything the RecordTable needs in a single round-trip:
+ *   - the object + its fieldMetadata (or `null` if not seeded)
+ *   - all views for the object (summary only)
+ *   - the active view hydrated with its viewFields + joined fieldMetadata
+ *
+ * Mirrors Twenty's flat denormalized "load all metadata in parallel"
+ * approach so we don't chain three sequential Convex queries on mount.
+ * Returns `{ object: null, views: [], activeView: null }` when the
+ * object hasn't been seeded — callers branch on `object` to show a
+ * "metadata not seeded" empty state instead of spinning forever.
+ */
+export const getFullTableSetup = query({
+  args: {
+    societyId: v.id("societies"),
+    nameSingular: v.string(),
+    viewId: v.optional(v.id("views")),
+  },
+  handler: async (ctx, { societyId, nameSingular, viewId }) => {
+    const object = await ctx.db
+      .query("objectMetadata")
+      .withIndex("by_society_name", (q) =>
+        q.eq("societyId", societyId).eq("nameSingular", nameSingular),
+      )
+      .unique();
+    if (!object) {
+      return { object: null, views: [], activeView: null };
+    }
+
+    const [fields, views] = await Promise.all([
+      ctx.db
+        .query("fieldMetadata")
+        .withIndex("by_object", (q) => q.eq("objectMetadataId", object._id))
+        .collect(),
+      ctx.db
+        .query("views")
+        .withIndex("by_object_position", (q) =>
+          q.eq("objectMetadataId", object._id),
+        )
+        .collect(),
+    ]);
+    fields.sort((a, b) => a.position - b.position);
+    views.sort((a, b) => a.position - b.position);
+
+    // Resolve which view to hydrate — explicit pin first, else first by position.
+    const targetViewId = viewId ?? views[0]?._id;
+    let activeView: {
+      view: (typeof views)[number];
+      columns: { viewField: any; field: any }[];
+    } | null = null;
+
+    if (targetViewId) {
+      const view = views.find((v) => v._id === targetViewId);
+      if (view) {
+        const viewFields = await ctx.db
+          .query("viewFields")
+          .withIndex("by_view_position", (q) => q.eq("viewId", view._id))
+          .collect();
+        viewFields.sort((a, b) => a.position - b.position);
+        const fieldsById = new Map(fields.map((f) => [f._id, f]));
+        const columns = viewFields
+          .map((vf) => {
+            const field = fieldsById.get(vf.fieldMetadataId);
+            return field ? { viewField: vf, field } : null;
+          })
+          .filter((x): x is { viewField: any; field: any } => x !== null);
+        activeView = { view, columns };
+      }
+    }
+
+    return {
+      object: { ...object, fields },
+      views: views.map((v) => ({
+        _id: v._id,
+        name: v.name,
+        position: v.position,
+        isSystem: v.isSystem,
+      })),
+      activeView,
+    };
+  },
+});
+
 export const create = mutation({
   args: {
     societyId: v.id("societies"),

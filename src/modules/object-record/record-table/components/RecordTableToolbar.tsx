@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, Columns, Filter, Search, X } from "lucide-react";
-import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
+import { ChevronDown, Columns, Filter, RotateCcw, Save, Search, X } from "lucide-react";
+import {
+  useRecordTableIsDirty,
+  useRecordTableState,
+  useRecordTableStoreHandle,
+} from "../state/recordTableStore";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 
 /**
@@ -18,6 +22,7 @@ export function RecordTableToolbar({
   currentViewId,
   onChangeView,
   onOpenFilter,
+  onSaveView,
   actions,
 }: {
   icon?: ReactNode;
@@ -26,16 +31,24 @@ export function RecordTableToolbar({
   currentViewId?: string | null;
   onChangeView?: (viewId: string) => void;
   onOpenFilter?: () => void;
+  /**
+   * If provided, Save/Discard buttons appear whenever the table's live
+   * state diverges from the last-loaded view. Typically wired to
+   * `usePersistView().saveCurrentView`.
+   */
+  onSaveView?: () => void | Promise<void>;
   actions?: ReactNode;
 }) {
   const searchTerm = useRecordTableState((s) => s.searchTerm);
   const columns = useRecordTableState((s) => s.columns);
   const filters = useRecordTableState((s) => s.filters);
   const handle = useRecordTableStoreHandle();
+  const isDirty = useRecordTableIsDirty();
   const { objectMetadata } = useRecordTableContextOrThrow();
 
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const columnMenuRef = useRef<HTMLDivElement>(null);
   const viewMenuRef = useRef<HTMLDivElement>(null);
 
@@ -132,6 +145,38 @@ export function RecordTableToolbar({
       </div>
 
       <div className="record-table__toolbar-right">
+        {onSaveView && isDirty && (
+          <>
+            <button
+              type="button"
+              className="record-table__toolbar-button record-table__toolbar-button--dirty"
+              disabled={isSaving}
+              onClick={async () => {
+                try {
+                  setIsSaving(true);
+                  await onSaveView();
+                } finally {
+                  setIsSaving(false);
+                }
+              }}
+              title="Save the current column layout, filters and sort into this view"
+            >
+              <Save size={12} />
+              <span>{isSaving ? "Saving…" : "Save changes"}</span>
+            </button>
+            <button
+              type="button"
+              className="record-table__toolbar-button"
+              disabled={isSaving}
+              onClick={() => handle.get().discardDraftChanges()}
+              title="Revert to the last saved view"
+            >
+              <RotateCcw size={12} />
+              <span>Discard</span>
+            </button>
+          </>
+        )}
+
         {onOpenFilter && (
           <button
             type="button"

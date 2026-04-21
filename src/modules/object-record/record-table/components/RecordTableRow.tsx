@@ -3,17 +3,20 @@ import { RecordTableRowContext } from "../contexts/RecordTableRowContext";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { RecordTableCell } from "./RecordTableCell";
+import type { RecordTableCellRenderer } from "./RecordTable";
 
 export function RecordTableRow({
   record,
   rowIndex,
   selectable,
   renderRowActions,
+  renderCell,
 }: {
   record: any;
   rowIndex: number;
   selectable: boolean;
   renderRowActions?: (record: any) => ReactNode;
+  renderCell?: RecordTableCellRenderer;
 }) {
   const { objectMetadata } = useRecordTableContextOrThrow();
   const columns = useRecordTableState((s) => s.columns);
@@ -58,6 +61,7 @@ export function RecordTableRow({
           isLabelIdentifier={
             column.field.name === objectMetadata.labelIdentifierFieldName
           }
+          renderCell={renderCell}
         />
       ))}
       {renderRowActions && (

@@ -60,10 +60,29 @@ export type DateFieldConfig = {
   includeTime?: boolean;
 };
 
+/**
+ * Semantic tone. Matches the `$chip-tones` palette in `_record-table.scss`
+ * and the `TagColor` union in `src/components/Tag.tsx`. Keep the three
+ * in sync whenever a new color is added.
+ */
+export type SelectOptionColor =
+  | "blue"
+  | "green"
+  | "red"
+  | "amber"
+  | "purple"
+  | "teal"
+  | "gray"
+  | "pink"
+  | "violet";
+
 export type SelectOption = {
   value: string;
   label: string;
-  color?: string; // semantic tone — blue | green | red | amber | purple | teal | gray
+  color?: SelectOptionColor;
+  /** Optional lucide icon name. Rendered as a small leading glyph inside
+   * the Tag (both in the table cell and the inline-edit menu). */
+  icon?: string;
 };
 
 export type SelectFieldConfig = {

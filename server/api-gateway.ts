@@ -1,6 +1,6 @@
 import "./env";
 import crypto from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import express, { NextFunction, Request, Response, Router } from "express";
 import swaggerUi from "swagger-ui-express";
@@ -850,6 +850,37 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       res.json(singleResponse(await connectorRunnerRequest("POST", `/connectors/${connectorId}/actions/${actionId}`, stripActor(req.body ?? {}))));
     }),
   );
+
+  router.post(
+    "/browser-connectors/governance-documents/import",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      const societyId = societyIdFrom(req, req.actor!);
+      const result = await importGovernanceDocumentsFromBcRegistry(client, {
+        societyId,
+        actingUserId: req.actor?.userId,
+        corpNum: typeof req.body?.corpNum === "string" ? req.body.corpNum : undefined,
+        refresh: req.body?.refresh === true,
+      });
+      res.json(singleResponse(result));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/filing-history/import",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      const societyId = societyIdFrom(req, req.actor!);
+      const result = await importBcRegistryFilingHistory(client, {
+        societyId,
+        actingUserId: req.actor?.userId,
+        corpNum: typeof req.body?.corpNum === "string" ? req.body.corpNum : undefined,
+        refresh: req.body?.refresh === true,
+        importDocuments: req.body?.importDocuments !== false,
+      });
+      res.json(singleResponse(result));
+    }),
+  );
 }
 
 function mountWorkflowBridgeRoutes(router: Router, client: ConvexHttpClient) {
@@ -1178,6 +1209,701 @@ function safeJson(text: string) {
   } catch {
     return { text };
   }
+}
+
+type BcRegistryCsvRecord = Record<string, string>;
+
+type GovernanceImportCandidate = {
+  kind: "constitution" | "bylaws" | "constitutionAndBylaws" | "privacyPolicy";
+  title: string;
+  category: string;
+  fileName: string;
+  sourcePath: string;
+  sourceUrl?: string;
+  filing?: string;
+  dateFiled?: string;
+  documentName?: string;
+  reportName?: string;
+  eventId?: string;
+  combined?: boolean;
+};
+
+async function importGovernanceDocumentsFromBcRegistry(
+  client: ConvexHttpClient,
+  input: {
+    societyId: string;
+    actingUserId?: string;
+    corpNum?: string;
+    refresh?: boolean;
+  },
+) {
+  const society: any = await convexCall(client, query("society.getById"), { id: input.societyId });
+  if (!society) throw httpError(404, "society_not_found", "Society not found.");
+
+  const corpNum = normalizeBcRegistryCorpNum(input.corpNum ?? society.incorporationNumber);
+  if (!corpNum) {
+    throw httpError(400, "bc_registry_corp_number_required", "A BC Registry incorporation number is required.");
+  }
+
+  const needs = {
+    constitution: !society.constitutionDocId,
+    bylaws: !society.bylawsDocId,
+    privacyPolicy: !society.privacyPolicyDocId,
+  };
+  const imported: any[] = [];
+  const skipped: any[] = [];
+  const missing: any[] = [];
+
+  if (!needs.constitution && !needs.bylaws && !needs.privacyPolicy) {
+    return { ok: true, corpNum, imported, skipped: [{ kind: "all", reason: "governance_documents_already_present" }], missing };
+  }
+
+  if (!needs.constitution && !needs.bylaws && needs.privacyPolicy) {
+    return {
+      ok: true,
+      corpNum,
+      imported,
+      skipped,
+      missing: [
+        {
+          kind: "privacyPolicy",
+          reason: "not_available_from_bc_registry",
+          message: "BC Registry filing history does not normally include a PIPA privacy policy.",
+        },
+      ],
+    };
+  }
+
+  const exportInfo = await resolveBcRegistryExport(corpNum, Boolean(input.refresh));
+  const records = await readBcRegistryFilingRecords(exportInfo.directory, corpNum);
+  const candidates = pickGovernanceImportCandidates(records, exportInfo.directory);
+  const importQueue: GovernanceImportCandidate[] = [];
+
+  if (needs.constitution && needs.bylaws && candidates.constitution?.fileName === candidates.bylaws?.fileName) {
+    importQueue.push({ ...candidates.constitution, kind: "constitutionAndBylaws", category: "Bylaws" });
+  } else {
+    if (needs.constitution && candidates.constitution) importQueue.push(candidates.constitution);
+    if (needs.bylaws && candidates.bylaws) importQueue.push(candidates.bylaws);
+  }
+
+  if (needs.privacyPolicy && candidates.privacyPolicy) {
+    importQueue.push(candidates.privacyPolicy);
+  }
+
+  const queuedKinds = new Set(importQueue.flatMap((candidate) => {
+    if (candidate.kind === "constitutionAndBylaws") return ["constitution", "bylaws"];
+    return [candidate.kind];
+  }));
+  for (const kind of ["constitution", "bylaws", "privacyPolicy"] as const) {
+    if (!needs[kind]) continue;
+    if (queuedKinds.has(kind)) continue;
+    missing.push(
+      kind === "privacyPolicy"
+        ? {
+            kind,
+            reason: "not_available_from_bc_registry",
+            message: "BC Registry filing history does not normally include a PIPA privacy policy.",
+          }
+        : {
+            kind,
+            reason: "no_registry_document_found",
+            message: `No ${kind === "constitution" ? "constitution" : "bylaws"} document was found in the filing export.`,
+          },
+    );
+  }
+
+  for (const candidate of importQueue) {
+    const copied = await copyGovernanceCandidateToDocumentStorage(candidate);
+    const created: any = await convexCall(client, mutation("documents.createGovernanceDocumentFromLocalFile"), dropUndefined({
+      societyId: input.societyId,
+      documentKind: candidate.kind,
+      title: candidate.title,
+      category: candidate.category,
+      fileName: candidate.fileName,
+      mimeType: "application/pdf",
+      fileSizeBytes: copied.fileSizeBytes,
+      storageKey: copied.storageKey,
+      sha256: copied.sha256,
+      tags: [
+        "bc-registry",
+        "browser-connector",
+        candidate.kind === "constitutionAndBylaws" ? "constitution" : candidate.kind,
+        ...(candidate.kind === "constitutionAndBylaws" ? ["bylaws"] : []),
+        ...(candidate.eventId ? [`bc-registry-event:${candidate.eventId}`] : []),
+      ],
+      sourceUrl: candidate.sourceUrl,
+      changeNote: candidate.combined
+        ? "Imported from BC Registry filing history; constitution appears to be bundled with bylaws."
+        : "Imported from BC Registry filing history.",
+      actingUserId: input.actingUserId,
+    }));
+    imported.push({
+      kind: candidate.kind,
+      title: candidate.title,
+      fileName: candidate.fileName,
+      filing: candidate.filing,
+      dateFiled: candidate.dateFiled,
+      documentName: candidate.documentName,
+      reportName: candidate.reportName,
+      eventId: candidate.eventId,
+      documentId: created?.documentId,
+      versionId: created?.versionId,
+      linked: created?.linked,
+    });
+  }
+
+  return {
+    ok: true,
+    corpNum,
+    source: exportInfo.source,
+    exportDirectory: exportInfo.publicDirectory ?? path.relative(process.cwd(), exportInfo.directory),
+    latestFiling: records[0]
+      ? {
+          filing: records[0].Filing,
+          dateFiled: records[0]["Date Filed"],
+        }
+      : undefined,
+    imported,
+    skipped,
+    missing,
+  };
+}
+
+async function importBcRegistryFilingHistory(
+  client: ConvexHttpClient,
+  input: {
+    societyId: string;
+    actingUserId?: string;
+    corpNum?: string;
+    refresh?: boolean;
+    importDocuments?: boolean;
+  },
+) {
+  const society: any = await convexCall(client, query("society.getById"), { id: input.societyId });
+  if (!society) throw httpError(404, "society_not_found", "Society not found.");
+
+  const corpNum = normalizeBcRegistryCorpNum(input.corpNum ?? society.incorporationNumber);
+  if (!corpNum) {
+    throw httpError(400, "bc_registry_corp_number_required", "A BC Registry incorporation number is required.");
+  }
+
+  const exportInfo = await resolveBcRegistryExport(corpNum, Boolean(input.refresh));
+  const records = await readBcRegistryFilingRecords(exportInfo.directory, corpNum);
+  const documentImport = input.importDocuments === false
+    ? { byFilename: new Map<string, string>(), created: 0, reused: 0, skipped: 0 }
+    : await importBcRegistryPdfDocuments(client, {
+        societyId: input.societyId,
+        actingUserId: input.actingUserId,
+        exportDirectory: exportInfo.directory,
+        records,
+      });
+  const filingRecords = buildBcRegistryFilingImportRecords({
+    corpNum,
+    exportDirectory: exportInfo.directory,
+    records,
+    documentIdsByFilename: documentImport.byFilename,
+  });
+  const imported: any = await convexCall(client, mutation("filings.importBcRegistryHistory"), {
+    societyId: input.societyId,
+    records: filingRecords,
+  });
+  return {
+    ok: true,
+    corpNum,
+    source: exportInfo.source,
+    exportDirectory: exportInfo.publicDirectory ?? path.relative(process.cwd(), exportInfo.directory),
+    filingCount: filingRecords.length,
+    inserted: imported?.inserted ?? 0,
+    updated: imported?.updated ?? 0,
+    documents: {
+      created: documentImport.created,
+      reused: documentImport.reused,
+      skipped: documentImport.skipped,
+      linkedFilingDocumentCount: filingRecords.reduce((sum, row: any) => sum + (row.sourceDocumentIds?.length ?? 0), 0),
+    },
+    latestFiling: records[0]
+      ? {
+          filing: records[0].Filing,
+          dateFiled: records[0]["Date Filed"],
+        }
+      : undefined,
+  };
+}
+
+async function importBcRegistryPdfDocuments(
+  client: ConvexHttpClient,
+  input: {
+    societyId: string;
+    actingUserId?: string;
+    exportDirectory: string;
+    records: BcRegistryCsvRecord[];
+  },
+) {
+  const existingDocuments: any[] = await convexCall(client, query("documents.list"), {
+    societyId: input.societyId,
+  });
+  const byFilename = new Map<string, string>();
+  for (const document of existingDocuments ?? []) {
+    if (document?.fileName && document?._id) byFilename.set(document.fileName, document._id);
+  }
+
+  let created = 0;
+  let reused = 0;
+  let skipped = 0;
+  const documentRows = uniqueBcRegistryDocumentRows(input.records);
+  for (const row of documentRows) {
+    const fileName = sanitizeFileName(path.basename(String(row.Filename ?? "")));
+    if (!fileName) {
+      skipped += 1;
+      continue;
+    }
+    const sourcePath = path.join(input.exportDirectory, "pdfs", fileName);
+    const eventId = row["Event ID"];
+    const reportName = row["Report Name"];
+    const tags = [
+      "bc-registry",
+      "browser-connector",
+      "filing-evidence",
+      ...(eventId ? [`bc-registry-event:${eventId}`] : []),
+      ...(reportName ? [`bc-registry-report:${reportName}`] : []),
+    ];
+    const sourceExternalIds = [
+      ...(eventId ? [`bc-registry:event:${eventId}`] : []),
+      ...(eventId && reportName ? [`bc-registry:document:${eventId}:${reportName}`] : []),
+    ];
+    const existingId = byFilename.get(fileName);
+    if (existingId) {
+      const metadata = await readPdfMetadata(fileName, sourcePath).catch(() => null);
+      await convexCall(client, mutation("documents.mergeConnectorDocumentMetadata"), dropUndefined({
+        documentId: existingId,
+        title: bcRegistryDocumentTitle(row),
+        category: bcRegistryDocumentCategory(row),
+        fileName,
+        mimeType: "application/pdf",
+        fileSizeBytes: metadata?.fileSizeBytes,
+        sha256: metadata?.sha256,
+        tags,
+        sourceUrl: row.URL || undefined,
+        sourceExternalIds,
+        sourcePayloadJson: JSON.stringify(row),
+        changeNote: "Imported from BC Registry filing-history export.",
+      }));
+      reused += 1;
+      continue;
+    }
+    const copied = await copyPdfToDocumentStorage(fileName, sourcePath).catch(() => null);
+    if (!copied) {
+      skipped += 1;
+      continue;
+    }
+    const result: any = await convexCall(client, mutation("documents.createLocalDocumentFromConnector"), dropUndefined({
+      societyId: input.societyId,
+      title: bcRegistryDocumentTitle(row),
+      category: bcRegistryDocumentCategory(row),
+      fileName,
+      mimeType: "application/pdf",
+      fileSizeBytes: copied.fileSizeBytes,
+      storageKey: copied.storageKey,
+      sha256: copied.sha256,
+      tags,
+      sourceUrl: row.URL || undefined,
+      sourceExternalIds,
+      sourcePayloadJson: JSON.stringify(row),
+      changeNote: "Imported from BC Registry filing-history export.",
+      actingUserId: input.actingUserId,
+      skipDuplicateCheck: true,
+    }));
+    if (result?.documentId) {
+      byFilename.set(fileName, result.documentId);
+      if (result.reused) reused += 1;
+      else created += 1;
+    }
+  }
+
+  return { byFilename, created, reused, skipped };
+}
+
+function uniqueBcRegistryDocumentRows(records: BcRegistryCsvRecord[]) {
+  const byFilename = new Map<string, BcRegistryCsvRecord>();
+  for (const row of records) {
+    if (row["Paper Only"] === "true" || !row.Filename) continue;
+    if (!byFilename.has(row.Filename)) byFilename.set(row.Filename, row);
+  }
+  return [...byFilename.values()];
+}
+
+function buildBcRegistryFilingImportRecords(input: {
+  corpNum: string;
+  exportDirectory: string;
+  records: BcRegistryCsvRecord[];
+  documentIdsByFilename: Map<string, string>;
+}) {
+  const groups = groupBcRegistryFilingRows(input.records);
+  return groups.map((group) => {
+    const row = group.rows[0];
+    const eventId = firstNonEmpty(group.rows.map((item) => item["Event ID"]));
+    const filedAt = parseBcRegistryDate(row["Date Filed"]);
+    const dueDate = deriveBcRegistryDueDate(row) ?? filedAt ?? new Date().toISOString().slice(0, 10);
+    const sourceDocumentIds = uniqueStrings(
+      group.rows
+        .map((item) => input.documentIdsByFilename.get(item.Filename))
+        .filter((value): value is string => Boolean(value)),
+    );
+    const receiptDocumentId = group.rows
+      .find((item) => /receipt/i.test(`${item["Report Name"]} ${item["Document Name"]}`))
+      ?.Filename;
+    const stagedPacketDocumentId = group.rows
+      .find((item) => item.Filename && !/receipt/i.test(`${item["Report Name"]} ${item["Document Name"]}`))
+      ?.Filename;
+    const documentNames = group.rows
+      .filter((item) => item.Filename)
+      .map((item) => `${item["Document Name"] || item["Report Name"] || "Document"} (${item.Filename})`);
+    const sourceKey = eventId
+      ? `bc-registry:event:${eventId}`
+      : `bc-registry:paper:${crypto.createHash("sha1").update(group.key).digest("hex").slice(0, 16)}`;
+    return dropUndefined({
+      kind: "RegistryRecord",
+      periodLabel: deriveBcRegistryPeriodLabel(row),
+      dueDate,
+      filedAt,
+      submissionMethod: "Online",
+      status: "Filed",
+      registryUrl: `https://www.bcregistry.ca/societies/${input.corpNum}/filingHistory`,
+      receiptDocumentId: receiptDocumentId ? input.documentIdsByFilename.get(receiptDocumentId) : undefined,
+      stagedPacketDocumentId: stagedPacketDocumentId ? input.documentIdsByFilename.get(stagedPacketDocumentId) : undefined,
+      sourceDocumentIds,
+      sourceExternalIds: uniqueStrings([
+        sourceKey,
+        ...(eventId ? [`bc-registry:event-id:${eventId}`] : []),
+      ]),
+      sourcePayloadJson: JSON.stringify({
+        exportDirectory: path.relative(process.cwd(), input.exportDirectory),
+        rows: group.rows,
+      }),
+      evidenceNotes: [
+        "Imported from BC Registry filing history.",
+        eventId ? `Event ID: ${eventId}.` : "Paper-only registry row.",
+        `Filing: ${row.Filing}.`,
+        row["Date Filed"] ? `Date filed: ${row["Date Filed"]}.` : "",
+        documentNames.length ? `Documents: ${documentNames.join("; ")}.` : "Documents: Available on paper only.",
+      ].filter(Boolean).join(" "),
+      notes: row.Details || undefined,
+    });
+  });
+}
+
+function groupBcRegistryFilingRows(records: BcRegistryCsvRecord[]) {
+  const groups = new Map<string, { key: string; rows: BcRegistryCsvRecord[] }>();
+  for (const row of records) {
+    const eventId = row["Event ID"];
+    const key = eventId
+      ? `event:${eventId}`
+      : `paper:${row.Filing}|${row["Date Filed"]}|${row.Details}`;
+    const group = groups.get(key) ?? { key, rows: [] };
+    group.rows.push(row);
+    groups.set(key, group);
+  }
+  return [...groups.values()];
+}
+
+function normalizeBcRegistryCorpNum(value: unknown) {
+  const text = String(value ?? "").trim().toUpperCase().replace(/-/g, "");
+  if (!text) return "";
+  if (!/^[A-Z0-9]+$/.test(text)) {
+    throw httpError(400, "invalid_bc_registry_corp_number", "BC Registry incorporation number is invalid.");
+  }
+  return text;
+}
+
+async function resolveBcRegistryExport(corpNum: string, refresh: boolean) {
+  const existing = refresh ? null : await latestBcRegistryExport(corpNum);
+  if (existing) return { ...existing, source: "latest-export" as const };
+
+  const exported = await runBcRegistryExportFromActiveSession(corpNum).catch(async (error) => {
+    const fallback = await latestBcRegistryExport(corpNum);
+    if (fallback) return { ...fallback, source: "latest-export" as const, warning: error?.message };
+    throw error;
+  });
+  return exported;
+}
+
+function browserConnectorExportRoot() {
+  return path.resolve(process.cwd(), "browser-connector-exports");
+}
+
+async function latestBcRegistryExport(corpNum: string) {
+  const root = browserConnectorExportRoot();
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+  const candidates: Array<{ directory: string; publicDirectory: string; mtimeMs: number }> = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.startsWith(`${corpNum}-`)) continue;
+    const directory = path.join(root, entry.name);
+    const csvPath = path.join(directory, `${corpNum}_filing_history.csv`);
+    const [dirStat, csv] = await Promise.all([
+      stat(directory).catch(() => null),
+      readFile(csvPath).catch(() => null),
+    ]);
+    if (!dirStat || !csv) continue;
+    candidates.push({
+      directory,
+      publicDirectory: path.posix.join("browser-connector-exports", entry.name),
+      mtimeMs: dirStat.mtimeMs,
+    });
+  }
+  return candidates.sort((a, b) => b.mtimeMs - a.mtimeMs)[0] ?? null;
+}
+
+async function runBcRegistryExportFromActiveSession(corpNum: string) {
+  const sessionsPayload: any = await connectorRunnerRequest("GET", "/sessions");
+  const sessions: any[] = Array.isArray(sessionsPayload?.sessions) ? sessionsPayload.sessions : [];
+  const session =
+    sessions.find((item) => item?.connectorId === "bc-registry" && String(item?.currentUrl ?? "").includes(`/societies/${corpNum}/`)) ??
+    sessions.find((item) => item?.connectorId === "bc-registry");
+  if (!session?.sessionId) {
+    throw httpError(
+      409,
+      "bc_registry_login_required",
+      "Open a BC Registry browser app session, sign in, and navigate to the filing history page.",
+    );
+  }
+
+  const output: any = await connectorRunnerRequest(
+    "POST",
+    `/connectors/bc-registry/auth/sessions/${encodeURIComponent(session.sessionId)}/actions/filingHistoryExport`,
+    { corpNum, includePdfProbe: true, downloadPdfs: true },
+  );
+  const publicDirectory =
+    typeof output?.download?.exportPublicDirectory === "string"
+      ? output.download.exportPublicDirectory
+      : undefined;
+  if (publicDirectory) {
+    return {
+      directory: path.resolve(process.cwd(), publicDirectory),
+      publicDirectory,
+      source: "active-session" as const,
+      exportResult: {
+        filingCount: output?.filingCount,
+        documentCount: output?.documentCount,
+        downloadedCount: output?.download?.downloadedCount,
+        failedCount: output?.download?.failedCount,
+      },
+    };
+  }
+
+  const latest = await latestBcRegistryExport(corpNum);
+  if (latest) return { ...latest, source: "active-session" as const };
+  throw httpError(502, "bc_registry_export_missing", "BC Registry export completed without a local export directory.");
+}
+
+async function readBcRegistryFilingRecords(exportDirectory: string, corpNum: string): Promise<BcRegistryCsvRecord[]> {
+  const csv = await readFile(path.join(exportDirectory, `${corpNum}_filing_history.csv`), "utf8").catch(() => null);
+  if (!csv) throw httpError(404, "bc_registry_export_csv_missing", "BC Registry filing export CSV was not found.");
+  const rows = parseCsv(csv);
+  const [headers, ...data] = rows;
+  if (!headers?.length) return [];
+  return data.map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""])));
+}
+
+function pickGovernanceImportCandidates(records: BcRegistryCsvRecord[], exportDirectory: string) {
+  const docs = records.filter((row) => row["Paper Only"] !== "true" && row.Filename);
+  const byReport = (pattern: RegExp) =>
+    docs.find((row) => pattern.test(row["Report Name"] ?? "") || pattern.test(row["Document Name"] ?? ""));
+  const bylaws = byReport(/^bylaws$/i) ?? byReport(/bylaw/i);
+  const standaloneConstitution = byReport(/^constitution$/i);
+  const constitution = standaloneConstitution ?? (bylaws ? { ...bylaws, __combinedConstitution: "true" } : undefined);
+  const privacyPolicy =
+    byReport(/\bpipa\b/i) ??
+    byReport(/privacy/i) ??
+    docs.find((row) => /personal information|privacy/i.test(`${row.Filing} ${row.Details}`));
+
+  return {
+    constitution: constitution
+      ? candidateFromRegistryRow(
+          constitution,
+          exportDirectory,
+          standaloneConstitution ? "constitution" : "constitutionAndBylaws",
+          standaloneConstitution ? "Constitution" : "Bylaws",
+          standaloneConstitution ? "Constitution - BC Registry" : "Constitution and Bylaws - BC Registry",
+          !standaloneConstitution,
+        )
+      : undefined,
+    bylaws: bylaws
+      ? candidateFromRegistryRow(bylaws, exportDirectory, "bylaws", "Bylaws", "Bylaws - BC Registry")
+      : undefined,
+    privacyPolicy: privacyPolicy
+      ? candidateFromRegistryRow(privacyPolicy, exportDirectory, "privacyPolicy", "Policy", "Privacy policy - BC Registry")
+      : undefined,
+  };
+}
+
+function candidateFromRegistryRow(
+  row: BcRegistryCsvRecord,
+  exportDirectory: string,
+  kind: GovernanceImportCandidate["kind"],
+  category: string,
+  baseTitle: string,
+  combined = false,
+): GovernanceImportCandidate {
+  const fileName = sanitizeFileName(path.basename(String(row.Filename ?? "")));
+  const dateFiled = row["Date Filed"] || undefined;
+  const title = `${baseTitle}${dateFiled ? ` (${dateFiled.replace(/\s+\d{1,2}:\d{2}\s*[AP]M$/i, "")})` : ""}`;
+  return {
+    kind,
+    title,
+    category,
+    fileName,
+    sourcePath: path.join(exportDirectory, "pdfs", fileName),
+    sourceUrl: row.URL || undefined,
+    filing: row.Filing || undefined,
+    dateFiled,
+    documentName: row["Document Name"] || undefined,
+    reportName: row["Report Name"] || undefined,
+    eventId: row["Event ID"] || undefined,
+    combined,
+  };
+}
+
+async function copyGovernanceCandidateToDocumentStorage(candidate: GovernanceImportCandidate) {
+  return copyPdfToDocumentStorage(candidate.fileName, candidate.sourcePath);
+}
+
+async function readPdfMetadata(fileName: string, sourcePath: string) {
+  const pdf = await readFile(sourcePath).catch(() => null);
+  if (!pdf) {
+    throw httpError(404, "bc_registry_export_pdf_missing", `${fileName} was not found in the BC Registry export.`);
+  }
+  if (pdf.byteLength === 0 || pdf.subarray(0, 4).toString("utf8") !== "%PDF") {
+    throw httpError(400, "bc_registry_export_pdf_invalid", `${fileName} is not a PDF file.`);
+  }
+  return {
+    pdf,
+    fileSizeBytes: pdf.byteLength,
+    sha256: crypto.createHash("sha256").update(pdf).digest("hex"),
+  };
+}
+
+async function copyPdfToDocumentStorage(fileName: string, sourcePath: string) {
+  const metadata = await readPdfMetadata(fileName, sourcePath);
+  const storageKey = `${crypto.randomUUID()}-${sanitizeFileName(fileName)}`;
+  await mkdir(generatedWorkflowDocumentDir(), { recursive: true });
+  await writeFile(path.join(generatedWorkflowDocumentDir(), storageKey), metadata.pdf);
+  return {
+    storageKey,
+    fileSizeBytes: metadata.fileSizeBytes,
+    sha256: metadata.sha256,
+  };
+}
+
+function bcRegistryDocumentTitle(row: BcRegistryCsvRecord) {
+  const name = row["Document Name"] || row["Report Name"] || "BC Registry document";
+  const date = parseBcRegistryDate(row["Date Filed"]);
+  return `${name} - BC Registry${date ? ` (${date})` : ""}`;
+}
+
+function bcRegistryDocumentCategory(row: BcRegistryCsvRecord) {
+  const text = `${row["Report Name"]} ${row["Document Name"]}`;
+  if (/receipt/i.test(text)) return "Receipt";
+  if (/constitution/i.test(text)) return "Constitution";
+  if (/bylaw/i.test(text)) return "Bylaws";
+  return "Filing";
+}
+
+function parseBcRegistryDate(value: unknown) {
+  const text = String(value ?? "").trim();
+  const match = text.match(/\b([A-Za-z]{3,9})\s+(\d{1,2}),\s+(\d{4})\b/);
+  if (!match) return undefined;
+  const month = monthNumber(match[1]);
+  if (!month) return undefined;
+  return `${match[3]}-${month}-${match[2].padStart(2, "0")}`;
+}
+
+function monthNumber(value: string) {
+  const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+  const index = months.findIndex((month) => value.toLowerCase().startsWith(month));
+  return index >= 0 ? String(index + 1).padStart(2, "0") : undefined;
+}
+
+function deriveBcRegistryDueDate(row: BcRegistryCsvRecord) {
+  if (/annual report/i.test(row.Filing ?? "")) {
+    const agmDate = parseBcRegistryDate(row.Filing.replace(/^.*\bAGM:\s*/i, ""));
+    if (agmDate) return addDaysISO(agmDate, 30);
+  }
+  return parseBcRegistryDate(row["Date Filed"]);
+}
+
+function addDaysISO(dateISO: string, days: number) {
+  const [year, month, day] = dateISO.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().slice(0, 10);
+}
+
+function deriveBcRegistryPeriodLabel(row: BcRegistryCsvRecord) {
+  const filing = row.Filing ?? "";
+  const annualYear = filing.match(/\b(\d{4})\s+BC\s+Annual\s+Report\b/i)?.[1];
+  if (annualYear) return annualYear;
+  const filedAt = parseBcRegistryDate(row["Date Filed"]);
+  const year = filedAt?.slice(0, 4);
+  const label = compactBcRegistryFilingLabel(filing);
+  return year ? `${year} ${label}` : label;
+}
+
+function compactBcRegistryFilingLabel(value: string) {
+  const text = value.replace(/\s+/g, " ").trim();
+  if (/change of directors/i.test(text)) return "Change of Directors";
+  if (/bylaw/i.test(text)) return "Bylaw Alteration";
+  if (/transition/i.test(text)) return "Transition";
+  if (/incorporat/i.test(text)) return "Incorporation";
+  if (/special resolution|registrar/i.test(text)) return "Special Resolution";
+  if (/annual report/i.test(text)) return "Annual Report";
+  return text.replace(/\bApplication\b/gi, "").trim().slice(0, 80) || "Registry Record";
+}
+
+function firstNonEmpty(values: string[]) {
+  return values.find((value) => typeof value === "string" && value.trim())?.trim();
+}
+
+function uniqueStrings(values: string[]) {
+  return Array.from(new Set(values.filter((value) => typeof value === "string" && value.trim())));
+}
+
+function parseCsv(text: string) {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let value = "";
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+    if (quoted) {
+      if (char === '"' && next === '"') {
+        value += '"';
+        index += 1;
+      } else if (char === '"') {
+        quoted = false;
+      } else {
+        value += char;
+      }
+      continue;
+    }
+    if (char === '"') {
+      quoted = true;
+    } else if (char === ",") {
+      row.push(value);
+      value = "";
+    } else if (char === "\n") {
+      row.push(value);
+      rows.push(row);
+      row = [];
+      value = "";
+    } else if (char !== "\r") {
+      value += char;
+    }
+  }
+  if (value || row.length) {
+    row.push(value);
+    rows.push(row);
+  }
+  return rows;
 }
 
 async function deliverWebhook(client: ConvexHttpClient, subscription: any, event: any, attemptsAlready: number) {

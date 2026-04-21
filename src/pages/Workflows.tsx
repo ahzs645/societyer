@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -6,9 +6,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Drawer, Field, Badge, EmptyState, Button } from "../components/ui";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
+import { Drawer, Field } from "../components/ui";
 import {
   ExternalLink,
   Plus,
@@ -16,12 +14,16 @@ import {
   Play,
   Pause,
   Trash2,
-  Tag,
-  Server,
-  Activity,
-  Clock,
 } from "lucide-react";
-import { formatDateTime } from "../lib/format";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 const triggerLabel = (trigger: any) =>
   trigger?.kind === "cron"
@@ -30,44 +32,22 @@ const triggerLabel = (trigger: any) =>
       ? `${trigger.offset?.daysBefore}d before ${trigger.offset?.anchor}`
       : "manual";
 
-const WORKFLOW_FILTERS = (catalog: Array<{ key: string; label: string }>): FilterField<any>[] => [
-  {
-    id: "recipe",
-    label: "Recipe",
-    icon: <Tag size={14} />,
-    options: catalog.map((c) => c.label),
-    match: (r, q) => (catalog.find((c) => c.key === r.recipe)?.label ?? r.recipe) === q,
-  },
-  {
-    id: "provider",
-    label: "Provider",
-    icon: <Server size={14} />,
-    options: ["internal", "n8n"],
-    match: (r, q) => (r.provider ?? "internal") === q,
-  },
-  {
-    id: "status",
-    label: "Status",
-    icon: <Activity size={14} />,
-    options: ["active", "paused"],
-    match: (r, q) => r.status === q,
-  },
-  {
-    id: "trigger",
-    label: "Trigger kind",
-    icon: <Clock size={14} />,
-    options: ["cron", "manual", "date_offset"],
-    match: (r, q) => r.trigger?.kind === q,
-  },
-];
-
 type TriggerKind = "cron" | "manual" | "date_offset";
 
+/**
+ * Workflows management. Each row joins a `workflows` doc with the
+ * recipe catalog (`recipeLabel`) and the derived `triggerLabel` from
+ * the trigger config — both projected client-side since neither is a
+ * real column. Inline edits for `name` and `status` route to
+ * `workflows.update` (Director-gated, name/status only); richer
+ * trigger / provider config still lives on the canvas page.
+ */
 export function WorkflowsPage() {
   const society = useSociety();
   const catalog = useQuery(api.workflows.listCatalog, {});
   const rows = useQuery(api.workflows.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.workflows.create);
+  const update = useMutation(api.workflows.update);
   const setStatus = useMutation(api.workflows.setStatus);
   const remove = useMutation(api.workflows.remove);
   const run = useAction(api.workflows.run);
@@ -86,6 +66,30 @@ export function WorkflowsPage() {
     provider?: string;
   } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "workflow",
+    viewId: currentViewId,
+  });
+
+  const recipeByKey = useMemo(
+    () => new Map<string, any>((catalog ?? []).map((c: any) => [c.key, c])),
+    [catalog],
+  );
+
+  const records = useMemo(
+    () =>
+      (rows ?? []).map((r: any) => ({
+        ...r,
+        recipeLabel: recipeByKey.get(r.recipe)?.label ?? r.recipe,
+        triggerLabel: triggerLabel(r.trigger),
+        provider: r.provider ?? "internal",
+      })),
+    [rows, recipeByKey],
+  );
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -129,6 +133,8 @@ export function WorkflowsPage() {
     toast.success("Workflow created");
   };
 
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+
   return (
     <div className="page">
       <PageHeader
@@ -148,169 +154,123 @@ export function WorkflowsPage() {
         }
       />
 
-      <DataTable
-        label="Configured workflows"
-        icon={<WorkflowIcon size={14} />}
-        data={(rows ?? []) as any[]}
-        loading={rows === undefined}
-        rowKey={(r) => String(r._id)}
-        searchPlaceholder="Search name, recipe, trigger…"
-        defaultSort={{ columnId: "name", dir: "asc" }}
-        viewsKey="workflows"
-        emptyMessage={
-          <EmptyState
-            icon={<WorkflowIcon />}
-            title="No workflows yet"
-            description="Pick a recipe from the catalog to automate meetings, filings, or approvals."
-            action={
-              <Button variant="primary" icon={<Plus size={14} />} onClick={() => openNew()}>
-                New workflow
-              </Button>
-            }
+      {showMetadataWarning ? (
+        <div className="record-table__empty">
+          <div className="record-table__empty-title">Metadata not seeded</div>
+          <div className="record-table__empty-desc">
+            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+            workflow object metadata + default view.
+          </div>
+        </div>
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="workflows"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+          onRecordClick={(_, record) => navigate(`/app/workflows/${record._id}`)}
+          onUpdate={async ({ recordId, fieldName, value }) => {
+            // Only `name` and `status` are safe for inline edits — the
+            // other visible columns are projected (recipeLabel,
+            // triggerLabel) or Director-gated state (provider / run
+            // timestamps). Provider switches go through
+            // `updateProviderLink` from the canvas page.
+            if (fieldName !== "name" && fieldName !== "status") return;
+            const patch: any = {};
+            patch[fieldName] = value;
+            await update({
+              id: recordId as Id<"workflows">,
+              patch,
+              actingUserId,
+            });
+          }}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<WorkflowIcon size={14} />}
+            label="Configured workflows"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
           />
-        }
-        onRowClick={(r) => navigate(`/app/workflows/${r._id}`)}
-        rowActionLabel={(r) => `Open ${r.name}`}
-        filterFields={WORKFLOW_FILTERS(catalog ?? [])}
-        searchExtraFields={[(r) => triggerLabel(r.trigger)]}
-        columns={[
-          {
-            id: "name",
-            header: "Name",
-            sortable: true,
-            accessor: (r) => r.name,
-            render: (r) => (
-              <Link className="link" to={`/app/workflows/${r._id}`} onClick={(e) => e.stopPropagation()}>
-                {r.name}
-              </Link>
-            ),
-          },
-          {
-            id: "recipe",
-            header: "Recipe",
-            sortable: true,
-            accessor: (r) => catalog?.find((c) => c.key === r.recipe)?.label ?? r.recipe,
-            render: (r) => (
-              <span className="cell-tag">
-                {catalog?.find((c) => c.key === r.recipe)?.label ?? r.recipe}
-              </span>
-            ),
-          },
-          {
-            id: "trigger",
-            header: "Trigger",
-            sortable: true,
-            accessor: (r) => triggerLabel(r.trigger),
-            render: (r) => (
-              <span className="mono" style={{ fontSize: "var(--fs-sm)" }}>
-                {triggerLabel(r.trigger)}
-              </span>
-            ),
-          },
-          {
-            id: "provider",
-            header: "Provider",
-            sortable: true,
-            accessor: (r) => r.provider ?? "internal",
-            render: (r) => (
-              <Badge tone={r.provider === "n8n" ? "info" : "neutral"}>
-                {r.provider ?? "internal"}
-              </Badge>
-            ),
-          },
-          {
-            id: "status",
-            header: "Status",
-            sortable: true,
-            accessor: (r) => r.status,
-            render: (r) => (
-              <Badge tone={r.status === "active" ? "success" : r.status === "paused" ? "warn" : "neutral"}>
-                {r.status}
-              </Badge>
-            ),
-          },
-          {
-            id: "lastRunAtISO",
-            header: "Last run",
-            sortable: true,
-            accessor: (r) => r.lastRunAtISO ?? "",
-            render: (r) => (
-              <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
-                {r.lastRunAtISO ? formatDateTime(r.lastRunAtISO) : "—"}
-              </span>
-            ),
-          },
-          {
-            id: "nextRunAtISO",
-            header: "Next run",
-            sortable: true,
-            accessor: (r) => r.nextRunAtISO ?? "",
-            render: (r) => (
-              <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
-                {r.nextRunAtISO ? formatDateTime(r.nextRunAtISO) : "—"}
-              </span>
-            ),
-          },
-        ]}
-        renderRowActions={(r) => (
-          <>
-            <Link
-              className="btn btn--ghost btn--sm"
-              to={`/app/workflows/${r._id}`}
-              onClick={(e) => e.stopPropagation()}
-              aria-label={`Open canvas for ${r.name}`}
-            >
-              <ExternalLink size={12} /> Canvas
-            </Link>
-            <button
-              className="btn btn--ghost btn--sm"
-              disabled={busyId === r._id}
-              onClick={async () => {
-                setBusyId(r._id);
-                try {
-                  const result = await run({
-                    societyId: society._id,
-                    workflowId: r._id,
-                    triggeredBy: "manual",
-                    actingUserId,
-                  });
-                  toast.success(
-                    result?.status === "running" ? "Workflow queued in n8n" : "Workflow run complete",
-                  );
-                } catch (err: any) {
-                  toast.error(err?.message ?? "Run failed");
-                } finally {
-                  setBusyId(null);
-                }
-              }}
-            >
-              <Play size={12} /> Run now
-            </button>
-            <button
-              className="btn btn--ghost btn--sm"
-              onClick={() =>
-                setStatus({
-                  id: r._id,
-                  status: r.status === "active" ? "paused" : "active",
-                  actingUserId,
-                })
-              }
-            >
-              <Pause size={12} /> {r.status === "active" ? "Pause" : "Resume"}
-            </button>
-            <button
-              className="btn btn--ghost btn--sm btn--icon"
-              aria-label={`Remove ${r.name}`}
-              onClick={async () => {
-                await remove({ id: r._id, actingUserId });
-                toast.success("Workflow removed");
-              }}
-            >
-              <Trash2 size={12} />
-            </button>
-          </>
-        )}
-      />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || rows === undefined}
+            renderRowActions={(r) => (
+              <>
+                <Link
+                  className="btn btn--ghost btn--sm"
+                  to={`/app/workflows/${r._id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label={`Open canvas for ${r.name}`}
+                >
+                  <ExternalLink size={12} /> Canvas
+                </Link>
+                <button
+                  className="btn btn--ghost btn--sm"
+                  disabled={busyId === r._id}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    setBusyId(r._id);
+                    try {
+                      const result = await run({
+                        societyId: society._id,
+                        workflowId: r._id,
+                        triggeredBy: "manual",
+                        actingUserId,
+                      });
+                      toast.success(
+                        result?.status === "running"
+                          ? "Workflow queued in n8n"
+                          : "Workflow run complete",
+                      );
+                    } catch (err: any) {
+                      toast.error(err?.message ?? "Run failed");
+                    } finally {
+                      setBusyId(null);
+                    }
+                  }}
+                >
+                  <Play size={12} /> Run now
+                </button>
+                <button
+                  className="btn btn--ghost btn--sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setStatus({
+                      id: r._id,
+                      status: r.status === "active" ? "paused" : "active",
+                      actingUserId,
+                    });
+                  }}
+                >
+                  <Pause size={12} /> {r.status === "active" ? "Pause" : "Resume"}
+                </button>
+                <button
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Remove ${r.name}`}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    await remove({ id: r._id, actingUserId });
+                    toast.success("Workflow removed");
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </>
+            )}
+          />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="record-table__loading-row" />
+          ))}
+        </div>
+      )}
 
       <Drawer
         open={open}

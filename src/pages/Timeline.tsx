@@ -5,13 +5,15 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge } from "../components/ui";
-import { formatDateTime } from "../lib/format";
+import { formatDateTime, money } from "../lib/format";
 
 export function TimelinePage() {
   const society = useSociety();
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
   const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
   const filings = useQuery(api.filings.list, society ? { societyId: society._id } : "skip");
+  const feeTimeline = useQuery(api.subscriptions.feeTimeline, society ? { societyId: society._id } : "skip");
+  const fundingSources = useQuery(api.fundingSources.list, society ? { societyId: society._id } : "skip");
 
   const grouped = useMemo(() => {
     const events: { date: string; kind: string; title: string; sub?: string; to?: string; past: boolean; color?: string }[] = [];
@@ -37,8 +39,31 @@ export function TimelinePage() {
         past: f.status === "Filed",
       });
     });
+    (feeTimeline ?? []).forEach((period: any) => {
+      if (period.effectiveFrom === "current") return;
+      events.push({
+        date: period.effectiveFrom,
+        kind: "Member fee",
+        title: `${period.label} — ${money(period.priceCents)} / ${period.interval}`,
+        sub: period.effectiveTo ? `Ends ${period.effectiveTo}` : period.status,
+        to: "/app/membership",
+        past: new Date(period.effectiveFrom).getTime() < now,
+      });
+    });
+    (fundingSources ?? []).forEach((source: any) => {
+      (source.events ?? []).forEach((event: any) => {
+        events.push({
+          date: event.eventDate,
+          kind: "Funding",
+          title: event.label,
+          sub: `${source.name}${event.amountCents != null ? ` · ${money(event.amountCents)}` : ""}${event.attributionStatus ? ` · ${event.attributionStatus}` : ""}`,
+          to: "/app/treasurer",
+          past: new Date(event.eventDate).getTime() < now,
+        });
+      });
+    });
     return events.sort((a, b) => b.date.localeCompare(a.date));
-  }, [meetings, committees, filings]);
+  }, [meetings, committees, filings, feeTimeline, fundingSources]);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -49,7 +74,7 @@ export function TimelinePage() {
 
   return (
     <div className="page">
-      <PageHeader title="Timeline" subtitle="Every meeting, filing, and due date on one spine." />
+      <PageHeader title="Timeline" subtitle="Every meeting, filing, member-fee change, funding event, and due date on one spine." />
 
       <div className="two-col">
         <div className="card">
@@ -61,7 +86,7 @@ export function TimelinePage() {
                   <span className="timeline-vertical__dot" style={e.color ? { borderColor: e.color } : undefined} />
                   <div className="row">
                     <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDateTime(e.date)}</span>
-                    <Badge tone={e.kind === "AGM" ? "accent" : e.kind === "Filing" ? "warn" : "info"}>{e.kind}</Badge>
+                    <Badge tone={e.kind === "AGM" ? "accent" : e.kind === "Filing" ? "warn" : e.kind === "Funding" ? "success" : "info"}>{e.kind}</Badge>
                   </div>
                   <div className="timeline-vertical__title">
                     {e.to ? <Link to={e.to}>{e.title}</Link> : e.title}

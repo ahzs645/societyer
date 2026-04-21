@@ -8,21 +8,21 @@ import { Drawer, Field, InspectorNote } from "../components/ui";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { useToast } from "../components/Toast";
-import { Plus, Check, ClipboardList, Bot } from "lucide-react";
+import { Plus, Check, ClipboardList, Bot, FileDown } from "lucide-react";
 import { centsToDollarInput, dollarInputToCents } from "../lib/format";
 import { kindLabel } from "./Dashboard";
 import { FilingBotRunner } from "../components/FilingBotRunner";
 import {
   RecordTable,
   RecordTableScope,
-  RecordTableToolbar,
+  RecordTableViewToolbar,
   RecordTableFilterChips,
   RecordTableFilterPopover,
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
 
-const KINDS = ["AnnualReport", "ChangeOfDirectors", "ChangeOfAddress", "BylawAmendment", "T2", "T1044", "T3010", "T4", "GSTHST"] as const;
+const KINDS = ["RegistryRecord", "AnnualReport", "ChangeOfDirectors", "ChangeOfAddress", "BylawAmendment", "T2", "T1044", "T3010", "T4", "GSTHST"] as const;
 
 export function FilingsPage() {
   const society = useSociety();
@@ -33,6 +33,7 @@ export function FilingsPage() {
   const [completeDraft, setCompleteDraft] = useState<any | null>(null);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [importingRegistry, setImportingRegistry] = useState(false);
   const filings = useQuery(api.filings.list, society ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const filingGuidance = useQuery(
@@ -59,6 +60,34 @@ export function FilingsPage() {
   };
   const save = async () => { await create({ societyId: society._id, ...form, submittedByUserId: actingUserId }); setOpen(false); };
 
+  const importRegistryHistory = async () => {
+    setImportingRegistry(true);
+    try {
+      const response = await fetch("/api/v1/browser-connectors/filing-history/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          societyId: society._id,
+          corpNum: society.incorporationNumber,
+          importDocuments: true,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error?.message ?? payload?.message ?? `Request failed with ${response.status}`);
+      }
+      const data = payload.data ?? {};
+      toast.success(
+        "BC Registry filings imported",
+        `${data.inserted ?? 0} created, ${data.updated ?? 0} updated, ${data.documents?.created ?? 0} document(s) added`,
+      );
+    } catch (error: any) {
+      toast.error("Could not import BC Registry filings", error?.message ?? "Open a BC Registry browser session and try again.");
+    } finally {
+      setImportingRegistry(false);
+    }
+  };
+
   const records = (filings ?? []) as any[];
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
@@ -70,9 +99,14 @@ export function FilingsPage() {
         iconColor="orange"
         subtitle="BC Societies Online filings, CRA returns, payroll & GST/HST."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
-            <Plus size={12} /> New filing
-          </button>
+          <>
+            <button className="btn-action" onClick={importRegistryHistory} disabled={importingRegistry}>
+              <FileDown size={12} /> {importingRegistry ? "Importing…" : "Import registry"}
+            </button>
+            <button className="btn-action btn-action--primary" onClick={openNew}>
+              <Plus size={12} /> New filing
+            </button>
+          </>
         }
       />
 
@@ -97,7 +131,9 @@ export function FilingsPage() {
             });
           }}
         >
-          <RecordTableToolbar
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
             icon={<ClipboardList size={14} />}
             label="All filings"
             views={tableData.views}

@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useId, useLayoutEffect, useMemo, useRef, useState
 import { createPortal } from "react-dom";
 import { ChevronDown, Check, Search } from "lucide-react";
 import { MenuRow } from "./ui";
+import { Tag, type TagColor } from "./Tag";
 
 export type SelectOption<T extends string = string> = {
   value: T;
@@ -9,6 +10,13 @@ export type SelectOption<T extends string = string> = {
   icon?: ReactNode;
   hint?: string;
   disabled?: boolean;
+  /**
+   * When set, the option's label renders as a colored `<Tag />` inside
+   * the menu (and the trigger, when selected). Matches Twenty CRM's
+   * SELECT-cell dropdown pattern — the chip you see in the row is the
+   * same chip you click on in the menu.
+   */
+  color?: TagColor;
 };
 
 type SelectProps<T extends string> = {
@@ -25,6 +33,23 @@ type SelectProps<T extends string> = {
   clearLabel?: string;
   /** Min width of the popup menu in px. Defaults to the trigger width. */
   menuMinWidth?: number;
+  /**
+   * When true, the menu is open on first render. Used for cell-edit
+   * inputs in the record table, where clicking the cell should drop
+   * straight into an open menu (no extra click on the trigger).
+   */
+  defaultOpen?: boolean;
+  /**
+   * Fires every time the menu closes — whether by selection, click-
+   * outside, or Escape. Cell-edit inputs use this to distinguish a
+   * "user cancelled" close from a "user picked something" close.
+   */
+  onClose?: () => void;
+  /** Hide the trigger entirely — used when we want the menu to float
+   * above a custom anchor (like a table cell). */
+  triggerless?: boolean;
+  /** External anchor rect for triggerless mode (pageX/Y coords). */
+  anchorRect?: { top: number; bottom: number; left: number; width: number };
   style?: React.CSSProperties;
   id?: string;
   "aria-describedby"?: string;
@@ -43,12 +68,16 @@ export function Select<T extends string>({
   clearable,
   clearLabel = "— none —",
   menuMinWidth,
+  defaultOpen = false,
+  onClose,
+  triggerless = false,
+  anchorRect,
   style,
   id,
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
 }: SelectProps<T>) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -56,14 +85,29 @@ export function Select<T extends string>({
   const generatedId = useId();
   const controlId = id ?? generatedId;
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  // Notify parents exactly once per open→close cycle. We don't want
+  // `onClose` to fire when we first mount with `defaultOpen=true`.
+  const wasOpenRef = useRef(defaultOpen);
+  useEffect(() => {
+    if (wasOpenRef.current && !open) {
+      onClose?.();
+    }
+    wasOpenRef.current = open;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const selected = options.find((o) => o.value === value);
 
+  // Any option with a `color` becomes a tagged menu — we default
+  // `searchable` on in that case so large enums stay usable.
+  const anyTagged = useMemo(() => options.some((o) => o.color), [options]);
+  const renderedSearchable = searchable ?? anyTagged;
+
   const filtered = useMemo(() => {
-    if (!searchable || !query.trim()) return options;
+    if (!renderedSearchable || !query.trim()) return options;
     const q = query.toLowerCase();
     return options.filter((o) => o.label.toLowerCase().includes(q));
-  }, [options, query, searchable]);
+  }, [options, query, renderedSearchable]);
 
   const visibleItems: (SelectOption<T> | { value: ""; label: string; _clear: true })[] = useMemo(() => {
     if (clearable) return [{ value: "" as const, label: clearLabel, _clear: true }, ...filtered];
@@ -71,10 +115,15 @@ export function Select<T extends string>({
   }, [clearable, clearLabel, filtered]);
 
   useLayoutEffect(() => {
-    if (!open || !triggerRef.current) return;
+    if (!open) return;
+    if (triggerless && anchorRect) {
+      setPos({ top: anchorRect.bottom + 4, left: anchorRect.left, width: anchorRect.width });
+      return;
+    }
+    if (!triggerRef.current) return;
     const r = triggerRef.current.getBoundingClientRect();
     setPos({ top: r.bottom + 4, left: r.left, width: r.width });
-  }, [open]);
+  }, [open, triggerless, anchorRect]);
 
   useEffect(() => {
     if (!open) return;
@@ -87,6 +136,7 @@ export function Select<T extends string>({
     const onScroll = () => setOpen(false);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        e.preventDefault();
         setOpen(false);
         triggerRef.current?.focus();
       }
@@ -110,8 +160,8 @@ export function Select<T extends string>({
     }
     const currentIdx = visibleItems.findIndex((o) => o.value === value);
     setActiveIdx(currentIdx >= 0 ? currentIdx : 0);
-    if (!searchable) setTimeout(() => menuRef.current?.focus(), 0);
-  }, [open, value, visibleItems]);
+    if (!renderedSearchable) setTimeout(() => menuRef.current?.focus(), 0);
+  }, [open, value, visibleItems, renderedSearchable]);
 
   // Keep the keyboard-focused option visible as the user moves through the menu.
   useEffect(() => {
@@ -166,33 +216,39 @@ export function Select<T extends string>({
 
   return (
     <>
-      <button
-        ref={triggerRef}
-        type="button"
-        className={triggerClass}
-        id={id}
-        onClick={() => !disabled && setOpen((o) => !o)}
-        onKeyDown={onTriggerKey}
-        disabled={disabled}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={open ? `${controlId}-menu` : undefined}
-        aria-describedby={ariaDescribedBy}
-        aria-invalid={ariaInvalid}
-        style={style}
-      >
-        <span className="select-trigger__label">
-          {selected ? (
-            <>
-              {selected.icon && <span className="select-trigger__icon">{selected.icon}</span>}
-              {selected.label}
-            </>
-          ) : (
-            <span className="select-trigger__placeholder">{placeholder}</span>
-          )}
-        </span>
-        <ChevronDown size={size === "sm" ? 12 : 14} className="select-trigger__chev" />
-      </button>
+      {!triggerless && (
+        <button
+          ref={triggerRef}
+          type="button"
+          className={triggerClass}
+          id={id}
+          onClick={() => !disabled && setOpen((o) => !o)}
+          onKeyDown={onTriggerKey}
+          disabled={disabled}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={open ? `${controlId}-menu` : undefined}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={ariaInvalid}
+          style={style}
+        >
+          <span className="select-trigger__label">
+            {selected ? (
+              selected.color ? (
+                <Tag color={selected.color} text={selected.label} />
+              ) : (
+                <>
+                  {selected.icon && <span className="select-trigger__icon">{selected.icon}</span>}
+                  {selected.label}
+                </>
+              )
+            ) : (
+              <span className="select-trigger__placeholder">{placeholder}</span>
+            )}
+          </span>
+          <ChevronDown size={size === "sm" ? 12 : 14} className="select-trigger__chev" />
+        </button>
+      )}
       {open && pos
         ? createPortal(
             <div
@@ -204,7 +260,7 @@ export function Select<T extends string>({
               onKeyDown={onMenuKey}
               style={{ top: pos.top, left: pos.left, minWidth: Math.max(menuMinWidth ?? 0, pos.width) }}
             >
-              {searchable && (
+              {renderedSearchable && (
                 <div className="menu__search">
                   <Search size={12} />
                   <input
@@ -226,14 +282,24 @@ export function Select<T extends string>({
                   const isActive = i === activeIdx;
                   const isSelected = o.value === value;
                   const isClear = "_clear" in o;
+                  const hasColor = !isClear && "color" in o && o.color;
+                  // A "clear" row renders as an outline-variant Tag so
+                  // it visually reads as an empty state.
+                  const label = isClear ? (
+                    <Tag color="transparent" variant="outline" text={o.label} />
+                  ) : hasColor ? (
+                    <Tag color={(o as SelectOption<T>).color!} text={o.label} />
+                  ) : (
+                    o.label
+                  );
                   return (
                     <MenuRow
                       key={`${o.value}-${i}`}
                       role="option"
                       ariaSelected={isSelected}
-                      icon={!isClear ? o.icon : undefined}
-                      label={o.label}
-                      hint={!isClear ? o.hint : undefined}
+                      icon={!isClear && !hasColor ? o.icon : undefined}
+                      label={label}
+                      hint={!isClear && !hasColor ? o.hint : undefined}
                       right={isSelected ? <Check size={12} className="menu__item-check" /> : undefined}
                       active={isActive}
                       disabled={!isClear && o.disabled}

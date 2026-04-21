@@ -3,24 +3,41 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
-import { Plus, Gavel, Trash2, Tag } from "lucide-react";
-import { formatDate } from "../lib/format";
+import { Drawer, Field } from "../components/ui";
+import { Plus, Gavel, Trash2 } from "lucide-react";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
-const FIELDS: FilterField<any>[] = [
-  { id: "status", label: "Status", icon: <Tag size={14} />, options: ["Active", "Satisfied", "Vacated"], match: (r, q) => r.status === q },
-];
-
+/**
+ * Court orders affecting the society — required to be kept with
+ * governance records under s.20. Detail table uses the metadata-driven
+ * record grid; the page keeps its own "Record order" drawer so new rows
+ * can attach a document.
+ */
 export function CourtOrdersPage() {
   const society = useSociety();
   const items = useQuery(api.courtOrders.list, society ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.courtOrders.create);
+  const update = useMutation(api.courtOrders.update);
   const remove = useMutation(api.courtOrders.remove);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "courtOrder",
+    viewId: currentViewId,
+  });
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -40,6 +57,9 @@ export function CourtOrdersPage() {
     setOpen(false);
   };
 
+  const records = (items ?? []) as any[];
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+
   return (
     <div className="page">
       <PageHeader
@@ -54,27 +74,59 @@ export function CourtOrdersPage() {
         }
       />
 
-      <DataTable
-        label="All court orders"
-        icon={<Gavel size={14} />}
-        data={(items ?? []) as any[]}
-        rowKey={(r) => r._id}
-        filterFields={FIELDS}
-        searchPlaceholder="Search orders…"
-        defaultSort={{ columnId: "orderDate", dir: "desc" }}
-        columns={[
-          { id: "title", header: "Title", sortable: true, accessor: (r) => r.title, render: (r) => <strong>{r.title}</strong> },
-          { id: "court", header: "Court", sortable: true, accessor: (r) => r.court },
-          { id: "fileNumber", header: "File #", accessor: (r) => r.fileNumber ?? "", render: (r) => <span className="mono">{r.fileNumber ?? "—"}</span> },
-          { id: "orderDate", header: "Date", sortable: true, accessor: (r) => r.orderDate, render: (r) => <span className="mono">{formatDate(r.orderDate)}</span> },
-          { id: "status", header: "Status", sortable: true, accessor: (r) => r.status, render: (r) => <Badge tone={r.status === "Active" ? "warn" : "neutral"}>{r.status}</Badge> },
-        ]}
-        renderRowActions={(r) => (
-          <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete court order ${r.title}`} onClick={() => remove({ id: r._id })}>
-            <Trash2 size={12} />
-          </button>
-        )}
-      />
+      {showMetadataWarning ? (
+        <div className="record-table__empty">
+          <div className="record-table__empty-title">Metadata not seeded</div>
+          <div className="record-table__empty-desc">
+            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+            court-order object metadata + default view.
+          </div>
+        </div>
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="court-orders"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+          onUpdate={async ({ recordId, fieldName, value }) => {
+            await update({
+              id: recordId as Id<"courtOrders">,
+              patch: { [fieldName]: value } as any,
+            });
+          }}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Gavel size={14} />}
+            label="All court orders"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || items === undefined}
+            renderRowActions={(r) => (
+              <button
+                className="btn btn--ghost btn--sm btn--icon"
+                aria-label={`Delete court order ${r.title}`}
+                onClick={() => remove({ id: r._id })}
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
+          />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="record-table__loading-row" />
+          ))}
+        </div>
+      )}
 
       <Drawer
         open={open}

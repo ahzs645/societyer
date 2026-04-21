@@ -24,6 +24,13 @@ export const run = mutation({
       demoMode: true,
       privacyOfficerName: "Amara Okonkwo",
       privacyOfficerEmail: "privacy@riversidecs.ca",
+      privacyProgramStatus: "Documented",
+      privacyProgramReviewedAtISO: "2026-04-21",
+      privacyProgramNotes: "Demo privacy program includes a PIPA policy, complaint process, privacy officer contact, and annual training.",
+      memberDataAccessStatus: "Society-controlled",
+      memberDataGapDocumented: false,
+      memberDataAccessReviewedAtISO: "2026-04-21",
+      memberDataAccessNotes: "Demo society maintains its member register directly in Societyer.",
       boardCadence: "Monthly",
       boardCadenceDayOfWeek: "Thursday",
       boardCadenceTime: "19:00",
@@ -870,7 +877,7 @@ export const run = mutation({
     }
 
     // Subscription plans — demo only.
-    await ctx.db.insert("subscriptionPlans", {
+    const regularPlanId = await ctx.db.insert("subscriptionPlans", {
       societyId,
       name: "Regular member",
       description: "Voting rights at AGM, weekly programs discount.",
@@ -881,7 +888,7 @@ export const run = mutation({
       membershipClass: "Regular",
       active: true,
     });
-    await ctx.db.insert("subscriptionPlans", {
+    const studentPlanId = await ctx.db.insert("subscriptionPlans", {
       societyId,
       name: "Student",
       description: "Reduced dues for verified students.",
@@ -892,7 +899,7 @@ export const run = mutation({
       membershipClass: "Student",
       active: true,
     });
-    await ctx.db.insert("subscriptionPlans", {
+    const sustainerPlanId = await ctx.db.insert("subscriptionPlans", {
       societyId,
       name: "Sustainer",
       description: "Recurring support for core operations.",
@@ -902,6 +909,29 @@ export const run = mutation({
       benefits: ["Named in annual report", "Invite to donor events"],
       active: true,
     });
+    const feePeriods = [
+      [regularPlanId, "Regular member", "Regular", 2000, "2022-04-01", "2025-03-31", "retired", "Original annual dues before AGM approval."],
+      [regularPlanId, "Regular member", "Regular", 2500, "2025-04-01", undefined, "active", "Current AGM-approved regular member fee."],
+      [studentPlanId, "Student", "Student", 500, "2024-09-01", undefined, "active", "Reduced annual dues for verified students."],
+      [sustainerPlanId, "Sustainer", undefined, 1500, "2026-01-01", undefined, "active", "Monthly recurring support tier."],
+    ] as const;
+    for (const [planId, label, membershipClass, priceCents, effectiveFrom, effectiveTo, status, notes] of feePeriods) {
+      await ctx.db.insert("membershipFeePeriods", {
+        societyId,
+        planId,
+        label,
+        membershipClass,
+        priceCents,
+        currency: "CAD",
+        interval: planId === sustainerPlanId ? "month" : "year",
+        effectiveFrom,
+        effectiveTo,
+        status,
+        notes,
+        createdAtISO: new Date().toISOString(),
+        updatedAtISO: new Date().toISOString(),
+      });
+    }
 
     // A couple of notifications so the bell lights up on first load.
     await ctx.db.insert("notifications", {
@@ -1063,6 +1093,70 @@ export const run = mutation({
       issuedAtISO: "2026-02-15T10:00:00Z",
       location: "Vancouver, BC",
       isNonCash: false,
+    });
+
+    const vancouverFoundationSourceId = await ctx.db.insert("fundingSources", {
+      societyId,
+      name: "Vancouver Foundation",
+      sourceType: "Donor",
+      status: "Active",
+      contactName: "Community grants officer",
+      email: "grants@example.foundation",
+      expectedAnnualCents: 500000,
+      committedCents: 500000,
+      receivedToDateCents: 500000,
+      currency: "CAD",
+      startDate: "2025-12-20",
+      restrictedPurpose: "Community arts programming",
+      notes: "Major institutional funder tracked for donor acknowledgements and renewal planning.",
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+    await ctx.db.insert("fundingSourceEvents", {
+      societyId,
+      sourceId: vancouverFoundationSourceId,
+      eventDate: "2025-12-20",
+      kind: "Received",
+      label: "Year-end community program contribution",
+      amountCents: 500000,
+      notes: "Receipt 000001 issued 2026-01-05.",
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+    const memberDuesSourceId = await ctx.db.insert("fundingSources", {
+      societyId,
+      name: "University student-fee remittance",
+      sourceType: "Member dues",
+      status: "Active",
+      collectionAgentName: "University finance office",
+      collectionModel: "third_party",
+      memberDisclosureLevel: "aggregate_amount",
+      estimatedMemberCount: 120,
+      collectionFrequency: "semester",
+      collectionScheduleNotes: "Collected for Fall and Winter semesters. Summer semester is excluded unless a special agreement is recorded.",
+      nextExpectedCollectionDate: "2026-09-30",
+      reconciliationCadence: "term",
+      expectedAnnualCents: 300000,
+      receivedToDateCents: 125000,
+      currency: "CAD",
+      startDate: "2025-04-01",
+      notes: "Aggregate member-fee revenue collected by the university without a member-level remittance list.",
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+    await ctx.db.insert("fundingSourceEvents", {
+      societyId,
+      sourceId: memberDuesSourceId,
+      eventDate: "2026-04-01",
+      kind: "Received",
+      label: "Spring term fee remittance",
+      amountCents: 125000,
+      memberCount: 50,
+      periodStart: "2026-01-01",
+      periodEnd: "2026-04-30",
+      attributionStatus: "aggregate",
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
     });
 
     // Employees
@@ -1310,7 +1404,10 @@ async function wipe(ctx: any) {
     "meetings",
     "directors",
     "members",
+    "fundingSourceEvents",
+    "fundingSources",
     "memberSubscriptions",
+    "membershipFeePeriods",
     "subscriptionPlans",
     "waveCacheStructures",
     "waveCacheResources",

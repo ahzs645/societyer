@@ -38,6 +38,7 @@ import type * as filingExports from "../filingExports.js";
 import type * as filings from "../filings.js";
 import type * as financialHub from "../financialHub.js";
 import type * as financials from "../financials.js";
+import type * as fundingSources from "../fundingSources.js";
 import type * as goals from "../goals.js";
 import type * as grants from "../grants.js";
 import type * as http from "../http.js";
@@ -133,6 +134,7 @@ declare const fullApi: ApiFromModules<{
   filings: typeof filings;
   financialHub: typeof financialHub;
   financials: typeof financials;
+  fundingSources: typeof fundingSources;
   goals: typeof goals;
   grants: typeof grants;
   http: typeof http;

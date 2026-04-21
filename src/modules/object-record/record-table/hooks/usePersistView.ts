@@ -54,6 +54,8 @@ export function usePersistView({
         .sort((a, b) => a.position - b.position)
         .map((c) => c.viewFieldId as Id<"viewFields">),
     });
+    // Promote live state into `savedView` so isDirty flips back to false.
+    handle.get().markSaved();
   }, [updateField, updateView, reorderFields, handle]);
 
   const saveAsNewView = useCallback(
@@ -80,6 +82,8 @@ export function usePersistView({
           size: col.size,
         });
       }
+      // New view is now the saved baseline.
+      handle.get().markSaved();
       return viewId;
     },
     [createView, addField, societyId, objectMetadataId, handle],

@@ -98,11 +98,33 @@ function buildFlags(args: {
       text: `${missingConsent.length} director(s) missing written consent.`,
       citationId: "BC-SOC-DIRECTOR-CONSENT",
     });
+  const privacyProgramStatus = society.privacyProgramStatus ?? (society.privacyPolicyDocId ? "Documented" : "Unknown");
+  const memberDataAccessStatus = society.memberDataAccessStatus ?? "Unknown";
+  const memberDataGapStatusRequiresMemo =
+    memberDataAccessStatus === "Institution-held" || memberDataAccessStatus === "Partially available";
+  if (privacyProgramStatus !== "Documented")
+    flags.push({
+      level: "warn",
+      text: "Privacy policy/practices are not marked documented.",
+      citationId: "PIPA-POLICY",
+    });
   if (!society.privacyPolicyDocId)
     flags.push({
       level: "warn",
-      text: "No PIPA privacy policy on file.",
+      text: "No PIPA policy evidence linked; this is a document-evidence gap, not a registry requirement.",
       citationId: "PIPA-POLICY",
+    });
+  if (memberDataAccessStatus === "Unknown")
+    flags.push({
+      level: "warn",
+      text: "Member data access status is not documented.",
+      citationIds: ["PIPA-POLICY", "BC-SOC-RECORDS"],
+    });
+  if (memberDataGapStatusRequiresMemo && !society.memberDataGapDocumented)
+    flags.push({
+      level: "warn",
+      text: "Member list not fully controlled by society; document the data-access gap.",
+      citationIds: ["PIPA-POLICY", "BC-SOC-RECORDS"],
     });
   if (!society.constitutionDocId)
     flags.push({

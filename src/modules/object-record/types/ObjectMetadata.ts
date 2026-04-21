@@ -22,24 +22,30 @@ export type ObjectMetadata = {
   fields: FieldMetadata[];
 };
 
-export function hydrateObjectMetadata(raw: {
-  object: any;
-  fields: any[];
-}): ObjectMetadata {
+/**
+ * Accepts the flat denormalized shape returned by
+ * `api.objectMetadata.getFullTableSetup` — `{ ...object, fields: [...] }` —
+ * as well as the legacy wrapped `{ object, fields }` shape.
+ */
+export function hydrateObjectMetadata(raw: any): ObjectMetadata {
+  const isLegacyWrapped =
+    raw && typeof raw === "object" && "object" in raw && "fields" in raw;
+  const object = isLegacyWrapped ? raw.object : raw;
+  const fields: any[] = isLegacyWrapped ? raw.fields : (raw.fields ?? []);
   return {
-    _id: String(raw.object._id),
-    nameSingular: raw.object.nameSingular,
-    namePlural: raw.object.namePlural,
-    labelSingular: raw.object.labelSingular,
-    labelPlural: raw.object.labelPlural,
-    description: raw.object.description,
-    icon: raw.object.icon,
-    iconColor: raw.object.iconColor,
-    labelIdentifierFieldName: raw.object.labelIdentifierFieldName,
-    imageIdentifierFieldName: raw.object.imageIdentifierFieldName,
-    isSystem: !!raw.object.isSystem,
-    isActive: raw.object.isActive !== false,
-    routePath: raw.object.routePath,
-    fields: raw.fields.map(hydrateFieldMetadata),
+    _id: String(object._id),
+    nameSingular: object.nameSingular,
+    namePlural: object.namePlural,
+    labelSingular: object.labelSingular,
+    labelPlural: object.labelPlural,
+    description: object.description,
+    icon: object.icon,
+    iconColor: object.iconColor,
+    labelIdentifierFieldName: object.labelIdentifierFieldName,
+    imageIdentifierFieldName: object.imageIdentifierFieldName,
+    isSystem: !!object.isSystem,
+    isActive: object.isActive !== false,
+    routePath: object.routePath,
+    fields: fields.map(hydrateFieldMetadata),
   };
 }

@@ -5,19 +5,17 @@ import { useSociety } from "../hooks/useSociety";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
-import { Sliders, Plus, Trash2, Tag } from "lucide-react";
-
-type EntityType = "members" | "directors" | "volunteers" | "employees";
-
-const ENTITY_LABELS: Record<EntityType, string> = {
-  members: "Members",
-  directors: "Directors",
-  volunteers: "Volunteers",
-  employees: "Employees",
-};
+import { Drawer, Field } from "../components/ui";
+import { Sliders, Plus, Trash2 } from "lucide-react";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 const FIELD_KINDS = [
   { value: "text", label: "Text" },
@@ -28,6 +26,20 @@ const FIELD_KINDS = [
   { value: "phone", label: "Phone" },
 ];
 
+const ENTITY_LABELS: Record<string, string> = {
+  members: "Members",
+  directors: "Directors",
+  volunteers: "Volunteers",
+  employees: "Employees",
+};
+
+/**
+ * Custom field definitions. The record table handles search / filter /
+ * sort / column visibility; inline edits route to
+ * `customFields.updateDefinition`. `entityType` and `key` are flagged
+ * read-only in the seed so they can't be changed after creation
+ * (matching the drawer's own `disabled` attribute on those inputs).
+ */
 export function CustomFieldsPage() {
   const society = useSociety();
   const definitions = useQuery(
@@ -42,6 +54,14 @@ export function CustomFieldsPage() {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [draft, setDraft] = useState<any>(null);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "customFieldDefinition",
+    viewId: currentViewId,
+  });
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -55,11 +75,6 @@ export function CustomFieldsPage() {
       required: false,
       description: "",
     });
-    setDrawerOpen(true);
-  };
-
-  const openEdit = (row: any) => {
-    setDraft({ ...row });
     setDrawerOpen(true);
   };
 
@@ -118,22 +133,8 @@ export function CustomFieldsPage() {
     toast.success("Deleted");
   };
 
-  const filterFields: FilterField<any>[] = [
-    {
-      id: "entityType",
-      label: "Category",
-      icon: <Tag size={14} />,
-      options: Object.keys(ENTITY_LABELS),
-      match: (row, q) => row.entityType === q,
-    },
-    {
-      id: "kind",
-      label: "Kind",
-      icon: <Tag size={14} />,
-      options: FIELD_KINDS.map((k) => k.value),
-      match: (row, q) => row.kind === q,
-    },
-  ];
+  const records = (definitions ?? []) as any[];
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   return (
     <div className="page">
@@ -149,69 +150,74 @@ export function CustomFieldsPage() {
         }
       />
 
-      <DataTable
-        label="Definitions"
-        icon={<Sliders size={14} />}
-        data={(definitions ?? []) as any[]}
-        loading={definitions === undefined}
-        rowKey={(r) => r._id}
-        searchPlaceholder="Search label, key, category…"
-        defaultSort={{ columnId: "entityType", dir: "asc" }}
-        viewsKey="custom-fields"
-        emptyMessage="No custom fields yet."
-        filterFields={filterFields}
-        onRowClick={openEdit}
-        rowActionLabel={(r) => `Edit ${r.label}`}
-        columns={[
-          {
-            id: "entityType",
-            header: "Category",
-            sortable: true,
-            accessor: (r) => r.entityType,
-            render: (r) => (
-              <Badge tone="neutral">{ENTITY_LABELS[r.entityType as EntityType] ?? r.entityType}</Badge>
-            ),
-          },
-          {
-            id: "label",
-            header: "Label",
-            sortable: true,
-            accessor: (r) => r.label,
-            render: (r) => <strong>{r.label}</strong>,
-          },
-          {
-            id: "key",
-            header: "Key",
-            sortable: true,
-            accessor: (r) => r.key,
-            render: (r) => <span className="mono">{r.key}</span>,
-          },
-          {
-            id: "kind",
-            header: "Kind",
-            sortable: true,
-            accessor: (r) => r.kind,
-            render: (r) => <span className="cell-tag">{r.kind}</span>,
-          },
-          {
-            id: "required",
-            header: "Required",
-            sortable: true,
-            accessor: (r) => (r.required ? 1 : 0),
-            render: (r) =>
-              r.required ? <Badge tone="warn">Required</Badge> : <span className="muted">—</span>,
-          },
-        ]}
-        renderRowActions={(row) => (
-          <button
-            className="btn btn--ghost btn--sm btn--icon"
-            aria-label={`Delete ${row.label}`}
-            onClick={() => doDelete(row)}
-          >
-            <Trash2 size={12} />
-          </button>
-        )}
-      />
+      {showMetadataWarning ? (
+        <div className="record-table__empty">
+          <div className="record-table__empty-title">Metadata not seeded</div>
+          <div className="record-table__empty-desc">
+            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+            custom-field-definition object metadata + default view.
+          </div>
+        </div>
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="custom-fields"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+          onRecordClick={(_, record) => {
+            setDraft({ ...record });
+            setDrawerOpen(true);
+          }}
+          onUpdate={async ({ recordId, fieldName, value }) => {
+            // `entityType` and `key` are immutable after create — the
+            // seed marks `key` read-only; entityType is filterable but
+            // not meant to be edited inline (ignore if it slips through).
+            if (fieldName === "entityType" || fieldName === "key") return;
+            const patch: any = { id: recordId };
+            if (fieldName === "label") patch.label = value;
+            else if (fieldName === "kind") patch.kind = value;
+            else if (fieldName === "required") patch.required = value;
+            else if (fieldName === "description") patch.description = value;
+            else if (fieldName === "order") patch.order = value;
+            else return;
+            await updateDef(patch);
+          }}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Sliders size={14} />}
+            label="Definitions"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || definitions === undefined}
+            renderRowActions={(row) => (
+              <button
+                className="btn btn--ghost btn--sm btn--icon"
+                aria-label={`Delete ${row.label}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  doDelete(row);
+                }}
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
+          />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="record-table__loading-row" />
+          ))}
+        </div>
+      )}
 
       <Drawer
         open={drawerOpen}

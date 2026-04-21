@@ -6,12 +6,26 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
-import { DataTable } from "../components/DataTable";
 import { Globe, Plus, Save, Trash2, Copy } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
-import { formatDate } from "../lib/format";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
+/**
+ * Public transparency page. The top card keeps the existing public-
+ * settings summary + edit flow; the publications list is now a
+ * metadata-driven record table. Inline edits route to
+ * `upsertPublication` which already handles the publish-guardrails
+ * (status=Published requires reviewStatus=Approved).
+ */
 export function TransparencyPage() {
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
@@ -34,6 +48,15 @@ export function TransparencyPage() {
   );
   const [settingsDraft, setSettingsDraft] = useState<any | null>(null);
   const [publicationDraft, setPublicationDraft] = useState<any | null>(null);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "publication",
+    viewId: currentViewId,
+  });
+
   const absolutePublicHref = useMemo(() => {
     if (typeof window === "undefined") return publicHref;
     return `${window.location.origin}${publicHref}`;
@@ -43,6 +66,9 @@ export function TransparencyPage() {
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
+
+  const records = (publications ?? []) as any[];
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   return (
     <div className="page">
@@ -152,45 +178,110 @@ export function TransparencyPage() {
         </div>
       </div>
 
-      <DataTable
-        label="Published items"
-        icon={<Globe size={14} />}
-        data={(publications ?? []) as any[]}
-        rowKey={(row) => String(row._id)}
-        searchPlaceholder="Search publications…"
-        defaultSort={{ columnId: "publishedAtISO", dir: "desc" }}
-        columns={[
-          { id: "title", header: "Title", sortable: true, accessor: (row) => row.title, render: (row) => <strong>{row.title}</strong> },
-          { id: "category", header: "Category", sortable: true, accessor: (row) => row.category, render: (row) => <Badge>{row.category}</Badge> },
-          { id: "status", header: "Status", sortable: true, accessor: (row) => row.status, render: (row) => <Badge tone={row.status === "Published" ? "success" : row.status === "Archived" ? "danger" : "warn"}>{row.status}</Badge> },
-          { id: "publishedAtISO", header: "Published", sortable: true, accessor: (row) => row.publishedAtISO ?? "", render: (row) => <span className="mono">{row.publishedAtISO ? formatDate(row.publishedAtISO) : "—"}</span> },
-          { id: "summary", header: "Summary", accessor: (row) => row.summary ?? "", render: (row) => <span className="muted">{row.summary ?? "—"}</span> },
-        ]}
-        renderRowActions={(row) => (
-          <>
-            <button className="btn btn--ghost btn--sm" onClick={() => setPublicationDraft({ ...row, id: row._id, documentId: row.documentId ?? "", url: row.url ?? "", summary: row.summary ?? "" })}>
-              Edit
-            </button>
-            <button
-              className="btn btn--ghost btn--sm btn--icon"
-              aria-label={`Delete publication ${row.title}`}
-              onClick={async () => {
-                const ok = await confirm({
-                  title: "Remove publication",
-                  message: `"${row.title}" will be removed from the internal publication list and the public page if it is live.`,
-                  confirmLabel: "Remove",
-                  tone: "danger",
-                });
-                if (!ok) return;
-                await removePublication({ id: row._id, actingUserId });
-                toast.success("Publication removed");
-              }}
-            >
-              <Trash2 size={12} />
-            </button>
-          </>
-        )}
-      />
+      {showMetadataWarning ? (
+        <div className="record-table__empty">
+          <div className="record-table__empty-title">Metadata not seeded</div>
+          <div className="record-table__empty-desc">
+            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+            publication object metadata + default view.
+          </div>
+        </div>
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="publications"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+          onUpdate={async ({ recordId, fieldName, value }) => {
+            // Route everything back through upsertPublication so the
+            // publish-guardrails stay intact. We copy the existing row
+            // from the local `publications` list and override just the
+            // edited field, since upsertPublication wants the full set
+            // of values.
+            const existing = (publications ?? []).find(
+              (row: any) => row._id === recordId,
+            ) as any;
+            if (!existing) return;
+            const merged = {
+              ...existing,
+              [fieldName]: value,
+            };
+            await upsertPublication({
+              id: recordId as Id<"publications">,
+              societyId: society._id,
+              title: merged.title,
+              summary: merged.summary || undefined,
+              category: merged.category,
+              documentId: merged.documentId || undefined,
+              url: merged.url || undefined,
+              publishedAtISO: merged.publishedAtISO || undefined,
+              status: merged.status,
+              reviewStatus: merged.reviewStatus,
+              approvedByUserId: merged.approvedByUserId,
+              approvedAtISO: merged.approvedAtISO,
+              featured: merged.featured,
+              actingUserId,
+            });
+          }}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Globe size={14} />}
+            label="Published items"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || publications === undefined}
+            renderRowActions={(row) => (
+              <>
+                <button
+                  className="btn btn--ghost btn--sm"
+                  onClick={() =>
+                    setPublicationDraft({
+                      ...row,
+                      id: row._id,
+                      documentId: row.documentId ?? "",
+                      url: row.url ?? "",
+                      summary: row.summary ?? "",
+                    })
+                  }
+                >
+                  Edit
+                </button>
+                <button
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Delete publication ${row.title}`}
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: "Remove publication",
+                      message: `"${row.title}" will be removed from the internal publication list and the public page if it is live.`,
+                      confirmLabel: "Remove",
+                      tone: "danger",
+                    });
+                    if (!ok) return;
+                    await removePublication({ id: row._id, actingUserId });
+                    toast.success("Publication removed");
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </>
+            )}
+          />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="record-table__loading-row" />
+          ))}
+        </div>
+      )}
 
       <Drawer
         open={!!settingsDraft}

@@ -115,11 +115,11 @@ const FALLBACK_CONNECTORS: ConnectorManifest[] = [
     ],
     utility: {
       title: "BC Registry filing export",
-      description: "Save a BC Registry browser profile, then run a page utility or Chrome extension on a society filing-history page.",
+      description: "Run a live BC Registry page utility on a society filing-history page.",
       steps: [
         "Open BC Registry in the live browser and navigate to the target society filing history.",
-        "Save the profile so authenticated registry cookies remain available to browser-backed utilities.",
-        "Run the filing-history export utility on the current page to create the CSV and download every digital document.",
+        "Run the filing-history export while the live browser is still signed in.",
+        "Save or stop the browser after export; closed BC Registry profiles can require a fresh login.",
       ],
     },
   },
@@ -176,6 +176,7 @@ export function BrowserConnectorsPage() {
   const [businessId, setBusinessId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [bcRegistryCorpNum, setBcRegistryCorpNum] = useState("S0048345");
   const [pasteText, setPasteText] = useState("");
   const [workspaceConnectorId, setWorkspaceConnectorId] = useState<string | null>(null);
 
@@ -439,6 +440,36 @@ export function BrowserConnectorsPage() {
     }
   }
 
+  async function scanBcRegistryFilingHistory() {
+    const bcRegistrySession = sessions.find((session) => connectorForSession(session, availableConnectors)?.id === "bc-registry") ?? null;
+    setBusy(true);
+    try {
+      const path = bcRegistrySession
+        ? `/connectors/bc-registry/auth/sessions/${bcRegistrySession.sessionId}/actions/filingHistoryExport`
+        : "/connectors/bc-registry/actions/filingHistoryExport";
+      const payload = await apiFetch<{ data: any }>(path, {
+        method: "POST",
+        body: JSON.stringify({
+          societyId: society._id,
+          profileKey,
+          corpNum: bcRegistryCorpNum.trim() || undefined,
+          includePdfProbe: true,
+          downloadPdfs: true,
+        }),
+      });
+      setLastRun(payload.data);
+      toast.success(
+        "BC Registry filing export complete",
+        `${payload.data?.filingCount ?? 0} filings, ${payload.data?.download?.downloadedCount ?? 0} PDF(s) saved`,
+      );
+      await refresh();
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not scan BC Registry filing history");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function finishSession(sessionId: string) {
     setBusy(true);
     try {
@@ -679,7 +710,7 @@ export function BrowserConnectorsPage() {
             <div className="card">
               <div className="card__head">
                 <h2 className="card__title">Live browser</h2>
-                <span className="card__subtitle">{liveSession ? liveSession.currentUrl : "No active browser for this app."}</span>
+                <span className="card__subtitle">{liveSession ? "Interactive browser for this app." : "No active browser for this app."}</span>
               </div>
               <div className="card__body" style={{ padding: 0 }}>
                 {runnerReady ? (
@@ -741,6 +772,35 @@ export function BrowserConnectorsPage() {
                     ))}
                   </div>
                 ) : null}
+                {selectedConnector.id === "bc-registry" && (
+                  <div className="panel" style={{ padding: 12 }}>
+                    <div className="grid two">
+                      <Field label="Society number">
+                        <input
+                          className="input"
+                          value={bcRegistryCorpNum}
+                          onChange={(event) => setBcRegistryCorpNum(event.target.value)}
+                          placeholder="S0048345"
+                        />
+                      </Field>
+                      <div className="field">
+                        <label className="field__label">Mode</label>
+                        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                          <Badge tone={liveSession ? "success" : "warn"}>{liveSession ? "Live session" : "Saved profile"}</Badge>
+                          <Badge tone="info">CSV + PDFs</Badge>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="muted" style={{ marginTop: 8 }}>
+                      Run this while the BC Registry live browser is signed in. The export reads the filing-history table, saves the CSV, and downloads every digital PDF to the local export folder.
+                    </div>
+                    <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                      <button className="btn btn--accent" disabled={busy || !runnerReady} onClick={scanBcRegistryFilingHistory}>
+                        <Play size={14} /> Export filings & PDFs
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {selectedConnector.actions.length > 0 && (
                   <div className="col" style={{ gap: 8 }}>
                     <div className="muted">Available actions</div>
@@ -857,11 +917,11 @@ export function BrowserConnectorsPage() {
                         <div className="row" style={{ gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
                           <Badge tone="success">Running</Badge>
                           {sessionConnector && <Badge tone="info">{sessionConnector.name}</Badge>}
-                          <strong>{session.profileKey}</strong>
+                          <strong>Active browser session</strong>
                         </div>
                         <div className="muted mono" style={{ fontSize: "var(--fs-sm)", overflowWrap: "anywhere" }}>{session.sessionId}</div>
                         <div className="muted" style={{ marginTop: 4, overflowWrap: "anywhere", wordBreak: "break-word" }}>
-                          {session.currentUrl} · started {formatDateTime(session.startedAtISO)}
+                          Started {formatDateTime(session.startedAtISO)}
                         </div>
                       </div>
                       <div className="row" style={{ gap: 8, flex: "0 0 auto", flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -892,10 +952,23 @@ export function BrowserConnectorsPage() {
                   <div className="muted">
                     {lastRun.import
                       ? `${lastRun.import.transactions} imported transactions across ${lastRun.import.accounts} account(s)`
+                      : lastRun.filingCount != null
+                      ? `${lastRun.filingCount} filings, ${lastRun.documentCount ?? 0} digital document(s), ${lastRun.paperOnlyCount ?? 0} paper-only row(s)`
                       : lastRun.transactionCount != null
                       ? `${lastRun.transactionCount} transactions across ${lastRun.pageCount} page(s)`
                       : lastRun.title ?? lastRun.currentUrl}
                   </div>
+                  {lastRun.pdfProbe && (
+                    <div className="muted" style={{ marginTop: 6 }}>
+                      Sample PDF check: {lastRun.pdfProbe.startsWithPdf ? "valid PDF" : "not a PDF"} ({lastRun.pdfProbe.contentType ?? "unknown type"})
+                    </div>
+                  )}
+                  {lastRun.download && (
+                    <div className="muted" style={{ marginTop: 6 }}>
+                      Saved {lastRun.download.downloadedCount ?? 0} PDF(s), {lastRun.download.failedCount ?? 0} failure(s)
+                      {lastRun.download.exportPublicDirectory ? ` in ${lastRun.download.exportPublicDirectory}` : ""}.
+                    </div>
+                  )}
                   {lastRun.normalized?.transactionsByAccount?.length > 0 && (
                     <div className="row" style={{ gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                       {lastRun.normalized.transactionsByAccount.slice(0, 5).map((row: any) => (

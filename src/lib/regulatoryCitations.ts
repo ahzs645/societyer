@@ -49,6 +49,15 @@ export interface RegulatoryCitation {
   /** Optional — tie this citation to one of the LegalGuideRule topics
    * (jurisdictionGuideTracks.ts) so the two can be cross-linked later. */
   relatedGuideTopic?: string;
+  /**
+   * Optional verbatim passage used to build a Chromium text-fragment URL
+   * (`#:~:text=...`) so clicking through highlights the exact sentence on
+   * the source page. If omitted, the helper falls back to `quote` — which
+   * only highlights reliably when `quote` is word-for-word identical to
+   * the text on the destination page. For paraphrased quotes, set this to
+   * a short verbatim snippet you know appears in the source.
+   */
+  highlight?: string;
 }
 
 const BC_LAWS_PIPA =
@@ -65,8 +74,17 @@ const CRA_RECORDS_URL =
   "https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/keeping-records.html";
 const CRA_CHARITIES_BOOKS_URL =
   "https://www.canada.ca/en/revenue-agency/services/charities-giving/charities/operating-a-registered-charity/books-records.html";
+const BC_OIPC_PRIVATE_ORGS_URL =
+  "https://www.oipc.bc.ca/for-private-organizations/";
+const BC_OIPC_PRIVACY_POLICY_GUIDE_URL =
+  "https://www.oipc.bc.ca/documents/guidance-documents/2164";
+const BC_OIPC_PRIVACYRIGHT_POLICY_WEBINAR_URL =
+  "https://www.oipc.bc.ca/privacyright/webinars/webinar-2b/";
+const OPC_PRIVACY_PLAN_TOOL_URL =
+  "https://services.priv.gc.ca/outil-tool";
 
 const BC_CURRENT_TO_ISO = "2026-04-14";
+const PRIVACY_RESOURCE_CURRENT_TO_ISO = "2026-04-21";
 
 export const regulatoryCitations: Record<string, RegulatoryCitation> = {
   // ---------------------------------------------------------------
@@ -152,6 +170,70 @@ export const regulatoryCitations: Record<string, RegulatoryCitation> = {
     sourceCurrentToISO: BC_CURRENT_TO_ISO,
     quote:
       "On request of an individual, an organization must provide the individual with the following: (a) the individual's personal information under the control of the organization; (b) information about the ways in which the personal information referred to in paragraph (a) has been and is being used by the organization; (c) the names of the individuals and organizations to whom the personal information referred to in paragraph (a) has been disclosed by the organization.",
+  },
+  "OIPC-PIPA-PRIVATE-ORGS": {
+    id: "OIPC-PIPA-PRIVATE-ORGS",
+    source: "BC OIPC — Resources for private organizations",
+    fullCitation:
+      "Office of the Information and Privacy Commissioner for British Columbia, For Private Organizations. Reviewed " +
+      PRIVACY_RESOURCE_CURRENT_TO_ISO +
+      ".",
+    jurisdiction: "CA-BC",
+    instrument: "BC OIPC guidance",
+    url: BC_OIPC_PRIVATE_ORGS_URL,
+    sourceCurrentToISO: PRIVACY_RESOURCE_CURRENT_TO_ISO,
+    quote:
+      "BC OIPC provides practical information for private-sector organizations, including not-for-profits and charities, to learn more about PIPA and how to comply.",
+    caveat:
+      "This is guidance, not legal advice. Use it with the text of PIPA and organization-specific review.",
+  },
+  "OIPC-PIPA-PRIVACY-POLICY-GUIDE": {
+    id: "OIPC-PIPA-PRIVACY-POLICY-GUIDE",
+    source: "BC OIPC — Developing a privacy policy under PIPA",
+    fullCitation:
+      "Office of the Information and Privacy Commissioner for British Columbia, Developing a privacy policy under the Personal Information Protection Act (PIPA). Reviewed " +
+      PRIVACY_RESOURCE_CURRENT_TO_ISO +
+      ".",
+    jurisdiction: "CA-BC",
+    instrument: "BC OIPC guidance",
+    url: BC_OIPC_PRIVACY_POLICY_GUIDE_URL,
+    sourceCurrentToISO: PRIVACY_RESOURCE_CURRENT_TO_ISO,
+    quote:
+      "BC OIPC guidance explains that PIPA requires organizations to develop and follow policies and practices needed for compliance, and to make information about them available on request.",
+    caveat:
+      "This is the best BC-specific source for shaping a privacy policy, but it is guidance rather than a fill-in-the-blanks official policy template.",
+  },
+  "OIPC-PRIVACYRIGHT-WRITE-POLICY": {
+    id: "OIPC-PRIVACYRIGHT-WRITE-POLICY",
+    source: "BC OIPC PrivacyRight — How to write a privacy policy",
+    fullCitation:
+      "Office of the Information and Privacy Commissioner for British Columbia, PrivacyRight Webinar 2b: How to write a privacy policy. Reviewed " +
+      PRIVACY_RESOURCE_CURRENT_TO_ISO +
+      ".",
+    jurisdiction: "CA-BC",
+    instrument: "BC OIPC PrivacyRight",
+    url: BC_OIPC_PRIVACYRIGHT_POLICY_WEBINAR_URL,
+    sourceCurrentToISO: PRIVACY_RESOURCE_CURRENT_TO_ISO,
+    quote:
+      "BC OIPC's PrivacyRight webinar covers how to write a privacy policy for an organization.",
+    caveat:
+      "Use this as an educational resource for drafting and review; the organization remains responsible for its own compliance.",
+  },
+  "OPC-PRIVACY-PLAN-TOOL": {
+    id: "OPC-PRIVACY-PLAN-TOOL",
+    source: "Office of the Privacy Commissioner of Canada — Privacy plan tool",
+    fullCitation:
+      "Office of the Privacy Commissioner of Canada, Build a privacy plan for your business. Reviewed " +
+      PRIVACY_RESOURCE_CURRENT_TO_ISO +
+      ".",
+    jurisdiction: "CA",
+    instrument: "Federal OPC guidance",
+    url: OPC_PRIVACY_PLAN_TOOL_URL,
+    sourceCurrentToISO: PRIVACY_RESOURCE_CURRENT_TO_ISO,
+    quote:
+      "The federal OPC privacy tool walks organizations through questions and provides an information audit, consent provisions, a security plan, training needs assessment, sample privacy policies, and other documentation.",
+    caveat:
+      "This tool is PIPEDA-oriented and not BC PIPA-specific. Treat it as a supplemental drafting aid, not proof of BC PIPA compliance.",
   },
 
   // ---------------------------------------------------------------
@@ -358,3 +440,96 @@ export function getRegulatoryCitation(
 export const REGULATORY_CITATION_IDS = Object.keys(
   regulatoryCitations,
 ) as (keyof typeof regulatoryCitations)[];
+
+// ---------------------------------------------------------------------------
+// Text Fragment (`#:~:text=...`) URL helpers
+//
+// Chromium-based browsers support "Scroll to Text Fragment" — a URL hash
+// of the form `#:~:text=encoded%20text` (optionally with `,textEnd`) that
+// scrolls to and highlights that text on the destination page. See:
+//   https://wicg.github.io/scroll-to-text-fragment/
+// ---------------------------------------------------------------------------
+
+/** Max characters to embed in a text-fragment start or end segment.
+ * Longer than this and we switch to the `textStart,textEnd` shape so the
+ * URL stays under typical browser limits and has a better chance of
+ * matching when the source page wraps or reflows the text. */
+const FRAGMENT_SEGMENT_MAX_CHARS = 220;
+
+/** Words to grab from each end of a long passage when we fall back to the
+ * `textStart,textEnd` pattern. */
+const FRAGMENT_EDGE_WORDS = 8;
+
+/** URL-encode a text-fragment segment. Encodes `,` and `-` as well because
+ * they're delimiters in the text-fragment grammar. */
+function encodeFragmentSegment(text: string): string {
+  return encodeURIComponent(text.trim())
+    .replace(/-/g, "%2D")
+    .replace(/,/g, "%2C");
+}
+
+/** Collapse whitespace so multi-line quotes still match page text. */
+function normaliseForFragment(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Build a deep link that highlights the cited passage on the source page
+ * using a Chromium text-fragment (`#:~:text=...`). For long passages,
+ * uses the `textStart,textEnd` shape so slight reflow on the destination
+ * doesn't break the match.
+ *
+ * Falls back to the bare URL when there's no highlight-able text.
+ */
+export function buildHighlightUrl(
+  citation: Pick<RegulatoryCitation, "url" | "quote" | "highlight">,
+): string {
+  const baseUrl = citation.url.split("#")[0];
+  const raw = citation.highlight ?? citation.quote;
+  if (!raw) return citation.url;
+
+  const passage = normaliseForFragment(raw);
+  if (!passage) return citation.url;
+
+  // Short enough to include verbatim — highest-fidelity highlight.
+  if (passage.length <= FRAGMENT_SEGMENT_MAX_CHARS) {
+    return `${baseUrl}#:~:text=${encodeFragmentSegment(passage)}`;
+  }
+
+  // Otherwise use the range shape: first few words , last few words.
+  const words = passage.split(" ");
+  const startWords = words.slice(0, FRAGMENT_EDGE_WORDS).join(" ");
+  const endWords = words.slice(-FRAGMENT_EDGE_WORDS).join(" ");
+  return `${baseUrl}#:~:text=${encodeFragmentSegment(startWords)},${encodeFragmentSegment(endWords)}`;
+}
+
+/**
+ * Copy a string to the clipboard. Returns true on success. Falls back to
+ * a hidden textarea for environments without `navigator.clipboard` (e.g.
+ * non-secure contexts, older Safari inside an iframe, etc.).
+ */
+export async function copyTextToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // fall through to the textarea approach
+  }
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-1000px";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(textarea);
+    return ok;
+  } catch {
+    return false;
+  }
+}

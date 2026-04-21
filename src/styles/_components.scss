@@ -901,6 +901,34 @@
 .citation-popover__link:hover { text-decoration: underline; }
 .citation-popover__link--muted { color: inherit; opacity: 0.7; }
 
+.citation-popover__copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  margin: -2px 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-xs);
+  line-height: 1.2;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: background 0.08s ease, opacity 0.08s ease, border-color 0.08s ease;
+}
+.citation-popover__copy:hover,
+.citation-popover__copy:focus-visible {
+  outline: none;
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.32);
+}
+.citation-popover__copy:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
 /* ============================================================
    Checkbox / Toggle / Radio
    ============================================================ */

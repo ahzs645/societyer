@@ -6,12 +6,9 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
+import { Drawer, Field } from "../components/ui";
 import {
   Inbox,
-  Mail,
   Plus,
   CheckCircle2,
   XCircle,
@@ -19,10 +16,17 @@ import {
   Copy,
   Paperclip,
   Trash2,
-  Tag,
-  Activity,
 } from "lucide-react";
 import { formatDateTime } from "../lib/format";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 type PendingEmail = {
   _id: string;
@@ -43,8 +47,6 @@ type PendingEmail = {
   notes?: string;
 };
 
-const STATUSES = ["draft", "ready", "sent", "cancelled"];
-
 const STATUS_TONE: Record<string, "neutral" | "warn" | "success" | "danger" | "info"> = {
   draft: "neutral",
   ready: "warn",
@@ -52,6 +54,11 @@ const STATUS_TONE: Record<string, "neutral" | "warn" | "success" | "danger" | "i
   cancelled: "danger",
 };
 
+/**
+ * Outbox of queued / sent emails. Metadata-driven columns; mutations
+ * (mark-sent, cancel, delete) fire from row actions because the
+ * underlying rows are a state machine, not free-edit rows.
+ */
 export function OutboxPage() {
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
@@ -74,31 +81,36 @@ export function OutboxPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selected, setSelected] = useState<PendingEmail | null>(null);
   const [attachPickerOpen, setAttachPickerOpen] = useState(false);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "outboxMessage",
+    viewId: currentViewId,
+  });
 
   const documentsById = useMemo(
     () => new Map<string, any>((documents ?? []).map((d: any) => [d._id, d])),
     [documents],
   );
 
+  // Derive `attachmentCount` on each record so the metadata-driven
+  // column has something to display. Keeps the Convex schema clean —
+  // the count is computed from `attachments.length` client-side.
+  const records = useMemo(
+    () =>
+      (emails ?? []).map((email: any) => ({
+        ...email,
+        attachmentCount: email.attachments?.length ?? 0,
+      })),
+    [emails],
+  );
+
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
 
-  const filterFields: FilterField<any>[] = [
-    {
-      id: "status",
-      label: "Status",
-      icon: <Activity size={14} />,
-      options: STATUSES,
-      match: (row, q) => row.status === q,
-    },
-    {
-      id: "channel",
-      label: "Sent channel",
-      icon: <Tag size={14} />,
-      options: ["personal_email", "other"],
-      match: (row, q) => row.sentChannel === q,
-    },
-  ];
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   const openNew = () => {
     setSelected({
@@ -242,103 +254,97 @@ export function OutboxPage() {
         }
       />
 
-      <DataTable
-        label="Pending emails"
-        icon={<Mail size={14} />}
-        data={(emails ?? []) as PendingEmail[]}
-        loading={emails === undefined}
-        rowKey={(r) => r._id}
-        searchPlaceholder="Search subject, recipient, body…"
-        defaultSort={{ columnId: "createdAtISO", dir: "desc" }}
-        viewsKey="outbox"
-        emptyMessage="No queued emails yet. Create a draft or queue one from a workflow Email node."
-        onRowClick={(row) => openExisting(row)}
-        rowActionLabel={(row) => `Open ${row.subject || "(no subject)"}`}
-        filterFields={filterFields}
-        searchExtraFields={[(r) => r.body]}
-        columns={[
-          {
-            id: "subject",
-            header: "Subject",
-            sortable: true,
-            accessor: (r) => r.subject,
-            render: (r) => (
-              <div>
-                <strong>{r.subject || "(no subject)"}</strong>
-                {r.attachments.length > 0 && (
-                  <span className="muted" style={{ marginLeft: 6, fontSize: "var(--fs-xs)" }}>
-                    <Paperclip size={10} /> {r.attachments.length}
-                  </span>
-                )}
+      {showMetadataWarning ? (
+        <div className="record-table__empty">
+          <div className="record-table__empty-title">Metadata not seeded</div>
+          <div className="record-table__empty-desc">
+            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+            outbox object metadata + default view.
+          </div>
+        </div>
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="outbox"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+          onRecordClick={(_, row) => openExisting(row as PendingEmail)}
+        >
+          <RecordTableToolbar
+            icon={<Inbox size={14} />}
+            label="Pending emails"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || emails === undefined}
+            emptyState={
+              <div className="record-table__empty">
+                <div className="record-table__empty-title">No queued emails yet</div>
+                <div className="record-table__empty-desc">
+                  Create a draft or queue one from a workflow Email node.
+                </div>
               </div>
-            ),
-          },
-          {
-            id: "to",
-            header: "To",
-            sortable: true,
-            accessor: (r) => r.to,
-            render: (r) => <span className="mono">{r.to}</span>,
-          },
-          {
-            id: "status",
-            header: "Status",
-            sortable: true,
-            accessor: (r) => r.status,
-            render: (r) => <Badge tone={STATUS_TONE[r.status] ?? "neutral"}>{r.status}</Badge>,
-          },
-          {
-            id: "createdAtISO",
-            header: "Created",
-            sortable: true,
-            accessor: (r) => r.createdAtISO,
-            render: (r) => (
-              <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
-                {formatDateTime(r.createdAtISO)}
-              </span>
-            ),
-          },
-          {
-            id: "sentAtISO",
-            header: "Sent",
-            sortable: true,
-            accessor: (r) => r.sentAtISO ?? "",
-            render: (r) => (
-              <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
-                {r.sentAtISO ? formatDateTime(r.sentAtISO) : "—"}
-              </span>
-            ),
-          },
-        ]}
-        renderRowActions={(row) =>
-          row.status === "sent" || row.status === "cancelled" ? (
-            <button
-              className="btn btn--ghost btn--sm btn--icon"
-              aria-label="Delete record"
-              onClick={() => doDelete(row)}
-            >
-              <Trash2 size={12} />
-            </button>
-          ) : (
-            <>
-              <button
-                className="btn btn--ghost btn--sm"
-                onClick={() => doMarkSent(row)}
-                title="Mark this email as sent"
-              >
-                <CheckCircle2 size={12} /> Mark sent
-              </button>
-              <button
-                className="btn btn--ghost btn--sm btn--icon"
-                aria-label="Cancel draft"
-                onClick={() => doCancel(row)}
-              >
-                <XCircle size={12} />
-              </button>
-            </>
-          )
-        }
-      />
+            }
+            renderCell={({ record, field, value }) => {
+              // Show attachment-count as the familiar paperclip + number
+              // rather than a bare number, and fold it into the subject
+              // cell for continuity with the old layout.
+              if (field.name === "subject") {
+                return (
+                  <div>
+                    <strong>{String(value) || "(no subject)"}</strong>
+                    {record.attachmentCount > 0 && (
+                      <span className="muted" style={{ marginLeft: 6, fontSize: "var(--fs-xs)" }}>
+                        <Paperclip size={10} /> {record.attachmentCount}
+                      </span>
+                    )}
+                  </div>
+                );
+              }
+              return undefined;
+            }}
+            renderRowActions={(row: PendingEmail) =>
+              row.status === "sent" || row.status === "cancelled" ? (
+                <button
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label="Delete record"
+                  onClick={() => doDelete(row)}
+                >
+                  <Trash2 size={12} />
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    onClick={() => doMarkSent(row)}
+                    title="Mark this email as sent"
+                  >
+                    <CheckCircle2 size={12} /> Mark sent
+                  </button>
+                  <button
+                    className="btn btn--ghost btn--sm btn--icon"
+                    aria-label="Cancel draft"
+                    onClick={() => doCancel(row)}
+                  >
+                    <XCircle size={12} />
+                  </button>
+                </>
+              )
+            }
+          />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="record-table__loading-row" />
+          ))}
+        </div>
+      )}
 
       <Drawer
         open={drawerOpen}
@@ -370,7 +376,12 @@ export function OutboxPage() {
                 marginBottom: 12,
               }}
             >
-              <Badge tone={STATUS_TONE[selected.status] ?? "neutral"}>{selected.status}</Badge>
+              <span
+                className="badge"
+                data-tone={STATUS_TONE[selected.status] ?? "neutral"}
+              >
+                {selected.status}
+              </span>
               {selected.sentAtISO && (
                 <span className="muted mono" style={{ fontSize: "var(--fs-xs)" }}>
                   Sent {formatDateTime(selected.sentAtISO)}

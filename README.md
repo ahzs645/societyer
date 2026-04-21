@@ -163,7 +163,7 @@ For the public site:
 | Compliance | `/app/deadlines` | Rolling calendar; recurrence (Monthly/Quarterly/Annual); categories (Governance / Tax / Payroll / Privacy / Other) |
 | Compliance | `/app/documents` | Constitution, bylaws, minutes, policies, financial statements; retention years; "flag for deletion" after 10-year threshold |
 | Compliance | `/app/bylaw-rules` | Active bylaw rule set that drives notice windows, proxies, voting, proposal thresholds, quorum, and inspection defaults |
-| Compliance | `/app/privacy` | PIPA checklist and records-inspection rules |
+| Compliance | `/app/privacy` | PIPA checklist and records-inspection rules; see [PIPA privacy policy help](docs/pipa-privacy-policy-help.md) |
 | Finance | `/app/financials` | Annual statements with revenue / expenses / net assets / restricted funds / audit status / board approval; remuneration disclosure ≥ $75k |
 | System | `/app/settings` | Theme (light/dark), demo mode, seed/reset, Convex deployment info |
 

@@ -19,6 +19,10 @@ export type FieldMetadata = {
   isSystem: boolean;
   isHidden: boolean;
   isNullable: boolean;
+  /** True for computed / server-managed columns (timestamps, IDs,
+   *  joined data). The cell still renders, but inline editing is
+   *  suppressed. */
+  isReadOnly: boolean;
   position: number;
 };
 
@@ -42,6 +46,7 @@ export function hydrateFieldMetadata(raw: any): FieldMetadata {
     isSystem: !!raw.isSystem,
     isHidden: !!raw.isHidden,
     isNullable: !!raw.isNullable,
+    isReadOnly: !!raw.isReadOnly,
     position: Number(raw.position ?? 0),
   };
 }

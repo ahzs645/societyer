@@ -556,6 +556,32 @@ export const setStatus = mutation({
   },
 });
 
+// Light-touch patch for inline edits from the record table. Only
+// exposes the fields that are safe to tweak without re-computing the
+// trigger / provider config: the human-facing `name` and the SELECT
+// status. For status parity with the dedicated `setStatus` mutation,
+// this also enforces Director role.
+export const update = mutation({
+  args: {
+    id: v.id("workflows"),
+    patch: v.object({
+      name: v.optional(v.string()),
+      status: v.optional(v.string()),
+    }),
+    actingUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, { id, patch, actingUserId }) => {
+    const wf = await ctx.db.get(id);
+    if (!wf) throw new Error("Workflow not found");
+    await requireRole(ctx, {
+      actingUserId,
+      societyId: wf.societyId,
+      required: "Director",
+    });
+    await ctx.db.patch(id, patch);
+  },
+});
+
 export const updateProviderLink = mutation({
   args: {
     id: v.id("workflows"),

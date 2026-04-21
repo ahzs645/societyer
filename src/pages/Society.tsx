@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation } from "convex/react";
+import { FileDown } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
@@ -7,15 +8,33 @@ import { Field, LockedField, Badge } from "../components/ui";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { Toggle } from "../components/Controls";
+import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
 import { JURISDICTION_OPTIONS } from "../lib/jurisdictionGuideTracks";
 
+const PRIVACY_PROGRAM_STATUS_OPTIONS = [
+  "Unknown",
+  "Documented",
+  "Needs review",
+  "Not started",
+].map((value) => ({ value, label: value }));
+
+const MEMBER_DATA_ACCESS_STATUS_OPTIONS = [
+  "Unknown",
+  "Society-controlled",
+  "Partially available",
+  "Institution-held",
+  "Not applicable",
+].map((value) => ({ value, label: value }));
+
 export function SocietyPage() {
   const society = useSociety();
+  const toast = useToast();
   const upsert = useMutation(api.society.upsert);
   const [form, setForm] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [importingGovernance, setImportingGovernance] = useState(false);
 
   useEffect(() => {
     if (society && !form) setForm({ ...society });
@@ -26,6 +45,11 @@ export function SocietyPage() {
   if (!form) return null;
 
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+  const missingGovernanceCount = [
+    society.constitutionDocId,
+    society.bylawsDocId,
+    society.privacyPolicyDocId,
+  ].filter((value) => !value).length;
 
   const save = async () => {
     setSaving(true);
@@ -44,6 +68,13 @@ export function SocietyPage() {
         purposes: form.purposes,
         privacyOfficerName: form.privacyOfficerName,
         privacyOfficerEmail: form.privacyOfficerEmail,
+        privacyProgramStatus: form.privacyProgramStatus,
+        privacyProgramReviewedAtISO: form.privacyProgramReviewedAtISO,
+        privacyProgramNotes: form.privacyProgramNotes,
+        memberDataAccessStatus: form.memberDataAccessStatus,
+        memberDataGapDocumented: !!form.memberDataGapDocumented,
+        memberDataAccessReviewedAtISO: form.memberDataAccessReviewedAtISO,
+        memberDataAccessNotes: form.memberDataAccessNotes,
         boardCadence: form.boardCadence,
         boardCadenceDayOfWeek: form.boardCadenceDayOfWeek,
         boardCadenceTime: form.boardCadenceTime,
@@ -53,6 +84,44 @@ export function SocietyPage() {
       setTimeout(() => setSaved(false), 1500);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const importGovernanceDocuments = async () => {
+    setImportingGovernance(true);
+    try {
+      const response = await fetch("/api/v1/browser-connectors/governance-documents/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          societyId: society._id,
+          corpNum: society.incorporationNumber,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error?.message ?? payload?.message ?? `Request failed with ${response.status}`);
+      }
+      const data = payload.data ?? {};
+      const imported = Array.isArray(data.imported) ? data.imported : [];
+      const missing = Array.isArray(data.missing) ? data.missing : [];
+      if (imported.length) {
+        toast.success(
+          "Governance documents imported",
+          `${imported.length} document${imported.length === 1 ? "" : "s"} linked from BC Registry.`,
+        );
+      } else if (missing.length) {
+        toast.warn(
+          "No registry documents imported",
+          missing.map((item: any) => item.message ?? item.reason).filter(Boolean).join(" "),
+        );
+      } else {
+        toast.info("Governance documents already on file");
+      }
+    } catch (error: any) {
+      toast.error("Could not import governance documents", error?.message ?? "Open a BC Registry browser session and try again.");
+    } finally {
+      setImportingGovernance(false);
     }
   };
 
@@ -202,6 +271,67 @@ export function SocietyPage() {
       <div className="spacer-6" />
 
       <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">Privacy operations</h2>
+          <span className="card__subtitle">Tracks compliance state separately from uploaded evidence.</span>
+        </div>
+        <div className="card__body">
+          <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
+            <Field label="Privacy program status" hint="Use Documented when PIPA policies/practices and complaint process have been adopted.">
+              <Select
+                value={form.privacyProgramStatus ?? ""}
+                onChange={(value) => set("privacyProgramStatus", value)}
+                clearable
+                options={PRIVACY_PROGRAM_STATUS_OPTIONS}
+              />
+            </Field>
+            <Field label="Program reviewed">
+              <DatePicker
+                value={form.privacyProgramReviewedAtISO ?? ""}
+                onChange={(value) => set("privacyProgramReviewedAtISO", value)}
+              />
+            </Field>
+          </div>
+          <Field label="Privacy program notes" hint="Examples: complaint process location, access-request procedure, retention schedule, training owner.">
+            <textarea
+              className="textarea"
+              value={form.privacyProgramNotes ?? ""}
+              onChange={(e) => set("privacyProgramNotes", e.target.value)}
+            />
+          </Field>
+          <div className="hr" />
+          <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
+            <Field label="Member data access" hint="Use Institution-held when a university or parent body holds the full member list outside society control.">
+              <Select
+                value={form.memberDataAccessStatus ?? ""}
+                onChange={(value) => set("memberDataAccessStatus", value)}
+                clearable
+                options={MEMBER_DATA_ACCESS_STATUS_OPTIONS}
+              />
+            </Field>
+            <Field label="Access reviewed">
+              <DatePicker
+                value={form.memberDataAccessReviewedAtISO ?? ""}
+                onChange={(value) => set("memberDataAccessReviewedAtISO", value)}
+              />
+            </Field>
+          </div>
+          <Toggle
+            checked={!!form.memberDataGapDocumented}
+            onChange={(value) => set("memberDataGapDocumented", value)}
+            label="Member data-access gap documented"
+          />
+          <Field label="Member data access notes" hint="Record source requests, refusal/limits, aggregate remittances, direct collection paths, and next review.">
+            <textarea
+              className="textarea"
+              value={form.memberDataAccessNotes ?? ""}
+              onChange={(e) => set("memberDataAccessNotes", e.target.value)}
+            />
+          </Field>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head"><h2 className="card__title">Board meeting cadence</h2>
           <span className="card__subtitle">How often the board meets — used by Timeline and Dashboard.</span>
         </div>
@@ -235,8 +365,22 @@ export function SocietyPage() {
       </div>
 
       <div className="card">
-        <div className="card__head"><h2 className="card__title">Governance documents</h2></div>
-        <div className="card__body row" style={{ gap: 12, flexWrap: "wrap" }}>
+        <div className="card__head">
+          <h2 className="card__title">Governance documents</h2>
+          <button
+            className="btn btn--sm"
+            onClick={importGovernanceDocuments}
+            disabled={importingGovernance || missingGovernanceCount === 0}
+            type="button"
+          >
+            <FileDown size={12} />
+            {importingGovernance ? "Checking…" : "Auto-fill missing"}
+          </button>
+        </div>
+        <div
+          className="card__body"
+          style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))", gap: 12 }}
+        >
           <DocBadge label="Constitution" present={!!society.constitutionDocId} />
           <DocBadge label="Bylaws" present={!!society.bylawsDocId} />
           <DocBadge label="PIPA policy" present={!!society.privacyPolicyDocId} />
@@ -248,9 +392,14 @@ export function SocietyPage() {
 
 function DocBadge({ label, present }: { label: string; present: boolean }) {
   return (
-    <div className="row" style={{ gap: 6 }}>
-      <Badge tone={present ? "success" : "warn"}>{present ? "On file" : "Missing"}</Badge>
-      <strong>{label}</strong>
+    <div className="panel" style={{ padding: 12 }}>
+      <div className="row" style={{ gap: 8, marginBottom: 4 }}>
+        <Badge tone={present ? "success" : "warn"}>{present ? "On file" : "Missing"}</Badge>
+        <strong>{label}</strong>
+      </div>
+      <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+        {present ? "Linked to documents" : "No linked document"}
+      </div>
     </div>
   );
 }

@@ -7,9 +7,30 @@ import type { HydratedView, RecordField, ViewFilter, ViewSort } from "../../type
  * pattern: every RecordTable on the page has its own independent store
  * (for selection, hover, focus, column widths, etc.), and components
  * inside it pull the store from context.
+ *
+ * ## Draft vs. saved
+ *
+ * View-level fields (columns / filters / sorts / density / searchTerm)
+ * live at the top level as the *live* values — that's what the UI reads
+ * and writes. `savedView` holds a snapshot of the last DB-synced state.
+ * `isDirty` (selector) is true whenever live ≠ savedView, which drives
+ * "You have unsaved changes" indicators. `markSaved()` promotes live
+ * into savedView after a successful server write; `discardDraftChanges()`
+ * throws away live edits and restores savedView. Interaction state
+ * (selection / hover / focus / records) is intentionally *not* split —
+ * dirty-checking those would be noise.
  */
 
 export type CellPosition = { rowIndex: number; columnIndex: number };
+
+type SavedViewSnapshot = {
+  viewId: string | null;
+  columns: RecordField[];
+  density: "compact" | "comfortable";
+  filters: ViewFilter[];
+  sorts: ViewSort[];
+  searchTerm: string;
+};
 
 export type RecordTableState = {
   /* identity */
@@ -54,8 +75,14 @@ export type RecordTableState = {
   records: any[];
   setRecords: (records: any[]) => void;
 
-  /* hydrate from a freshly loaded view */
+  /* draft / current split */
+  savedView: SavedViewSnapshot | null;
+  /** Load a view from the server — replaces both live state and savedView. */
   loadView: (hydrated: HydratedView) => void;
+  /** Promote current live state into savedView (call after server save). */
+  markSaved: () => void;
+  /** Restore live state to savedView, throwing away unsaved edits. */
+  discardDraftChanges: () => void;
 };
 
 export type RecordTableStore = ReturnType<typeof createRecordTableStore>;
@@ -78,6 +105,7 @@ export function createRecordTableStore(opts: {
     focusedCell: null,
     editingCell: null,
     records: [],
+    savedView: null,
 
     setColumns: (columns) => set({ columns }),
     resizeColumn: (viewFieldId, size) =>
@@ -128,15 +156,52 @@ export function createRecordTableStore(opts: {
 
     setRecords: (records) => set({ records }),
 
-    loadView: (hydrated) =>
-      set({
+    loadView: (hydrated) => {
+      const snapshot: SavedViewSnapshot = {
         viewId: hydrated.view._id,
         columns: hydrated.columns,
         density: hydrated.view.density,
         filters: hydrated.view.filters,
         sorts: hydrated.view.sorts,
         searchTerm: hydrated.view.searchTerm ?? "",
-      }),
+      };
+      set({
+        viewId: snapshot.viewId,
+        columns: snapshot.columns,
+        density: snapshot.density,
+        filters: snapshot.filters,
+        sorts: snapshot.sorts,
+        searchTerm: snapshot.searchTerm,
+        savedView: snapshot,
+      });
+    },
+
+    markSaved: () => {
+      const s = get();
+      set({
+        savedView: {
+          viewId: s.viewId,
+          columns: s.columns,
+          density: s.density,
+          filters: s.filters,
+          sorts: s.sorts,
+          searchTerm: s.searchTerm,
+        },
+      });
+    },
+
+    discardDraftChanges: () => {
+      const snap = get().savedView;
+      if (!snap) return;
+      set({
+        viewId: snap.viewId,
+        columns: snap.columns,
+        density: snap.density,
+        filters: snap.filters,
+        sorts: snap.sorts,
+        searchTerm: snap.searchTerm,
+      });
+    },
   }));
 }
 
@@ -176,4 +241,68 @@ export function useRecordTableStoreHandle() {
     set: store.setState,
     subscribe: store.subscribe,
   };
+}
+
+/* ----------------------- dirty-checking ----------------------- */
+
+function filtersEqual(a: ViewFilter[], b: ViewFilter[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (
+      x.fieldMetadataId !== y.fieldMetadataId ||
+      x.operator !== y.operator ||
+      JSON.stringify(x.value) !== JSON.stringify(y.value)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function sortsEqual(a: ViewSort[], b: ViewSort[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (
+      a[i].fieldMetadataId !== b[i].fieldMetadataId ||
+      a[i].direction !== b[i].direction
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function columnsEqual(a: RecordField[], b: RecordField[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (
+      a[i].viewFieldId !== b[i].viewFieldId ||
+      a[i].position !== b[i].position ||
+      a[i].size !== b[i].size ||
+      a[i].isVisible !== b[i].isVisible
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function computeIsDirty(s: RecordTableState): boolean {
+  const snap = s.savedView;
+  if (!snap) return false;
+  return (
+    s.viewId !== snap.viewId ||
+    s.density !== snap.density ||
+    s.searchTerm !== snap.searchTerm ||
+    !filtersEqual(s.filters, snap.filters) ||
+    !sortsEqual(s.sorts, snap.sorts) ||
+    !columnsEqual(s.columns, snap.columns)
+  );
+}
+
+/** Returns true whenever the live view state differs from what's saved on the server. */
+export function useRecordTableIsDirty(): boolean {
+  return useRecordTableState(computeIsDirty);
 }

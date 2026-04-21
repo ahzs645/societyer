@@ -4,9 +4,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer } from "../components/ui";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
+import { Drawer } from "../components/ui";
 import {
   History,
   CheckCircle2,
@@ -14,13 +12,24 @@ import {
   XCircle,
   Loader2,
   MinusCircle,
-  Activity,
-  Workflow as WorkflowIcon,
-  Tag,
-  Zap,
 } from "lucide-react";
 import { formatDateTime } from "../lib/format";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
+/**
+ * Workflow-run history. Read-only, like the audit log — the records
+ * are written by the workflow engine, not edited by hand. The page
+ * projects `workflowName` / `recipeLabel` into each record before
+ * handing them to the table so the metadata-driven columns just work.
+ */
 export function WorkflowRunsPage() {
   const society = useSociety();
   const runs = useQuery(
@@ -34,56 +43,41 @@ export function WorkflowRunsPage() {
   const catalog = useQuery(api.workflows.listCatalog, {});
   const [searchParams] = useSearchParams();
   const [selectedRun, setSelectedRun] = useState<any>(null);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "workflowRun",
+    viewId: currentViewId,
+  });
+
+  const workflowsById = useMemo(
+    () => new Map<string, any>((workflows ?? []).map((w: any) => [w._id, w])),
+    [workflows],
+  );
+
+  const workflowFilter = searchParams.get("workflowId");
+
+  // Project the derived fields (`workflowName`, `recipeLabel`) into
+  // each record before they're handed to the table. Doing this here —
+  // rather than in a Convex query — keeps workflow-catalog logic on
+  // the client where the labels live.
+  const visibleRuns = useMemo(() => {
+    const byKey = new Map<string, any>((catalog ?? []).map((c) => [c.key, c]));
+    return (runs ?? [])
+      .filter((run: any) => !workflowFilter || run.workflowId === workflowFilter)
+      .map((run: any) => ({
+        ...run,
+        workflowName: workflowsById.get(run.workflowId)?.name ?? "—",
+        recipeLabel: byKey.get(run.recipe)?.label ?? run.recipe,
+      }));
+  }, [runs, workflowsById, catalog, workflowFilter]);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
 
-  const workflowsById = new Map<string, any>((workflows ?? []).map((w: any) => [w._id, w]));
-  const workflowFilter = searchParams.get("workflowId");
-  const visibleRuns = (runs ?? []).filter(
-    (run: any) => !workflowFilter || run.workflowId === workflowFilter,
-  );
-
-  const recipeLabel = (key: string) => catalog?.find((c) => c.key === key)?.label ?? key;
-  const workflowName = (id: string) => workflowsById.get(id)?.name ?? "—";
-
-  const uniq = (xs: string[]) => Array.from(new Set(xs)).filter(Boolean);
-  const filterFields: FilterField<any>[] = useMemo(() => {
-    const workflowOptions = uniq(
-      visibleRuns.map((r: any) => workflowName(r.workflowId)),
-    ).filter((name) => name !== "—");
-    return [
-      {
-        id: "workflow",
-        label: "Workflow",
-        icon: <WorkflowIcon size={14} />,
-        options: workflowOptions,
-        match: (r, q) => workflowName(r.workflowId) === q,
-      },
-      {
-        id: "status",
-        label: "Status",
-        icon: <Activity size={14} />,
-        options: ["success", "failed", "running"],
-        match: (r, q) => r.status === q,
-      },
-      {
-        id: "triggeredBy",
-        label: "Triggered",
-        icon: <Zap size={14} />,
-        options: uniq(visibleRuns.map((r: any) => String(r.triggeredBy ?? ""))),
-        match: (r, q) => r.triggeredBy === q,
-      },
-      {
-        id: "recipe",
-        label: "Recipe",
-        icon: <Tag size={14} />,
-        options: uniq(visibleRuns.map((r: any) => recipeLabel(r.recipe))),
-        match: (r, q) => recipeLabel(r.recipe) === q,
-      },
-    ];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleRuns, catalog, workflows]);
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   return (
     <div className="page">
@@ -94,120 +88,92 @@ export function WorkflowRunsPage() {
         subtitle="Step-by-step execution history for every configured workflow. Click a row for timeline detail."
       />
 
-      <DataTable
-        label="Recent runs"
-        icon={<History size={14} />}
-        data={visibleRuns as any[]}
-        loading={runs === undefined}
-        rowKey={(r) => String(r._id)}
-        searchPlaceholder="Search workflow, recipe, status…"
-        defaultSort={{ columnId: "startedAtISO", dir: "desc" }}
-        viewsKey="workflow-runs"
-        emptyMessage="No runs yet. Trigger a workflow from the Workflows page."
-        onRowClick={(r) => setSelectedRun(r)}
-        rowActionLabel={(r) => `Open run detail for ${workflowName(r.workflowId)}`}
-        filterFields={filterFields}
-        searchExtraFields={[
-          (r) => workflowName(r.workflowId),
-          (r) => recipeLabel(r.recipe),
-        ]}
-        pagination
-        columns={[
-          {
-            id: "workflow",
-            header: "Workflow",
-            sortable: true,
-            accessor: (r) => workflowName(r.workflowId),
-            render: (r) => {
-              const wf = workflowsById.get(r.workflowId);
-              return wf ? (
-                <Link
-                  className="link"
-                  to={`/app/workflows/${wf._id}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {wf.name}
-                </Link>
-              ) : (
-                <span className="muted">—</span>
-              );
-            },
-          },
-          {
-            id: "recipe",
-            header: "Recipe",
-            sortable: true,
-            accessor: (r) => recipeLabel(r.recipe),
-            render: (r) => <span className="cell-tag">{recipeLabel(r.recipe)}</span>,
-          },
-          {
-            id: "status",
-            header: "Status",
-            sortable: true,
-            accessor: (r) => r.status,
-            render: (r) => (
-              <Badge
-                tone={
-                  r.status === "success"
-                    ? "success"
-                    : r.status === "failed"
-                      ? "danger"
-                      : "warn"
-                }
-              >
-                {r.status}
-              </Badge>
-            ),
-          },
-          {
-            id: "triggeredBy",
-            header: "Triggered",
-            sortable: true,
-            accessor: (r) => r.triggeredBy,
-            render: (r) => (
-              <span className="mono" style={{ fontSize: "var(--fs-sm)" }}>
-                {r.triggeredBy}
-              </span>
-            ),
-          },
-          {
-            id: "startedAtISO",
-            header: "Started",
-            sortable: true,
-            accessor: (r) => r.startedAtISO ?? "",
-            render: (r) => (
-              <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
-                {r.startedAtISO ? formatDateTime(r.startedAtISO) : "—"}
-              </span>
-            ),
-          },
-          {
-            id: "completedAtISO",
-            header: "Completed",
-            sortable: true,
-            accessor: (r) => r.completedAtISO ?? "",
-            render: (r) => (
-              <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
-                {r.completedAtISO ? formatDateTime(r.completedAtISO) : "—"}
-              </span>
-            ),
-          },
-        ]}
-      />
+      {showMetadataWarning ? (
+        <div className="record-table__empty">
+          <div className="record-table__empty-title">Metadata not seeded</div>
+          <div className="record-table__empty-desc">
+            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+            workflow-run object metadata + default view.
+          </div>
+        </div>
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="workflow-runs"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={visibleRuns}
+          onRecordClick={(_, record) => setSelectedRun(record)}
+        >
+          <RecordTableToolbar
+            icon={<History size={14} />}
+            label="Recent runs"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || runs === undefined}
+            emptyState={
+              <div className="record-table__empty">
+                <div className="record-table__empty-title">No runs yet</div>
+                <div className="record-table__empty-desc">
+                  Trigger a workflow from the Workflows page.
+                </div>
+              </div>
+            }
+            renderCell={({ record, field, value }) => {
+              if (field.name === "workflowName") {
+                const wf = workflowsById.get(record.workflowId);
+                return wf ? (
+                  <Link
+                    className="link"
+                    to={`/app/workflows/${wf._id}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {wf.name}
+                  </Link>
+                ) : (
+                  <span className="muted">—</span>
+                );
+              }
+              if (field.name === "recipeLabel") {
+                return <span className="cell-tag">{String(value ?? "")}</span>;
+              }
+              if (field.name === "triggeredBy") {
+                return (
+                  <span className="mono" style={{ fontSize: "var(--fs-sm)" }}>
+                    {String(value ?? "")}
+                  </span>
+                );
+              }
+              return undefined;
+            }}
+          />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="record-table__loading-row" />
+          ))}
+        </div>
+      )}
 
       <Drawer
         open={!!selectedRun}
         onClose={() => setSelectedRun(null)}
         title={
           selectedRun
-            ? `${workflowName(selectedRun.workflowId)} · ${selectedRun.status}`
+            ? `${selectedRun.workflowName} · ${selectedRun.status}`
             : "Run detail"
         }
       >
         {selectedRun && (
           <div>
             <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 12 }}>
-              Recipe: <strong>{recipeLabel(selectedRun.recipe)}</strong> · Triggered{" "}
+              Recipe: <strong>{selectedRun.recipeLabel}</strong> · Triggered{" "}
               <span className="mono">{selectedRun.triggeredBy}</span>
               {selectedRun.startedAtISO && (
                 <>

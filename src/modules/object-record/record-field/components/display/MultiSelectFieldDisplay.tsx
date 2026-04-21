@@ -1,6 +1,12 @@
 import type { FieldDisplayProps } from "../FieldDisplay";
 import type { SelectFieldConfig, SelectOption } from "../../../types";
+import { Tag, type TagColor } from "@/components/Tag";
 
+/**
+ * Read-only cell for a MULTI_SELECT field. Renders each value as a
+ * colored `<Tag />`, wrapped in a flex row so long lists wrap rather
+ * than overflow the cell.
+ */
 export function MultiSelectFieldDisplay({ value, field }: FieldDisplayProps) {
   const values = Array.isArray(value) ? value : [];
   if (values.length === 0) {
@@ -15,12 +21,12 @@ export function MultiSelectFieldDisplay({ value, field }: FieldDisplayProps) {
           options.find((o: SelectOption) => o.value === String(v)) ??
           ({ value: String(v), label: String(v), color: "gray" } as SelectOption);
         return (
-          <span
+          <Tag
             key={option.value}
-            className={`record-cell__chip record-cell__chip--${option.color ?? "gray"}`}
-          >
-            {option.label}
-          </span>
+            color={(option.color as TagColor | undefined) ?? "gray"}
+            text={option.label}
+            title={option.label}
+          />
         );
       })}
     </div>

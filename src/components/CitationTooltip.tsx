@@ -29,8 +29,10 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { BookMarked, ExternalLink } from "lucide-react";
+import { BookMarked, Check, Copy, ExternalLink } from "lucide-react";
 import {
+  buildHighlightUrl,
+  copyTextToClipboard,
   getRegulatoryCitation,
   type RegulatoryCitation,
 } from "../lib/regulatoryCitations";
@@ -229,7 +231,11 @@ export function CitationBadge(props: CitationBadgeProps) {
         onFocus={show}
         onBlur={scheduleHide}
         onClick={() => {
-          window.open(citation.url, "_blank", "noopener,noreferrer");
+          window.open(
+            buildHighlightUrl(citation),
+            "_blank",
+            "noopener,noreferrer",
+          );
         }}
         onKeyDown={onKeyDown}
       >
@@ -265,6 +271,25 @@ const CitationPopover = forwardRef<HTMLDivElement, CitationPopoverProps>(
     { id, citation, position, onMouseEnter, onMouseLeave },
     ref,
   ) {
+    const highlightUrl = buildHighlightUrl(citation);
+    const [copied, setCopied] = useState(false);
+    const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(
+      () => () => {
+        if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      },
+      [],
+    );
+
+    const handleCopy = async () => {
+      const ok = await copyTextToClipboard(highlightUrl);
+      if (!ok) return;
+      setCopied(true);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 1500);
+    };
+
     return (
       <>
         {position?.bridge &&
@@ -310,13 +335,36 @@ const CitationPopover = forwardRef<HTMLDivElement, CitationPopoverProps>(
           <div className="citation-popover__actions">
             <a
               className="citation-popover__link"
-              href={citation.url}
+              href={highlightUrl}
               target="_blank"
               rel="noreferrer"
             >
               Open source
               <ExternalLink size={11} aria-hidden="true" />
             </a>
+            <button
+              type="button"
+              className="citation-popover__copy"
+              onClick={handleCopy}
+              aria-live="polite"
+              aria-label={
+                copied
+                  ? "Highlight link copied to clipboard"
+                  : "Copy highlight link to clipboard"
+              }
+            >
+              {copied ? (
+                <>
+                  <Check size={11} aria-hidden="true" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy size={11} aria-hidden="true" />
+                  Copy link
+                </>
+              )}
+            </button>
             {citation.pointInTimeUrl &&
               citation.pointInTimeUrl !== citation.url && (
                 <a
