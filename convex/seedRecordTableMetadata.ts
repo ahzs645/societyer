@@ -1094,6 +1094,142 @@ const OBJECTS: SeedObject[] = [
       ],
     },
   },
+  {
+    // Wave counterparty transactions (vendor / customer detail page).
+    // All columns are read-only — edits to category / account live
+    // upstream in Wave. `accountName` is projected client-side from
+    // the row's joined `account` / `accountResource` objects so we
+    // don't need a RELATION field.
+    nameSingular: "counterpartyTransaction",
+    namePlural: "counterpartyTransactions",
+    labelSingular: "Linked transaction",
+    labelPlural: "Linked transactions",
+    icon: "Database",
+    iconColor: "green",
+    routePath: "/app/financials",
+    labelIdentifierFieldName: "description",
+    fields: [
+      { name: "date", label: "Date", fieldType: FIELD_TYPES.DATE, icon: "Calendar", isReadOnly: true },
+      { name: "description", label: "Description", fieldType: FIELD_TYPES.TEXT, icon: "FileText", isReadOnly: true, isSystem: true },
+      { name: "externalId", label: "External ID", fieldType: FIELD_TYPES.TEXT, icon: "Hash", isReadOnly: true },
+      { name: "accountName", label: "Account", fieldType: FIELD_TYPES.TEXT, icon: "Wallet", isReadOnly: true },
+      { name: "category", label: "Category", fieldType: FIELD_TYPES.TEXT, icon: "Tag", isReadOnly: true },
+      {
+        name: "amountCents",
+        label: "Amount",
+        fieldType: FIELD_TYPES.CURRENCY,
+        icon: "DollarSign",
+        isReadOnly: true,
+        config: { currencyCode: "CAD", isCents: true },
+      },
+    ],
+    defaultView: {
+      name: "All linked transactions",
+      columns: [
+        { fieldName: "date", size: 120 },
+        { fieldName: "description", size: 280 },
+        { fieldName: "accountName", size: 180 },
+        { fieldName: "category", size: 160 },
+        { fieldName: "amountCents", size: 140 },
+      ],
+    },
+  },
+  {
+    // Wave account transactions (account detail page). Slightly
+    // different shape from `counterpartyTransaction` — here the
+    // `counterparty` is shown as a subtext next to the description
+    // and `accountName` is static context (the parent account). Kept
+    // as its own metadata entry so the default column order matches
+    // what Ops looks at on the account page.
+    nameSingular: "accountTransaction",
+    namePlural: "accountTransactions",
+    labelSingular: "Account transaction",
+    labelPlural: "Account transactions",
+    icon: "Database",
+    iconColor: "green",
+    routePath: "/app/financials",
+    labelIdentifierFieldName: "description",
+    fields: [
+      { name: "date", label: "Date", fieldType: FIELD_TYPES.DATE, icon: "Calendar", isReadOnly: true },
+      { name: "description", label: "Description", fieldType: FIELD_TYPES.TEXT, icon: "FileText", isReadOnly: true, isSystem: true },
+      { name: "counterparty", label: "Counterparty", fieldType: FIELD_TYPES.TEXT, icon: "User", isReadOnly: true },
+      { name: "accountName", label: "Account", fieldType: FIELD_TYPES.TEXT, icon: "Wallet", isReadOnly: true },
+      { name: "category", label: "Category", fieldType: FIELD_TYPES.TEXT, icon: "Tag", isReadOnly: true },
+      {
+        name: "amountCents",
+        label: "Amount",
+        fieldType: FIELD_TYPES.CURRENCY,
+        icon: "DollarSign",
+        isReadOnly: true,
+        config: { currencyCode: "CAD", isCents: true },
+      },
+    ],
+    defaultView: {
+      name: "All account transactions",
+      columns: [
+        { fieldName: "date", size: 120 },
+        { fieldName: "description", size: 280 },
+        { fieldName: "accountName", size: 180 },
+        { fieldName: "category", size: 160 },
+        { fieldName: "amountCents", size: 140 },
+      ],
+    },
+  },
+  {
+    // Organization history — profile facts. Editable label/value +
+    // confidence + status selects. Source-document chips stay as a
+    // renderCell escape hatch in the page.
+    nameSingular: "profileFact",
+    namePlural: "profileFacts",
+    labelSingular: "Profile fact",
+    labelPlural: "Profile facts",
+    icon: "FileText",
+    iconColor: "blue",
+    routePath: "/app/org-history",
+    labelIdentifierFieldName: "label",
+    fields: [
+      { name: "label", label: "Fact", fieldType: FIELD_TYPES.TEXT, icon: "FileText", isSystem: true },
+      { name: "value", label: "Value", fieldType: FIELD_TYPES.TEXT, icon: "StickyNote" },
+      {
+        name: "confidence",
+        label: "Confidence",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Gauge",
+        config: {
+          options: [
+            { value: "High", label: "High", color: "green" },
+            { value: "Medium", label: "Medium", color: "blue" },
+            { value: "Review", label: "Review", color: "amber" },
+          ],
+        },
+      },
+      {
+        name: "status",
+        label: "Status",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Activity",
+        config: {
+          options: [
+            { value: "Draft", label: "Draft", color: "gray" },
+            { value: "Verified", label: "Verified", color: "green" },
+            { value: "NeedsReview", label: "Needs review", color: "amber" },
+            { value: "Archived", label: "Archived", color: "red" },
+          ],
+        },
+      },
+      { name: "sourceIds", label: "Source documents", fieldType: FIELD_TYPES.ARRAY, icon: "Archive", isReadOnly: true },
+    ],
+    defaultView: {
+      name: "All facts",
+      columns: [
+        { fieldName: "label", size: 220 },
+        { fieldName: "value", size: 300 },
+        { fieldName: "confidence", size: 140 },
+        { fieldName: "status", size: 140 },
+        { fieldName: "sourceIds", size: 260 },
+      ],
+    },
+  },
 ];
 
 /* ----------------------------- Seed operations ---------------------------- */

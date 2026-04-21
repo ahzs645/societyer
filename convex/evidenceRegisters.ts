@@ -64,6 +64,46 @@ export const updateReview = mutation({
   },
 });
 
+export const promoteBoardRoleToDirector = mutation({
+  args: {
+    assignmentId: v.id("boardRoleAssignments"),
+    position: v.optional(v.string()),
+    isBCResident: v.optional(v.boolean()),
+    consentOnFile: v.optional(v.boolean()),
+    status: v.optional(v.string()),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const assignment = await ctx.db.get(args.assignmentId);
+    if (!assignment) throw new Error("Board role assignment not found.");
+    const name = splitName(assignment.personName);
+    const directorId = await ctx.db.insert("directors", {
+      societyId: assignment.societyId,
+      memberId: assignment.memberId,
+      firstName: name.firstName,
+      lastName: name.lastName,
+      email: undefined,
+      aliases: [],
+      position: cleanText(args.position) || assignment.roleTitle || "Director",
+      isBCResident: args.isBCResident ?? false,
+      termStart: assignment.startDate,
+      termEnd: assignment.endDate,
+      consentOnFile: args.consentOnFile ?? false,
+      status: cleanText(args.status) || "Active",
+      notes: appendReviewNote(
+        args.notes,
+        `Promoted from board role evidence ${String(assignment._id)}. Review source evidence before treating as final registry data.`,
+      ),
+    });
+    await ctx.db.patch(args.assignmentId, {
+      directorId,
+      status: assignment.status === "Observed" ? "Verified" : assignment.status,
+      notes: appendReviewNote(assignment.notes, `Promoted to director register as ${String(directorId)}.`),
+    });
+    return directorId;
+  },
+});
+
 export const finishFinancePaperlessReview = mutation({
   args: { societyId: v.id("societies") },
   handler: async (ctx, { societyId }) => {
@@ -467,6 +507,15 @@ function arrayOf(value: unknown) {
 
 function personKey(value: unknown) {
   return cleanText(value)?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function splitName(value: unknown) {
+  const parts = (cleanText(value) || "Needs Review").split(/\s+/);
+  if (parts.length === 1) return { firstName: parts[0], lastName: "Review" };
+  return {
+    firstName: parts.slice(0, -1).join(" "),
+    lastName: parts[parts.length - 1],
+  };
 }
 
 function hasSource(row: any, sourceExternalId: string) {

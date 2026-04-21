@@ -16,6 +16,7 @@ import { applyThemePreference, getStoredThemePreference } from "./lib/theme";
 
 const Dashboard = React.lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
 const SocietyPage = React.lazy(() => import("./pages/Society").then((m) => ({ default: m.SocietyPage })));
+const OrganizationDetailsPage = React.lazy(() => import("./pages/OrganizationDetails").then((m) => ({ default: m.OrganizationDetailsPage })));
 const OrganizationHistoryPage = React.lazy(() => import("./pages/OrganizationHistory").then((m) => ({ default: m.OrganizationHistoryPage })));
 const OrganizationHistoryBudgetPage = React.lazy(() => import("./pages/OrganizationHistory").then((m) => ({ default: m.OrganizationHistoryBudgetPage })));
 const GovernanceRegistersPage = React.lazy(() => import("./pages/EvidenceRegisters").then((m) => ({ default: m.GovernanceRegistersPage })));
@@ -31,6 +32,7 @@ const MinutesPage = React.lazy(() => import("./pages/Minutes").then((m) => ({ de
 const FilingsPage = React.lazy(() => import("./pages/Filings").then((m) => ({ default: m.FilingsPage })));
 const DeadlinesPage = React.lazy(() => import("./pages/Deadlines").then((m) => ({ default: m.DeadlinesPage })));
 const DocumentsPage = React.lazy(() => import("./pages/Documents").then((m) => ({ default: m.DocumentsPage })));
+const MinuteBookPage = React.lazy(() => import("./pages/MinuteBook").then((m) => ({ default: m.MinuteBookPage })));
 const ConflictsPage = React.lazy(() => import("./pages/Conflicts").then((m) => ({ default: m.ConflictsPage })));
 const FinancialsPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.FinancialsPage })));
 const FinancialYearDetailPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.FinancialYearDetailPage })));
@@ -38,6 +40,7 @@ const WaveAccountDetailPage = React.lazy(() => import("./pages/Financials").then
 const WaveResourceDetailPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.WaveResourceDetailPage })));
 const WaveResourceTablePage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.WaveResourceTablePage })));
 const PrivacyPage = React.lazy(() => import("./pages/Privacy").then((m) => ({ default: m.PrivacyPage })));
+const PoliciesPage = React.lazy(() => import("./pages/Policies").then((m) => ({ default: m.PoliciesPage })));
 const SettingsPage = React.lazy(() => import("./pages/Settings").then((m) => ({ default: m.SettingsPage })));
 const ApiKeysPage = React.lazy(() => import("./pages/ApiKeysPage").then((m) => ({ default: m.ApiKeysPage })));
 const CommitteesPage = React.lazy(() => import("./pages/Committees").then((m) => ({ default: m.CommitteesPage })));
@@ -89,6 +92,7 @@ const BrowserConnectorsPage = React.lazy(() => import("./pages/BrowserConnectors
 const WorkflowsPage = React.lazy(() => import("./pages/Workflows").then((m) => ({ default: m.WorkflowsPage })));
 const WorkflowDetailPage = React.lazy(() => import("./pages/WorkflowDetail").then((m) => ({ default: m.WorkflowDetailPage })));
 const WorkflowRunsPage = React.lazy(() => import("./pages/WorkflowRuns").then((m) => ({ default: m.WorkflowRunsPage })));
+const WorkflowPackagesPage = React.lazy(() => import("./pages/WorkflowPackages").then((m) => ({ default: m.WorkflowPackagesPage })));
 const OutboxPage = React.lazy(() => import("./pages/Outbox").then((m) => ({ default: m.OutboxPage })));
 const CustomFieldsPage = React.lazy(() => import("./pages/CustomFields").then((m) => ({ default: m.CustomFieldsPage })));
 const PublicTransparencyPage = React.lazy(() => import("./pages/PublicTransparency").then((m) => ({ default: m.PublicTransparencyPage })));
@@ -208,6 +212,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             >
             <Route index element={<Dashboard />} />
             <Route path="society" element={<SocietyPage />} />
+            <Route path="organization-details" element={<OrganizationDetailsPage />} />
             <Route path="org-history" element={<OrganizationHistoryPage />} />
             <Route path="org-history/budgets/:budgetId" element={<OrganizationHistoryBudgetPage />} />
             <Route path="governance-registers" element={<GovernanceRegistersPage />} />
@@ -223,6 +228,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="filings" element={<FilingsPage />} />
             <Route path="deadlines" element={<DeadlinesPage />} />
             <Route path="documents" element={<DocumentsPage />} />
+            <Route path="minute-book" element={<MinuteBookPage />} />
             <Route path="conflicts" element={<ConflictsPage />} />
             <Route path="financials" element={<FinancialsPage />} />
             <Route path="financials/fy/:fiscalYear" element={<FinancialYearDetailPage />} />
@@ -242,6 +248,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               element={withModule("grants", <GrantEditPage />)}
             />
             <Route path="privacy" element={<PrivacyPage />} />
+            <Route path="policies" element={<PoliciesPage />} />
             <Route
               path="communications"
               element={withModule("communications", <CommunicationsPage />)}
@@ -363,6 +370,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route
               path="workflow-runs"
               element={withModule("workflows", <WorkflowRunsPage />)}
+            />
+            <Route
+              path="workflow-packages"
+              element={withModule("workflows", <WorkflowPackagesPage />)}
             />
             <Route path="outbox" element={<OutboxPage />} />
             <Route path="custom-fields" element={<CustomFieldsPage />} />

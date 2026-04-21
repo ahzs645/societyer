@@ -13,6 +13,15 @@ import { ArrowLeft, Braces, Database, ExternalLink, Link2, PiggyBank, PlusCircle
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 const OPERATING_SUBSCRIPTION_INTERVALS = [
   { value: "month", label: "Monthly" },
@@ -212,7 +221,7 @@ export function FinancialsPage() {
   };
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <PageHeader
         title="Financials"
         icon={<PiggyBank size={16} />}
@@ -1285,6 +1294,14 @@ export function WaveAccountDetailPage() {
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [pullState, setPullState] = useState<"idle" | "pulling" | "pulled" | "error">("idle");
   const [pullError, setPullError] = useState<string | null>(null);
+  const [txnViewId, setTxnViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [txnFilterOpen, setTxnFilterOpen] = useState(false);
+
+  const txnTableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "accountTransaction",
+    viewId: txnViewId,
+  });
 
   useEffect(() => {
     setPullState("idle");
@@ -1339,6 +1356,20 @@ export function WaveAccountDetailPage() {
   const accountKind = waveResourceSingularLabel(resource);
   const transactionLabel = isCategoryAccount ? "categorized transaction" : "synced transaction";
   const linkedTotalCents = activity?.linkedTotalCents ?? transactions.reduce((sum: number, row: any) => sum + row.amountCents, 0);
+
+  // Flatten for the record table — for category accounts the
+  // `accountName` comes from the transaction's linked Wave account;
+  // for regular accounts it's the parent account context (same for
+  // all rows).
+  const txnRecords = transactions.map((row: any) => ({
+    ...row,
+    accountName: isCategoryAccount
+      ? row.account?.name ?? row.accountResource?.label ?? ""
+      : activity?.account?.name ?? "",
+    counterparty: row.counterparty ?? "",
+    category: isCategoryAccount ? "" : row.category ?? "",
+  }));
+  const txnMetadataWarning = !txnTableData.loading && !txnTableData.objectMetadata;
 
   return (
     <div className="page">
@@ -1405,46 +1436,55 @@ export function WaveAccountDetailPage() {
         <Flag level="warn">
           Wave ledger/system row. Usually payable or transfer clearing internals, not a reusable transaction category.
         </Flag>
+      ) : txnMetadataWarning ? (
+        <div className="record-table__empty">
+          <div className="record-table__empty-title">Metadata not seeded</div>
+          <div className="record-table__empty-desc">
+            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+            account-transaction object metadata + default view.
+          </div>
+        </div>
+      ) : txnTableData.objectMetadata ? (
+        <RecordTableScope
+          tableId={`wave-account-txns-${resource._id}`}
+          objectMetadata={txnTableData.objectMetadata}
+          hydratedView={txnTableData.hydratedView}
+          records={txnRecords}
+          onRecordClick={(_, record) => setSelectedTransaction(record)}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={txnTableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Database size={14} />}
+            label={isCategoryAccount ? "Categorized transactions" : "Account transactions"}
+            views={txnTableData.views}
+            currentViewId={txnViewId ?? txnTableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setTxnViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setTxnFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={txnFilterOpen} onClose={() => setTxnFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={txnTableData.loading || activity === undefined}
+            renderRowActions={(row) => (
+              <button
+                className="btn btn--ghost btn--sm"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setSelectedTransaction(row);
+                }}
+              >
+                <ExternalLink size={12} /> Open
+              </button>
+            )}
+          />
+        </RecordTableScope>
       ) : (
-        <DataTable
-          label={isCategoryAccount ? "Categorized transactions" : "Account transactions"}
-          icon={<Database size={14} />}
-          data={transactions as any[]}
-          loading={activity === undefined}
-          rowKey={(row) => row._id}
-          onRowClick={(row) => setSelectedTransaction(row)}
-          rowActionLabel={(row) => `Open transaction ${row.description}`}
-          searchPlaceholder="Search transactions..."
-          searchExtraFields={[(row) => row.counterparty, (row) => row.account?.name, (row) => row.category]}
-          defaultSort={{ columnId: "date", dir: "desc" }}
-          viewsKey={`wave-account-transactions-${resource._id}`}
-          pagination
-          initialPageSize={25}
-          pageSizeOptions={[10, 25, 50, 100]}
-          columns={isCategoryAccount ? categoryAccountTransactionColumns() : financialTransactionColumns(activity?.account)}
-          renderRowActions={(row) => (
-            <button
-              className="btn btn--ghost btn--sm"
-              onClick={(event) => {
-                event.stopPropagation();
-                setSelectedTransaction(row);
-              }}
-            >
-              <ExternalLink size={12} /> Open
-            </button>
-          )}
-          emptyMessage={
-            pullState === "pulling"
-              ? "Pulling latest available Wave activity..."
-              : pullState === "pulled"
-              ? "Pulled latest available Wave data. No synced transactions exist for this account."
-              : isCategoryAccount
-              ? "No synced transactions are categorized to this Wave account yet."
-              : activity?.account
-              ? "No synced transactions for this account yet."
-              : "This cached Wave account is not in the synced financial account set."
-          }
-        />
+        <div className="record-table__loading">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="record-table__loading-row" />
+          ))}
+        </div>
       )}
 
       <TransactionDrawer
@@ -1473,6 +1513,14 @@ export function WaveResourceDetailPage() {
       : "skip",
   );
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+  const [cpViewId, setCpViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [cpFilterOpen, setCpFilterOpen] = useState(false);
+
+  const cpTableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "counterpartyTransaction",
+    viewId: cpViewId,
+  });
 
   useEffect(() => {
     setSelectedTransaction(null);
@@ -1502,6 +1550,11 @@ export function WaveResourceDetailPage() {
   const transactions = activity?.transactions ?? [];
   const linkedTotalCents = activity?.linkedTotalCents ?? transactions.reduce((sum: number, row: any) => sum + row.amountCents, 0);
   const resourceKind = waveSingularTypeLabel(resource.resourceType);
+  const cpRecords = transactions.map((row: any) => ({
+    ...row,
+    accountName: row.account?.name ?? row.accountResource?.label ?? "",
+  }));
+  const cpMetadataWarning = !cpTableData.loading && !cpTableData.objectMetadata;
 
   return (
     <div className="page">
@@ -1537,35 +1590,72 @@ export function WaveResourceDetailPage() {
       </div>
 
       {isWaveCounterpartyResource(resource) ? (
-        <DataTable
-          label="Linked transactions"
-          icon={<Database size={14} />}
-          data={transactions as any[]}
-          loading={activity === undefined}
-          rowKey={(row) => row._id}
-          onRowClick={(row) => setSelectedTransaction(row)}
-          rowActionLabel={(row) => `Open transaction ${row.description}`}
-          searchPlaceholder={`Search ${resource.label} transactions...`}
-          searchExtraFields={[(row) => row.account?.name, (row) => row.category, (row) => row.externalId]}
-          defaultSort={{ columnId: "date", dir: "desc" }}
-          viewsKey={`wave-${resource.resourceType}-transactions-${resource._id}`}
-          pagination
-          initialPageSize={25}
-          pageSizeOptions={[10, 25, 50, 100]}
-          columns={counterpartyTransactionColumns()}
-          renderRowActions={(row) => (
-            <button
-              className="btn btn--ghost btn--sm"
-              onClick={(event) => {
-                event.stopPropagation();
-                setSelectedTransaction(row);
+        cpMetadataWarning ? (
+          <div className="record-table__empty">
+            <div className="record-table__empty-title">Metadata not seeded</div>
+            <div className="record-table__empty-desc">
+              Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+              counterparty-transaction object metadata + default view.
+            </div>
+          </div>
+        ) : cpTableData.objectMetadata ? (
+          <RecordTableScope
+            tableId={`wave-cp-txns-${resource._id}`}
+            objectMetadata={cpTableData.objectMetadata}
+            hydratedView={cpTableData.hydratedView}
+            records={cpRecords}
+            onRecordClick={(_, record) => setSelectedTransaction(record)}
+          >
+            <RecordTableViewToolbar
+              societyId={society._id}
+              objectMetadataId={cpTableData.objectMetadata._id as Id<"objectMetadata">}
+              icon={<Database size={14} />}
+              label="Linked transactions"
+              views={cpTableData.views}
+              currentViewId={cpViewId ?? cpTableData.views[0]?._id ?? null}
+              onChangeView={(viewId) => setCpViewId(viewId as Id<"views">)}
+              onOpenFilter={() => setCpFilterOpen((x) => !x)}
+            />
+            <RecordTableFilterPopover open={cpFilterOpen} onClose={() => setCpFilterOpen(false)} />
+            <RecordTableFilterChips />
+            <RecordTable
+              loading={cpTableData.loading || activity === undefined}
+              renderCell={({ record, field, value }) => {
+                // Render account as a Link when we have the linked
+                // accountResource._id; fall back to the seed's default
+                // text cell otherwise.
+                if (field.name === "accountName" && record.accountResource?._id) {
+                  return (
+                    <Link
+                      to={`/app/financials/wave/account/${record.accountResource._id}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {String(value ?? record.accountResource.label ?? "Wave account")}
+                    </Link>
+                  );
+                }
+                return undefined;
               }}
-            >
-              <ExternalLink size={12} /> Open
-            </button>
-          )}
-          emptyMessage={`No synced transactions are linked to this ${resourceKind} yet.`}
-        />
+              renderRowActions={(row) => (
+                <button
+                  className="btn btn--ghost btn--sm"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSelectedTransaction(row);
+                  }}
+                >
+                  <ExternalLink size={12} /> Open
+                </button>
+              )}
+            />
+          </RecordTableScope>
+        ) : (
+          <div className="record-table__loading">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="record-table__loading-row" />
+            ))}
+          </div>
+        )
       ) : (
         <div className="card">
           <div className="card__body muted" style={{ fontSize: 13 }}>

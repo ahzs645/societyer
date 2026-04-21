@@ -542,8 +542,14 @@
   gap: var(--s-3);
   margin-bottom: var(--s-6);
 }
+/* 3-stat dashboards — avoids the dead cell that appears when a 3-stat row
+ * renders inside a 4-column grid. */
+.stat-grid--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
 @media (max-width: 1100px) {
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .stat-grid--3 { grid-template-columns: repeat(2, 1fr); }
 }
 .stat {
   background: var(--bg-panel);
@@ -663,6 +669,101 @@
  * swimming in whitespace. */
 @media (max-width: 760px) {
   .two-col { gap: var(--s-3); }
+}
+
+/* ---- Wide-content page cap ---------------------------------------------
+ * Desktop optimisation for form-heavy pages (Society, Exports, etc.): cap
+ * the content width so rows and grids don't stretch across ultrawide
+ * monitors. Mirrors `.page--narrow` (which caps at 960px for record-detail
+ * reading measure) but at 1440px — wide enough for multi-column forms and
+ * dense grids without letting content bleed across the entire viewport. */
+.page--wide > * {
+  max-width: 1440px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ---- Society profile page ----------------------------------------------
+ * Splits the Privacy operations card into two columns (Privacy program /
+ * Member data access) on wide screens, and pairs Board cadence + Governance
+ * documents side-by-side so each gets its share of horizontal space instead
+ * of owning a full-width stripe.
+ *
+ * All helpers collapse to a single column at 1100px to match `.two-col`. */
+
+.society-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-5);
+}
+.society-split > * { min-width: 0; }
+.society-split > * + * {
+  padding-left: var(--s-5);
+  border-left: 1px solid var(--border);
+}
+.society-split__eyebrow {
+  display: block;
+  margin-bottom: var(--s-3);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+@media (max-width: 1100px) {
+  .society-split { grid-template-columns: 1fr; gap: 0; }
+  .society-split > * + * {
+    padding-left: 0;
+    border-left: 0;
+    padding-top: var(--s-3);
+    margin-top: var(--s-3);
+    border-top: 1px solid var(--border);
+  }
+}
+
+.society-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-4);
+  align-items: start;
+}
+.society-bottom > * { min-width: 0; }
+@media (max-width: 1100px) {
+  .society-bottom { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .society-bottom { gap: var(--s-3); }
+}
+
+/* ---- Settings page ----------------------------------------------------
+ * Pair compact sibling cards side-by-side on desktop (Language +
+ * Appearance, Authentication + Convex deployment) so they don't each own
+ * a full-width stripe, and lay the Modules sub-cards out in a 2-col grid
+ * instead of stacking six tall panels vertically. All collapse to a
+ * single column at 1100px to match `.two-col`. */
+
+.settings-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-4);
+  align-items: start;
+}
+.settings-pair > * { min-width: 0; }
+@media (max-width: 1100px) {
+  .settings-pair { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .settings-pair { gap: var(--s-3); }
+}
+
+.settings-modules {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--s-3);
+}
+.settings-modules > * { min-width: 0; }
+@media (max-width: 1100px) {
+  .settings-modules { grid-template-columns: 1fr; }
 }
 
 /* Reusable responsive grid helpers. Use on plain <div>s to avoid inline

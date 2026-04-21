@@ -8,6 +8,19 @@ export default defineSchema({
     incorporationDate: v.optional(v.string()),
     fiscalYearEnd: v.optional(v.string()),
     jurisdictionCode: v.optional(v.string()),
+    entityType: v.optional(v.string()),
+    actFormedUnder: v.optional(v.string()),
+    officialEmail: v.optional(v.string()),
+    numbered: v.optional(v.boolean()),
+    distributing: v.optional(v.boolean()),
+    solicitingPublicBenefit: v.optional(v.boolean()),
+    organizationStatus: v.optional(v.string()),
+    archivedAtISO: v.optional(v.string()),
+    removedAtISO: v.optional(v.string()),
+    continuanceDate: v.optional(v.string()),
+    amalgamationDate: v.optional(v.string()),
+    naicsCode: v.optional(v.string()),
+    niceClassification: v.optional(v.string()),
     isCharity: v.boolean(),
     isMemberFunded: v.boolean(),
     registeredOfficeAddress: v.optional(v.string()),
@@ -42,6 +55,65 @@ export default defineSchema({
     demoMode: v.optional(v.boolean()),
     updatedAt: v.number(),
   }).index("by_public_slug", ["publicSlug"]),
+
+  organizationAddresses: defineTable({
+    societyId: v.id("societies"),
+    type: v.string(), // registered_office | records_office | mailing | physical | other
+    status: v.string(), // current | past | proposed
+    effectiveFrom: v.optional(v.string()),
+    effectiveTo: v.optional(v.string()),
+    street: v.string(),
+    unit: v.optional(v.string()),
+    city: v.string(),
+    provinceState: v.optional(v.string()),
+    postalCode: v.optional(v.string()),
+    country: v.string(),
+    notes: v.optional(v.string()),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_type", ["societyId", "type"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  organizationRegistrations: defineTable({
+    societyId: v.id("societies"),
+    jurisdiction: v.string(),
+    assumedName: v.optional(v.string()),
+    registrationNumber: v.optional(v.string()),
+    registrationDate: v.optional(v.string()),
+    activityCommencementDate: v.optional(v.string()),
+    deRegistrationDate: v.optional(v.string()),
+    nuansNumber: v.optional(v.string()),
+    officialEmail: v.optional(v.string()),
+    representativeIds: v.array(v.string()),
+    status: v.string(), // active | inactive | pending | needs_review
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  organizationIdentifiers: defineTable({
+    societyId: v.id("societies"),
+    kind: v.string(), // charity_number | business_number | gst | payroll | registry_account | other
+    number: v.string(),
+    jurisdiction: v.optional(v.string()),
+    foreignJurisdiction: v.optional(v.string()),
+    registeredAt: v.optional(v.string()),
+    status: v.string(), // active | inactive | needs_review
+    accessLevel: v.string(), // internal | restricted
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_kind", ["societyId", "kind"])
+    .index("by_society_status", ["societyId", "status"]),
 
   users: defineTable({
     societyId: v.id("societies"),
@@ -733,6 +805,31 @@ export default defineSchema({
     .index("by_society", ["societyId"])
     .index("by_workflow", ["workflowId"]),
 
+  workflowPackages: defineTable({
+    societyId: v.id("societies"),
+    workflowId: v.optional(v.id("workflows")),
+    workflowRunId: v.optional(v.id("workflowRuns")),
+    eventType: v.string(),
+    effectiveDate: v.optional(v.string()),
+    status: v.string(), // draft | collecting_signatures | ready | filed | cancelled | archived
+    packageName: v.string(),
+    parts: v.array(v.string()),
+    notes: v.optional(v.string()),
+    supportingDocumentIds: v.array(v.id("documents")),
+    priceItems: v.array(v.string()),
+    transactionId: v.optional(v.string()),
+    signerRoster: v.array(v.string()),
+    signerEmails: v.array(v.string()),
+    signingPackageIds: v.array(v.string()),
+    stripeCheckoutSessionId: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_workflow", ["workflowId"])
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_society_effective", ["societyId", "effectiveDate"]),
+
   subscriptionPlans: defineTable({
     societyId: v.id("societies"),
     name: v.string(),
@@ -1128,6 +1225,32 @@ export default defineSchema({
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
     heldAt: v.string(),
+    chairName: v.optional(v.string()),
+    secretaryName: v.optional(v.string()),
+    recorderName: v.optional(v.string()),
+    calledToOrderAt: v.optional(v.string()),
+    adjournedAt: v.optional(v.string()),
+    remoteParticipation: v.optional(
+      v.object({
+        url: v.optional(v.string()),
+        meetingId: v.optional(v.string()),
+        passcode: v.optional(v.string()),
+        instructions: v.optional(v.string()),
+      }),
+    ),
+    detailedAttendance: v.optional(
+      v.array(
+        v.object({
+          name: v.string(),
+          status: v.string(), // present | absent | regrets | guest | staff | invited | proxy
+          roleTitle: v.optional(v.string()),
+          affiliation: v.optional(v.string()),
+          proxyFor: v.optional(v.string()),
+          quorumCounted: v.optional(v.boolean()),
+          notes: v.optional(v.string()),
+        }),
+      ),
+    ),
     attendees: v.array(v.string()),
     absent: v.array(v.string()),
     quorumMet: v.boolean(),
@@ -1138,6 +1261,28 @@ export default defineSchema({
     quorumSourceLabel: v.optional(v.string()),
     quorumComputedAtISO: v.optional(v.string()),
     discussion: v.string(),
+    sections: v.optional(
+      v.array(
+        v.object({
+          title: v.string(),
+          type: v.optional(v.string()), // discussion | motion | report | break | executive_session | other
+          presenter: v.optional(v.string()),
+          discussion: v.optional(v.string()),
+          reportSubmitted: v.optional(v.boolean()),
+          decisions: v.optional(v.array(v.string())),
+          actionItems: v.optional(
+            v.array(
+              v.object({
+                text: v.string(),
+                assignee: v.optional(v.string()),
+                dueDate: v.optional(v.string()),
+                done: v.boolean(),
+              }),
+            ),
+          ),
+        }),
+      ),
+    ),
     motions: v.array(
       v.object({
         text: v.string(),
@@ -1165,6 +1310,49 @@ export default defineSchema({
     ),
     approvedAt: v.optional(v.string()),
     approvedInMeetingId: v.optional(v.id("meetings")),
+    nextMeetingAt: v.optional(v.string()),
+    nextMeetingLocation: v.optional(v.string()),
+    nextMeetingNotes: v.optional(v.string()),
+    sessionSegments: v.optional(
+      v.array(
+        v.object({
+          type: v.string(), // public | in_camera | executive_session | closed | other
+          title: v.optional(v.string()),
+          startedAt: v.optional(v.string()),
+          endedAt: v.optional(v.string()),
+          notes: v.optional(v.string()),
+        }),
+      ),
+    ),
+    agmDetails: v.optional(
+      v.object({
+        financialStatementsPresented: v.optional(v.boolean()),
+        financialStatementsNotes: v.optional(v.string()),
+        directorElectionNotes: v.optional(v.string()),
+        directorAppointments: v.optional(
+          v.array(
+            v.object({
+              name: v.string(),
+              roleTitle: v.optional(v.string()),
+              affiliation: v.optional(v.string()),
+              term: v.optional(v.string()),
+              consentRecorded: v.optional(v.boolean()),
+              status: v.optional(v.string()),
+              notes: v.optional(v.string()),
+            }),
+          ),
+        ),
+        specialResolutionExhibits: v.optional(
+          v.array(
+            v.object({
+              title: v.string(),
+              reference: v.optional(v.string()),
+              notes: v.optional(v.string()),
+            }),
+          ),
+        ),
+      }),
+    ),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     sourceExternalIds: v.optional(v.array(v.string())),
     draftTranscript: v.optional(v.string()),
@@ -1466,6 +1654,30 @@ export default defineSchema({
     createdAtISO: v.string(),
   }).index("by_society", ["societyId"]),
 
+  policies: defineTable({
+    societyId: v.id("societies"),
+    policyName: v.string(),
+    policyNumber: v.optional(v.string()),
+    owner: v.optional(v.string()),
+    effectiveDate: v.optional(v.string()),
+    reviewDate: v.optional(v.string()),
+    ceasedDate: v.optional(v.string()),
+    docxDocumentId: v.optional(v.id("documents")),
+    pdfDocumentId: v.optional(v.id("documents")),
+    html: v.optional(v.string()),
+    requiredSigners: v.array(v.string()),
+    signatureRequired: v.boolean(),
+    jurisdictions: v.array(v.string()),
+    entityTypes: v.array(v.string()),
+    status: v.string(), // Draft | Active | ReviewDue | Superseded | Ceased
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_society_review", ["societyId", "reviewDate"]),
+
   conflicts: defineTable({
     societyId: v.id("societies"),
     directorId: v.id("directors"),
@@ -1574,18 +1786,28 @@ export default defineSchema({
     status: v.string(),
     priority: v.string(),
     assignee: v.optional(v.string()),
+    responsibleUserIds: v.optional(v.array(v.id("users"))),
     dueDate: v.optional(v.string()),
     committeeId: v.optional(v.id("committees")),
     meetingId: v.optional(v.id("meetings")),
     goalId: v.optional(v.id("goals")),
+    filingId: v.optional(v.id("filings")),
+    workflowId: v.optional(v.id("workflows")),
+    documentId: v.optional(v.id("documents")),
+    eventId: v.optional(v.string()),
     tags: v.array(v.string()),
     createdAtISO: v.string(),
     completedAt: v.optional(v.string()),
+    completedByUserId: v.optional(v.id("users")),
+    completionNote: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
     .index("by_committee", ["committeeId"])
     .index("by_goal", ["goalId"])
-    .index("by_meeting", ["meetingId"]),
+    .index("by_meeting", ["meetingId"])
+    .index("by_filing", ["filingId"])
+    .index("by_workflow", ["workflowId"])
+    .index("by_document", ["documentId"]),
 
   activity: defineTable({
     societyId: v.id("societies"),
@@ -2040,6 +2262,30 @@ export default defineSchema({
   })
     .index("by_society", ["societyId"])
     .index("by_society_category", ["societyId", "category"]),
+
+  minuteBookItems: defineTable({
+    societyId: v.id("societies"),
+    title: v.string(),
+    recordType: v.string(), // meeting | minutes | resolution | filing | policy | document | package | other
+    effectiveDate: v.optional(v.string()),
+    status: v.string(), // Draft | Current | NeedsReview | Archived | Superseded
+    documentIds: v.array(v.id("documents")),
+    meetingId: v.optional(v.id("meetings")),
+    minutesId: v.optional(v.id("minutes")),
+    filingId: v.optional(v.id("filings")),
+    policyId: v.optional(v.id("policies")),
+    workflowPackageId: v.optional(v.id("workflowPackages")),
+    signatureIds: v.array(v.id("signatures")),
+    sourceEvidenceIds: v.array(v.id("sourceEvidence")),
+    archivedAtISO: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_type", ["societyId", "recordType"])
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_society_effective", ["societyId", "effectiveDate"]),
 
   // Where records are kept if not at the registered office
   recordsLocation: defineTable({

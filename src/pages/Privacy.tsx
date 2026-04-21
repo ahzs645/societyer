@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import {
   ClipboardCheck,
   ExternalLink,
@@ -7,6 +8,9 @@ import {
   FileText,
   GraduationCap,
   MailCheck,
+  PenLine,
+  Plus,
+  Save,
   Shield,
   UserRound,
   UsersRound,
@@ -15,7 +19,9 @@ import {
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Banner } from "../components/ui";
+import { Badge, Banner, Field } from "../components/ui";
+import { Modal, useConfirm } from "../components/Modal";
+import { useToast } from "../components/Toast";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { useModuleEnabled } from "../hooks/useModules";
 import { CitationBadge } from "../components/CitationTooltip";
@@ -28,12 +34,23 @@ import {
 } from "../lib/legalCopy";
 
 type StepTone = "success" | "warn" | "info" | "neutral";
+type DraftEditorKind = "policy" | "memberDataMemo";
+type DraftEditorState = {
+  id: any;
+  kind: DraftEditorKind;
+  title: string;
+  content: string;
+  tags: string[];
+};
 
 export function PrivacyPage() {
   const society = useSociety();
   const { rules } = useBylawRules();
+  const toast = useToast();
+  const confirm = useConfirm();
   const communicationsEnabled = useModuleEnabled("communications");
   const trainingEnabled = useModuleEnabled("pipaTraining");
+  const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const training = useQuery(
     api.pipaTraining.list,
@@ -43,11 +60,23 @@ export function PrivacyPage() {
     api.communications.listMemberPrefs,
     society && communicationsEnabled ? { societyId: society._id } : "skip",
   );
+  const createPolicyDraft = useMutation(api.documents.createPipaPolicyDraft);
+  const createMemberDataGapMemoDraft = useMutation(api.documents.createMemberDataGapMemoDraft);
+  const updateDraftContent = useMutation(api.documents.updateDraftContent);
+  const linkPrivacyPolicyEvidence = useMutation(api.documents.linkPrivacyPolicyEvidence);
+  const [draftEditor, setDraftEditor] = useState<DraftEditorState | null>(null);
+  const [draftBusy, setDraftBusy] = useState(false);
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
 
   const hasPolicyEvidence = !!society.privacyPolicyDocId;
   const hasOfficer = !!society.privacyOfficerName && !!society.privacyOfficerEmail;
+  const documentRows = documents ?? [];
+  const policyDraft = documentRows.find(isPrivacyPolicyDraft);
+  const memberDataMemoDraft = documentRows.find(isMemberDataMemoDraft);
+  const adoptedPolicyDocument = society.privacyPolicyDocId
+    ? documentRows.find((document) => String(document._id) === String(society.privacyPolicyDocId))
+    : null;
   const privacyProgramStatus = society.privacyProgramStatus ?? (hasPolicyEvidence ? "Documented" : "Unknown");
   const privacyProgramDocumented = privacyProgramStatus === "Documented";
   const memberDataAccessStatus = society.memberDataAccessStatus ?? "Unknown";
@@ -81,16 +110,103 @@ export function PrivacyPage() {
     consentTrainingTone === "success" || consentTrainingTone === "info",
   ].filter(Boolean).length;
 
+  const openPolicyDraft = async () => {
+    setDraftBusy(true);
+    try {
+      const result = policyDraft
+        ? { document: policyDraft, reused: true }
+        : await createPolicyDraft({ societyId: society._id });
+      if (!result?.document) throw new Error("Draft document was not returned.");
+      setDraftEditor(editorStateFromDocument(result.document, "policy"));
+      toast.success(result.reused ? "Opened existing policy draft" : "Policy draft created");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not create the policy draft");
+    } finally {
+      setDraftBusy(false);
+    }
+  };
+
+  const openMemberDataMemoDraft = async () => {
+    setDraftBusy(true);
+    try {
+      const result = memberDataMemoDraft
+        ? { document: memberDataMemoDraft, reused: true }
+        : await createMemberDataGapMemoDraft({ societyId: society._id });
+      if (!result?.document) throw new Error("Draft document was not returned.");
+      setDraftEditor(editorStateFromDocument(result.document, "memberDataMemo"));
+      toast.success(result.reused ? "Opened existing data-gap memo" : "Data-gap memo draft created");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not create the data-gap memo");
+    } finally {
+      setDraftBusy(false);
+    }
+  };
+
+  const saveDraftEditor = async () => {
+    if (!draftEditor) return;
+    setDraftBusy(true);
+    try {
+      const updated = await updateDraftContent({
+        id: draftEditor.id,
+        title: draftEditor.title,
+        content: draftEditor.content,
+        tags: draftEditor.tags,
+      });
+      if (updated) setDraftEditor(editorStateFromDocument(updated, draftEditor.kind));
+      toast.success("Draft saved");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Draft save failed");
+    } finally {
+      setDraftBusy(false);
+    }
+  };
+
+  const linkDraftAsEvidence = async () => {
+    if (!draftEditor || draftEditor.kind !== "policy") return;
+    const ok = await confirm({
+      title: "Link as adopted evidence?",
+      message:
+        "Only do this after the draft has been reviewed and approved by the society. This links the document as PIPA policy evidence, but it does not file anything publicly.",
+      confirmLabel: "Link evidence",
+      tone: "warn",
+    });
+    if (!ok) return;
+    setDraftBusy(true);
+    try {
+      await updateDraftContent({
+        id: draftEditor.id,
+        title: draftEditor.title,
+        content: draftEditor.content,
+        tags: Array.from(new Set([...draftEditor.tags.filter((tag) => tag !== "draft"), "adopted-evidence"])),
+      });
+      await linkPrivacyPolicyEvidence({ societyId: society._id, documentId: draftEditor.id });
+      setDraftEditor(null);
+      toast.success("Privacy policy evidence linked");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not link privacy policy evidence");
+    } finally {
+      setDraftBusy(false);
+    }
+  };
+
   return (
     <div className="page">
       <PageHeader
         title="Privacy (PIPA)"
         subtitle={`A practical setup checklist for privacy policies, complaint handling, member-data access, consent, and training. ${LEGAL_COPY_REVIEWED}.`}
-        actions={communicationsEnabled ? (
-          <Link className="btn-action" to="/app/communications">
-            Manage consent
-          </Link>
-        ) : undefined}
+        actions={
+          <>
+            <button className="btn-action btn-action--primary" disabled={draftBusy} onClick={openPolicyDraft}>
+              {policyDraft ? <PenLine size={12} /> : <Plus size={12} />}
+              {policyDraft ? "Edit policy draft" : "Create policy draft"}
+            </button>
+            {communicationsEnabled && (
+              <Link className="btn-action" to="/app/communications">
+                Manage consent
+              </Link>
+            )}
+          </>
+        }
       />
 
       <Banner tone="info" title="Treat this as a setup workflow, not a public-registry filing">
@@ -100,19 +216,58 @@ export function PrivacyPage() {
       </Banner>
 
       <div className="two-col privacy-layout">
-        <div className="card privacy-setup-card">
-          <div className="card__head">
-            <div>
-              <h2 className="card__title">
-                <ClipboardCheck size={14} />
-                Privacy setup checklist
-              </h2>
-              <p className="card__subtitle">
-                {completedSetupCount}/5 baseline items are ready. Work through these before marking the program documented.
-              </p>
+        <div className="col privacy-main-col">
+          <div className="card privacy-create-card">
+            <div className="card__head">
+              <div>
+                <h2 className="card__title">
+                  <FileText size={14} />
+                  Create the policy document
+                </h2>
+                <p className="card__subtitle">
+                  Start with a Societyer draft, edit it here, then link the final approved version as evidence.
+                </p>
+              </div>
+            </div>
+            <div className="card__body">
+              <div className="privacy-document-path">
+                <div className="privacy-document-path__copy">
+                  <strong>{policyDraft ? policyDraft.title : "No starter privacy policy draft yet"}</strong>
+                  <span>
+                    {adoptedPolicyDocument
+                      ? `${adoptedPolicyDocument.title} is linked as the adopted privacy policy evidence.`
+                      : policyDraft
+                        ? "Open the draft, tailor it to the society, and link it as evidence only after approval."
+                        : "Create a Markdown draft populated with this society's name, privacy officer fields, member-data status, and PIPA baseline sections."}
+                  </span>
+                </div>
+                <div className="privacy-document-path__actions">
+                  <button className="btn btn--accent btn--sm" disabled={draftBusy} onClick={openPolicyDraft}>
+                    {policyDraft ? <PenLine size={12} /> : <Plus size={12} />}
+                    {policyDraft ? "Edit draft" : "Create draft"}
+                  </button>
+                  <button className="btn btn--ghost btn--sm" disabled={draftBusy} onClick={openMemberDataMemoDraft}>
+                    {memberDataMemoDraft ? <PenLine size={12} /> : <Plus size={12} />}
+                    {memberDataMemoDraft ? "Edit data memo" : "Create data memo"}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="card__body privacy-step-list">
+
+          <div className="card privacy-setup-card">
+            <div className="card__head">
+              <div>
+                <h2 className="card__title">
+                  <ClipboardCheck size={14} />
+                  Privacy setup checklist
+                </h2>
+                <p className="card__subtitle">
+                  {completedSetupCount}/5 baseline items are ready. Work through these before marking the program documented.
+                </p>
+              </div>
+            </div>
+            <div className="card__body privacy-step-list">
             <PrivacyStep
               icon={UserRound}
               title="Designate the privacy officer"
@@ -136,7 +291,15 @@ export function PrivacyPage() {
               status={privacyProgramDocumented ? "Adopted" : "Draft/adopt"}
               tone={privacyProgramDocumented ? "success" : "warn"}
               citationIds={["PIPA-POLICY", "OIPC-PIPA-PRIVACY-POLICY-GUIDE"]}
-              actions={<Link className="btn btn--ghost btn--sm" to="/app/society"><FileText size={12} /> Program status</Link>}
+              actions={(
+                <>
+                  <button className="btn btn--accent btn--sm" disabled={draftBusy} onClick={openPolicyDraft}>
+                    {policyDraft ? <PenLine size={12} /> : <Plus size={12} />}
+                    {policyDraft ? "Edit draft" : "Create draft"}
+                  </button>
+                  <Link className="btn btn--ghost btn--sm" to="/app/society"><FileText size={12} /> Program status</Link>
+                </>
+              )}
             >
               {privacyProgramDocumented ? (
                 <>
@@ -154,7 +317,16 @@ export function PrivacyPage() {
               status={hasPolicyEvidence ? "Linked" : "Evidence gap"}
               tone={hasPolicyEvidence ? "success" : "info"}
               citationIds={["PIPA-POLICY"]}
-              actions={<Link className="btn btn--ghost btn--sm" to="/app/documents"><FileCheck2 size={12} /> Documents</Link>}
+              actions={(
+                <>
+                  {policyDraft && (
+                    <button className="btn btn--ghost btn--sm" disabled={draftBusy} onClick={openPolicyDraft}>
+                      <PenLine size={12} /> Review draft
+                    </button>
+                  )}
+                  <Link className="btn btn--ghost btn--sm" to="/app/documents"><FileCheck2 size={12} /> Documents</Link>
+                </>
+              )}
             >
               {hasPolicyEvidence
                 ? "An adopted privacy policy or equivalent evidence is linked in Documents."
@@ -167,7 +339,15 @@ export function PrivacyPage() {
               status={memberDataReady ? "Recorded" : "Needs memo"}
               tone={memberDataReady ? "success" : "warn"}
               citationIds={["PIPA-POLICY", "BC-SOC-RECORDS"]}
-              actions={<Link className="btn btn--ghost btn--sm" to="/app/society"><UsersRound size={12} /> Data access</Link>}
+              actions={(
+                <>
+                  <button className="btn btn--ghost btn--sm" disabled={draftBusy} onClick={openMemberDataMemoDraft}>
+                    {memberDataMemoDraft ? <PenLine size={12} /> : <Plus size={12} />}
+                    {memberDataMemoDraft ? "Edit memo" : "Create memo"}
+                  </button>
+                  <Link className="btn btn--ghost btn--sm" to="/app/society"><UsersRound size={12} /> Data access</Link>
+                </>
+              )}
             >
               {memberDataStepText(memberDataAccessStatus, memberDataGapDocumented)}
             </PrivacyStep>
@@ -200,6 +380,7 @@ export function PrivacyPage() {
             </PrivacyStep>
           </div>
         </div>
+        </div>
 
         <div className="col privacy-side-col">
           <div className="card">
@@ -214,7 +395,13 @@ export function PrivacyPage() {
                 Societyer can provide a starter policy draft. BC OIPC provides the BC-specific guidance; the federal OPC tool is only a drafting aid.
               </p>
               {PIPA_TEMPLATE_RESOURCES.map((resource) => (
-                <ResourceRow key={resource.title} resource={resource} />
+                <ResourceRow
+                  key={resource.title}
+                  resource={resource}
+                  onCreateDraft={resource.title.includes("starter") ? openPolicyDraft : undefined}
+                  draftBusy={draftBusy}
+                  hasDraft={!!policyDraft}
+                />
               ))}
             </div>
           </div>
@@ -259,6 +446,54 @@ export function PrivacyPage() {
           </div>
         </div>
       </div>
+
+      <Modal
+        open={!!draftEditor}
+        onClose={() => setDraftEditor(null)}
+        title={draftEditor?.kind === "memberDataMemo" ? "Edit member-data gap memo" : "Edit privacy policy draft"}
+        size="xl"
+        footer={
+          <>
+            <button className="btn" disabled={draftBusy} onClick={() => setDraftEditor(null)}>
+              Close
+            </button>
+            {draftEditor?.kind === "policy" && (
+              <button className="btn" disabled={draftBusy} onClick={linkDraftAsEvidence}>
+                <FileCheck2 size={12} />
+                Link as adopted evidence
+              </button>
+            )}
+            <button className="btn btn--accent" disabled={draftBusy} onClick={saveDraftEditor}>
+              <Save size={12} />
+              Save draft
+            </button>
+          </>
+        }
+      >
+        {draftEditor && (
+          <div className="privacy-editor">
+            <Banner tone="warn" title={draftEditor.kind === "policy" ? "Draft first, evidence after approval" : "Document the data-access gap"}>
+              {draftEditor.kind === "policy"
+                ? "Edit the policy here. Use Link as adopted evidence only after the society has approved the final version."
+                : "Record what the society controls, what the university or parent body controls, and the evidence for that conclusion."}
+            </Banner>
+            <Field label="Document title">
+              <input
+                className="input"
+                value={draftEditor.title}
+                onChange={(event) => setDraftEditor({ ...draftEditor, title: event.target.value })}
+              />
+            </Field>
+            <Field label="Markdown draft" hint="Replace bracketed placeholders before adoption.">
+              <textarea
+                className="textarea privacy-editor__textarea"
+                value={draftEditor.content}
+                onChange={(event) => setDraftEditor({ ...draftEditor, content: event.target.value })}
+              />
+            </Field>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -308,8 +543,14 @@ function PrivacyStep({
 
 function ResourceRow({
   resource,
+  onCreateDraft,
+  draftBusy,
+  hasDraft,
 }: {
   resource: (typeof PIPA_TEMPLATE_RESOURCES)[number];
+  onCreateDraft?: () => void;
+  draftBusy?: boolean;
+  hasDraft?: boolean;
 }) {
   const externalHref = "href" in resource ? resource.href : undefined;
   return (
@@ -328,6 +569,11 @@ function ResourceRow({
           <ExternalLink size={12} />
           Open
         </a>
+      ) : onCreateDraft ? (
+        <button className="btn btn--ghost btn--sm" disabled={draftBusy} onClick={onCreateDraft}>
+          {hasDraft ? <PenLine size={12} /> : <Plus size={12} />}
+          {hasDraft ? "Edit" : "Create"}
+        </button>
       ) : (
         <Link className="btn btn--ghost btn--sm" to="/app/documents">
           <FileCheck2 size={12} />
@@ -335,6 +581,37 @@ function ResourceRow({
         </Link>
       )}
     </div>
+  );
+}
+
+function editorStateFromDocument(document: any, kind: DraftEditorKind): DraftEditorState {
+  return {
+    id: document._id,
+    kind,
+    title: String(document.title ?? ""),
+    content: String(document.content ?? ""),
+    tags: Array.isArray(document.tags) ? document.tags : [],
+  };
+}
+
+function isPrivacyPolicyDraft(document: any) {
+  if (!document || document.archivedAtISO || document.flaggedForDeletion) return false;
+  const tags = Array.isArray(document.tags) ? document.tags : [];
+  const title = String(document.title ?? "").toLowerCase();
+  return (
+    (tags.includes("privacy-policy") && tags.includes("draft")) ||
+    (title.includes("draft") && title.includes("privacy policy"))
+  );
+}
+
+function isMemberDataMemoDraft(document: any) {
+  if (!document || document.archivedAtISO || document.flaggedForDeletion) return false;
+  const tags = Array.isArray(document.tags) ? document.tags : [];
+  const title = String(document.title ?? "").toLowerCase();
+  const normalizedTitle = title.replace(/[-_]+/g, " ");
+  return (
+    (tags.includes("member-data-gap") && tags.includes("draft")) ||
+    (normalizedTitle.includes("draft") && normalizedTitle.includes("member data") && normalizedTitle.includes("gap"))
   );
 }
 

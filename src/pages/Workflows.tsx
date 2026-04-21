@@ -144,6 +144,9 @@ export function WorkflowsPage() {
         subtitle="Native workflow control with Societyer context and n8n execution for external automations."
         actions={
           <>
+            <Link className="btn-action" to="/app/workflow-packages">
+              <WorkflowIcon size={12} /> Legal packages
+            </Link>
             <button className="btn-action" onClick={() => openNew("unbc_affiliate_id_request")}>
               <WorkflowIcon size={12} /> UNBC example
             </button>

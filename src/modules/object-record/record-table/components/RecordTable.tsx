@@ -1,4 +1,9 @@
-import { type ReactNode, useMemo } from "react";
+import { forwardRef, type ReactNode, useMemo } from "react";
+// NOTE: if you're adding another hook to this file, it MUST go above all the
+// early returns (`if (loading) ...`, etc). React's rules of hooks require a
+// stable call order on every render. An earlier iteration had a useMemo
+// after the virtualization branch and it crashed the page once the record
+// count grew past the threshold on a re-render.
 import { TableVirtuoso } from "react-virtuoso";
 import { useRecordTableState } from "../state/recordTableStore";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
@@ -7,6 +12,35 @@ import { RecordTableHeader } from "./RecordTableHeader";
 import { RecordTableRow } from "./RecordTableRow";
 import { RecordTableEmpty } from "./RecordTableEmpty";
 import type { FieldMetadata } from "../../types";
+
+// react-virtuoso attaches refs to the four table subcomponents so it can
+// measure them for virtualization. Plain function components can't accept
+// refs, so each override has to be a `forwardRef`. They're defined outside
+// the main component so React doesn't re-create them every render (which
+// would thrash virtuoso's internal keys).
+const VirtuosoTable = forwardRef<HTMLTableElement, React.TableHTMLAttributes<HTMLTableElement>>(
+  function VirtuosoTable(props, ref) {
+    return <table ref={ref} {...props} className="record-table" />;
+  },
+);
+
+const VirtuosoTableHead = forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
+  function VirtuosoTableHead(props, ref) {
+    return <thead ref={ref} {...props} className="record-table__thead" />;
+  },
+);
+
+const VirtuosoTableBody = forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
+  function VirtuosoTableBody(props, ref) {
+    return <tbody ref={ref} {...props} className="record-table__tbody" />;
+  },
+);
+
+const VirtuosoTableRow = forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement> & { item?: unknown }>(
+  function VirtuosoTableRow({ item: _item, ...props }, ref) {
+    return <tr ref={ref} {...props} className="record-table__row" />;
+  },
+);
 
 /**
  * Opt-in escape hatch for pages that need a custom cell renderer on
@@ -91,9 +125,13 @@ export function RecordTable({
     );
   }
 
-  const className =
-    "record-table" +
-    (density === "comfortable" ? " record-table--comfortable" : " record-table--compact");
+  // Density lives on the wrapper (CSS selectors are descendant-based —
+  // `.record-table--compact .record-table__cell`), so the <table> itself
+  // can keep a static `record-table` class. That lets `VirtuosoTable` be a
+  // module-level forwardRef with no closure over render-time state, which
+  // keeps the hook order stable across both render branches.
+  const densityClass =
+    density === "comfortable" ? "record-table--comfortable" : "record-table--compact";
 
   const hasRowActions = !!renderRowActions;
 
@@ -102,8 +140,8 @@ export function RecordTable({
   // react-virtuoso.
   if (filtered.length <= virtualizeAbove) {
     return (
-      <div className="record-table__scroll">
-        <table className={className}>
+      <div className={`record-table__scroll ${densityClass}`}>
+        <table className="record-table">
           <thead className="record-table__thead">
             <RecordTableHeader selectable={selectable} hasRowActions={hasRowActions} />
           </thead>
@@ -129,17 +167,20 @@ export function RecordTable({
     );
   }
 
+  // TableVirtuoso applies `height: 100%` inline by default, which overrides
+  // the 600px from `.record-table__virtuoso` in CSS (inline > class). If the
+  // parent card has no explicit height, 100% collapses to 0 and virtuoso
+  // renders an empty tbody. Pass height inline so our value wins.
   return (
     <TableVirtuoso
       data={filtered}
-      className="record-table__virtuoso"
+      className={`record-table__virtuoso ${densityClass}`}
+      style={{ height: 600 }}
       components={{
-        Table: (props) => <table {...props} className={className} />,
-        TableHead: (props) => <thead {...props} className="record-table__thead" />,
-        TableBody: (props: any) => <tbody {...props} className="record-table__tbody" />,
-        TableRow: ({ item: _item, ...props }: any) => (
-          <tr {...props} className="record-table__row" />
-        ),
+        Table: VirtuosoTable,
+        TableHead: VirtuosoTableHead,
+        TableBody: VirtuosoTableBody,
+        TableRow: VirtuosoTableRow,
       }}
       fixedHeaderContent={() => (
         <RecordTableHeader selectable={selectable} hasRowActions={hasRowActions} />

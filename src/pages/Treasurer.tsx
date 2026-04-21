@@ -228,11 +228,14 @@ export function TreasurerPage() {
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
 
-  const incomeEntries = pnl
-    ? Object.entries(pnl.incomeByCategory as Record<string, number>)
+  // Server now returns these as arrays of `{ category, cents }` (object keys
+  // can't carry the en-dash characters Wave uses in category names). Map to
+  // tuples so the existing `[cat, amt]` destructuring downstream still works.
+  const incomeEntries: Array<[string, number]> = pnl
+    ? pnl.incomeByCategory.map(({ category, cents }) => [category, cents])
     : [];
-  const expenseEntries = pnl
-    ? Object.entries(pnl.expenseByCategory as Record<string, number>)
+  const expenseEntries: Array<[string, number]> = pnl
+    ? pnl.expenseByCategory.map(({ category, cents }) => [category, cents])
     : [];
   const fundingEvents = (fundingSources ?? [])
     .flatMap((source: any) =>

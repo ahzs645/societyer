@@ -94,29 +94,31 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <PageHeader title={t("settings.title")} subtitle={t("settings.subtitle")} />
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card__head">
-          <h2 className="card__title">{t("settings.languageTitle")}</h2>
-          <span className="card__subtitle">{t("settings.languageSubtitle")}</span>
+      <div className="settings-pair" style={{ marginBottom: 16 }}>
+        <div className="card">
+          <div className="card__head">
+            <h2 className="card__title">{t("settings.languageTitle")}</h2>
+            <span className="card__subtitle">{t("settings.languageSubtitle")}</span>
+          </div>
+          <div className="card__body row" style={{ gap: 8 }}>
+            <LocaleSwitcher />
+          </div>
         </div>
-        <div className="card__body row" style={{ gap: 8 }}>
-          <LocaleSwitcher />
-        </div>
-      </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card__head"><h2 className="card__title">{t("settings.appearanceTitle")}</h2></div>
-        <div className="card__body row" style={{ gap: 8 }}>
-          <RadioGroup<ThemePreference>
-            name="appearance-theme"
-            value={theme}
-            onChange={setTheme}
-            options={themeOptions}
-            direction="horizontal"
-          />
+        <div className="card">
+          <div className="card__head"><h2 className="card__title">{t("settings.appearanceTitle")}</h2></div>
+          <div className="card__body row" style={{ gap: 8 }}>
+            <RadioGroup<ThemePreference>
+              name="appearance-theme"
+              value={theme}
+              onChange={setTheme}
+              options={themeOptions}
+              direction="horizontal"
+            />
+          </div>
         </div>
       </div>
 
@@ -130,38 +132,40 @@ export function SettingsPage() {
             {t("settings.modulesHint")}
           </div>
 
-          {modulesByCategory.map(({ category, items }) => (
-            <div key={category} className="card" style={{ background: "var(--bg-base)" }}>
-              <div className="card__head">
-                <h3 className="card__title" style={{ fontSize: "var(--fs-md)" }}>{category}</h3>
-              </div>
-              <div className="card__body col" style={{ gap: 12 }}>
-                {items.map((module) => (
-                  <div
-                    key={module.key}
-                    style={{
-                      paddingBottom: 12,
-                      borderBottom:
-                        module.key === items[items.length - 1]?.key
-                          ? "none"
-                          : "1px solid var(--border)",
-                    }}
-                  >
-                    <Toggle
-                      checked={moduleSettings[module.key]}
-                      onChange={(checked) => toggleModule(module.key, checked)}
-                      disabled={savingModule === module.key}
-                      label={module.label}
-                      hint={module.description}
-                    />
-                    <div className="muted" style={{ fontSize: "var(--fs-sm)", paddingLeft: 42, marginTop: 4 }}>
-                      Includes: {module.includes.join(", ")}
+          <div className="settings-modules">
+            {modulesByCategory.map(({ category, items }) => (
+              <div key={category} className="card" style={{ background: "var(--bg-base)" }}>
+                <div className="card__head">
+                  <h3 className="card__title" style={{ fontSize: "var(--fs-md)" }}>{category}</h3>
+                </div>
+                <div className="card__body col" style={{ gap: 12 }}>
+                  {items.map((module) => (
+                    <div
+                      key={module.key}
+                      style={{
+                        paddingBottom: 12,
+                        borderBottom:
+                          module.key === items[items.length - 1]?.key
+                            ? "none"
+                            : "1px solid var(--border)",
+                      }}
+                    >
+                      <Toggle
+                        checked={moduleSettings[module.key]}
+                        onChange={(checked) => toggleModule(module.key, checked)}
+                        disabled={savingModule === module.key}
+                        label={module.label}
+                        hint={module.description}
+                      />
+                      <div className="muted" style={{ fontSize: "var(--fs-sm)", paddingLeft: 42, marginTop: 4 }}>
+                        Includes: {module.includes.join(", ")}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
 
@@ -201,29 +205,31 @@ export function SettingsPage() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card__head"><h2 className="card__title">Authentication</h2></div>
-        <div className="card__body col">
-          <div className="muted">
-            Auth mode: <code className="mono">{authMode}</code>
-          </div>
-          <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-            Set <code className="mono">VITE_AUTH_MODE</code> and <code className="mono">AUTH_MODE</code> to <code className="mono">better-auth</code> for real login,
-            or leave them as <code className="mono">none</code> to keep the local no-auth workflow.
+      <div className="settings-pair">
+        <div className="card">
+          <div className="card__head"><h2 className="card__title">Authentication</h2></div>
+          <div className="card__body col">
+            <div className="muted">
+              Auth mode: <code className="mono">{authMode}</code>
+            </div>
+            <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+              Set <code className="mono">VITE_AUTH_MODE</code> and <code className="mono">AUTH_MODE</code> to <code className="mono">better-auth</code> for real login,
+              or leave them as <code className="mono">none</code> to keep the local no-auth workflow.
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="card">
-        <div className="card__head"><h2 className="card__title">Convex deployment</h2></div>
-        <div className="card__body col">
-          <div className="muted">VITE_CONVEX_URL: <code className="mono">{import.meta.env.VITE_CONVEX_URL ?? "— (not set)"}</code></div>
-          <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-            Run <code className="mono">npx convex dev</code> for cloud, or point to a self-hosted backend from{" "}
-            <a href="https://github.com/get-convex/convex-backend" target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
-              get-convex/convex-backend
-            </a>
-            . See <code className="mono">README.md</code>.
+        <div className="card">
+          <div className="card__head"><h2 className="card__title">Convex deployment</h2></div>
+          <div className="card__body col">
+            <div className="muted">VITE_CONVEX_URL: <code className="mono">{import.meta.env.VITE_CONVEX_URL ?? "— (not set)"}</code></div>
+            <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+              Run <code className="mono">npx convex dev</code> for cloud, or point to a self-hosted backend from{" "}
+              <a href="https://github.com/get-convex/convex-backend" target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
+                get-convex/convex-backend
+              </a>
+              . See <code className="mono">README.md</code>.
+            </div>
           </div>
         </div>
       </div>

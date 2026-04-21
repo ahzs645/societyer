@@ -10,6 +10,15 @@ import { Modal } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Tabs } from "../components/primitives";
 import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
+import {
   Archive,
   ArrowLeft,
   ArrowRight,
@@ -169,7 +178,15 @@ export function OrganizationHistoryPage() {
   const [importError, setImportError] = useState("");
   const [peopleSection, setPeopleSection] = useState<PeopleSection>("summary");
   const [workflowOpen, setWorkflowOpen] = useState(false);
+  const [factsViewId, setFactsViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [factsFilterOpen, setFactsFilterOpen] = useState(false);
   const section = parseHistorySection(searchParams.get("section")) ?? "facts";
+
+  const factsTableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "profileFact",
+    viewId: factsViewId,
+  });
 
   const sources = data?.sources ?? [];
   const facts = data?.facts ?? [];
@@ -187,6 +204,19 @@ export function OrganizationHistoryPage() {
   const sourceById = useMemo(() => {
     return new Map(sources.map((source: any) => [source._id, source]));
   }, [sources]);
+
+  const factRecords = useMemo(
+    () =>
+      facts.map((f: any) => ({
+        _id: f._id,
+        label: f.label,
+        value: f.value,
+        confidence: f.confidence,
+        status: f.status,
+        sourceIds: f.sourceIds ?? [],
+      })),
+    [facts],
+  );
 
   const motionOutcomeOptions = useMemo(
     () => uniqueOptions(motions.map((motion: any) => motion.outcome)),
@@ -357,64 +387,83 @@ export function OrganizationHistoryPage() {
               </button>
             </div>
           </div>
-          <DataTable<any>
-            label="Profile facts"
-            icon={<FileText size={14} />}
-            data={facts}
-            rowKey={(fact) => fact._id}
-            pagination
-            initialPageSize={10}
-            pageSizeOptions={[10, 25, 50]}
-            defaultSort={{ columnId: "label", dir: "asc" }}
-            searchPlaceholder="Search facts, values, or sources..."
-            searchExtraFields={[(fact) => sourceSearchText(fact.sourceIds, sourceById)]}
-            emptyMessage="No profile facts yet."
-            columns={[
-              {
-                id: "label",
-                header: "Fact",
-                sortable: true,
-                accessor: (fact) => fact.label,
-                render: (fact) => <strong>{fact.label}</strong>,
-              },
-              {
-                id: "value",
-                header: "Value",
-                accessor: (fact) => fact.value,
-                render: (fact) => <span className="org-history__fact-value">{fact.value}</span>,
-              },
-              {
-                id: "confidence",
-                header: "Confidence",
-                sortable: true,
-                accessor: (fact) => fact.confidence,
-                render: (fact) => <ConfidenceBadge confidence={fact.confidence} />,
-              },
-              {
-                id: "status",
-                header: "Status",
-                sortable: true,
-                accessor: (fact) => fact.status,
-                render: (fact) => <StatusBadge status={fact.status} />,
-              },
-              {
-                id: "sources",
-                header: "Source documents",
-                accessor: (fact) => sourceSearchText(fact.sourceIds, sourceById),
-                render: (fact) => <SourceBadges ids={fact.sourceIds} sourceById={sourceById} />,
-              },
-            ]}
-            renderRowActions={(fact) => (
-              <>
-                <IconButton label={`Edit ${fact.label}`} onClick={() => setFactForm({ ...fact, sourceIds: fact.sourceIds ?? [] })}>
-                  <Pencil size={12} />
-                </IconButton>
-                <IconButton label={`Delete ${fact.label}`} onClick={() => removeItem({ id: fact._id, kind: "fact" })}>
-                  <Trash2 size={12} />
-                </IconButton>
-              </>
-            )}
-          />
+          {!factsTableData.loading && !factsTableData.objectMetadata ? (
+            <div className="record-table__empty">
+              <div className="record-table__empty-title">Metadata not seeded</div>
+              <div className="record-table__empty-desc">
+                Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+                profile-fact object metadata + default view.
+              </div>
+            </div>
+          ) : factsTableData.objectMetadata ? (
+            <RecordTableScope
+              tableId="profileFacts"
+              objectMetadata={factsTableData.objectMetadata}
+              hydratedView={factsTableData.hydratedView}
+              records={factRecords}
+              onUpdate={async ({ recordId, fieldName, value }) => {
+                const existing = facts.find((f: any) => f._id === recordId);
+                if (!existing) return;
+                if (fieldName === "sourceIds") return;
+                const merged = { ...existing, [fieldName]: value };
+                const payload = normalizeFact(merged);
+                if (!payload.label || !payload.value) return;
+                await saveItem({
+                  societyId: society._id,
+                  id: existing._id,
+                  kind: "fact",
+                  payload,
+                });
+              }}
+            >
+              <RecordTableViewToolbar
+                societyId={society._id}
+                objectMetadataId={factsTableData.objectMetadata._id as Id<"objectMetadata">}
+                icon={<FileText size={14} />}
+                label="Profile facts"
+                views={factsTableData.views}
+                currentViewId={factsViewId ?? factsTableData.views[0]?._id ?? null}
+                onChangeView={(viewId) => setFactsViewId(viewId as Id<"views">)}
+                onOpenFilter={() => setFactsFilterOpen((x) => !x)}
+              />
+              <RecordTableFilterPopover open={factsFilterOpen} onClose={() => setFactsFilterOpen(false)} />
+              <RecordTableFilterChips />
+              <RecordTable
+                loading={factsTableData.loading}
+                renderCell={({ record, field }) => {
+                  if (field.name === "sourceIds") {
+                    return <SourceBadges ids={record.sourceIds} sourceById={sourceById} />;
+                  }
+                  return undefined;
+                }}
+                renderRowActions={(fact) => {
+                  const original = facts.find((f: any) => f._id === fact._id) ?? fact;
+                  return (
+                    <>
+                      <IconButton
+                        label={`Edit ${fact.label}`}
+                        onClick={() => setFactForm({ ...original, sourceIds: original.sourceIds ?? [] })}
+                      >
+                        <Pencil size={12} />
+                      </IconButton>
+                      <IconButton
+                        label={`Delete ${fact.label}`}
+                        onClick={() => removeItem({ id: fact._id, kind: "fact" })}
+                      >
+                        <Trash2 size={12} />
+                      </IconButton>
+                    </>
+                  );
+                }}
+              />
+            </RecordTableScope>
+          ) : (
+            <div className="record-table__loading">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="record-table__loading-row" />
+              ))}
+            </div>
+          )}
         </div>
       )}
 

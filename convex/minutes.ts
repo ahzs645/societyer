@@ -27,6 +27,81 @@ const actionItem = v.object({
   done: v.boolean(),
 });
 
+const remoteParticipation = v.object({
+  url: v.optional(v.string()),
+  meetingId: v.optional(v.string()),
+  passcode: v.optional(v.string()),
+  instructions: v.optional(v.string()),
+});
+
+const detailedAttendance = v.object({
+  name: v.string(),
+  status: v.string(),
+  roleTitle: v.optional(v.string()),
+  affiliation: v.optional(v.string()),
+  proxyFor: v.optional(v.string()),
+  quorumCounted: v.optional(v.boolean()),
+  notes: v.optional(v.string()),
+});
+
+const minuteSection = v.object({
+  title: v.string(),
+  type: v.optional(v.string()),
+  presenter: v.optional(v.string()),
+  discussion: v.optional(v.string()),
+  reportSubmitted: v.optional(v.boolean()),
+  decisions: v.optional(v.array(v.string())),
+  actionItems: v.optional(v.array(actionItem)),
+});
+
+const sessionSegment = v.object({
+  type: v.string(),
+  title: v.optional(v.string()),
+  startedAt: v.optional(v.string()),
+  endedAt: v.optional(v.string()),
+  notes: v.optional(v.string()),
+});
+
+const directorAppointment = v.object({
+  name: v.string(),
+  roleTitle: v.optional(v.string()),
+  affiliation: v.optional(v.string()),
+  term: v.optional(v.string()),
+  consentRecorded: v.optional(v.boolean()),
+  status: v.optional(v.string()),
+  notes: v.optional(v.string()),
+});
+
+const specialResolutionExhibit = v.object({
+  title: v.string(),
+  reference: v.optional(v.string()),
+  notes: v.optional(v.string()),
+});
+
+const agmDetails = v.object({
+  financialStatementsPresented: v.optional(v.boolean()),
+  financialStatementsNotes: v.optional(v.string()),
+  directorElectionNotes: v.optional(v.string()),
+  directorAppointments: v.optional(v.array(directorAppointment)),
+  specialResolutionExhibits: v.optional(v.array(specialResolutionExhibit)),
+});
+
+const structuredMinutesFields = {
+  chairName: v.optional(v.string()),
+  secretaryName: v.optional(v.string()),
+  recorderName: v.optional(v.string()),
+  calledToOrderAt: v.optional(v.string()),
+  adjournedAt: v.optional(v.string()),
+  remoteParticipation: v.optional(remoteParticipation),
+  detailedAttendance: v.optional(v.array(detailedAttendance)),
+  sections: v.optional(v.array(minuteSection)),
+  nextMeetingAt: v.optional(v.string()),
+  nextMeetingLocation: v.optional(v.string()),
+  nextMeetingNotes: v.optional(v.string()),
+  sessionSegments: v.optional(v.array(sessionSegment)),
+  agmDetails: v.optional(agmDetails),
+};
+
 export const list = query({
   args: { societyId: v.id("societies") },
   handler: async (ctx, { societyId }) =>
@@ -52,6 +127,7 @@ export const create = mutation({
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
     heldAt: v.string(),
+    ...structuredMinutesFields,
     attendees: v.array(v.string()),
     absent: v.array(v.string()),
     quorumMet: v.boolean(),
@@ -89,6 +165,7 @@ export const update = mutation({
     id: v.id("minutes"),
     patch: v.object({
       heldAt: v.optional(v.string()),
+      ...structuredMinutesFields,
       attendees: v.optional(v.array(v.string())),
       absent: v.optional(v.array(v.string())),
       quorumMet: v.optional(v.boolean()),
@@ -125,6 +202,7 @@ export const upsertFromDraft = mutation({
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
     heldAt: v.string(),
+    ...structuredMinutesFields,
     attendees: v.array(v.string()),
     absent: v.array(v.string()),
     quorumMet: v.boolean(),
@@ -298,13 +376,26 @@ export const generateDraft = action({
       societyId: meeting.societyId,
       meetingId,
       heldAt: meeting.scheduledAt,
+      chairName: draft.chairName,
+      secretaryName: draft.secretaryName,
+      recorderName: draft.recorderName,
+      calledToOrderAt: draft.calledToOrderAt,
+      adjournedAt: draft.adjournedAt,
+      remoteParticipation: draft.remoteParticipation,
+      detailedAttendance: draft.detailedAttendance,
       attendees: draft.attendees.length ? draft.attendees : meeting.attendeeIds,
       absent: draft.absent,
       quorumMet: draft.attendees.length >= (meeting.quorumRequired ?? 0),
       discussion: draft.discussion,
+      sections: draft.sections,
       motions: draft.motions,
       decisions: draft.decisions,
       actionItems: draft.actionItems,
+      nextMeetingAt: draft.nextMeetingAt,
+      nextMeetingLocation: draft.nextMeetingLocation,
+      nextMeetingNotes: draft.nextMeetingNotes,
+      sessionSegments: draft.sessionSegments,
+      agmDetails: draft.agmDetails,
       draftTranscript: transcript,
     });
   },

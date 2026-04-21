@@ -2,7 +2,41 @@
 import { providers } from "./env";
 
 export type MinuteDraft = {
+  chairName?: string;
+  secretaryName?: string;
+  recorderName?: string;
+  calledToOrderAt?: string;
+  adjournedAt?: string;
+  remoteParticipation?: {
+    url?: string;
+    meetingId?: string;
+    passcode?: string;
+    instructions?: string;
+  };
+  detailedAttendance?: Array<{
+    name: string;
+    status: string;
+    roleTitle?: string;
+    affiliation?: string;
+    proxyFor?: string;
+    quorumCounted?: boolean;
+    notes?: string;
+  }>;
   discussion: string;
+  sections?: Array<{
+    title: string;
+    type?: string;
+    presenter?: string;
+    discussion?: string;
+    reportSubmitted?: boolean;
+    decisions?: string[];
+    actionItems?: Array<{
+      text: string;
+      assignee?: string;
+      dueDate?: string;
+      done: boolean;
+    }>;
+  }>;
   motions: Array<{
     text: string;
     movedBy?: string;
@@ -21,6 +55,35 @@ export type MinuteDraft = {
   }>;
   attendees: string[];
   absent: string[];
+  nextMeetingAt?: string;
+  nextMeetingLocation?: string;
+  nextMeetingNotes?: string;
+  sessionSegments?: Array<{
+    type: string;
+    title?: string;
+    startedAt?: string;
+    endedAt?: string;
+    notes?: string;
+  }>;
+  agmDetails?: {
+    financialStatementsPresented?: boolean;
+    financialStatementsNotes?: string;
+    directorElectionNotes?: string;
+    directorAppointments?: Array<{
+      name: string;
+      roleTitle?: string;
+      affiliation?: string;
+      term?: string;
+      consentRecorded?: boolean;
+      status?: string;
+      notes?: string;
+    }>;
+    specialResolutionExhibits?: Array<{
+      title: string;
+      reference?: string;
+      notes?: string;
+    }>;
+  };
 };
 
 function env(name: string): string | undefined {
@@ -120,6 +183,11 @@ function heuristicSummary(args: {
 
   const openLine = findNearbyContext(args.transcript, /call the meeting to order|good evening/i);
   const closeLine = findNearbyContext(args.transcript, /adjourn/i);
+  const calledToOrderAt = extractTime(openLine);
+  const adjournedAt = extractTime(closeLine);
+  const chairName = extractOfficerName(openLine, /(called|convened).*?(?:by\s+)?([A-Z][a-zA-Z'-]+(?:\s+[A-Z][a-zA-Z'-]+)+)|([A-Z][a-zA-Z'-]+(?:\s+[A-Z][a-zA-Z'-]+)+)\s+(?:called|convened)/i);
+  const nextMeetingAt = extractNextMeeting(args.transcript);
+  const remoteParticipation = extractRemoteParticipation(args.transcript);
   const discussion = [openLine, closeLine]
     .filter(Boolean)
     .concat([
@@ -130,7 +198,26 @@ function heuristicSummary(args: {
     ])
     .join("\n\n");
 
-  return { discussion, motions, decisions, actionItems, attendees, absent };
+  const detailedAttendance = [
+    ...attendees.map((name) => ({ name, status: "present", quorumCounted: true })),
+    ...absent.map((name) => ({ name, status: "absent", quorumCounted: false })),
+  ];
+
+  return {
+    chairName,
+    calledToOrderAt,
+    adjournedAt,
+    remoteParticipation,
+    detailedAttendance,
+    discussion,
+    sections: inferredSections(lines),
+    motions,
+    decisions,
+    actionItems,
+    attendees,
+    absent,
+    nextMeetingAt,
+  };
 }
 
 function stripCodeFence(value: string) {
@@ -181,16 +268,161 @@ function normalizeDraft(draft: any, fallback: MinuteDraft): MinuteDraft {
     : fallback.absent;
 
   return {
+    chairName: optionalString(draft?.chairName) ?? fallback.chairName,
+    secretaryName: optionalString(draft?.secretaryName) ?? fallback.secretaryName,
+    recorderName: optionalString(draft?.recorderName) ?? fallback.recorderName,
+    calledToOrderAt: optionalString(draft?.calledToOrderAt) ?? fallback.calledToOrderAt,
+    adjournedAt: optionalString(draft?.adjournedAt) ?? fallback.adjournedAt,
+    remoteParticipation: normalizeRemoteParticipation(draft?.remoteParticipation) ?? fallback.remoteParticipation,
+    detailedAttendance: normalizeDetailedAttendance(draft?.detailedAttendance) ?? fallback.detailedAttendance,
     discussion:
       typeof draft?.discussion === "string" && draft.discussion.trim()
         ? draft.discussion.trim()
         : fallback.discussion,
+    sections: normalizeSections(draft?.sections) ?? fallback.sections,
     motions,
     decisions,
     actionItems,
     attendees,
     absent,
+    nextMeetingAt: optionalString(draft?.nextMeetingAt) ?? fallback.nextMeetingAt,
+    nextMeetingLocation: optionalString(draft?.nextMeetingLocation) ?? fallback.nextMeetingLocation,
+    nextMeetingNotes: optionalString(draft?.nextMeetingNotes) ?? fallback.nextMeetingNotes,
+    sessionSegments: normalizeSessionSegments(draft?.sessionSegments) ?? fallback.sessionSegments,
+    agmDetails: normalizeAgmDetails(draft?.agmDetails) ?? fallback.agmDetails,
   };
+}
+
+function optionalString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function normalizeRemoteParticipation(value: any): MinuteDraft["remoteParticipation"] | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const out = {
+    url: optionalString(value.url),
+    meetingId: optionalString(value.meetingId),
+    passcode: optionalString(value.passcode),
+    instructions: optionalString(value.instructions),
+  };
+  return Object.values(out).some(Boolean) ? out : undefined;
+}
+
+function normalizeDetailedAttendance(value: any): MinuteDraft["detailedAttendance"] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const rows = value
+    .filter((row) => optionalString(row?.name))
+    .map((row) => ({
+      name: optionalString(row.name)!,
+      status: optionalString(row.status) ?? "present",
+      roleTitle: optionalString(row.roleTitle),
+      affiliation: optionalString(row.affiliation),
+      proxyFor: optionalString(row.proxyFor),
+      quorumCounted: typeof row.quorumCounted === "boolean" ? row.quorumCounted : undefined,
+      notes: optionalString(row.notes),
+    }));
+  return rows.length ? rows : undefined;
+}
+
+function normalizeSections(value: any): MinuteDraft["sections"] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const rows = value
+    .filter((row) => optionalString(row?.title))
+    .map((row) => ({
+      title: optionalString(row.title)!,
+      type: optionalString(row.type),
+      presenter: optionalString(row.presenter),
+      discussion: optionalString(row.discussion),
+      reportSubmitted: typeof row.reportSubmitted === "boolean" ? row.reportSubmitted : undefined,
+      decisions: Array.isArray(row.decisions) ? row.decisions.map(optionalString).filter(Boolean) as string[] : undefined,
+      actionItems: Array.isArray(row.actionItems)
+        ? row.actionItems
+            .filter((item: any) => optionalString(item?.text))
+            .map((item: any) => ({
+              text: optionalString(item.text)!,
+              assignee: optionalString(item.assignee),
+              dueDate: optionalString(item.dueDate),
+              done: !!item.done,
+            }))
+        : undefined,
+    }));
+  return rows.length ? rows : undefined;
+}
+
+function normalizeSessionSegments(value: any): MinuteDraft["sessionSegments"] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const rows = value
+    .filter((row) => optionalString(row?.type))
+    .map((row) => ({
+      type: optionalString(row.type)!,
+      title: optionalString(row.title),
+      startedAt: optionalString(row.startedAt),
+      endedAt: optionalString(row.endedAt),
+      notes: optionalString(row.notes),
+    }));
+  return rows.length ? rows : undefined;
+}
+
+function normalizeAgmDetails(value: any): MinuteDraft["agmDetails"] | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const directorAppointments = Array.isArray(value.directorAppointments)
+    ? value.directorAppointments
+        .filter((row: any) => optionalString(row?.name))
+        .map((row: any) => ({
+          name: optionalString(row.name)!,
+          roleTitle: optionalString(row.roleTitle),
+          affiliation: optionalString(row.affiliation),
+          term: optionalString(row.term),
+          consentRecorded: typeof row.consentRecorded === "boolean" ? row.consentRecorded : undefined,
+          status: optionalString(row.status),
+          notes: optionalString(row.notes),
+        }))
+    : undefined;
+  const specialResolutionExhibits = Array.isArray(value.specialResolutionExhibits)
+    ? value.specialResolutionExhibits
+        .filter((row: any) => optionalString(row?.title))
+        .map((row: any) => ({
+          title: optionalString(row.title)!,
+          reference: optionalString(row.reference),
+          notes: optionalString(row.notes),
+        }))
+    : undefined;
+  const out = {
+    financialStatementsPresented: typeof value.financialStatementsPresented === "boolean" ? value.financialStatementsPresented : undefined,
+    financialStatementsNotes: optionalString(value.financialStatementsNotes),
+    directorElectionNotes: optionalString(value.directorElectionNotes),
+    directorAppointments: directorAppointments?.length ? directorAppointments : undefined,
+    specialResolutionExhibits: specialResolutionExhibits?.length ? specialResolutionExhibits : undefined,
+  };
+  return Object.values(out).some(Boolean) ? out : undefined;
+}
+
+function extractTime(value: string) {
+  return value.match(/\b(\d{1,2}:\d{2}\s*(?:a\.?m\.?|p\.?m\.?)?)\b/i)?.[1]?.replace(/\s+/g, " ");
+}
+
+function extractOfficerName(value: string, pattern: RegExp) {
+  const match = value.match(pattern);
+  return optionalString(match?.[2] ?? match?.[3]);
+}
+
+function extractNextMeeting(text: string) {
+  return optionalString(text.match(/\bnext meeting(?:\s+(?:is|set for|scheduled for))?\s+([^.\n]+)/i)?.[1]);
+}
+
+function extractRemoteParticipation(text: string): MinuteDraft["remoteParticipation"] | undefined {
+  const url = optionalString(text.match(/https?:\/\/\S+/i)?.[0]);
+  const meetingId = optionalString(text.match(/\bmeeting id[:\s]+([A-Z0-9 -]{5,})/i)?.[1]);
+  if (!url && !meetingId) return undefined;
+  return { url, meetingId };
+}
+
+function inferredSections(lines: string[]): MinuteDraft["sections"] | undefined {
+  const headings = lines
+    .filter((line) => /^(?:\d+[\). -]+)?[A-Z][A-Za-z &/,'’-]{3,60}$/.test(line) && !/^(motion|action item|minutes)$/i.test(line))
+    .slice(0, 12)
+    .map((title) => ({ title, type: /report/i.test(title) ? "report" : "discussion" }));
+  return headings.length ? headings : undefined;
 }
 
 async function openaiSummary(args: {
@@ -216,7 +448,7 @@ async function openaiSummary(args: {
         {
           role: "system",
           content:
-            "You turn meeting transcripts into strict JSON for nonprofit minutes. Return only valid JSON with keys discussion, motions, decisions, actionItems, attendees, absent. Keep motions factual and concise.",
+            "You turn meeting transcripts into strict JSON for nonprofit minutes. Return only valid JSON. Include keys discussion, motions, decisions, actionItems, attendees, absent, plus optional chairName, secretaryName, recorderName, calledToOrderAt, adjournedAt, remoteParticipation, detailedAttendance, sections, nextMeetingAt, nextMeetingLocation, nextMeetingNotes, sessionSegments, and agmDetails when clearly supported by the transcript. Keep motions factual and concise. Omit unknown optional fields.",
         },
         {
           role: "user",
@@ -259,7 +491,7 @@ async function anthropicSummary(args: {
       max_tokens: 1800,
       temperature: 0.2,
       system:
-        "You turn meeting transcripts into strict JSON for nonprofit minutes. Return only valid JSON with keys discussion, motions, decisions, actionItems, attendees, absent.",
+        "You turn meeting transcripts into strict JSON for nonprofit minutes. Return only valid JSON. Include keys discussion, motions, decisions, actionItems, attendees, absent, plus optional chairName, secretaryName, recorderName, calledToOrderAt, adjournedAt, remoteParticipation, detailedAttendance, sections, nextMeetingAt, nextMeetingLocation, nextMeetingNotes, sessionSegments, and agmDetails when clearly supported by the transcript. Omit unknown optional fields.",
       messages: [
         {
           role: "user",

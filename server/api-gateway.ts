@@ -1,5 +1,6 @@
 import "./env";
 import crypto from "node:crypto";
+import { execFile } from "node:child_process";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import express, { NextFunction, Request, Response, Router } from "express";
@@ -881,6 +882,21 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       res.json(singleResponse(result));
     }),
   );
+
+  router.post(
+    "/browser-connectors/bylaws-history/import",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      const societyId = societyIdFrom(req, req.actor!);
+      const result = await importBylawsHistoryFromBcRegistry(client, {
+        societyId,
+        actingUserId: req.actor?.userId,
+        corpNum: typeof req.body?.corpNum === "string" ? req.body.corpNum : undefined,
+        refresh: req.body?.refresh === true,
+      });
+      res.json(singleResponse(result));
+    }),
+  );
 }
 
 function mountWorkflowBridgeRoutes(router: Router, client: ConvexHttpClient) {
@@ -1430,6 +1446,86 @@ async function importBcRegistryFilingHistory(
   };
 }
 
+async function importBylawsHistoryFromBcRegistry(
+  client: ConvexHttpClient,
+  input: {
+    societyId: string;
+    actingUserId?: string;
+    corpNum?: string;
+    refresh?: boolean;
+  },
+) {
+  const society: any = await convexCall(client, query("society.getById"), { id: input.societyId });
+  if (!society) throw httpError(404, "society_not_found", "Society not found.");
+
+  const corpNum = normalizeBcRegistryCorpNum(input.corpNum ?? society.incorporationNumber);
+  if (!corpNum) {
+    throw httpError(400, "bc_registry_corp_number_required", "A BC Registry incorporation number is required.");
+  }
+
+  const exportInfo = await resolveBcRegistryExport(corpNum, Boolean(input.refresh));
+  const records = await readBcRegistryFilingRecords(exportInfo.directory, corpNum);
+  const documentImport = await importBcRegistryPdfDocuments(client, {
+    societyId: input.societyId,
+    actingUserId: input.actingUserId,
+    exportDirectory: exportInfo.directory,
+    records,
+  });
+  const bundle = await buildBcRegistryBylawsHistoryBundle({
+    corpNum,
+    exportDirectory: exportInfo.directory,
+    publicDirectory: exportInfo.publicDirectory,
+    records,
+    documentIdsByFilename: documentImport.byFilename,
+  });
+
+  if (bundle.bylawAmendments.length === 0) {
+    return {
+      ok: true,
+      corpNum,
+      source: exportInfo.source,
+      exportDirectory: exportInfo.publicDirectory ?? path.relative(process.cwd(), exportInfo.directory),
+      sessionId: null,
+      candidateDocuments: 0,
+      bylawAmendments: 0,
+      visionQueue: 0,
+      documents: {
+        created: documentImport.created,
+        reused: documentImport.reused,
+        skipped: documentImport.skipped,
+      },
+      missing: [
+        {
+          reason: "no_bylaws_registry_rows",
+          message: "No bylaws, constitution, Form 10, or special-resolution rows were found in the BC Registry export.",
+        },
+      ],
+    };
+  }
+
+  const sessionId: any = await convexCall(client, mutation("importSessions.createFromBundle"), {
+    societyId: input.societyId,
+    name: `Bylaws history bot - BC Registry (${new Date().toISOString().slice(0, 10)})`,
+    bundle,
+  });
+
+  return {
+    ok: true,
+    corpNum,
+    source: exportInfo.source,
+    exportDirectory: exportInfo.publicDirectory ?? path.relative(process.cwd(), exportInfo.directory),
+    sessionId,
+    candidateDocuments: bundle.sources.length,
+    bylawAmendments: bundle.bylawAmendments.length,
+    visionQueue: bundle.metadata.visionQueue,
+    documents: {
+      created: documentImport.created,
+      reused: documentImport.reused,
+      skipped: documentImport.skipped,
+    },
+  };
+}
+
 async function importBcRegistryPdfDocuments(
   client: ConvexHttpClient,
   input: {
@@ -1470,6 +1566,7 @@ async function importBcRegistryPdfDocuments(
     const sourceExternalIds = [
       ...(eventId ? [`bc-registry:event:${eventId}`] : []),
       ...(eventId && reportName ? [`bc-registry:document:${eventId}:${reportName}`] : []),
+      ...(fileName ? [`bc-registry:file:${fileName}`] : []),
     ];
     const existingId = byFilename.get(fileName);
     if (existingId) {
@@ -1523,6 +1620,120 @@ async function importBcRegistryPdfDocuments(
   return { byFilename, created, reused, skipped };
 }
 
+async function buildBcRegistryBylawsHistoryBundle(input: {
+  corpNum: string;
+  exportDirectory: string;
+  publicDirectory?: string;
+  records: BcRegistryCsvRecord[];
+  documentIdsByFilename: Map<string, string>;
+}) {
+  const groups = groupBcRegistryFilingRows(input.records.filter(isBcRegistryBylawsHistoryRow))
+    .sort((a, b) => {
+      const left = parseBcRegistryDate(a.rows[0]?.["Date Filed"]) ?? "";
+      const right = parseBcRegistryDate(b.rows[0]?.["Date Filed"]) ?? "";
+      return left.localeCompare(right) || a.key.localeCompare(b.key);
+    });
+  const sources: any[] = [];
+  const bylawAmendments: any[] = [];
+  let previousText = "";
+  let visionQueue = 0;
+
+  for (const group of groups) {
+    const row = bestBcRegistryBylawsDocumentRow(group.rows);
+    const eventId = firstNonEmpty(group.rows.map((item) => item["Event ID"]));
+    const reportName = row["Report Name"];
+    const rawFilename = String(row.Filename ?? "").trim();
+    const fileName = rawFilename ? sanitizeFileName(path.basename(rawFilename)) : "";
+    const sourcePath = fileName ? path.join(input.exportDirectory, "pdfs", fileName) : "";
+    const filedAt = parseBcRegistryDate(row["Date Filed"]);
+    const sourceExternalIds = uniqueStrings([
+      eventId ? `bc-registry:event:${eventId}` : "",
+      eventId ? `bc-registry:event-id:${eventId}` : "",
+      eventId && reportName ? `bc-registry:document:${eventId}:${reportName}` : "",
+      fileName ? `bc-registry:file:${fileName}` : "",
+    ]);
+    const primaryExternalId = sourceExternalIds[0] ?? `bc-registry:paper:${crypto.createHash("sha1").update(group.key).digest("hex").slice(0, 16)}`;
+    const rawText = sourcePath ? await extractPdfTextWithPdftotext(sourcePath) : "";
+    const fullBylaws = looksLikeFullBylawsText(rawText || `${row.Filing} ${row.Details} ${row["Document Name"]} ${row["Report Name"]}`);
+    const needsVisionReview = cleanRegistryText(rawText).length < 300;
+    if (needsVisionReview) visionQueue += 1;
+    const proposedText = needsVisionReview
+      ? registryVisionReviewMarkdown(row, fileName || undefined)
+      : registryBylawsMarkdownFromText(rawText, bcRegistryBylawsSourceTitle(row));
+    const status = fullBylaws && !needsVisionReview ? "Filed" : "Draft";
+    const confidence = fullBylaws && !needsVisionReview ? "Medium" : "Review";
+    const sourceDocumentId = fileName ? input.documentIdsByFilename.get(fileName) : undefined;
+    const notes = [
+      needsVisionReview
+        ? "The registry PDF appears to be scanned or did not yield enough digital text. Run page-by-page vision transcription before approving."
+        : "The registry PDF yielded digital text via pdftotext and was normalized into Markdown. Verify against the PDF before approval.",
+      fullBylaws
+        ? "This looks like a complete bylaws version."
+        : "This looks like a partial amendment, special resolution, or filing source. Merge it into the previous full bylaws text before marking it filed.",
+      sourceDocumentId ? `Linked document: ${sourceDocumentId}.` : "No local source document was linked.",
+    ].join(" ");
+
+    sources.push({
+      externalSystem: "bc-registry",
+      externalId: primaryExternalId,
+      title: bcRegistryBylawsSourceTitle(row),
+      sourceDate: filedAt,
+      category: "BC Registry Bylaws Source",
+      confidence,
+      notes,
+      url: row.URL || undefined,
+      localPath: sourcePath ? path.relative(process.cwd(), sourcePath) : undefined,
+      fileName: fileName || undefined,
+      tags: ["bc-registry", "bylaws", needsVisionReview ? "vision-review" : "pdf-text"],
+    });
+
+    bylawAmendments.push({
+      title: `${status === "Filed" ? "Bylaws version" : "Bylaws source needing review"}: ${bcRegistryBylawsSourceTitle(row)}${filedAt ? ` (${filedAt})` : ""}`,
+      status,
+      baseText: previousText,
+      proposedText,
+      createdByName: "BC Registry bylaws history bot",
+      createdAtISO: dateToStartIso(filedAt),
+      updatedAtISO: dateToStartIso(filedAt),
+      filedAtISO: status === "Filed" ? dateToStartIso(filedAt) : undefined,
+      sourceDate: filedAt,
+      sourceExternalIds,
+      importedFrom: "BC Registry bylaws history bot",
+      confidence,
+      notes,
+      sourceDocumentId,
+      extractionPlan: needsVisionReview
+        ? {
+            mode: "page_by_page_vision",
+            reason: "Digital PDF text extraction was sparse or unavailable.",
+            reviewerInstruction: "Render each PDF page as an image, transcribe clauses in order, preserve numbering, and mark uncertain words with [[uncertain: ...]].",
+          }
+        : {
+            mode: "pdftotext_markdown_normalization",
+            reason: "Digital text was available from the registry PDF.",
+          },
+    });
+
+    if (status === "Filed") previousText = proposedText;
+    else if (!previousText) previousText = proposedText;
+  }
+
+  return {
+    metadata: {
+      name: "Bylaws history bot - BC Registry",
+      createdFrom: "BC Registry filing-history export",
+      corpNum: input.corpNum,
+      exportDirectory: input.publicDirectory ?? path.relative(process.cwd(), input.exportDirectory),
+      candidateDocuments: sources.length,
+      bylawAmendments: bylawAmendments.length,
+      visionQueue,
+      note: "Registry PDFs were staged as review records. Digital PDFs are normalized to Markdown; scan-only PDFs are queued for page-by-page vision transcription.",
+    },
+    sources,
+    bylawAmendments,
+  };
+}
+
 function uniqueBcRegistryDocumentRows(records: BcRegistryCsvRecord[]) {
   const byFilename = new Map<string, BcRegistryCsvRecord>();
   for (const row of records) {
@@ -1530,6 +1741,176 @@ function uniqueBcRegistryDocumentRows(records: BcRegistryCsvRecord[]) {
     if (!byFilename.has(row.Filename)) byFilename.set(row.Filename, row);
   }
   return [...byFilename.values()];
+}
+
+function isBcRegistryBylawsHistoryRow(row: BcRegistryCsvRecord) {
+  const text = [
+    row.Filing,
+    row.Details,
+    row["Document Name"],
+    row["Report Name"],
+    row.Filename,
+  ].join(" ");
+  if (!/\b(bylaws?|by-laws?|constitution|special resolution|copy of resolution|form\s*10|transition)\b/i.test(text)) {
+    return false;
+  }
+  if (/\b(receipt|invoice|payment|annual report)\b/i.test(`${row["Document Name"]} ${row["Report Name"]}`) &&
+    !/\b(bylaw|constitution|resolution)\b/i.test(text)) {
+    return false;
+  }
+  return true;
+}
+
+function bestBcRegistryBylawsDocumentRow(rows: BcRegistryCsvRecord[]): BcRegistryCsvRecord {
+  return rows.find((row) => /\bbylaws?|by-laws?\b/i.test(`${row["Document Name"]} ${row["Report Name"]}`) && row.Filename) ??
+    rows.find((row) => /\bconstitution\b/i.test(`${row["Document Name"]} ${row["Report Name"]}`) && row.Filename) ??
+    rows.find((row) => /\bspecial resolution|copy of resolution|form\s*10\b/i.test(`${row["Document Name"]} ${row["Report Name"]}`) && row.Filename) ??
+    rows.find((row) => row.Filename) ??
+    rows[0] ??
+    {};
+}
+
+function bcRegistryBylawsSourceTitle(row: BcRegistryCsvRecord) {
+  return row["Document Name"] || row["Report Name"] || compactBcRegistryFilingLabel(row.Filing ?? "") || "BC Registry bylaws source";
+}
+
+async function extractPdfTextWithPdftotext(sourcePath: string) {
+  const exists = await stat(sourcePath).catch(() => null);
+  if (!exists) return "";
+  return await new Promise<string>((resolve) => {
+    execFile(
+      "pdftotext",
+      ["-layout", "-enc", "UTF-8", sourcePath, "-"],
+      { timeout: 45_000, maxBuffer: 8 * 1024 * 1024 },
+      (error, stdout) => {
+        if (error) resolve("");
+        else resolve(String(stdout ?? ""));
+      },
+    );
+  });
+}
+
+function registryBylawsMarkdownFromText(raw: string, title: string) {
+  const source = rebreakRegistryBylawsText(raw || title);
+  const lines = source
+    .split(/\n+/)
+    .map((line) => normalizeRegistryBylawLine(line))
+    .filter(Boolean);
+  const out: string[] = [`# ${title}`];
+  let previousWasHeading = true;
+
+  for (const line of lines) {
+    if (isRegistryPdfPageMarker(line)) continue;
+    if (sameRegistryNormalizedText(line, title)) continue;
+
+    if (/^(part|article)\s+[0-9ivxlcdm]+(\b|[:. -])/i.test(line)) {
+      out.push("", `## ${line}`);
+      previousWasHeading = true;
+      continue;
+    }
+    if (/^(section|bylaw)\s+\d+(\b|[:. -])/i.test(line)) {
+      out.push("", `### ${line}`);
+      previousWasHeading = true;
+      continue;
+    }
+    if (isLikelyRegistryStandaloneHeading(line)) {
+      out.push("", `## ${line}`);
+      previousWasHeading = true;
+      continue;
+    }
+    if (/^\d+(?:\.\d+)*[.)]?\s+/.test(line) || /^\([a-z0-9ivxlcdm]+\)\s+/i.test(line)) {
+      out.push(previousWasHeading ? line : `\n${line}`);
+      previousWasHeading = false;
+      continue;
+    }
+
+    out.push(line);
+    previousWasHeading = false;
+  }
+
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function registryVisionReviewMarkdown(row: BcRegistryCsvRecord, fileName?: string) {
+  return [
+    `# ${bcRegistryBylawsSourceTitle(row)}`,
+    "",
+    "## Vision transcription required",
+    "",
+    "The BC Registry PDF did not yield enough digital text to reconstruct this bylaws version safely.",
+    "",
+    "Reviewer checklist:",
+    "",
+    "1. Open the linked registry PDF.",
+    "2. Render each page as an image and transcribe it in order.",
+    "3. Preserve all headings, clause numbers, definitions, schedules, signatures, and handwritten annotations.",
+    "4. Mark uncertain words as `[[uncertain: text]]` and missing/unreadable areas as `[[illegible: page N]]`.",
+    "",
+    `Filing: ${row.Filing || "BC Registry filing"}`,
+    row["Date Filed"] ? `Date filed: ${row["Date Filed"]}` : "",
+    fileName ? `File: ${fileName}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+function rebreakRegistryBylawsText(value: string) {
+  return String(value ?? "")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s+(Part\s+[0-9IVXLCDM]+[:. -])/gi, "\n\n$1")
+    .replace(/\s+((?:Article|Section|Bylaw)\s+\d+(?:\.\d+)*[:. -])/gi, "\n\n$1")
+    .replace(/\s+(\d+(?:\.\d+)*[.)]\s+)/g, "\n$1")
+    .replace(/\s+(\([a-z0-9ivxlcdm]+\)\s+)/gi, "\n$1")
+    .trim();
+}
+
+function normalizeRegistryBylawLine(value: string) {
+  return String(value ?? "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s+([,.;:])/g, "$1")
+    .trim();
+}
+
+function cleanRegistryText(value: string) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function looksLikeFullBylawsText(text: string) {
+  const cleaned = cleanRegistryText(text);
+  const score = [
+    /\bbylaws?|by-laws?\b/i,
+    /\bpart\s+\d+|article\s+\d+|section\s+\d+|\b\d+\.\s+[A-Z]/i,
+    /\bmembers?\b/i,
+    /\bdirectors?\b/i,
+    /\bgeneral meetings?|annual general meeting|special general meeting\b/i,
+    /\bquorum|vot(?:e|ing)|special resolution\b/i,
+  ].reduce((sum, regex) => sum + (regex.test(cleaned) ? 1 : 0), 0);
+  return score >= 4 && cleaned.length > 900;
+}
+
+function isRegistryPdfPageMarker(line: string) {
+  return /^(page\s*)?\d+\s*(of\s+\d+)?$/i.test(line) ||
+    /^-+\s*\d+\s*-+$/.test(line);
+}
+
+function sameRegistryNormalizedText(left: string, right: string) {
+  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return normalize(left) === normalize(right);
+}
+
+function isLikelyRegistryStandaloneHeading(line: string) {
+  if (line.length < 4 || line.length > 90) return false;
+  if (/[.!?]$/.test(line)) return false;
+  if (/^(and|or|the|a|an|to|of|in|for)\b/i.test(line)) return false;
+  const words = line.split(/\s+/);
+  if (words.length > 10) return false;
+  const capitalized = words.filter((word) => /^[A-Z0-9]/.test(word)).length;
+  return capitalized >= Math.max(1, Math.ceil(words.length * 0.6));
+}
+
+function dateToStartIso(date: string | undefined) {
+  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) return `${date}T00:00:00Z`;
+  return new Date().toISOString();
 }
 
 function buildBcRegistryFilingImportRecords(input: {

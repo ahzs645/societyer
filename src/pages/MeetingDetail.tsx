@@ -8,15 +8,45 @@ import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { formatDate, formatDateTime } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, ArrowLeft, FileText, Save, Mic, FileDown, Gavel, ClipboardCheck, Upload, ExternalLink, Download, RefreshCw } from "lucide-react";
+import { Sparkles, ArrowLeft, FileText, Save, Mic, FileDown, Gavel, ClipboardCheck, Upload, ExternalLink, Download, RefreshCw, Printer } from "lucide-react";
 import { MotionEditor, Motion } from "../components/MotionEditor";
 import { Checkbox } from "../components/Controls";
-import { exportWordDoc, renderMinutesHtml } from "../lib/exportWord";
+import {
+  MINUTES_EXPORT_STYLES,
+  MinutesExportStyleId,
+  exportWordDoc,
+  getMinutesStyleGaps,
+  openPrintableDocument,
+  renderMinutesHtml,
+} from "../lib/exportWord";
 import { redactText, RedactOptions } from "../lib/redactPii";
 import { EyeOff } from "lucide-react";
 import { SignaturePanel } from "../components/SignaturePanel";
 import { LegalGuideInline, LegalGuideTrackList } from "../components/LegalGuide";
 import { getLegalGuideRules, resolveJurisdictionCode } from "../lib/jurisdictionGuideTracks";
+
+type StructuredMinutesEdit = {
+  chairName: string;
+  secretaryName: string;
+  recorderName: string;
+  calledToOrderAt: string;
+  adjournedAt: string;
+  remoteUrl: string;
+  remoteMeetingId: string;
+  remotePasscode: string;
+  remoteInstructions: string;
+  detailedAttendance: string;
+  sections: string;
+  nextMeetingAt: string;
+  nextMeetingLocation: string;
+  nextMeetingNotes: string;
+  sessionSegments: string;
+  financialStatementsPresented: boolean;
+  financialStatementsNotes: string;
+  directorElectionNotes: string;
+  directorAppointments: string;
+  specialResolutionExhibits: string;
+};
 
 export function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -70,6 +100,13 @@ export function MeetingDetailPage() {
   } | null>(null);
   const [savingTranscript, setSavingTranscript] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [structuredEdit, setStructuredEdit] = useState<StructuredMinutesEdit | null>(null);
+  const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>("standard");
+  const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(true);
+  const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(true);
+  const [includeApprovalInExport, setIncludeApprovalInExport] = useState(true);
+  const [includeSignaturesInExport, setIncludeSignaturesInExport] = useState(true);
+  const [includePlaceholdersInExport, setIncludePlaceholdersInExport] = useState(false);
 
   useEffect(() => {
     if (!meeting) return;
@@ -105,6 +142,50 @@ export function MeetingDetailPage() {
     dateISO: legalGuideDateISO,
     topics: ["quorum", "model_bylaws_quorum"],
   });
+  const selectedMinutesExportStyle =
+    MINUTES_EXPORT_STYLES.find((style) => style.id === minutesExportStyle) ??
+    MINUTES_EXPORT_STYLES[0];
+  const minutesExportGaps = minutes
+    ? getMinutesStyleGaps({
+        styleId: minutesExportStyle,
+        meeting: {
+          title: meeting.title,
+          type: meeting.type,
+          scheduledAt: meeting.scheduledAt,
+          location: meeting.location ?? null,
+          electronic: !!meeting.electronic,
+          noticeSentAt: meeting.noticeSentAt ?? null,
+          agendaItems: agenda,
+        },
+        minutes: {
+          heldAt: minutes.heldAt,
+          chairName: minutes.chairName ?? null,
+          secretaryName: minutes.secretaryName ?? null,
+          recorderName: minutes.recorderName ?? null,
+          calledToOrderAt: minutes.calledToOrderAt ?? null,
+          adjournedAt: minutes.adjournedAt ?? null,
+          remoteParticipation: minutes.remoteParticipation ?? null,
+          detailedAttendance: minutes.detailedAttendance ?? null,
+          attendees: minutes.attendees,
+          absent: minutes.absent,
+          quorumMet: minutes.quorumMet,
+          quorumRequired: quorumSnapshot.required,
+          quorumSourceLabel: quorumSnapshot.label,
+          discussion: minutes.discussion,
+          sections: minutes.sections ?? null,
+          motions: minutes.motions as any,
+          decisions: minutes.decisions,
+          actionItems: minutes.actionItems as any,
+          approvedAt: minutes.approvedAt ?? null,
+          nextMeetingAt: minutes.nextMeetingAt ?? null,
+          nextMeetingLocation: minutes.nextMeetingLocation ?? null,
+          nextMeetingNotes: minutes.nextMeetingNotes ?? null,
+          sessionSegments: minutes.sessionSegments ?? null,
+          agmDetails: minutes.agmDetails ?? null,
+          draftTranscript: minutes.draftTranscript ?? null,
+        },
+      })
+    : [];
   const transcriptStatusTone =
     transcriptionJob?.status === "complete"
       ? "success"
@@ -159,10 +240,96 @@ export function MeetingDetailPage() {
 
   const markHeld = () => updateMeeting({ id: meeting._id, patch: { status: "Held" } });
 
-  const exportToWord = () => {
-    if (!meeting || !minutes || !society) return;
-    const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-    const bodyHtml = renderMinutesHtml({
+  const minutesRenderPayload = (redact?: (value: string) => string) => {
+    if (!minutes) return null;
+    const tx = (value?: string | null) => (value && redact ? redact(value) : value);
+    return {
+      heldAt: minutes.heldAt,
+      chairName: tx(minutes.chairName),
+      secretaryName: tx(minutes.secretaryName),
+      recorderName: tx(minutes.recorderName),
+      calledToOrderAt: minutes.calledToOrderAt ?? null,
+      adjournedAt: minutes.adjournedAt ?? null,
+      remoteParticipation: redact
+        ? {
+            ...(minutes.remoteParticipation ?? {}),
+            instructions: tx(minutes.remoteParticipation?.instructions),
+          }
+        : minutes.remoteParticipation ?? null,
+      detailedAttendance: (minutes.detailedAttendance ?? []).map((row: any) => ({
+        ...row,
+        name: tx(row.name),
+        roleTitle: tx(row.roleTitle),
+        affiliation: tx(row.affiliation),
+        proxyFor: tx(row.proxyFor),
+        notes: tx(row.notes),
+      })),
+      attendees: redact ? minutes.attendees.map(redact) : minutes.attendees,
+      absent: redact ? minutes.absent.map(redact) : minutes.absent,
+      quorumMet: minutes.quorumMet,
+      quorumRequired: quorumSnapshot.required,
+      quorumSourceLabel: quorumSnapshot.label,
+      discussion: tx(minutes.discussion) ?? "",
+      sections: (minutes.sections ?? []).map((section: any) => ({
+        ...section,
+        presenter: tx(section.presenter),
+        discussion: tx(section.discussion),
+        decisions: (section.decisions ?? []).map((value: string) => tx(value) ?? ""),
+        actionItems: (section.actionItems ?? []).map((item: any) => ({
+          ...item,
+          text: tx(item.text) ?? "",
+          assignee: tx(item.assignee),
+        })),
+      })),
+      motions: (minutes.motions as any[]).map((m) => ({
+        ...m,
+        text: tx(m.text) ?? "",
+        movedBy: tx(m.movedBy),
+        secondedBy: tx(m.secondedBy),
+      })),
+      decisions: redact ? minutes.decisions.map(redact) : minutes.decisions,
+      actionItems: (minutes.actionItems as any[]).map((a) => ({
+        ...a,
+        text: tx(a.text) ?? "",
+        assignee: tx(a.assignee),
+      })),
+      approvedAt: minutes.approvedAt ?? null,
+      nextMeetingAt: minutes.nextMeetingAt ?? null,
+      nextMeetingLocation: tx(minutes.nextMeetingLocation),
+      nextMeetingNotes: tx(minutes.nextMeetingNotes),
+      sessionSegments: (minutes.sessionSegments ?? []).map((segment: any) => ({
+        ...segment,
+        title: tx(segment.title),
+        notes: tx(segment.notes),
+      })),
+      agmDetails: minutes.agmDetails
+        ? {
+            ...minutes.agmDetails,
+            financialStatementsNotes: tx(minutes.agmDetails.financialStatementsNotes),
+            directorElectionNotes: tx(minutes.agmDetails.directorElectionNotes),
+            directorAppointments: (minutes.agmDetails.directorAppointments ?? []).map((row: any) => ({
+              ...row,
+              name: tx(row.name) ?? "",
+              roleTitle: tx(row.roleTitle),
+              affiliation: tx(row.affiliation),
+              notes: tx(row.notes),
+            })),
+            specialResolutionExhibits: (minutes.agmDetails.specialResolutionExhibits ?? []).map((row: any) => ({
+              ...row,
+              title: tx(row.title) ?? "",
+              reference: tx(row.reference),
+              notes: tx(row.notes),
+            })),
+          }
+        : null,
+      draftTranscript: redact ? null : minutes.draftTranscript ?? null,
+    };
+  };
+
+  const renderExportBody = (redact?: (value: string) => string) => {
+    const payload = minutesRenderPayload(redact);
+    if (!payload) return "";
+    return renderMinutesHtml({
       society: { name: society.name, incorporationNumber: society.incorporationNumber ?? null },
       meeting: {
         title: meeting.title,
@@ -170,22 +337,25 @@ export function MeetingDetailPage() {
         scheduledAt: meeting.scheduledAt,
         location: meeting.location ?? null,
         electronic: !!meeting.electronic,
+        noticeSentAt: meeting.noticeSentAt ?? null,
+        agendaItems: agenda,
       },
-      minutes: {
-        heldAt: minutes.heldAt,
-        attendees: minutes.attendees,
-        absent: minutes.absent,
-        quorumMet: minutes.quorumMet,
-        quorumRequired: quorumSnapshot.required,
-        quorumSourceLabel: quorumSnapshot.label,
-        discussion: minutes.discussion,
-        motions: minutes.motions as any,
-        decisions: minutes.decisions,
-        actionItems: minutes.actionItems as any,
-        approvedAt: minutes.approvedAt ?? null,
-        draftTranscript: minutes.draftTranscript ?? null,
+      minutes: payload,
+      styleId: minutesExportStyle,
+      options: {
+        includeTranscript: redact ? false : includeTranscriptInExport,
+        includeActionItems: includeActionItemsInExport,
+        includeApprovalBlock: includeApprovalInExport,
+        includeSignatures: includeSignaturesInExport,
+        includePlaceholders: includePlaceholdersInExport,
       },
     });
+  };
+
+  const exportToWord = () => {
+    if (!meeting || !minutes || !society) return;
+    const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    const bodyHtml = renderExportBody();
     exportWordDoc({
       filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.doc`,
       title: `${meeting.title} — Minutes`,
@@ -194,44 +364,22 @@ export function MeetingDetailPage() {
     toast.success("Minutes exported", "Opens in Word, Pages, or Google Docs.");
   };
 
+  const exportToPdf = () => {
+    if (!meeting || !minutes || !society) return;
+    const opened = openPrintableDocument({
+      title: `${meeting.title} — Minutes`,
+      bodyHtml: renderExportBody(),
+    });
+    if (opened) toast.success("Printable minutes opened", "Use the print dialog to save as PDF.");
+    else toast.error("Popup blocked", "Allow popups for this site to open the printable PDF view.");
+  };
+
   const exportPublicMinutes = () => {
     if (!meeting || !minutes || !society) return;
     const pii = redactOpts();
     const redact = (s: string) => redactText(s, pii);
     const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-    const bodyHtml = renderMinutesHtml({
-      society: { name: society.name, incorporationNumber: society.incorporationNumber ?? null },
-      meeting: {
-        title: meeting.title,
-        type: meeting.type,
-        scheduledAt: meeting.scheduledAt,
-        location: meeting.location ?? null,
-        electronic: !!meeting.electronic,
-      },
-      minutes: {
-        heldAt: minutes.heldAt,
-        attendees: minutes.attendees.map(redact),
-        absent: minutes.absent.map(redact),
-        quorumMet: minutes.quorumMet,
-        quorumRequired: quorumSnapshot.required,
-        quorumSourceLabel: quorumSnapshot.label,
-        discussion: redact(minutes.discussion),
-        motions: (minutes.motions as any[]).map((m) => ({
-          ...m,
-          text: redact(m.text),
-          movedBy: m.movedBy ? redact(m.movedBy) : undefined,
-          secondedBy: m.secondedBy ? redact(m.secondedBy) : undefined,
-        })),
-        decisions: minutes.decisions.map(redact),
-        actionItems: (minutes.actionItems as any[]).map((a) => ({
-          ...a,
-          text: redact(a.text),
-          assignee: a.assignee ? redact(a.assignee) : undefined,
-        })),
-        approvedAt: minutes.approvedAt ?? null,
-        draftTranscript: null, // never include transcripts in public copy
-      },
-    });
+    const bodyHtml = renderExportBody(redact);
     exportWordDoc({
       filename: `${safe}-public-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.doc`,
       title: `${meeting.title} — Public minutes`,
@@ -247,9 +395,20 @@ export function MeetingDetailPage() {
     // Members query isn't loaded on this page by default; use attendees & absent
     // from the minutes as a fallback signal for which names appear in the text.
     if (minutes) {
+      addRedactionName(names, minutes.chairName);
+      addRedactionName(names, minutes.secretaryName);
+      addRedactionName(names, minutes.recorderName);
       minutes.attendees.forEach((n: string) => addRedactionName(names, n));
       minutes.absent.forEach((n: string) => addRedactionName(names, n));
+      (minutes.detailedAttendance ?? []).forEach((row: any) => {
+        addRedactionName(names, row.name);
+        addRedactionName(names, row.proxyFor);
+      });
       minutes.actionItems.forEach((item: any) => addRedactionName(names, item.assignee));
+      (minutes.sections ?? []).forEach((section: any) => {
+        addRedactionName(names, section.presenter);
+        namesFromDiscussion(section.discussion ?? "").forEach((n) => addRedactionName(names, n));
+      });
       namesFromDiscussion(minutes.discussion).forEach((n) => addRedactionName(names, n));
     }
     return { names: Array.from(new Set(names)), typeLabels: true };
@@ -293,6 +452,21 @@ export function MeetingDetailPage() {
     });
     setAttendanceEdit(null);
     toast.success("Attendance saved");
+  };
+
+  const startStructuredEdit = () => {
+    if (!minutes) return;
+    setStructuredEdit(structuredEditFromMinutes(minutes));
+  };
+
+  const saveStructuredDetails = async () => {
+    if (!minutes || !structuredEdit) return;
+    await updateMinutes({
+      id: minutes._id,
+      patch: structuredPatchFromEdit(structuredEdit),
+    });
+    setStructuredEdit(null);
+    toast.success("Structured minutes details saved");
   };
 
   const transcriptCard = (
@@ -485,6 +659,11 @@ export function MeetingDetailPage() {
               </button>
             )}
             {minutes && (
+              <button className="btn-action" onClick={exportToPdf} title="Open a printable copy you can save as PDF">
+                <Printer size={12} /> Print / PDF
+              </button>
+            )}
+            {minutes && (
               <button
                 className="btn-action"
                 onClick={exportPublicMinutes}
@@ -620,6 +799,31 @@ export function MeetingDetailPage() {
                 </div>
 
                 <div className="minutes-section">
+                  <div className="row" style={{ justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                    <h3>Structured details</h3>
+                    {structuredEdit ? (
+                      <div className="row" style={{ gap: 6 }}>
+                        <button className="btn-action" onClick={() => setStructuredEdit(null)}>Cancel</button>
+                        <button className="btn-action btn-action--primary" onClick={saveStructuredDetails}>
+                          <Save size={12} /> Save details
+                        </button>
+                      </div>
+                    ) : (
+                      <button className="btn-action" onClick={startStructuredEdit}>Edit details</button>
+                    )}
+                  </div>
+                  {structuredEdit ? (
+                    <StructuredMinutesEditor
+                      value={structuredEdit}
+                      onChange={setStructuredEdit}
+                      isAgm={meeting.type === "AGM"}
+                    />
+                  ) : (
+                    <StructuredMinutesSummary minutes={minutes} />
+                  )}
+                </div>
+
+                <div className="minutes-section">
                   <h3>Discussion</h3>
                   <p style={{ whiteSpace: "pre-wrap", margin: 0, color: "var(--text-secondary)" }}>{minutes.discussion}</p>
                 </div>
@@ -726,6 +930,82 @@ export function MeetingDetailPage() {
               </Detail>
             </div>
           </div>
+
+          {minutes && (
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">Minutes export</h2>
+                <span className="card__subtitle">{selectedMinutesExportStyle.source}</span>
+              </div>
+              <div className="card__body col" style={{ gap: 12 }}>
+                <Field label="Style">
+                  <select
+                    className="input"
+                    value={minutesExportStyle}
+                    onChange={(event) => setMinutesExportStyle(event.target.value as MinutesExportStyleId)}
+                  >
+                    {MINUTES_EXPORT_STYLES.map((style) => (
+                      <option key={style.id} value={style.id}>
+                        {style.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>
+                  {selectedMinutesExportStyle.tone}
+                </p>
+                <div className="col" style={{ gap: 6 }}>
+                  <Checkbox
+                    checked={includeTranscriptInExport}
+                    onChange={setIncludeTranscriptInExport}
+                    label="Include transcript"
+                  />
+                  <Checkbox
+                    checked={includeActionItemsInExport}
+                    onChange={setIncludeActionItemsInExport}
+                    label="Include action items"
+                  />
+                  <Checkbox
+                    checked={includeApprovalInExport}
+                    onChange={setIncludeApprovalInExport}
+                    label="Include approval block"
+                  />
+                  <Checkbox
+                    checked={includeSignaturesInExport}
+                    onChange={setIncludeSignaturesInExport}
+                    label="Include signature lines"
+                  />
+                  <Checkbox
+                    checked={includePlaceholdersInExport}
+                    onChange={setIncludePlaceholdersInExport}
+                    label="Show not-recorded placeholders"
+                  />
+                </div>
+                <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                  <button className="btn-action btn-action--primary" onClick={exportToWord}>
+                    <FileDown size={12} /> Export Word
+                  </button>
+                  <button className="btn-action" onClick={exportToPdf}>
+                    <Printer size={12} /> Print / PDF
+                  </button>
+                  <button className="btn-action" onClick={exportPublicMinutes}>
+                    <EyeOff size={12} /> Public copy
+                  </button>
+                </div>
+                <div className="minutes-export-gaps">
+                  {minutesExportGaps.map((gap) => (
+                    <div key={`${gap.status}-${gap.label}`} className="minutes-export-gap">
+                      <div className="row" style={{ gap: 6, justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <strong>{gap.label}</strong>
+                        <Badge tone={gapStatusTone(gap.status)}>{gapStatusLabel(gap.status)}</Badge>
+                      </div>
+                      <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{gap.detail}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {quorumLegalGuides.length > 0 && (
             <div className="card">
@@ -851,6 +1131,133 @@ function AttendanceDetails({
         </table>
       </div>
     </details>
+  );
+}
+
+function StructuredMinutesSummary({ minutes }: { minutes: any }) {
+  const chips = [
+    minutes.chairName && `Chair: ${minutes.chairName}`,
+    minutes.secretaryName && `Secretary: ${minutes.secretaryName}`,
+    minutes.recorderName && `Recorder: ${minutes.recorderName}`,
+    minutes.calledToOrderAt && `Called: ${minutes.calledToOrderAt}`,
+    minutes.adjournedAt && `Adjourned: ${minutes.adjournedAt}`,
+    minutes.remoteParticipation?.url && "Remote link",
+    minutes.remoteParticipation?.meetingId && `Meeting ID: ${minutes.remoteParticipation.meetingId}`,
+    (minutes.detailedAttendance ?? []).length ? `${minutes.detailedAttendance.length} detailed attendance rows` : "",
+    (minutes.sections ?? []).length ? `${minutes.sections.length} minute sections` : "",
+    (minutes.sessionSegments ?? []).length ? `${minutes.sessionSegments.length} session segments` : "",
+    minutes.nextMeetingAt && `Next: ${minutes.nextMeetingAt}`,
+    minutes.agmDetails?.financialStatementsPresented && "Financials presented",
+    (minutes.agmDetails?.directorAppointments ?? []).length ? `${minutes.agmDetails.directorAppointments.length} director appointments` : "",
+  ].filter(Boolean);
+
+  if (!chips.length) {
+    return (
+      <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+        No optional structured details recorded yet. Add these to generate richer minutes styles and omit blank sections automatically.
+      </div>
+    );
+  }
+
+  return (
+    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+      {chips.map((chip) => <Badge key={String(chip)} tone="neutral">{chip}</Badge>)}
+    </div>
+  );
+}
+
+function StructuredMinutesEditor({
+  value,
+  onChange,
+  isAgm,
+}: {
+  value: StructuredMinutesEdit;
+  onChange: (value: StructuredMinutesEdit) => void;
+  isAgm: boolean;
+}) {
+  const patch = (diff: Partial<StructuredMinutesEdit>) => onChange({ ...value, ...diff });
+  return (
+    <div className="structured-minutes-editor">
+      <div className="structured-minutes-editor__grid">
+        <Field label="Chair">
+          <input className="input" value={value.chairName} onChange={(event) => patch({ chairName: event.target.value })} />
+        </Field>
+        <Field label="Secretary">
+          <input className="input" value={value.secretaryName} onChange={(event) => patch({ secretaryName: event.target.value })} />
+        </Field>
+        <Field label="Recorder / minute-taker">
+          <input className="input" value={value.recorderName} onChange={(event) => patch({ recorderName: event.target.value })} />
+        </Field>
+        <Field label="Called to order" hint="ISO date/time or source text such as 5:32 pm.">
+          <input className="input" value={value.calledToOrderAt} onChange={(event) => patch({ calledToOrderAt: event.target.value })} />
+        </Field>
+        <Field label="Adjourned" hint="ISO date/time or source text.">
+          <input className="input" value={value.adjournedAt} onChange={(event) => patch({ adjournedAt: event.target.value })} />
+        </Field>
+        <Field label="Next meeting">
+          <input className="input" value={value.nextMeetingAt} onChange={(event) => patch({ nextMeetingAt: event.target.value })} />
+        </Field>
+      </div>
+
+      <div className="structured-minutes-editor__grid">
+        <Field label="Remote URL">
+          <input className="input" value={value.remoteUrl} onChange={(event) => patch({ remoteUrl: event.target.value })} />
+        </Field>
+        <Field label="Remote meeting ID">
+          <input className="input" value={value.remoteMeetingId} onChange={(event) => patch({ remoteMeetingId: event.target.value })} />
+        </Field>
+        <Field label="Remote passcode">
+          <input className="input" value={value.remotePasscode} onChange={(event) => patch({ remotePasscode: event.target.value })} />
+        </Field>
+      </div>
+
+      <Field label="Remote instructions">
+        <textarea className="textarea" rows={2} value={value.remoteInstructions} onChange={(event) => patch({ remoteInstructions: event.target.value })} />
+      </Field>
+
+      <Field label="Detailed attendance" hint="One row per person: status | name | role | affiliation | proxy for | quorum yes/no | notes">
+        <textarea className="textarea" rows={5} value={value.detailedAttendance} onChange={(event) => patch({ detailedAttendance: event.target.value })} />
+      </Field>
+
+      <Field label="Per-agenda sections" hint="One row per section: type | title | presenter | discussion | report yes/no | decisions ; separated | action items ; separated">
+        <textarea className="textarea" rows={5} value={value.sections} onChange={(event) => patch({ sections: event.target.value })} />
+      </Field>
+
+      <Field label="Session segments" hint="One row per segment: type | title | started | ended | notes">
+        <textarea className="textarea" rows={3} value={value.sessionSegments} onChange={(event) => patch({ sessionSegments: event.target.value })} />
+      </Field>
+
+      <div className="structured-minutes-editor__grid">
+        <Field label="Next meeting location">
+          <input className="input" value={value.nextMeetingLocation} onChange={(event) => patch({ nextMeetingLocation: event.target.value })} />
+        </Field>
+        <Field label="Next meeting notes">
+          <input className="input" value={value.nextMeetingNotes} onChange={(event) => patch({ nextMeetingNotes: event.target.value })} />
+        </Field>
+      </div>
+
+      {isAgm && (
+        <>
+          <Checkbox
+            checked={value.financialStatementsPresented}
+            onChange={(financialStatementsPresented) => patch({ financialStatementsPresented })}
+            label="Financial statements were presented"
+          />
+          <Field label="Financial statement notes">
+            <textarea className="textarea" rows={3} value={value.financialStatementsNotes} onChange={(event) => patch({ financialStatementsNotes: event.target.value })} />
+          </Field>
+          <Field label="Director election / appointment notes">
+            <textarea className="textarea" rows={3} value={value.directorElectionNotes} onChange={(event) => patch({ directorElectionNotes: event.target.value })} />
+          </Field>
+          <Field label="Director appointments" hint="One row: status | name | role | affiliation | term | consent yes/no | notes">
+            <textarea className="textarea" rows={4} value={value.directorAppointments} onChange={(event) => patch({ directorAppointments: event.target.value })} />
+          </Field>
+          <Field label="Special-resolution exhibits" hint="One row: title | reference | notes">
+            <textarea className="textarea" rows={3} value={value.specialResolutionExhibits} onChange={(event) => patch({ specialResolutionExhibits: event.target.value })} />
+          </Field>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -1107,6 +1514,206 @@ function getQuorumSnapshot(minutes: any, meeting: any) {
 
 function humanizeQuorumSourceLabel(value: string) {
   return value.replace(/effective (\d{4}-\d{2}-\d{2})/i, (_match, date) => `effective ${formatDate(date)}`);
+}
+
+function structuredEditFromMinutes(minutes: any): StructuredMinutesEdit {
+  return {
+    chairName: minutes.chairName ?? "",
+    secretaryName: minutes.secretaryName ?? "",
+    recorderName: minutes.recorderName ?? "",
+    calledToOrderAt: minutes.calledToOrderAt ?? "",
+    adjournedAt: minutes.adjournedAt ?? "",
+    remoteUrl: minutes.remoteParticipation?.url ?? "",
+    remoteMeetingId: minutes.remoteParticipation?.meetingId ?? "",
+    remotePasscode: minutes.remoteParticipation?.passcode ?? "",
+    remoteInstructions: minutes.remoteParticipation?.instructions ?? "",
+    detailedAttendance: serializeDetailedAttendance(minutes.detailedAttendance ?? []),
+    sections: serializeSections(minutes.sections ?? []),
+    nextMeetingAt: minutes.nextMeetingAt ?? "",
+    nextMeetingLocation: minutes.nextMeetingLocation ?? "",
+    nextMeetingNotes: minutes.nextMeetingNotes ?? "",
+    sessionSegments: serializeSessionSegments(minutes.sessionSegments ?? []),
+    financialStatementsPresented: !!minutes.agmDetails?.financialStatementsPresented,
+    financialStatementsNotes: minutes.agmDetails?.financialStatementsNotes ?? "",
+    directorElectionNotes: minutes.agmDetails?.directorElectionNotes ?? "",
+    directorAppointments: serializeDirectorAppointments(minutes.agmDetails?.directorAppointments ?? []),
+    specialResolutionExhibits: serializeSpecialResolutionExhibits(minutes.agmDetails?.specialResolutionExhibits ?? []),
+  };
+}
+
+function structuredPatchFromEdit(edit: StructuredMinutesEdit) {
+  const remoteParticipation = compactObject({
+    url: cleanOptional(edit.remoteUrl),
+    meetingId: cleanOptional(edit.remoteMeetingId),
+    passcode: cleanOptional(edit.remotePasscode),
+    instructions: cleanOptional(edit.remoteInstructions),
+  });
+  const agmDetails = compactObject({
+    financialStatementsPresented: edit.financialStatementsPresented || undefined,
+    financialStatementsNotes: cleanOptional(edit.financialStatementsNotes),
+    directorElectionNotes: cleanOptional(edit.directorElectionNotes),
+    directorAppointments: parseDirectorAppointments(edit.directorAppointments),
+    specialResolutionExhibits: parseSpecialResolutionExhibits(edit.specialResolutionExhibits),
+  });
+  return {
+    chairName: cleanOptional(edit.chairName),
+    secretaryName: cleanOptional(edit.secretaryName),
+    recorderName: cleanOptional(edit.recorderName),
+    calledToOrderAt: cleanOptional(edit.calledToOrderAt),
+    adjournedAt: cleanOptional(edit.adjournedAt),
+    remoteParticipation,
+    detailedAttendance: parseDetailedAttendance(edit.detailedAttendance),
+    sections: parseSections(edit.sections),
+    nextMeetingAt: cleanOptional(edit.nextMeetingAt),
+    nextMeetingLocation: cleanOptional(edit.nextMeetingLocation),
+    nextMeetingNotes: cleanOptional(edit.nextMeetingNotes),
+    sessionSegments: parseSessionSegments(edit.sessionSegments),
+    agmDetails,
+  };
+}
+
+function cleanOptional(value: string | undefined | null) {
+  const text = String(value ?? "").trim();
+  return text || undefined;
+}
+
+function compactObject<T extends Record<string, any>>(value: T): T | undefined {
+  return Object.values(value).some((entry) => Array.isArray(entry) ? entry.length > 0 : entry !== undefined && entry !== "")
+    ? value
+    : undefined;
+}
+
+function parseDetailedAttendance(value: string) {
+  return parsePipeRows(value).map((parts) => ({
+    status: parts[0] || "present",
+    name: parts[1] || parts[0] || "Unknown",
+    roleTitle: cleanOptional(parts[2]),
+    affiliation: cleanOptional(parts[3]),
+    proxyFor: cleanOptional(parts[4]),
+    quorumCounted: parseOptionalBoolean(parts[5]),
+    notes: cleanOptional(parts[6]),
+  })).filter((row) => row.name !== "Unknown" || row.notes);
+}
+
+function serializeDetailedAttendance(rows: any[]) {
+  return rows.map((row) => [
+    row.status,
+    row.name,
+    row.roleTitle,
+    row.affiliation,
+    row.proxyFor,
+    row.quorumCounted == null ? "" : row.quorumCounted ? "yes" : "no",
+    row.notes,
+  ].map((part) => part ?? "").join(" | ")).join("\n");
+}
+
+function parseSections(value: string) {
+  return parsePipeRows(value).map((parts) => ({
+    type: cleanOptional(parts[0]),
+    title: parts[1] || parts[0] || "Section",
+    presenter: cleanOptional(parts[2]),
+    discussion: cleanOptional(parts[3]),
+    reportSubmitted: parseOptionalBoolean(parts[4]),
+    decisions: splitSemi(parts[5]),
+    actionItems: splitSemi(parts[6]).map((text) => ({ text, done: false })),
+  })).filter((row) => row.title !== "Section" || row.discussion);
+}
+
+function serializeSections(rows: any[]) {
+  return rows.map((row) => [
+    row.type,
+    row.title,
+    row.presenter,
+    row.discussion,
+    row.reportSubmitted == null ? "" : row.reportSubmitted ? "yes" : "no",
+    (row.decisions ?? []).join("; "),
+    (row.actionItems ?? []).map((item: any) => item.text).join("; "),
+  ].map((part) => part ?? "").join(" | ")).join("\n");
+}
+
+function parseSessionSegments(value: string) {
+  return parsePipeRows(value).map((parts) => ({
+    type: parts[0] || "public",
+    title: cleanOptional(parts[1]),
+    startedAt: cleanOptional(parts[2]),
+    endedAt: cleanOptional(parts[3]),
+    notes: cleanOptional(parts[4]),
+  })).filter((row) => row.type || row.notes);
+}
+
+function serializeSessionSegments(rows: any[]) {
+  return rows.map((row) => [row.type, row.title, row.startedAt, row.endedAt, row.notes].map((part) => part ?? "").join(" | ")).join("\n");
+}
+
+function parseDirectorAppointments(value: string) {
+  return parsePipeRows(value).map((parts) => ({
+    status: cleanOptional(parts[0]),
+    name: parts[1] || parts[0] || "Unknown",
+    roleTitle: cleanOptional(parts[2]),
+    affiliation: cleanOptional(parts[3]),
+    term: cleanOptional(parts[4]),
+    consentRecorded: parseOptionalBoolean(parts[5]),
+    notes: cleanOptional(parts[6]),
+  })).filter((row) => row.name !== "Unknown");
+}
+
+function serializeDirectorAppointments(rows: any[]) {
+  return rows.map((row) => [
+    row.status,
+    row.name,
+    row.roleTitle,
+    row.affiliation,
+    row.term,
+    row.consentRecorded == null ? "" : row.consentRecorded ? "yes" : "no",
+    row.notes,
+  ].map((part) => part ?? "").join(" | ")).join("\n");
+}
+
+function parseSpecialResolutionExhibits(value: string) {
+  return parsePipeRows(value).map((parts) => ({
+    title: parts[0] || "Exhibit",
+    reference: cleanOptional(parts[1]),
+    notes: cleanOptional(parts[2]),
+  })).filter((row) => row.title !== "Exhibit" || row.reference || row.notes);
+}
+
+function serializeSpecialResolutionExhibits(rows: any[]) {
+  return rows.map((row) => [row.title, row.reference, row.notes].map((part) => part ?? "").join(" | ")).join("\n");
+}
+
+function parsePipeRows(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.split("|").map((part) => part.trim()));
+}
+
+function splitSemi(value: string | undefined) {
+  return String(value ?? "")
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function parseOptionalBoolean(value: string | undefined) {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (!text) return undefined;
+  if (["yes", "y", "true", "1", "counted", "recorded"].includes(text)) return true;
+  if (["no", "n", "false", "0", "not counted", "not recorded"].includes(text)) return false;
+  return undefined;
+}
+
+function gapStatusTone(status: "available" | "missing" | "not_collected"): "success" | "warn" | "danger" {
+  if (status === "available") return "success";
+  if (status === "missing") return "warn";
+  return "danger";
+}
+
+function gapStatusLabel(status: "available" | "missing" | "not_collected") {
+  if (status === "available") return "Ready";
+  if (status === "missing") return "Missing";
+  return "Not collected";
 }
 
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {

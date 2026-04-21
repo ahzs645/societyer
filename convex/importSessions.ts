@@ -774,6 +774,22 @@ async function ensureImportSourceDocuments(
       byExternalId.set(externalId, { _id: evidence.sourceDocumentId });
     }
   }
+  if (byExternalId.size < externalIds.length) {
+    const existingDocs = await ctx.db
+      .query("documents")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .collect();
+    const missing = externalIds.filter((externalId) => !byExternalId.has(externalId));
+    for (const doc of existingDocs) {
+      if (doc.importSessionId) continue;
+      if (!doc.fileName && !doc.url && !doc.mimeType) continue;
+      const docExternalIds = arrayOf(doc.sourceExternalIds).map(String);
+      for (const externalId of missing) {
+        if (byExternalId.has(externalId)) continue;
+        if (docExternalIds.includes(externalId)) byExternalId.set(externalId, { _id: doc._id });
+      }
+    }
+  }
 
   const ids: any[] = [];
   for (const externalId of externalIds) {

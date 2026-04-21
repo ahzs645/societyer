@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Field } from "../components/ui";
+import { Badge, Banner, Field } from "../components/ui";
+import { useToast } from "../components/Toast";
 import {
   BookOpen,
   FileDown,
@@ -17,6 +18,10 @@ import {
   PenLine,
   MessageSquare,
   CheckCircle2,
+  Bot,
+  Database,
+  FileSearch,
+  ScanText,
 } from "lucide-react";
 import { formatDateTime, formatDate, relative } from "../lib/format";
 import { exportWordDoc, escapeHtml } from "../lib/exportWord";
@@ -80,13 +85,20 @@ type View = "timeline" | "current";
 
 export function BylawsHistoryPage() {
   const society = useSociety();
+  const toast = useToast();
   const amendments = useQuery(
     api.bylawAmendments.list,
     society ? { societyId: society._id } : "skip",
   );
+  const scanPaperlessBylaws = useAction(api.paperless.createBylawsHistoryImportSession);
 
   const [view, setView] = useState<View>("timeline");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [paperlessQuery, setPaperlessQuery] = useState("bylaws by-laws constitution special resolution");
+  const [paperlessLimit, setPaperlessLimit] = useState(500);
+  const [paperlessBusy, setPaperlessBusy] = useState(false);
+  const [registryBusy, setRegistryBusy] = useState(false);
+  const [lastBotSessionId, setLastBotSessionId] = useState<string | null>(null);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -126,6 +138,63 @@ export function BylawsHistoryPage() {
     });
   };
 
+  const runPaperlessBot = async () => {
+    if (paperlessBusy) return;
+    setPaperlessBusy(true);
+    try {
+      const result = await scanPaperlessBylaws({
+        societyId: society._id,
+        query: paperlessQuery.trim() || undefined,
+        maxDocuments: paperlessLimit,
+      });
+      setLastBotSessionId(result.sessionId);
+      toast.success(
+        "Paperless bylaws review staged",
+        `${result.bylawAmendments ?? 0} candidate version(s), ${result.visionQueue ?? 0} needing page review`,
+      );
+    } catch (error: any) {
+      toast.error("Could not scan Paperless bylaws", error?.message ?? "Check the Paperless connection and try again.");
+    } finally {
+      setPaperlessBusy(false);
+    }
+  };
+
+  const runRegistryBot = async () => {
+    if (registryBusy) return;
+    setRegistryBusy(true);
+    try {
+      const response = await fetch("/api/v1/browser-connectors/bylaws-history/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          societyId: society._id,
+          corpNum: society.incorporationNumber,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error?.message ?? payload?.message ?? `Request failed with ${response.status}`);
+      }
+      const data = payload.data ?? {};
+      if (data.sessionId) {
+        setLastBotSessionId(data.sessionId);
+        toast.success(
+          "BC Registry bylaws review staged",
+          `${data.bylawAmendments ?? 0} candidate version(s), ${data.visionQueue ?? 0} needing page review`,
+        );
+      } else {
+        toast.warn(
+          "No BC Registry bylaws staged",
+          data.missing?.map?.((item: any) => item.message ?? item.reason).filter(Boolean).join(" ") ?? "No matching rows were found.",
+        );
+      }
+    } catch (error: any) {
+      toast.error("Could not stage BC Registry bylaws", error?.message ?? "Open a BC Registry browser session and try again.");
+    } finally {
+      setRegistryBusy(false);
+    }
+  };
+
   return (
     <div className="page">
       <PageHeader
@@ -158,6 +227,52 @@ export function BylawsHistoryPage() {
           value={current ? formatDate(current.filedAtISO) : "—"}
           sub={current ? relative(current.filedAtISO) : undefined}
         />
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <div>
+            <h2 className="card__title"><Bot size={14} /> Bylaws history bot</h2>
+            <p className="card__subtitle">
+              Stage BC Registry and Paperless sources as markdown bylaw versions, then approve them in Import Sessions before they update this timeline.
+            </p>
+          </div>
+          {lastBotSessionId && (
+            <Link to="/app/import-sessions" className="btn-action">
+              <FileSearch size={12} /> Review staged records
+            </Link>
+          )}
+        </div>
+        <div className="card__body col" style={{ gap: 12 }}>
+          <Banner tone="warn" icon={<ScanText size={14} />} title="Scans need review">
+            Digital OCR is normalized into Markdown automatically. Scan-only PDFs are queued for page-by-page vision transcription and should stay pending until a reviewer confirms the text.
+          </Banner>
+          <div className="row" style={{ gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <Field label="Paperless search">
+              <input
+                className="input"
+                value={paperlessQuery}
+                onChange={(event) => setPaperlessQuery(event.target.value)}
+              />
+            </Field>
+            <Field label="Max documents">
+              <input
+                className="input"
+                type="number"
+                min={1}
+                max={1179}
+                value={paperlessLimit}
+                onChange={(event) => setPaperlessLimit(Number(event.target.value) || 1)}
+              />
+            </Field>
+            <button className="btn-action btn-action--primary" disabled={paperlessBusy} onClick={runPaperlessBot}>
+              <Database size={12} /> {paperlessBusy ? "Scanning..." : "Scan Paperless"}
+            </button>
+            <button className="btn-action" disabled={registryBusy} onClick={runRegistryBot}>
+              <FileDown size={12} /> {registryBusy ? "Staging..." : "Stage BC Registry"}
+            </button>
+          </div>
+        </div>
       </div>
 
       {view === "current" && (

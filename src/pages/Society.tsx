@@ -126,7 +126,7 @@ export function SocietyPage() {
   };
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <PageHeader
         title="Society profile"
         subtitle="Constitution details, registered office, and key flags."
@@ -276,114 +276,123 @@ export function SocietyPage() {
           <span className="card__subtitle">Tracks compliance state separately from uploaded evidence.</span>
         </div>
         <div className="card__body">
-          <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
-            <Field label="Privacy program status" hint="Use Documented when PIPA policies/practices and complaint process have been adopted.">
-              <Select
-                value={form.privacyProgramStatus ?? ""}
-                onChange={(value) => set("privacyProgramStatus", value)}
-                clearable
-                options={PRIVACY_PROGRAM_STATUS_OPTIONS}
+          <div className="society-split">
+            <section>
+              <span className="society-split__eyebrow">Privacy program</span>
+              <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
+                <Field label="Status" hint="Use Documented when PIPA policies/practices and complaint process have been adopted.">
+                  <Select
+                    value={form.privacyProgramStatus ?? ""}
+                    onChange={(value) => set("privacyProgramStatus", value)}
+                    clearable
+                    options={PRIVACY_PROGRAM_STATUS_OPTIONS}
+                  />
+                </Field>
+                <Field label="Reviewed">
+                  <DatePicker
+                    value={form.privacyProgramReviewedAtISO ?? ""}
+                    onChange={(value) => set("privacyProgramReviewedAtISO", value)}
+                  />
+                </Field>
+              </div>
+              <Field label="Notes" hint="Examples: complaint process location, access-request procedure, retention schedule, training owner.">
+                <textarea
+                  className="textarea"
+                  value={form.privacyProgramNotes ?? ""}
+                  onChange={(e) => set("privacyProgramNotes", e.target.value)}
+                />
+              </Field>
+            </section>
+            <section>
+              <span className="society-split__eyebrow">Member data access</span>
+              <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
+                <Field label="Status" hint="Use Institution-held when a university or parent body holds the full member list outside society control.">
+                  <Select
+                    value={form.memberDataAccessStatus ?? ""}
+                    onChange={(value) => set("memberDataAccessStatus", value)}
+                    clearable
+                    options={MEMBER_DATA_ACCESS_STATUS_OPTIONS}
+                  />
+                </Field>
+                <Field label="Reviewed">
+                  <DatePicker
+                    value={form.memberDataAccessReviewedAtISO ?? ""}
+                    onChange={(value) => set("memberDataAccessReviewedAtISO", value)}
+                  />
+                </Field>
+              </div>
+              <Toggle
+                checked={!!form.memberDataGapDocumented}
+                onChange={(value) => set("memberDataGapDocumented", value)}
+                label="Member data-access gap documented"
               />
-            </Field>
-            <Field label="Program reviewed">
-              <DatePicker
-                value={form.privacyProgramReviewedAtISO ?? ""}
-                onChange={(value) => set("privacyProgramReviewedAtISO", value)}
-              />
-            </Field>
+              <Field label="Notes" hint="Record source requests, refusal/limits, aggregate remittances, direct collection paths, and next review.">
+                <textarea
+                  className="textarea"
+                  value={form.memberDataAccessNotes ?? ""}
+                  onChange={(e) => set("memberDataAccessNotes", e.target.value)}
+                />
+              </Field>
+            </section>
           </div>
-          <Field label="Privacy program notes" hint="Examples: complaint process location, access-request procedure, retention schedule, training owner.">
-            <textarea
-              className="textarea"
-              value={form.privacyProgramNotes ?? ""}
-              onChange={(e) => set("privacyProgramNotes", e.target.value)}
-            />
-          </Field>
-          <div className="hr" />
-          <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
-            <Field label="Member data access" hint="Use Institution-held when a university or parent body holds the full member list outside society control.">
-              <Select
-                value={form.memberDataAccessStatus ?? ""}
-                onChange={(value) => set("memberDataAccessStatus", value)}
-                clearable
-                options={MEMBER_DATA_ACCESS_STATUS_OPTIONS}
-              />
-            </Field>
-            <Field label="Access reviewed">
-              <DatePicker
-                value={form.memberDataAccessReviewedAtISO ?? ""}
-                onChange={(value) => set("memberDataAccessReviewedAtISO", value)}
-              />
-            </Field>
-          </div>
-          <Toggle
-            checked={!!form.memberDataGapDocumented}
-            onChange={(value) => set("memberDataGapDocumented", value)}
-            label="Member data-access gap documented"
-          />
-          <Field label="Member data access notes" hint="Record source requests, refusal/limits, aggregate remittances, direct collection paths, and next review.">
-            <textarea
-              className="textarea"
-              value={form.memberDataAccessNotes ?? ""}
-              onChange={(e) => set("memberDataAccessNotes", e.target.value)}
-            />
-          </Field>
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card__head"><h2 className="card__title">Board meeting cadence</h2>
-          <span className="card__subtitle">How often the board meets — used by Timeline and Dashboard.</span>
-        </div>
-        <div className="card__body">
-          <div className="row" style={{ gap: 12 }}>
-            <Field label="Cadence">
-              <Select
-                value={form.boardCadence ?? ""}
-                onChange={(v) => set("boardCadence", v)}
-                clearable
-                options={["Weekly", "Biweekly", "Monthly", "Bimonthly", "Quarterly", "Ad-hoc"].map((c) => ({ value: c, label: c }))}
-              />
-            </Field>
-            <Field label="Day of week">
-              <Select
-                value={form.boardCadenceDayOfWeek ?? ""}
-                onChange={(v) => set("boardCadenceDayOfWeek", v)}
-                clearable
-                clearLabel="—"
-                options={["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((d) => ({ value: d, label: d }))}
-              />
-            </Field>
-            <Field label="Time (24h)">
-              <input className="input" type="time" value={form.boardCadenceTime ?? ""} onChange={(e) => set("boardCadenceTime", e.target.value)} />
+      <div className="society-bottom">
+        <div className="card">
+          <div className="card__head"><h2 className="card__title">Board meeting cadence</h2>
+            <span className="card__subtitle">How often the board meets — used by Timeline and Dashboard.</span>
+          </div>
+          <div className="card__body">
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Cadence">
+                <Select
+                  value={form.boardCadence ?? ""}
+                  onChange={(v) => set("boardCadence", v)}
+                  clearable
+                  options={["Weekly", "Biweekly", "Monthly", "Bimonthly", "Quarterly", "Ad-hoc"].map((c) => ({ value: c, label: c }))}
+                />
+              </Field>
+              <Field label="Day of week">
+                <Select
+                  value={form.boardCadenceDayOfWeek ?? ""}
+                  onChange={(v) => set("boardCadenceDayOfWeek", v)}
+                  clearable
+                  clearLabel="—"
+                  options={["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((d) => ({ value: d, label: d }))}
+                />
+              </Field>
+              <Field label="Time (24h)">
+                <input className="input" type="time" value={form.boardCadenceTime ?? ""} onChange={(e) => set("boardCadenceTime", e.target.value)} />
+              </Field>
+            </div>
+            <Field label="Notes" hint="e.g. Fourth Thursday of each month, except July & August.">
+              <input className="input" value={form.boardCadenceNotes ?? ""} onChange={(e) => set("boardCadenceNotes", e.target.value)} />
             </Field>
           </div>
-          <Field label="Notes" hint="e.g. Fourth Thursday of each month, except July & August.">
-            <input className="input" value={form.boardCadenceNotes ?? ""} onChange={(e) => set("boardCadenceNotes", e.target.value)} />
-          </Field>
         </div>
-      </div>
 
-      <div className="card">
-        <div className="card__head">
-          <h2 className="card__title">Governance documents</h2>
-          <button
-            className="btn btn--sm"
-            onClick={importGovernanceDocuments}
-            disabled={importingGovernance || missingGovernanceCount === 0}
-            type="button"
+        <div className="card">
+          <div className="card__head">
+            <h2 className="card__title">Governance documents</h2>
+            <button
+              className="btn btn--sm"
+              onClick={importGovernanceDocuments}
+              disabled={importingGovernance || missingGovernanceCount === 0}
+              type="button"
+            >
+              <FileDown size={12} />
+              {importingGovernance ? "Checking…" : "Auto-fill missing"}
+            </button>
+          </div>
+          <div
+            className="card__body"
+            style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))", gap: 12 }}
           >
-            <FileDown size={12} />
-            {importingGovernance ? "Checking…" : "Auto-fill missing"}
-          </button>
-        </div>
-        <div
-          className="card__body"
-          style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))", gap: 12 }}
-        >
-          <DocBadge label="Constitution" present={!!society.constitutionDocId} />
-          <DocBadge label="Bylaws" present={!!society.bylawsDocId} />
-          <DocBadge label="PIPA policy" present={!!society.privacyPolicyDocId} />
+            <DocBadge label="Constitution" present={!!society.constitutionDocId} />
+            <DocBadge label="Bylaws" present={!!society.bylawsDocId} />
+            <DocBadge label="PIPA policy" present={!!society.privacyPolicyDocId} />
+          </div>
         </div>
       </div>
     </div>

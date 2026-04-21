@@ -652,7 +652,7 @@ function RecordDrawer({
             </Field>
           </div>
           {renderPayloadEditor(form, onChange)}
-          <Field label="Source external IDs" hint="Comma-separated Paperless source IDs used for provenance.">
+          <Field label="Source external IDs" hint="Comma-separated Paperless, BC Registry, local, or external IDs used for provenance.">
             <input className="input" value={form.sourceExternalIdsText} onChange={(event) => onChange({ ...form, sourceExternalIdsText: event.target.value })} />
           </Field>
           <Field label="Review notes">
@@ -757,6 +757,40 @@ function renderPayloadEditor(form: any, onChange: (form: any) => void) {
       </>
     );
   }
+  if (form.recordKind === "bylawAmendment") {
+    return (
+      <>
+        <Field label="Title"><input className="input" value={payload.title ?? ""} onChange={(event) => set({ title: event.target.value })} /></Field>
+        <div className="row" style={{ gap: 12 }}>
+          <Field label="Status">
+            <select className="input" value={payload.status ?? "Draft"} onChange={(event) => set({ status: event.target.value })}>
+              <option>Draft</option>
+              <option>Consultation</option>
+              <option>ResolutionPassed</option>
+              <option>Filed</option>
+              <option>Withdrawn</option>
+              <option>Superseded</option>
+            </select>
+          </Field>
+          <Field label="Filed at">
+            <input className="input" value={payload.filedAtISO ?? ""} onChange={(event) => set({ filedAtISO: event.target.value })} placeholder="YYYY-MM-DD or ISO date" />
+          </Field>
+          <Field label="Source date">
+            <input className="input" value={payload.sourceDate ?? ""} onChange={(event) => set({ sourceDate: event.target.value })} placeholder="YYYY-MM-DD" />
+          </Field>
+        </div>
+        <Field label="Base bylaws Markdown" hint="Prior full version used for the redline. Leave blank only for the first version.">
+          <textarea className="textarea mono" rows={12} value={payload.baseText ?? ""} onChange={(event) => set({ baseText: event.target.value })} />
+        </Field>
+        <Field label="Proposed/current bylaws Markdown" hint="For filed history, this should be the full bylaws text after the amendment, not just the resolution excerpt.">
+          <textarea className="textarea mono" rows={16} value={payload.proposedText ?? ""} onChange={(event) => set({ proposedText: event.target.value })} />
+        </Field>
+        <Field label="Notes">
+          <textarea className="textarea" rows={4} value={payload.notes ?? ""} onChange={(event) => set({ notes: event.target.value })} />
+        </Field>
+      </>
+    );
+  }
   if (form.recordKind === "grant") {
     return (
       <>
@@ -820,7 +854,7 @@ function recordPayloadFromForm(form: any) {
   if (form.recordKind === "budget") {
     payload = { ...payload, lines: parseJsonArray(form.linesText) };
   }
-  if (!["source", "fact", "event", "boardTerm", "motion", "budget", "grant"].includes(form.recordKind)) {
+  if (!["source", "fact", "event", "boardTerm", "motion", "budget", "bylawAmendment", "grant"].includes(form.recordKind)) {
     payload = parseJsonObject(form.payloadText);
   }
   return {

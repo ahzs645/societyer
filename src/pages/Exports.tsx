@@ -162,7 +162,7 @@ export function ExportsPage() {
   const totalRows = validation?.totalRows ?? (allTablesCounted ? countedRows : null);
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <PageHeader
         title="Data export"
         icon={<Database size={16} />}
@@ -191,7 +191,7 @@ export function ExportsPage() {
         }
       />
 
-      <div className="stat-grid">
+      <div className="stat-grid stat-grid--3">
         <Stat
           label="Validation"
           value={validation ? (validationOk ? "OK" : "Review") : "..."}
@@ -234,7 +234,7 @@ export function ExportsPage() {
 
       <div className="card">
         <div className="card__head">
-          <div>
+          <div style={{ flex: "1 1 auto", minWidth: 0 }}>
             <h2 className="card__title">Tables</h2>
             <span className="card__subtitle">One file per table. Row counts fill in as validation or exports page through the current database.</span>
           </div>
@@ -256,7 +256,7 @@ export function ExportsPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))",
+              gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 200px), 1fr))",
               gap: 8,
             }}
           >
@@ -271,7 +271,7 @@ export function ExportsPage() {
                 onClick={() => download(table.name)}
                 style={{ justifyContent: "space-between" }}
               >
-                <span className="row" style={{ gap: 8, minWidth: 0 }}>
+                <span className="row row--nowrap" style={{ gap: 8, minWidth: 0, overflow: "hidden" }}>
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{table.name}</span>
                   <Badge tone={count != null && Number(count) > 0 ? "info" : "neutral"}>
                     {count == null ? "pending" : formatNumber(Number(count))}

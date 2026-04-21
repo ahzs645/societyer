@@ -515,6 +515,18 @@ const minutes = [
     status: "Approved",
     heldAt: "2025-06-19T18:30:00.000Z",
     approvedAt: "2025-07-10",
+    chairName: "Mina Patel",
+    secretaryName: "Jordan Lee",
+    recorderName: "Avery Santos",
+    calledToOrderAt: "2025-06-19T18:32:00.000Z",
+    adjournedAt: "2025-06-19T19:46:00.000Z",
+    detailedAttendance: [
+      { name: "Mina Patel", status: "present", roleTitle: "Chair", quorumCounted: true },
+      { name: "Jordan Lee", status: "present", roleTitle: "Secretary", quorumCounted: true },
+      { name: "Devon Clarke", status: "present", roleTitle: "Director", quorumCounted: true },
+      { name: "Avery Santos", status: "present", roleTitle: "Recorder", quorumCounted: true },
+      { name: "Sam Nguyen", status: "regrets", quorumCounted: false },
+    ],
     attendees: ["Mina Patel", "Jordan Lee", "Devon Clarke", "Avery Santos"],
     absent: ["Sam Nguyen"],
     quorumMet: true,
@@ -525,6 +537,22 @@ const minutes = [
     quorumSourceLabel: "Bylaw rules v1, effective 2025-06-25",
     quorumComputedAtISO: "2025-06-19T18:30:00.000Z",
     discussion: "Members reviewed the annual report, financial statements, and director slate.",
+    sections: [
+      {
+        title: "Annual report",
+        type: "report",
+        presenter: "Mina Patel",
+        discussion: "Members reviewed the annual report and program highlights.",
+        reportSubmitted: true,
+      },
+      {
+        title: "Financial statements",
+        type: "report",
+        presenter: "Jordan Lee",
+        discussion: "The 2025 financial statements were presented and discussed.",
+        reportSubmitted: true,
+      },
+    ],
     motions: [
       {
         text: "Approve the 2025 financial statements as presented.",
@@ -538,6 +566,17 @@ const minutes = [
     ],
     decisions: ["Approved annual report filing package."],
     actionItems: [{ text: "File annual report package", assignee: "Mina Patel", dueDate: "2025-07-19", done: true }],
+    nextMeetingAt: "2025-07-10T18:30:00.000Z",
+    nextMeetingLocation: "Riverside Community Hall",
+    agmDetails: {
+      financialStatementsPresented: true,
+      financialStatementsNotes: "The 2025 financial statements were presented to the members.",
+      directorElectionNotes: "The director slate was reviewed and accepted.",
+      directorAppointments: [
+        { name: "Mina Patel", roleTitle: "Director", term: "2025-2026", consentRecorded: true, status: "Confirmed" },
+        { name: "Jordan Lee", roleTitle: "Director", term: "2025-2026", consentRecorded: true, status: "Confirmed" },
+      ],
+    },
   },
 ];
 
@@ -1791,30 +1830,32 @@ function profitAndLoss(args: StaticArgs) {
   const from = args?.from ?? "2026-01-01";
   const to = args?.to ?? "2026-12-31";
   const rows = financialTransactions.filter((transaction) => transaction.date >= from && transaction.date <= to);
-  const incomeByCategory: Record<string, number> = {};
-  const expenseByCategory: Record<string, number> = {};
+  const incomeByCategoryMap = new Map<string, number>();
+  const expenseByCategoryMap = new Map<string, number>();
   let totalIncomeCents = 0;
   let totalExpenseCents = 0;
 
   for (const transaction of rows) {
     const category = transaction.category ?? "Uncategorized";
     if (transaction.amountCents > 0) {
-      incomeByCategory[category] = (incomeByCategory[category] ?? 0) + transaction.amountCents;
+      incomeByCategoryMap.set(category, (incomeByCategoryMap.get(category) ?? 0) + transaction.amountCents);
       totalIncomeCents += transaction.amountCents;
     } else {
-      expenseByCategory[category] = (expenseByCategory[category] ?? 0) + Math.abs(transaction.amountCents);
+      expenseByCategoryMap.set(category, (expenseByCategoryMap.get(category) ?? 0) + Math.abs(transaction.amountCents));
       totalExpenseCents += Math.abs(transaction.amountCents);
     }
   }
 
+  // Mirror the server shape: arrays of `{ category, cents }` so non-ASCII
+  // category names (e.g. Wave's en-dash) survive Convex value validation.
   return {
     from,
     to,
     totalIncomeCents,
     totalExpenseCents,
     netCents: totalIncomeCents - totalExpenseCents,
-    incomeByCategory,
-    expenseByCategory,
+    incomeByCategory: Array.from(incomeByCategoryMap, ([category, cents]) => ({ category, cents })),
+    expenseByCategory: Array.from(expenseByCategoryMap, ([category, cents]) => ({ category, cents })),
     transactionCount: rows.length,
   };
 }
@@ -2614,6 +2655,54 @@ function mutationResult(name: string, args: StaticArgs) {
       status: "complete",
       tags: ["societyer", "demo"],
     };
+  }
+  if (name === "documents:createPipaPolicyDraft") {
+    return {
+      reused: false,
+      document: {
+        _id: "static_pipa_policy_draft",
+        societyId: args?.societyId ?? SOCIETY_ID,
+        title: `Draft PIPA privacy policy - ${society.name}`,
+        category: "Policy",
+        content: `# ${society.name} Privacy Policy\n\nStatus: Draft\n\nReplace bracketed placeholders, review against BC OIPC guidance, then approve before linking as adopted evidence.\n\n## Privacy Officer\n\nPrivacy officer: [role or name]\nEmail: [privacy email]\n\n## Purposes\n\nDescribe why personal information is collected, used, and disclosed.\n\n## Complaint Process\n\nDescribe how privacy questions, access requests, correction requests, and complaints are handled.\n`,
+        createdAtISO: new Date().toISOString(),
+        flaggedForDeletion: false,
+        retentionYears: 10,
+        tags: ["privacy", "privacy-policy", "pipa", "draft", "societyer-template"],
+      },
+    };
+  }
+  if (name === "documents:createMemberDataGapMemoDraft") {
+    return {
+      reused: false,
+      document: {
+        _id: "static_member_data_gap_memo_draft",
+        societyId: args?.societyId ?? SOCIETY_ID,
+        title: `Draft member-data access gap memo - ${society.name}`,
+        category: "Policy",
+        content: `# ${society.name} Member-Data Access Gap Memo\n\nStatus: Draft\n\nDocument what the society controls, what the university or parent body holds, and what evidence supports that conclusion.\n`,
+        createdAtISO: new Date().toISOString(),
+        flaggedForDeletion: false,
+        retentionYears: 10,
+        tags: ["privacy", "member-data-gap", "pipa", "draft", "societyer-template"],
+      },
+    };
+  }
+  if (name === "documents:updateDraftContent") {
+    return {
+      _id: args?.id ?? "static_draft_document",
+      societyId: SOCIETY_ID,
+      title: args?.title ?? "Draft document",
+      category: "Policy",
+      content: args?.content ?? "",
+      createdAtISO: new Date().toISOString(),
+      flaggedForDeletion: false,
+      retentionYears: 10,
+      tags: args?.tags ?? ["privacy", "draft"],
+    };
+  }
+  if (name === "documents:linkPrivacyPolicyEvidence") {
+    return { documentId: args?.documentId ?? DOCUMENT_POLICY_ID };
   }
   if (name === "waveCache:sync") {
     return {

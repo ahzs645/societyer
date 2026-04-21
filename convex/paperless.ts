@@ -400,6 +400,48 @@ export const createTransposedImportSession = action({
   },
 });
 
+export const createBylawsHistoryImportSession = action({
+  args: {
+    societyId: v.id("societies"),
+    query: v.optional(v.string()),
+    maxDocuments: v.optional(v.number()),
+    actingUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    if (args.actingUserId) {
+      await ctx.runQuery(api.paperless.authorizeMeetingImport, {
+        societyId: args.societyId,
+        actingUserId: args.actingUserId,
+      });
+    }
+
+    const query = args.query?.trim() || "bylaws by-laws constitution special resolution form 10";
+    const docs = await listPaperlessDocuments({
+      query,
+      maxDocuments: args.maxDocuments ?? 500,
+    });
+    const bundle = bylawsHistoryBundleFromPaperlessDocuments(docs, query);
+    const sessionId = await ctx.runMutation(api.importSessions.createFromBundle, {
+      societyId: args.societyId,
+      name: `Bylaws history bot - Paperless (${new Date().toISOString().slice(0, 10)})`,
+      bundle,
+    });
+    return {
+      sessionId,
+      scannedDocuments: docs.length,
+      candidateDocuments: bundle.sources.length,
+      bylawAmendments: bundle.bylawAmendments.length,
+      visionQueue: bundle.metadata.visionQueue,
+      sample: bundle.bylawAmendments.slice(0, 8).map((record: any) => ({
+        title: record.title,
+        status: record.status,
+        filedAtISO: record.filedAtISO,
+        confidence: record.confidence,
+      })),
+    };
+  },
+});
+
 export const authorizeMeetingImport = query({
   args: {
     societyId: v.id("societies"),
@@ -962,6 +1004,252 @@ function transposedBundleFromPaperlessDocuments(docs: any[], query?: string) {
     volunteers: bundle.volunteers.length,
   };
   return bundle;
+}
+
+function bylawsHistoryBundleFromPaperlessDocuments(docs: any[], query?: string) {
+  const candidates = docs
+    .map(bylawsHistoryCandidateFromPaperlessDocument)
+    .filter(Boolean)
+    .sort((a: any, b: any) =>
+      String(a.sourceDate ?? "").localeCompare(String(b.sourceDate ?? "")) ||
+      String(a.title ?? "").localeCompare(String(b.title ?? "")),
+    );
+
+  let previousText = "";
+  const bylawAmendments = candidates.map((candidate: any, index: number) => {
+    const record = {
+      title: candidate.title,
+      status: candidate.status,
+      baseText: previousText,
+      proposedText: candidate.markdown,
+      createdByName: "Bylaws history bot",
+      createdAtISO: sourceDateTime(candidate.sourceDate),
+      updatedAtISO: sourceDateTime(candidate.sourceDate),
+      filedAtISO: candidate.status === "Filed" ? sourceDateTime(candidate.sourceDate) : undefined,
+      sourceDate: candidate.sourceDate,
+      sourceExternalIds: [candidate.externalId],
+      importedFrom: "Paperless bylaws history bot",
+      confidence: candidate.confidence,
+      notes: candidate.notes,
+      extractionPlan: candidate.extractionPlan,
+      sourceTitle: candidate.sourceTitle,
+    };
+    if (candidate.status === "Filed") previousText = candidate.markdown;
+    else if (index === 0 && !previousText) previousText = candidate.markdown;
+    return record;
+  });
+
+  return {
+    metadata: {
+      name: "Bylaws history bot - Paperless",
+      createdFrom: "Paperless-ngx bylaws history bot",
+      query: query ?? null,
+      scannedDocuments: docs.length,
+      candidateDocuments: candidates.length,
+      bylawAmendments: bylawAmendments.length,
+      visionQueue: candidates.filter((candidate: any) => candidate.needsVisionReview).length,
+      note: "The bot normalizes OCR into Markdown so reviewers can compare bylaw versions. Sparse OCR or scan-only PDFs are staged with a page-by-page vision review plan instead of being trusted automatically.",
+    },
+    sources: candidates.map((candidate: any) => ({
+      externalSystem: "paperless",
+      externalId: candidate.externalId,
+      title: candidate.sourceTitle,
+      sourceDate: candidate.sourceDate,
+      category: "Bylaws Source",
+      confidence: candidate.confidence,
+      notes: candidate.sourceNotes,
+      url: candidate.url,
+      fileName: candidate.fileName,
+      tags: ["bylaws", candidate.needsVisionReview ? "vision-review" : "ocr-markdown"],
+    })),
+    bylawAmendments,
+  };
+}
+
+function bylawsHistoryCandidateFromPaperlessDocument(doc: any) {
+  const title = paperlessDocumentTitle(doc);
+  const fileName = paperlessFileName(doc);
+  const rawContent = rawPaperlessContent(doc);
+  const haystack = `${title}\n${fileName ?? ""}\n${rawContent}`;
+  if (!isLikelyBylawsHistorySource(haystack)) return null;
+
+  const sourceDate = inferredPaperlessDate(doc);
+  const externalId = `paperless:${doc.id}`;
+  const fullBylaws = looksLikeFullBylaws(haystack);
+  const needsVisionReview = cleanOcrText(rawContent).length < 300;
+  const markdown = needsVisionReview
+    ? visionReviewMarkdown(title, doc)
+    : bylawsMarkdownFromText(rawContent, title);
+  const status = fullBylaws && !needsVisionReview ? "Filed" : "Draft";
+  const confidence = fullBylaws && !needsVisionReview
+    ? "Medium"
+    : needsVisionReview
+      ? "Review"
+      : "Review";
+  const sourceNotes = needsVisionReview
+    ? "Paperless returned little or no OCR for this bylaws source. Pull the source file and run a page-by-page vision review before approving."
+    : "OCR was normalized into Markdown for reviewer comparison. Verify numbering, headings, signatures, and any handwritten marks against the source PDF.";
+
+  return {
+    title: bylawHistoryTitle(title, sourceDate, status),
+    sourceTitle: title,
+    fileName,
+    sourceDate,
+    externalId,
+    url: paperlessDocumentUrl(doc.id),
+    markdown,
+    status,
+    confidence,
+    needsVisionReview,
+    sourceNotes,
+    notes: [
+      sourceNotes,
+      fullBylaws
+        ? "Looks like a full bylaws document, so it was staged as a filed replacement version."
+        : "Looks like an amendment, resolution, or partial source. Review and merge into the previous full bylaws text before filing in the history.",
+    ].join(" "),
+    extractionPlan: needsVisionReview
+      ? {
+          mode: "page_by_page_vision",
+          reason: "Paperless OCR was sparse or missing.",
+          reviewerInstruction: "Render each PDF page as an image, transcribe clauses in order, preserve numbering, and mark uncertain words with [[uncertain: ...]].",
+        }
+      : {
+          mode: "ocr_markdown_normalization",
+          reason: "Paperless OCR text was available.",
+        },
+  };
+}
+
+function isLikelyBylawsHistorySource(text: string) {
+  return /\b(bylaws?|by-laws?|constitution|special resolution|copy of resolution|form\s*10|transition application)\b/i.test(text) &&
+    /\b(societ(?:y|ies)|bc registr|registrar|directors?|members?|general meetings?|special resolution|quorum|voting)\b/i.test(text);
+}
+
+function looksLikeFullBylaws(text: string) {
+  const score = [
+    /\bbylaws?|by-laws?\b/i,
+    /\bpart\s+\d+|article\s+\d+|section\s+\d+|\b\d+\.\s+[A-Z]/i,
+    /\bmembers?\b/i,
+    /\bdirectors?\b/i,
+    /\bgeneral meetings?|annual general meeting|special general meeting\b/i,
+    /\bquorum|vot(?:e|ing)|special resolution\b/i,
+  ].reduce((sum, regex) => sum + (regex.test(text) ? 1 : 0), 0);
+  return score >= 4 && cleanOcrText(text).length > 900;
+}
+
+function rawPaperlessContent(doc: any) {
+  return String(doc.content ?? "").replace(/\r/g, "\n").trim();
+}
+
+function bylawsMarkdownFromText(raw: string, title: string) {
+  const source = rebreakBylawsText(raw || title);
+  const lines = source
+    .split(/\n+/)
+    .map((line) => normalizeBylawLine(line))
+    .filter(Boolean);
+  const out: string[] = [`# ${title}`];
+  let previousWasHeading = true;
+
+  for (const line of lines) {
+    if (isPdfPageMarker(line)) continue;
+    if (sameNormalizedText(line, title)) continue;
+
+    if (/^(part|article)\s+[0-9ivxlcdm]+(\b|[:. -])/i.test(line)) {
+      out.push("", `## ${line}`);
+      previousWasHeading = true;
+      continue;
+    }
+    if (/^(section|bylaw)\s+\d+(\b|[:. -])/i.test(line)) {
+      out.push("", `### ${line}`);
+      previousWasHeading = true;
+      continue;
+    }
+    if (isLikelyStandaloneHeading(line)) {
+      out.push("", `## ${line}`);
+      previousWasHeading = true;
+      continue;
+    }
+    if (/^\d+(?:\.\d+)*[.)]?\s+/.test(line) || /^\([a-z0-9ivxlcdm]+\)\s+/i.test(line)) {
+      out.push(previousWasHeading ? line : `\n${line}`);
+      previousWasHeading = false;
+      continue;
+    }
+
+    out.push(line);
+    previousWasHeading = false;
+  }
+
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function rebreakBylawsText(value: string) {
+  return String(value ?? "")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s+(Part\s+[0-9IVXLCDM]+[:. -])/gi, "\n\n$1")
+    .replace(/\s+((?:Article|Section|Bylaw)\s+\d+(?:\.\d+)*[:. -])/gi, "\n\n$1")
+    .replace(/\s+(\d+(?:\.\d+)*[.)]\s+)/g, "\n$1")
+    .replace(/\s+(\([a-z0-9ivxlcdm]+\)\s+)/gi, "\n$1")
+    .trim();
+}
+
+function normalizeBylawLine(value: string) {
+  return String(value ?? "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s+([,.;:])/g, "$1")
+    .trim();
+}
+
+function isPdfPageMarker(line: string) {
+  return /^(page\s*)?\d+\s*(of\s+\d+)?$/i.test(line) ||
+    /^-+\s*\d+\s*-+$/.test(line);
+}
+
+function sameNormalizedText(left: string, right: string) {
+  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return normalize(left) === normalize(right);
+}
+
+function isLikelyStandaloneHeading(line: string) {
+  if (line.length < 4 || line.length > 90) return false;
+  if (/[.!?]$/.test(line)) return false;
+  if (/^(and|or|the|a|an|to|of|in|for)\b/i.test(line)) return false;
+  const words = line.split(/\s+/);
+  if (words.length > 10) return false;
+  const capitalized = words.filter((word) => /^[A-Z0-9]/.test(word)).length;
+  return capitalized >= Math.max(1, Math.ceil(words.length * 0.6));
+}
+
+function visionReviewMarkdown(title: string, doc: any) {
+  return [
+    `# ${title}`,
+    "",
+    "## Vision transcription required",
+    "",
+    "Paperless did not return enough OCR text to reconstruct this bylaws version safely.",
+    "",
+    "Reviewer checklist:",
+    "",
+    "1. Pull the original PDF from Paperless.",
+    "2. Render each page as an image and transcribe it in order.",
+    "3. Preserve all headings, clause numbers, definitions, schedules, signatures, and handwritten annotations.",
+    "4. Mark uncertain words as `[[uncertain: text]]` and missing/unreadable areas as `[[illegible: page N]]`.",
+    "",
+    `Source: Paperless #${doc.id}`,
+  ].join("\n");
+}
+
+function bylawHistoryTitle(sourceTitle: string, sourceDate: string | undefined, status: string) {
+  const suffix = sourceDate ? ` (${sourceDate})` : "";
+  const prefix = status === "Filed" ? "Bylaws version" : "Bylaws source needing review";
+  return `${prefix}: ${sourceTitle}${suffix}`;
+}
+
+function sourceDateTime(date: string | undefined) {
+  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) return `${date}T00:00:00Z`;
+  return new Date().toISOString();
 }
 
 function transposedBundleKey(kind: string) {

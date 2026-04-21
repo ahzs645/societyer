@@ -42,14 +42,19 @@ export const profitAndLoss = query({
       }
     }
 
+    // Return category breakdowns as arrays rather than records keyed by
+    // category name. Wave-imported categories include non-ASCII typographic
+    // characters like the en-dash in "Payroll – Salary & Wages", which Convex
+    // rejects as an object field name (`validateObjectField` only accepts
+    // plain ASCII). Arrays sidestep that validation without dropping data.
     return {
       from,
       to,
       totalIncomeCents: totalIncome,
       totalExpenseCents: totalExpense,
       netCents: totalIncome - totalExpense,
-      incomeByCategory: Object.fromEntries(incomeByCategory),
-      expenseByCategory: Object.fromEntries(expenseByCategory),
+      incomeByCategory: Array.from(incomeByCategory, ([category, cents]) => ({ category, cents })),
+      expenseByCategory: Array.from(expenseByCategory, ([category, cents]) => ({ category, cents })),
       transactionCount: txns.length,
     };
   },

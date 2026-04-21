@@ -11,7 +11,7 @@ import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Plus, Trash2, UserCog } from "lucide-react";
+import { Archive, ListChecks, Plus, Trash2, UserCog } from "lucide-react";
 import { formatDate } from "../lib/format";
 import {
   RecordTable,
@@ -38,6 +38,7 @@ export function DirectorsPage() {
   const [open, setOpen] = useState(false);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [directorMode, setDirectorMode] = useState<"register" | "archived">("register");
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -58,6 +59,7 @@ export function DirectorsPage() {
   );
   const archivedRoleTerms = roleTerms.filter((term: any) => term.status === "Archived");
   const unresolvedRoleTerms = roleTerms.filter((term: any) => !["Archived", "Verified"].includes(term.status));
+  const currentDirectorKeys = new Set<string>(active.map((director: any) => personNameKey(`${director.firstName} ${director.lastName}`)));
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -95,9 +97,31 @@ export function DirectorsPage() {
         iconColor="blue"
         subtitle="Register of directors under s.20. Act requires ≥ 3 directors, ≥ 1 BC resident (regular societies)."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
-            <Plus size={12} /> New director
-          </button>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <div className="segmented" role="tablist" aria-label="Director screen view">
+              <button
+                type="button"
+                className={`segmented__btn${directorMode === "register" ? " is-active" : ""}`}
+                aria-pressed={directorMode === "register"}
+                onClick={() => setDirectorMode("register")}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+              >
+                <ListChecks size={12} /> Register
+              </button>
+              <button
+                type="button"
+                className={`segmented__btn${directorMode === "archived" ? " is-active" : ""}`}
+                aria-pressed={directorMode === "archived"}
+                onClick={() => setDirectorMode("archived")}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+              >
+                <Archive size={12} /> Archived
+              </button>
+            </div>
+            <button className="btn-action btn-action--primary" onClick={openNew}>
+              <Plus size={12} /> New director
+            </button>
+          </div>
         }
       />
 
@@ -124,7 +148,7 @@ export function DirectorsPage() {
         </div>
       </div>
 
-      {(active.length < 3 || bcResidents < 1 || missingConsent.length > 0) && (
+      {directorMode === "register" && (active.length < 3 || bcResidents < 1 || missingConsent.length > 0) && (
         <div className="col" style={{ marginBottom: 16, gap: 6 }}>
           {active.length < 3 && !society.isMemberFunded && <Flag level="err">Fewer than 3 active directors — regular societies must have at least 3.</Flag>}
           {bcResidents < 1 && <Flag level="err">No BC-resident director. At least one is required.</Flag>}
@@ -132,128 +156,82 @@ export function DirectorsPage() {
         </div>
       )}
 
-      {showMetadataWarning ? (
-        <div className="record-table__empty">
-          <div className="record-table__empty-title">Metadata not seeded</div>
-          <div className="record-table__empty-desc">
-            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-            director object metadata + default view.
+      {directorMode === "register" ? (
+        showMetadataWarning ? (
+          <div className="record-table__empty">
+            <div className="record-table__empty-title">Metadata not seeded</div>
+            <div className="record-table__empty-desc">
+              Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+              director object metadata + default view.
+            </div>
           </div>
-        </div>
-      ) : tableData.objectMetadata ? (
-        <RecordTableScope
-          tableId="directors"
-          objectMetadata={tableData.objectMetadata}
-          hydratedView={tableData.hydratedView}
-          records={records}
-          onRecordClick={(_, record) => {
-            setSelected(record);
-            setOpen(true);
-          }}
-          onUpdate={async ({ recordId, fieldName, value }) => {
-            await update({
-              id: recordId as Id<"directors">,
-              patch: { [fieldName]: value } as any,
-            });
-          }}
-        >
-          <RecordTableViewToolbar
-            societyId={society._id}
-            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
-            icon={<UserCog size={14} />}
-            label="Current legal director register"
-            views={tableData.views}
-            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
-            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
-            onOpenFilter={() => setFilterOpen((x) => !x)}
-          />
-          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
-          <RecordTableFilterChips />
-          <RecordTable selectable loading={tableData.loading || directors === undefined} />
-          <RecordTableBulkBar
-            actions={[
-              {
-                id: "bulk-remove",
-                label: "Remove",
-                icon: <Trash2 size={12} />,
-                tone: "danger",
-                onRun: async (_ids, rows) => {
-                  const ok = await confirm({
-                    title: `Remove ${rows.length} director${rows.length === 1 ? "" : "s"}?`,
-                    message: "They will be removed from the director register.",
-                    confirmLabel: "Remove",
-                    tone: "danger",
-                  });
-                  if (!ok) return;
-                  for (const r of rows) await remove({ id: r._id });
-                  toast.success(`Removed ${rows.length} director${rows.length === 1 ? "" : "s"}`);
+        ) : tableData.objectMetadata ? (
+          <RecordTableScope
+            tableId="directors"
+            objectMetadata={tableData.objectMetadata}
+            hydratedView={tableData.hydratedView}
+            records={records}
+            onRecordClick={(_, record) => {
+              setSelected(record);
+              setOpen(true);
+            }}
+            onUpdate={async ({ recordId, fieldName, value }) => {
+              await update({
+                id: recordId as Id<"directors">,
+                patch: { [fieldName]: value } as any,
+              });
+            }}
+          >
+            <RecordTableViewToolbar
+              societyId={society._id}
+              objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+              icon={<UserCog size={14} />}
+              label="Current legal director register"
+              views={tableData.views}
+              currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+              onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+              onOpenFilter={() => setFilterOpen((x) => !x)}
+            />
+            <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+            <RecordTableFilterChips />
+            <RecordTable selectable loading={tableData.loading || directors === undefined} />
+            <RecordTableBulkBar
+              actions={[
+                {
+                  id: "bulk-remove",
+                  label: "Remove",
+                  icon: <Trash2 size={12} />,
+                  tone: "danger",
+                  onRun: async (_ids, rows) => {
+                    const ok = await confirm({
+                      title: `Remove ${rows.length} director${rows.length === 1 ? "" : "s"}?`,
+                      message: "They will be removed from the director register.",
+                      confirmLabel: "Remove",
+                      tone: "danger",
+                    });
+                    if (!ok) return;
+                    for (const r of rows) await remove({ id: r._id });
+                    toast.success(`Removed ${rows.length} director${rows.length === 1 ? "" : "s"}`);
+                  },
                 },
-              },
-            ]}
-          />
-        </RecordTableScope>
+              ]}
+            />
+          </RecordTableScope>
+        ) : (
+          <div className="record-table__loading">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="record-table__loading-row" />
+            ))}
+          </div>
+        )
       ) : (
-        <div className="record-table__loading">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="record-table__loading-row" />
-          ))}
-        </div>
-      )}
-
-      {roleTerms.length > 0 && (
-        <div className="card" style={{ marginTop: 16 }}>
-          <div className="card__head">
-            <div>
-              <h2 className="card__title">Archived role and service evidence</h2>
-              <p className="card__subtitle">
-                Paperless-derived board, director, masthead, and editorial records retained as historical evidence. The legal register above is the definitive current board.
-              </p>
-            </div>
-            <Link className="btn-action" to="/app/org-history">
-              Open history
-            </Link>
-          </div>
-          <div className="card__body">
-            <div className="stat-grid" style={{ marginBottom: 12 }}>
-              <div className="stat">
-                <div className="stat__label">Historical roles</div>
-                <div className="stat__value">{roleTerms.length}</div>
-                <div className="stat__sub">board, director, masthead, staff</div>
-              </div>
-              <div className="stat">
-                <div className="stat__label">Director/officer evidence</div>
-                <div className="stat__value">{legalDirectorTerms.length}</div>
-                <div className="stat__sub">archived historical observations</div>
-              </div>
-              <div className="stat">
-                <div className="stat__label">Archived</div>
-                <div className="stat__value">{archivedRoleTerms.length}</div>
-                <div className="stat__sub">kept for audit trail</div>
-              </div>
-              <div className="stat">
-                <div className="stat__label">Unresolved</div>
-                <div className="stat__value">{unresolvedRoleTerms.length}</div>
-                <div className="stat__sub">source needs cleanup</div>
-              </div>
-            </div>
-            <table className="table">
-              <thead>
-                <tr><th>Person</th><th>Position</th><th>Board/group</th><th>Observed</th><th>Status</th></tr>
-              </thead>
-              <tbody>
-                {roleTerms.slice(0, 12).map((term: any) => (
-                  <tr key={term._id}>
-                    <td><strong>{term.personName}</strong></td>
-                    <td>{term.position}</td>
-                    <td className="muted">{term.committeeName ?? "—"}</td>
-                    <td className="mono">{formatDate(term.startDate ?? term.endDate)}</td>
-                    <td><Badge tone={roleStatusTone(term.status)}>{term.status ?? "Needs Review"}</Badge></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <ArchivedRoleEvidenceView
+          roleTerms={roleTerms}
+          legalDirectorTerms={legalDirectorTerms}
+          archivedRoleTerms={archivedRoleTerms}
+          unresolvedRoleTerms={unresolvedRoleTerms}
+          currentDirectorKeys={currentDirectorKeys}
+        />
       )}
 
       <Drawer
@@ -350,9 +328,118 @@ export function DirectorsPage() {
   );
 }
 
+function ArchivedRoleEvidenceView({
+  roleTerms,
+  legalDirectorTerms,
+  archivedRoleTerms,
+  unresolvedRoleTerms,
+  currentDirectorKeys,
+}: {
+  roleTerms: any[];
+  legalDirectorTerms: any[];
+  archivedRoleTerms: any[];
+  unresolvedRoleTerms: any[];
+  currentDirectorKeys: Set<string>;
+}) {
+  const currentOverlap = new Set(
+    legalDirectorTerms
+      .filter((term: any) => currentDirectorKeys.has(personNameKey(term.personName)))
+      .map((term: any) => personNameKey(term.personName)),
+  ).size;
+  const legalEvidencePeople = new Set(legalDirectorTerms.map((term: any) => personNameKey(term.personName)).filter(Boolean)).size;
+
+  return (
+    <div className="col" style={{ gap: 16 }}>
+      <div className="card">
+        <div className="card__head">
+          <div>
+            <h2 className="card__title">Archived role evidence</h2>
+            <p className="card__subtitle">
+              Historical board, director, masthead, and editorial observations. Use this for comparison; the Register view remains the current legal director register.
+            </p>
+          </div>
+          <Link className="btn-action" to="/app/org-history">
+            Open history
+          </Link>
+        </div>
+        <div className="card__body">
+          <div className="stat-grid">
+            <div className="stat">
+              <div className="stat__label">Historical roles</div>
+              <div className="stat__value">{roleTerms.length}</div>
+              <div className="stat__sub">board, director, masthead, staff</div>
+            </div>
+            <div className="stat">
+              <div className="stat__label">Director/officer evidence</div>
+              <div className="stat__value">{legalDirectorTerms.length}</div>
+              <div className="stat__sub">{currentOverlap} current · {Math.max(legalEvidencePeople - currentOverlap, 0)} historical-only</div>
+            </div>
+            <div className="stat">
+              <div className="stat__label">Archived</div>
+              <div className="stat__value">{archivedRoleTerms.length}</div>
+              <div className="stat__sub">kept for audit trail</div>
+            </div>
+            <div className="stat">
+              <div className="stat__label">Unresolved</div>
+              <div className="stat__value">{unresolvedRoleTerms.length}</div>
+              <div className="stat__sub">source needs cleanup</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card__head">
+          <div>
+            <h2 className="card__title">Archived people and roles</h2>
+            <p className="card__subtitle">Compared against active directors by normalized name.</p>
+          </div>
+        </div>
+        <div className="card__body">
+          {roleTerms.length > 0 ? (
+            <table className="table">
+              <thead>
+                <tr><th>Person</th><th>Position</th><th>Board/group</th><th>Observed</th><th>Register</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {roleTerms.map((term: any) => {
+                  const inCurrentRegister = currentDirectorKeys.has(personNameKey(term.personName));
+                  return (
+                    <tr key={term._id}>
+                      <td><strong>{term.personName}</strong></td>
+                      <td>{term.position}</td>
+                      <td className="muted">{term.committeeName ?? "—"}</td>
+                      <td className="mono">{formatDate(term.startDate ?? term.endDate)}</td>
+                      <td>
+                        <Badge tone={inCurrentRegister ? "info" : "neutral"}>
+                          {inCurrentRegister ? "Current register" : "Historical only"}
+                        </Badge>
+                      </td>
+                      <td><Badge tone={roleStatusTone(term.status)}>{term.status ?? "Needs Review"}</Badge></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <div className="muted">No archived role evidence has been imported yet.</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function cleanAliases(value: unknown) {
   const items = Array.isArray(value) ? value : String(value ?? "").split(",");
   return Array.from(new Set(items.map((item) => String(item).trim()).filter(Boolean)));
+}
+
+function personNameKey(value: unknown) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function roleStatusTone(status?: string) {

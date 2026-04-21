@@ -1,20 +1,41 @@
 import { Link } from "react-router-dom";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge } from "../components/ui";
+import { useConfirm } from "../components/Modal";
+import { useToast } from "../components/Toast";
 import { Archive, Banknote, ClipboardCheck, FileSearch, GitBranch } from "lucide-react";
 import { formatDate, money } from "../lib/format";
 
 export function GovernanceRegistersPage() {
   const { society, data, people } = useRegisters();
+  const promoteBoardRole = useMutation(api.evidenceRegisters.promoteBoardRoleToDirector);
+  const confirm = useConfirm();
+  const toast = useToast();
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
 
   const roles = data?.boardRoleAssignments ?? [];
   const changes = data?.boardRoleChanges ?? [];
   const signing = data?.signingAuthorities ?? [];
+
+  const promoteRole = async (row: any) => {
+    const ok = await confirm({
+      title: "Promote to director register?",
+      message: `${row.personName} will be added to the current directors register using this source-backed role assignment.`,
+      confirmLabel: "Promote",
+    });
+    if (!ok) return;
+    await promoteBoardRole({
+      assignmentId: row._id,
+      position: row.roleTitle,
+      status: "Active",
+      notes: "Promoted from governance register review.",
+    });
+    toast.success("Director register updated", row.personName);
+  };
 
   return (
     <div className="page">
@@ -35,8 +56,15 @@ export function GovernanceRegistersPage() {
         title="People and director timeline"
         rows={roles}
         empty="Approve board role assignment imports to build the timeline."
-        columns={["Person", "Role", "Group", "Start", "Status"]}
-        render={(row) => [<PersonCell key="p" row={row} name={row.personName} people={people} />, row.roleTitle, row.roleGroup ?? "-", formatDate(row.startDate), <Status key="s" value={row.status} />]}
+        columns={["Person", "Role", "Group", "Start", "Status", "Actions"]}
+        render={(row) => [
+          <PersonCell key="p" row={row} name={row.personName} people={people} />,
+          row.roleTitle,
+          row.roleGroup ?? "-",
+          formatDate(row.startDate),
+          <Status key="s" value={row.status} />,
+          <PromoteAction key="a" row={row} onPromote={() => promoteRole(row)} />,
+        ]}
       />
       <RegisterTable
         title="Board role changes"
@@ -262,6 +290,16 @@ function Stat({ label, value, tone }: { label: string; value: number | string; t
 function Status({ value }: { value?: string }) {
   const tone = value === "Verified" || value === "Linked" ? "success" : value === "Rejected" ? "danger" : "warn";
   return <Badge tone={tone}>{value ?? "NeedsReview"}</Badge>;
+}
+
+function PromoteAction({ row, onPromote }: { row: any; onPromote: () => void }) {
+  if (row.directorId) return <Badge tone="success">Director</Badge>;
+  if (row.status === "Rejected") return <span className="muted">Rejected</span>;
+  return (
+    <button className="btn btn--ghost btn--sm" onClick={onPromote}>
+      Promote
+    </button>
+  );
 }
 
 function PersonCell({ row, name, people }: { row: any; name?: string; people?: PersonLinkCandidate[] }) {

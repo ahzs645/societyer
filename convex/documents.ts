@@ -60,6 +60,142 @@ export const create = mutation({
     }),
 });
 
+export const createPipaPolicyDraft = mutation({
+  args: { societyId: v.id("societies") },
+  handler: async (ctx, { societyId }) => {
+    const society = await ctx.db.get(societyId);
+    if (!society) throw new Error("Society not found.");
+
+    const existing = await findExistingPrivacyDraft(ctx, societyId, "privacy-policy");
+    if (existing) return { document: existing, reused: true };
+
+    const nowISO = new Date().toISOString();
+    const documentId = await ctx.db.insert("documents", {
+      societyId,
+      title: `Draft PIPA privacy policy - ${society.name}`,
+      category: "Policy",
+      fileName: "pipa-privacy-policy-draft.md",
+      mimeType: "text/markdown",
+      content: buildPipaPolicyDraft(society),
+      retentionYears: 10,
+      createdAtISO: nowISO,
+      flaggedForDeletion: false,
+      tags: ["privacy", "privacy-policy", "pipa", "draft", "societyer-template"],
+    });
+
+    await ctx.db.insert("activity", {
+      societyId,
+      actor: "Societyer",
+      entityType: "document",
+      entityId: documentId,
+      action: "document-created",
+      summary: "Created a draft PIPA privacy policy from the Societyer starter template.",
+      createdAtISO: nowISO,
+    });
+
+    const document = await ctx.db.get(documentId);
+    return { document, reused: false };
+  },
+});
+
+export const createMemberDataGapMemoDraft = mutation({
+  args: { societyId: v.id("societies") },
+  handler: async (ctx, { societyId }) => {
+    const society = await ctx.db.get(societyId);
+    if (!society) throw new Error("Society not found.");
+
+    const existing = await findExistingPrivacyDraft(ctx, societyId, "member-data-gap");
+    if (existing) return { document: existing, reused: true };
+
+    const nowISO = new Date().toISOString();
+    const documentId = await ctx.db.insert("documents", {
+      societyId,
+      title: `Draft member-data access gap memo - ${society.name}`,
+      category: "Policy",
+      fileName: "member-data-access-gap-memo-draft.md",
+      mimeType: "text/markdown",
+      content: buildMemberDataGapMemoDraft(society),
+      retentionYears: 10,
+      createdAtISO: nowISO,
+      flaggedForDeletion: false,
+      tags: ["privacy", "member-data-gap", "pipa", "draft", "societyer-template"],
+    });
+
+    await ctx.db.insert("activity", {
+      societyId,
+      actor: "Societyer",
+      entityType: "document",
+      entityId: documentId,
+      action: "document-created",
+      summary: "Created a draft member-data access gap memo from the Societyer starter template.",
+      createdAtISO: nowISO,
+    });
+
+    const document = await ctx.db.get(documentId);
+    return { document, reused: false };
+  },
+});
+
+export const updateDraftContent = mutation({
+  args: {
+    id: v.id("documents"),
+    title: v.string(),
+    content: v.string(),
+    tags: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const document = await ctx.db.get(args.id);
+    if (!document) throw new Error("Document not found.");
+    const tags = args.tags ? Array.from(new Set(args.tags)) : document.tags;
+    await ctx.db.patch(args.id, {
+      title: args.title.trim() || document.title,
+      content: args.content,
+      tags,
+    });
+    await ctx.db.insert("activity", {
+      societyId: document.societyId,
+      actor: "Societyer",
+      entityType: "document",
+      entityId: args.id,
+      action: "document-updated",
+      summary: `Updated ${args.title.trim() || document.title}.`,
+      createdAtISO: new Date().toISOString(),
+    });
+    return await ctx.db.get(args.id);
+  },
+});
+
+export const linkPrivacyPolicyEvidence = mutation({
+  args: {
+    societyId: v.id("societies"),
+    documentId: v.id("documents"),
+  },
+  handler: async (ctx, { societyId, documentId }) => {
+    const [society, document] = await Promise.all([
+      ctx.db.get(societyId),
+      ctx.db.get(documentId),
+    ]);
+    if (!society) throw new Error("Society not found.");
+    if (!document || document.societyId !== societyId) {
+      throw new Error("Document not found for this society.");
+    }
+    await ctx.db.patch(societyId, {
+      privacyPolicyDocId: documentId,
+      updatedAt: Date.now(),
+    });
+    await ctx.db.insert("activity", {
+      societyId,
+      actor: "Societyer",
+      entityType: "society",
+      entityId: societyId,
+      action: "privacy-policy-linked",
+      summary: `Linked ${document.title} as PIPA policy evidence.`,
+      createdAtISO: new Date().toISOString(),
+    });
+    return { documentId };
+  },
+});
+
 export const createGovernanceDocumentFromLocalFile = mutation({
   args: {
     societyId: v.id("societies"),
@@ -333,3 +469,265 @@ export const remove = mutation({
     await ctx.db.delete(id);
   },
 });
+
+async function findExistingPrivacyDraft(ctx: any, societyId: string, tag: string) {
+  const docs = await ctx.db
+    .query("documents")
+    .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+    .collect();
+  return docs.find((doc: any) => {
+    if (doc.archivedAtISO || doc.flaggedForDeletion) return false;
+    const tags = Array.isArray(doc.tags) ? doc.tags : [];
+    if (tags.includes(tag) && tags.includes("draft")) return true;
+    const title = String(doc.title ?? "").toLowerCase();
+    const normalizedTitle = title.replace(/[-_]+/g, " ");
+    if (tag === "privacy-policy") return title.includes("draft") && title.includes("privacy policy");
+    return normalizedTitle.includes("draft") && normalizedTitle.includes("member data") && normalizedTitle.includes("gap");
+  }) ?? null;
+}
+
+function buildPipaPolicyDraft(society: any) {
+  const today = new Date().toISOString().slice(0, 10);
+  const legalName = valueOrPlaceholder(society.name, "Legal organization name");
+  const privacyOfficerName = valueOrPlaceholder(society.privacyOfficerName, "Privacy officer role or name");
+  const privacyOfficerEmail = valueOrPlaceholder(society.privacyOfficerEmail, "privacy email");
+  const mailingAddress = valueOrPlaceholder(society.mailingAddress, "mailing address");
+  const memberDataStatus = valueOrPlaceholder(society.memberDataAccessStatus, "Society-controlled / Partially available / Institution-held / Not applicable");
+
+  return `# ${legalName} Privacy Policy
+
+Draft created: ${today}
+
+Status: Draft - not adopted until approved by the authorized board, executive, or officer.
+
+This draft is a Societyer starter template based on BC PIPA guidance. It is not legal advice and it is not an official BC OIPC template. Replace bracketed text and remove options that do not apply before adoption.
+
+## 1. Organization
+
+${legalName} collects, uses, discloses, stores, and disposes of personal information in accordance with British Columbia's Personal Information Protection Act (PIPA) and other applicable laws.
+
+- Legal name: ${legalName}
+- Incorporation number: ${valueOrPlaceholder(society.incorporationNumber, "incorporation number, if applicable")}
+- Mailing address: ${mailingAddress}
+- General contact: ${valueOrPlaceholder(society.email, "general contact email")}
+
+## 2. Privacy Officer
+
+The privacy officer is responsible for privacy questions, access and correction requests, privacy complaints, and maintaining this policy.
+
+- Privacy officer: ${privacyOfficerName}
+- Email: ${privacyOfficerEmail}
+- Mailing address: ${mailingAddress}
+
+## 3. Personal Information We Collect
+
+We collect only the personal information that is reasonable for our purposes. Depending on the activity, this may include:
+
+- name and contact information;
+- membership or eligibility information;
+- director, officer, staff, contractor, and volunteer records;
+- event registration and attendance information;
+- communication preferences and mailing-list records;
+- payment, reimbursement, grant, funding, accounting, or payroll records;
+- application, intake, complaint, dispute, access-request, and correction-request records;
+- meeting, election, referendum, filing, insurance, governance, and legal-compliance records; and
+- technical information generated when people use our websites, forms, email systems, document systems, or other tools.
+
+We do not intentionally collect sensitive personal information unless it is needed for a specific purpose and the collection is reasonable in the circumstances.
+
+## 4. Why We Collect Personal Information
+
+We may collect personal information to:
+
+- administer the organization and its governance;
+- maintain required society records;
+- manage memberships, eligibility, and voting where applicable;
+- communicate with members, directors, staff, volunteers, applicants, funders, partners, and the public;
+- run meetings, elections, referenda, events, programs, and services;
+- process payments, reimbursements, grants, donations, invoices, payroll, accounting, and tax records;
+- recruit, onboard, manage, and support staff, contractors, directors, and volunteers;
+- respond to questions, complaints, access requests, and correction requests;
+- protect the safety, security, and legal interests of the organization and individuals; and
+- meet legal, regulatory, audit, funding, insurance, and reporting obligations.
+
+## 5. Consent and Notice
+
+When we collect personal information directly from an individual, we explain the purpose for collection at or before collection unless the purpose is obvious and the individual voluntarily provides the information for that purpose.
+
+We collect, use, and disclose personal information with consent unless PIPA or another law authorizes collection, use, or disclosure without consent. Consent may be express, implied, deemed, or opt-out depending on the information, the context, and legal requirements.
+
+An individual may withdraw consent by contacting the privacy officer, subject to legal, contractual, funding, governance, audit, or operational limits.
+
+## 6. Use and Disclosure
+
+We use personal information only for the purposes for which it was collected, for purposes reasonably related to those purposes, or for other purposes authorized by law.
+
+Access is limited to people who need the information for their role, such as authorized directors, officers, staff, contractors, volunteers, committee members, or service providers.
+
+We may disclose personal information when the individual consents, when disclosure is needed for an authorized purpose, when a service provider acts for us, when disclosure is required or authorized by law, or when disclosure is needed for safety, legal, audit, insurance, funding, accounting, or governance purposes.
+
+We do not sell personal information.
+
+## 7. Service Providers
+
+We may use service providers for email, cloud storage, accounting, forms, payments, websites, communications, voting, records management, security, document storage, and other operations.
+
+When service providers handle personal information for us, we take reasonable steps to ensure they protect the information and use it only for authorized purposes.
+
+## 8. Member Records and Institution-Held Data
+
+Current member-data access status in Societyer: ${memberDataStatus}.
+
+Choose and adapt one option before adoption.
+
+Option A - society-controlled member records:
+
+The organization maintains its own member register and related member records. Access to member records is restricted to authorized people and handled under applicable statutes, bylaws, and privacy rules.
+
+Option B - institution-held or partially available member records:
+
+Some member or eligibility information may be held by [university / parent institution / other body]. The organization is responsible for personal information it collects or controls. Institution-held records are not treated as organization-controlled unless the organization has access to them, a copy of them, a contractual right to obtain them, a shared system, or the practical or legal ability to direct their use or disclosure.
+
+The organization maintains the member records it can lawfully maintain and keeps a separate member-data access gap memo where the institution does not provide a full member list.
+
+## 9. Safeguards
+
+We protect personal information using safeguards appropriate to the sensitivity and amount of information. These may include:
+
+- role-limited access;
+- password protection and multi-factor authentication where practical;
+- restricted cloud folders and document permissions;
+- locked physical storage for paper records;
+- secure deletion or disposal;
+- training for staff, directors, and volunteers;
+- service-provider controls; and
+- access review after role changes.
+
+## 10. Retention and Disposal
+
+We keep personal information only as long as needed for the purpose for which it was collected, or as long as needed for legal, governance, funding, audit, insurance, tax, accounting, dispute-resolution, or business purposes.
+
+If personal information is used to make a decision that directly affects an individual, we retain that information for at least one year after the decision so the individual has a reasonable opportunity to request access.
+
+When retention is no longer needed, we securely destroy records or remove the means by which the information can be associated with an identifiable individual.
+
+## 11. Access and Correction Requests
+
+Individuals may ask for access to their own personal information under the organization's control. They may also ask how their information has been used and disclosed, and may request correction if they believe it is inaccurate.
+
+Requests should be sent to the privacy officer. We may ask for information needed to confirm identity and locate records. We respond within the timelines required by law unless an extension or exception applies.
+
+## 12. Complaints
+
+Privacy complaints should be sent to the privacy officer. The organization will review the complaint, gather relevant information, respond within a reasonable time, and take appropriate corrective steps where needed.
+
+If a complaint is not resolved, the individual may contact the Office of the Information and Privacy Commissioner for British Columbia.
+
+## 13. Electronic Communications
+
+Where electronic messages are subject to Canada's Anti-Spam Legislation (CASL), we send them only with an applicable consent basis, include required sender identification, and provide unsubscribe handling where required.
+
+## 14. Review
+
+This policy will be reviewed at least annually and whenever the organization changes how it collects, uses, stores, or discloses personal information; adopts a new system or service provider; starts a new program; has a privacy complaint or breach; or receives new legal, regulatory, funder, or institutional requirements.
+
+## 15. Adoption
+
+Policy adopted by: [board / executive / authorized officer]
+
+Adoption date: [YYYY-MM-DD]
+
+Last review date: ${today}
+
+Next review date: [YYYY-MM-DD]
+
+## Source Notes
+
+This draft was prepared using public resources including BC PIPA, BC OIPC private-organization guidance, BC OIPC guidance on developing a privacy policy under PIPA, and BC OIPC PrivacyRight training.
+`;
+}
+
+function buildMemberDataGapMemoDraft(society: any) {
+  const today = new Date().toISOString().slice(0, 10);
+  const legalName = valueOrPlaceholder(society.name, "Legal organization name");
+  const currentStatus = valueOrPlaceholder(society.memberDataAccessStatus, "Institution-held / Partially available / Society-controlled / Unknown");
+  return `# ${legalName} Member-Data Access Gap Memo
+
+Draft created: ${today}
+
+Status: Draft - complete this memo before marking the member-data access gap documented.
+
+## 1. Purpose
+
+This memo records whether ${legalName} controls its member list or whether a university, parent body, collection agent, or other institution holds some or all member or eligibility information.
+
+Current Societyer member-data access status: ${currentStatus}.
+
+## 2. Institution or External Holder
+
+- Institution or external holder: [name]
+- Contact person or office: [name / office]
+- Contact email: [email]
+- Relevant agreement, policy, funding rule, or correspondence: [reference]
+
+## 3. What the Society Controls
+
+List the personal information the society actually has, can access, or can direct.
+
+- [example: director/officer contacts]
+- [example: volunteer records]
+- [example: newsletter consent records]
+- [example: event registration records]
+- [example: partial member eligibility list]
+
+## 4. What the Institution Holds
+
+List the personal information the institution or external holder keeps and does not share with the society.
+
+- [example: full student membership or levy payer list]
+- [example: student number or enrolment status]
+- [example: fee assessment or collection records]
+
+## 5. Access Limits
+
+Describe what the society has requested, what was provided, what was refused or unavailable, and why.
+
+- Request made on: [date]
+- Response received on: [date]
+- Summary of response: [summary]
+- Evidence stored at: [document link / email / meeting minutes]
+
+## 6. Privacy Handling
+
+For information the society controls, describe safeguards, access limits, retention, disposal, and request handling.
+
+For institution-held information, describe how individuals are redirected to the institution or how the society handles requests it cannot fulfill directly.
+
+## 7. Societies Act Member-Register Handling
+
+Record the society's working approach to member-register obligations and inspection requests.
+
+- Does the society maintain its own member register? [yes/no/partial]
+- If partial, what fields are kept? [fields]
+- How will member inspection requests be handled? [process]
+- Who reviews uncertain requests? [role]
+
+## 8. Follow-Up Actions
+
+- [ ] Confirm the external holder's current position in writing.
+- [ ] Store correspondence or agreement evidence in Documents.
+- [ ] Update Societyer member-data access status.
+- [ ] Review this memo annually or when the institution's data-sharing process changes.
+
+Prepared by: [name / role]
+
+Reviewed by: [board / executive / privacy officer]
+
+Review date: ${today}
+`;
+}
+
+function valueOrPlaceholder(value: unknown, placeholder: string) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text || `[${placeholder}]`;
+}
