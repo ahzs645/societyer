@@ -32,6 +32,7 @@ export function TasksPage() {
   const filings = useQuery(api.filings.list, society ? { societyId: society._id } : "skip");
   const workflows = useQuery(api.workflows.list, society ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
+  const commitments = useQuery(api.commitments.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.tasks.create);
   const update = useMutation(api.tasks.update);
   const remove = useMutation(api.tasks.remove);
@@ -50,6 +51,7 @@ export function TasksPage() {
   const filingById = useMemo(() => new Map<string, any>((filings ?? []).map((f: any) => [f._id, f])), [filings]);
   const workflowById = useMemo(() => new Map<string, any>((workflows ?? []).map((w: any) => [w._id, w])), [workflows]);
   const documentById = useMemo(() => new Map<string, any>((documents ?? []).map((d: any) => [d._id, d])), [documents]);
+  const commitmentById = useMemo(() => new Map<string, any>((commitments ?? []).map((c: any) => [c._id, c])), [commitments]);
 
   const filtered = useMemo(() => {
     const base = tasks ?? [];
@@ -63,15 +65,16 @@ export function TasksPage() {
         filingById.get(t.filingId)?.kind,
         workflowById.get(t.workflowId)?.name,
         documentById.get(t.documentId)?.title,
+        commitmentById.get(t.commitmentId)?.title,
         t.eventId,
       ].filter(Boolean).join(" ");
       return t.title.toLowerCase().includes(ql) ||
         (t.assignee ?? "").toLowerCase().includes(ql) ||
         responsibleNames.toLowerCase().includes(ql) ||
         linkedText.toLowerCase().includes(ql) ||
-        t.tags.join(" ").toLowerCase().includes(ql);
+        (t.tags ?? []).join(" ").toLowerCase().includes(ql);
     });
-  }, [tasks, q, filterCommittee, filterLink, userById, filingById, workflowById, documentById]);
+  }, [tasks, q, filterCommittee, filterLink, userById, filingById, workflowById, documentById, commitmentById]);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -89,6 +92,7 @@ export function TasksPage() {
       filingId: "",
       workflowId: "",
       documentId: "",
+      commitmentId: "",
       eventId: "",
       completionNote: "",
     });
@@ -103,6 +107,7 @@ export function TasksPage() {
       filingId: task.filingId ?? "",
       workflowId: task.workflowId ?? "",
       documentId: task.documentId ?? "",
+      commitmentId: task.commitmentId ?? "",
       eventId: task.eventId ?? "",
       completionNote: task.completionNote ?? "",
     });
@@ -126,6 +131,7 @@ export function TasksPage() {
           filingId: form.filingId || undefined,
           workflowId: form.workflowId || undefined,
           documentId: form.documentId || undefined,
+          commitmentId: form.commitmentId || undefined,
           eventId: form.eventId || undefined,
           completionNote: form.completionNote || undefined,
           completedByUserId: form.status === "Done" && currentUserId ? currentUserId : undefined,
@@ -149,6 +155,7 @@ export function TasksPage() {
       filingId: form.filingId || undefined,
       workflowId: form.workflowId || undefined,
       documentId: form.documentId || undefined,
+      commitmentId: form.commitmentId || undefined,
       eventId: form.eventId || undefined,
       tags: form.tags ?? [],
     });
@@ -225,6 +232,7 @@ export function TasksPage() {
             { value: "filing", label: "Filing linked" },
             { value: "workflow", label: "Workflow linked" },
             { value: "document", label: "Document linked" },
+            { value: "commitment", label: "Commitment linked" },
             { value: "event", label: "Event linked" },
           ]}
         />
@@ -264,7 +272,7 @@ export function TasksPage() {
                       </span>
                     </>
                   )}
-                  {(t.filingId || t.workflowId || t.documentId || t.eventId) && <span>· linked</span>}
+                  {(t.filingId || t.workflowId || t.documentId || t.commitmentId || t.eventId) && <span>· linked</span>}
                   {t.dueDate && (
                     <span style={{ color: overdue ? "var(--danger)" : undefined, marginLeft: "auto" }}>
                       {formatDate(t.dueDate)}
@@ -313,6 +321,7 @@ export function TasksPage() {
                         filingById={filingById}
                         workflowById={workflowById}
                         documentById={documentById}
+                        commitmentById={commitmentById}
                       />
                     </td>
                     <td className="table__cell--mono">{t.dueDate ? formatDate(t.dueDate) : "—"}</td>
@@ -435,6 +444,15 @@ export function TasksPage() {
                 options={(documents ?? []).map((d: any) => ({ value: d._id, label: d.title }))}
               />
             </Field>
+            <Field label="Commitment (optional)">
+              <Select
+                value={form.commitmentId ?? ""}
+                onChange={(v) => setForm({ ...form, commitmentId: v || "" })}
+                clearable
+                searchable
+                options={(commitments ?? []).map((c: any) => ({ value: c._id, label: c.title, hint: c.nextDueDate ? `Due ${formatDate(c.nextDueDate)}` : c.status }))}
+              />
+            </Field>
             <Field label="Event ID (optional)"><input className="input mono" value={form.eventId ?? ""} onChange={(e) => setForm({ ...form, eventId: e.target.value })} placeholder="custom.event or imported event id" /></Field>
             <Field label="Completion note">
               <textarea
@@ -456,10 +474,11 @@ function userNames(ids: string[] | undefined, userById: Map<string, any>) {
 }
 
 function matchesLinkFilter(task: any, filter: string) {
-  if (filter === "linked") return Boolean(task.filingId || task.workflowId || task.documentId || task.eventId);
+  if (filter === "linked") return Boolean(task.filingId || task.workflowId || task.documentId || task.commitmentId || task.eventId);
   if (filter === "filing") return Boolean(task.filingId);
   if (filter === "workflow") return Boolean(task.workflowId);
   if (filter === "document") return Boolean(task.documentId);
+  if (filter === "commitment") return Boolean(task.commitmentId);
   if (filter === "event") return Boolean(task.eventId);
   return true;
 }
@@ -473,21 +492,25 @@ function LinkedTaskRecords({
   filingById,
   workflowById,
   documentById,
+  commitmentById,
 }: {
   task: any;
   filingById: Map<string, any>;
   workflowById: Map<string, any>;
   documentById: Map<string, any>;
+  commitmentById: Map<string, any>;
 }) {
   const filing = task.filingId ? filingById.get(task.filingId) : null;
   const workflow = task.workflowId ? workflowById.get(task.workflowId) : null;
   const document = task.documentId ? documentById.get(task.documentId) : null;
-  if (!filing && !workflow && !document && !task.eventId) return <span className="muted">—</span>;
+  const commitment = task.commitmentId ? commitmentById.get(task.commitmentId) : null;
+  if (!filing && !workflow && !document && !commitment && !task.eventId) return <span className="muted">—</span>;
   return (
     <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
       {filing && <Link to="/app/filings"><Badge tone="orange">{filing.kind}</Badge></Link>}
       {workflow && <Link to={`/app/workflows/${workflow._id}`}><Badge tone="purple">{workflow.name}</Badge></Link>}
       {document && <Link to="/app/documents"><Badge>{document.title}</Badge></Link>}
+      {commitment && <Link to="/app/commitments"><Badge tone="green">{commitment.title}</Badge></Link>}
       {task.eventId && <Badge tone="gray">{task.eventId}</Badge>}
     </div>
   );

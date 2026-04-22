@@ -185,8 +185,6 @@ export function BrowserConnectorsPage() {
     ? availableConnectors.find((connector) => connector.id === workspaceConnectorId) ?? null
     : null;
   const activeSession = sessions[0] ?? null;
-  const activeWaveSession = sessions.find((session) => session.connectorId === "wave") ?? null;
-  const activeWaveNeedsLogin = Boolean(activeWaveSession && /auth\.waveapps\.com|\/login|identifier/i.test(activeWaveSession.currentUrl));
   const selectedConnector = workspaceConnector ?? availableConnectors.find((connector) => connector.id === connectorId) ?? availableConnectors[0];
   const selectedConnectorRegistered = selectedConnector ? connectorRegistered(selectedConnector) : false;
   const runnerReady = Boolean(health?.ok && health.browser?.ok);
@@ -198,6 +196,15 @@ export function BrowserConnectorsPage() {
     if (!liveSession?.dashboardUrl) return activeDashboardUrl;
     return liveSession.dashboardUrl;
   }, [activeDashboardUrl, liveSession?.dashboardUrl]);
+  const connectorPanelRenderers: Record<string, () => JSX.Element> = {
+    wave: renderWaveProviderPanel,
+    "bc-registry": renderBcRegistryProviderPanel,
+  };
+  const connectorPanelPolicy: Record<string, { hideGenericUtilities?: boolean }> = {
+    wave: { hideGenericUtilities: true },
+  };
+  const providerPanel = selectedConnector ? connectorPanelRenderers[selectedConnector.id]?.() ?? null : null;
+  const showGenericUtilities = Boolean(selectedConnector && !connectorPanelPolicy[selectedConnector.id]?.hideGenericUtilities);
 
   useEffect(() => {
     refresh();
@@ -256,6 +263,29 @@ export function BrowserConnectorsPage() {
 
   function sessionForConnector(connector: ConnectorManifest) {
     return sessions.find((session) => connectorForSession(session, availableConnectors)?.id === connector.id) ?? null;
+  }
+
+  function sessionForConnectorId(nextConnectorId: string) {
+    return sessions.find((session) => connectorForSession(session, availableConnectors)?.id === nextConnectorId) ?? null;
+  }
+
+  function connectorActionPath(input: {
+    connectorId: string;
+    actionId: string;
+    session?: BrowserSession | null;
+    importAlias?: string;
+  }) {
+    const connector = encodeURIComponent(input.connectorId);
+    const action = encodeURIComponent(input.actionId);
+    if (input.session) {
+      const sessionId = encodeURIComponent(input.session.sessionId);
+      return input.importAlias
+        ? `/connectors/${connector}/auth/sessions/${sessionId}/${input.importAlias}`
+        : `/connectors/${connector}/auth/sessions/${sessionId}/actions/${action}`;
+    }
+    return input.importAlias
+      ? `/connectors/${connector}/${input.importAlias}`
+      : `/connectors/${connector}/actions/${action}`;
   }
 
   function profileKeyForWorkspace(connector: ConnectorManifest) {
@@ -372,15 +402,18 @@ export function BrowserConnectorsPage() {
   }
 
   async function pullWaveTransactions() {
-    if (!businessId.trim() && !activeWaveSession) {
+    const waveSession = sessionForConnectorId("wave");
+    if (!businessId.trim() && !waveSession) {
       toast.error("Wave business id is required");
       return;
     }
     setBusy(true);
     try {
-      const path = activeWaveSession
-        ? `/connectors/wave/auth/sessions/${activeWaveSession.sessionId}/actions/listTransactions`
-        : "/connectors/wave/actions/listTransactions";
+      const path = connectorActionPath({
+        connectorId: "wave",
+        actionId: "listTransactions",
+        session: waveSession,
+      });
       const payload = await apiFetch<{ data: any }>(path, {
         method: "POST",
         body: JSON.stringify({
@@ -404,15 +437,19 @@ export function BrowserConnectorsPage() {
   }
 
   async function importWaveTransactions() {
-    if (!businessId.trim() && !activeWaveSession) {
+    const waveSession = sessionForConnectorId("wave");
+    if (!businessId.trim() && !waveSession) {
       toast.error("Wave business id is required");
       return;
     }
     setBusy(true);
     try {
-      const path = activeWaveSession
-        ? `/connectors/wave/auth/sessions/${activeWaveSession.sessionId}/import-transactions`
-        : "/connectors/wave/import-transactions";
+      const path = connectorActionPath({
+        connectorId: "wave",
+        actionId: "importTransactions",
+        session: waveSession,
+        importAlias: "import-transactions",
+      });
       const payload = await apiFetch<{ data: any }>(path, {
         method: "POST",
         body: JSON.stringify({
@@ -441,12 +478,14 @@ export function BrowserConnectorsPage() {
   }
 
   async function scanBcRegistryFilingHistory() {
-    const bcRegistrySession = sessions.find((session) => connectorForSession(session, availableConnectors)?.id === "bc-registry") ?? null;
+    const bcRegistrySession = sessionForConnectorId("bc-registry");
     setBusy(true);
     try {
-      const path = bcRegistrySession
-        ? `/connectors/bc-registry/auth/sessions/${bcRegistrySession.sessionId}/actions/filingHistoryExport`
-        : "/connectors/bc-registry/actions/filingHistoryExport";
+      const path = connectorActionPath({
+        connectorId: "bc-registry",
+        actionId: "filingHistoryExport",
+        session: bcRegistrySession,
+      });
       const payload = await apiFetch<{ data: any }>(path, {
         method: "POST",
         body: JSON.stringify({
@@ -554,6 +593,149 @@ export function BrowserConnectorsPage() {
     } catch (error: any) {
       toast.error(error?.message ?? "Clipboard permission was not granted");
     }
+  }
+
+  function renderGenericUtilityPanel() {
+    if (!selectedConnector) return null;
+    return (
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">{selectedConnector.utility?.title ?? `${selectedConnector.name} utilities`}</h2>
+          <span className="card__subtitle">{selectedConnector.utility?.description ?? selectedConnector.description}</span>
+        </div>
+        <div className="card__body col" style={{ gap: 12 }}>
+          {selectedConnector.utility?.steps?.length ? (
+            <div className="grid two">
+              {selectedConnector.utility.steps.map((step, index) => (
+                <div key={step} className="panel" style={{ padding: 12 }}>
+                  <div className="row" style={{ gap: 8 }}>
+                    <Badge tone="gray">{index + 1}</Badge>
+                    <span>{step}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {selectedConnector.actions.length > 0 && (
+            <div className="col" style={{ gap: 8 }}>
+              <div className="muted">Available actions</div>
+              {selectedConnector.actions.map((action) => (
+                <div key={action.id} className="panel" style={{ padding: 12 }}>
+                  <div className="row" style={{ justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                    <strong>{action.name}</strong>
+                    <span className="mono muted">{action.id}</span>
+                  </div>
+                  <div className="muted" style={{ marginTop: 4 }}>{action.description}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function renderBcRegistryProviderPanel() {
+    return (
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">BC Registry filing export</h2>
+          <span className="card__subtitle">Collect filing-history rows, write a CSV, and fetch digital PDFs through the signed-in browser.</span>
+        </div>
+        <div className="card__body col" style={{ gap: 12 }}>
+          <div className="grid two">
+            <Field label="Society number">
+              <input
+                className="input"
+                value={bcRegistryCorpNum}
+                onChange={(event) => setBcRegistryCorpNum(event.target.value)}
+                placeholder="S0048345"
+              />
+            </Field>
+            <div className="field">
+              <label className="field__label">Mode</label>
+              <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                <Badge tone={liveSession ? "success" : "warn"}>{liveSession ? "Live session" : "Saved profile"}</Badge>
+                <Badge tone="info">CSV + PDFs</Badge>
+                <Badge tone="gray">Paper rows kept</Badge>
+              </div>
+            </div>
+          </div>
+          <div className="muted">
+            Run this while the BC Registry live browser is signed in on a society filing-history page. The runner executes a page utility, preserves paper-only rows in the CSV, and logs each PDF download result.
+          </div>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <button className="btn btn--accent" disabled={busy || !runnerReady} onClick={scanBcRegistryFilingHistory}>
+              <Play size={14} /> Export filings & PDFs
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderWaveProviderPanel() {
+    const waveSession = sessionForConnectorId("wave");
+    const waveNeedsLogin = Boolean(waveSession && /auth\.waveapps\.com|\/login|identifier/i.test(waveSession.currentUrl));
+
+    return (
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">Wave transactions</h2>
+          <span className="card__subtitle">Preview or import transactions through the active Wave browser profile.</span>
+        </div>
+        <div className="card__body col" style={{ gap: 12 }}>
+          {savedConnection && (
+            <div className="panel" style={{ padding: 12 }}>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <Badge tone="success">Saved profile</Badge>
+                <strong>{savedConnection.profileKey}</strong>
+              </div>
+              <div className="muted" style={{ marginTop: 4, overflowWrap: "anywhere" }}>
+                Saved {formatDateTime(savedConnection.savedAtISO)} from {savedConnection.finalUrl ?? savedConnection.currentUrl}
+              </div>
+            </div>
+          )}
+          {waveSession && (
+            <div className="panel" style={{ padding: 12 }}>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <Badge tone={waveNeedsLogin ? "warn" : "success"}>
+                  {waveNeedsLogin ? "Wave login in progress" : "Active Wave session"}
+                </Badge>
+                <strong>{waveSession.profileKey}</strong>
+              </div>
+              <div className="muted" style={{ marginTop: 4 }}>
+                {waveNeedsLogin
+                  ? "Finish login in the live browser. Then pull and save while this session is active."
+                  : "Business ID can be inferred from the active Wave dashboard URL. Import before confirming if Wave only exposes its bearer during the live session."}
+              </div>
+            </div>
+          )}
+          <Field label="Business ID">
+            <input className="input" value={businessId} onChange={(event) => setBusinessId(event.target.value)} placeholder={waveSession ? "Optional while Wave session is active" : "QnVzaW5lc3M6..."} />
+          </Field>
+          <div className="grid two">
+            <Field label="Start date (optional)">
+              <input className="input" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+            </Field>
+            <Field label="End date (optional)">
+              <input className="input" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+            </Field>
+          </div>
+          <div className="muted">
+            Leave dates blank to pull every transaction Wave returns for the active business. Raw bearer tokens stay inside the connector runner.
+          </div>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <button className="btn" disabled={busy || !runnerReady || waveNeedsLogin} onClick={pullWaveTransactions}>
+              <Play size={14} /> Preview pull
+            </button>
+            <button className="btn btn--accent" disabled={busy || !runnerReady || waveNeedsLogin} onClick={importWaveTransactions}>
+              <Play size={14} /> Pull all & save
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -753,130 +935,8 @@ export function BrowserConnectorsPage() {
             </div>
           </div>
 
-          {selectedConnector.id !== "wave" && (
-            <div className="card" style={{ marginBottom: 16 }}>
-              <div className="card__head">
-                <h2 className="card__title">{selectedConnector.utility?.title ?? `${selectedConnector.name} utilities`}</h2>
-                <span className="card__subtitle">{selectedConnector.utility?.description ?? selectedConnector.description}</span>
-              </div>
-              <div className="card__body col" style={{ gap: 12 }}>
-                {selectedConnector.utility?.steps?.length ? (
-                  <div className="grid two">
-                    {selectedConnector.utility.steps.map((step, index) => (
-                      <div key={step} className="panel" style={{ padding: 12 }}>
-                        <div className="row" style={{ gap: 8 }}>
-                          <Badge tone="gray">{index + 1}</Badge>
-                          <span>{step}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                {selectedConnector.id === "bc-registry" && (
-                  <div className="panel" style={{ padding: 12 }}>
-                    <div className="grid two">
-                      <Field label="Society number">
-                        <input
-                          className="input"
-                          value={bcRegistryCorpNum}
-                          onChange={(event) => setBcRegistryCorpNum(event.target.value)}
-                          placeholder="S0048345"
-                        />
-                      </Field>
-                      <div className="field">
-                        <label className="field__label">Mode</label>
-                        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                          <Badge tone={liveSession ? "success" : "warn"}>{liveSession ? "Live session" : "Saved profile"}</Badge>
-                          <Badge tone="info">CSV + PDFs</Badge>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="muted" style={{ marginTop: 8 }}>
-                      Run this while the BC Registry live browser is signed in. The export reads the filing-history table, saves the CSV, and downloads every digital PDF to the local export folder.
-                    </div>
-                    <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                      <button className="btn btn--accent" disabled={busy || !runnerReady} onClick={scanBcRegistryFilingHistory}>
-                        <Play size={14} /> Export filings & PDFs
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {selectedConnector.actions.length > 0 && (
-                  <div className="col" style={{ gap: 8 }}>
-                    <div className="muted">Available actions</div>
-                    {selectedConnector.actions.map((action) => (
-                      <div key={action.id} className="panel" style={{ padding: 12 }}>
-                        <div className="row" style={{ justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                          <strong>{action.name}</strong>
-                          <span className="mono muted">{action.id}</span>
-                        </div>
-                        <div className="muted" style={{ marginTop: 4 }}>{action.description}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {selectedConnector.id === "wave" && (
-            <div className="card" style={{ marginBottom: 16 }}>
-              <div className="card__head">
-                <h2 className="card__title">Wave transactions</h2>
-                <span className="card__subtitle">Preview or import transactions through the active Wave browser profile.</span>
-              </div>
-              <div className="card__body col" style={{ gap: 12 }}>
-                {savedConnection && (
-                  <div className="panel" style={{ padding: 12 }}>
-                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                      <Badge tone="success">Saved profile</Badge>
-                      <strong>{savedConnection.profileKey}</strong>
-                    </div>
-                    <div className="muted" style={{ marginTop: 4, overflowWrap: "anywhere" }}>
-                      Saved {formatDateTime(savedConnection.savedAtISO)} from {savedConnection.finalUrl ?? savedConnection.currentUrl}
-                    </div>
-                  </div>
-                )}
-                {activeWaveSession && (
-                  <div className="panel" style={{ padding: 12 }}>
-                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                      <Badge tone={activeWaveNeedsLogin ? "warn" : "success"}>
-                        {activeWaveNeedsLogin ? "Wave login in progress" : "Active Wave session"}
-                      </Badge>
-                      <strong>{activeWaveSession.profileKey}</strong>
-                    </div>
-                    <div className="muted" style={{ marginTop: 4 }}>
-                      {activeWaveNeedsLogin
-                        ? "Finish login in the live browser. Then pull and save while this session is active."
-                        : "Business ID can be inferred from the active Wave dashboard URL. Import before confirming if Wave only exposes its bearer during the live session."}
-                    </div>
-                  </div>
-                )}
-                <Field label="Business ID">
-                  <input className="input" value={businessId} onChange={(event) => setBusinessId(event.target.value)} placeholder={activeWaveSession ? "Optional while Wave session is active" : "QnVzaW5lc3M6..."} />
-                </Field>
-                <div className="grid two">
-                  <Field label="Start date (optional)">
-                    <input className="input" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-                  </Field>
-                  <Field label="End date (optional)">
-                    <input className="input" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
-                  </Field>
-                </div>
-                <div className="muted">
-                  Leave dates blank to pull every transaction Wave returns for the active business. Raw bearer tokens stay inside the connector runner.
-                </div>
-                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                  <button className="btn" disabled={busy || !runnerReady || activeWaveNeedsLogin} onClick={pullWaveTransactions}>
-                    <Play size={14} /> Preview pull
-                  </button>
-                  <button className="btn btn--accent" disabled={busy || !runnerReady || activeWaveNeedsLogin} onClick={importWaveTransactions}>
-                    <Play size={14} /> Pull all & save
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          {providerPanel}
+          {showGenericUtilities && renderGenericUtilityPanel()}
 
           <div className="card">
             <div className="card__head">
@@ -967,6 +1027,11 @@ export function BrowserConnectorsPage() {
                     <div className="muted" style={{ marginTop: 6 }}>
                       Saved {lastRun.download.downloadedCount ?? 0} PDF(s), {lastRun.download.failedCount ?? 0} failure(s)
                       {lastRun.download.exportPublicDirectory ? ` in ${lastRun.download.exportPublicDirectory}` : ""}.
+                    </div>
+                  )}
+                  {lastRun.resultLog?.length > 0 && (
+                    <div className="muted" style={{ marginTop: 6 }}>
+                      Log: {lastRun.resultLog.map((entry: any) => `${entry.step ?? entry.level}: ${entry.message}`).join(" · ")}
                     </div>
                   )}
                   {lastRun.normalized?.transactionsByAccount?.length > 0 && (

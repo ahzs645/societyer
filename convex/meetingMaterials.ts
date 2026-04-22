@@ -1,5 +1,9 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import {
+  normalizeAccessGrants,
+  summarizeMeetingMaterials,
+} from "./lib/access/materialAccess";
 
 const accessGrantValidator = v.object({
   subjectType: v.string(),
@@ -55,6 +59,7 @@ export const packageForMeeting = query({
     );
 
     const agenda = parseAgenda(meeting.agendaJson);
+    const materialSummary = summarizeMeetingMaterials(materials);
     return {
       meeting,
       minutes,
@@ -67,6 +72,11 @@ export const packageForMeeting = query({
         agendaItems: agenda.length,
         materials: materials.length,
         requiredMaterials: materials.filter((row) => row.requiredForMeeting).length,
+        readyMaterials: materialSummary.ready,
+        attentionMaterials: materialSummary.needsAttention,
+        expiredMaterials: materialSummary.expired,
+        restrictedMaterials: materialSummary.restricted,
+        explicitGrantMaterials: materialSummary.withExplicitGrants,
         openTasks: tasks.filter((task) => task.status !== "Done").length,
       },
     };
@@ -199,17 +209,4 @@ function parseAgenda(value: unknown) {
   } catch {
     return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   }
-}
-
-function normalizeAccessGrants(grants: any[] | undefined) {
-  if (!Array.isArray(grants)) return [];
-  return grants
-    .map((grant) => ({
-      subjectType: String(grant.subjectType ?? "").trim(),
-      subjectId: grant.subjectId ? String(grant.subjectId).trim() : undefined,
-      subjectLabel: String(grant.subjectLabel ?? "").trim(),
-      access: String(grant.access ?? "view").trim() || "view",
-      note: grant.note ? String(grant.note).trim() : undefined,
-    }))
-    .filter((grant) => grant.subjectType && grant.subjectLabel);
 }

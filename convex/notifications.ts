@@ -244,7 +244,8 @@ export const scanUpcoming = internalMutation({
       for (const commitment of commitments) {
         if (!commitment.nextDueDate || commitment.status === "Closed" || commitment.status === "Paused") continue;
         const due = new Date(commitment.nextDueDate).getTime();
-        if (due > cutoff) continue;
+        const commitmentCutoff = now + Math.max(14, commitment.noticeLeadDays ?? 0) * 24 * 60 * 60 * 1000;
+        if (due > commitmentCutoff) continue;
         const overdue = due < now;
         const title = overdue
           ? `Commitment overdue: ${commitment.title}`
@@ -258,7 +259,7 @@ export const scanUpcoming = internalMutation({
           title,
           body: overdue
             ? `Commitment deadline passed on ${commitment.nextDueDate}.`
-            : `Commitment deadline is ${commitment.nextDueDate}.`,
+            : `Commitment deadline is ${commitment.nextDueDate}${commitment.noticeLeadDays ? `; lead time is ${commitment.noticeLeadDays} days.` : "."}`,
           linkHref: "/app/commitments",
           createdAtISO: new Date().toISOString(),
         });

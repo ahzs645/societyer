@@ -13,6 +13,8 @@
     "convex:seed": "convex run seed:run",
     "convex:reset": "convex run seed:reset",
     "convex:codegen": "npx convex codegen",
+    "templates:json": "tsx scripts/generate-starter-template-json.ts",
+    "templates:exports": "tsx scripts/render-starter-template-documents.ts",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f backend",

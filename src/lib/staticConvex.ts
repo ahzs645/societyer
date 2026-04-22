@@ -511,6 +511,12 @@ const meetings = [
     attendeeIds: [],
     agendaJson: JSON.stringify(["Annual report", "Financial statements", "Director elections"]),
     status: "Held",
+    sourceReviewStatus: "source_reviewed",
+    sourceReviewNotes: "Demo source minutes checked against the local record.",
+    sourceReviewedAtISO: "2025-07-10T18:00:00.000Z",
+    sourceReviewedByUserId: USER_SECRETARY_ID,
+    packageReviewStatus: "needs_review",
+    packageReviewNotes: "Financial statements still need signature review before the package is ready.",
   },
 ];
 
@@ -579,6 +585,10 @@ const minutes = [
     actionItems: [{ text: "File annual report package", assignee: "Mina Patel", dueDate: "2025-07-19", done: true }],
     nextMeetingAt: "2025-07-10T18:30:00.000Z",
     nextMeetingLocation: "Riverside Community Hall",
+    sourceReviewStatus: "source_reviewed",
+    sourceReviewNotes: "Demo source minutes checked against the local record.",
+    sourceReviewedAtISO: "2025-07-10T18:00:00.000Z",
+    sourceReviewedByUserId: USER_SECRETARY_ID,
     agmDetails: {
       financialStatementsPresented: true,
       financialStatementsNotes: "The 2025 financial statements were presented to the members.",
@@ -651,13 +661,17 @@ const commitments = [
     category: "Facility",
     sourceDocumentId: DOCUMENT_TENANCY_ID,
     sourceLabel: "Tenancy agreement section 6.2",
+    sourceExcerpt: "The tenant must present its space, programming, accessibility, and community needs to the landlord once each year before the lease review.",
     counterparty: "Community Hall Association",
     requirement: "Present the society's space, programming, accessibility, and community needs to the landlord once each year.",
     cadence: "Annual",
     nextDueDate: "2026-09-14",
+    dueDateBasis: "Annual anniversary of the 2025 AGM presentation, with a 30-day preparation lead before the lease review.",
     noticeLeadDays: 30,
     owner: "Secretary",
     status: "Active",
+    reviewStatus: "Verified",
+    confidence: 0.92,
     lastCompletedAtISO: "2025-09-14",
     lastCompletionSummary: "Presented at the 2025 AGM and filed the slide deck.",
     notes: "Keep the presentation and meeting minutes linked as evidence before the lease review.",
@@ -671,12 +685,17 @@ const commitments = [
     category: "Privacy",
     sourceDocumentId: DOCUMENT_POLICY_ID,
     sourceLabel: "PIPA privacy policy review clause",
+    sourceExcerpt: "Privacy practices and officer contact details should be reviewed on a regular cycle and when society operations change.",
     requirement: "Review privacy practices, training status, and contact details annually.",
     cadence: "Annual",
     nextDueDate: "2026-05-12",
+    dueDateBasis: "Annual review cadence inferred from the current privacy policy.",
     noticeLeadDays: 14,
     owner: "Privacy officer",
     status: "Watching",
+    reviewStatus: "NeedsReview",
+    confidence: 0.68,
+    uncertaintyNote: "The policy supports regular review, but the annual cadence should be confirmed by the board.",
     lastCompletedAtISO: "2025-05-09",
     lastCompletionSummary: "Policy reviewed and minor contact updates approved.",
     createdAtISO: "2026-04-21T18:15:00.000Z",
@@ -693,6 +712,8 @@ const commitmentEvents = [
     happenedAtISO: "2025-09-14",
     meetingId: MEETING_AGM_ID,
     evidenceDocumentIds: [DOCUMENT_PRESENTATION_ID],
+    evidenceStatus: "Verified",
+    evidenceNotes: "Slide deck is filed and the AGM minutes include the presentation agenda item.",
     summary: "Board presented tenancy-related programming and accessibility needs at the AGM.",
     createdAtISO: "2025-09-14T21:05:00.000Z",
   },
@@ -738,6 +759,7 @@ const documents = [
     mimeType: "application/pdf",
     retentionYears: 10,
     createdAtISO: "2025-03-01T17:00:00.000Z",
+    reviewStatus: "approved",
     flaggedForDeletion: false,
     tags: ["agreement", "tenancy", "facility"],
   },
@@ -995,6 +1017,21 @@ const tasks = [
     dueDate: "2026-04-20",
     ownerUserId: USER_SECRETARY_ID,
     goalId: "static_goal_agm",
+    tags: [],
+  },
+  {
+    _id: "static_task_commitment_presentation",
+    societyId: SOCIETY_ID,
+    title: "Prepare 2026 society needs presentation",
+    description: "Use the tenancy agreement clause, last AGM evidence, and current program/facility needs to prepare the annual landlord presentation.",
+    status: "Todo",
+    priority: "High",
+    dueDate: "2026-08-15",
+    assignee: "Secretary",
+    documentId: DOCUMENT_TENANCY_ID,
+    commitmentId: "static_commitment_tenancy_presentation",
+    eventId: "commitment:static_commitment_tenancy_presentation",
+    tags: ["commitment", "tenancy", "facility"],
   },
   {
     _id: "static_task_board_packet",
@@ -1007,6 +1044,7 @@ const tasks = [
     goalId: "static_goal_agm",
     meetingId: MEETING_BOARD_ID,
     documentId: DOCUMENT_POLICY_ID,
+    tags: [],
   },
 ];
 
@@ -3092,6 +3130,8 @@ function mutationResult(name: string, args: StaticArgs) {
   if (name === "documentComments:create") return "static_document_comment_new";
   if (name === "documentComments:setStatus") return null;
   if (name === "documentComments:remove") return null;
+  if (name === "meetings:markSourceReview") return null;
+  if (name === "meetings:setPackageReviewStatus") return null;
   if (name === "meetingMaterials:attach") return "static_material_new";
   if (name === "meetingMaterials:remove") return null;
   if (name === "expenseReports:upsert") return "static_expense_new";

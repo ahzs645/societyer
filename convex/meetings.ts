@@ -41,6 +41,14 @@ export const create = mutation({
     status: v.string(),
     attendeeIds: v.array(v.string()),
     agendaJson: v.optional(v.string()),
+    sourceReviewStatus: v.optional(v.string()),
+    sourceReviewNotes: v.optional(v.string()),
+    sourceReviewedAtISO: v.optional(v.string()),
+    sourceReviewedByUserId: v.optional(v.id("users")),
+    packageReviewStatus: v.optional(v.string()),
+    packageReviewNotes: v.optional(v.string()),
+    packageReviewedAtISO: v.optional(v.string()),
+    packageReviewedByUserId: v.optional(v.id("users")),
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -101,11 +109,105 @@ export const update = mutation({
       attendeeIds: v.optional(v.array(v.string())),
       agendaJson: v.optional(v.string()),
       minutesId: v.optional(v.id("minutes")),
+      sourceReviewStatus: v.optional(v.string()),
+      sourceReviewNotes: v.optional(v.string()),
+      sourceReviewedAtISO: v.optional(v.string()),
+      sourceReviewedByUserId: v.optional(v.id("users")),
+      packageReviewStatus: v.optional(v.string()),
+      packageReviewNotes: v.optional(v.string()),
+      packageReviewedAtISO: v.optional(v.string()),
+      packageReviewedByUserId: v.optional(v.id("users")),
       notes: v.optional(v.string()),
     }),
   },
   handler: async (ctx, { id, patch }) => {
     await ctx.db.patch(id, patch);
+  },
+});
+
+export const markSourceReview = mutation({
+  args: {
+    id: v.id("meetings"),
+    status: v.string(),
+    notes: v.optional(v.string()),
+    actingUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, { id, status, notes, actingUserId }) => {
+    const meeting = await ctx.db.get(id);
+    if (!meeting) throw new Error("Meeting not found.");
+    const actor = actingUserId ? await ctx.db.get(actingUserId) : null;
+    if (actor && actor.societyId !== meeting.societyId) {
+      throw new Error("Reviewer is not part of this society.");
+    }
+    const now = new Date().toISOString();
+    const patch: any = {
+      sourceReviewStatus: status,
+      sourceReviewNotes: notes || undefined,
+    };
+    if (status === "source_reviewed") {
+      patch.sourceReviewedAtISO = now;
+      patch.sourceReviewedByUserId = actingUserId;
+    }
+    await ctx.db.patch(id, patch);
+
+    const minutes = await ctx.db
+      .query("minutes")
+      .withIndex("by_meeting", (q) => q.eq("meetingId", id))
+      .first();
+    if (minutes) {
+      await ctx.db.patch(minutes._id, {
+        sourceReviewStatus: status,
+        sourceReviewNotes: notes || undefined,
+        sourceReviewedAtISO: status === "source_reviewed" ? now : undefined,
+        sourceReviewedByUserId: status === "source_reviewed" ? actingUserId : undefined,
+      });
+    }
+
+    await ctx.db.insert("activity", {
+      societyId: meeting.societyId,
+      actor: actor?.displayName ?? "You",
+      entityType: "meeting",
+      entityId: id,
+      action: "source-review",
+      summary: `Marked source review ${status.replace(/_/g, " ")} for ${meeting.title}`,
+      createdAtISO: now,
+    });
+  },
+});
+
+export const setPackageReviewStatus = mutation({
+  args: {
+    id: v.id("meetings"),
+    status: v.string(),
+    notes: v.optional(v.string()),
+    actingUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, { id, status, notes, actingUserId }) => {
+    const meeting = await ctx.db.get(id);
+    if (!meeting) throw new Error("Meeting not found.");
+    const actor = actingUserId ? await ctx.db.get(actingUserId) : null;
+    if (actor && actor.societyId !== meeting.societyId) {
+      throw new Error("Reviewer is not part of this society.");
+    }
+    const now = new Date().toISOString();
+    const patch: any = {
+      packageReviewStatus: status,
+      packageReviewNotes: notes || undefined,
+    };
+    if (status === "ready" || status === "released") {
+      patch.packageReviewedAtISO = now;
+      patch.packageReviewedByUserId = actingUserId;
+    }
+    await ctx.db.patch(id, patch);
+    await ctx.db.insert("activity", {
+      societyId: meeting.societyId,
+      actor: actor?.displayName ?? "You",
+      entityType: "meeting",
+      entityId: id,
+      action: "package-review",
+      summary: `Marked board package ${status.replace(/_/g, " ")} for ${meeting.title}`,
+      createdAtISO: now,
+    });
   },
 });
 

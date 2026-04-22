@@ -26,6 +26,39 @@ export type ConnectorManifest = {
   };
 };
 
+export type ConnectorProfileInput = {
+  profileKey: string;
+  url: string;
+  readOnly?: boolean;
+  liveView?: boolean;
+  waitForSelector?: string;
+  authenticatedSelector?: string;
+  unauthenticatedSelector?: string;
+  includeBodyText?: boolean;
+};
+
+export type ConnectorActionMode = "profile" | "session";
+
+export type ConnectorActionContext = {
+  connector: ConnectorManifest;
+  actionId: string;
+  mode: ConnectorActionMode;
+  profileKey: string;
+};
+
+type ConnectorActionDefinition = {
+  inputSchema: z.ZodTypeAny;
+  activeInputSchema?: z.ZodTypeAny;
+  run: (page: Page, input: any, context: ConnectorActionContext) => Promise<Record<string, unknown>>;
+};
+
+type ConnectorProvider = {
+  manifest: ConnectorManifest;
+  verifyAuth?: (page: Page, input: ConnectorProfileInput) => Promise<Record<string, unknown>>;
+  authIncompleteMessage?: (auth: Record<string, unknown>) => string;
+  actions: Record<string, ConnectorActionDefinition>;
+};
+
 export class ConnectorActionError extends Error {
   constructor(
     readonly statusCode: number,
@@ -104,6 +137,12 @@ export function getConnectorManifest(connectorId: string) {
   return connectors.find((connector) => connector.id === connectorId);
 }
 
+function requireConnectorManifest(connectorId: string) {
+  const connector = getConnectorManifest(connectorId);
+  if (!connector) throw new Error(`Connector manifest "${connectorId}" is not registered.`);
+  return connector;
+}
+
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD.");
 
 export const waveListTransactionsSchema = z.object({
@@ -122,9 +161,7 @@ export const activeWaveListTransactionsSchema = waveListTransactionsSchema.omit(
   businessId: z.string().min(1).optional(),
 });
 
-export type ActiveWaveListTransactionsInput = z.infer<typeof activeWaveListTransactionsSchema> & {
-  businessId: string;
-};
+export type ActiveWaveListTransactionsInput = z.infer<typeof activeWaveListTransactionsSchema>;
 
 export const bcRegistryFilingHistorySchema = z.object({
   corpNum: z.string().min(1).optional(),
@@ -134,6 +171,10 @@ export const bcRegistryFilingHistorySchema = z.object({
 });
 
 export type BcRegistryFilingHistoryInput = z.infer<typeof bcRegistryFilingHistorySchema>;
+
+const bcRegistryFilingHistoryProfileSchema = bcRegistryFilingHistorySchema.extend({
+  profileKey: z.string().min(1),
+});
 
 export type WaveNormalizedAccount = {
   externalId: string;
@@ -158,7 +199,8 @@ export type WaveNormalizedTransaction = {
   counterpartyResourceType?: "vendor" | "customer";
 };
 
-const WAVE_CONNECTOR = connectors[0];
+const WAVE_CONNECTOR = requireConnectorManifest("wave");
+const BC_REGISTRY_CONNECTOR = requireConnectorManifest("bc-registry");
 const WAVE_GQL_ENDPOINT = "https://gql.waveapps.com/graphql/internal";
 
 const WAVE_TRANSACTIONS_QUERY = `
@@ -423,6 +465,72 @@ export async function verifyWaveAuth(page: Page) {
   };
 }
 
+async function selectorVisible(page: Page, selector?: string) {
+  if (!selector) return undefined;
+  try {
+    return await page.locator(selector).first().isVisible({ timeout: 2_000 });
+  } catch {
+    return false;
+  }
+}
+
+export function connectorOriginStatus(connector: ConnectorManifest, url: string) {
+  try {
+    const origin = new URL(url).origin;
+    const allowed = connector.auth.allowedOrigins;
+    return {
+      origin,
+      allowedOrigin: allowed.length === 0 || allowed.includes(origin),
+    };
+  } catch {
+    return {
+      origin: undefined,
+      allowedOrigin: undefined,
+    };
+  }
+}
+
+async function verifyGenericConnectorAuth(page: Page, connector: ConnectorManifest, input: ConnectorProfileInput) {
+  await page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 45_000 });
+  if (input.waitForSelector) {
+    await page.waitForSelector(input.waitForSelector, { timeout: 10_000 });
+  }
+  await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
+
+  const unauthenticated = await selectorVisible(page, input.unauthenticatedSelector);
+  const authenticated = await selectorVisible(page, input.authenticatedSelector);
+  const currentUrl = page.url();
+  const bodyText = input.includeBodyText
+    ? (await page.locator("body").innerText({ timeout: 5_000 }).catch(() => "")).slice(0, 4000)
+    : undefined;
+
+  return {
+    connectorId: connector.id,
+    profileKey: input.profileKey,
+    currentUrl,
+    title: await page.title().catch(() => undefined),
+    authenticated:
+      authenticated === true ? true :
+      unauthenticated === true ? false :
+      undefined,
+    ...connectorOriginStatus(connector, currentUrl),
+    checkedAtISO: new Date().toISOString(),
+    bodyText,
+  };
+}
+
+export async function verifyConnectorAuth(page: Page, connector: ConnectorManifest, input: ConnectorProfileInput) {
+  const provider = requireConnectorProvider(connector.id);
+  return provider.verifyAuth
+    ? provider.verifyAuth(page, input)
+    : verifyGenericConnectorAuth(page, connector, input);
+}
+
+export function connectorAuthIncompleteMessage(connector: ConnectorManifest, auth: Record<string, unknown>) {
+  return requireConnectorProvider(connector.id).authIncompleteMessage?.(auth)
+    ?? `${connector.name} login is not complete. Keep the live browser open, finish login, then confirm again.`;
+}
+
 export async function installWaveBearerCapture(page: Page, onBearer: (token: string) => void) {
   page.on("request", (request) => {
     const authorization = request.headers().authorization;
@@ -680,6 +788,69 @@ export function businessUuidFromWaveBusinessId(businessId: string) {
   }
 }
 
+async function openWaveTransactionsPage(page: Page, businessId: string) {
+  const businessUuid = businessUuidFromWaveBusinessId(businessId);
+  if (!businessUuid) return;
+  const transactionsUrl = `https://next.waveapps.com/${businessUuid}/transactions`;
+  if (page.url().startsWith(transactionsUrl)) return;
+  await page.goto(transactionsUrl, { waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => undefined);
+  await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
+}
+
+async function runWaveTransactionsAction(page: Page, input: WaveListTransactionsInput | ActiveWaveListTransactionsInput, context: ConnectorActionContext) {
+  const businessId = input.businessId ?? businessIdFromWaveUrl(page.url());
+  if (!businessId) {
+    throw new ConnectorActionError(
+      401,
+      "reauth_required",
+      "Wave is not on a business dashboard yet. Finish login in the live browser, then run the transaction pull before confirming and saving.",
+    );
+  }
+
+  let bearer: string | undefined;
+  await installWaveBearerCapture(page, (token) => {
+    bearer = token;
+  });
+  await openWaveTransactionsPage(page, businessId);
+
+  await page.evaluate(() => {
+    const apollo = Reflect.get(window, "__APOLLO_CLIENT__");
+    return apollo?.refetchObservableQueries?.();
+  }).catch(() => undefined);
+  bearer = await waitForWaveBearer(page, () => bearer, 5_000);
+
+  if (!bearer) {
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => undefined);
+    await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
+    bearer = await waitForWaveBearer(page, () => bearer, 15_000);
+  }
+
+  if (!bearer) {
+    throw new ConnectorActionError(
+      401,
+      "reauth_required",
+      context.mode === "profile"
+        ? "Wave did not expose an authenticated GraphQL bearer token. Open the Wave live login flow and finish the session first."
+        : "Wave did not expose an authenticated GraphQL bearer token in the active browser session.",
+    );
+  }
+
+  try {
+    const output = await runWaveListTransactions(
+      page,
+      { ...input, businessId, profileKey: context.profileKey },
+      bearer,
+    );
+    return {
+      currentUrl: page.url(),
+      title: await page.title().catch(() => undefined),
+      ...output,
+    };
+  } finally {
+    bearer = undefined;
+  }
+}
+
 function bcRegistryCorpNumFromUrl(url: string) {
   try {
     return new URL(url).pathname.match(/\/societies\/([^/]+)(?:\/|$)/)?.[1];
@@ -689,6 +860,7 @@ function bcRegistryCorpNumFromUrl(url: string) {
 }
 
 export async function runBcRegistryFilingHistoryExport(page: Page, input: BcRegistryFilingHistoryInput) {
+  const resultLog: Array<Record<string, unknown>> = [];
   const currentCorpNum = bcRegistryCorpNumFromUrl(page.url());
   const corpNum = input.corpNum?.trim() || currentCorpNum;
   const targetUrl = input.url
@@ -703,6 +875,13 @@ export async function runBcRegistryFilingHistoryExport(page: Page, input: BcRegi
     );
   }
 
+  resultLog.push({
+    level: "info",
+    step: "open",
+    message: "Opening BC Registry filing-history page.",
+    targetUrl,
+    timestampISO: new Date().toISOString(),
+  });
   await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
   await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
   await page.waitForSelector("table", { timeout: 10_000 }).catch(() => undefined);
@@ -716,6 +895,20 @@ export async function runBcRegistryFilingHistoryExport(page: Page, input: BcRegi
       "BC Registry redirected to login. Finish login in the live browser, then run the filing-history export before saving the profile.",
     );
   }
+  if (!/\/filingHistory(?:[/?#]|$)/i.test(currentUrl) && !/Filing\s+Date Filed\s+Details\s+View Documents/i.test(bodyText)) {
+    throw new ConnectorActionError(
+      422,
+      "bc_registry_filing_history_not_detected",
+      "The active BC Registry page does not look like a society filing-history page.",
+    );
+  }
+  resultLog.push({
+    level: "info",
+    step: "detect",
+    message: "Detected a BC Registry filing-history page.",
+    currentUrl,
+    timestampISO: new Date().toISOString(),
+  });
 
   const extracted: any = await page.evaluate(`(async () => {
     const includePdfProbe = ${JSON.stringify(input.includePdfProbe)};
@@ -910,12 +1103,36 @@ export async function runBcRegistryFilingHistoryExport(page: Page, input: BcRegi
     };
   })()`);
 
-  if (!input.downloadPdfs) return extracted;
+  resultLog.push({
+    level: "info",
+    step: "collect",
+    message: "Collected filing-history table rows.",
+    filingCount: extracted.filingCount,
+    documentCount: extracted.documentCount,
+    paperOnlyCount: extracted.paperOnlyCount,
+    timestampISO: new Date().toISOString(),
+  });
+
+  if (!input.downloadPdfs) {
+    return {
+      ...extracted,
+      resultLog,
+    };
+  }
 
   const download = await downloadBcRegistryDocuments(page, extracted);
+  resultLog.push({
+    level: download.failedCount > 0 ? "warn" : "info",
+    step: "download",
+    message: "Completed authenticated PDF download pass.",
+    downloadedCount: download.downloadedCount,
+    failedCount: download.failedCount,
+    timestampISO: new Date().toISOString(),
+  });
   return {
     ...extracted,
     download,
+    resultLog,
   };
 }
 
@@ -1015,6 +1232,81 @@ async function downloadBcRegistryDocuments(page: Page, extracted: any) {
     totalByteLength: files.reduce((sum, file) => sum + Number(file.byteLength ?? 0), 0),
     files,
   };
+}
+
+export const connectorProviders: ConnectorProvider[] = [
+  {
+    manifest: WAVE_CONNECTOR,
+    verifyAuth: (page) => verifyWaveAuth(page),
+    authIncompleteMessage: () => "Wave login is not complete. Keep the live browser open, finish login, then confirm again.",
+    actions: {
+      listTransactions: {
+        inputSchema: waveListTransactionsSchema,
+        activeInputSchema: activeWaveListTransactionsSchema,
+        run: runWaveTransactionsAction,
+      },
+      importTransactions: {
+        inputSchema: waveListTransactionsSchema,
+        activeInputSchema: activeWaveListTransactionsSchema,
+        run: runWaveTransactionsAction,
+      },
+    },
+  },
+  {
+    manifest: BC_REGISTRY_CONNECTOR,
+    actions: {
+      filingHistoryExport: {
+        inputSchema: bcRegistryFilingHistoryProfileSchema,
+        activeInputSchema: bcRegistryFilingHistorySchema,
+        run: (page, input) => runBcRegistryFilingHistoryExport(page, input),
+      },
+    },
+  },
+];
+
+export function getConnectorProvider(connectorId: string) {
+  return connectorProviders.find((provider) => provider.manifest.id === connectorId);
+}
+
+export function requireConnectorProvider(connectorId: string) {
+  const provider = getConnectorProvider(connectorId);
+  if (!provider) {
+    throw new ConnectorActionError(404, "connector_not_found", `Connector "${connectorId}" is not registered.`);
+  }
+  return provider;
+}
+
+export function requireConnectorAction(connectorId: string, actionId: string) {
+  const provider = requireConnectorProvider(connectorId);
+  const action = provider.actions[actionId];
+  if (!action) {
+    throw new ConnectorActionError(404, "connector_action_not_found", `Action "${actionId}" is not registered for ${connectorId}.`);
+  }
+  return action;
+}
+
+export function parseConnectorActionInput(connectorId: string, actionId: string, mode: ConnectorActionMode, body: unknown) {
+  const action = requireConnectorAction(connectorId, actionId);
+  const schema = mode === "session" ? action.activeInputSchema ?? action.inputSchema : action.inputSchema;
+  return schema.parse(body);
+}
+
+export async function runConnectorAction(
+  page: Page,
+  connectorId: string,
+  actionId: string,
+  mode: ConnectorActionMode,
+  input: unknown,
+  profileKey: string,
+) {
+  const provider = requireConnectorProvider(connectorId);
+  const action = requireConnectorAction(connectorId, actionId);
+  return action.run(page, input, {
+    connector: provider.manifest,
+    actionId,
+    mode,
+    profileKey,
+  });
 }
 
 export function requireKnownConnector(connectorId: string) {

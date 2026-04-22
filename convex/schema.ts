@@ -1643,6 +1643,14 @@ export default defineSchema({
     attendeeIds: v.array(v.string()),
     agendaJson: v.optional(v.string()),
     minutesId: v.optional(v.id("minutes")),
+    sourceReviewStatus: v.optional(v.string()), // imported_needs_review | source_reviewed | rejected
+    sourceReviewNotes: v.optional(v.string()),
+    sourceReviewedAtISO: v.optional(v.string()),
+    sourceReviewedByUserId: v.optional(v.id("users")),
+    packageReviewStatus: v.optional(v.string()), // draft | needs_review | ready | released
+    packageReviewNotes: v.optional(v.string()),
+    packageReviewedAtISO: v.optional(v.string()),
+    packageReviewedByUserId: v.optional(v.id("users")),
     notes: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
@@ -1796,6 +1804,10 @@ export default defineSchema({
     ),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     sourceExternalIds: v.optional(v.array(v.string())),
+    sourceReviewStatus: v.optional(v.string()), // imported_needs_review | source_reviewed | rejected
+    sourceReviewNotes: v.optional(v.string()),
+    sourceReviewedAtISO: v.optional(v.string()),
+    sourceReviewedByUserId: v.optional(v.id("users")),
     draftTranscript: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
@@ -2058,13 +2070,18 @@ export default defineSchema({
     category: v.string(), // Contract | Grant | Facility | Governance | Privacy | Funding | Other
     sourceDocumentId: v.optional(v.id("documents")),
     sourceLabel: v.optional(v.string()),
+    sourceExcerpt: v.optional(v.string()),
     counterparty: v.optional(v.string()),
     requirement: v.string(),
     cadence: v.string(), // Once | Monthly | Quarterly | Annual | Every 2 years | Custom
     nextDueDate: v.optional(v.string()),
+    dueDateBasis: v.optional(v.string()),
     noticeLeadDays: v.optional(v.number()),
     owner: v.optional(v.string()),
     status: v.string(), // Active | Watching | Paused | Closed
+    reviewStatus: v.optional(v.string()), // NeedsReview | Verified | Rejected
+    confidence: v.optional(v.number()),
+    uncertaintyNote: v.optional(v.string()),
     lastCompletedAtISO: v.optional(v.string()),
     lastCompletionSummary: v.optional(v.string()),
     notes: v.optional(v.string()),
@@ -2082,6 +2099,8 @@ export default defineSchema({
     happenedAtISO: v.string(),
     meetingId: v.optional(v.id("meetings")),
     evidenceDocumentIds: v.array(v.id("documents")),
+    evidenceStatus: v.optional(v.string()), // NeedsReview | Verified | Rejected
+    evidenceNotes: v.optional(v.string()),
     summary: v.optional(v.string()),
     createdAtISO: v.string(),
   })
@@ -2331,6 +2350,7 @@ export default defineSchema({
     filingId: v.optional(v.id("filings")),
     workflowId: v.optional(v.id("workflows")),
     documentId: v.optional(v.id("documents")),
+    commitmentId: v.optional(v.id("commitments")),
     eventId: v.optional(v.string()),
     tags: v.array(v.string()),
     createdAtISO: v.string(),
@@ -2344,7 +2364,8 @@ export default defineSchema({
     .index("by_meeting", ["meetingId"])
     .index("by_filing", ["filingId"])
     .index("by_workflow", ["workflowId"])
-    .index("by_document", ["documentId"]),
+    .index("by_document", ["documentId"])
+    .index("by_commitment", ["commitmentId"]),
 
   expenseReports: defineTable({
     societyId: v.id("societies"),

@@ -50,6 +50,8 @@ import type * as inspections from "../inspections.js";
 import type * as insurance from "../insurance.js";
 import type * as invitations from "../invitations.js";
 import type * as legalOperations from "../legalOperations.js";
+import type * as lib_access_documentAccess from "../lib/access/documentAccess.js";
+import type * as lib_access_materialAccess from "../lib/access/materialAccess.js";
 import type * as lib_bylawRules from "../lib/bylawRules.js";
 import type * as lib_moduleSettings from "../lib/moduleSettings.js";
 import type * as lib_orgHubOptions from "../lib/orgHubOptions.js";
@@ -159,6 +161,8 @@ declare const fullApi: ApiFromModules<{
   insurance: typeof insurance;
   invitations: typeof invitations;
   legalOperations: typeof legalOperations;
+  "lib/access/documentAccess": typeof lib_access_documentAccess;
+  "lib/access/materialAccess": typeof lib_access_materialAccess;
   "lib/bylawRules": typeof lib_bylawRules;
   "lib/moduleSettings": typeof lib_moduleSettings;
   "lib/orgHubOptions": typeof lib_orgHubOptions;

@@ -373,6 +373,10 @@ export const applyApprovedMeetings = mutation({
         status: "Held",
         attendeeIds: [],
         agendaJson: JSON.stringify(importedMeetingAgenda(title, group.map(({ payload }) => payload), sourceExternalIds)),
+        sourceReviewStatus: "imported_needs_review",
+        sourceReviewNotes: "Created from approved import-session motion records. Verify against source minutes before relying on it as an official meeting record.",
+        packageReviewStatus: "needs_review",
+        packageReviewNotes: "Imported meeting source review must be completed before the board package is ready.",
         notes: `Imported from ${hydrateSession(session).name} (${group.length} converted motion${group.length === 1 ? "" : "s"}). Review attendance, quorum, discussion, and source minutes before treating as official minutes.`,
       });
       const minutesId = await ctx.db.insert("minutes", {
@@ -396,6 +400,8 @@ export const applyApprovedMeetings = mutation({
         actionItems: [],
         sourceDocumentIds,
         sourceExternalIds,
+        sourceReviewStatus: "imported_needs_review",
+        sourceReviewNotes: "Created from approved import-session motion records. Verify against source minutes before relying on it as official minutes.",
         draftTranscript: JSON.stringify({
           importSessionId: sessionId,
           sourceExternalIds,
@@ -439,6 +445,10 @@ export const applyApprovedMeetings = mutation({
             ? payload.agendaItems
             : importedMeetingAgenda(title, payload.motions, sourceExternalIds),
         ),
+        sourceReviewStatus: "imported_needs_review",
+        sourceReviewNotes: "Created from approved import-session meeting minutes. Verify against source minutes before relying on it as an official meeting record.",
+        packageReviewStatus: "needs_review",
+        packageReviewNotes: "Imported meeting source review must be completed before the board package is ready.",
         notes: `Imported from ${hydrateSession(session).name}. Review source minutes before treating as official minutes.`,
       });
       const minutesId = await ctx.db.insert("minutes", {
@@ -455,6 +465,8 @@ export const applyApprovedMeetings = mutation({
         actionItems: payload.actionItems,
         sourceDocumentIds,
         sourceExternalIds,
+        sourceReviewStatus: "imported_needs_review",
+        sourceReviewNotes: "Created from approved import-session meeting minutes. Verify against source minutes before relying on it as official minutes.",
         draftTranscript: JSON.stringify({
           importSessionId: sessionId,
           sourceExternalIds,
@@ -514,6 +526,14 @@ async function mergeExistingMeetingImport(
     `Merged richer Paperless minutes import from ${hydrateSession(session).name}; review before treating as official minutes.`,
   );
   if (mergedMeetingNote !== meeting.notes) meetingPatch.notes = mergedMeetingNote;
+  if (meeting.sourceReviewStatus !== "source_reviewed") {
+    meetingPatch.sourceReviewStatus = "imported_needs_review";
+    meetingPatch.sourceReviewNotes = "Merged imported meeting-minute data. Verify against source minutes before relying on it as official.";
+  }
+  if (meeting.packageReviewStatus !== "released") {
+    meetingPatch.packageReviewStatus = "needs_review";
+    meetingPatch.packageReviewNotes = "Meeting source data changed through import and needs board package review.";
+  }
   if (Object.keys(meetingPatch).length > 0) await ctx.db.patch(meeting._id, meetingPatch);
 
   const minutesPatch: any = {};
@@ -538,6 +558,10 @@ async function mergeExistingMeetingImport(
   if (mergedSourceExternalIds.length !== (minutesRow.sourceExternalIds ?? []).length) minutesPatch.sourceExternalIds = mergedSourceExternalIds;
   const mergedSourceDocumentIds = unique([...(minutesRow.sourceDocumentIds ?? []), ...sourceDocumentIds]);
   if (mergedSourceDocumentIds.length !== (minutesRow.sourceDocumentIds ?? []).length) minutesPatch.sourceDocumentIds = mergedSourceDocumentIds;
+  if (minutesRow.sourceReviewStatus !== "source_reviewed") {
+    minutesPatch.sourceReviewStatus = "imported_needs_review";
+    minutesPatch.sourceReviewNotes = "Merged imported meeting-minute data. Verify against source minutes before relying on it as official.";
+  }
 
   minutesPatch.draftTranscript = JSON.stringify({
     ...parseJson(minutesRow.draftTranscript),
@@ -704,6 +728,8 @@ export const applyApprovedDocuments = mutation({
           note: `Metadata-only import. Review the original ${sourceSystemLabel(externalSystem)} source before relying on OCR or publishing content.`,
         }),
         createdAtISO: new Date().toISOString(),
+        reviewStatus: "in_review",
+        librarySection: importedLibrarySection(record.targetModule, sections),
         flaggedForDeletion: false,
         tags: [
           `${sourceSystemTag(externalSystem)}-import`,
@@ -862,6 +888,8 @@ async function ensureImportSourceDocuments(
         note: cleanText(source?.notes) || note,
       }),
       createdAtISO: new Date().toISOString(),
+      reviewStatus: "in_review",
+      librarySection: importedLibrarySection(sourceCategory, arrayOf(source?.sections).map(String)),
       flaggedForDeletion: false,
       tags: [
         `${sourceSystemTag(externalSystem)}-import`,
@@ -3275,6 +3303,15 @@ function sourceSystem(bundle: any) {
 function firstSection(doc: any) {
   const sections = Array.isArray(doc?.sections) ? doc.sections : Array.isArray(doc?.candidateSections) ? doc.candidateSections : [];
   return cleanText(sections[0]) || "Documents";
+}
+
+function importedLibrarySection(targetModule: unknown, sections: string[] = []) {
+  const haystack = [targetModule, ...sections].map((value) => cleanText(value)?.toLowerCase()).filter(Boolean).join(" ");
+  if (/\bmeeting|minutes|agenda|board\b/.test(haystack)) return "meeting_material";
+  if (/\bfinancial|treasurer|budget|receipt|expense\b/.test(haystack)) return "finance";
+  if (/\bpolicy|privacy|pipa\b/.test(haystack)) return "policy";
+  if (/\bconstitution|bylaw|governance|filing|resolution|minute-book\b/.test(haystack)) return "governance";
+  return "reference";
 }
 
 function inferMeetingType(title: string) {

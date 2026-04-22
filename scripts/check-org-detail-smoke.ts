@@ -107,7 +107,29 @@ const checks: Array<{ file: string; patterns: Array<string | RegExp> }> = [
       "STARTER_POLICY_TEMPLATES",
       "pdftotext",
       "utf8-normalized-ascii",
+      "sampleData",
+      "renderedSample",
+      "compareTemplateText",
       "convex/data/starterPolicyTemplates",
+    ],
+  },
+  {
+    file: "scripts/render-starter-template-documents.ts",
+    patterns: [
+      "renderStarterTemplateBlocks",
+      "writeDocx",
+      "writePdf",
+      "comparison-report.md",
+      "data/starter-template-exports",
+    ],
+  },
+  {
+    file: "scripts/starter-template-rendering.ts",
+    patterns: [
+      "starterSampleData",
+      "renderStarterTemplateSampleHtml",
+      "compareTemplateText",
+      "Dummy data for export preview",
     ],
   },
   {
@@ -243,6 +265,9 @@ if (!existsSync(starterJsonDir)) {
       if (!parsed.key) failures.push(`${file}: missing key`);
       if (!parsed.source?.sha256) failures.push(`${file}: missing source.sha256`);
       if (!parsed.extraction?.text) failures.push(`${file}: missing extraction.text`);
+      if (!parsed.sampleData?.values?.CorporationName) failures.push(`${file}: missing sampleData.values.CorporationName`);
+      if (!parsed.renderedSample?.text) failures.push(`${file}: missing renderedSample.text`);
+      if (!parsed.comparison?.status) failures.push(`${file}: missing comparison.status`);
       if (!parsed.remadeTemplate?.html) failures.push(`${file}: missing remadeTemplate.html`);
     } catch (error) {
       failures.push(`${file}: invalid JSON`);

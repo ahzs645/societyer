@@ -7,20 +7,14 @@ import { WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
 import { createBrowserBackend } from "./browserBackend.js";
 import {
-  activeWaveListTransactionsSchema,
-  bcRegistryFilingHistorySchema,
-  businessIdFromWaveUrl,
-  businessUuidFromWaveBusinessId,
-  type ConnectorManifest,
   ConnectorActionError,
+  connectorAuthIncompleteMessage,
   connectors,
-  installWaveBearerCapture,
+  parseConnectorActionInput,
+  connectorOriginStatus,
   requireKnownConnector,
-  runBcRegistryFilingHistoryExport,
-  runWaveListTransactions,
-  verifyWaveAuth,
-  waitForWaveBearer,
-  waveListTransactionsSchema,
+  runConnectorAction,
+  verifyConnectorAuth,
 } from "./connectors.js";
 
 const port = Number(process.env.CONNECTOR_RUNNER_PORT ?? 8890);
@@ -176,60 +170,6 @@ async function selectorVisible(page: Page, selector?: string) {
   } catch {
     return false;
   }
-}
-
-function connectorOriginStatus(connector: ConnectorManifest, url: string) {
-  try {
-    const origin = new URL(url).origin;
-    const allowed = connector.auth.allowedOrigins;
-    return {
-      origin,
-      allowedOrigin: allowed.length === 0 || allowed.includes(origin),
-    };
-  } catch {
-    return {
-      origin: undefined,
-      allowedOrigin: undefined,
-    };
-  }
-}
-
-async function verifyGenericConnectorProfile(page: Page, connector: ConnectorManifest, input: ProfilePageInput) {
-  await page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 45_000 });
-  if (input.waitForSelector) {
-    await page.waitForSelector(input.waitForSelector, { timeout: 10_000 });
-  }
-  await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
-
-  const unauthenticated = await selectorVisible(page, input.unauthenticatedSelector);
-  const authenticated = await selectorVisible(page, input.authenticatedSelector);
-  const currentUrl = page.url();
-  const bodyText = input.includeBodyText
-    ? (await page.locator("body").innerText({ timeout: 5_000 }).catch(() => "")).slice(0, 4000)
-    : undefined;
-
-  return {
-    connectorId: connector.id,
-    profileKey: input.profileKey,
-    currentUrl,
-    title: await page.title().catch(() => undefined),
-    authenticated:
-      authenticated === true ? true :
-      unauthenticated === true ? false :
-      undefined,
-    ...connectorOriginStatus(connector, currentUrl),
-    checkedAtISO: new Date().toISOString(),
-    bodyText,
-  };
-}
-
-async function openWaveTransactionsPage(page: Page, businessId: string) {
-  const businessUuid = businessUuidFromWaveBusinessId(businessId);
-  if (!businessUuid) return;
-  const transactionsUrl = `https://next.waveapps.com/${businessUuid}/transactions`;
-  if (page.url().startsWith(transactionsUrl)) return;
-  await page.goto(transactionsUrl, { waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => undefined);
-  await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
 }
 
 function publicSession(session: ActiveSession) {
@@ -492,11 +432,7 @@ app.post("/connectors/:connectorId/auth/verify", asyncRoute(async (req, res) => 
 
   const { browser, page } = await connectSession(browserSession.cdpUrl);
   try {
-    if (connector.id === "wave") {
-      res.json(await verifyWaveAuth(page));
-      return;
-    }
-    res.json(await verifyGenericConnectorProfile(page, connector, input));
+    res.json(await verifyConnectorAuth(page, connector, input));
   } finally {
     await browser.close().catch(() => undefined);
   }
@@ -518,8 +454,11 @@ app.post("/connectors/:connectorId/auth/sessions/:sessionId/confirm", asyncRoute
 
   const finalUrl = session.page.url();
   const title = await session.page.title().catch(() => undefined);
-  const auth = connector.id === "wave"
-    ? await verifyWaveAuth(session.page)
+  const auth = connector.auth.confirmMode === "verified"
+    ? await verifyConnectorAuth(session.page, connector, {
+      profileKey: session.profileKey,
+      url: connector.auth.startUrl,
+    })
     : {
       connectorId: connector.id,
       currentUrl: finalUrl,
@@ -530,14 +469,15 @@ app.post("/connectors/:connectorId/auth/sessions/:sessionId/confirm", asyncRoute
       checkedAtISO: new Date().toISOString(),
     };
 
-  if (connector.id === "wave" && !auth.authenticated) {
+  if (connector.auth.confirmMode === "verified" && !auth.authenticated) {
+    const message = connectorAuthIncompleteMessage(connector, auth);
     res.status(409).json({
       ...auth,
       sessionId: session.sessionId,
       profileKey: session.profileKey,
       saved: false,
-      error: "Wave login is not complete.",
-      message: "Wave login is not complete. Keep the live browser open, finish login, then confirm again.",
+      error: message,
+      message,
     });
     return;
   }
@@ -568,70 +508,10 @@ app.post("/connectors/:connectorId/auth/sessions/:sessionId/actions/:actionId", 
     res.status(409).json({ error: `Session belongs to ${session.connectorId}, not ${connector.id}.` });
     return;
   }
-  if (connector.id === "bc-registry" && actionId === "filingHistoryExport") {
-    const input = bcRegistryFilingHistorySchema.parse(req.body);
-    const startedAtISO = new Date().toISOString();
-    const output = await runBcRegistryFilingHistoryExport(session.page, input);
-    res.json({
-      runId: crypto.randomUUID(),
-      connectorId: connector.id,
-      actionId,
-      sessionId: session.sessionId,
-      profileKey: session.profileKey,
-      provider: backend.provider,
-      startedAtISO,
-      completedAtISO: new Date().toISOString(),
-      ...output,
-    });
-    return;
-  }
-  if (connector.id !== "wave" || !["listTransactions", "importTransactions"].includes(actionId)) {
-    throw new ConnectorActionError(404, "connector_action_not_found", `Action "${actionId}" is not registered for ${connector.id}.`);
-  }
 
-  const input = activeWaveListTransactionsSchema.parse(req.body);
-  const businessId = input.businessId ?? businessIdFromWaveUrl(session.page.url());
-  if (!businessId) {
-    throw new ConnectorActionError(
-      401,
-      "reauth_required",
-      "Wave is not on a business dashboard yet. Finish login in the live browser, then run the transaction pull before confirming and saving.",
-    );
-  }
-
+  const input = parseConnectorActionInput(connector.id, actionId, "session", req.body);
   const startedAtISO = new Date().toISOString();
-  let bearer: string | undefined;
-  await installWaveBearerCapture(session.page, (token) => {
-    bearer = token;
-  });
-  await openWaveTransactionsPage(session.page, businessId);
-
-  await session.page.evaluate(() => {
-    const apollo = Reflect.get(window, "__APOLLO_CLIENT__");
-    return apollo?.refetchObservableQueries?.();
-  }).catch(() => undefined);
-  bearer = await waitForWaveBearer(session.page, () => bearer, 5_000);
-
-  if (!bearer) {
-    await session.page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => undefined);
-    await session.page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
-    bearer = await waitForWaveBearer(session.page, () => bearer, 15_000);
-  }
-
-  if (!bearer) {
-    throw new ConnectorActionError(
-      401,
-      "reauth_required",
-      "Wave did not expose an authenticated GraphQL bearer token in the active browser session.",
-    );
-  }
-
-  const output = await runWaveListTransactions(
-    session.page,
-    { ...input, businessId, profileKey: session.profileKey },
-    bearer,
-  );
-  bearer = undefined;
+  const output = await runConnectorAction(session.page, connector.id, actionId, "session", input, session.profileKey);
   res.json({
     runId: crypto.randomUUID(),
     connectorId: connector.id,
@@ -650,38 +530,7 @@ app.post("/connectors/:connectorId/auth/sessions/:sessionId/actions/:actionId", 
 app.post("/connectors/:connectorId/actions/:actionId", asyncRoute(async (req, res) => {
   const connector = requireKnownConnector(String(req.params.connectorId));
   const actionId = String(req.params.actionId);
-  if (connector.id === "bc-registry" && actionId === "filingHistoryExport") {
-    const input = bcRegistryFilingHistorySchema.extend({ profileKey: z.string().min(1) }).parse(req.body);
-    const browserSession = await backend.createSession({
-      profileKey: input.profileKey,
-      persist: true,
-      liveView: false,
-      readOnly: true,
-    });
-    const { browser, page } = await connectSession(browserSession.cdpUrl);
-    const startedAtISO = new Date().toISOString();
-    try {
-      const output = await runBcRegistryFilingHistoryExport(page, input);
-      res.json({
-        runId: crypto.randomUUID(),
-        connectorId: connector.id,
-        actionId,
-        profileKey: browserSession.profileKey,
-        provider: backend.provider,
-        startedAtISO,
-        completedAtISO: new Date().toISOString(),
-        ...output,
-      });
-    } finally {
-      await browser.close().catch(() => undefined);
-    }
-    return;
-  }
-  if (connector.id !== "wave" || !["listTransactions", "importTransactions"].includes(actionId)) {
-    throw new ConnectorActionError(404, "connector_action_not_found", `Action "${actionId}" is not registered for ${connector.id}.`);
-  }
-
-  const input = waveListTransactionsSchema.parse(req.body);
+  const input: any = parseConnectorActionInput(connector.id, actionId, "profile", req.body);
   const browserSession = await backend.createSession({
     profileKey: input.profileKey,
     persist: true,
@@ -692,24 +541,8 @@ app.post("/connectors/:connectorId/actions/:actionId", asyncRoute(async (req, re
   const { browser, page } = await connectSession(browserSession.cdpUrl);
   const runId = crypto.randomUUID();
   const startedAtISO = new Date().toISOString();
-  let bearer: string | undefined;
   try {
-    await installWaveBearerCapture(page, (token) => {
-      bearer = token;
-    });
-    await page.goto(connector.auth.startUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
-    await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
-    await openWaveTransactionsPage(page, input.businessId);
-    bearer = await waitForWaveBearer(page, () => bearer);
-    if (!bearer) {
-      throw new ConnectorActionError(
-        401,
-        "reauth_required",
-        "Wave did not expose an authenticated GraphQL bearer token. Open the Wave live login flow and finish the session first.",
-      );
-    }
-
-    const output = await runWaveListTransactions(page, input, bearer);
+    const output = await runConnectorAction(page, connector.id, actionId, "profile", input, browserSession.profileKey);
     res.json({
       runId,
       connectorId: connector.id,
@@ -723,7 +556,6 @@ app.post("/connectors/:connectorId/actions/:actionId", asyncRoute(async (req, re
       ...output,
     });
   } finally {
-    bearer = undefined;
     await browser.close().catch(() => undefined);
   }
 }));

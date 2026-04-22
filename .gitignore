@@ -9,6 +9,7 @@ dist
 data/*.sqlite
 data/*.sqlite-*
 data/workflow-generated-documents/
+data/starter-template-exports/
 *.pyc
 __pycache__/
 scripts/__pycache__/

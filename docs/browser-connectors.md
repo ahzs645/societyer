@@ -115,9 +115,12 @@ curl -X POST http://127.0.0.1:8890/connectors/bc-registry/auth/sessions/<session
 
 The action navigates to `/societies/<corpNum>/filingHistory`, extracts the full
 DataTables filing history, returns `filings`, `documents`, `csv`, `csvFilename`,
-and can verify one sample PDF endpoint with `includePdfProbe`. With
-`downloadPdfs: true`, it fetches PDFs inside the authenticated browser context
-and writes the CSV plus PDFs to `browser-connector-exports/<corp>-<timestamp>/`.
+`resultLog`, and can verify one sample PDF endpoint with `includePdfProbe`.
+Rows that only have paper records stay in the CSV with `Paper Only` set to
+`true`. With `downloadPdfs: true`, it fetches PDFs inside the authenticated
+browser context and writes the CSV plus PDFs to
+`browser-connector-exports/<corp>-<timestamp>/`, including per-document success
+or error details in the download result.
 
 Societyer can then fill missing Society governance document links from that
 export:

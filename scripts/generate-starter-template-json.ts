@@ -7,6 +7,12 @@ import {
   starterTemplateHtml,
   starterTemplateRequiredFields,
 } from "../convex/starterPolicyTemplates";
+import {
+  compareTemplateText,
+  htmlToPlainText,
+  renderStarterTemplateSampleHtml,
+  starterSampleData,
+} from "./starter-template-rendering";
 
 const sourceRoot = "/Users/ahmadjalil/Downloads/New Folder With Items";
 const nestedSourceRoot = join(sourceRoot, "New Folder With Items 3");
@@ -79,6 +85,11 @@ function main() {
     if (hash !== template.sourceSha256) {
       throw new Error(`${template.key} hash mismatch: ${hash} !== ${template.sourceSha256}`);
     }
+    const sourceText = normalizedAscii(pdfText(primary));
+    const html = starterTemplateHtml(template);
+    const sampleData = starterSampleData(template);
+    const renderedSampleHtml = renderStarterTemplateSampleHtml(template, html, sampleData);
+    const renderedSampleText = htmlToPlainText(renderedSampleHtml);
 
     const duplicateFiles = (byHash.get(hash) ?? [])
       .map((file) => ({
@@ -104,7 +115,17 @@ function main() {
       extraction: {
         tool: "pdftotext -layout",
         textEncoding: "utf8-normalized-ascii",
-        text: normalizedAscii(pdfText(primary)),
+        text: sourceText,
+      },
+      sampleData,
+      renderedSample: {
+        html: renderedSampleHtml,
+        text: renderedSampleText,
+      },
+      comparison: {
+        comparedAgainst: "source PDF extraction",
+        comparedArtifact: "renderedSample.text",
+        ...compareTemplateText(sourceText, renderedSampleText),
       },
       remadeTemplate: {
         summary: template.summary,
@@ -119,7 +140,7 @@ function main() {
           "CharityStatus",
         ],
         sections: template.sections,
-        html: starterTemplateHtml(template),
+        html,
       },
     };
 

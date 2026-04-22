@@ -12,12 +12,14 @@ import { FilterField } from "../components/FilterBar";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import {
+  AlertTriangle,
   CalendarClock,
   CheckCircle2,
   ClipboardList,
   FileText,
   FolderOpen,
   Link as LinkIcon,
+  ListTodo,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -26,12 +28,15 @@ import { formatDate, relative } from "../lib/format";
 const CATEGORIES = ["Contract", "Grant", "Facility", "Governance", "Privacy", "Funding", "Other"] as const;
 const CADENCES = ["Once", "Monthly", "Quarterly", "Annual", "Every 2 years", "Custom"] as const;
 const STATUSES = ["Active", "Watching", "Paused", "Closed"] as const;
+const REVIEW_STATUSES = ["NeedsReview", "Verified", "Rejected"] as const;
+const EVIDENCE_STATUSES = ["NeedsReview", "Verified", "Rejected"] as const;
 
 const COMMITMENT_FIELDS: FilterField<any>[] = [
   { id: "title", label: "Title", icon: <ClipboardList size={14} />, match: (c, q) => c.title.toLowerCase().includes(q.toLowerCase()) },
   { id: "category", label: "Category", icon: <FileText size={14} />, options: [...CATEGORIES], match: (c, q) => c.category === q },
   { id: "cadence", label: "Cadence", icon: <CalendarClock size={14} />, options: [...CADENCES], match: (c, q) => c.cadence === q },
   { id: "status", label: "Status", icon: <CheckCircle2 size={14} />, options: [...STATUSES], match: (c, q) => c.status === q },
+  { id: "reviewStatus", label: "Review", icon: <AlertTriangle size={14} />, options: [...REVIEW_STATUSES], match: (c, q) => (c.reviewStatus ?? "NeedsReview") === q },
   { id: "overdue", label: "Overdue", icon: <CalendarClock size={14} />, options: ["Yes", "No"], match: (c, q) => {
     const overdue = c.status !== "Closed" && c.status !== "Paused" && c.nextDueDate && new Date(c.nextDueDate).getTime() < Date.now();
     return q === (overdue ? "Yes" : "No");
@@ -44,13 +49,18 @@ type CommitmentForm = {
   category: string;
   sourceDocumentId?: string;
   sourceLabel?: string;
+  sourceExcerpt?: string;
   counterparty?: string;
   requirement: string;
   cadence: string;
   nextDueDate?: string;
+  dueDateBasis?: string;
   noticeLeadDays?: number | "";
   owner?: string;
   status: string;
+  reviewStatus?: string;
+  confidence?: number | "";
+  uncertaintyNote?: string;
   notes?: string;
 };
 
@@ -60,6 +70,8 @@ type EventForm = {
   happenedAtISO: string;
   meetingId?: string;
   evidenceDocumentIds: string[];
+  evidenceStatus?: string;
+  evidenceNotes?: string;
   summary?: string;
   nextDueDate?: string;
 };
@@ -70,11 +82,13 @@ export function CommitmentsPage() {
   const events = useQuery(api.commitments.eventsForSociety, society ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
+  const tasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.commitments.create);
   const update = useMutation(api.commitments.update);
   const remove = useMutation(api.commitments.remove);
   const recordEvent = useMutation(api.commitments.recordEvent);
   const removeEvent = useMutation(api.commitments.removeEvent);
+  const createTask = useMutation(api.tasks.create);
   const confirm = useConfirm();
   const toast = useToast();
   const [form, setForm] = useState<CommitmentForm | null>(null);
@@ -90,6 +104,16 @@ export function CommitmentsPage() {
     }
     return map;
   }, [events]);
+  const openTasksByCommitment = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const task of tasks ?? []) {
+      if (task.status === "Done") continue;
+      const key = task.commitmentId ? String(task.commitmentId) : task.eventId?.startsWith("commitment:") ? task.eventId.slice("commitment:".length) : "";
+      if (!key) continue;
+      map.set(key, [...(map.get(key) ?? []), task]);
+    }
+    return map;
+  }, [tasks]);
 
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
@@ -103,7 +127,13 @@ export function CommitmentsPage() {
     const due = new Date(row.nextDueDate).getTime();
     return due >= now && due <= now + 30 * 24 * 60 * 60 * 1000;
   });
+  const needsReview = activeRows.filter((row) => (row.reviewStatus ?? "NeedsReview") !== "Verified");
   const linkedEvidenceCount = (events ?? []).filter((event: any) => event.evidenceDocumentIds?.length > 0 || event.meetingId).length;
+  const tenancyWorkflow = rows.find((row) => {
+    const source = documentsById.get(String(row.sourceDocumentId));
+    const sourceTags = Array.isArray(source?.tags) ? source.tags.join(" ").toLowerCase() : "";
+    return sourceTags.includes("tenancy") || row.title.toLowerCase().includes("presentation");
+  }) ?? rows[0];
 
   const openNew = () => {
     setForm({
@@ -114,6 +144,8 @@ export function CommitmentsPage() {
       nextDueDate: new Date().toISOString().slice(0, 10),
       noticeLeadDays: 30,
       status: "Active",
+      reviewStatus: "NeedsReview",
+      confidence: "",
     });
   };
 
@@ -124,13 +156,18 @@ export function CommitmentsPage() {
       category: row.category,
       sourceDocumentId: row.sourceDocumentId,
       sourceLabel: row.sourceLabel,
+      sourceExcerpt: row.sourceExcerpt,
       counterparty: row.counterparty,
       requirement: row.requirement,
       cadence: row.cadence,
       nextDueDate: row.nextDueDate,
+      dueDateBasis: row.dueDateBasis,
       noticeLeadDays: row.noticeLeadDays ?? "",
       owner: row.owner,
       status: row.status,
+      reviewStatus: row.reviewStatus ?? "NeedsReview",
+      confidence: row.confidence ?? "",
+      uncertaintyNote: row.uncertaintyNote,
       notes: row.notes,
     });
   };
@@ -142,6 +179,7 @@ export function CommitmentsPage() {
       title: `${row.title} completed`,
       happenedAtISO: today,
       evidenceDocumentIds: [],
+      evidenceStatus: "NeedsReview",
       nextDueDate: nextDueDate(row.cadence, today) ?? row.nextDueDate,
     });
   };
@@ -167,11 +205,42 @@ export function CommitmentsPage() {
       happenedAtISO: eventForm.happenedAtISO,
       meetingId: emptyToUndefined(eventForm.meetingId) as any,
       evidenceDocumentIds: eventForm.evidenceDocumentIds as any[],
+      evidenceStatus: eventForm.evidenceStatus,
+      evidenceNotes: emptyToUndefined(eventForm.evidenceNotes),
       summary: emptyToUndefined(eventForm.summary),
       nextDueDate: emptyToUndefined(eventForm.nextDueDate),
     });
     toast.success("Completion recorded");
     setEventForm(null);
+  };
+
+  const createPreparationTask = async (row: any) => {
+    const existing = openTasksByCommitment.get(String(row._id)) ?? [];
+    if (existing.length > 0) {
+      toast.info("Open task already exists", existing[0].title);
+      return;
+    }
+    const dueDate = row.nextDueDate ? subtractDays(row.nextDueDate, row.noticeLeadDays ?? 14) : undefined;
+    const sourceTitle = documentsById.get(String(row.sourceDocumentId))?.title;
+    await createTask({
+      societyId: society._id,
+      title: `Prepare ${row.title}`,
+      description: [
+        row.requirement,
+        row.sourceLabel ? `Source: ${row.sourceLabel}` : undefined,
+        sourceTitle ? `Document: ${sourceTitle}` : undefined,
+        row.uncertaintyNote ? `Review note: ${row.uncertaintyNote}` : undefined,
+      ].filter(Boolean).join("\n"),
+      status: "Todo",
+      priority: isOverdue(row) ? "High" : "Medium",
+      assignee: row.owner,
+      dueDate,
+      documentId: row.sourceDocumentId,
+      commitmentId: row._id,
+      eventId: `commitment:${row._id}`,
+      tags: ["commitment", row.category?.toLowerCase?.()].filter(Boolean),
+    });
+    toast.success("Preparation task created", dueDate ? `Due ${formatDate(dueDate)}` : row.title);
   };
 
   return (
@@ -205,11 +274,29 @@ export function CommitmentsPage() {
           <div className="stat__sub">watch list</div>
         </div>
         <div className="stat">
+          <div className="stat__label">Needs review</div>
+          <div className="stat__value">{needsReview.length}</div>
+          <div className="stat__sub">source or cadence uncertainty</div>
+        </div>
+        <div className="stat">
           <div className="stat__label">Evidence links</div>
           <div className="stat__value">{linkedEvidenceCount}</div>
           <div className="stat__sub">meetings or documents</div>
         </div>
       </div>
+
+      {tenancyWorkflow && (
+        <TenancyWorkflowCard
+          commitment={tenancyWorkflow}
+          sourceDocument={documentsById.get(String(tenancyWorkflow.sourceDocumentId))}
+          events={eventsByCommitment.get(String(tenancyWorkflow._id)) ?? []}
+          openTasks={openTasksByCommitment.get(String(tenancyWorkflow._id)) ?? []}
+          documentsById={documentsById}
+          meetingsById={meetingsById}
+          onRecord={() => openRecord(tenancyWorkflow)}
+          onPlanTask={() => createPreparationTask(tenancyWorkflow)}
+        />
+      )}
 
       <DataTable
         label="All commitments"
@@ -221,8 +308,11 @@ export function CommitmentsPage() {
         searchPlaceholder="Search requirement, source, counterparty..."
         searchExtraFields={[
           (row) => row.requirement,
+          (row) => row.sourceExcerpt,
           (row) => row.counterparty,
           (row) => row.sourceLabel,
+          (row) => row.dueDateBasis,
+          (row) => row.uncertaintyNote,
           (row) => documentsById.get(String(row.sourceDocumentId))?.title,
         ]}
         defaultSort={{ columnId: "nextDueDate", dir: "asc" }}
@@ -237,14 +327,28 @@ export function CommitmentsPage() {
             accessor: (row) => row.title,
             render: (row) => (
               <div>
-                <strong>{row.title}</strong>
+                <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                  <strong>{row.title}</strong>
+                  <Badge tone={reviewStatusTone(row.reviewStatus)}>{reviewStatusLabel(row.reviewStatus)}</Badge>
+                  {typeof row.confidence === "number" && <Badge tone="neutral">{formatConfidence(row.confidence)}</Badge>}
+                </div>
                 <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{row.requirement}</div>
+                {row.sourceExcerpt && (
+                  <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>
+                    "{truncate(row.sourceExcerpt, 120)}"
+                  </div>
+                )}
                 {row.sourceDocumentId && (
                   <div className="row" style={{ gap: 6, marginTop: 4 }}>
                     <LinkIcon size={12} />
-                    <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                    <Link
+                      to={`/app/documents/${row.sourceDocumentId}`}
+                      className="muted"
+                      style={{ fontSize: "var(--fs-sm)" }}
+                      onClick={(event) => event.stopPropagation()}
+                    >
                       {documentsById.get(String(row.sourceDocumentId))?.title ?? "Source document"}
-                    </span>
+                    </Link>
                   </div>
                 )}
               </div>
@@ -266,7 +370,21 @@ export function CommitmentsPage() {
               <div>
                 {row.counterparty && <div>{row.counterparty}</div>}
                 {row.sourceLabel && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{row.sourceLabel}</div>}
+                {row.dueDateBasis && <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{row.dueDateBasis}</div>}
                 {!row.counterparty && !row.sourceLabel && <span className="muted">No source label</span>}
+              </div>
+            ),
+          },
+          {
+            id: "review",
+            header: "Review",
+            sortable: true,
+            accessor: (row) => row.reviewStatus ?? "NeedsReview",
+            render: (row) => (
+              <div>
+                <Badge tone={reviewStatusTone(row.reviewStatus)}>{reviewStatusLabel(row.reviewStatus)}</Badge>
+                {typeof row.confidence === "number" && <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{formatConfidence(row.confidence)}</div>}
+                {row.uncertaintyNote && <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{truncate(row.uncertaintyNote, 90)}</div>}
               </div>
             ),
           },
@@ -289,12 +407,39 @@ export function CommitmentsPage() {
             header: "Last done",
             sortable: true,
             accessor: (row) => row.lastCompletedAtISO ?? "",
-            render: (row) => (
-              <div>
-                <span className="mono">{formatDate(row.lastCompletedAtISO)}</span>
-                {row.lastCompletionSummary && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{row.lastCompletionSummary}</div>}
-              </div>
-            ),
+            render: (row) => {
+              const latestEvent = eventsByCommitment.get(String(row._id))?.[0];
+              return (
+                <div>
+                  <span className="mono">{formatDate(row.lastCompletedAtISO)}</span>
+                  {latestEvent?.evidenceStatus && (
+                    <div style={{ marginTop: 4 }}>
+                      <Badge tone={evidenceStatusTone(latestEvent.evidenceStatus)}>{reviewStatusLabel(latestEvent.evidenceStatus)}</Badge>
+                    </div>
+                  )}
+                  {row.lastCompletionSummary && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{row.lastCompletionSummary}</div>}
+                </div>
+              );
+            },
+          },
+          {
+            id: "tasks",
+            header: "Tasks",
+            accessor: (row) => openTasksByCommitment.get(String(row._id))?.length ?? 0,
+            render: (row) => {
+              const openTasks = openTasksByCommitment.get(String(row._id)) ?? [];
+              if (openTasks.length === 0) return <span className="muted">No open task</span>;
+              return (
+                <div className="tag-list">
+                  {openTasks.slice(0, 2).map((task) => (
+                    <Link key={task._id} className="badge badge--info" to="/app/tasks" onClick={(event) => event.stopPropagation()}>
+                      {task.title}
+                    </Link>
+                  ))}
+                  {openTasks.length > 2 && <Badge tone="neutral">+{openTasks.length - 2}</Badge>}
+                </div>
+              );
+            },
           },
           {
             id: "status",
@@ -308,6 +453,9 @@ export function CommitmentsPage() {
           <>
             <button className="btn btn--ghost btn--sm" onClick={() => openRecord(row)}>
               <CheckCircle2 size={12} /> Record
+            </button>
+            <button className="btn btn--ghost btn--sm" onClick={() => createPreparationTask(row)}>
+              <ListTodo size={12} /> Task
             </button>
             <button className="btn btn--ghost btn--sm" onClick={() => openEdit(row)}>
               Edit
@@ -351,6 +499,7 @@ export function CommitmentsPage() {
                   <div className="row">
                     <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDate(event.happenedAtISO)}</span>
                     <Badge tone="success">Completed</Badge>
+                    {event.evidenceStatus && <Badge tone={evidenceStatusTone(event.evidenceStatus)}>{reviewStatusLabel(event.evidenceStatus)}</Badge>}
                     <button
                       className="btn btn--ghost btn--sm btn--icon"
                       aria-label={`Delete completion ${event.title}`}
@@ -374,11 +523,16 @@ export function CommitmentsPage() {
                     {commitment && <span className="muted"> · {commitment.title}</span>}
                   </div>
                   {event.summary && <div className="timeline-vertical__desc">{event.summary}</div>}
+                  {event.evidenceNotes && <div className="timeline-vertical__desc">{event.evidenceNotes}</div>}
                   <div className="tag-list" style={{ marginTop: 6 }}>
                     {meeting && <Link className="badge badge--info" to={`/app/meetings/${meeting._id}`}>{meeting.title}</Link>}
                     {event.evidenceDocumentIds?.map((id: string) => {
                       const doc = documentsById.get(String(id));
-                      return <Badge key={id} tone="neutral">{doc?.title ?? "Evidence document"}</Badge>;
+                      return (
+                        <Link key={id} className="badge" to={`/app/documents/${id}`}>
+                          {doc?.title ?? "Evidence document"}
+                        </Link>
+                      );
                     })}
                   </div>
                 </div>
@@ -463,6 +617,21 @@ function CommitmentFormFields({
           <Select value={form.status} onChange={(value) => setForm({ ...form, status: value })} options={STATUSES.map((value) => ({ value, label: value }))} />
         </Field>
       </div>
+      <div className="row" style={{ gap: 12 }}>
+        <Field label="Source review">
+          <Select value={form.reviewStatus ?? "NeedsReview"} onChange={(value) => setForm({ ...form, reviewStatus: value })} options={REVIEW_STATUSES.map((value) => ({ value, label: reviewStatusLabel(value) }))} />
+        </Field>
+        <Field label="Confidence">
+          <input
+            className="input"
+            type="number"
+            min={0}
+            max={100}
+            value={form.confidence === "" || form.confidence == null ? "" : Math.round(form.confidence * 100)}
+            onChange={(e) => setForm({ ...form, confidence: e.target.value === "" ? "" : Number(e.target.value) / 100 })}
+          />
+        </Field>
+      </div>
       <Field label="Source document">
         <Select
           value={form.sourceDocumentId ?? ""}
@@ -471,6 +640,9 @@ function CommitmentFormFields({
           searchable
           options={documents.map((doc) => ({ value: String(doc._id), label: doc.title, hint: doc.category }))}
         />
+      </Field>
+      <Field label="Source excerpt" hint="Clause or paragraph text that created this obligation.">
+        <textarea className="textarea" value={form.sourceExcerpt ?? ""} onChange={(e) => setForm({ ...form, sourceExcerpt: e.target.value })} />
       </Field>
       <div className="row" style={{ gap: 12 }}>
         <Field label="Source label">
@@ -497,8 +669,14 @@ function CommitmentFormFields({
           />
         </Field>
       </div>
+      <Field label="Due date basis">
+        <input className="input" value={form.dueDateBasis ?? ""} placeholder="Annual anniversary, fiscal year end, fixed contract date..." onChange={(e) => setForm({ ...form, dueDateBasis: e.target.value })} />
+      </Field>
       <Field label="Owner">
         <input className="input" value={form.owner ?? ""} onChange={(e) => setForm({ ...form, owner: e.target.value })} />
+      </Field>
+      <Field label="Uncertainty or review note">
+        <textarea className="textarea" value={form.uncertaintyNote ?? ""} onChange={(e) => setForm({ ...form, uncertaintyNote: e.target.value })} />
       </Field>
       <Field label="Notes">
         <textarea className="textarea" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
@@ -554,6 +732,13 @@ function EventFormFields({
           options={meetings.map((meeting) => ({ value: String(meeting._id), label: meeting.title, hint: formatDate(meeting.scheduledAt) }))}
         />
       </Field>
+      <Field label="Evidence review">
+        <Select
+          value={form.evidenceStatus ?? "NeedsReview"}
+          onChange={(value) => setForm({ ...form, evidenceStatus: value })}
+          options={EVIDENCE_STATUSES.map((value) => ({ value, label: reviewStatusLabel(value) }))}
+        />
+      </Field>
       <Field label="Evidence documents" hint="Select presentations, reports, minutes, confirmations, or source records.">
         <div className="card-list" style={{ maxHeight: 220, overflow: "auto" }}>
           {documents.map((doc) => (
@@ -578,9 +763,125 @@ function EventFormFields({
           {documents.length === 0 && <div className="muted">No documents available.</div>}
         </div>
       </Field>
+      <Field label="Evidence notes">
+        <textarea className="textarea" value={form.evidenceNotes ?? ""} onChange={(e) => setForm({ ...form, evidenceNotes: e.target.value })} />
+      </Field>
       <Field label="Summary">
         <textarea className="textarea" value={form.summary ?? ""} onChange={(e) => setForm({ ...form, summary: e.target.value })} />
       </Field>
+    </div>
+  );
+}
+
+function TenancyWorkflowCard({
+  commitment,
+  sourceDocument,
+  events,
+  openTasks,
+  documentsById,
+  meetingsById,
+  onRecord,
+  onPlanTask,
+}: {
+  commitment: any;
+  sourceDocument?: any;
+  events: any[];
+  openTasks: any[];
+  documentsById: Map<string, any>;
+  meetingsById: Map<string, any>;
+  onRecord: () => void;
+  onPlanTask: () => void;
+}) {
+  const latest = events[0];
+  const meeting = latest?.meetingId ? meetingsById.get(String(latest.meetingId)) : null;
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card__head">
+        <div>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+            <Badge tone="orange">Tenancy agreement workflow</Badge>
+            <Badge tone={reviewStatusTone(commitment.reviewStatus)}>{reviewStatusLabel(commitment.reviewStatus)}</Badge>
+            {typeof commitment.confidence === "number" && <Badge tone="neutral">{formatConfidence(commitment.confidence)}</Badge>}
+          </div>
+          <h2 className="card__title">{commitment.title}</h2>
+          <p className="card__subtitle">{commitment.requirement}</p>
+        </div>
+        <div className="row" style={{ gap: 8 }}>
+          <button className="btn-action" onClick={onPlanTask}>
+            <ListTodo size={12} /> Plan task
+          </button>
+          <button className="btn-action btn-action--primary" onClick={onRecord}>
+            <CheckCircle2 size={12} /> Record evidence
+          </button>
+        </div>
+      </div>
+      <div className="card__body">
+        <div className="stat-grid" style={{ marginBottom: 14 }}>
+          <div className="stat">
+            <div className="stat__label">Next due</div>
+            <div className="stat__value" style={{ fontSize: "var(--fs-xl)" }}>{formatDate(commitment.nextDueDate)}</div>
+            <div className="stat__sub">{commitment.noticeLeadDays ?? 0} day lead</div>
+          </div>
+          <div className="stat">
+            <div className="stat__label">Last satisfied</div>
+            <div className="stat__value" style={{ fontSize: "var(--fs-xl)" }}>{formatDate(commitment.lastCompletedAtISO)}</div>
+            <div className="stat__sub">{latest?.evidenceStatus ? reviewStatusLabel(latest.evidenceStatus) : "No review status"}</div>
+          </div>
+          <div className="stat">
+            <div className="stat__label">Open tasks</div>
+            <div className="stat__value" style={{ fontSize: "var(--fs-xl)" }}>{openTasks.length}</div>
+            <div className="stat__sub">{openTasks[0]?.title ?? "No preparation task"}</div>
+          </div>
+        </div>
+
+        <div className="row" style={{ alignItems: "flex-start", gap: 18, flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 320px" }}>
+            <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 4 }}>Source reference</div>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              {sourceDocument ? (
+                <Link className="badge badge--orange" to={`/app/documents/${sourceDocument._id}`}>
+                  {sourceDocument.title}
+                </Link>
+              ) : (
+                <Badge tone="warn">No source document</Badge>
+              )}
+              {commitment.sourceLabel && <Badge tone="neutral">{commitment.sourceLabel}</Badge>}
+              {sourceDocument?.reviewStatus && <Badge tone={documentReviewTone(sourceDocument.reviewStatus)}>{documentReviewLabel(sourceDocument.reviewStatus)}</Badge>}
+            </div>
+            {commitment.sourceExcerpt && (
+              <p className="muted" style={{ marginTop: 8, fontSize: "var(--fs-sm)" }}>
+                "{commitment.sourceExcerpt}"
+              </p>
+            )}
+            {commitment.uncertaintyNote && (
+              <div className="row" style={{ gap: 6, color: "var(--warn)", fontSize: "var(--fs-sm)" }}>
+                <AlertTriangle size={14} /> {commitment.uncertaintyNote}
+              </div>
+            )}
+          </div>
+
+          <div style={{ flex: "1 1 320px" }}>
+            <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 4 }}>Last satisfaction evidence</div>
+            {latest ? (
+              <>
+                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                  <Badge tone={evidenceStatusTone(latest.evidenceStatus)}>{reviewStatusLabel(latest.evidenceStatus)}</Badge>
+                  <Badge tone="success">{formatDate(latest.happenedAtISO)}</Badge>
+                  {meeting && <Link className="badge badge--info" to={`/app/meetings/${meeting._id}`}>{meeting.title}</Link>}
+                  {latest.evidenceDocumentIds?.map((id: string) => {
+                    const doc = documentsById.get(String(id));
+                    return <Link key={id} className="badge" to={`/app/documents/${id}`}>{doc?.title ?? "Evidence document"}</Link>;
+                  })}
+                </div>
+                {latest.summary && <p className="muted" style={{ marginTop: 8, fontSize: "var(--fs-sm)" }}>{latest.summary}</p>}
+                {latest.evidenceNotes && <p className="muted" style={{ marginTop: 4, fontSize: "var(--fs-sm)" }}>{latest.evidenceNotes}</p>}
+              </>
+            ) : (
+              <div className="muted">No satisfaction evidence recorded yet.</div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -589,8 +890,7 @@ function DueBadge({ row }: { row: any }) {
   if (!row.nextDueDate) return <span className="muted">No due date</span>;
   if (row.status === "Closed") return <Badge>Closed</Badge>;
   if (row.status === "Paused") return <Badge tone="neutral">Paused</Badge>;
-  const due = new Date(row.nextDueDate).getTime();
-  const overdue = due < Date.now();
+  const overdue = isOverdue(row);
   return (
     <div>
       <span className="mono">{formatDate(row.nextDueDate)}</span>
@@ -607,13 +907,18 @@ function commitmentPayload(form: CommitmentForm) {
     category: form.category,
     sourceDocumentId: form.sourceDocumentId,
     sourceLabel: form.sourceLabel,
+    sourceExcerpt: form.sourceExcerpt,
     counterparty: form.counterparty,
     requirement: form.requirement.trim(),
     cadence: form.cadence,
     nextDueDate: form.nextDueDate,
+    dueDateBasis: form.dueDateBasis,
     noticeLeadDays: form.noticeLeadDays === "" ? undefined : form.noticeLeadDays,
     owner: form.owner,
     status: form.status,
+    reviewStatus: form.reviewStatus,
+    confidence: form.confidence === "" ? undefined : form.confidence,
+    uncertaintyNote: form.uncertaintyNote,
     notes: form.notes,
   });
 }
@@ -663,4 +968,66 @@ function statusTone(status: string) {
     case "Closed": return "neutral" as const;
     default: return "neutral" as const;
   }
+}
+
+function reviewStatusLabel(status?: string) {
+  switch (status) {
+    case "Verified": return "Verified";
+    case "Rejected": return "Rejected";
+    case "NeedsReview":
+    default: return "Needs review";
+  }
+}
+
+function reviewStatusTone(status?: string) {
+  switch (status) {
+    case "Verified": return "success" as const;
+    case "Rejected": return "danger" as const;
+    case "NeedsReview":
+    default: return "warn" as const;
+  }
+}
+
+function evidenceStatusTone(status?: string) {
+  return reviewStatusTone(status);
+}
+
+function documentReviewLabel(status?: string) {
+  switch (status) {
+    case "approved": return "Document approved";
+    case "in_review": return "Document in review";
+    case "needs_signature": return "Needs signature";
+    case "blocked": return "Document blocked";
+    default: return "Document not reviewed";
+  }
+}
+
+function documentReviewTone(status?: string) {
+  switch (status) {
+    case "approved": return "success" as const;
+    case "in_review": return "info" as const;
+    case "needs_signature": return "warn" as const;
+    case "blocked": return "danger" as const;
+    default: return "neutral" as const;
+  }
+}
+
+function formatConfidence(value: number) {
+  return `${Math.round(value * 100)}% confidence`;
+}
+
+function isOverdue(row: any) {
+  return row.status !== "Closed" && row.status !== "Paused" && row.nextDueDate && new Date(row.nextDueDate).getTime() < Date.now();
+}
+
+function subtractDays(value: string, days: number) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return undefined;
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
+function truncate(value: string, max: number) {
+  if (value.length <= max) return value;
+  return `${value.slice(0, max - 3)}...`;
 }

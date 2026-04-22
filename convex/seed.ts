@@ -433,6 +433,7 @@ export const run = mutation({
       fileName: "community-hall-tenancy-agreement.pdf",
       mimeType: "application/pdf",
       retentionYears: 10,
+      reviewStatus: "approved",
       createdAtISO: "2025-03-01T00:00:00Z",
       flaggedForDeletion: false,
       tags: ["agreement", "tenancy", "facility"],
@@ -495,13 +496,17 @@ export const run = mutation({
       category: "Facility",
       sourceDocumentId: tenancyId,
       sourceLabel: "Tenancy agreement section 6.2",
+      sourceExcerpt: "The tenant must present its space, programming, accessibility, and community needs to the landlord once each year before the lease review.",
       counterparty: "Community Hall Association",
       requirement: "Present the society's space, programming, accessibility, and community needs to the landlord once each year.",
       cadence: "Annual",
       nextDueDate: "2026-09-14",
+      dueDateBasis: "Annual anniversary of the 2025 AGM presentation, with a 30-day preparation lead before the lease review.",
       noticeLeadDays: 30,
       owner: "Secretary",
       status: "Active",
+      reviewStatus: "Verified",
+      confidence: 0.92,
       lastCompletedAtISO: "2025-09-14",
       lastCompletionSummary: "Presented at the 2025 AGM and filed the slide deck.",
       notes: "Keep the presentation and meeting minutes linked as evidence before the lease review.",
@@ -515,6 +520,8 @@ export const run = mutation({
       happenedAtISO: "2025-09-14",
       meetingId: lastAgm,
       evidenceDocumentIds: [presentationId],
+      evidenceStatus: "Verified",
+      evidenceNotes: "Slide deck is filed and the AGM minutes include the presentation agenda item.",
       summary: "Board presented tenancy-related programming and accessibility needs at the AGM.",
       createdAtISO: "2025-09-14T21:05:00Z",
     });
@@ -524,12 +531,17 @@ export const run = mutation({
       category: "Privacy",
       sourceDocumentId: privacyId,
       sourceLabel: "PIPA privacy policy review clause",
+      sourceExcerpt: "Privacy practices and officer contact details should be reviewed on a regular cycle and when society operations change.",
       requirement: "Review privacy practices, training status, and privacy officer contact details annually.",
       cadence: "Annual",
       nextDueDate: plusDays(60),
+      dueDateBasis: "Annual review cadence inferred from the current privacy policy.",
       noticeLeadDays: 14,
       owner: "Privacy officer",
       status: "Watching",
+      reviewStatus: "NeedsReview",
+      confidence: 0.68,
+      uncertaintyNote: "The policy supports regular review, but the annual cadence should be confirmed by the board.",
       lastCompletedAtISO: "2025-05-09",
       lastCompletionSummary: "Policy reviewed and minor contact updates approved.",
       createdAtISO: new Date().toISOString(),
@@ -791,6 +803,9 @@ export const run = mutation({
       dueDate?: string;
       committeeId?: any;
       goalId?: any;
+      documentId?: any;
+      commitmentId?: any;
+      eventId?: string;
       tags: string[];
     }> = [
       {
@@ -874,6 +889,18 @@ export const run = mutation({
         tags: ["recruitment", "board"],
       },
       {
+        title: "Prepare 2026 society needs presentation",
+        description: "Use the tenancy agreement clause, last AGM evidence, and current program/facility needs to prepare the annual landlord presentation.",
+        status: "Todo",
+        priority: "High",
+        assignee: "Secretary",
+        dueDate: "2026-08-15",
+        documentId: tenancyId,
+        commitmentId: presentationCommitmentId,
+        eventId: `commitment:${presentationCommitmentId}`,
+        tags: ["commitment", "tenancy", "facility"],
+      },
+      {
         title: "RFP for audit firm — shortlist 3",
         status: "Todo",
         priority: "Urgent",
@@ -895,6 +922,9 @@ export const run = mutation({
         dueDate: t.dueDate,
         committeeId: t.committeeId,
         goalId: t.goalId,
+        documentId: t.documentId,
+        commitmentId: t.commitmentId,
+        eventId: t.eventId,
         tags: t.tags,
         createdAtISO: "2026-04-01T00:00:00Z",
         completedAt: t.status === "Done" ? "2026-04-10T00:00:00Z" : undefined,
