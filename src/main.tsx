@@ -48,6 +48,7 @@ const CommitteeDetailPage = React.lazy(() => import("./pages/CommitteeDetail").t
 const GoalsPage = React.lazy(() => import("./pages/Goals").then((m) => ({ default: m.GoalsPage })));
 const GoalDetailPage = React.lazy(() => import("./pages/GoalDetail").then((m) => ({ default: m.GoalDetailPage })));
 const TasksPage = React.lazy(() => import("./pages/Tasks").then((m) => ({ default: m.TasksPage })));
+const CommitmentsPage = React.lazy(() => import("./pages/Commitments").then((m) => ({ default: m.CommitmentsPage })));
 const TimelinePage = React.lazy(() => import("./pages/Timeline").then((m) => ({ default: m.TimelinePage })));
 const NotificationsPage = React.lazy(() => import("./pages/Notifications").then((m) => ({ default: m.NotificationsPage })));
 const UsersPage = React.lazy(() => import("./pages/Users").then((m) => ({ default: m.UsersPage })));
@@ -262,6 +263,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="goals" element={<GoalsPage />} />
             <Route path="goals/:id" element={<GoalDetailPage />} />
             <Route path="tasks" element={<TasksPage />} />
+            <Route path="commitments" element={<CommitmentsPage />} />
             <Route path="timeline" element={<TimelinePage />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="users" element={<UsersPage />} />

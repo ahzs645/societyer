@@ -24,7 +24,27 @@ type OptionSetName =
   | "policyStatuses"
   | "workflowPackageStatuses"
   | "minuteBookRecordTypes"
-  | "minuteBookStatuses";
+  | "minuteBookStatuses"
+  | "roleHolderStatuses"
+  | "rightsClassTypes"
+  | "rightsClassStatuses"
+  | "rightsholdingTransferTypes"
+  | "rightsholdingTransferStatuses"
+  | "templateTypes"
+  | "templateStatuses"
+  | "precedentStatuses"
+  | "precedentRunStatuses"
+  | "generatedDocumentStatuses"
+  | "formationStatuses"
+  | "amendmentStatuses"
+  | "annualMaintenanceStatuses"
+  | "annualFinancialStatementOptions"
+  | "currencies"
+  | "logTypes"
+  | "logSeverities"
+  | "partTypes"
+  | "documentTypes"
+  | "suffixCompanyNames";
 
 export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
   entityTypes: ["corporation__nfp_", "society"],
@@ -119,7 +139,7 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
   taxNumberTypes: ["business_number", "income_tax", "sales_tax", "import___export", "payroll_tax", "charity_number", "registry_account", "gst", "payroll", "other"],
   companyKeyTypes: ["company_key", "password__bc_", "access_code"],
   permissionLevels: ["entity_administrator", "entity_editor", "entity_viewer"],
-  signerStatuses: ["opened_package", "all_signed"],
+  signerStatuses: ["unsigned", "opened_package", "all_signed", "signed", "declined", "needs_review"],
   filingTypes: ["annual", "notice_of_change", "formation"],
   officerTitles: [
     "assistant_secretary",
@@ -206,6 +226,69 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
     "other",
   ],
   minuteBookStatuses: ["Draft", "Current", "NeedsReview", "Archived", "Superseded"],
+  roleHolderStatuses: ["current", "proposed", "former", "needs_review"],
+  rightsClassTypes: ["membership", "voting", "non_voting", "unit", "share", "other"],
+  rightsClassStatuses: ["active", "proposed", "inactive", "needs_review"],
+  rightsholdingTransferTypes: ["issuance", "transfer", "redemption", "cancellation", "adjustment", "other"],
+  rightsholdingTransferStatuses: ["draft", "posted", "void", "needs_review"],
+  templateTypes: ["document", "policy", "filing", "search", "registration", "purpose", "vertical", "other"],
+  templateStatuses: ["active", "draft", "archived", "needs_review"],
+  precedentStatuses: ["active", "draft", "archived", "needs_review"],
+  precedentRunStatuses: ["draft", "data_review", "generating", "signing", "complete", "cancelled", "needs_review"],
+  generatedDocumentStatuses: ["draft", "out_for_signing", "signed", "final", "void", "needs_review"],
+  formationStatuses: ["draft", "name_search", "filing", "organizing", "complete", "cancelled", "needs_review"],
+  amendmentStatuses: ["draft", "approved", "filed", "needs_review"],
+  annualMaintenanceStatuses: ["draft", "ready", "filed", "processed", "needs_review"],
+  annualFinancialStatementOptions: [
+    "audit",
+    "review_engagement",
+    "compilation",
+    "internally_prepared",
+    "waived",
+    "not_required",
+    "other",
+  ],
+  currencies: ["cad", "usd", "eur"],
+  logTypes: [
+    "checkout_started",
+    "payment_received",
+    "out_for_signing",
+    "signed",
+    "filing_submitted",
+    "filing_completed",
+    "closed",
+    "logged_in",
+    "logged_out",
+    "help_request",
+    "created_user",
+    "deleted_user",
+    "created_entity",
+    "deleted_entity",
+    "created_incorporation",
+    "deleted_incorporation",
+    "created_event",
+    "deleted_event",
+    "created_part",
+    "deleted_part",
+    "frontend_error",
+    "backend_error",
+    "edit",
+  ],
+  logSeverities: ["info", "warning", "error", "critical"],
+  partTypes: ["filing", "search", "registration", "policy", "document", "event", "other"],
+  documentTypes: ["docx", "pdf", "html", "draft", "signed", "processed", "other"],
+  suffixCompanyNames: [
+    "society",
+    "association",
+    "foundation",
+    "club",
+    "centre",
+    "canada_inc",
+    "inc",
+    "corp",
+    "ltd",
+    "other",
+  ],
 };
 
 export function isAllowedOption(setName: OptionSetName, value: unknown) {

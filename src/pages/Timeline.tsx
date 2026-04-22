@@ -12,6 +12,8 @@ export function TimelinePage() {
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
   const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
   const filings = useQuery(api.filings.list, society ? { societyId: society._id } : "skip");
+  const commitments = useQuery(api.commitments.list, society ? { societyId: society._id } : "skip");
+  const commitmentEvents = useQuery(api.commitments.eventsForSociety, society ? { societyId: society._id } : "skip");
   const feeTimeline = useQuery(api.subscriptions.feeTimeline, society ? { societyId: society._id } : "skip");
   const fundingSources = useQuery(api.fundingSources.list, society ? { societyId: society._id } : "skip");
 
@@ -39,6 +41,28 @@ export function TimelinePage() {
         past: f.status === "Filed",
       });
     });
+    (commitments ?? []).forEach((commitment: any) => {
+      if (!commitment.nextDueDate || commitment.status === "Closed" || commitment.status === "Paused") return;
+      events.push({
+        date: commitment.nextDueDate,
+        kind: "Commitment",
+        title: commitment.title,
+        sub: `${commitment.cadence}${commitment.counterparty ? ` · ${commitment.counterparty}` : ""}`,
+        to: "/app/commitments",
+        past: new Date(commitment.nextDueDate).getTime() < now,
+      });
+    });
+    (commitmentEvents ?? []).forEach((event: any) => {
+      const commitment = (commitments ?? []).find((row: any) => String(row._id) === String(event.commitmentId));
+      events.push({
+        date: event.happenedAtISO,
+        kind: "Commitment",
+        title: event.title,
+        sub: commitment ? `${commitment.title}${event.summary ? ` · ${event.summary}` : ""}` : event.summary,
+        to: "/app/commitments",
+        past: true,
+      });
+    });
     (feeTimeline ?? []).forEach((period: any) => {
       if (period.effectiveFrom === "current") return;
       events.push({
@@ -63,7 +87,7 @@ export function TimelinePage() {
       });
     });
     return events.sort((a, b) => b.date.localeCompare(a.date));
-  }, [meetings, committees, filings, feeTimeline, fundingSources]);
+  }, [meetings, committees, filings, commitments, commitmentEvents, feeTimeline, fundingSources]);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -74,7 +98,7 @@ export function TimelinePage() {
 
   return (
     <div className="page">
-      <PageHeader title="Timeline" subtitle="Every meeting, filing, member-fee change, funding event, and due date on one spine." />
+      <PageHeader title="Timeline" subtitle="Every meeting, filing, commitment, member-fee change, funding event, and due date on one spine." />
 
       <div className="two-col">
         <div className="card">
@@ -86,7 +110,7 @@ export function TimelinePage() {
                   <span className="timeline-vertical__dot" style={e.color ? { borderColor: e.color } : undefined} />
                   <div className="row">
                     <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDateTime(e.date)}</span>
-                    <Badge tone={e.kind === "AGM" ? "accent" : e.kind === "Filing" ? "warn" : e.kind === "Funding" ? "success" : "info"}>{e.kind}</Badge>
+                    <Badge tone={eventTone(e.kind)}>{e.kind}</Badge>
                   </div>
                   <div className="timeline-vertical__title">
                     {e.to ? <Link to={e.to}>{e.title}</Link> : e.title}
@@ -108,7 +132,7 @@ export function TimelinePage() {
                   <span className="timeline-vertical__dot" />
                   <div className="row">
                     <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDateTime(e.date)}</span>
-                    <Badge>{e.kind}</Badge>
+                    <Badge tone={eventTone(e.kind)}>{e.kind}</Badge>
                   </div>
                   <div className="timeline-vertical__title">
                     {e.to ? <Link to={e.to}>{e.title}</Link> : e.title}
@@ -123,6 +147,10 @@ export function TimelinePage() {
       </div>
     </div>
   );
+}
+
+function eventTone(kind: string) {
+  return kind === "AGM" ? "accent" : kind === "Filing" ? "warn" : kind === "Funding" || kind === "Commitment" ? "success" : "info";
 }
 
 function kindLabel(k: string) {

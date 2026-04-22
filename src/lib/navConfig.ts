@@ -7,6 +7,7 @@ export const DEFAULT_PINNED_ROUTES: readonly string[] = [
   "/app",
   "/app/tasks",
   "/app/deadlines",
+  "/app/commitments",
   "/app/meetings",
   "/app/documents",
 ];

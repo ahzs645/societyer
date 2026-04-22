@@ -38,6 +38,8 @@ export const PERMISSIONS = [
   "filings:submit",
   "deadlines:read",
   "deadlines:write",
+  "commitments:read",
+  "commitments:write",
   "financials:read",
   "financials:write",
   "elections:read",

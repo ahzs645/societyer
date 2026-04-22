@@ -17,7 +17,7 @@ import { DocumentVersionsDrawer } from "../components/DocumentVersions";
 import { PaperlessDocumentAction } from "../components/PaperlessDocumentAction";
 import { isDemoMode } from "../lib/demoMode";
 
-const CATS = ["Constitution", "Bylaws", "Minutes", "FinancialStatement", "Policy", "Filing", "WorkflowGenerated", "Other"] as const;
+const CATS = ["Constitution", "Bylaws", "Minutes", "FinancialStatement", "Policy", "Filing", "Agreement", "WorkflowGenerated", "Other"] as const;
 
 const CAT_LABELS: Record<string, string> = {
   FinancialStatement: "Financial Statement",
@@ -407,6 +407,7 @@ function catTone(cat: string) {
     case "Bylaws": return "accent" as const;
     case "FinancialStatement": return "warn" as const;
     case "Policy": return "info" as const;
+    case "Agreement": return "orange" as const;
     case "Minutes": return "success" as const;
     case "WorkflowGenerated": return "purple" as const;
     default: return "neutral" as const;

@@ -426,6 +426,28 @@ export const run = mutation({
       flaggedForDeletion: false,
       tags: ["privacy", "PIPA"],
     });
+    const tenancyId = await ctx.db.insert("documents", {
+      societyId,
+      title: "Community hall tenancy agreement",
+      category: "Agreement",
+      fileName: "community-hall-tenancy-agreement.pdf",
+      mimeType: "application/pdf",
+      retentionYears: 10,
+      createdAtISO: "2025-03-01T00:00:00Z",
+      flaggedForDeletion: false,
+      tags: ["agreement", "tenancy", "facility"],
+    });
+    const presentationId = await ctx.db.insert("documents", {
+      societyId,
+      title: "2025 society needs presentation",
+      category: "Other",
+      fileName: "2025-society-needs-presentation.pdf",
+      mimeType: "application/pdf",
+      retentionYears: 10,
+      createdAtISO: "2025-09-14T21:00:00Z",
+      flaggedForDeletion: false,
+      tags: ["commitment", "tenancy", "AGM-2025"],
+    });
     await ctx.db.insert("documents", {
       societyId,
       title: "2024-25 Financial statements",
@@ -464,6 +486,54 @@ export const run = mutation({
       constitutionDocId: constitutionId,
       bylawsDocId: bylawsId,
       privacyPolicyDocId: privacyId,
+    });
+
+    // Commitments
+    const presentationCommitmentId = await ctx.db.insert("commitments", {
+      societyId,
+      title: "Annual society needs presentation",
+      category: "Facility",
+      sourceDocumentId: tenancyId,
+      sourceLabel: "Tenancy agreement section 6.2",
+      counterparty: "Community Hall Association",
+      requirement: "Present the society's space, programming, accessibility, and community needs to the landlord once each year.",
+      cadence: "Annual",
+      nextDueDate: "2026-09-14",
+      noticeLeadDays: 30,
+      owner: "Secretary",
+      status: "Active",
+      lastCompletedAtISO: "2025-09-14",
+      lastCompletionSummary: "Presented at the 2025 AGM and filed the slide deck.",
+      notes: "Keep the presentation and meeting minutes linked as evidence before the lease review.",
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+    await ctx.db.insert("commitmentEvents", {
+      societyId,
+      commitmentId: presentationCommitmentId,
+      title: "2025 society needs presentation",
+      happenedAtISO: "2025-09-14",
+      meetingId: lastAgm,
+      evidenceDocumentIds: [presentationId],
+      summary: "Board presented tenancy-related programming and accessibility needs at the AGM.",
+      createdAtISO: "2025-09-14T21:05:00Z",
+    });
+    await ctx.db.insert("commitments", {
+      societyId,
+      title: "Annual privacy program review",
+      category: "Privacy",
+      sourceDocumentId: privacyId,
+      sourceLabel: "PIPA privacy policy review clause",
+      requirement: "Review privacy practices, training status, and privacy officer contact details annually.",
+      cadence: "Annual",
+      nextDueDate: plusDays(60),
+      noticeLeadDays: 14,
+      owner: "Privacy officer",
+      status: "Watching",
+      lastCompletedAtISO: "2025-05-09",
+      lastCompletionSummary: "Policy reviewed and minor contact updates approved.",
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
     });
 
     // Conflicts
@@ -1391,6 +1461,8 @@ async function wipe(ctx: any) {
     "committees",
     "financials",
     "conflicts",
+    "commitmentEvents",
+    "commitments",
     "documents",
     "documentVersions",
     "deadlines",

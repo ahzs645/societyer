@@ -8,6 +8,7 @@ const VISIBLE_DOCUMENT_CATEGORIES = [
   "FinancialStatement",
   "Policy",
   "Filing",
+  "Agreement",
   "Other",
   "Insurance",
   "Grant",

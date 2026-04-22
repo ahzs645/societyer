@@ -16,6 +16,7 @@ import type * as attestations from "../attestations.js";
 import type * as auditors from "../auditors.js";
 import type * as bylawAmendments from "../bylawAmendments.js";
 import type * as bylawRules from "../bylawRules.js";
+import type * as commitments from "../commitments.js";
 import type * as committees from "../committees.js";
 import type * as communications from "../communications.js";
 import type * as conflicts from "../conflicts.js";
@@ -117,6 +118,7 @@ declare const fullApi: ApiFromModules<{
   auditors: typeof auditors;
   bylawAmendments: typeof bylawAmendments;
   bylawRules: typeof bylawRules;
+  commitments: typeof commitments;
   committees: typeof committees;
   communications: typeof communications;
   conflicts: typeof conflicts;

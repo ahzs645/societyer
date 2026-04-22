@@ -11,6 +11,8 @@ const MEETING_BOARD_ID = "static_meeting_board_q2";
 const MEETING_AGM_ID = "static_meeting_agm_2025";
 const DOCUMENT_BYLAWS_ID = "static_document_bylaws";
 const DOCUMENT_POLICY_ID = "static_document_privacy";
+const DOCUMENT_TENANCY_ID = "static_document_tenancy";
+const DOCUMENT_PRESENTATION_ID = "static_document_needs_presentation";
 const DOCUMENT_UNBC_GENERATED_ID = "static_document_unbc_affiliate";
 const ELECTION_ID = "static_election";
 const ELECTION_QUESTION_ID = "static_election_question_directors";
@@ -636,6 +638,61 @@ const deadlines = [
   },
 ];
 
+const commitments = [
+  {
+    _id: "static_commitment_tenancy_presentation",
+    societyId: SOCIETY_ID,
+    title: "Annual society needs presentation",
+    category: "Facility",
+    sourceDocumentId: DOCUMENT_TENANCY_ID,
+    sourceLabel: "Tenancy agreement section 6.2",
+    counterparty: "Community Hall Association",
+    requirement: "Present the society's space, programming, accessibility, and community needs to the landlord once each year.",
+    cadence: "Annual",
+    nextDueDate: "2026-09-14",
+    noticeLeadDays: 30,
+    owner: "Secretary",
+    status: "Active",
+    lastCompletedAtISO: "2025-09-14",
+    lastCompletionSummary: "Presented at the 2025 AGM and filed the slide deck.",
+    notes: "Keep the presentation and meeting minutes linked as evidence before the lease review.",
+    createdAtISO: "2026-04-21T18:00:00.000Z",
+    updatedAtISO: "2026-04-21T18:00:00.000Z",
+  },
+  {
+    _id: "static_commitment_privacy_review",
+    societyId: SOCIETY_ID,
+    title: "Annual privacy program review",
+    category: "Privacy",
+    sourceDocumentId: DOCUMENT_POLICY_ID,
+    sourceLabel: "PIPA privacy policy review clause",
+    requirement: "Review privacy practices, training status, and contact details annually.",
+    cadence: "Annual",
+    nextDueDate: "2026-05-12",
+    noticeLeadDays: 14,
+    owner: "Privacy officer",
+    status: "Watching",
+    lastCompletedAtISO: "2025-05-09",
+    lastCompletionSummary: "Policy reviewed and minor contact updates approved.",
+    createdAtISO: "2026-04-21T18:15:00.000Z",
+    updatedAtISO: "2026-04-21T18:15:00.000Z",
+  },
+];
+
+const commitmentEvents = [
+  {
+    _id: "static_commitment_event_presentation_2025",
+    societyId: SOCIETY_ID,
+    commitmentId: "static_commitment_tenancy_presentation",
+    title: "2025 society needs presentation",
+    happenedAtISO: "2025-09-14",
+    meetingId: MEETING_AGM_ID,
+    evidenceDocumentIds: [DOCUMENT_PRESENTATION_ID],
+    summary: "Board presented tenancy-related programming and accessibility needs at the AGM.",
+    createdAtISO: "2025-09-14T21:05:00.000Z",
+  },
+];
+
 const documents = [
   {
     _id: DOCUMENT_BYLAWS_ID,
@@ -664,6 +721,34 @@ const documents = [
     flaggedForDeletion: false,
     tags: ["privacy", "PIPA", "public"],
     public: true,
+  },
+  {
+    _id: DOCUMENT_TENANCY_ID,
+    societyId: SOCIETY_ID,
+    title: "Community hall tenancy agreement",
+    kind: "Agreement",
+    category: "Agreement",
+    status: "Active",
+    fileName: "community-hall-tenancy-agreement.pdf",
+    mimeType: "application/pdf",
+    retentionYears: 10,
+    createdAtISO: "2025-03-01T17:00:00.000Z",
+    flaggedForDeletion: false,
+    tags: ["agreement", "tenancy", "facility"],
+  },
+  {
+    _id: DOCUMENT_PRESENTATION_ID,
+    societyId: SOCIETY_ID,
+    title: "2025 society needs presentation",
+    kind: "Presentation",
+    category: "Other",
+    status: "Filed",
+    fileName: "2025-society-needs-presentation.pdf",
+    mimeType: "application/pdf",
+    retentionYears: 10,
+    createdAtISO: "2025-09-14T21:00:00.000Z",
+    flaggedForDeletion: false,
+    tags: ["commitment", "tenancy", "AGM-2025"],
   },
   {
     _id: DOCUMENT_UNBC_GENERATED_ID,
@@ -1372,6 +1457,8 @@ const tables: Record<string, any[]> = {
   ],
   committees,
   conflicts,
+  commitments,
+  commitmentEvents,
   courtOrders: [],
   deadlines,
   directors,
@@ -2115,6 +2202,9 @@ function publicCenter(args?: StaticArgs) {
 
 const STATIC_EXPORT_TABLES = [
   "societies",
+  "organizationAddresses",
+  "organizationRegistrations",
+  "organizationIdentifiers",
   "users",
   "apiClients",
   "apiTokens",
@@ -2148,6 +2238,7 @@ const STATIC_EXPORT_TABLES = [
   "signatures",
   "filingBotRuns",
   "workflows",
+  "workflowPackages",
   "pendingEmails",
   "workflowRuns",
   "subscriptionPlans",
@@ -2183,13 +2274,17 @@ const STATIC_EXPORT_TABLES = [
   "grantReports",
   "grantTransactions",
   "deadlines",
+  "commitments",
+  "commitmentEvents",
   "documents",
   "publications",
+  "policies",
   "conflicts",
   "financials",
   "bylawRuleSets",
   "goals",
   "tasks",
+  "minuteBookItems",
   "activity",
   "notes",
   "invitations",
@@ -2361,6 +2456,10 @@ function queryResult(name: string, args: StaticArgs) {
       return tables.bylawRuleSets;
     case "committees:detail":
       return { committee: byId(committees, args?.id), members: [], meetings: [], tasks, goals };
+    case "commitments:eventsForSociety":
+      return scopedRows(commitmentEvents, args).sort((a, b) => b.happenedAtISO.localeCompare(a.happenedAtISO));
+    case "commitments:eventsForCommitment":
+      return commitmentEvents.filter((event) => event.commitmentId === args?.commitmentId);
     case "dashboard:summary":
       return dashboardSummary();
     case "documentVersions:latest":
@@ -2771,6 +2870,8 @@ function mutationResult(name: string, args: StaticArgs) {
   if (name === "documents:linkPrivacyPolicyEvidence") {
     return { documentId: args?.documentId ?? DOCUMENT_POLICY_ID };
   }
+  if (name === "commitments:recordEvent") return `static_commitment_event_${Date.now()}`;
+  if (name === "commitments:removeEvent") return null;
   if (name === "waveCache:sync") {
     return {
       snapshotId: WAVE_CACHE_SNAPSHOT_ID,

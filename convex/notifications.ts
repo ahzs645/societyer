@@ -129,7 +129,7 @@ export const scanUpcoming = internalMutation({
     for (const s of societies) {
       if (!s) continue;
 
-      const [deadlines, filings, grantReports, screenings, recent] = await Promise.all([
+      const [deadlines, filings, grantReports, screenings, commitments, recent] = await Promise.all([
         ctx.db
           .query("deadlines")
           .withIndex("by_society", (q) => q.eq("societyId", s._id))
@@ -144,6 +144,10 @@ export const scanUpcoming = internalMutation({
           .collect(),
         ctx.db
           .query("volunteerScreenings")
+          .withIndex("by_society", (q) => q.eq("societyId", s._id))
+          .collect(),
+        ctx.db
+          .query("commitments")
           .withIndex("by_society", (q) => q.eq("societyId", s._id))
           .collect(),
         ctx.db
@@ -233,6 +237,29 @@ export const scanUpcoming = internalMutation({
             ? `A volunteer screening deadline passed on ${screening.expiresAtISO}.`
             : `A volunteer screening expires on ${screening.expiresAtISO}.`,
           linkHref: "/volunteers",
+          createdAtISO: new Date().toISOString(),
+        });
+      }
+
+      for (const commitment of commitments) {
+        if (!commitment.nextDueDate || commitment.status === "Closed" || commitment.status === "Paused") continue;
+        const due = new Date(commitment.nextDueDate).getTime();
+        if (due > cutoff) continue;
+        const overdue = due < now;
+        const title = overdue
+          ? `Commitment overdue: ${commitment.title}`
+          : `Commitment due soon: ${commitment.title}`;
+        const key = `general:/app/commitments:${title}`;
+        if (alreadyNotified.has(key)) continue;
+        await ctx.db.insert("notifications", {
+          societyId: s._id,
+          kind: "general",
+          severity: overdue ? "err" : "warn",
+          title,
+          body: overdue
+            ? `Commitment deadline passed on ${commitment.nextDueDate}.`
+            : `Commitment deadline is ${commitment.nextDueDate}.`,
+          linkHref: "/app/commitments",
           createdAtISO: new Date().toISOString(),
         });
       }

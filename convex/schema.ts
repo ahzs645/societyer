@@ -115,6 +115,430 @@ export default defineSchema({
     .index("by_society_kind", ["societyId", "kind"])
     .index("by_society_status", ["societyId", "status"]),
 
+  roleHolders: defineTable({
+    societyId: v.id("societies"),
+    roleType: v.string(), // director | officer | member | incorporator | attorney_for_service | authorized_representative | controller | other
+    status: v.string(), // current | proposed | former | needs_review
+    fullName: v.string(),
+    firstName: v.optional(v.string()),
+    middleName: v.optional(v.string()),
+    lastName: v.optional(v.string()),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    signerTag: v.optional(v.string()),
+    membershipId: v.optional(v.string()),
+    membershipClassName: v.optional(v.string()),
+    membershipClassId: v.optional(v.id("rightsClasses")),
+    officerTitle: v.optional(v.string()),
+    directorTerm: v.optional(v.string()),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    referenceDate: v.optional(v.string()),
+    street: v.optional(v.string()),
+    unit: v.optional(v.string()),
+    city: v.optional(v.string()),
+    provinceState: v.optional(v.string()),
+    postalCode: v.optional(v.string()),
+    country: v.optional(v.string()),
+    alternateStreet: v.optional(v.string()),
+    alternateUnit: v.optional(v.string()),
+    alternateCity: v.optional(v.string()),
+    alternateProvinceState: v.optional(v.string()),
+    alternatePostalCode: v.optional(v.string()),
+    alternateCountry: v.optional(v.string()),
+    serviceStreet: v.optional(v.string()),
+    serviceUnit: v.optional(v.string()),
+    serviceCity: v.optional(v.string()),
+    serviceProvinceState: v.optional(v.string()),
+    servicePostalCode: v.optional(v.string()),
+    serviceCountry: v.optional(v.string()),
+    ageOver18: v.optional(v.boolean()),
+    dateOfBirth: v.optional(v.string()),
+    occupation: v.optional(v.string()),
+    citizenshipResidency: v.optional(v.string()),
+    citizenshipCountries: v.array(v.string()),
+    taxResidenceCountries: v.array(v.string()),
+    nonNaturalPerson: v.optional(v.boolean()),
+    nonNaturalPersonType: v.optional(v.string()),
+    nonNaturalJurisdiction: v.optional(v.string()),
+    natureOfControl: v.optional(v.string()),
+    authorizedRepresentative: v.optional(v.boolean()),
+    relatedRoleHolderId: v.optional(v.id("roleHolders")),
+    relatedShareholderIds: v.array(v.string()),
+    controllingIndividualIds: v.array(v.string()),
+    extraProvincialRegistrationId: v.optional(v.id("organizationRegistrations")),
+    sourceDocumentIds: v.array(v.id("documents")),
+    sourceExternalIds: v.array(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_role", ["societyId", "roleType"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  rightsClasses: defineTable({
+    societyId: v.id("societies"),
+    className: v.string(),
+    classType: v.string(), // membership | voting | non_voting | unit | share | other
+    status: v.string(), // active | proposed | inactive | needs_review
+    idPrefix: v.optional(v.string()),
+    highestAssignedNumber: v.optional(v.number()),
+    votingRights: v.optional(v.string()),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    conditionsToHold: v.optional(v.string()),
+    conditionsToTransfer: v.optional(v.string()),
+    conditionsForRemoval: v.optional(v.string()),
+    otherProvisions: v.optional(v.string()),
+    sourceDocumentIds: v.array(v.id("documents")),
+    sourceExternalIds: v.array(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  rightsholdingTransfers: defineTable({
+    societyId: v.id("societies"),
+    transferType: v.string(), // issuance | transfer | redemption | cancellation | adjustment | other
+    status: v.string(), // draft | posted | void | needs_review
+    transferDate: v.optional(v.string()),
+    eventId: v.optional(v.string()),
+    precedentRunId: v.optional(v.id("legalPrecedentRuns")),
+    rightsClassId: v.optional(v.id("rightsClasses")),
+    sourceRoleHolderId: v.optional(v.id("roleHolders")),
+    destinationRoleHolderId: v.optional(v.id("roleHolders")),
+    sourceHolderName: v.optional(v.string()),
+    destinationHolderName: v.optional(v.string()),
+    quantity: v.optional(v.number()),
+    considerationType: v.optional(v.string()),
+    considerationDescription: v.optional(v.string()),
+    priceToOrganizationCents: v.optional(v.number()),
+    priceToOrganizationCurrency: v.optional(v.string()),
+    priceToVendorCents: v.optional(v.number()),
+    priceToVendorCurrency: v.optional(v.string()),
+    sourceDocumentIds: v.array(v.id("documents")),
+    sourceExternalIds: v.array(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_date", ["societyId", "transferDate"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  legalTemplateDataFields: defineTable({
+    societyId: v.optional(v.id("societies")),
+    name: v.string(),
+    label: v.optional(v.string()),
+    fieldType: v.optional(v.string()),
+    number: v.optional(v.number()),
+    dynamicIndicator: v.optional(v.string()),
+    required: v.optional(v.boolean()),
+    reviewRequired: v.optional(v.boolean()),
+    notes: v.optional(v.string()),
+    sourceExternalIds: v.array(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_name", ["name"]),
+
+  legalTemplates: defineTable({
+    societyId: v.optional(v.id("societies")),
+    templateType: v.string(), // document | policy | filing | search | registration | purpose | vertical | other
+    name: v.string(),
+    status: v.string(), // active | draft | archived | needs_review
+    templateDocumentId: v.optional(v.id("documents")),
+    docxDocumentId: v.optional(v.id("documents")),
+    pdfDocumentId: v.optional(v.id("documents")),
+    html: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    owner: v.optional(v.string()),
+    ownerIsTobuso: v.optional(v.boolean()),
+    signatureRequired: v.optional(v.boolean()),
+    documentTag: v.optional(v.string()),
+    entityTypes: v.array(v.string()),
+    jurisdictions: v.array(v.string()),
+    requiredSigners: v.array(v.string()),
+    requiredDataFieldIds: v.array(v.id("legalTemplateDataFields")),
+    optionalDataFieldIds: v.array(v.id("legalTemplateDataFields")),
+    reviewDataFieldIds: v.array(v.id("legalTemplateDataFields")),
+    requiredDataFields: v.array(v.string()),
+    optionalDataFields: v.array(v.string()),
+    reviewDataFields: v.array(v.string()),
+    timeline: v.optional(v.string()),
+    deliverable: v.optional(v.string()),
+    terms: v.optional(v.string()),
+    filingType: v.optional(v.string()),
+    priceItems: v.array(v.string()),
+    sourceExternalIds: v.array(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_type", ["societyId", "templateType"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  legalPrecedents: defineTable({
+    societyId: v.optional(v.id("societies")),
+    packageName: v.string(),
+    partType: v.optional(v.string()),
+    status: v.string(), // active | draft | archived | needs_review
+    description: v.optional(v.string()),
+    shortDescription: v.optional(v.string()),
+    timeline: v.optional(v.string()),
+    deliverables: v.optional(v.string()),
+    internalNotes: v.optional(v.string()),
+    addOnTerms: v.optional(v.string()),
+    templateIds: v.array(v.id("legalTemplates")),
+    templateNames: v.array(v.string()),
+    templateFilingNames: v.array(v.string()),
+    templateSearchNames: v.array(v.string()),
+    templateRegistrationNames: v.array(v.string()),
+    requiresAmendmentRecord: v.optional(v.boolean()),
+    requiresAnnualMaintenanceRecord: v.optional(v.boolean()),
+    priceItems: v.array(v.string()),
+    entityTypes: v.array(v.string()),
+    jurisdictions: v.array(v.string()),
+    subloopPairs: v.array(v.any()),
+    sourceExternalIds: v.array(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  legalPrecedentRuns: defineTable({
+    societyId: v.id("societies"),
+    name: v.string(),
+    status: v.string(), // draft | data_review | generating | signing | complete | cancelled | needs_review
+    precedentId: v.optional(v.id("legalPrecedents")),
+    eventId: v.optional(v.string()),
+    dateTime: v.optional(v.string()),
+    dataJson: v.optional(v.string()),
+    dataJsonList: v.array(v.any()),
+    dataReviewed: v.optional(v.boolean()),
+    externalNotes: v.optional(v.string()),
+    searchIds: v.array(v.string()),
+    registrationIds: v.array(v.string()),
+    filingIds: v.array(v.id("filings")),
+    generatedDocumentIds: v.array(v.id("generatedLegalDocuments")),
+    signerRoleHolderIds: v.array(v.id("roleHolders")),
+    priceItems: v.array(v.string()),
+    abstainingDirectorIds: v.array(v.string()),
+    abstainingRightsholderIds: v.array(v.string()),
+    sourceExternalIds: v.array(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_precedent", ["precedentId"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  generatedLegalDocuments: defineTable({
+    societyId: v.id("societies"),
+    title: v.string(),
+    status: v.string(), // draft | out_for_signing | signed | final | void | needs_review
+    draftDocumentId: v.optional(v.id("documents")),
+    signedDocumentId: v.optional(v.id("documents")),
+    draftFileUrl: v.optional(v.string()),
+    sourceTemplateId: v.optional(v.id("legalTemplates")),
+    sourceTemplateName: v.optional(v.string()),
+    precedentRunId: v.optional(v.id("legalPrecedentRuns")),
+    eventId: v.optional(v.string()),
+    effectiveDate: v.optional(v.string()),
+    documentTag: v.optional(v.string()),
+    dataJson: v.optional(v.string()),
+    subloopJsonList: v.array(v.any()),
+    syngrafiiFileId: v.optional(v.string()),
+    syngrafiiDocumentId: v.optional(v.string()),
+    syngrafiiPackageId: v.optional(v.string()),
+    signersRequiredRoleHolderIds: v.array(v.id("roleHolders")),
+    signersWhoSignedIds: v.array(v.id("legalSigners")),
+    signerTagsRequired: v.array(v.string()),
+    signerTagsSigned: v.array(v.string()),
+    sourceDocumentIds: v.array(v.id("documents")),
+    sourceExternalIds: v.array(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_precedent_run", ["precedentRunId"]),
+
+  legalSigners: defineTable({
+    societyId: v.id("societies"),
+    status: v.string(), // unsigned | opened_package | signed | declined | needs_review
+    fullName: v.string(),
+    firstName: v.optional(v.string()),
+    lastName: v.optional(v.string()),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    signerId: v.optional(v.string()),
+    signerTag: v.optional(v.string()),
+    eventId: v.optional(v.string()),
+    generatedDocumentId: v.optional(v.id("generatedLegalDocuments")),
+    roleHolderId: v.optional(v.id("roleHolders")),
+    sourceExternalIds: v.array(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_document", ["generatedDocumentId"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  formationRecords: defineTable({
+    societyId: v.id("societies"),
+    status: v.string(), // draft | name_search | filing | organizing | complete | cancelled | needs_review
+    statusNumber: v.optional(v.number()),
+    logStartDate: v.optional(v.string()),
+    nuansDate: v.optional(v.string()),
+    nuansNumber: v.optional(v.string()),
+    relatedUserId: v.optional(v.id("users")),
+    addressRental: v.optional(v.boolean()),
+    stepDataInput: v.optional(v.string()),
+    assignedStaffIds: v.array(v.string()),
+    signingPackageIds: v.array(v.string()),
+    articlesRestrictionOnActivities: v.optional(v.string()),
+    purposeStatement: v.optional(v.string()),
+    additionalProvisions: v.optional(v.string()),
+    classesOfMembership: v.optional(v.string()),
+    distributionOfProperty: v.optional(v.string()),
+    draftDocumentIds: v.array(v.id("documents")),
+    supportingDocumentIds: v.array(v.id("documents")),
+    relatedIncorporationEventId: v.optional(v.string()),
+    relatedOrganizingEventId: v.optional(v.string()),
+    priceItems: v.array(v.string()),
+    jurisdiction: v.optional(v.string()),
+    extraProvincialRegistrationJurisdiction: v.optional(v.string()),
+    sourceExternalIds: v.array(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  nameSearchItems: defineTable({
+    societyId: v.id("societies"),
+    formationRecordId: v.optional(v.id("formationRecords")),
+    name: v.string(),
+    success: v.optional(v.boolean()),
+    errors: v.array(v.string()),
+    reportUrl: v.optional(v.string()),
+    reportDocumentId: v.optional(v.id("documents")),
+    rank: v.optional(v.number()),
+    expressService: v.optional(v.boolean()),
+    descriptiveElement: v.optional(v.string()),
+    distinctiveElement: v.optional(v.string()),
+    nuansReportNumber: v.optional(v.string()),
+    suffix: v.optional(v.string()),
+    sourceExternalIds: v.array(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_formation", ["formationRecordId"]),
+
+  entityAmendments: defineTable({
+    societyId: v.id("societies"),
+    status: v.string(), // draft | approved | filed | needs_review
+    effectiveDate: v.optional(v.string()),
+    entityNameNew: v.optional(v.string()),
+    directorsMinimum: v.optional(v.number()),
+    directorsMaximum: v.optional(v.number()),
+    relatedPrecedentRunId: v.optional(v.id("legalPrecedentRuns")),
+    shareClassAmendmentText: v.optional(v.string()),
+    jurisdictionNew: v.optional(v.string()),
+    sourceDocumentIds: v.array(v.id("documents")),
+    sourceExternalIds: v.array(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  annualMaintenanceRecords: defineTable({
+    societyId: v.id("societies"),
+    status: v.string(), // draft | ready | filed | processed | needs_review
+    yearFilingFor: v.optional(v.string()),
+    lastAgmDate: v.optional(v.string()),
+    filingDate: v.optional(v.string()),
+    draftFilingDocumentId: v.optional(v.id("documents")),
+    signedFilingDocumentId: v.optional(v.id("documents")),
+    processedFilingDocumentId: v.optional(v.id("documents")),
+    relatedPrecedentRunId: v.optional(v.id("legalPrecedentRuns")),
+    filingId: v.optional(v.id("filings")),
+    keyVaultItemId: v.optional(v.id("secretVaultItems")),
+    templateFilingId: v.optional(v.id("legalTemplates")),
+    authorizingPhone: v.optional(v.string()),
+    authorizingRoleHolderId: v.optional(v.id("roleHolders")),
+    financialStatementsDocumentId: v.optional(v.id("documents")),
+    fiscalYearEndDate: v.optional(v.string()),
+    incomeTaxReturnDate: v.optional(v.string()),
+    annualFinancialStatementType: v.optional(v.string()),
+    financialStatementReportDate: v.optional(v.string()),
+    financialStatementReportType: v.optional(v.string()),
+    auditedFinancialStatements: v.optional(v.boolean()),
+    auditedFinancialStatementsNextYear: v.optional(v.boolean()),
+    annualFinancialsEngagementLevel: v.optional(v.string()),
+    annualFinancialStatementOption: v.optional(v.string()),
+    sourceDocumentIds: v.array(v.id("documents")),
+    sourceExternalIds: v.array(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_year", ["societyId", "yearFilingFor"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  jurisdictionMetadata: defineTable({
+    jurisdiction: v.string(),
+    label: v.string(),
+    actFormedUnder: v.optional(v.string()),
+    nuansJurisdictionNumber: v.optional(v.string()),
+    nuansReservationReportTypeId: v.optional(v.string()),
+    incorporationServiceEligible: v.optional(v.boolean()),
+    sourceOptionId: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_jurisdiction", ["jurisdiction"])
+    .index("by_act", ["actFormedUnder"]),
+
+  supportLogs: defineTable({
+    societyId: v.optional(v.id("societies")),
+    logType: v.string(),
+    severity: v.string(), // info | warning | error | critical
+    page: v.optional(v.string()),
+    pageLocationUrl: v.optional(v.string()),
+    userId: v.optional(v.id("users")),
+    relatedUserId: v.optional(v.id("users")),
+    relatedEventId: v.optional(v.string()),
+    relatedEntityId: v.optional(v.id("societies")),
+    relatedSubscriptionId: v.optional(v.string()),
+    relatedIncorporationId: v.optional(v.string()),
+    errorCode: v.optional(v.string()),
+    errorMessage: v.optional(v.string()),
+    detailsHeading: v.optional(v.string()),
+    detailsBody: v.optional(v.string()),
+    sourceExternalIds: v.array(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_type", ["societyId", "logType"])
+    .index("by_created", ["createdAtISO"]),
+
   users: defineTable({
     societyId: v.id("societies"),
     email: v.string(),
@@ -1623,6 +2047,44 @@ export default defineSchema({
   })
     .index("by_society", ["societyId"])
     .index("by_society_due", ["societyId", "dueDate"]),
+
+  commitments: defineTable({
+    societyId: v.id("societies"),
+    title: v.string(),
+    category: v.string(), // Contract | Grant | Facility | Governance | Privacy | Funding | Other
+    sourceDocumentId: v.optional(v.id("documents")),
+    sourceLabel: v.optional(v.string()),
+    counterparty: v.optional(v.string()),
+    requirement: v.string(),
+    cadence: v.string(), // Once | Monthly | Quarterly | Annual | Every 2 years | Custom
+    nextDueDate: v.optional(v.string()),
+    noticeLeadDays: v.optional(v.number()),
+    owner: v.optional(v.string()),
+    status: v.string(), // Active | Watching | Paused | Closed
+    lastCompletedAtISO: v.optional(v.string()),
+    lastCompletionSummary: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_due", ["societyId", "nextDueDate"])
+    .index("by_source_document", ["sourceDocumentId"]),
+
+  commitmentEvents: defineTable({
+    societyId: v.id("societies"),
+    commitmentId: v.id("commitments"),
+    title: v.string(),
+    happenedAtISO: v.string(),
+    meetingId: v.optional(v.id("meetings")),
+    evidenceDocumentIds: v.array(v.id("documents")),
+    summary: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_happened", ["societyId", "happenedAtISO"])
+    .index("by_commitment", ["commitmentId"])
+    .index("by_meeting", ["meetingId"]),
 
   documents: defineTable({
     societyId: v.id("societies"),

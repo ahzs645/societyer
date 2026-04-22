@@ -88,6 +88,7 @@ const NAV_ITEMS: CommandItem[] = [
   { id: "nav-directors", label: "Directors", to: "/app/directors", icon: UserCog, category: "Navigation" },
   { id: "nav-documents", label: "Documents", to: "/app/documents", icon: FolderOpen, category: "Navigation" },
   { id: "nav-deadlines", label: "Deadlines", to: "/app/deadlines", icon: Calendar, category: "Navigation" },
+  { id: "nav-commitments", label: "Commitments", to: "/app/commitments", icon: ClipboardList, category: "Navigation" },
   { id: "nav-volunteers", label: "Volunteers", to: "/app/volunteers", icon: HandHeart, category: "Navigation", module: "volunteers" },
   { id: "nav-communications", label: "Communications", to: "/app/communications", icon: Mail, category: "Navigation", module: "communications" },
   { id: "nav-outbox", label: "Outbox", to: "/app/outbox", icon: Inbox, category: "Navigation" },
