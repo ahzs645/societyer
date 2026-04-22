@@ -94,7 +94,47 @@ export function TasksPage() {
     });
     setOpen(true);
   };
+
+  const openEdit = (task: any) => {
+    setForm({
+      ...task,
+      responsibleUserId: task.responsibleUserIds?.[0] ?? "",
+      dueDate: task.dueDate ?? "",
+      filingId: task.filingId ?? "",
+      workflowId: task.workflowId ?? "",
+      documentId: task.documentId ?? "",
+      eventId: task.eventId ?? "",
+      completionNote: task.completionNote ?? "",
+    });
+    setOpen(true);
+  };
+
   const save = async () => {
+    if (form._id) {
+      await update({
+        id: form._id,
+        patch: cleanPatch({
+          title: form.title,
+          description: form.description || undefined,
+          status: form.status,
+          priority: form.priority,
+          assignee: form.assignee || undefined,
+          responsibleUserIds: form.responsibleUserId ? [form.responsibleUserId] : [],
+          dueDate: form.dueDate || undefined,
+          committeeId: form.committeeId || undefined,
+          goalId: form.goalId || undefined,
+          filingId: form.filingId || undefined,
+          workflowId: form.workflowId || undefined,
+          documentId: form.documentId || undefined,
+          eventId: form.eventId || undefined,
+          completionNote: form.completionNote || undefined,
+          completedByUserId: form.status === "Done" && currentUserId ? currentUserId : undefined,
+        }),
+      });
+      setOpen(false);
+      toast.success("Task updated", form.title);
+      return;
+    }
     await create({
       societyId: society._id,
       title: form.title,
@@ -291,7 +331,12 @@ export function TasksPage() {
                         options={COLS.map((c) => ({ value: c.id, label: c.label }))}
                       />
                     </td>
-                    <td><button className="btn btn--ghost btn--sm" onClick={() => confirmDelete(t._id, t.title)}>Delete</button></td>
+                    <td>
+                      <div className="row" style={{ justifyContent: "flex-end" }}>
+                        <button className="btn btn--ghost btn--sm" onClick={() => openEdit(t)}>Edit</button>
+                        <button className="btn btn--ghost btn--sm" onClick={() => confirmDelete(t._id, t.title)}>Delete</button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -304,11 +349,11 @@ export function TasksPage() {
       <Drawer
         open={open}
         onClose={() => setOpen(false)}
-        title="New task"
+        title={form?._id ? "Edit task" : "New task"}
         footer={
           <>
             <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save}>Create</button>
+            <button className="btn btn--accent" onClick={save}>{form?._id ? "Save" : "Create"}</button>
           </>
         }
       >
@@ -391,6 +436,14 @@ export function TasksPage() {
               />
             </Field>
             <Field label="Event ID (optional)"><input className="input mono" value={form.eventId ?? ""} onChange={(e) => setForm({ ...form, eventId: e.target.value })} placeholder="custom.event or imported event id" /></Field>
+            <Field label="Completion note">
+              <textarea
+                className="textarea"
+                value={form.completionNote ?? ""}
+                onChange={(e) => setForm({ ...form, completionNote: e.target.value })}
+                placeholder="Evidence captured, filed confirmation, or blocker resolution."
+              />
+            </Field>
           </div>
         )}
       </Drawer>
@@ -409,6 +462,10 @@ function matchesLinkFilter(task: any, filter: string) {
   if (filter === "document") return Boolean(task.documentId);
   if (filter === "event") return Boolean(task.eventId);
   return true;
+}
+
+function cleanPatch<T extends Record<string, any>>(source: T) {
+  return Object.fromEntries(Object.entries(source).filter(([, value]) => value !== undefined)) as T;
 }
 
 function LinkedTaskRecords({

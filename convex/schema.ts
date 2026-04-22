@@ -1245,6 +1245,7 @@ export default defineSchema({
           status: v.string(), // present | absent | regrets | guest | staff | invited | proxy
           roleTitle: v.optional(v.string()),
           affiliation: v.optional(v.string()),
+          memberIdentifier: v.optional(v.string()),
           proxyFor: v.optional(v.string()),
           quorumCounted: v.optional(v.boolean()),
           notes: v.optional(v.string()),
@@ -1324,6 +1325,16 @@ export default defineSchema({
         }),
       ),
     ),
+    appendices: v.optional(
+      v.array(
+        v.object({
+          title: v.string(),
+          type: v.optional(v.string()),
+          reference: v.optional(v.string()),
+          notes: v.optional(v.string()),
+        }),
+      ),
+    ),
     agmDetails: v.optional(
       v.object({
         financialStatementsPresented: v.optional(v.boolean()),
@@ -1334,12 +1345,14 @@ export default defineSchema({
             v.object({
               name: v.string(),
               roleTitle: v.optional(v.string()),
-              affiliation: v.optional(v.string()),
-              term: v.optional(v.string()),
-              consentRecorded: v.optional(v.boolean()),
-              status: v.optional(v.string()),
-              notes: v.optional(v.string()),
-            }),
+                affiliation: v.optional(v.string()),
+                term: v.optional(v.string()),
+                consentRecorded: v.optional(v.boolean()),
+                votesReceived: v.optional(v.number()),
+                elected: v.optional(v.boolean()),
+                status: v.optional(v.string()),
+                notes: v.optional(v.string()),
+              }),
           ),
         ),
         specialResolutionExhibits: v.optional(

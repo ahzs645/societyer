@@ -83,8 +83,8 @@ export function MinuteBookPage() {
   };
 
   const items = Array.isArray(detail) ? [] : detail?.items ?? [];
-  const documentCategories = new Set(safeRows(detail, "documents").map((row: any) => row.category));
-  const missingBasics = ["Constitution", "Bylaws", "Minutes"].filter((category) => !documentCategories.has(category));
+  const checks = safeRows(detail, "checks");
+  const openCheckCount = checks.filter((check: any) => !check.ok).length;
 
   return (
     <div className="page page--wide">
@@ -104,7 +104,29 @@ export function MinuteBookPage() {
         <Stat label="Manual records" value={items.length} />
         <Stat label="Documents" value={safeCount(detail, "documents")} />
         <Stat label="Meetings" value={safeCount(detail, "meetings")} />
-        <Stat label="Missing basics" value={missingBasics.length} tone={missingBasics.length ? "warn" : undefined} />
+        <Stat label="Open checks" value={openCheckCount} tone={openCheckCount ? "warn" : undefined} />
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">Completeness checks</h2>
+          <Badge tone={openCheckCount ? "warn" : "success"}>{openCheckCount ? `${openCheckCount} open` : "Clear"}</Badge>
+        </div>
+        <div className="card__body">
+          <div className="grid two">
+            {checks.map((check: any) => (
+              <div key={check.key} className="row" style={{ alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                <div>
+                  <strong>{check.label}</strong>
+                  <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{check.detail}</div>
+                </div>
+                <Badge tone={check.ok ? "success" : check.severity === "danger" ? "danger" : check.severity === "warn" ? "warn" : "info"}>
+                  {check.count}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>

@@ -39,6 +39,7 @@ const detailedAttendance = v.object({
   status: v.string(),
   roleTitle: v.optional(v.string()),
   affiliation: v.optional(v.string()),
+  memberIdentifier: v.optional(v.string()),
   proxyFor: v.optional(v.string()),
   quorumCounted: v.optional(v.boolean()),
   notes: v.optional(v.string()),
@@ -62,12 +63,21 @@ const sessionSegment = v.object({
   notes: v.optional(v.string()),
 });
 
+const appendix = v.object({
+  title: v.string(),
+  type: v.optional(v.string()),
+  reference: v.optional(v.string()),
+  notes: v.optional(v.string()),
+});
+
 const directorAppointment = v.object({
   name: v.string(),
   roleTitle: v.optional(v.string()),
   affiliation: v.optional(v.string()),
   term: v.optional(v.string()),
   consentRecorded: v.optional(v.boolean()),
+  votesReceived: v.optional(v.number()),
+  elected: v.optional(v.boolean()),
   status: v.optional(v.string()),
   notes: v.optional(v.string()),
 });
@@ -99,6 +109,7 @@ const structuredMinutesFields = {
   nextMeetingLocation: v.optional(v.string()),
   nextMeetingNotes: v.optional(v.string()),
   sessionSegments: v.optional(v.array(sessionSegment)),
+  appendices: v.optional(v.array(appendix)),
   agmDetails: v.optional(agmDetails),
 };
 
@@ -395,6 +406,7 @@ export const generateDraft = action({
       nextMeetingLocation: draft.nextMeetingLocation,
       nextMeetingNotes: draft.nextMeetingNotes,
       sessionSegments: draft.sessionSegments,
+      appendices: draft.appendices,
       agmDetails: draft.agmDetails,
       draftTranscript: transcript,
     });

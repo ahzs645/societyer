@@ -17,6 +17,9 @@ export function PoliciesPage() {
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const upsert = useMutation(api.policies.upsert);
   const remove = useMutation(api.policies.remove);
+  const createReviewTask = useMutation(api.policies.createReviewTask);
+  const createSignerTask = useMutation(api.policies.createRequiredSignerTask);
+  const createTransparencyDraft = useMutation(api.policies.createTransparencyDraft);
   const confirm = useConfirm();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -80,6 +83,17 @@ export function PoliciesPage() {
     toast.success("Policy deleted");
   };
 
+  const createLifecycleTask = async (row: any, kind: "review" | "signers") => {
+    if (kind === "review") await createReviewTask({ policyId: row._id });
+    if (kind === "signers") await createSignerTask({ policyId: row._id });
+    toast.success(kind === "review" ? "Review task created" : "Signer task created");
+  };
+
+  const createPublication = async (row: any) => {
+    await createTransparencyDraft({ policyId: row._id });
+    toast.success("Transparency draft ready");
+  };
+
   return (
     <div className="page page--wide">
       <PageHeader
@@ -108,6 +122,7 @@ export function PoliciesPage() {
                 <th>Dates</th>
                 <th>Documents</th>
                 <th>Signers</th>
+                <th>Lifecycle</th>
                 <th>Status</th>
                 <th />
               </tr>
@@ -135,9 +150,15 @@ export function PoliciesPage() {
                       <span className="muted">Not required</span>
                     )}
                   </td>
+                  <td>
+                    <LifecycleBadges lifecycle={row.lifecycle} />
+                  </td>
                   <td><Badge tone={toneForStatus(row.status)}>{row.status}</Badge></td>
                   <td>
                     <div className="row" style={{ justifyContent: "flex-end" }}>
+                      <button className="btn btn--ghost btn--sm" onClick={() => createLifecycleTask(row, "review")}>Review task</button>
+                      {row.signatureRequired && <button className="btn btn--ghost btn--sm" onClick={() => createLifecycleTask(row, "signers")}>Signer task</button>}
+                      <button className="btn btn--ghost btn--sm" onClick={() => createPublication(row)}>Publish draft</button>
                       <button
                         className="btn btn--ghost btn--sm"
                         onClick={() => {
@@ -160,7 +181,7 @@ export function PoliciesPage() {
                 </tr>
               ))}
               {(policies ?? []).length === 0 && (
-                <tr><td colSpan={7} className="muted" style={{ textAlign: "center", padding: 24 }}>No policies yet.</td></tr>
+                <tr><td colSpan={8} className="muted" style={{ textAlign: "center", padding: 24 }}>No policies yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -223,10 +244,31 @@ function csv(value: any) {
   return String(value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
 }
 
+function LifecycleBadges({ lifecycle }: { lifecycle?: any }) {
+  if (!lifecycle) return <span className="muted">-</span>;
+  return (
+    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+      <Badge tone={lifecycle.reviewState === "overdue" ? "danger" : lifecycle.reviewState === "due_soon" || lifecycle.reviewState === "missing_review_date" ? "warn" : "success"}>
+        {labelize(lifecycle.reviewState)}
+      </Badge>
+      <Badge tone={lifecycle.publicationId ? "success" : "neutral"}>{lifecycle.publicationStatus ?? "not published"}</Badge>
+      <Badge tone={lifecycle.signatureState === "missing_signers" ? "danger" : lifecycle.signatureState === "required" ? "warn" : "neutral"}>
+        {labelize(lifecycle.signatureState)}
+      </Badge>
+      <Badge>{lifecycle.versionCount ?? 0} versions</Badge>
+      <Badge>{lifecycle.taskCount ?? 0} tasks</Badge>
+    </div>
+  );
+}
+
 function toneForStatus(status?: string) {
   const value = String(status ?? "").toLowerCase();
   if (value.includes("active") || value.includes("approved")) return "success" as const;
   if (value.includes("review") || value.includes("draft")) return "warn" as const;
   if (value.includes("ceased") || value.includes("superseded")) return "danger" as const;
   return "neutral" as const;
+}
+
+function labelize(value?: string) {
+  return String(value ?? "-").replace(/_/g, " ");
 }

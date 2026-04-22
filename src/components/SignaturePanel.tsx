@@ -74,7 +74,8 @@ export function SignaturePanel({
             <button
               className="btn btn--ghost btn--sm btn--icon"
               aria-label={`Revoke signature from ${s.signerName}`}
-              onClick={() => revoke({ id: s._id })}
+              disabled={!user}
+              onClick={() => user && revoke({ id: s._id, actingUserId: user._id })}
               title="Revoke"
             >
               <Trash2 size={12} />
@@ -94,7 +95,12 @@ export function SignaturePanel({
             </Field>
             <button
               className="btn btn--accent"
+              disabled={!user}
               onClick={async () => {
+                if (!user) {
+                  toast.error("Pick a user in the header before signing.");
+                  return;
+                }
                 const name = typedName || user?.displayName;
                 if (!name) {
                   toast.error("Pick a user in the header or type your name.");
@@ -105,6 +111,7 @@ export function SignaturePanel({
                   entityType,
                   entityId,
                   userId: user?._id,
+                  actingUserId: user._id,
                   signerName: name,
                   signerRole: user?.role,
                   method: "typed",

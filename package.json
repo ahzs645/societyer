@@ -24,6 +24,7 @@
     "auth:server": "tsx server/auth-server.ts",
     "test:smoke": "npx playwright test",
     "test:api-contract": "tsx scripts/check-api-contract.ts",
+    "test:org-details": "tsx scripts/check-org-detail-smoke.ts",
     "test:exports": "tsx scripts/check-export-coverage.ts",
     "test:exports:db": "tsx scripts/validate-export-database.ts"
   },

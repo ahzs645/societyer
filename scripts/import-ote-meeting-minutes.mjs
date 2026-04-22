@@ -88,6 +88,36 @@ async function uploadFile(absPath, title, category) {
   return docId;
 }
 
+function minutesStructuredFields(spec) {
+  return compact({
+    chairName: spec.chairName,
+    secretaryName: spec.secretaryName,
+    recorderName: spec.recorderName,
+    calledToOrderAt: spec.calledToOrderAt,
+    adjournedAt: spec.adjournedAt,
+    remoteParticipation: spec.remoteParticipation,
+    detailedAttendance: spec.detailedAttendance,
+    sections: spec.sections,
+    nextMeetingAt: spec.nextMeetingAt,
+    nextMeetingLocation: spec.nextMeetingLocation,
+    nextMeetingNotes: spec.nextMeetingNotes,
+    sessionSegments: spec.sessionSegments,
+    appendices: spec.appendices,
+    agmDetails: spec.agmDetails,
+  });
+}
+
+function compact(value) {
+  const out = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry == null || entry === "") continue;
+    if (Array.isArray(entry) && entry.length === 0) continue;
+    if (typeof entry === "object" && !Array.isArray(entry) && Object.keys(entry).length === 0) continue;
+    out[key] = entry;
+  }
+  return out;
+}
+
 async function importMeeting(spec) {
   console.log(`\n→ ${spec.scheduledAt.slice(0, 10)} | ${spec.title}`);
 
@@ -132,6 +162,7 @@ async function importMeeting(spec) {
     absent: spec.absent ?? [],
     quorumMet: spec.quorumMet ?? true,
     discussion: spec.discussion,
+    ...minutesStructuredFields(spec),
     motions: spec.motions ?? [],
     decisions: spec.decisions ?? [],
     actionItems: spec.actionItems ?? [],

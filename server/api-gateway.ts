@@ -1639,83 +1639,84 @@ async function buildBcRegistryBylawsHistoryBundle(input: {
   let visionQueue = 0;
 
   for (const group of groups) {
-    const row = bestBcRegistryBylawsDocumentRow(group.rows);
-    const eventId = firstNonEmpty(group.rows.map((item) => item["Event ID"]));
-    const reportName = row["Report Name"];
-    const rawFilename = String(row.Filename ?? "").trim();
-    const fileName = rawFilename ? sanitizeFileName(path.basename(rawFilename)) : "";
-    const sourcePath = fileName ? path.join(input.exportDirectory, "pdfs", fileName) : "";
-    const filedAt = parseBcRegistryDate(row["Date Filed"]);
-    const sourceExternalIds = uniqueStrings([
-      eventId ? `bc-registry:event:${eventId}` : "",
-      eventId ? `bc-registry:event-id:${eventId}` : "",
-      eventId && reportName ? `bc-registry:document:${eventId}:${reportName}` : "",
-      fileName ? `bc-registry:file:${fileName}` : "",
-    ]);
-    const primaryExternalId = sourceExternalIds[0] ?? `bc-registry:paper:${crypto.createHash("sha1").update(group.key).digest("hex").slice(0, 16)}`;
-    const rawText = sourcePath ? await extractPdfTextWithPdftotext(sourcePath) : "";
-    const fullBylaws = looksLikeFullBylawsText(rawText || `${row.Filing} ${row.Details} ${row["Document Name"]} ${row["Report Name"]}`);
-    const needsVisionReview = cleanRegistryText(rawText).length < 300;
-    if (needsVisionReview) visionQueue += 1;
-    const proposedText = needsVisionReview
-      ? registryVisionReviewMarkdown(row, fileName || undefined)
-      : registryBylawsMarkdownFromText(rawText, bcRegistryBylawsSourceTitle(row));
-    const status = fullBylaws && !needsVisionReview ? "Filed" : "Draft";
-    const confidence = fullBylaws && !needsVisionReview ? "Medium" : "Review";
-    const sourceDocumentId = fileName ? input.documentIdsByFilename.get(fileName) : undefined;
-    const notes = [
-      needsVisionReview
-        ? "The registry PDF appears to be scanned or did not yield enough digital text. Run page-by-page vision transcription before approving."
-        : "The registry PDF yielded digital text via pdftotext and was normalized into Markdown. Verify against the PDF before approval.",
-      fullBylaws
-        ? "This looks like a complete bylaws version."
-        : "This looks like a partial amendment, special resolution, or filing source. Merge it into the previous full bylaws text before marking it filed.",
-      sourceDocumentId ? `Linked document: ${sourceDocumentId}.` : "No local source document was linked.",
-    ].join(" ");
+    for (const row of bcRegistryBylawsRowsToStage(group.rows)) {
+      const eventId = firstNonEmpty(group.rows.map((item) => item["Event ID"]));
+      const reportName = row["Report Name"];
+      const rawFilename = String(row.Filename ?? "").trim();
+      const fileName = rawFilename ? sanitizeFileName(path.basename(rawFilename)) : "";
+      const sourcePath = fileName ? path.join(input.exportDirectory, "pdfs", fileName) : "";
+      const filedAt = parseBcRegistryDate(row["Date Filed"]);
+      const sourceExternalIds = uniqueStrings([
+        eventId && reportName ? `bc-registry:document:${eventId}:${reportName}` : "",
+        eventId ? `bc-registry:event:${eventId}` : "",
+        eventId ? `bc-registry:event-id:${eventId}` : "",
+        fileName ? `bc-registry:file:${fileName}` : "",
+      ]);
+      const primaryExternalId = sourceExternalIds[0] ?? `bc-registry:paper:${crypto.createHash("sha1").update(group.key).digest("hex").slice(0, 16)}`;
+      const rawText = sourcePath ? await extractPdfTextWithPdftotext(sourcePath) : "";
+      const fullBylaws = looksLikeFullBylawsText(rawText || `${row.Filing} ${row.Details} ${row["Document Name"]} ${row["Report Name"]}`);
+      const fullBylawsVersion = isBcRegistryFullBylawsVersionRow(row) && fullBylaws;
+      const needsVisionReview = cleanRegistryText(rawText).length < 300;
+      if (needsVisionReview) visionQueue += 1;
+      const proposedText = needsVisionReview
+        ? registryVisionReviewMarkdown(row, fileName || undefined)
+        : registryBylawsMarkdownFromText(rawText, bcRegistryBylawsSourceTitle(row));
+      const status = fullBylawsVersion && !needsVisionReview ? "Filed" : "Draft";
+      const confidence = fullBylawsVersion && !needsVisionReview ? "Medium" : "Review";
+      const sourceDocumentId = fileName ? input.documentIdsByFilename.get(fileName) : undefined;
+      const notes = [
+        needsVisionReview
+          ? "The registry PDF appears to be scanned or did not yield enough digital text. Run page-by-page vision transcription before approving."
+          : "The registry PDF yielded digital text via pdftotext and was normalized into Markdown. Verify against the PDF before approval.",
+        fullBylawsVersion
+          ? "This looks like a complete filed bylaws version and can be compared against the previous full version."
+          : "This is a supporting registry source, constitution, partial amendment, or paper-only filing reference. Keep it in review unless it is manually merged into a full bylaws version.",
+        sourceDocumentId ? `Linked document: ${sourceDocumentId}.` : "No local source document was linked.",
+      ].join(" ");
 
-    sources.push({
-      externalSystem: "bc-registry",
-      externalId: primaryExternalId,
-      title: bcRegistryBylawsSourceTitle(row),
-      sourceDate: filedAt,
-      category: "BC Registry Bylaws Source",
-      confidence,
-      notes,
-      url: row.URL || undefined,
-      localPath: sourcePath ? path.relative(process.cwd(), sourcePath) : undefined,
-      fileName: fileName || undefined,
-      tags: ["bc-registry", "bylaws", needsVisionReview ? "vision-review" : "pdf-text"],
-    });
+      sources.push({
+        externalSystem: "bc-registry",
+        externalId: primaryExternalId,
+        title: bcRegistryBylawsSourceTitle(row),
+        sourceDate: filedAt,
+        category: "BC Registry Bylaws Source",
+        confidence,
+        notes,
+        url: row.URL || undefined,
+        localPath: sourcePath ? path.relative(process.cwd(), sourcePath) : undefined,
+        fileName: fileName || undefined,
+        tags: ["bc-registry", "bylaws", needsVisionReview ? "vision-review" : "pdf-text"],
+      });
 
-    bylawAmendments.push({
-      title: `${status === "Filed" ? "Bylaws version" : "Bylaws source needing review"}: ${bcRegistryBylawsSourceTitle(row)}${filedAt ? ` (${filedAt})` : ""}`,
-      status,
-      baseText: previousText,
-      proposedText,
-      createdByName: "BC Registry bylaws history bot",
-      createdAtISO: dateToStartIso(filedAt),
-      updatedAtISO: dateToStartIso(filedAt),
-      filedAtISO: status === "Filed" ? dateToStartIso(filedAt) : undefined,
-      sourceDate: filedAt,
-      sourceExternalIds,
-      importedFrom: "BC Registry bylaws history bot",
-      confidence,
-      notes,
-      sourceDocumentId,
-      extractionPlan: needsVisionReview
-        ? {
-            mode: "page_by_page_vision",
-            reason: "Digital PDF text extraction was sparse or unavailable.",
-            reviewerInstruction: "Render each PDF page as an image, transcribe clauses in order, preserve numbering, and mark uncertain words with [[uncertain: ...]].",
-          }
-        : {
-            mode: "pdftotext_markdown_normalization",
-            reason: "Digital text was available from the registry PDF.",
-          },
-    });
+      bylawAmendments.push({
+        title: `${status === "Filed" ? "Bylaws version" : "Bylaws source needing review"}: ${bcRegistryBylawsSourceTitle(row)}${filedAt ? ` (${filedAt})` : ""}`,
+        status,
+        baseText: fullBylawsVersion && !needsVisionReview ? previousText : "",
+        proposedText,
+        createdByName: "BC Registry bylaws history bot",
+        createdAtISO: dateToStartIso(filedAt),
+        updatedAtISO: dateToStartIso(filedAt),
+        filedAtISO: status === "Filed" ? dateToStartIso(filedAt) : undefined,
+        sourceDate: filedAt,
+        sourceExternalIds,
+        importedFrom: "BC Registry bylaws history bot",
+        confidence,
+        notes,
+        sourceDocumentId,
+        extractionPlan: needsVisionReview
+          ? {
+              mode: "page_by_page_vision",
+              reason: "Digital PDF text extraction was sparse or unavailable.",
+              reviewerInstruction: "Render each PDF page as an image, transcribe clauses in order, preserve numbering, and mark uncertain words with [[uncertain: ...]].",
+            }
+          : {
+              mode: "pdftotext_markdown_normalization",
+              reason: "Digital text was available from the registry PDF.",
+            },
+      });
 
-    if (status === "Filed") previousText = proposedText;
-    else if (!previousText) previousText = proposedText;
+      if (status === "Filed") previousText = proposedText;
+    }
   }
 
   return {
@@ -1768,6 +1769,28 @@ function bestBcRegistryBylawsDocumentRow(rows: BcRegistryCsvRecord[]): BcRegistr
     rows.find((row) => row.Filename) ??
     rows[0] ??
     {};
+}
+
+function bcRegistryBylawsRowsToStage(rows: BcRegistryCsvRecord[]) {
+  const candidates = rows.filter((row) => {
+    const descriptor = `${row["Document Name"] ?? ""} ${row["Report Name"] ?? ""}`;
+    if (row.Filename) {
+      return /\b(bylaws?|by-laws?|constitution|special resolution|copy of resolution|form\s*10|transition|bylawalteration)\b/i.test(descriptor);
+    }
+    return /\b(bylaws?|by-laws?|special resolution|registrar'?s order|copy of resolution|form\s*10)\b/i.test(`${row.Filing ?? ""} ${row.Details ?? ""}`);
+  });
+  const seen = new Set<string>();
+  const unique = candidates.filter((row) => {
+    const key = row.Filename || `${row.Filing}|${row["Date Filed"]}|${row.Details}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.length ? unique : [bestBcRegistryBylawsDocumentRow(rows)].filter((row) => Object.keys(row).length);
+}
+
+function isBcRegistryFullBylawsVersionRow(row: BcRegistryCsvRecord) {
+  return /\b(?:bylaws|by-laws)\b/i.test(`${row["Document Name"] ?? ""} ${row["Report Name"] ?? ""}`);
 }
 
 function bcRegistryBylawsSourceTitle(row: BcRegistryCsvRecord) {

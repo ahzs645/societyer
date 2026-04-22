@@ -553,6 +553,10 @@ const minutes = [
         reportSubmitted: true,
       },
     ],
+    appendices: [
+      { title: "Annual report package", type: "report", reference: "Source documents" },
+      { title: "Director slate", type: "election_roster", reference: "AGM package" },
+    ],
     motions: [
       {
         text: "Approve the 2025 financial statements as presented.",
@@ -573,8 +577,8 @@ const minutes = [
       financialStatementsNotes: "The 2025 financial statements were presented to the members.",
       directorElectionNotes: "The director slate was reviewed and accepted.",
       directorAppointments: [
-        { name: "Mina Patel", roleTitle: "Director", term: "2025-2026", consentRecorded: true, status: "Confirmed" },
-        { name: "Jordan Lee", roleTitle: "Director", term: "2025-2026", consentRecorded: true, status: "Confirmed" },
+        { name: "Mina Patel", roleTitle: "Director", term: "2025-2026", consentRecorded: true, elected: true, status: "Confirmed" },
+        { name: "Jordan Lee", roleTitle: "Director", term: "2025-2026", consentRecorded: true, elected: true, status: "Confirmed" },
       ],
     },
   },
@@ -2258,6 +2262,55 @@ function staticExportValidation(args?: StaticArgs) {
   };
 }
 
+function staticPipaPolicyDraft() {
+  const today = new Date().toISOString().slice(0, 10);
+  return `# ${society.name} Privacy Policy
+
+Draft created: ${today}
+
+Status: Draft - not adopted until approved by the authorized board, executive, or officer.
+
+This draft is a Societyer starter template based on BC PIPA guidance. It is not legal advice and it is not an official BC OIPC template. Replace bracketed text and remove options that do not apply before adoption.
+
+## 1. Organization
+
+${society.name} collects, uses, discloses, stores, and disposes of personal information in accordance with British Columbia's Personal Information Protection Act (PIPA) and other applicable laws.
+
+- Legal name: ${society.name}
+- Incorporation number: ${society.incorporationNumber}
+- Mailing address: ${society.mailingAddress}
+- General contact: ${society.publicContactEmail}
+
+## 2. Privacy Officer
+
+The privacy officer is responsible for privacy questions, access and correction requests, privacy complaints, and maintaining this policy.
+
+- Privacy officer: ${society.privacyOfficerName}
+- Email: ${society.privacyOfficerEmail}
+- Mailing address: ${society.mailingAddress}
+
+## 3. Member Records and Institution-Held Data
+
+Current member-data access status in Societyer: ${society.memberDataAccessStatus}.
+
+Tailor this section to the actual member list, university data-sharing limits, and evidence stored in Societyer before adoption.
+
+## 4. Complaint Process
+
+Privacy questions, access requests, correction requests, and complaints should be sent to the privacy officer. The organization will review the request, gather relevant information, respond within the timelines required by law, and keep a record of the outcome.
+
+## 5. Adoption
+
+Policy adopted by: [board / executive / authorized officer]
+
+Adoption date: [YYYY-MM-DD]
+
+Last review date: ${today}
+
+Next review date: [YYYY-MM-DD]
+`;
+}
+
 function staticExportWorkspace(args?: StaticArgs) {
   const summaries = staticExportSummaries(args);
   const tableRows = Object.fromEntries(
@@ -2659,17 +2712,31 @@ function mutationResult(name: string, args: StaticArgs) {
   if (name === "documents:createPipaPolicyDraft") {
     return {
       reused: false,
+      refreshed: false,
       document: {
         _id: "static_pipa_policy_draft",
         societyId: args?.societyId ?? SOCIETY_ID,
         title: `Draft PIPA privacy policy - ${society.name}`,
         category: "Policy",
-        content: `# ${society.name} Privacy Policy\n\nStatus: Draft\n\nReplace bracketed placeholders, review against BC OIPC guidance, then approve before linking as adopted evidence.\n\n## Privacy Officer\n\nPrivacy officer: [role or name]\nEmail: [privacy email]\n\n## Purposes\n\nDescribe why personal information is collected, used, and disclosed.\n\n## Complaint Process\n\nDescribe how privacy questions, access requests, correction requests, and complaints are handled.\n`,
+        content: staticPipaPolicyDraft(),
         createdAtISO: new Date().toISOString(),
         flaggedForDeletion: false,
         retentionYears: 10,
-        tags: ["privacy", "privacy-policy", "pipa", "draft", "societyer-template"],
+        tags: ["privacy", "privacy-policy", "pipa", "draft", "societyer-template", "society-filled"],
       },
+    };
+  }
+  if (name === "documents:rebuildPipaPolicyDraftFromSociety") {
+    return {
+      _id: args?.id ?? "static_pipa_policy_draft",
+      societyId: SOCIETY_ID,
+      title: `Draft PIPA privacy policy - ${society.name}`,
+      category: "Policy",
+      content: staticPipaPolicyDraft(),
+      createdAtISO: new Date().toISOString(),
+      flaggedForDeletion: false,
+      retentionYears: 10,
+      tags: ["privacy", "privacy-policy", "pipa", "draft", "societyer-template", "society-filled"],
     };
   }
   if (name === "documents:createMemberDataGapMemoDraft") {

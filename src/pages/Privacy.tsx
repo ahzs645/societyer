@@ -4,12 +4,14 @@ import { useMutation, useQuery } from "convex/react";
 import {
   ClipboardCheck,
   ExternalLink,
+  FileDown,
   FileCheck2,
   FileText,
   GraduationCap,
   MailCheck,
   PenLine,
   Plus,
+  RefreshCw,
   Save,
   Shield,
   UserRound,
@@ -32,9 +34,11 @@ import {
   PIPA_TEMPLATE_RESOURCES,
   RECORDS_INSPECTION_GUIDANCE,
 } from "../lib/legalCopy";
+import { exportMarkdownWordDoc, markdownToHtml } from "../lib/exportWord";
 
 type StepTone = "success" | "warn" | "info" | "neutral";
 type DraftEditorKind = "policy" | "memberDataMemo";
+type DraftViewMode = "edit" | "preview";
 type DraftEditorState = {
   id: any;
   kind: DraftEditorKind;
@@ -65,6 +69,7 @@ export function PrivacyPage() {
   const updateDraftContent = useMutation(api.documents.updateDraftContent);
   const linkPrivacyPolicyEvidence = useMutation(api.documents.linkPrivacyPolicyEvidence);
   const [draftEditor, setDraftEditor] = useState<DraftEditorState | null>(null);
+  const [draftViewMode, setDraftViewMode] = useState<DraftViewMode>("edit");
   const [draftBusy, setDraftBusy] = useState(false);
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
@@ -111,16 +116,61 @@ export function PrivacyPage() {
   ].filter(Boolean).length;
 
   const openPolicyDraft = async () => {
+    if (policyDraft) {
+      const prepared = preparePolicyDraftForSociety(policyDraft, society);
+      setDraftEditor(editorStateFromDocument(prepared, "policy"));
+      setDraftViewMode("edit");
+      toast.success(
+        prepared !== policyDraft
+          ? "Filled policy draft with society details"
+          : "Opened existing policy draft",
+        prepared !== policyDraft ? "Review and save the draft to persist these template fields." : undefined,
+      );
+      return;
+    }
+
     setDraftBusy(true);
     try {
-      const result = policyDraft
-        ? { document: policyDraft, reused: true }
-        : await createPolicyDraft({ societyId: society._id });
+      const result = await createPolicyDraft({ societyId: society._id });
       if (!result?.document) throw new Error("Draft document was not returned.");
-      setDraftEditor(editorStateFromDocument(result.document, "policy"));
-      toast.success(result.reused ? "Opened existing policy draft" : "Policy draft created");
+      setDraftEditor(editorStateFromDocument(preparePolicyDraftForSociety(result.document, society), "policy"));
+      setDraftViewMode("edit");
+      toast.success(
+        result.refreshed
+          ? "Filled existing policy draft with society details"
+          : result.reused
+            ? "Opened existing policy draft"
+            : "Policy draft created",
+      );
     } catch (error: any) {
       toast.error(error?.message ?? "Could not create the policy draft");
+    } finally {
+      setDraftBusy(false);
+    }
+  };
+
+  const rebuildPolicyDraft = async () => {
+    if (!draftEditor || draftEditor.kind !== "policy") return;
+    const ok = await confirm({
+      title: "Use current society details?",
+      message:
+        `This will replace the draft body with a fresh PIPA starter template filled with ${society.name}'s current Society page details. Any unsaved edits in this editor will be overwritten.`,
+      confirmLabel: "Use society details",
+      tone: "warn",
+    });
+    if (!ok) return;
+    setDraftBusy(true);
+    try {
+      setDraftEditor({
+        ...draftEditor,
+        title: `Draft PIPA privacy policy - ${society.name}`,
+        content: buildClientPipaPolicyDraft(society),
+        tags: withDraftTags(draftEditor.tags, ["privacy", "privacy-policy", "pipa", "draft", "societyer-template", "society-filled"]),
+      });
+      setDraftViewMode("edit");
+      toast.success("Policy draft filled from society details", "Review and save the draft to persist these template fields.");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not fill the draft from society details");
     } finally {
       setDraftBusy(false);
     }
@@ -134,6 +184,7 @@ export function PrivacyPage() {
         : await createMemberDataGapMemoDraft({ societyId: society._id });
       if (!result?.document) throw new Error("Draft document was not returned.");
       setDraftEditor(editorStateFromDocument(result.document, "memberDataMemo"));
+      setDraftViewMode("edit");
       toast.success(result.reused ? "Opened existing data-gap memo" : "Data-gap memo draft created");
     } catch (error: any) {
       toast.error(error?.message ?? "Could not create the data-gap memo");
@@ -187,6 +238,16 @@ export function PrivacyPage() {
     } finally {
       setDraftBusy(false);
     }
+  };
+
+  const exportDraftToWord = () => {
+    if (!draftEditor) return;
+    exportMarkdownWordDoc({
+      filename: `${slugifyFileName(draftEditor.title)}.doc`,
+      title: draftEditor.title,
+      markdown: draftEditor.content,
+    });
+    toast.success("Word document exported", "Uses the same rendered Markdown as the preview.");
   };
 
   return (
@@ -457,11 +518,21 @@ export function PrivacyPage() {
             <button className="btn" disabled={draftBusy} onClick={() => setDraftEditor(null)}>
               Close
             </button>
+            <button className="btn" disabled={draftBusy || !draftEditor} onClick={exportDraftToWord}>
+              <FileDown size={12} />
+              Export Word
+            </button>
             {draftEditor?.kind === "policy" && (
-              <button className="btn" disabled={draftBusy} onClick={linkDraftAsEvidence}>
-                <FileCheck2 size={12} />
-                Link as adopted evidence
-              </button>
+              <>
+                <button className="btn" disabled={draftBusy} onClick={rebuildPolicyDraft}>
+                  <RefreshCw size={12} />
+                  Use society details
+                </button>
+                <button className="btn" disabled={draftBusy} onClick={linkDraftAsEvidence}>
+                  <FileCheck2 size={12} />
+                  Link as adopted evidence
+                </button>
+              </>
             )}
             <button className="btn btn--accent" disabled={draftBusy} onClick={saveDraftEditor}>
               <Save size={12} />
@@ -484,13 +555,41 @@ export function PrivacyPage() {
                 onChange={(event) => setDraftEditor({ ...draftEditor, title: event.target.value })}
               />
             </Field>
-            <Field label="Markdown draft" hint="Replace bracketed placeholders before adoption.">
-              <textarea
-                className="textarea privacy-editor__textarea"
-                value={draftEditor.content}
-                onChange={(event) => setDraftEditor({ ...draftEditor, content: event.target.value })}
+            <div className="segmented privacy-editor__mode" role="tablist" aria-label="Draft view">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={draftViewMode === "edit"}
+                className={`segmented__btn ${draftViewMode === "edit" ? "is-active" : ""}`}
+                onClick={() => setDraftViewMode("edit")}
+              >
+                Edit Markdown
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={draftViewMode === "preview"}
+                className={`segmented__btn ${draftViewMode === "preview" ? "is-active" : ""}`}
+                onClick={() => setDraftViewMode("preview")}
+              >
+                Preview
+              </button>
+            </div>
+            {draftViewMode === "edit" ? (
+              <Field label="Markdown draft" hint="Replace bracketed placeholders before adoption.">
+                <textarea
+                  className="textarea privacy-editor__textarea"
+                  value={draftEditor.content}
+                  onChange={(event) => setDraftEditor({ ...draftEditor, content: event.target.value })}
+                />
+              </Field>
+            ) : (
+              <div
+                className="privacy-editor__preview markdown-preview"
+                aria-label="Rendered Markdown preview"
+                dangerouslySetInnerHTML={{ __html: markdownToHtml(draftEditor.content) }}
               />
-            </Field>
+            )}
           </div>
         )}
       </Modal>
@@ -592,6 +691,155 @@ function editorStateFromDocument(document: any, kind: DraftEditorKind): DraftEdi
     content: String(document.content ?? ""),
     tags: Array.isArray(document.tags) ? document.tags : [],
   };
+}
+
+function preparePolicyDraftForSociety(document: any, society: any) {
+  if (!isGenericPipaPolicyTemplate(document)) return document;
+  return {
+    ...document,
+    title: `Draft PIPA privacy policy - ${society.name}`,
+    content: buildClientPipaPolicyDraft(society),
+    tags: withDraftTags(document.tags, ["privacy", "privacy-policy", "pipa", "draft", "societyer-template", "society-filled"]),
+  };
+}
+
+function isGenericPipaPolicyTemplate(document: any) {
+  const title = String(document.title ?? "").toLowerCase();
+  const content = String(document.content ?? "");
+  const hasGenericName = content.includes("[Legal organization name]") || content.includes("[legal name]");
+  if (!hasGenericName) return false;
+  return (
+    title.includes("draft pipa privacy policy template") ||
+    content.includes("This template is not legal advice") ||
+    content.includes("PIPA Privacy Policy Template")
+  );
+}
+
+function buildClientPipaPolicyDraft(society: any) {
+  const today = new Date().toISOString().slice(0, 10);
+  const legalName = valueOrPlaceholder(society.name, "Legal organization name");
+  const privacyOfficerName = valueOrPlaceholder(society.privacyOfficerName, "Privacy officer role or name");
+  const privacyOfficerEmail = valueOrPlaceholder(society.privacyOfficerEmail, "privacy email");
+  const mailingAddress = valueOrPlaceholder(society.mailingAddress, "mailing address");
+  const generalContactEmail = valueOrPlaceholder(society.officialEmail ?? society.publicContactEmail, "general contact email");
+  const memberDataStatus = valueOrPlaceholder(society.memberDataAccessStatus, "Society-controlled / Partially available / Institution-held / Not applicable");
+
+  return `# ${legalName} Privacy Policy
+
+Draft created: ${today}
+
+Status: Draft - not adopted until approved by the authorized board, executive, or officer.
+
+This draft is a Societyer starter template based on BC PIPA guidance. It is not legal advice and it is not an official BC OIPC template. Replace bracketed text and remove options that do not apply before adoption.
+
+## 1. Organization
+
+${legalName} collects, uses, discloses, stores, and disposes of personal information in accordance with British Columbia's Personal Information Protection Act (PIPA) and other applicable laws.
+
+- Legal name: ${legalName}
+- Incorporation number: ${valueOrPlaceholder(society.incorporationNumber, "incorporation number, if applicable")}
+- Mailing address: ${mailingAddress}
+- General contact: ${generalContactEmail}
+
+## 2. Privacy Officer
+
+The privacy officer is responsible for privacy questions, access and correction requests, privacy complaints, and maintaining this policy.
+
+- Privacy officer: ${privacyOfficerName}
+- Email: ${privacyOfficerEmail}
+- Mailing address: ${mailingAddress}
+
+## 3. Personal Information We Collect
+
+We collect only the personal information that is reasonable for our purposes. Depending on the activity, this may include:
+
+- name and contact information;
+- membership or eligibility information;
+- director, officer, staff, contractor, and volunteer records;
+- event registration and attendance information;
+- communication preferences and mailing-list records;
+- payment, reimbursement, grant, funding, accounting, or payroll records;
+- application, intake, complaint, dispute, access-request, and correction-request records;
+- meeting, election, referendum, filing, insurance, governance, and legal-compliance records; and
+- technical information generated when people use our websites, forms, email systems, or other tools.
+
+## 4. Why We Collect Personal Information
+
+We may collect personal information to administer the organization, maintain required records, manage membership or eligibility where applicable, communicate with stakeholders, run meetings and programs, process payments or reimbursements, respond to privacy requests and complaints, protect safety and security, and meet legal, regulatory, audit, funding, insurance, and reporting obligations.
+
+## 5. Consent, Use, and Disclosure
+
+When we collect personal information directly from an individual, we explain the purpose for collection at or before collection unless the purpose is obvious and the individual voluntarily provides the information for that purpose.
+
+We collect, use, and disclose personal information with consent unless PIPA or another law authorizes collection, use, or disclosure without consent. Access is limited to people who need the information for their role.
+
+We do not sell personal information.
+
+## 6. Member Records and Institution-Held Data
+
+Current member-data access status in Societyer: ${memberDataStatus}.
+
+Choose and adapt the correct member-records language before adoption. If a university or parent body holds the member list, describe what the society actually controls and keep a separate member-data access gap memo.
+
+## 7. Safeguards
+
+We protect personal information using safeguards appropriate to the sensitivity and amount of information. These may include role-limited access, password protection, multi-factor authentication where practical, restricted cloud folders, locked physical storage, secure deletion or disposal, training, service-provider controls, and access review after role changes.
+
+## 8. Retention and Disposal
+
+We keep personal information only as long as needed for the purpose for which it was collected, or as long as needed for legal, governance, funding, audit, insurance, tax, accounting, dispute-resolution, or business purposes.
+
+If personal information is used to make a decision that directly affects an individual, we retain that information for at least one year after the decision so the individual has a reasonable opportunity to request access.
+
+## 9. Access and Correction Requests
+
+Individuals may ask for access to their own personal information under the organization's control. They may also ask how their information has been used and disclosed, and may request correction if they believe it is inaccurate.
+
+Requests should be sent to the privacy officer. We may ask for information needed to confirm identity and locate records. We respond within the timelines required by law unless an extension or exception applies.
+
+## 10. Complaints
+
+Privacy complaints should be sent to the privacy officer. The organization will review the complaint, gather relevant information, respond within a reasonable time, and take appropriate corrective steps where needed.
+
+If a complaint is not resolved, the individual may contact the Office of the Information and Privacy Commissioner for British Columbia.
+
+## 11. Electronic Communications
+
+Where electronic messages are subject to Canada's Anti-Spam Legislation (CASL), we send them only with an applicable consent basis, include required sender identification, and provide unsubscribe handling where required.
+
+## 12. Adoption
+
+Policy adopted by: [board / executive / authorized officer]
+
+Adoption date: [YYYY-MM-DD]
+
+Last review date: ${today}
+
+Next review date: [YYYY-MM-DD]
+
+## Source Notes
+
+This draft was prepared using public resources including BC PIPA, BC OIPC private-organization guidance, BC OIPC guidance on developing a privacy policy under PIPA, and BC OIPC PrivacyRight training.
+`;
+}
+
+function valueOrPlaceholder(value: unknown, placeholder: string) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text || `[${placeholder}]`;
+}
+
+function withDraftTags(existing: unknown, additions: string[]) {
+  const tags = Array.isArray(existing) ? existing.map(String) : [];
+  return Array.from(new Set([...tags, ...additions]));
+}
+
+function slugifyFileName(value: string) {
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || "privacy-policy-draft";
 }
 
 function isPrivacyPolicyDraft(document: any) {

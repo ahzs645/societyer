@@ -98,6 +98,126 @@ export function escapeHtml(s: string | undefined | null): string {
     .replace(/'/g, "&#39;");
 }
 
+export function markdownToHtml(markdown: string | undefined | null): string {
+  const lines = String(markdown ?? "").replace(/\r\n/g, "\n").split("\n");
+  const html: string[] = [];
+  let paragraph: string[] = [];
+  let listType: "ul" | "ol" | null = null;
+
+  const closeList = () => {
+    if (!listType) return;
+    html.push(`</${listType}>`);
+    listType = null;
+  };
+
+  const flushParagraph = () => {
+    if (paragraph.length === 0) return;
+    html.push(`<p>${renderMarkdownInline(paragraph.join(" "))}</p>`);
+    paragraph = [];
+  };
+
+  const openList = (type: "ul" | "ol") => {
+    if (listType === type) return;
+    closeList();
+    html.push(`<${type}>`);
+    listType = type;
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushParagraph();
+      closeList();
+      continue;
+    }
+
+    const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      flushParagraph();
+      closeList();
+      const level = Math.min(heading[1].length, 4);
+      html.push(`<h${level}>${renderMarkdownInline(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    if (/^[-*_]{3,}$/.test(trimmed)) {
+      flushParagraph();
+      closeList();
+      html.push("<hr />");
+      continue;
+    }
+
+    const unordered = trimmed.match(/^[-*+]\s+(.+)$/);
+    if (unordered) {
+      flushParagraph();
+      openList("ul");
+      html.push(`<li>${renderMarkdownInline(unordered[1])}</li>`);
+      continue;
+    }
+
+    const ordered = trimmed.match(/^\d+[.)]\s+(.+)$/);
+    if (ordered) {
+      flushParagraph();
+      openList("ol");
+      html.push(`<li>${renderMarkdownInline(ordered[1])}</li>`);
+      continue;
+    }
+
+    const quote = trimmed.match(/^>\s?(.+)$/);
+    if (quote) {
+      flushParagraph();
+      closeList();
+      html.push(`<blockquote>${renderMarkdownInline(quote[1])}</blockquote>`);
+      continue;
+    }
+
+    paragraph.push(trimmed);
+  }
+
+  flushParagraph();
+  closeList();
+  return html.join("\n");
+}
+
+export function exportMarkdownWordDoc({
+  filename,
+  title,
+  markdown,
+}: {
+  filename: string;
+  title: string;
+  markdown: string;
+}) {
+  exportWordDoc({
+    filename,
+    title,
+    bodyHtml: markdownToHtml(markdown),
+  });
+}
+
+function renderMarkdownInline(value: string) {
+  const tokens: string[] = [];
+  let html = escapeHtml(value).replace(/`([^`]+)`/g, (_match, code) => {
+    const token = `@@CODE${tokens.length}@@`;
+    tokens.push(`<code>${code}</code>`);
+    return token;
+  });
+
+  html = html
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_match, label, href) => {
+      const safeHref = escapeHtml(href);
+      return `<a href="${safeHref}">${label}</a>`;
+    });
+
+  tokens.forEach((token, index) => {
+    html = html.replace(`@@CODE${index}@@`, token);
+  });
+  return html;
+}
+
 export const MINUTES_EXPORT_STYLES = [
   {
     id: "standard",
@@ -160,6 +280,7 @@ type DetailedAttendance = {
   status: string;
   roleTitle?: string;
   affiliation?: string;
+  memberIdentifier?: string;
   proxyFor?: string;
   quorumCounted?: boolean;
   notes?: string;
@@ -227,6 +348,12 @@ type MinutesRenderArgs = {
       endedAt?: string;
       notes?: string;
     }[] | null;
+    appendices?: {
+      title: string;
+      type?: string;
+      reference?: string;
+      notes?: string;
+    }[] | null;
     agmDetails?: {
       financialStatementsPresented?: boolean;
       financialStatementsNotes?: string;
@@ -237,6 +364,8 @@ type MinutesRenderArgs = {
         affiliation?: string;
         term?: string;
         consentRecorded?: boolean;
+        votesReceived?: number;
+        elected?: boolean;
         status?: string;
         notes?: string;
       }[];
@@ -312,6 +441,12 @@ export function getMinutesStyleGaps({
       (minutes.sections ?? []).some((section) => hasAny(section.discussion, section.presenter, section.reportSubmitted)),
       "Per-agenda sections can drive styled minutes.",
       "No per-agenda discussion/report sections are recorded.",
+    ),
+    gap(
+      "Appendices and attachments",
+      (minutes.appendices ?? []).length > 0,
+      "Report appendices and exhibit references can be rendered.",
+      "No appendix or attachment references are recorded.",
     ),
   ];
 
@@ -447,6 +582,7 @@ function renderStandardMinutes({
     ${renderOptionalSection("Decisions", renderDecisionsList(minutes.decisions, options), minutes.decisions.length > 0, options)}
 
     ${options.includeActionItems ? renderOptionalSection("Action Items", renderActionItemsTable(minutes.actionItems, options), minutes.actionItems.length > 0, options) : ""}
+    ${renderAppendices(minutes.appendices, options)}
     ${renderNextMeeting(minutes, options)}
 
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
@@ -504,6 +640,7 @@ function renderFormalAgmMinutes({
       : "<p>There was no other business recorded.</p>"}
 
     ${options.includeActionItems ? renderOptionalSection("Action Items", renderActionItemsTable(minutes.actionItems, options), minutes.actionItems.length > 0, options) : ""}
+    ${renderAppendices(minutes.appendices, options)}
     ${renderNextMeeting(minutes, options)}
 
     <h2>Conclusion of Meeting</h2>
@@ -547,6 +684,7 @@ function renderExecutiveAgendaMinutes({
     ${renderOptionalSection("Decisions", renderDecisionsList(minutes.decisions, options), minutes.decisions.length > 0, options)}
 
     ${renderNextMeeting(minutes, options)}
+    ${renderAppendices(minutes.appendices, options)}
 
     ${adjournedAt || options.includePlaceholders ? `<p><strong>The meeting adjourned at ${eh(adjournedAt ?? placeholder("adjournment time", options))}.</strong></p>` : ""}
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
@@ -589,6 +727,7 @@ function renderActionTableMinutes({
 
     ${options.includeActionItems ? renderOptionalSection("Action Items", renderActionItemsTable(minutes.actionItems, options), minutes.actionItems.length > 0, options) : ""}
     ${renderAgmDetails(minutes.agmDetails, options)}
+    ${renderAppendices(minutes.appendices, options)}
     ${renderNextMeeting(minutes, options)}
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
     ${options.includeTranscript && minutes.draftTranscript ? renderTranscript(minutes.draftTranscript) : ""}
@@ -625,6 +764,7 @@ function renderBoardPublicMinutes({
     ${renderOptionalSection("Decisions", renderDecisionsList(minutes.decisions, options), minutes.decisions.length > 0, options)}
 
     ${options.includeActionItems ? renderOptionalSection("Action Items", renderActionItemsTable(minutes.actionItems, options), minutes.actionItems.length > 0, options) : ""}
+    ${renderAppendices(minutes.appendices, options)}
 
     <h2>Participants</h2>
     ${renderAttendance(minutes)}
@@ -786,13 +926,14 @@ function renderAttendance(
 function renderDetailedAttendance(rows: DetailedAttendance[]) {
   return `
     <table>
-      <tr><th>Status</th><th>Name</th><th>Role</th><th>Affiliation</th><th>Proxy / quorum</th><th>Notes</th></tr>
+      <tr><th>Status</th><th>Name</th><th>Role</th><th>Affiliation</th><th>ID</th><th>Proxy / quorum</th><th>Notes</th></tr>
       ${rows.map((row) => `
         <tr>
           <td>${escapeHtml(humanizeLabel(row.status))}</td>
           <td>${escapeHtml(row.name)}</td>
           <td>${escapeHtml(row.roleTitle ?? "—")}</td>
           <td>${escapeHtml(row.affiliation ?? "—")}</td>
+          <td>${escapeHtml(row.memberIdentifier ?? "—")}</td>
           <td>${escapeHtml([
             row.proxyFor ? `Proxy for ${row.proxyFor}` : "",
             row.quorumCounted == null ? "" : row.quorumCounted ? "Counts for quorum" : "Not counted for quorum",
@@ -836,6 +977,30 @@ function renderMinuteSections(sections: MinutesRenderArgs["minutes"]["sections"]
     .join("");
 }
 
+function renderAppendices(appendices: MinutesRenderArgs["minutes"]["appendices"], options: Required<MinutesExportOptions>) {
+  if (!appendices?.length) {
+    return options.includePlaceholders ? renderOptionalSection("Appendices", placeholderParagraph("appendices", options), true, options) : "";
+  }
+  const rows = appendices.filter((row) => hasAny(row.title, row.type, row.reference, row.notes));
+  if (!rows.length) return "";
+  return renderOptionalSection(
+    "Appendices",
+    `<table>
+      <tr><th>Title</th><th>Type</th><th>Reference</th><th>Notes</th></tr>
+      ${rows.map((row) => `
+        <tr>
+          <td>${escapeHtml(row.title)}</td>
+          <td>${escapeHtml(row.type ? humanizeLabel(row.type) : "—")}</td>
+          <td>${escapeHtml(row.reference ?? "—")}</td>
+          <td>${escapeHtml(row.notes ?? "—")}</td>
+        </tr>
+      `).join("")}
+    </table>`,
+    true,
+    options,
+  );
+}
+
 function renderAgmDetails(agm: MinutesRenderArgs["minutes"]["agmDetails"], options: Required<MinutesExportOptions>) {
   if (!agm || !hasAny(agm.financialStatementsPresented, agm.financialStatementsNotes, agm.directorElectionNotes, agm.directorAppointments?.length, agm.specialResolutionExhibits?.length)) {
     return options.includePlaceholders ? placeholderParagraph("AGM details", options) : "";
@@ -855,13 +1020,15 @@ function renderAgmDetails(agm: MinutesRenderArgs["minutes"]["agmDetails"], optio
       ? renderOptionalSection(
           "Director Appointments",
           `<table>
-            <tr><th>Name</th><th>Role</th><th>Affiliation</th><th>Term</th><th>Consent</th><th>Status</th><th>Notes</th></tr>
+            <tr><th>Name</th><th>Role</th><th>Affiliation</th><th>Term</th><th>Votes</th><th>Elected</th><th>Consent</th><th>Status</th><th>Notes</th></tr>
             ${agm.directorAppointments.map((row) => `
               <tr>
                 <td>${escapeHtml(row.name)}</td>
                 <td>${escapeHtml(row.roleTitle ?? "—")}</td>
                 <td>${escapeHtml(row.affiliation ?? "—")}</td>
                 <td>${escapeHtml(row.term ?? "—")}</td>
+                <td>${row.votesReceived == null ? "—" : row.votesReceived}</td>
+                <td>${row.elected == null ? "—" : row.elected ? "Yes" : "No"}</td>
                 <td>${row.consentRecorded == null ? "—" : row.consentRecorded ? "Recorded" : "Not recorded"}</td>
                 <td>${escapeHtml(row.status ?? "—")}</td>
                 <td>${escapeHtml(row.notes ?? "—")}</td>

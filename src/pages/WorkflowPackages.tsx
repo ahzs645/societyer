@@ -18,6 +18,8 @@ export function WorkflowPackagesPage() {
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const upsert = useMutation(api.workflowPackages.upsert);
   const remove = useMutation(api.workflowPackages.remove);
+  const createFollowUpTask = useMutation(api.workflowPackages.createFollowUpTask);
+  const markFiled = useMutation(api.workflowPackages.markFiled);
   const confirm = useConfirm();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -83,6 +85,16 @@ export function WorkflowPackagesPage() {
     toast.success("Workflow package deleted");
   };
 
+  const createPackageTask = async (row: any) => {
+    await createFollowUpTask({ packageId: row._id });
+    toast.success("Package task created");
+  };
+
+  const filePackage = async (row: any) => {
+    await markFiled({ packageId: row._id });
+    toast.success("Package marked filed");
+  };
+
   return (
     <div className="page page--wide">
       <PageHeader
@@ -111,6 +123,7 @@ export function WorkflowPackagesPage() {
                 <th>Workflow</th>
                 <th>Signers</th>
                 <th>Commerce</th>
+                <th>Lifecycle</th>
                 <th>Status</th>
                 <th />
               </tr>
@@ -139,9 +152,12 @@ export function WorkflowPackagesPage() {
                       <div>{row.priceItems?.length ? row.priceItems.join(", ") : "No price items"}</div>
                       <div className="mono muted">{row.stripeCheckoutSessionId || row.transactionId || ""}</div>
                     </td>
+                    <td><PackageLifecycle lifecycle={row.lifecycle} /></td>
                     <td><Badge tone={toneForPackageStatus(row.status)}>{labelize(row.status)}</Badge></td>
                     <td>
                       <div className="row" style={{ justifyContent: "flex-end" }}>
+                        <button className="btn btn--ghost btn--sm" onClick={() => createPackageTask(row)}>Task</button>
+                        {!row.lifecycle?.filed && <button className="btn btn--ghost btn--sm" onClick={() => filePackage(row)}>Filed</button>}
                         <button
                           className="btn btn--ghost btn--sm"
                           onClick={() => {
@@ -168,7 +184,7 @@ export function WorkflowPackagesPage() {
                 );
               })}
               {(packages ?? []).length === 0 && (
-                <tr><td colSpan={7} className="muted" style={{ textAlign: "center", padding: 24 }}>No workflow packages yet.</td></tr>
+                <tr><td colSpan={8} className="muted" style={{ textAlign: "center", padding: 24 }}>No workflow packages yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -230,6 +246,22 @@ function csv(value: any) {
 
 function labelize(value?: string) {
   return String(value ?? "-").replace(/_/g, " ");
+}
+
+function PackageLifecycle({ lifecycle }: { lifecycle?: any }) {
+  if (!lifecycle) return <span className="muted">-</span>;
+  return (
+    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+      <Badge tone={lifecycle.signerState === "complete" ? "success" : lifecycle.signerState === "needed" ? "warn" : "neutral"}>
+        {labelize(lifecycle.signerState)}
+      </Badge>
+      <Badge tone={lifecycle.paymentState === "transaction_linked" ? "success" : lifecycle.paymentState === "checkout_created" ? "info" : "neutral"}>
+        {labelize(lifecycle.paymentState)}
+      </Badge>
+      <Badge tone={lifecycle.openTaskCount ? "warn" : "neutral"}>{lifecycle.openTaskCount ?? 0} open tasks</Badge>
+      <Badge>{lifecycle.filingCount ?? 0} filings</Badge>
+    </div>
+  );
 }
 
 function toneForPackageStatus(status?: string) {

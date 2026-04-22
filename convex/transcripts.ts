@@ -400,6 +400,7 @@ export const runPipeline = action({
           nextMeetingLocation: draft.nextMeetingLocation,
           nextMeetingNotes: draft.nextMeetingNotes,
           sessionSegments: draft.sessionSegments,
+          appendices: draft.appendices,
           agmDetails: draft.agmDetails,
           draftTranscript: result.text,
         });

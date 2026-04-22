@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { canActAs } from "./users";
 
 export const listForEntity = query({
   args: { entityType: v.string(), entityId: v.string() },
@@ -21,8 +22,14 @@ export const sign = mutation({
     method: v.string(),
     typedName: v.optional(v.string()),
     demo: v.optional(v.boolean()),
+    actingUserId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    const actor = await ctx.db.get(args.actingUserId);
+    if (!actor || actor.societyId !== args.societyId) throw new Error("Signature actor is not part of this society.");
+    if (args.userId && args.userId !== args.actingUserId && !canActAs(actor.role, "Admin")) {
+      throw new Error("Only an admin can sign on behalf of another user.");
+    }
     const id = await ctx.db.insert("signatures", {
       societyId: args.societyId,
       entityType: args.entityType,
@@ -58,10 +65,15 @@ export const sign = mutation({
 });
 
 export const revoke = mutation({
-  args: { id: v.id("signatures") },
-  handler: async (ctx, { id }) => {
+  args: { id: v.id("signatures"), actingUserId: v.id("users") },
+  handler: async (ctx, { id, actingUserId }) => {
     const sig = await ctx.db.get(id);
     if (!sig) return;
+    const actor = await ctx.db.get(actingUserId);
+    if (!actor || actor.societyId !== sig.societyId) throw new Error("Signature actor is not part of this society.");
+    if (sig.userId && sig.userId !== actingUserId && !canActAs(actor.role, "Admin")) {
+      throw new Error("Only an admin can revoke another user's signature.");
+    }
     await ctx.db.delete(id);
     await ctx.db.insert("activity", {
       societyId: sig.societyId,

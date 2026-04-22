@@ -41,6 +41,7 @@ type StructuredMinutesEdit = {
   nextMeetingLocation: string;
   nextMeetingNotes: string;
   sessionSegments: string;
+  appendices: string;
   financialStatementsPresented: boolean;
   financialStatementsNotes: string;
   directorElectionNotes: string;
@@ -181,6 +182,7 @@ export function MeetingDetailPage() {
           nextMeetingLocation: minutes.nextMeetingLocation ?? null,
           nextMeetingNotes: minutes.nextMeetingNotes ?? null,
           sessionSegments: minutes.sessionSegments ?? null,
+          appendices: minutes.appendices ?? null,
           agmDetails: minutes.agmDetails ?? null,
           draftTranscript: minutes.draftTranscript ?? null,
         },
@@ -261,6 +263,7 @@ export function MeetingDetailPage() {
         name: tx(row.name),
         roleTitle: tx(row.roleTitle),
         affiliation: tx(row.affiliation),
+        memberIdentifier: tx(row.memberIdentifier),
         proxyFor: tx(row.proxyFor),
         notes: tx(row.notes),
       })),
@@ -301,6 +304,13 @@ export function MeetingDetailPage() {
         ...segment,
         title: tx(segment.title),
         notes: tx(segment.notes),
+      })),
+      appendices: (minutes.appendices ?? []).map((row: any) => ({
+        ...row,
+        title: tx(row.title) ?? "",
+        type: tx(row.type),
+        reference: tx(row.reference),
+        notes: tx(row.notes),
       })),
       agmDetails: minutes.agmDetails
         ? {
@@ -1146,6 +1156,7 @@ function StructuredMinutesSummary({ minutes }: { minutes: any }) {
     (minutes.detailedAttendance ?? []).length ? `${minutes.detailedAttendance.length} detailed attendance rows` : "",
     (minutes.sections ?? []).length ? `${minutes.sections.length} minute sections` : "",
     (minutes.sessionSegments ?? []).length ? `${minutes.sessionSegments.length} session segments` : "",
+    (minutes.appendices ?? []).length ? `${minutes.appendices.length} appendices` : "",
     minutes.nextMeetingAt && `Next: ${minutes.nextMeetingAt}`,
     minutes.agmDetails?.financialStatementsPresented && "Financials presented",
     (minutes.agmDetails?.directorAppointments ?? []).length ? `${minutes.agmDetails.directorAppointments.length} director appointments` : "",
@@ -1215,7 +1226,7 @@ function StructuredMinutesEditor({
         <textarea className="textarea" rows={2} value={value.remoteInstructions} onChange={(event) => patch({ remoteInstructions: event.target.value })} />
       </Field>
 
-      <Field label="Detailed attendance" hint="One row per person: status | name | role | affiliation | proxy for | quorum yes/no | notes">
+      <Field label="Detailed attendance" hint="One row per person: status | name | role | affiliation | member ID | proxy for | quorum yes/no | notes">
         <textarea className="textarea" rows={5} value={value.detailedAttendance} onChange={(event) => patch({ detailedAttendance: event.target.value })} />
       </Field>
 
@@ -1225,6 +1236,10 @@ function StructuredMinutesEditor({
 
       <Field label="Session segments" hint="One row per segment: type | title | started | ended | notes">
         <textarea className="textarea" rows={3} value={value.sessionSegments} onChange={(event) => patch({ sessionSegments: event.target.value })} />
+      </Field>
+
+      <Field label="Appendices / attachments" hint="One row: title | type | reference | notes">
+        <textarea className="textarea" rows={3} value={value.appendices} onChange={(event) => patch({ appendices: event.target.value })} />
       </Field>
 
       <div className="structured-minutes-editor__grid">
@@ -1249,7 +1264,7 @@ function StructuredMinutesEditor({
           <Field label="Director election / appointment notes">
             <textarea className="textarea" rows={3} value={value.directorElectionNotes} onChange={(event) => patch({ directorElectionNotes: event.target.value })} />
           </Field>
-          <Field label="Director appointments" hint="One row: status | name | role | affiliation | term | consent yes/no | notes">
+          <Field label="Director appointments" hint="One row: status | name | role | affiliation | term | consent yes/no | votes | elected yes/no | notes">
             <textarea className="textarea" rows={4} value={value.directorAppointments} onChange={(event) => patch({ directorAppointments: event.target.value })} />
           </Field>
           <Field label="Special-resolution exhibits" hint="One row: title | reference | notes">
@@ -1533,6 +1548,7 @@ function structuredEditFromMinutes(minutes: any): StructuredMinutesEdit {
     nextMeetingLocation: minutes.nextMeetingLocation ?? "",
     nextMeetingNotes: minutes.nextMeetingNotes ?? "",
     sessionSegments: serializeSessionSegments(minutes.sessionSegments ?? []),
+    appendices: serializeAppendices(minutes.appendices ?? []),
     financialStatementsPresented: !!minutes.agmDetails?.financialStatementsPresented,
     financialStatementsNotes: minutes.agmDetails?.financialStatementsNotes ?? "",
     directorElectionNotes: minutes.agmDetails?.directorElectionNotes ?? "",
@@ -1568,6 +1584,7 @@ function structuredPatchFromEdit(edit: StructuredMinutesEdit) {
     nextMeetingLocation: cleanOptional(edit.nextMeetingLocation),
     nextMeetingNotes: cleanOptional(edit.nextMeetingNotes),
     sessionSegments: parseSessionSegments(edit.sessionSegments),
+    appendices: parseAppendices(edit.appendices),
     agmDetails,
   };
 }
@@ -1589,9 +1606,10 @@ function parseDetailedAttendance(value: string) {
     name: parts[1] || parts[0] || "Unknown",
     roleTitle: cleanOptional(parts[2]),
     affiliation: cleanOptional(parts[3]),
-    proxyFor: cleanOptional(parts[4]),
-    quorumCounted: parseOptionalBoolean(parts[5]),
-    notes: cleanOptional(parts[6]),
+    memberIdentifier: cleanOptional(parts[4]),
+    proxyFor: cleanOptional(parts[5]),
+    quorumCounted: parseOptionalBoolean(parts[6]),
+    notes: cleanOptional(parts[7]),
   })).filter((row) => row.name !== "Unknown" || row.notes);
 }
 
@@ -1601,6 +1619,7 @@ function serializeDetailedAttendance(rows: any[]) {
     row.name,
     row.roleTitle,
     row.affiliation,
+    row.memberIdentifier,
     row.proxyFor,
     row.quorumCounted == null ? "" : row.quorumCounted ? "yes" : "no",
     row.notes,
@@ -1645,6 +1664,19 @@ function serializeSessionSegments(rows: any[]) {
   return rows.map((row) => [row.type, row.title, row.startedAt, row.endedAt, row.notes].map((part) => part ?? "").join(" | ")).join("\n");
 }
 
+function parseAppendices(value: string) {
+  return parsePipeRows(value).map((parts) => ({
+    title: parts[0] || "Appendix",
+    type: cleanOptional(parts[1]),
+    reference: cleanOptional(parts[2]),
+    notes: cleanOptional(parts[3]),
+  })).filter((row) => row.title !== "Appendix" || row.reference || row.notes);
+}
+
+function serializeAppendices(rows: any[]) {
+  return rows.map((row) => [row.title, row.type, row.reference, row.notes].map((part) => part ?? "").join(" | ")).join("\n");
+}
+
 function parseDirectorAppointments(value: string) {
   return parsePipeRows(value).map((parts) => ({
     status: cleanOptional(parts[0]),
@@ -1653,7 +1685,9 @@ function parseDirectorAppointments(value: string) {
     affiliation: cleanOptional(parts[3]),
     term: cleanOptional(parts[4]),
     consentRecorded: parseOptionalBoolean(parts[5]),
-    notes: cleanOptional(parts[6]),
+    votesReceived: numberOrUndefined(parts[6]),
+    elected: parseOptionalBoolean(parts[7]),
+    notes: cleanOptional(parts[8]),
   })).filter((row) => row.name !== "Unknown");
 }
 
@@ -1665,6 +1699,8 @@ function serializeDirectorAppointments(rows: any[]) {
     row.affiliation,
     row.term,
     row.consentRecorded == null ? "" : row.consentRecorded ? "yes" : "no",
+    row.votesReceived,
+    row.elected == null ? "" : row.elected ? "yes" : "no",
     row.notes,
   ].map((part) => part ?? "").join(" | ")).join("\n");
 }
@@ -1702,6 +1738,13 @@ function parseOptionalBoolean(value: string | undefined) {
   if (["yes", "y", "true", "1", "counted", "recorded"].includes(text)) return true;
   if (["no", "n", "false", "0", "not counted", "not recorded"].includes(text)) return false;
   return undefined;
+}
+
+function numberOrUndefined(value: string | undefined) {
+  const text = String(value ?? "").trim();
+  if (!text) return undefined;
+  const number = Number(text);
+  return Number.isFinite(number) ? number : undefined;
 }
 
 function gapStatusTone(status: "available" | "missing" | "not_collected"): "success" | "warn" | "danger" {

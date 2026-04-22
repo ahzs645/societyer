@@ -17,7 +17,7 @@ export function OrganizationDetailsPage() {
   const society = useSociety();
   const detail = useQuery(api.organizationDetails.overview, society ? { societyId: society._id } : "skip");
   const upsertSociety = useMutation(api.society.upsert);
-  const seedAddresses = useMutation(api.organizationDetails.seedFromSocietyAddresses);
+  const backfillRecords = useMutation(api.organizationDetails.backfillFromExistingRecords);
   const upsertAddress = useMutation(api.organizationDetails.upsertAddress);
   const removeAddress = useMutation(api.organizationDetails.removeAddress);
   const upsertRegistration = useMutation(api.organizationDetails.upsertRegistration);
@@ -30,10 +30,19 @@ export function OrganizationDetailsPage() {
   const [profile, setProfile] = useState<any>(null);
   const [drawerKind, setDrawerKind] = useState<DrawerKind | null>(null);
   const [draft, setDraft] = useState<any>(null);
+  const [autoBackfilledSocietyId, setAutoBackfilledSocietyId] = useState<string | null>(null);
 
   useEffect(() => {
     if (society && !profile) setProfile({ ...society });
   }, [society, profile]);
+
+  useEffect(() => {
+    if (!society || detail === undefined || autoBackfilledSocietyId === society._id) return;
+    setAutoBackfilledSocietyId(society._id);
+    void backfillRecords({ societyId: society._id }).catch((error) => {
+      console.error("Organization detail backfill failed", error);
+    });
+  }, [autoBackfilledSocietyId, backfillRecords, detail, society]);
 
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
@@ -94,9 +103,13 @@ export function OrganizationDetailsPage() {
     toast.success("Organization dossier saved");
   };
 
-  const createAddressRows = async () => {
-    const result = await seedAddresses({ societyId: society._id });
-    toast.success(result.created ? "Address rows created" : "No address rows added");
+  const backfillExistingRecords = async () => {
+    const result = await backfillRecords({ societyId: society._id });
+    const total = result.addressesCreated + result.minuteBookItemsCreated;
+    toast.success(
+      total ? "Backfill complete" : "No records added",
+      `${result.addressesCreated} addresses, ${result.minuteBookItemsCreated} minute-book records`,
+    );
   };
 
   const openNew = (kind: DrawerKind) => {
@@ -205,7 +218,7 @@ export function OrganizationDetailsPage() {
         subtitle="Registry dossier, structured addresses, extra-provincial registrations, and restricted tax/account identifiers."
         actions={
           <>
-            <button className="btn-action" onClick={createAddressRows}>Create address rows</button>
+            <button className="btn-action" onClick={backfillExistingRecords}>Backfill records</button>
             <button className="btn btn--accent" onClick={saveProfile}>Save dossier</button>
           </>
         }

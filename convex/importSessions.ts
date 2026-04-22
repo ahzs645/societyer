@@ -33,6 +33,12 @@ const SECTION_RECORD_KINDS = [
   "budgetSnapshot",
   "treasurerReport",
   "transactionCandidate",
+  "organizationAddress",
+  "organizationRegistration",
+  "organizationIdentifier",
+  "policy",
+  "workflowPackage",
+  "minuteBookItem",
   "sourceEvidence",
   "secretVaultItem",
   "pipaTraining",
@@ -427,6 +433,7 @@ export const applyApprovedMeetings = mutation({
         absent: payload.absent,
         quorumMet: payload.quorumMet,
         discussion: payload.discussion || "Imported from Paperless meeting minutes. Review the source document before approving these minutes.",
+        ...structuredMinutesPatchFromPayload(payload),
         motions: payload.motions.map(minutesMotionFromPayload),
         decisions: payload.decisions,
         actionItems: payload.actionItems,
@@ -502,6 +509,14 @@ async function mergeExistingMeetingImport(
   if (!minutesRow.quorumMet && payload.quorumMet) minutesPatch.quorumMet = true;
   if (isGenericImportedDiscussion(minutesRow.discussion) && cleanText(payload.discussion)) minutesPatch.discussion = cleanText(payload.discussion);
   if ((!Array.isArray(minutesRow.motions) || minutesRow.motions.length === 0) && motions.length > 0) minutesPatch.motions = motions;
+  const structuredPatch = structuredMinutesPatchFromPayload(payload);
+  for (const [key, value] of Object.entries(structuredPatch)) {
+    const current = (minutesRow as any)[key];
+    const currentIsBlank = Array.isArray(current)
+      ? current.length === 0
+      : current == null || (typeof current === "object" && Object.keys(current).length === 0) || current === "";
+    if (currentIsBlank) minutesPatch[key] = value;
+  }
 
   const mergedSourceExternalIds = unique([...(minutesRow.sourceExternalIds ?? []), ...sourceExternalIds]);
   if (mergedSourceExternalIds.length !== (minutesRow.sourceExternalIds ?? []).length) minutesPatch.sourceExternalIds = mergedSourceExternalIds;
@@ -716,6 +731,12 @@ export const applyApprovedSectionRecords = mutation({
         `Source placeholder created while applying ${record.recordKind} from ${hydrateSession(session).name}. Pull or review the original source document before publishing content.`,
         sourceCatalog,
       );
+      const promotionIssues = await importPromotionIssues(ctx, session.societyId, record);
+      if (promotionIssues.length > 0) {
+        await patchRecordPromotionBlocked(ctx, record, promotionIssues);
+        byKind[`${record.recordKind}:blocked`] = (byKind[`${record.recordKind}:blocked`] ?? 0) + 1;
+        continue;
+      }
       const target = await insertSectionRecord(ctx, session.societyId, record, sourceDocumentIds);
       if (record.recordKind !== "sourceEvidence") {
         await insertSourceEvidenceForAppliedRecord(ctx, session.societyId, record, target, sourceDocumentIds);
@@ -1282,6 +1303,131 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
     });
   }
 
+  if (record.recordKind === "organizationAddress") {
+    return await ctx.db.insert("organizationAddresses", {
+      societyId,
+      type: cleanText(payload.type) || "other",
+      status: cleanText(payload.status) || "needs_review",
+      effectiveFrom: cleanDate(payload.effectiveFrom),
+      effectiveTo: cleanDate(payload.effectiveTo),
+      street: cleanText(payload.street) || cleanText(payload.address) || "Needs review",
+      unit: cleanText(payload.unit),
+      city: cleanText(payload.city) || "Needs review",
+      provinceState: cleanText(payload.provinceState) || cleanText(payload.province),
+      postalCode: cleanText(payload.postalCode),
+      country: cleanText(payload.country) || "Canada",
+      sourceDocumentIds,
+      notes: sourceNote,
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "organizationRegistration") {
+    return await ctx.db.insert("organizationRegistrations", {
+      societyId,
+      jurisdiction: cleanText(payload.jurisdiction) || "Needs review",
+      assumedName: cleanText(payload.assumedName),
+      registrationNumber: cleanText(payload.registrationNumber),
+      registrationDate: cleanDate(payload.registrationDate),
+      activityCommencementDate: cleanDate(payload.activityCommencementDate),
+      deRegistrationDate: cleanDate(payload.deRegistrationDate),
+      nuansNumber: cleanText(payload.nuansNumber),
+      officialEmail: cleanText(payload.officialEmail),
+      representativeIds: arrayOf(payload.representativeIds).map(String).map(cleanText).filter(Boolean),
+      status: cleanText(payload.status) || "needs_review",
+      sourceDocumentIds,
+      notes: sourceNote,
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "organizationIdentifier") {
+    return await ctx.db.insert("organizationIdentifiers", {
+      societyId,
+      kind: cleanText(payload.kind) || cleanText(payload.type) || "other",
+      number: cleanText(payload.number) || "Needs review",
+      jurisdiction: cleanText(payload.jurisdiction),
+      foreignJurisdiction: cleanText(payload.foreignJurisdiction),
+      registeredAt: cleanDate(payload.registeredAt) || cleanDate(payload.registrationDate),
+      status: cleanText(payload.status) || "needs_review",
+      accessLevel: cleanText(payload.accessLevel) || "restricted",
+      sourceDocumentIds,
+      notes: sourceNote,
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "policy") {
+    return await ctx.db.insert("policies", {
+      societyId,
+      policyName: cleanText(payload.policyName) || cleanText(payload.name) || record.title || "Imported policy",
+      policyNumber: cleanText(payload.policyNumber),
+      owner: cleanText(payload.owner),
+      effectiveDate: cleanDate(payload.effectiveDate),
+      reviewDate: cleanDate(payload.reviewDate),
+      ceasedDate: cleanDate(payload.ceasedDate),
+      docxDocumentId: cleanText(payload.docxDocumentId) as any,
+      pdfDocumentId: cleanText(payload.pdfDocumentId) as any,
+      html: cleanText(payload.html),
+      requiredSigners: arrayOf(payload.requiredSigners).map(String).map(cleanText).filter(Boolean),
+      signatureRequired: Boolean(payload.signatureRequired),
+      jurisdictions: arrayOf(payload.jurisdictions).map(String).map(cleanText).filter(Boolean),
+      entityTypes: arrayOf(payload.entityTypes).map(String).map(cleanText).filter(Boolean),
+      status: cleanText(payload.status) || "Draft",
+      notes: sourceNote,
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "workflowPackage") {
+    return await ctx.db.insert("workflowPackages", {
+      societyId,
+      workflowId: cleanText(payload.workflowId) as any,
+      workflowRunId: cleanText(payload.workflowRunId) as any,
+      eventType: cleanText(payload.eventType) || "custom.event",
+      effectiveDate: cleanDate(payload.effectiveDate),
+      status: cleanText(payload.status) || "draft",
+      packageName: cleanText(payload.packageName) || cleanText(payload.package) || record.title || "Imported package",
+      parts: arrayOf(payload.parts).map(String).map(cleanText).filter(Boolean),
+      notes: sourceNote,
+      supportingDocumentIds: sourceDocumentIds,
+      priceItems: arrayOf(payload.priceItems).map(String).map(cleanText).filter(Boolean),
+      transactionId: cleanText(payload.transactionId),
+      signerRoster: arrayOf(payload.signerRoster).map(String).map(cleanText).filter(Boolean),
+      signerEmails: arrayOf(payload.signerEmails).map(String).map(cleanText).filter(Boolean),
+      signingPackageIds: arrayOf(payload.signingPackageIds).map(String).map(cleanText).filter(Boolean),
+      stripeCheckoutSessionId: cleanText(payload.stripeCheckoutSessionId),
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "minuteBookItem") {
+    return await ctx.db.insert("minuteBookItems", {
+      societyId,
+      title: cleanText(payload.title) || record.title || "Imported minute book record",
+      recordType: cleanText(payload.recordType) || cleanText(payload.type) || "imported_record",
+      effectiveDate: cleanDate(payload.effectiveDate) || cleanDate(payload.sourceDate),
+      status: cleanText(payload.status) || "NeedsReview",
+      documentIds: sourceDocumentIds,
+      meetingId: cleanText(payload.meetingId) as any,
+      minutesId: cleanText(payload.minutesId) as any,
+      filingId: cleanText(payload.filingId) as any,
+      policyId: cleanText(payload.policyId) as any,
+      workflowPackageId: cleanText(payload.workflowPackageId) as any,
+      signatureIds: [],
+      sourceEvidenceIds: [],
+      archivedAtISO: cleanDate(payload.archivedAtISO),
+      notes: sourceNote,
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
   if (record.recordKind === "sourceEvidence") {
     const externalId = cleanText(payload.externalId) || cleanText(payload.sourceExternalIds?.[0]);
     return await ctx.db.insert("sourceEvidence", {
@@ -1632,6 +1778,118 @@ async function patchRecordImportTarget(ctx: any, record: any, target: string, va
   });
 }
 
+async function patchRecordPromotionBlocked(ctx: any, record: any, issues: string[]) {
+  const riskFlags = unique([
+    ...(record.riskFlags ?? []),
+    "validation",
+    issues.some((issue) => issue.toLowerCase().includes("duplicate")) ? "duplicate" : "",
+    issues.some((issue) => issue.toLowerCase().includes("confidence")) ? "confidence" : "",
+  ]);
+  await ctx.db.patch(record._id, {
+    content: JSON.stringify({
+      ...record,
+      status: "Pending",
+      reviewNotes: appendImportNote(
+        record.reviewNotes,
+        `Promotion blocked: ${issues.join("; ")}`,
+      ),
+      riskFlags,
+      updatedAtISO: new Date().toISOString(),
+    }),
+    tags: [SESSION_TAG, RECORD_TAG, tagValue(record.recordKind), tagValue(record.targetModule), "promotion-blocked"].filter(Boolean),
+  });
+}
+
+async function importPromotionIssues(ctx: any, societyId: string, record: any) {
+  const kind = record.recordKind;
+  if (![
+    "organizationAddress",
+    "organizationRegistration",
+    "organizationIdentifier",
+    "policy",
+    "workflowPackage",
+    "minuteBookItem",
+  ].includes(kind)) {
+    return [];
+  }
+
+  const payload = normalizePayload(kind, record.payload ?? {});
+  const issues: string[] = [];
+  if (confidenceFor(payload) === "Review" && !cleanText(record.reviewNotes)) {
+    issues.push("Review-confidence records need reviewer notes before promotion.");
+  }
+
+  if (kind === "organizationAddress") {
+    if (!cleanText(payload.street) && !cleanText(payload.address)) issues.push("Address street/address is required.");
+    if (!cleanText(payload.city)) issues.push("Address city is required.");
+    const rows = await ctx.db.query("organizationAddresses").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = addressKey({
+      type: cleanText(payload.type) || "other",
+      street: cleanText(payload.street) || cleanText(payload.address),
+      city: cleanText(payload.city),
+      provinceState: cleanText(payload.provinceState) || cleanText(payload.province),
+      postalCode: cleanText(payload.postalCode),
+      country: cleanText(payload.country) || "Canada",
+    });
+    if (key && rows.some((row: any) => addressKey(row) === key)) issues.push("Duplicate structured address already exists.");
+  }
+
+  if (kind === "organizationRegistration") {
+    if (!cleanText(payload.jurisdiction)) issues.push("Registration jurisdiction is required.");
+    const rows = await ctx.db.query("organizationRegistrations").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.jurisdiction, payload.registrationNumber, payload.assumedName]);
+    if (key && rows.some((row: any) => compactKey([row.jurisdiction, row.registrationNumber, row.assumedName]) === key)) {
+      issues.push("Duplicate organization registration already exists.");
+    }
+  }
+
+  if (kind === "organizationIdentifier") {
+    if (!cleanText(payload.number)) issues.push("Identifier number is required.");
+    if (!cleanText(payload.kind) && !cleanText(payload.type)) issues.push("Identifier kind is required.");
+    const rows = await ctx.db.query("organizationIdentifiers").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.kind ?? payload.type, payload.number, payload.jurisdiction, payload.foreignJurisdiction]);
+    if (key && rows.some((row: any) => compactKey([row.kind, row.number, row.jurisdiction, row.foreignJurisdiction]) === key)) {
+      issues.push("Duplicate organization identifier already exists.");
+    }
+  }
+
+  if (kind === "policy") {
+    if (!cleanText(payload.policyName) && !cleanText(payload.name)) issues.push("Policy name is required.");
+    const rows = await ctx.db.query("policies").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.policyNumber || payload.policyName || payload.name]);
+    if (key && rows.some((row: any) => compactKey([row.policyNumber || row.policyName]) === key)) issues.push("Duplicate policy already exists.");
+  }
+
+  if (kind === "workflowPackage") {
+    if (!cleanText(payload.eventType)) issues.push("Workflow package event type is required.");
+    if (!cleanText(payload.packageName) && !cleanText(payload.package)) issues.push("Workflow package name is required.");
+    const rows = await ctx.db.query("workflowPackages").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.eventType, payload.packageName ?? payload.package, payload.effectiveDate]);
+    if (key && rows.some((row: any) => compactKey([row.eventType, row.packageName, row.effectiveDate]) === key)) {
+      issues.push("Duplicate workflow package already exists.");
+    }
+  }
+
+  if (kind === "minuteBookItem") {
+    if (!cleanText(payload.title)) issues.push("Minute book title is required.");
+    const rows = await ctx.db.query("minuteBookItems").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.title, payload.recordType ?? payload.type, payload.effectiveDate ?? payload.sourceDate]);
+    if (key && rows.some((row: any) => compactKey([row.title, row.recordType, row.effectiveDate]) === key)) {
+      issues.push("Duplicate minute book record already exists.");
+    }
+  }
+
+  return unique(issues);
+}
+
+function addressKey(row: any) {
+  return compactKey([row.type, row.street, row.city, row.provinceState, row.postalCode, row.country]);
+}
+
+function compactKey(values: unknown[]) {
+  return values.map((value) => cleanText(value)?.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()).filter(Boolean).join("|");
+}
+
 async function patchSessionUpdatedAt(ctx: any, sessionId: string) {
   const doc = await ctx.db.get(sessionId);
   if (!isImportSession(doc)) return;
@@ -1668,6 +1926,13 @@ function recordsFromBundle(bundle: any) {
   for (const snapshot of arrayOf(bundle?.budgetSnapshots)) records.push(makeRecord("budgetSnapshot", "budgetSnapshots", snapshot));
   for (const report of arrayOf(bundle?.treasurerReports)) records.push(makeRecord("treasurerReport", "treasurerReports", report));
   for (const transaction of arrayOf(bundle?.transactionCandidates)) records.push(makeRecord("transactionCandidate", "transactionCandidates", transaction));
+  for (const address of arrayOf(bundle?.organizationAddresses)) records.push(makeRecord("organizationAddress", "organizationAddresses", address));
+  for (const registration of arrayOf(bundle?.organizationRegistrations)) records.push(makeRecord("organizationRegistration", "organizationRegistrations", registration));
+  for (const identifier of arrayOf(bundle?.organizationIdentifiers)) records.push(makeRecord("organizationIdentifier", "organizationIdentifiers", identifier));
+  for (const identifier of arrayOf(bundle?.taxRegistrations)) records.push(makeRecord("organizationIdentifier", "organizationIdentifiers", identifier));
+  for (const policy of arrayOf(bundle?.policies)) records.push(makeRecord("policy", "policies", policy));
+  for (const workflowPackage of arrayOf(bundle?.workflowPackages)) records.push(makeRecord("workflowPackage", "workflowPackages", workflowPackage));
+  for (const item of arrayOf(bundle?.minuteBookItems)) records.push(makeRecord("minuteBookItem", "minuteBookItems", item));
   for (const evidence of arrayOf(bundle?.sourceEvidence)) records.push(makeRecord("sourceEvidence", "sourceEvidence", evidence));
   for (const secret of arrayOf(bundle?.secretVaultItems)) records.push(makeRecord("secretVaultItem", "secrets", secret));
   for (const training of arrayOf(bundle?.pipaTrainings)) records.push(makeRecord("pipaTraining", "pipaTraining", training));
@@ -1748,14 +2013,28 @@ function normalizeMeetingMinutesPayload(minutes: any) {
   return {
     meetingDate: cleanText(minutes?.meetingDate),
     meetingTitle: cleanText(minutes?.meetingTitle),
+    chairName: cleanText(minutes?.chairName),
+    secretaryName: cleanText(minutes?.secretaryName),
+    recorderName: cleanText(minutes?.recorderName),
+    calledToOrderAt: cleanText(minutes?.calledToOrderAt),
+    adjournedAt: cleanText(minutes?.adjournedAt),
+    remoteParticipation: normalizeRemoteParticipationPayload(minutes?.remoteParticipation),
+    detailedAttendance: normalizeDetailedAttendancePayload(minutes?.detailedAttendance),
     attendees: arrayOf(minutes?.attendees).map(String).map(cleanText).filter(Boolean),
     absent: arrayOf(minutes?.absent).map(String).map(cleanText).filter(Boolean),
     quorumMet: Boolean(minutes?.quorumMet),
     agendaItems: arrayOf(minutes?.agendaItems).map(String).map(cleanText).filter(Boolean),
     discussion: cleanText(minutes?.discussion),
+    sections: normalizeMinuteSectionsPayload(minutes?.sections),
     motions: arrayOf(minutes?.motions).map(normalizeMotionPayload),
     decisions: arrayOf(minutes?.decisions).map(String).map(cleanText).filter(Boolean),
     actionItems: arrayOf(minutes?.actionItems),
+    nextMeetingAt: cleanText(minutes?.nextMeetingAt),
+    nextMeetingLocation: cleanText(minutes?.nextMeetingLocation),
+    nextMeetingNotes: cleanText(minutes?.nextMeetingNotes),
+    sessionSegments: normalizeSessionSegmentsPayload(minutes?.sessionSegments),
+    appendices: normalizeAppendicesPayload(minutes?.appendices),
+    agmDetails: normalizeAgmDetailsPayload(minutes?.agmDetails),
     sourceExternalIds: arrayOf(minutes?.sourceExternalIds).map(String),
     sourceDocumentTitle: cleanText(minutes?.sourceDocumentTitle),
     sourceDocumentId: minutes?.sourceDocumentId != null ? String(minutes.sourceDocumentId) : undefined,
@@ -1764,6 +2043,142 @@ function normalizeMeetingMinutesPayload(minutes: any) {
     confidence: confidenceFor(minutes),
     notes: cleanText(minutes?.notes),
   };
+}
+
+function structuredMinutesPatchFromPayload(payload: any) {
+  return compactRecord({
+    chairName: cleanText(payload?.chairName),
+    secretaryName: cleanText(payload?.secretaryName),
+    recorderName: cleanText(payload?.recorderName),
+    calledToOrderAt: cleanText(payload?.calledToOrderAt),
+    adjournedAt: cleanText(payload?.adjournedAt),
+    remoteParticipation: normalizeRemoteParticipationPayload(payload?.remoteParticipation),
+    detailedAttendance: normalizeDetailedAttendancePayload(payload?.detailedAttendance),
+    sections: normalizeMinuteSectionsPayload(payload?.sections),
+    nextMeetingAt: cleanText(payload?.nextMeetingAt),
+    nextMeetingLocation: cleanText(payload?.nextMeetingLocation),
+    nextMeetingNotes: cleanText(payload?.nextMeetingNotes),
+    sessionSegments: normalizeSessionSegmentsPayload(payload?.sessionSegments),
+    appendices: normalizeAppendicesPayload(payload?.appendices),
+    agmDetails: normalizeAgmDetailsPayload(payload?.agmDetails),
+  }) ?? {};
+}
+
+function normalizeRemoteParticipationPayload(value: any) {
+  if (!value || typeof value !== "object") return undefined;
+  return compactRecord({
+    url: cleanText(value.url),
+    meetingId: cleanText(value.meetingId),
+    passcode: cleanText(value.passcode),
+    instructions: cleanText(value.instructions),
+  });
+}
+
+function normalizeDetailedAttendancePayload(value: any) {
+  const rows = arrayOf(value)
+    .map((row: any) => compactRecord({
+      name: cleanText(row?.name),
+      status: cleanText(row?.status) || "present",
+      roleTitle: cleanText(row?.roleTitle),
+      affiliation: cleanText(row?.affiliation),
+      memberIdentifier: cleanText(row?.memberIdentifier),
+      proxyFor: cleanText(row?.proxyFor),
+      quorumCounted: optionalBoolean(row?.quorumCounted),
+      notes: cleanText(row?.notes),
+    }))
+    .filter((row: any) => row?.name);
+  return rows.length ? rows : undefined;
+}
+
+function normalizeMinuteSectionsPayload(value: any) {
+  const rows = arrayOf(value)
+    .map((row: any) => compactRecord({
+      title: cleanText(row?.title),
+      type: cleanText(row?.type),
+      presenter: cleanText(row?.presenter),
+      discussion: cleanText(row?.discussion),
+      reportSubmitted: optionalBoolean(row?.reportSubmitted),
+      decisions: arrayOf(row?.decisions).map(String).map(cleanText).filter(Boolean),
+      actionItems: normalizeActionItemsPayload(row?.actionItems),
+    }))
+    .filter((row: any) => row?.title);
+  return rows.length ? rows : undefined;
+}
+
+function normalizeActionItemsPayload(value: any) {
+  const rows = arrayOf(value)
+    .map((row: any) => compactRecord({
+      text: cleanText(row?.text),
+      assignee: cleanText(row?.assignee),
+      dueDate: cleanText(row?.dueDate),
+      done: Boolean(row?.done),
+    }))
+    .filter((row: any) => row?.text);
+  return rows.length ? rows : undefined;
+}
+
+function normalizeSessionSegmentsPayload(value: any) {
+  const rows = arrayOf(value)
+    .map((row: any) => compactRecord({
+      type: cleanText(row?.type) || "other",
+      title: cleanText(row?.title),
+      startedAt: cleanText(row?.startedAt),
+      endedAt: cleanText(row?.endedAt),
+      notes: cleanText(row?.notes),
+    }))
+    .filter((row: any) => row?.type);
+  return rows.length ? rows : undefined;
+}
+
+function normalizeAppendicesPayload(value: any) {
+  const rows = arrayOf(value)
+    .map((row: any) => compactRecord({
+      title: cleanText(row?.title),
+      type: cleanText(row?.type),
+      reference: cleanText(row?.reference),
+      notes: cleanText(row?.notes),
+    }))
+    .filter((row: any) => row?.title);
+  return rows.length ? rows : undefined;
+}
+
+function normalizeAgmDetailsPayload(value: any) {
+  if (!value || typeof value !== "object") return undefined;
+  return compactRecord({
+    financialStatementsPresented: optionalBoolean(value.financialStatementsPresented),
+    financialStatementsNotes: cleanText(value.financialStatementsNotes),
+    directorElectionNotes: cleanText(value.directorElectionNotes),
+    directorAppointments: normalizeDirectorAppointmentsPayload(value.directorAppointments),
+    specialResolutionExhibits: normalizeSpecialResolutionExhibitsPayload(value.specialResolutionExhibits),
+  });
+}
+
+function normalizeDirectorAppointmentsPayload(value: any) {
+  const rows = arrayOf(value)
+    .map((row: any) => compactRecord({
+      name: cleanText(row?.name),
+      roleTitle: cleanText(row?.roleTitle),
+      affiliation: cleanText(row?.affiliation),
+      term: cleanText(row?.term),
+      consentRecorded: optionalBoolean(row?.consentRecorded),
+      votesReceived: numberOrUndefined(row?.votesReceived),
+      elected: optionalBoolean(row?.elected),
+      status: cleanText(row?.status),
+      notes: cleanText(row?.notes),
+    }))
+    .filter((row: any) => row?.name);
+  return rows.length ? rows : undefined;
+}
+
+function normalizeSpecialResolutionExhibitsPayload(value: any) {
+  const rows = arrayOf(value)
+    .map((row: any) => compactRecord({
+      title: cleanText(row?.title),
+      reference: cleanText(row?.reference),
+      notes: cleanText(row?.notes),
+    }))
+    .filter((row: any) => row?.title);
+  return rows.length ? rows : undefined;
 }
 
 function normalizeBudgetPayload(budget: any) {
@@ -1845,6 +2260,12 @@ function titleForRecord(recordKind: string, payload: any) {
   if (recordKind === "financialStatementImport") return cleanText(payload?.title) || cleanText(payload?.fiscalYear) || "Financial statement import";
   if (recordKind === "treasurerReport") return cleanText(payload?.title) || cleanText(payload?.reportDate) || "Treasurer report";
   if (recordKind === "transactionCandidate") return cleanText(payload?.description) || cleanText(payload?.title) || "Transaction candidate";
+  if (recordKind === "organizationAddress") return cleanText(payload?.title) || cleanText(payload?.type) || cleanText(payload?.address) || "Organization address";
+  if (recordKind === "organizationRegistration") return cleanText(payload?.jurisdiction) || cleanText(payload?.registrationNumber) || "Organization registration";
+  if (recordKind === "organizationIdentifier") return cleanText(payload?.kind) || cleanText(payload?.type) || "Organization identifier";
+  if (recordKind === "policy") return cleanText(payload?.policyName) || cleanText(payload?.name) || "Policy";
+  if (recordKind === "workflowPackage") return cleanText(payload?.packageName) || cleanText(payload?.eventType) || "Workflow package";
+  if (recordKind === "minuteBookItem") return cleanText(payload?.title) || cleanText(payload?.recordType) || "Minute book record";
   if (recordKind === "sourceEvidence") return cleanText(payload?.sourceTitle) || cleanText(payload?.title) || "Source evidence";
   if (recordKind === "secretVaultItem") return cleanText(payload?.name) || cleanText(payload?.title) || cleanText(payload?.service) || "Access custody reference";
   if (recordKind === "pipaTraining") return cleanText(payload?.participantName) || cleanText(payload?.title) || "PIPA training";
@@ -1936,6 +2357,12 @@ function targetTableForRecordKind(kind: string) {
     budgetSnapshot: "budgetSnapshots",
     treasurerReport: "treasurerReports",
     transactionCandidate: "transactionCandidates",
+    organizationAddress: "organizationAddresses",
+    organizationRegistration: "organizationRegistrations",
+    organizationIdentifier: "organizationIdentifiers",
+    policy: "policies",
+    workflowPackage: "workflowPackages",
+    minuteBookItem: "minuteBookItems",
     secretVaultItem: "secretVaultItems",
     pipaTraining: "pipaTrainings",
     employee: "employees",
@@ -2115,7 +2542,23 @@ function riskFlagsFor(recordKind: string, targetModule: string, payload: any) {
   if (payload?.sensitivity === "restricted") flags.add("restricted");
   if (/(finance|financial|treasurer|receipt|invoice|payroll|tax|bank|employee|member|student id|privacy|insurance|legal|sin|secret|credential|password|recovery key|registry key|api key)/.test(text)) flags.add("restricted");
   if (/(duplicate|ocr|bad date|manual review|placeholder)/.test(text)) flags.add("cleanup");
+  for (const flag of staticValidationFlagsFor(recordKind, payload)) flags.add(flag);
   return Array.from(flags);
+}
+
+function staticValidationFlagsFor(recordKind: string, payload: any) {
+  const flags: string[] = [];
+  if (["organizationAddress", "organizationRegistration", "organizationIdentifier", "policy", "workflowPackage", "minuteBookItem"].includes(recordKind)) {
+    if (confidenceFor(payload) === "Review") flags.push("confidence");
+  }
+  if (recordKind === "organizationAddress" && (!cleanText(payload?.street) && !cleanText(payload?.address))) flags.push("validation");
+  if (recordKind === "organizationAddress" && !cleanText(payload?.city)) flags.push("validation");
+  if (recordKind === "organizationRegistration" && !cleanText(payload?.jurisdiction)) flags.push("validation");
+  if (recordKind === "organizationIdentifier" && (!cleanText(payload?.number) || (!cleanText(payload?.kind) && !cleanText(payload?.type)))) flags.push("validation");
+  if (recordKind === "policy" && !cleanText(payload?.policyName) && !cleanText(payload?.name)) flags.push("validation");
+  if (recordKind === "workflowPackage" && (!cleanText(payload?.eventType) || (!cleanText(payload?.packageName) && !cleanText(payload?.package)))) flags.push("validation");
+  if (recordKind === "minuteBookItem" && !cleanText(payload?.title)) flags.push("validation");
+  return flags;
 }
 
 function confidenceFor(payload: any) {
@@ -2268,6 +2711,17 @@ function arrayOf(value: unknown) {
   return Array.isArray(value) ? value : [];
 }
 
+function compactRecord<T extends Record<string, any>>(value: T): T | undefined {
+  const out: Record<string, any> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry === undefined || entry === "") continue;
+    if (Array.isArray(entry) && entry.length === 0) continue;
+    if (entry && typeof entry === "object" && !Array.isArray(entry) && Object.keys(entry).length === 0) continue;
+    out[key] = entry;
+  }
+  return Object.keys(out).length ? (out as T) : undefined;
+}
+
 function unique(values: unknown[]) {
   return Array.from(new Set(values.map((value) => cleanText(value)).filter(Boolean))) as string[];
 }
@@ -2276,6 +2730,15 @@ function numberOrUndefined(value: unknown) {
   if (value === "" || value == null) return undefined;
   const number = Number(value);
   return Number.isFinite(number) ? number : undefined;
+}
+
+function optionalBoolean(value: unknown) {
+  if (typeof value === "boolean") return value;
+  const text = cleanText(value)?.toLowerCase();
+  if (!text) return undefined;
+  if (["yes", "y", "true", "1", "counted", "recorded", "carried", "elected"].includes(text)) return true;
+  if (["no", "n", "false", "0", "not counted", "not recorded", "defeated", "not elected"].includes(text)) return false;
+  return undefined;
 }
 
 function sourceSystemFromExternalId(externalId: unknown) {

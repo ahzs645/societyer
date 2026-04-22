@@ -1,6 +1,6 @@
 /**
  * Heuristic PII redaction for public-facing minutes. Scans a body of text and
- * replaces emails, phone numbers, postal codes and supplied names with a
+ * replaces emails, phone numbers, postal codes, member/student IDs and supplied names with a
  * neutral placeholder. The goal isn't bulletproof privacy — a human should
  * still review — but it catches the obvious stuff before you publish minutes
  * to members or attach them to a public filing.
@@ -21,11 +21,14 @@ const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 const PHONE_RE = /(?:\+?1[\s\-.]?)?(?:\(?\d{3}\)?[\s\-.]?)\d{3}[\s\-.]?\d{4}/g;
 // Canadian postal code: A1A 1A1 (optional space)
 const POSTAL_RE = /\b[A-Za-z]\d[A-Za-z][\s-]?\d[A-Za-z]\d\b/g;
+// Student/member/account-style identifiers. Keep this after phone matching so
+// full phone numbers keep the more specific phone label.
+const MEMBER_ID_RE = /\b\d{6,12}\b/g;
 // Street-number + capitalised word + common suffix: "2187 Commercial Drive"
 const STREET_RE =
   /\b\d{1,5}\s+[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*\s+(?:Street|St\.?|Road|Rd\.?|Avenue|Ave\.?|Boulevard|Blvd\.?|Drive|Dr\.?|Lane|Ln\.?|Court|Ct\.?|Place|Pl\.?|Way|Terrace|Crescent|Cres\.?)\b/g;
 
-export type Redaction = { kind: "email" | "phone" | "postal" | "address" | "name"; original: string; start: number; end: number };
+export type Redaction = { kind: "email" | "phone" | "postal" | "member ID" | "address" | "name"; original: string; start: number; end: number };
 
 export function findRedactions(text: string, opts: RedactOptions = {}): Redaction[] {
   const out: Redaction[] = [];
@@ -38,6 +41,7 @@ export function findRedactions(text: string, opts: RedactOptions = {}): Redactio
   scan(EMAIL_RE, "email");
   scan(PHONE_RE, "phone");
   scan(POSTAL_RE, "postal");
+  scan(MEMBER_ID_RE, "member ID");
   scan(STREET_RE, "address");
 
   // Name matching — case-insensitive, whole-word. Longest first so "Jordan

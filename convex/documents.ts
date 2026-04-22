@@ -67,7 +67,10 @@ export const createPipaPolicyDraft = mutation({
     if (!society) throw new Error("Society not found.");
 
     const existing = await findExistingPrivacyDraft(ctx, societyId, "privacy-policy");
-    if (existing) return { document: existing, reused: true };
+    if (existing) {
+      const refreshed = await refreshGenericPipaPolicyDraft(ctx, existing, society);
+      return { document: refreshed ?? existing, reused: true, refreshed: !!refreshed };
+    }
 
     const nowISO = new Date().toISOString();
     const documentId = await ctx.db.insert("documents", {
@@ -95,6 +98,40 @@ export const createPipaPolicyDraft = mutation({
 
     const document = await ctx.db.get(documentId);
     return { document, reused: false };
+  },
+});
+
+export const rebuildPipaPolicyDraftFromSociety = mutation({
+  args: { id: v.id("documents") },
+  handler: async (ctx, { id }) => {
+    const document = await ctx.db.get(id);
+    if (!document) throw new Error("Document not found.");
+    const society = await ctx.db.get(document.societyId);
+    if (!society) throw new Error("Society not found.");
+
+    const title = `Draft PIPA privacy policy - ${society.name}`;
+    await ctx.db.patch(id, {
+      title,
+      content: buildPipaPolicyDraft(society),
+      tags: withTags(document.tags, [
+        "privacy",
+        "privacy-policy",
+        "pipa",
+        "draft",
+        "societyer-template",
+        "society-filled",
+      ]),
+    });
+    await ctx.db.insert("activity", {
+      societyId: document.societyId,
+      actor: "Societyer",
+      entityType: "document",
+      entityId: id,
+      action: "document-updated",
+      summary: `Rebuilt ${title} from the current society details.`,
+      createdAtISO: new Date().toISOString(),
+    });
+    return await ctx.db.get(id);
   },
 });
 
@@ -486,12 +523,57 @@ async function findExistingPrivacyDraft(ctx: any, societyId: string, tag: string
   }) ?? null;
 }
 
+async function refreshGenericPipaPolicyDraft(ctx: any, document: any, society: any) {
+  if (!isGenericPipaPolicyTemplate(document)) return null;
+  const title = `Draft PIPA privacy policy - ${society.name}`;
+  await ctx.db.patch(document._id, {
+    title,
+    content: buildPipaPolicyDraft(society),
+    tags: withTags(document.tags, [
+      "privacy",
+      "privacy-policy",
+      "pipa",
+      "draft",
+      "societyer-template",
+      "society-filled",
+    ]),
+  });
+  await ctx.db.insert("activity", {
+    societyId: document.societyId,
+    actor: "Societyer",
+    entityType: "document",
+    entityId: document._id,
+    action: "document-updated",
+    summary: `Filled ${title} with current society details.`,
+    createdAtISO: new Date().toISOString(),
+  });
+  return await ctx.db.get(document._id);
+}
+
+function isGenericPipaPolicyTemplate(document: any) {
+  const title = String(document.title ?? "").toLowerCase();
+  const content = String(document.content ?? "");
+  const hasGenericName = content.includes("[Legal organization name]") || content.includes("[legal name]");
+  if (!hasGenericName) return false;
+  return (
+    title.includes("draft pipa privacy policy template") ||
+    content.includes("This template is not legal advice") ||
+    content.includes("PIPA Privacy Policy Template")
+  );
+}
+
+function withTags(existing: unknown, additions: string[]) {
+  const tags = Array.isArray(existing) ? existing.map(String) : [];
+  return Array.from(new Set([...tags, ...additions]));
+}
+
 function buildPipaPolicyDraft(society: any) {
   const today = new Date().toISOString().slice(0, 10);
   const legalName = valueOrPlaceholder(society.name, "Legal organization name");
   const privacyOfficerName = valueOrPlaceholder(society.privacyOfficerName, "Privacy officer role or name");
   const privacyOfficerEmail = valueOrPlaceholder(society.privacyOfficerEmail, "privacy email");
   const mailingAddress = valueOrPlaceholder(society.mailingAddress, "mailing address");
+  const generalContactEmail = valueOrPlaceholder(society.officialEmail ?? society.publicContactEmail, "general contact email");
   const memberDataStatus = valueOrPlaceholder(society.memberDataAccessStatus, "Society-controlled / Partially available / Institution-held / Not applicable");
 
   return `# ${legalName} Privacy Policy
@@ -509,7 +591,7 @@ ${legalName} collects, uses, discloses, stores, and disposes of personal informa
 - Legal name: ${legalName}
 - Incorporation number: ${valueOrPlaceholder(society.incorporationNumber, "incorporation number, if applicable")}
 - Mailing address: ${mailingAddress}
-- General contact: ${valueOrPlaceholder(society.email, "general contact email")}
+- General contact: ${generalContactEmail}
 
 ## 2. Privacy Officer
 

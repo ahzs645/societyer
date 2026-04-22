@@ -18,6 +18,7 @@ export type MinuteDraft = {
     status: string;
     roleTitle?: string;
     affiliation?: string;
+    memberIdentifier?: string;
     proxyFor?: string;
     quorumCounted?: boolean;
     notes?: string;
@@ -65,6 +66,12 @@ export type MinuteDraft = {
     endedAt?: string;
     notes?: string;
   }>;
+  appendices?: Array<{
+    title: string;
+    type?: string;
+    reference?: string;
+    notes?: string;
+  }>;
   agmDetails?: {
     financialStatementsPresented?: boolean;
     financialStatementsNotes?: string;
@@ -75,6 +82,8 @@ export type MinuteDraft = {
       affiliation?: string;
       term?: string;
       consentRecorded?: boolean;
+      votesReceived?: number;
+      elected?: boolean;
       status?: string;
       notes?: string;
     }>;
@@ -289,6 +298,7 @@ function normalizeDraft(draft: any, fallback: MinuteDraft): MinuteDraft {
     nextMeetingLocation: optionalString(draft?.nextMeetingLocation) ?? fallback.nextMeetingLocation,
     nextMeetingNotes: optionalString(draft?.nextMeetingNotes) ?? fallback.nextMeetingNotes,
     sessionSegments: normalizeSessionSegments(draft?.sessionSegments) ?? fallback.sessionSegments,
+    appendices: normalizeAppendices(draft?.appendices) ?? fallback.appendices,
     agmDetails: normalizeAgmDetails(draft?.agmDetails) ?? fallback.agmDetails,
   };
 }
@@ -317,6 +327,7 @@ function normalizeDetailedAttendance(value: any): MinuteDraft["detailedAttendanc
       status: optionalString(row.status) ?? "present",
       roleTitle: optionalString(row.roleTitle),
       affiliation: optionalString(row.affiliation),
+      memberIdentifier: optionalString(row.memberIdentifier),
       proxyFor: optionalString(row.proxyFor),
       quorumCounted: typeof row.quorumCounted === "boolean" ? row.quorumCounted : undefined,
       notes: optionalString(row.notes),
@@ -363,6 +374,19 @@ function normalizeSessionSegments(value: any): MinuteDraft["sessionSegments"] | 
   return rows.length ? rows : undefined;
 }
 
+function normalizeAppendices(value: any): MinuteDraft["appendices"] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const rows = value
+    .filter((row) => optionalString(row?.title))
+    .map((row) => ({
+      title: optionalString(row.title)!,
+      type: optionalString(row.type),
+      reference: optionalString(row.reference),
+      notes: optionalString(row.notes),
+    }));
+  return rows.length ? rows : undefined;
+}
+
 function normalizeAgmDetails(value: any): MinuteDraft["agmDetails"] | undefined {
   if (!value || typeof value !== "object") return undefined;
   const directorAppointments = Array.isArray(value.directorAppointments)
@@ -374,6 +398,8 @@ function normalizeAgmDetails(value: any): MinuteDraft["agmDetails"] | undefined 
           affiliation: optionalString(row.affiliation),
           term: optionalString(row.term),
           consentRecorded: typeof row.consentRecorded === "boolean" ? row.consentRecorded : undefined,
+          votesReceived: typeof row.votesReceived === "number" ? row.votesReceived : undefined,
+          elected: typeof row.elected === "boolean" ? row.elected : undefined,
           status: optionalString(row.status),
           notes: optionalString(row.notes),
         }))
@@ -448,7 +474,7 @@ async function openaiSummary(args: {
         {
           role: "system",
           content:
-            "You turn meeting transcripts into strict JSON for nonprofit minutes. Return only valid JSON. Include keys discussion, motions, decisions, actionItems, attendees, absent, plus optional chairName, secretaryName, recorderName, calledToOrderAt, adjournedAt, remoteParticipation, detailedAttendance, sections, nextMeetingAt, nextMeetingLocation, nextMeetingNotes, sessionSegments, and agmDetails when clearly supported by the transcript. Keep motions factual and concise. Omit unknown optional fields.",
+            "You turn meeting transcripts into strict JSON for nonprofit minutes. Return only valid JSON. Include keys discussion, motions, decisions, actionItems, attendees, absent, plus optional chairName, secretaryName, recorderName, calledToOrderAt, adjournedAt, remoteParticipation, detailedAttendance, sections, nextMeetingAt, nextMeetingLocation, nextMeetingNotes, sessionSegments, appendices, and agmDetails when clearly supported by the transcript. Use detailedAttendance.memberIdentifier for student/member numbers. Use agmDetails.directorAppointments votesReceived/elected when election results are stated. Keep motions factual and concise. Omit unknown optional fields.",
         },
         {
           role: "user",
@@ -491,7 +517,7 @@ async function anthropicSummary(args: {
       max_tokens: 1800,
       temperature: 0.2,
       system:
-        "You turn meeting transcripts into strict JSON for nonprofit minutes. Return only valid JSON. Include keys discussion, motions, decisions, actionItems, attendees, absent, plus optional chairName, secretaryName, recorderName, calledToOrderAt, adjournedAt, remoteParticipation, detailedAttendance, sections, nextMeetingAt, nextMeetingLocation, nextMeetingNotes, sessionSegments, and agmDetails when clearly supported by the transcript. Omit unknown optional fields.",
+        "You turn meeting transcripts into strict JSON for nonprofit minutes. Return only valid JSON. Include keys discussion, motions, decisions, actionItems, attendees, absent, plus optional chairName, secretaryName, recorderName, calledToOrderAt, adjournedAt, remoteParticipation, detailedAttendance, sections, nextMeetingAt, nextMeetingLocation, nextMeetingNotes, sessionSegments, appendices, and agmDetails when clearly supported by the transcript. Use detailedAttendance.memberIdentifier for student/member numbers. Use agmDetails.directorAppointments votesReceived/elected when election results are stated. Omit unknown optional fields.",
       messages: [
         {
           role: "user",

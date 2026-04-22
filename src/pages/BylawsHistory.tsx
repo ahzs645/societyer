@@ -238,7 +238,7 @@ export function BylawsHistoryPage() {
             </p>
           </div>
           {lastBotSessionId && (
-            <Link to="/app/import-sessions" className="btn-action">
+            <Link to="/app/imports" className="btn-action">
               <FileSearch size={12} /> Review staged records
             </Link>
           )}

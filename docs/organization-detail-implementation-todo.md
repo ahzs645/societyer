@@ -14,8 +14,17 @@ Purpose: track the first implementation pass for broader organization detail sup
 - Extended tasks with responsible users and links to filings, workflows, documents, and event IDs, including link-type filters.
 - Added governance-register promotion from reviewed board-role evidence into the current director register.
 - Added legacy address seeding from the existing society profile strings into structured address rows.
+- Added import-session promotion support for organization addresses, registrations, identifiers/tax registrations, policies, workflow packages, and minute-book items.
+- Tightened signature mutations so signing and revocation require an acting workspace user, with admin-only signing/revocation on behalf of another user.
+- Added import promotion gates for duplicate detection, required-field validation, review-confidence blocking, and review notes before promotion for organization detail records.
+- Added minute-book completeness checks for core documents, signatures, filings, unresolved resolutions, paper-book archive evidence, package gaps, policy review gaps, and meetings without minutes.
+- Connected policy rows to lifecycle signals across PIPA training, transparency publications, document versions, workflows, tasks, review dates, and required signer tasks.
+- Added workflow package lifecycle signals and actions for signer state, payment state, generated follow-up tasks, linked filings, and filed status.
+- Added idempotent auto-backfill plus manual re-run from legacy society address strings and existing legal document categories/tags into structured organization address and minute-book records.
+- Added richer task editing for linked filing/workflow/document/event fields and completion notes.
+- Added `npm run test:org-details` as a focused smoke check for the new schema, promotion paths, lifecycle actions, and pages.
 
-Remaining refinement areas: richer import-review promotion rules, deeper policy links into PIPA/training/transparency flows, and automated minute-book completeness rules beyond the initial basic checks.
+Remaining refinement areas: deeper duplicate review UX inside import sessions, more precise minute-book jurisdiction checklists, and end-to-end browser tests after a seeded legal-record fixture exists.
 
 ## What To Implement First
 
