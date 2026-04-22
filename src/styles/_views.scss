@@ -422,6 +422,45 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--s-3);
 }
+.pdf-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+  gap: var(--s-4);
+  align-items: start;
+}
+.pdf-page {
+  min-height: 420px;
+  padding: var(--s-5);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-base);
+  box-shadow: inset 0 0 0 1px var(--bg-subtle);
+}
+.pdf-line {
+  height: 10px;
+  margin-bottom: var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
+}
+.pdf-line.short {
+  width: 62%;
+}
+.pdf-side {
+  display: grid;
+  gap: var(--s-3);
+}
+.signature-box {
+  min-height: 72px;
+  margin-top: var(--s-6);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  padding: var(--s-3);
+  color: var(--text-tertiary);
+  text-align: center;
+  font-size: var(--fs-sm);
+}
 .attendance-details {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
@@ -2272,7 +2311,8 @@
   .grant-edit-grid--2,
   .grant-edit-grid--3,
   .grant-edit-grid--4,
-  .structured-minutes-editor__grid {
+  .structured-minutes-editor__grid,
+  .pdf-layout {
     grid-template-columns: 1fr;
   }
 }

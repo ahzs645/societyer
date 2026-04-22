@@ -481,6 +481,9 @@ const meetings = [
     scheduledAt: "2026-04-23T19:00:00.000Z",
     location: "Riverside Community Hall",
     electronic: true,
+    remoteUrl: "https://teams.microsoft.com/l/meetup-join/static-demo",
+    remoteMeetingId: "RCS-Q2-BOARD",
+    remotePasscode: "demo",
     quorumRequired: 4,
     bylawRuleSetId: "static_bylaw_rules",
     quorumRuleVersion: 1,
@@ -488,6 +491,7 @@ const meetings = [
     quorumSourceLabel: "Bylaw rules v1, effective 2025-06-25",
     quorumComputedAtISO: "2026-04-16T16:00:00.000Z",
     attendeeIds: ["static_director_mina", "static_director_jordan", "static_director_devon"],
+    agendaJson: JSON.stringify(["Privacy program review", "Finance committee update", "Grant reporting calendar"]),
     status: "Scheduled",
   },
   {
@@ -505,6 +509,7 @@ const meetings = [
     quorumSourceLabel: "Bylaw rules v1, effective 2025-06-25",
     quorumComputedAtISO: "2025-06-19T18:30:00.000Z",
     attendeeIds: [],
+    agendaJson: JSON.stringify(["Annual report", "Financial statements", "Director elections"]),
     status: "Held",
   },
 ];
@@ -739,6 +744,7 @@ const documents = [
   {
     _id: DOCUMENT_PRESENTATION_ID,
     societyId: SOCIETY_ID,
+    meetingId: MEETING_AGM_ID,
     title: "2025 society needs presentation",
     kind: "Presentation",
     category: "Other",
@@ -747,6 +753,9 @@ const documents = [
     mimeType: "application/pdf",
     retentionYears: 10,
     createdAtISO: "2025-09-14T21:00:00.000Z",
+    lastOpenedAtISO: "2026-04-14T18:10:00.000Z",
+    reviewStatus: "approved",
+    librarySection: "meeting_material",
     flaggedForDeletion: false,
     tags: ["commitment", "tenancy", "AGM-2025"],
   },
@@ -775,9 +784,86 @@ const documents = [
     effectiveDate: "2026-03-31",
     retentionYears: 10,
     createdAtISO: "2026-04-10T19:30:00.000Z",
+    lastOpenedAtISO: "2026-04-15T18:10:00.000Z",
+    reviewStatus: "needs_signature",
+    librarySection: "finance",
     flaggedForDeletion: false,
     tags: ["finance", "AGM", "public"],
     public: true,
+  },
+];
+
+const meetingMaterials = [
+  {
+    _id: "static_material_agm_financials",
+    societyId: SOCIETY_ID,
+    meetingId: MEETING_AGM_ID,
+    documentId: "static_document_financials",
+    agendaLabel: "Financial statements",
+    label: "FY2025 financial statements",
+    order: 1,
+    requiredForMeeting: true,
+    accessLevel: "members",
+    createdAtISO: "2026-04-10T19:35:00.000Z",
+  },
+  {
+    _id: "static_material_agm_presentation",
+    societyId: SOCIETY_ID,
+    meetingId: MEETING_AGM_ID,
+    documentId: DOCUMENT_PRESENTATION_ID,
+    agendaLabel: "Annual report",
+    label: "Society needs presentation",
+    order: 2,
+    requiredForMeeting: false,
+    accessLevel: "members",
+    createdAtISO: "2025-09-14T21:05:00.000Z",
+  },
+  {
+    _id: "static_material_board_policy",
+    societyId: SOCIETY_ID,
+    meetingId: MEETING_BOARD_ID,
+    documentId: DOCUMENT_POLICY_ID,
+    agendaLabel: "Privacy program review",
+    label: "PIPA privacy policy",
+    order: 1,
+    requiredForMeeting: true,
+    accessLevel: "board",
+    createdAtISO: "2026-04-16T18:00:00.000Z",
+  },
+];
+
+const documentComments = [
+  {
+    _id: "static_document_comment_financials",
+    societyId: SOCIETY_ID,
+    documentId: "static_document_financials",
+    pageNumber: 3,
+    anchorText: "restricted funds note",
+    authorName: "Jordan Lee",
+    authorUserId: USER_TREASURER_ID,
+    body: "Confirm the restricted-fund note matches the grant register before final sign-off.",
+    status: "open",
+    createdAtISO: "2026-04-15T18:20:00.000Z",
+  },
+];
+
+const expenseReports = [
+  {
+    _id: "static_expense_workshop_supplies",
+    societyId: SOCIETY_ID,
+    claimantName: "Avery Santos",
+    claimantUserId: USER_SECRETARY_ID,
+    title: "Workshop supplies reimbursement",
+    category: "Supplies",
+    amountCents: 8642,
+    currency: "CAD",
+    incurredAtISO: "2026-04-12",
+    submittedAtISO: "2026-04-13",
+    status: "Submitted",
+    receiptDocumentId: DOCUMENT_PRESENTATION_ID,
+    notes: "Supplies for the youth resilience workshop.",
+    createdAtISO: "2026-04-13T16:00:00.000Z",
+    updatedAtISO: "2026-04-13T16:00:00.000Z",
   },
 ];
 
@@ -902,6 +988,8 @@ const tasks = [
     dueDate: "2026-04-21",
     ownerUserId: USER_OWNER_ID,
     goalId: "static_goal_agm",
+    meetingId: MEETING_BOARD_ID,
+    documentId: DOCUMENT_POLICY_ID,
   },
 ];
 
@@ -1497,7 +1585,9 @@ const tables: Record<string, any[]> = {
   deadlines,
   directors,
   documents,
+  documentComments,
   documentVersions: [],
+  expenseReports,
   paperlessConnections,
   paperlessDocumentSyncs,
   electionAuditEvents,
@@ -1627,6 +1717,7 @@ const tables: Record<string, any[]> = {
   ],
   grantTransactions: [],
   inspections: [],
+  meetingMaterials,
   secrets: [
     {
       _id: "static_access_registry",
@@ -2017,6 +2108,112 @@ function restrictedFunds() {
       status: "Active",
     },
   ];
+}
+
+function staticDocumentReviewQueues() {
+  const taskCounts = new Map<string, number>();
+  for (const task of tasks.filter((task) => task.status !== "Done" && task.documentId)) {
+    taskCounts.set(String(task.documentId), (taskCounts.get(String(task.documentId)) ?? 0) + 1);
+  }
+  const commentCounts = new Map<string, number>();
+  for (const comment of documentComments.filter((comment) => comment.status !== "resolved")) {
+    commentCounts.set(String(comment.documentId), (commentCounts.get(String(comment.documentId)) ?? 0) + 1);
+  }
+  const materialDocIds = new Set(meetingMaterials.map((row) => String(row.documentId)));
+  const annotate = (document: any) => ({
+    ...document,
+    openTaskCount: taskCounts.get(String(document._id)) ?? 0,
+    openCommentCount: commentCounts.get(String(document._id)) ?? 0,
+    signatureCount: 0,
+    linkedToMeetingPackage: materialDocIds.has(String(document._id)) || !!document.meetingId,
+  });
+  const annotated = documents.map(annotate);
+  return {
+    recent: annotated
+      .filter((document) => document.lastOpenedAtISO || document.createdAtISO)
+      .sort((a, b) => String(b.lastOpenedAtISO ?? b.createdAtISO).localeCompare(String(a.lastOpenedAtISO ?? a.createdAtISO)))
+      .slice(0, 8),
+    actionRequired: annotated
+      .filter((document) => document.reviewStatus === "needs_signature" || document.openCommentCount > 0 || document.openTaskCount > 0)
+      .slice(0, 8),
+    workInProgress: annotated
+      .filter((document) => document.reviewStatus === "in_review" || document.linkedToMeetingPackage || document.openCommentCount > 0)
+      .slice(0, 8),
+    counts: {
+      documents: annotated.length,
+      recent: annotated.length,
+      actionRequired: annotated.filter((document) => document.reviewStatus === "needs_signature" || document.openCommentCount > 0 || document.openTaskCount > 0).length,
+      workInProgress: annotated.filter((document) => document.reviewStatus === "in_review" || document.linkedToMeetingPackage || document.openCommentCount > 0).length,
+    },
+  };
+}
+
+function staticMeetingPackage(args: StaticArgs) {
+  const meeting = byId(meetings, args?.meetingId) ?? meetings[0];
+  const materials = meetingMaterials
+    .filter((material) => material.meetingId === meeting._id)
+    .map((material) => ({ ...material, document: byId(documents, material.documentId) }))
+    .sort((a, b) => a.order - b.order);
+  return {
+    meeting,
+    minutes: minutes.find((row) => row.meetingId === meeting._id) ?? null,
+    agenda: parseStaticAgenda(meeting.agendaJson),
+    materials,
+    tasks: tasks.filter((task) => task.meetingId === meeting._id),
+    counts: {
+      agendaItems: parseStaticAgenda(meeting.agendaJson).length,
+      materials: materials.length,
+      requiredMaterials: materials.filter((material) => material.requiredForMeeting).length,
+      openTasks: tasks.filter((task) => task.meetingId === meeting._id && task.status !== "Done").length,
+    },
+  };
+}
+
+function staticLibraryOverview() {
+  const referenceDocuments = documents
+    .filter((document) =>
+      document.librarySection ||
+      ["Policy", "Bylaws", "Constitution"].includes(document.category) ||
+      document.tags?.includes("library") ||
+      meetingMaterials.some((material) => material.documentId === document._id),
+    )
+    .sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO)));
+  const sectionsMap = new Map<string, any[]>();
+  for (const document of referenceDocuments) {
+    const section = document.librarySection ?? (document.category === "Policy" ? "policy" : document.category === "FinancialStatement" ? "finance" : "governance");
+    if (!sectionsMap.has(section)) sectionsMap.set(section, []);
+    sectionsMap.get(section)!.push(document);
+  }
+  const meetingPackets = Array.from(new Set(meetingMaterials.map((material) => material.meetingId)))
+    .map((meetingId) => {
+      const meeting = byId(meetings, meetingId);
+      const materials = meetingMaterials
+        .filter((material) => material.meetingId === meetingId)
+        .map((material) => ({ ...material, document: byId(documents, material.documentId) }))
+        .filter((material) => material.document);
+      return { meeting, materials, requiredCount: materials.filter((material) => material.requiredForMeeting).length };
+    })
+    .filter((packet) => packet.meeting);
+  return {
+    referenceDocuments,
+    meetingPackets,
+    sections: Array.from(sectionsMap, ([section, documents]) => ({ section, documents })),
+    counts: {
+      referenceDocuments: referenceDocuments.length,
+      meetingPackets: meetingPackets.length,
+      meetingMaterials: meetingMaterials.length,
+    },
+  };
+}
+
+function parseStaticAgenda(value?: string) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
 }
 
 function staticFundingSourcesList() {
@@ -2497,6 +2694,12 @@ function queryResult(name: string, args: StaticArgs) {
       return commitmentEvents.filter((event) => event.commitmentId === args?.commitmentId);
     case "dashboard:summary":
       return dashboardSummary();
+    case "documentComments:listForDocument":
+      return documentComments
+        .filter((comment) => comment.documentId === args?.documentId)
+        .sort((a, b) => b.createdAtISO.localeCompare(a.createdAtISO));
+    case "documents:reviewQueues":
+      return staticDocumentReviewQueues();
     case "documentVersions:latest":
     case "documentVersions:listForDocument":
       return [];
@@ -2686,6 +2889,8 @@ function queryResult(name: string, args: StaticArgs) {
           annualEstimateCents: monthlyEstimateCents * 12,
         };
       });
+    case "library:overview":
+      return staticLibraryOverview();
     case "fundingSources:list":
       return staticFundingSourcesList();
     case "fundingSources:rollup":
@@ -2745,6 +2950,16 @@ function queryResult(name: string, args: StaticArgs) {
       return byId(members, args?.id);
     case "meetings:get":
       return byId(meetings, args?.id) ?? meetings[0];
+    case "meetingMaterials:packageForMeeting":
+      return staticMeetingPackage(args);
+    case "meetingMaterials:listForMeeting":
+      return staticMeetingPackage(args).materials;
+    case "meetingMaterials:listForSociety":
+      return meetingMaterials.map((material) => ({
+        ...material,
+        document: byId(documents, material.documentId),
+        meeting: byId(meetings, material.meetingId),
+      }));
     case "minutes:getByMeeting":
       return minutes.find((row) => row.meetingId === args?.meetingId) ?? null;
     case "notifications:list":
@@ -2852,6 +3067,16 @@ function mutationResult(name: string, args: StaticArgs) {
   if (name === "motionBacklog:seedToMinutes") {
     return { inserted: 1, considered: 1, minutesId: "static_minutes_board_q2" };
   }
+  if (name === "documents:markOpened") return { openedAtISO: new Date().toISOString() };
+  if (name === "documents:updateReviewStatus") return null;
+  if (name === "documentComments:create") return "static_document_comment_new";
+  if (name === "documentComments:setStatus") return null;
+  if (name === "documentComments:remove") return null;
+  if (name === "meetingMaterials:attach") return "static_material_new";
+  if (name === "meetingMaterials:remove") return null;
+  if (name === "expenseReports:upsert") return "static_expense_new";
+  if (name === "expenseReports:setStatus") return null;
+  if (name === "expenseReports:remove") return null;
   if (name === "documents:createPipaPolicyDraft") {
     return {
       reused: false,

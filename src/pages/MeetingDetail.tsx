@@ -5,7 +5,7 @@ import { useToast } from "../components/Toast";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Field } from "../components/ui";
+import { Badge, Drawer, Field } from "../components/ui";
 import { formatDate, formatDateTime } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
 import { Sparkles, ArrowLeft, FileText, Save, Mic, FileDown, Gavel, ClipboardCheck, Upload, ExternalLink, Download, RefreshCw, Printer } from "lucide-react";
@@ -54,6 +54,7 @@ export function MeetingDetailPage() {
   const society = useSociety();
   const meeting = useQuery(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
   const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const meetingPackage = useQuery(api.meetingMaterials.packageForMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
   const sourceDocumentIds = ((minutes as any)?.sourceDocumentIds ?? []) as Id<"documents">[];
   const sourceDocuments = useQuery(
     api.documents.getMany,
@@ -71,10 +72,13 @@ export function MeetingDetailPage() {
     api.members.list,
     society ? { societyId: society._id } : "skip",
   );
+  const allDocuments = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const motionPeople = personLinkCandidates(members, directors);
   const directorNames = (directors ?? []).flatMap((d: any) => [`${d.firstName} ${d.lastName}`, ...(Array.isArray(d.aliases) ? d.aliases : [])]);
   const generate = useAction(api.minutes.generateDraft);
   const updateMeeting = useMutation(api.meetings.update);
+  const attachMeetingMaterial = useMutation(api.meetingMaterials.attach);
+  const removeMeetingMaterial = useMutation(api.meetingMaterials.remove);
   const backfillMeetingQuorum = useMutation(api.meetings.backfillQuorumSnapshot);
   const updateMinutes = useMutation(api.minutes.update);
   const backfillMinutesQuorum = useMutation(api.minutes.backfillQuorumSnapshot);
@@ -108,6 +112,8 @@ export function MeetingDetailPage() {
   const [includeApprovalInExport, setIncludeApprovalInExport] = useState(true);
   const [includeSignaturesInExport, setIncludeSignaturesInExport] = useState(true);
   const [includePlaceholdersInExport, setIncludePlaceholdersInExport] = useState(false);
+  const [materialDraft, setMaterialDraft] = useState<any | null>(null);
+  const [joinEdit, setJoinEdit] = useState<any | null>(null);
 
   useEffect(() => {
     if (!meeting) return;
@@ -194,6 +200,10 @@ export function MeetingDetailPage() {
       : transcriptionJob?.status === "failed"
       ? "danger"
       : "warn";
+  const packageMaterials = meetingPackage?.materials ?? [];
+  const packageTasks = meetingPackage?.tasks ?? [];
+  const openPackageTasks = packageTasks.filter((task: any) => task.status !== "Done");
+  const joinDetails = getMeetingJoinDetails(meeting, minutes);
 
   const runGenerate = async () => {
     const sourceTranscript = transcript.trim() || transcriptOnFile.trim();
@@ -479,6 +489,81 @@ export function MeetingDetailPage() {
     toast.success("Structured minutes details saved");
   };
 
+  const openMaterialDrawer = (agendaLabel?: string) => {
+    setMaterialDraft({
+      documentId: "",
+      agendaLabel: agendaLabel ?? "",
+      label: "",
+      order: packageMaterials.length + 1,
+      requiredForMeeting: true,
+      accessLevel: "board",
+      notes: "",
+    });
+  };
+
+  const saveMaterial = async () => {
+    if (!materialDraft?.documentId) {
+      toast.error("Choose a document to attach.");
+      return;
+    }
+    await attachMeetingMaterial({
+      societyId: meeting.societyId,
+      meetingId: meeting._id,
+      documentId: materialDraft.documentId,
+      agendaLabel: materialDraft.agendaLabel || undefined,
+      label: materialDraft.label || undefined,
+      order: Number(materialDraft.order) || packageMaterials.length + 1,
+      requiredForMeeting: !!materialDraft.requiredForMeeting,
+      accessLevel: materialDraft.accessLevel || "board",
+      notes: materialDraft.notes || undefined,
+    });
+    setMaterialDraft(null);
+    toast.success("Material added to meeting package");
+  };
+
+  const startJoinEdit = () => {
+    setJoinEdit({
+      remoteUrl: meeting.remoteUrl ?? minutes?.remoteParticipation?.url ?? "",
+      remoteMeetingId: meeting.remoteMeetingId ?? minutes?.remoteParticipation?.meetingId ?? "",
+      remotePasscode: meeting.remotePasscode ?? minutes?.remoteParticipation?.passcode ?? "",
+      remoteInstructions: meeting.remoteInstructions ?? minutes?.remoteParticipation?.instructions ?? "",
+    });
+  };
+
+  const saveJoinDetails = async () => {
+    if (!joinEdit) return;
+    await updateMeeting({
+      id: meeting._id,
+      patch: {
+        remoteUrl: joinEdit.remoteUrl || undefined,
+        remoteMeetingId: joinEdit.remoteMeetingId || undefined,
+        remotePasscode: joinEdit.remotePasscode || undefined,
+        remoteInstructions: joinEdit.remoteInstructions || undefined,
+      },
+    });
+    setJoinEdit(null);
+    toast.success("Meeting link saved");
+  };
+
+  const downloadMeetingPack = () => {
+    const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    const html = renderMeetingPackHtml({
+      meeting,
+      agenda,
+      materials: packageMaterials,
+      tasks: packageTasks,
+      minutes,
+      joinDetails,
+    });
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${safe}-meeting-pack.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const transcriptCard = (
     <div className="card meeting-notes-card">
       <div className="card__head">
@@ -663,6 +748,14 @@ export function MeetingDetailPage() {
                 <ClipboardCheck size={12} /> AGM workflow
               </Link>
             )}
+            {joinDetails.url && (
+              <a className="btn-action" href={joinDetails.url} target="_blank" rel="noreferrer">
+                <ExternalLink size={12} /> Join
+              </a>
+            )}
+            <button className="btn-action" onClick={downloadMeetingPack}>
+              <Download size={12} /> Meeting pack
+            </button>
             {minutes && (
               <button className="btn-action" onClick={exportToWord} title="Download as .doc (opens in Word, Pages, or Google Docs)">
                 <FileDown size={12} /> Export to Word
@@ -685,6 +778,126 @@ export function MeetingDetailPage() {
           </>
         }
       />
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <div>
+            <h2 className="card__title">Meeting package hub</h2>
+            <p className="card__subtitle">
+              Agenda topics, linked materials, attendees, join details, minutes, and open actions.
+            </p>
+          </div>
+          <div className="row" style={{ gap: 6, flexWrap: "wrap", marginLeft: "auto" }}>
+            <button className="btn-action" onClick={() => openMaterialDrawer()}>
+              <FileText size={12} /> Add material
+            </button>
+            <button className="btn-action" onClick={startJoinEdit}>
+              <ExternalLink size={12} /> {joinDetails.url ? "Edit join link" : "Add join link"}
+            </button>
+            <button className="btn-action btn-action--primary" onClick={downloadMeetingPack}>
+              <Download size={12} /> Download pack
+            </button>
+          </div>
+        </div>
+        <div className="card__body">
+          <div className="stat-grid" style={{ marginBottom: 16 }}>
+            <div className="stat">
+              <div className="stat__label">Agenda topics</div>
+              <div className="stat__value">{agenda.length}</div>
+              <div className="stat__sub">editable below</div>
+            </div>
+            <div className="stat">
+              <div className="stat__label">Materials</div>
+              <div className="stat__value">{packageMaterials.length}</div>
+              <div className="stat__sub">{packageMaterials.filter((m: any) => m.requiredForMeeting).length} required</div>
+            </div>
+            <div className="stat">
+              <div className="stat__label">Attendees</div>
+              <div className="stat__value">{minutes?.attendees.length ?? meeting.attendeeIds?.length ?? 0}</div>
+              <div className="stat__sub">{minutes ? "from minutes" : "scheduled roster"}</div>
+            </div>
+            <div className="stat">
+              <div className="stat__label">Open actions</div>
+              <div className="stat__value">{openPackageTasks.length}</div>
+              <div className="stat__sub">linked meeting tasks</div>
+            </div>
+          </div>
+
+          <div className="two-col">
+            <div className="col" style={{ gap: 10 }}>
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <strong>Agenda materials</strong>
+                <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>Group materials by agenda label</span>
+              </div>
+              {(agenda.length ? agenda : ["General materials"]).map((topic) => {
+                const topicMaterials = packageMaterials.filter((material: any) => (material.agendaLabel || "General materials") === topic);
+                return (
+                  <div key={topic} className="panel" style={{ padding: 12, borderRadius: 8 }}>
+                    <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
+                      <strong>{topic}</strong>
+                      <button className="btn btn--ghost btn--sm" onClick={() => openMaterialDrawer(topic)}>
+                        Add
+                      </button>
+                    </div>
+                    <div className="col" style={{ gap: 6, marginTop: 8 }}>
+                      {topicMaterials.map((material: any) => (
+                        <div key={material._id} className="row" style={{ gap: 8 }}>
+                          <FileText size={12} />
+                          <Link to={`/app/documents/${material.document?._id}`}>{material.label || material.document?.title || "Document"}</Link>
+                          {material.requiredForMeeting && <Badge tone="warn">Required</Badge>}
+                          <Badge tone="neutral">{material.accessLevel}</Badge>
+                          <button
+                            className="btn btn--ghost btn--sm"
+                            style={{ marginLeft: "auto" }}
+                            onClick={() => removeMeetingMaterial({ id: material._id })}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                      {topicMaterials.length === 0 && (
+                        <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>No linked materials.</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="col" style={{ gap: 10 }}>
+              <div className="panel" style={{ padding: 12, borderRadius: 8 }}>
+                <div className="row" style={{ justifyContent: "space-between" }}>
+                  <strong>Join meeting</strong>
+                  {joinDetails.provider && <Badge tone="info">{joinDetails.provider}</Badge>}
+                </div>
+                {joinDetails.url ? (
+                  <div className="col" style={{ gap: 6, marginTop: 8 }}>
+                    <a className="btn btn--accent btn--sm" href={joinDetails.url} target="_blank" rel="noreferrer">
+                      <ExternalLink size={12} /> Join meeting
+                    </a>
+                    {joinDetails.meetingId && <Detail label="Meeting ID">{joinDetails.meetingId}</Detail>}
+                    {joinDetails.passcode && <Detail label="Passcode">{joinDetails.passcode}</Detail>}
+                    {joinDetails.instructions && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{joinDetails.instructions}</div>}
+                  </div>
+                ) : (
+                  <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 8 }}>No remote meeting link saved.</div>
+                )}
+              </div>
+              <div className="panel" style={{ padding: 12, borderRadius: 8 }}>
+                <strong>Open actions</strong>
+                <div className="col" style={{ gap: 6, marginTop: 8 }}>
+                  {openPackageTasks.slice(0, 5).map((task: any) => (
+                    <Link key={task._id} to="/app/tasks" className="row" style={{ gap: 6 }}>
+                      <Badge tone={task.priority === "High" ? "danger" : task.priority === "Medium" ? "warn" : "neutral"}>{task.priority}</Badge>
+                      <span>{task.title}</span>
+                    </Link>
+                  ))}
+                  {openPackageTasks.length === 0 && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>No open tasks linked to this meeting.</div>}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="two-col">
         <div className="col" style={{ gap: 16 }}>
@@ -1086,6 +1299,101 @@ export function MeetingDetailPage() {
           )}
         </div>
       </div>
+
+      <Drawer
+        open={!!materialDraft}
+        onClose={() => setMaterialDraft(null)}
+        title="Attach meeting material"
+        footer={
+          <>
+            <button className="btn" onClick={() => setMaterialDraft(null)}>Cancel</button>
+            <button className="btn btn--accent" onClick={saveMaterial}>Attach</button>
+          </>
+        }
+      >
+        {materialDraft && (
+          <div>
+            <Field label="Document">
+              <select
+                className="input"
+                value={materialDraft.documentId}
+                onChange={(event) => setMaterialDraft({ ...materialDraft, documentId: event.target.value })}
+              >
+                <option value="">Choose document</option>
+                {(allDocuments ?? []).map((document: any) => (
+                  <option key={document._id} value={document._id}>{document.title}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Agenda topic">
+              <select
+                className="input"
+                value={materialDraft.agendaLabel}
+                onChange={(event) => setMaterialDraft({ ...materialDraft, agendaLabel: event.target.value })}
+              >
+                <option value="">General materials</option>
+                {agenda.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </Field>
+            <Field label="Label">
+              <input className="input" value={materialDraft.label} onChange={(event) => setMaterialDraft({ ...materialDraft, label: event.target.value })} placeholder="Optional display label" />
+            </Field>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Field label="Order">
+                <input className="input" type="number" min="1" value={materialDraft.order} onChange={(event) => setMaterialDraft({ ...materialDraft, order: event.target.value })} />
+              </Field>
+              <Field label="Access">
+                <select className="input" value={materialDraft.accessLevel} onChange={(event) => setMaterialDraft({ ...materialDraft, accessLevel: event.target.value })}>
+                  <option value="board">Board</option>
+                  <option value="committee">Committee</option>
+                  <option value="members">Members</option>
+                  <option value="public">Public</option>
+                  <option value="restricted">Restricted</option>
+                </select>
+              </Field>
+            </div>
+            <Checkbox
+              checked={!!materialDraft.requiredForMeeting}
+              onChange={(requiredForMeeting) => setMaterialDraft({ ...materialDraft, requiredForMeeting })}
+              label="Required review for this meeting"
+            />
+            <Field label="Notes">
+              <textarea className="textarea" rows={3} value={materialDraft.notes} onChange={(event) => setMaterialDraft({ ...materialDraft, notes: event.target.value })} />
+            </Field>
+          </div>
+        )}
+      </Drawer>
+
+      <Drawer
+        open={!!joinEdit}
+        onClose={() => setJoinEdit(null)}
+        title="Meeting join details"
+        footer={
+          <>
+            <button className="btn" onClick={() => setJoinEdit(null)}>Cancel</button>
+            <button className="btn btn--accent" onClick={saveJoinDetails}>Save</button>
+          </>
+        }
+      >
+        {joinEdit && (
+          <div>
+            <Field label="Remote meeting URL">
+              <input className="input" value={joinEdit.remoteUrl} onChange={(event) => setJoinEdit({ ...joinEdit, remoteUrl: event.target.value })} placeholder="https://..." />
+            </Field>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Field label="Meeting ID">
+                <input className="input" value={joinEdit.remoteMeetingId} onChange={(event) => setJoinEdit({ ...joinEdit, remoteMeetingId: event.target.value })} />
+              </Field>
+              <Field label="Passcode">
+                <input className="input" value={joinEdit.remotePasscode} onChange={(event) => setJoinEdit({ ...joinEdit, remotePasscode: event.target.value })} />
+              </Field>
+            </div>
+            <Field label="Instructions">
+              <textarea className="textarea" rows={3} value={joinEdit.remoteInstructions} onChange={(event) => setJoinEdit({ ...joinEdit, remoteInstructions: event.target.value })} />
+            </Field>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 }
@@ -1509,6 +1817,109 @@ function sourceLabelForExternalId(externalId: string | undefined) {
 
 function formatSourceReferences(value: string) {
   return value.replace(/\bpaperless:(\d+)\b/gi, "Paperless #$1");
+}
+
+function getMeetingJoinDetails(meeting: any, minutes: any) {
+  const url =
+    meeting.remoteUrl ??
+    minutes?.remoteParticipation?.url ??
+    (isUrl(meeting.location) ? meeting.location : "");
+  return {
+    url,
+    meetingId: meeting.remoteMeetingId ?? minutes?.remoteParticipation?.meetingId ?? "",
+    passcode: meeting.remotePasscode ?? minutes?.remoteParticipation?.passcode ?? "",
+    instructions: meeting.remoteInstructions ?? minutes?.remoteParticipation?.instructions ?? "",
+    provider: providerForUrl(url),
+  };
+}
+
+function isUrl(value: unknown) {
+  return /^https?:\/\//i.test(String(value ?? "").trim());
+}
+
+function providerForUrl(value: string) {
+  const lower = value.toLowerCase();
+  if (!lower) return "";
+  if (lower.includes("zoom.")) return "Zoom";
+  if (lower.includes("teams.microsoft") || lower.includes("teams.live")) return "Teams";
+  if (lower.includes("webex.")) return "Webex";
+  if (lower.includes("gotomeeting.") || lower.includes("goto.com")) return "GoToMeeting";
+  return "Online";
+}
+
+function renderMeetingPackHtml({
+  meeting,
+  agenda,
+  materials,
+  tasks,
+  minutes,
+  joinDetails,
+}: {
+  meeting: any;
+  agenda: string[];
+  materials: any[];
+  tasks: any[];
+  minutes: any;
+  joinDetails: any;
+}) {
+  const agendaHtml = (agenda.length ? agenda : ["General materials"])
+    .map((topic) => {
+      const topicMaterials = materials.filter((material) => (material.agendaLabel || "General materials") === topic);
+      return `<li><strong>${escapeHtml(topic)}</strong>${topicMaterials.length ? `<ul>${topicMaterials.map((material) => `<li>${escapeHtml(material.label || material.document?.title || "Document")} ${material.requiredForMeeting ? "(required)" : ""}</li>`).join("")}</ul>` : ""}</li>`;
+    })
+    .join("");
+  const taskHtml = tasks.length
+    ? `<ul>${tasks.map((task) => `<li>${escapeHtml(task.title)} - ${escapeHtml(task.status)}${task.dueDate ? `, due ${escapeHtml(task.dueDate)}` : ""}</li>`).join("")}</ul>`
+    : "<p>No linked tasks.</p>";
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>${escapeHtml(meeting.title)} meeting pack</title>
+    <style>
+      body { font-family: system-ui, sans-serif; line-height: 1.45; margin: 32px; color: #18212f; }
+      h1, h2 { margin-bottom: 6px; }
+      .meta { color: #596275; margin-bottom: 20px; }
+      section { border-top: 1px solid #d8dee8; padding-top: 18px; margin-top: 18px; }
+      li { margin: 4px 0; }
+    </style>
+  </head>
+  <body>
+    <h1>${escapeHtml(meeting.title)}</h1>
+    <div class="meta">${escapeHtml(meeting.type)} - ${escapeHtml(formatDateTime(meeting.scheduledAt))} - ${escapeHtml(meeting.location ?? "")}</div>
+    <section>
+      <h2>Join Details</h2>
+      ${joinDetails.url ? `<p><a href="${escapeHtml(joinDetails.url)}">${escapeHtml(joinDetails.url)}</a></p>` : "<p>No remote meeting link saved.</p>"}
+      ${joinDetails.meetingId ? `<p>Meeting ID: ${escapeHtml(joinDetails.meetingId)}</p>` : ""}
+      ${joinDetails.passcode ? `<p>Passcode: ${escapeHtml(joinDetails.passcode)}</p>` : ""}
+      ${joinDetails.instructions ? `<p>${escapeHtml(joinDetails.instructions)}</p>` : ""}
+    </section>
+    <section>
+      <h2>Agenda And Materials</h2>
+      <ol>${agendaHtml}</ol>
+    </section>
+    <section>
+      <h2>Attendance</h2>
+      <p>${minutes?.attendees?.length ? escapeHtml(minutes.attendees.join(", ")) : "Attendance not recorded."}</p>
+    </section>
+    <section>
+      <h2>Actions</h2>
+      ${taskHtml}
+    </section>
+    <section>
+      <h2>Minutes</h2>
+      <p>${minutes ? "Minutes are on file in Societyer." : "Minutes have not been drafted yet."}</p>
+    </section>
+  </body>
+</html>`;
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function getQuorumSnapshot(minutes: any, meeting: any) {

@@ -694,6 +694,28 @@ function withTags(existing: unknown, additions: string[]) {
   return Array.from(new Set([...tags, ...additions]));
 }
 
+function countByDocument(rows: Array<{ documentId?: unknown }>) {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.documentId) continue;
+    const key = String(row.documentId);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function isInternalDocumentRecord(doc: any) {
+  const tags = Array.isArray(doc.tags) ? doc.tags : [];
+  return (
+    tags.includes("import-session") ||
+    tags.includes("org-history") ||
+    doc.category === "Import Session" ||
+    doc.category === "Import Candidate" ||
+    doc.category === "Org History Source" ||
+    doc.category === "Org History Item"
+  );
+}
+
 function buildPipaPolicyDraft(society: any) {
   const today = new Date().toISOString().slice(0, 10);
   const legalName = valueOrPlaceholder(society.name, "Legal organization name");

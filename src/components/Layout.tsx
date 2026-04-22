@@ -171,6 +171,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/app/deadlines", label: "Deadlines", icon: Calendar, color: "yellow" },
       { to: "/app/commitments", label: "Commitments", icon: ClipboardList, color: "green" },
       { to: "/app/documents", label: "Documents", icon: FolderOpen, color: "gray" },
+      { to: "/app/library", label: "Library", icon: BookOpen, color: "purple" },
       { to: "/app/communications", label: "Communications", icon: Mail, color: "orange", module: "communications" },
       { to: "/app/outbox", label: "Outbox", icon: Inbox, color: "orange" },
     ],

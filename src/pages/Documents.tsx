@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -11,13 +11,13 @@ import { FilterField } from "../components/FilterBar";
 import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Plus, Trash2, Flag as FlagIcon, Upload, Download, FolderOpen, Tag, History } from "lucide-react";
-import { formatDate } from "../lib/format";
+import { Plus, Trash2, Flag as FlagIcon, Upload, Download, FolderOpen, Tag, History, BookOpen, ClipboardCheck, MessageSquare } from "lucide-react";
+import { formatDate, formatDateTime } from "../lib/format";
 import { DocumentVersionsDrawer } from "../components/DocumentVersions";
 import { PaperlessDocumentAction } from "../components/PaperlessDocumentAction";
 import { isDemoMode } from "../lib/demoMode";
 
-const CATS = ["Constitution", "Bylaws", "Minutes", "FinancialStatement", "Policy", "Filing", "Agreement", "WorkflowGenerated", "Other"] as const;
+const CATS = ["Constitution", "Bylaws", "Minutes", "FinancialStatement", "Policy", "Filing", "Agreement", "Library", "WorkflowGenerated", "Other"] as const;
 
 const CAT_LABELS: Record<string, string> = {
   FinancialStatement: "Financial Statement",
@@ -35,6 +35,7 @@ const DOC_FIELDS: FilterField<any>[] = [
 export function DocumentsPage() {
   const society = useSociety();
   const docs = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
+  const reviewQueues = useQuery(api.documents.reviewQueues, society ? { societyId: society._id } : "skip");
   const importSessions = useQuery(api.importSessions.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.documents.create);
   const flag = useMutation(api.documents.flagForDeletion);
@@ -157,6 +158,9 @@ export function DocumentsPage() {
         subtitle="Constitution, bylaws, minutes, financial statements, policies. Records ≥ 10 years (CRA: 7 years financial)."
         actions={
           <>
+            <Link className="btn-action" to="/app/library">
+              <BookOpen size={12} /> Library
+            </Link>
             <input ref={fileInputRef} type="file" style={{ display: "none" }}
               onChange={async (e) => {
                 const file = e.target.files?.[0];
@@ -173,6 +177,8 @@ export function DocumentsPage() {
           </>
         }
       />
+
+      {reviewQueues && <DocumentQueues queues={reviewQueues} />}
 
       {documentImportSession && (
         <div className="card" style={{ marginBottom: 16 }}>
@@ -267,6 +273,9 @@ export function DocumentsPage() {
             {(r.storageId || r.fileName) && (
               <CurrentDocumentDownload documentId={r._id} legacyStorageId={r.storageId} />
             )}
+            <Link className="btn btn--ghost btn--sm" to={`/app/documents/${r._id}`}>
+              <ClipboardCheck size={12} /> Review
+            </Link>
             <PaperlessDocumentAction
               societyId={society._id}
               documentId={r._id}
@@ -352,6 +361,77 @@ export function DocumentsPage() {
   );
 }
 
+function DocumentQueues({ queues }: { queues: any }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: 12, marginBottom: 16 }}>
+      <DocumentQueueCard
+        title="Recent documents"
+        subtitle="Opened or added recently"
+        icon={<History size={14} />}
+        documents={queues.recent}
+        empty="No recent document activity."
+      />
+      <DocumentQueueCard
+        title="Action required"
+        subtitle="Open comments, tasks, or signatures"
+        icon={<MessageSquare size={14} />}
+        documents={queues.actionRequired}
+        empty="No document actions waiting."
+      />
+      <DocumentQueueCard
+        title="Work in progress"
+        subtitle="Meeting packets and reviews"
+        icon={<ClipboardCheck size={14} />}
+        documents={queues.workInProgress}
+        empty="No in-progress document reviews."
+      />
+    </div>
+  );
+}
+
+function DocumentQueueCard({
+  title,
+  subtitle,
+  icon,
+  documents,
+  empty,
+}: {
+  title: string;
+  subtitle: string;
+  icon: ReactNode;
+  documents: any[];
+  empty: string;
+}) {
+  return (
+    <div className="card">
+      <div className="card__head">
+        <h2 className="card__title">{icon} {title}</h2>
+        <span className="card__subtitle">{subtitle}</span>
+      </div>
+      <div className="card__body col" style={{ gap: 8 }}>
+        {documents.map((doc) => (
+          <Link key={doc._id} to={`/app/documents/${doc._id}`} className="col" style={{ gap: 4, padding: 10, border: "1px solid var(--border)", borderRadius: 6 }}>
+            <div className="row" style={{ gap: 6 }}>
+              <strong>{doc.title}</strong>
+              {doc.reviewStatus && <Badge tone={reviewStatusTone(doc.reviewStatus)}>{reviewStatusLabel(doc.reviewStatus)}</Badge>}
+            </div>
+            <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+              {doc.lastOpenedAtISO ? `Opened ${formatDateTime(doc.lastOpenedAtISO)}` : `Created ${formatDate(doc.createdAtISO)}`}
+            </div>
+            <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+              {doc.openCommentCount > 0 && <Badge tone="warn">{doc.openCommentCount} comments</Badge>}
+              {doc.openTaskCount > 0 && <Badge tone="warn">{doc.openTaskCount} tasks</Badge>}
+              {doc.linkedToMeetingPackage && <Badge tone="info">Meeting packet</Badge>}
+              {doc.signatureCount > 0 && <Badge tone="success">{doc.signatureCount} signed</Badge>}
+            </div>
+          </Link>
+        ))}
+        {documents.length === 0 && <div className="muted">{empty}</div>}
+      </div>
+    </div>
+  );
+}
+
 function CurrentDocumentDownload({ documentId, legacyStorageId }: { documentId: any; legacyStorageId?: any }) {
   const latest = useQuery(api.documentVersions.latest, { documentId });
   const legacyUrl = useQuery(api.files.getUrl, legacyStorageId ? { storageId: legacyStorageId } : "skip");
@@ -410,6 +490,26 @@ function catTone(cat: string) {
     case "Agreement": return "orange" as const;
     case "Minutes": return "success" as const;
     case "WorkflowGenerated": return "purple" as const;
+    default: return "neutral" as const;
+  }
+}
+
+function reviewStatusLabel(status: string) {
+  switch (status) {
+    case "in_review": return "In review";
+    case "needs_signature": return "Needs signature";
+    case "approved": return "Approved";
+    case "blocked": return "Blocked";
+    default: return "Not reviewed";
+  }
+}
+
+function reviewStatusTone(status: string) {
+  switch (status) {
+    case "approved": return "success" as const;
+    case "needs_signature": return "warn" as const;
+    case "blocked": return "danger" as const;
+    case "in_review": return "info" as const;
     default: return "neutral" as const;
   }
 }

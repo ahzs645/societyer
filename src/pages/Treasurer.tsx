@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, SeedPrompt } from "./_helpers";
-import { PiggyBank, TrendingUp, TrendingDown, AlertTriangle, DollarSign, PlusCircle, Trash2, Upload } from "lucide-react";
+import { PiggyBank, TrendingUp, TrendingDown, AlertTriangle, DollarSign, PlusCircle, Trash2, Upload, Receipt } from "lucide-react";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
@@ -89,6 +90,19 @@ const FUNDING_EVENT_KINDS = [
   { value: "Other", label: "Other" },
 ];
 
+const EXPENSE_STATUSES = ["Draft", "Submitted", "Approved", "Paid", "Rejected", "Recalled"];
+
+const EXPENSE_CATEGORIES = [
+  "Program",
+  "Travel",
+  "Meals",
+  "Supplies",
+  "Software",
+  "Facility",
+  "Professional services",
+  "Other",
+];
+
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -168,6 +182,42 @@ function newEventDraft(source: any) {
   };
 }
 
+function newExpenseDraft() {
+  return {
+    id: undefined,
+    claimantName: "",
+    claimantUserId: "",
+    title: "",
+    category: "Program",
+    amountDollars: "",
+    currency: "CAD",
+    incurredAtISO: todayISO(),
+    submittedAtISO: "",
+    status: "Draft",
+    receiptDocumentId: "",
+    paymentReference: "",
+    notes: "",
+  };
+}
+
+function expenseDraftFromRow(row: any) {
+  return {
+    id: row._id,
+    claimantName: row.claimantName ?? "",
+    claimantUserId: row.claimantUserId ?? "",
+    title: row.title ?? "",
+    category: row.category ?? "Program",
+    amountDollars: centsToDollarInput(row.amountCents),
+    currency: row.currency ?? "CAD",
+    incurredAtISO: row.incurredAtISO ?? todayISO(),
+    submittedAtISO: row.submittedAtISO ?? "",
+    status: row.status ?? "Draft",
+    receiptDocumentId: row.receiptDocumentId ?? "",
+    paymentReference: row.paymentReference ?? "",
+    notes: row.notes ?? "",
+  };
+}
+
 function eventDraftFromRow(event: any, source: any) {
   return {
     id: event._id,
@@ -215,14 +265,30 @@ export function TreasurerPage() {
     api.fundingSources.list,
     society ? { societyId: society._id } : "skip",
   );
+  const expenseReports = useQuery(
+    api.expenseReports.list,
+    society ? { societyId: society._id } : "skip",
+  );
+  const documents = useQuery(
+    api.documents.list,
+    society ? { societyId: society._id } : "skip",
+  );
+  const users = useQuery(
+    api.users.list,
+    society ? { societyId: society._id } : "skip",
+  );
   const upsertFundingSource = useMutation(api.fundingSources.upsertSource);
   const removeFundingSource = useMutation(api.fundingSources.removeSource);
   const upsertFundingEvent = useMutation(api.fundingSources.upsertEvent);
   const removeFundingEvent = useMutation(api.fundingSources.removeEvent);
+  const upsertExpenseReport = useMutation(api.expenseReports.upsert);
+  const setExpenseStatus = useMutation(api.expenseReports.setStatus);
+  const removeExpenseReport = useMutation(api.expenseReports.remove);
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const [sourceDraft, setSourceDraft] = useState<any>(null);
   const [eventDraft, setEventDraft] = useState<any>(null);
+  const [expenseDraft, setExpenseDraft] = useState<any>(null);
   const [levyImportOpen, setLevyImportOpen] = useState(false);
 
   if (society === undefined) return <div className="page">Loading…</div>;
@@ -247,6 +313,16 @@ export function TreasurerPage() {
       })),
     )
     .sort((a: any, b: any) => b.eventDate.localeCompare(a.eventDate));
+  const expenseTotals = (expenseReports ?? []).reduce(
+    (acc: any, report: any) => {
+      acc.total += report.amountCents ?? 0;
+      if (report.status === "Submitted") acc.submitted += report.amountCents ?? 0;
+      if (report.status === "Approved") acc.approved += report.amountCents ?? 0;
+      if (report.status === "Paid") acc.paid += report.amountCents ?? 0;
+      return acc;
+    },
+    { total: 0, submitted: 0, approved: 0, paid: 0 },
+  );
 
   return (
     <div className="page">
@@ -259,6 +335,9 @@ export function TreasurerPage() {
           <>
             <button className="btn-action" onClick={() => setLevyImportOpen(true)}>
               <Upload size={12} /> Import levy
+            </button>
+            <button className="btn-action" onClick={() => setExpenseDraft(newExpenseDraft())}>
+              <Receipt size={12} /> New expense claim
             </button>
             <button className="btn-action btn-action--primary" onClick={() => setSourceDraft(newSourceDraft())}>
               <PlusCircle size={12} /> New funding source
@@ -322,6 +401,109 @@ export function TreasurerPage() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card__head">
+          <div>
+            <h2 className="card__title">Expense reports</h2>
+            <span className="card__subtitle">
+              Reimbursement claims with receipt evidence and approval status.
+            </span>
+          </div>
+          <button className="btn btn--ghost btn--sm" onClick={() => setExpenseDraft(newExpenseDraft())}>
+            <Receipt size={12} /> New claim
+          </button>
+        </div>
+        <div className="card__body">
+          <div className="stat-grid" style={{ marginBottom: 16 }}>
+            <div className="stat">
+              <div className="stat__label">Total claims</div>
+              <div className="stat__value">{cents(expenseTotals.total)}</div>
+              <div className="stat__sub">{expenseReports?.length ?? 0} report{(expenseReports?.length ?? 0) === 1 ? "" : "s"}</div>
+            </div>
+            <div className="stat">
+              <div className="stat__label">Submitted</div>
+              <div className="stat__value">{cents(expenseTotals.submitted)}</div>
+              <div className="stat__sub">awaiting approval</div>
+            </div>
+            <div className="stat">
+              <div className="stat__label">Approved</div>
+              <div className="stat__value">{cents(expenseTotals.approved)}</div>
+              <div className="stat__sub">ready for payment</div>
+            </div>
+            <div className="stat">
+              <div className="stat__label">Paid</div>
+              <div className="stat__value">{cents(expenseTotals.paid)}</div>
+              <div className="stat__sub">closed reimbursements</div>
+            </div>
+          </div>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Claim</th>
+                <th>Claimant</th>
+                <th>Status</th>
+                <th style={{ textAlign: "right" }}>Amount</th>
+                <th>Receipt</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {(expenseReports ?? []).map((report: any) => (
+                <tr key={report._id}>
+                  <td>
+                    <strong>{report.title}</strong>
+                    <div className="muted" style={{ fontSize: 11 }}>
+                      {report.category} · incurred {formatDate(report.incurredAtISO)}
+                    </div>
+                  </td>
+                  <td>{report.claimantName}</td>
+                  <td><Badge tone={expenseStatusTone(report.status)}>{report.status}</Badge></td>
+                  <td className="mono" style={{ textAlign: "right" }}>{cents(report.amountCents)}</td>
+                  <td>
+                    {report.receiptDocument ? (
+                      <Link to={`/app/documents/${report.receiptDocument._id}`}>{report.receiptDocument.title}</Link>
+                    ) : (
+                      <span className="muted">No receipt</span>
+                    )}
+                  </td>
+                  <td>
+                    <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
+                      <button className="btn btn--ghost btn--sm" onClick={() => setExpenseDraft(expenseDraftFromRow(report))}>Edit</button>
+                      {report.status === "Draft" && (
+                        <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Submitted", actingUserId })}>Submit</button>
+                      )}
+                      {report.status === "Submitted" && (
+                        <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Approved", actingUserId })}>Approve</button>
+                      )}
+                      {report.status === "Approved" && (
+                        <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Paid", actingUserId })}>Mark paid</button>
+                      )}
+                      <button
+                        className="btn btn--ghost btn--sm btn--icon"
+                        aria-label={`Delete expense report ${report.title}`}
+                        onClick={async () => {
+                          await removeExpenseReport({ id: report._id });
+                          toast.success("Expense report removed");
+                        }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {(expenseReports ?? []).length === 0 && (
+                <tr>
+                  <td colSpan={6} className="muted" style={{ textAlign: "center", padding: 24 }}>
+                    No reimbursement claims yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -841,6 +1023,111 @@ export function TreasurerPage() {
         )}
       </Drawer>
 
+      <Drawer
+        open={!!expenseDraft}
+        onClose={() => setExpenseDraft(null)}
+        title={expenseDraft?.id ? "Edit expense report" : "New expense report"}
+        footer={
+          <>
+            <button className="btn" onClick={() => setExpenseDraft(null)}>Cancel</button>
+            <button
+              className="btn btn--accent"
+              disabled={!expenseDraft?.title || !expenseDraft?.claimantName}
+              onClick={async () => {
+                await upsertExpenseReport({
+                  id: expenseDraft.id,
+                  societyId: society._id,
+                  claimantName: expenseDraft.claimantName,
+                  claimantUserId: expenseDraft.claimantUserId || undefined,
+                  title: expenseDraft.title,
+                  category: expenseDraft.category,
+                  amountCents: dollarInputToCents(expenseDraft.amountDollars) ?? 0,
+                  currency: expenseDraft.currency || "CAD",
+                  incurredAtISO: expenseDraft.incurredAtISO,
+                  submittedAtISO: expenseDraft.submittedAtISO || undefined,
+                  status: expenseDraft.status,
+                  receiptDocumentId: expenseDraft.receiptDocumentId || undefined,
+                  paymentReference: expenseDraft.paymentReference || undefined,
+                  notes: expenseDraft.notes || undefined,
+                  actingUserId,
+                });
+                toast.success("Expense report saved");
+                setExpenseDraft(null);
+              }}
+            >
+              Save
+            </button>
+          </>
+        }
+      >
+        {expenseDraft && (
+          <div>
+            <Field label="Claim title">
+              <input className="input" value={expenseDraft.title} onChange={(e) => setExpenseDraft({ ...expenseDraft, title: e.target.value })} />
+            </Field>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Field label="Claimant">
+                <input className="input" value={expenseDraft.claimantName} onChange={(e) => setExpenseDraft({ ...expenseDraft, claimantName: e.target.value })} />
+              </Field>
+              <Field label="Linked user">
+                <select
+                  className="input"
+                  value={expenseDraft.claimantUserId ?? ""}
+                  onChange={(e) => {
+                    const selected = (users ?? []).find((user: any) => user._id === e.target.value);
+                    setExpenseDraft({
+                      ...expenseDraft,
+                      claimantUserId: e.target.value,
+                      claimantName: selected?.displayName || expenseDraft.claimantName,
+                    });
+                  }}
+                >
+                  <option value="">No linked user</option>
+                  {(users ?? []).map((user: any) => (
+                    <option key={user._id} value={user._id}>{user.displayName}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Field label="Category">
+                <Select value={expenseDraft.category} onChange={(v) => setExpenseDraft({ ...expenseDraft, category: v })} options={EXPENSE_CATEGORIES.map((value) => ({ value, label: value }))} />
+              </Field>
+              <Field label="Status">
+                <Select value={expenseDraft.status} onChange={(v) => setExpenseDraft({ ...expenseDraft, status: v })} options={EXPENSE_STATUSES.map((value) => ({ value, label: value }))} />
+              </Field>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Field label="Amount">
+                <input className="input" type="number" min="0" step="0.01" value={expenseDraft.amountDollars} onChange={(e) => setExpenseDraft({ ...expenseDraft, amountDollars: e.target.value })} />
+              </Field>
+              <Field label="Incurred date">
+                <input className="input" type="date" value={expenseDraft.incurredAtISO} onChange={(e) => setExpenseDraft({ ...expenseDraft, incurredAtISO: e.target.value })} />
+              </Field>
+            </div>
+            <Field label="Receipt document" hint="Upload receipts in Documents, then link them here.">
+              <select className="input" value={expenseDraft.receiptDocumentId ?? ""} onChange={(e) => setExpenseDraft({ ...expenseDraft, receiptDocumentId: e.target.value })}>
+                <option value="">No receipt linked</option>
+                {(documents ?? []).map((document: any) => (
+                  <option key={document._id} value={document._id}>{document.title}</option>
+                ))}
+              </select>
+            </Field>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Field label="Submitted date">
+                <input className="input" type="date" value={expenseDraft.submittedAtISO ?? ""} onChange={(e) => setExpenseDraft({ ...expenseDraft, submittedAtISO: e.target.value })} />
+              </Field>
+              <Field label="Payment reference">
+                <input className="input" value={expenseDraft.paymentReference ?? ""} onChange={(e) => setExpenseDraft({ ...expenseDraft, paymentReference: e.target.value })} />
+              </Field>
+            </div>
+            <Field label="Notes">
+              <textarea className="textarea" value={expenseDraft.notes ?? ""} onChange={(e) => setExpenseDraft({ ...expenseDraft, notes: e.target.value })} />
+            </Field>
+          </div>
+        )}
+      </Drawer>
+
       <StudentLevyIntakeDrawer
         open={levyImportOpen}
         onClose={() => setLevyImportOpen(false)}
@@ -874,4 +1161,14 @@ function SummaryCard({
       </div>
     </div>
   );
+}
+
+function expenseStatusTone(status: string) {
+  switch (status) {
+    case "Paid": return "success" as const;
+    case "Approved": return "info" as const;
+    case "Submitted": return "warn" as const;
+    case "Rejected": return "danger" as const;
+    default: return "neutral" as const;
+  }
 }
