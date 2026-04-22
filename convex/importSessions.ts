@@ -66,7 +66,7 @@ export const list = query({
   args: { societyId: v.id("societies") },
   handler: async (ctx, { societyId }) => {
     const sessions = await docsByCategory(ctx, societyId, SESSION_CATEGORY);
-    const rows = [];
+    const rows: any[] = [];
     for (const doc of sessions.filter(isImportSession)) {
       const session = hydrateSession(doc);
       const recordDocs = await recordsForSession(ctx, doc._id);
@@ -132,7 +132,7 @@ export const createFromBundle = mutation({
       content: JSON.stringify(sessionPayload),
       createdAtISO: now,
       flaggedForDeletion: false,
-      tags: [SESSION_TAG, tagValue(sessionPayload.sourceSystem)],
+      tags: compactStrings([SESSION_TAG, tagValue(sessionPayload.sourceSystem)]),
     });
 
     for (const record of records) {
@@ -154,7 +154,7 @@ export const createFromBundle = mutation({
         }),
         createdAtISO: now,
         flaggedForDeletion: false,
-        tags: [SESSION_TAG, RECORD_TAG, tagValue(record.recordKind), tagValue(record.targetModule)],
+        tags: compactStrings([SESSION_TAG, RECORD_TAG, tagValue(record.recordKind), tagValue(record.targetModule)]),
       });
     }
 
@@ -191,7 +191,7 @@ export const updateRecord = mutation({
     await ctx.db.patch(recordId, {
       title,
       content: JSON.stringify({ ...next, title }),
-      tags: [SESSION_TAG, RECORD_TAG, tagValue(next.recordKind), tagValue(next.targetModule)],
+      tags: compactStrings([SESSION_TAG, RECORD_TAG, tagValue(next.recordKind), tagValue(next.targetModule)]),
     });
     return recordId;
   },
@@ -641,8 +641,8 @@ export const backfillApprovedMeetingReferences = mutation({
     let documents = 0;
     for (const recordsForMeeting of groups.values()) {
       const target = recordsForMeeting[0].importedTargets.meetings;
-      const meeting = await ctx.db.get(target.meetingId);
-      const minutesRow = await ctx.db.get(target.minutesId);
+      const meeting = await ctx.db.get(target.meetingId) as any;
+      const minutesRow = await ctx.db.get(target.minutesId) as any;
       if (!meeting || !minutesRow) continue;
 
       const payloads = recordsForMeeting.map((record) => normalizeMotionPayload(record.payload));
@@ -2680,14 +2680,14 @@ function normalizeMeetingMinutesPayload(minutes: any) {
     adjournedAt: cleanText(minutes?.adjournedAt),
     remoteParticipation: normalizeRemoteParticipationPayload(minutes?.remoteParticipation),
     detailedAttendance: normalizeDetailedAttendancePayload(minutes?.detailedAttendance),
-    attendees: arrayOf(minutes?.attendees).map(String).map(cleanText).filter(Boolean),
-    absent: arrayOf(minutes?.absent).map(String).map(cleanText).filter(Boolean),
+    attendees: compactStrings(arrayOf(minutes?.attendees)),
+    absent: compactStrings(arrayOf(minutes?.absent)),
     quorumMet: Boolean(minutes?.quorumMet),
-    agendaItems: arrayOf(minutes?.agendaItems).map(String).map(cleanText).filter(Boolean),
+    agendaItems: compactStrings(arrayOf(minutes?.agendaItems)),
     discussion: cleanText(minutes?.discussion),
     sections: normalizeMinuteSectionsPayload(minutes?.sections),
     motions: arrayOf(minutes?.motions).map(normalizeMotionPayload),
-    decisions: arrayOf(minutes?.decisions).map(String).map(cleanText).filter(Boolean),
+    decisions: compactStrings(arrayOf(minutes?.decisions)),
     actionItems: arrayOf(minutes?.actionItems),
     nextMeetingAt: cleanText(minutes?.nextMeetingAt),
     nextMeetingLocation: cleanText(minutes?.nextMeetingLocation),
@@ -3129,7 +3129,7 @@ function summarizeFromSessionMetadata(session: any) {
   };
 }
 
-function hydrateSession(doc: any) {
+function hydrateSession(doc: any): any {
   const payload = parseJson(doc?.content);
   return {
     ...payload,
@@ -3140,7 +3140,7 @@ function hydrateSession(doc: any) {
   };
 }
 
-function hydrateRecord(doc: any) {
+function hydrateRecord(doc: any): any {
   const payload = parseJson(doc?.content);
   return {
     ...payload,
@@ -3207,11 +3207,11 @@ function sourceCatalogForRecords(records: any[]) {
   return catalog;
 }
 
-function isImportSession(doc: any) {
+function isImportSession(doc: any): doc is Record<string, any> {
   return Boolean(doc?.tags?.includes(SESSION_TAG) && !doc?.tags?.includes(RECORD_TAG));
 }
 
-function isImportRecord(doc: any) {
+function isImportRecord(doc: any): doc is Record<string, any> {
   return Boolean(doc?.tags?.includes(SESSION_TAG) && doc?.tags?.includes(RECORD_TAG));
 }
 
@@ -3322,8 +3322,8 @@ function inferMeetingType(title: string) {
   return "Board";
 }
 
-function toMeetingDateTime(date: string) {
-  const value = cleanText(date);
+function toMeetingDateTime(date: unknown) {
+  const value = cleanText(date) ?? "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return `${value}T12:00:00.000Z`;
   if (/^\d{4}-\d{2}$/.test(value)) return `${value}-01T12:00:00.000Z`;
   if (/^\d{4}$/.test(value)) return `${value}-01-01T12:00:00.000Z`;
@@ -3440,6 +3440,10 @@ function cleanText(value: unknown) {
 
 function arrayOf(value: unknown) {
   return Array.isArray(value) ? value : [];
+}
+
+function compactStrings(values: unknown[]): string[] {
+  return values.map((value) => cleanText(value)).filter((value): value is string => Boolean(value));
 }
 
 function compactRecord<T extends Record<string, any>>(value: T): T | undefined {

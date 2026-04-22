@@ -165,7 +165,6 @@ export const attach = mutation({
     const id = await ctx.db.insert("meetingMaterials", {
       societyId: args.societyId,
       meetingId: args.meetingId,
-      documentId: args.documentId,
       ...patch,
       createdAtISO: new Date().toISOString(),
     });

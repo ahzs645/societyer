@@ -321,7 +321,7 @@ async function ensurePaperlessTags(names: string[]) {
   if (normalized.length === 0) return [];
 
   const existing = await listPaperlessTags();
-  const byName = new Map(
+  const byName = new Map<string, any>(
     existing.map((tag: any) => [String(tag.name ?? "").toLowerCase(), tag]),
   );
   const ids: number[] = [];
@@ -350,7 +350,7 @@ async function ensurePaperlessTags(names: string[]) {
   return ids;
 }
 
-async function listPaperlessTags() {
+async function listPaperlessTags(): Promise<any[]> {
   const response = await paperlessFetch("/api/tags/?page_size=200");
   const data = await parseResponse(response);
   return Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];

@@ -484,7 +484,11 @@ async function assertPersonLinkBelongsToSociety(
   }
 }
 
-function resolveMotionPersonLink(value: unknown, members: any[], directors: any[]) {
+function resolveMotionPersonLink(
+  value: unknown,
+  members: any[],
+  directors: any[],
+): { memberId?: string; directorId?: string; label?: string } {
   const key = normalizePersonLookupName(value);
   if (!key) return {};
   const memberMatches = members.filter((member) => personLookupKeys(member).includes(key));

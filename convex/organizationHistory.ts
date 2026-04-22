@@ -348,7 +348,7 @@ export const bulkImport = mutation({
       const source = normalizeSource(rawSource);
       if (!source.title) continue;
 
-      let sourceId = null;
+      let sourceId: any = null;
       if (source.externalId) {
         const existing = existingSources.find(
           (candidate) =>
@@ -562,7 +562,7 @@ function mergeMotionRecords(historyMotions: any[], minutesRows: any[], meetingRo
   const sourceById = new Map(sources.map((source) => [source._id, source]));
   const sourceIdByExternalId = new Map(
     sources
-      .map((source) => [String(source.externalId ?? ""), source._id])
+      .map((source) => [String(source.externalId ?? ""), source._id] as const)
       .filter(([externalId]) => externalId),
   );
   const meetingById = new Map(meetingRows.map((meeting) => [meeting._id, meeting]));
@@ -899,7 +899,7 @@ function extractRegisterTransactions(lines: string[], source: any) {
   return uniqueBy(out, (row) => [row.transactionDate, row.description, row.amountCents, row.checkNumber].join("|").toLowerCase());
 }
 
-function parseRegisterRow(line: string, context: any) {
+function parseRegisterRow(line: string, context: any): any {
   const matches = moneyLikeMatches(line);
   if (matches.length === 0) return null;
 
@@ -1298,10 +1298,10 @@ function isItemKind(kind: string) {
   return ["fact", "event", "boardTerm", "motion", "budget"].includes(kind);
 }
 
-function isHistorySource(doc: any) {
+function isHistorySource(doc: any): doc is Record<string, any> {
   return Boolean(doc?.tags?.includes(HISTORY_TAG) && doc?.tags?.includes(SOURCE_TAG));
 }
 
-function isHistoryItem(doc: any) {
+function isHistoryItem(doc: any): doc is Record<string, any> {
   return Boolean(doc?.tags?.includes(HISTORY_TAG) && doc?.tags?.includes(ITEM_TAG));
 }

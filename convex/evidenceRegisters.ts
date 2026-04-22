@@ -337,7 +337,7 @@ export const finishSafePaperlessReview = mutation({
       }))) counts.motionsRejected += 1;
     }
 
-    const sourceEvidenceKeepReview = new Set(SAFE_REVIEW.sourceEvidenceKeepNeedsReview);
+    const sourceEvidenceKeepReview = new Set<string>(SAFE_REVIEW.sourceEvidenceKeepNeedsReview);
     const evidenceRows = await ctx.db
       .query("sourceEvidence")
       .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
