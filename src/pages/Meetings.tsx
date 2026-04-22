@@ -14,6 +14,8 @@ import { useToast } from "../components/Toast";
 import { Plus, Calendar, Tag, AlertTriangle } from "lucide-react";
 import { formatDateTime } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
+import { CalendarView } from "../components/CalendarView";
+import type { ToneVariant } from "../components/ui";
 
 const OVERLAP_WINDOW_MS = 2 * 60 * 60 * 1000; // within 2 hours counts as concurrent
 
@@ -48,6 +50,7 @@ export function MeetingsPage() {
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const formRules = useQuery(
     api.bylawRules.getForDate,
     society && form?.scheduledAt ? { societyId: society._id, dateISO: form.scheduledAt } : "skip",
@@ -101,71 +104,110 @@ export function MeetingsPage() {
         iconColor="orange"
         subtitle={`Board meetings, committee meetings, and general meetings (AGM/SGM). Active notice rule: ${noticeMinDays}–${noticeMaxDays} days.`}
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
-            <Plus size={12} /> New meeting
-          </button>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <div className="segmented" role="tablist" aria-label="Meeting view">
+              <button
+                type="button"
+                className={`segmented__btn${viewMode === "list" ? " is-active" : ""}`}
+                aria-pressed={viewMode === "list"}
+                onClick={() => setViewMode("list")}
+              >
+                List
+              </button>
+              <button
+                type="button"
+                className={`segmented__btn${viewMode === "calendar" ? " is-active" : ""}`}
+                aria-pressed={viewMode === "calendar"}
+                onClick={() => setViewMode("calendar")}
+              >
+                Calendar
+              </button>
+            </div>
+            <button className="btn-action btn-action--primary" onClick={openNew}>
+              <Plus size={12} /> New meeting
+            </button>
+          </div>
         }
       />
 
-      <DataTable
-        label="All meetings"
-        icon={<Calendar size={14} />}
-        data={(meetings ?? []) as any[]}
-        rowKey={(r) => r._id}
-        filterFields={MEETING_FIELDS}
-        searchPlaceholder="Search meetings…"
-        defaultSort={{ columnId: "scheduledAt", dir: "desc" }}
-        onRowClick={(row) => navigate(`/app/meetings/${row._id}`)}
-        columns={[
-          { id: "title", header: "Title", sortable: true, accessor: (r) => r.title, render: (r) => <strong>{r.title}</strong> },
-          {
-            id: "type", header: "Type", sortable: true,
-            accessor: (r) => r.type,
-            render: (r) => <Badge tone={r.type === "AGM" ? "accent" : r.type === "SGM" ? "warn" : "info"}>{r.type}</Badge>,
-          },
-          {
-            id: "scheduledAt", header: "When", sortable: true,
-            accessor: (r) => r.scheduledAt,
-            render: (r) => {
-              const overlap = conflicts.get(r._id);
-              return (
-                <span>
-                  <span className="mono">{formatDateTime(r.scheduledAt)}</span>
-                  {overlap && (
-                    <span
-                      title={`Overlaps with: ${overlap.join(", ")}`}
-                      style={{ marginLeft: 6, display: "inline-flex", alignItems: "center" }}
-                    >
-                      <Badge tone="warn">
-                        <AlertTriangle size={10} style={{ marginRight: 3, verticalAlign: -1 }} />
-                        {overlap.length} concurrent
-                      </Badge>
-                    </span>
-                  )}
-                </span>
-              );
+      {viewMode === "calendar" ? (
+        <div className="card">
+          <div className="card__head">
+            <h2 className="card__title">Meeting calendar</h2>
+            <span className="card__subtitle">Click a meeting to open its hub.</span>
+          </div>
+          <div className="card__body">
+            <CalendarView
+              items={(meetings ?? []) as any[]}
+              getDate={(meeting) => meeting.scheduledAt}
+              getLabel={(meeting) => `${meetingTimeLabel(meeting.scheduledAt)} ${meeting.title}`}
+              getTone={(meeting) => meetingStatusTone(meeting.status)}
+              getId={(meeting) => meeting._id}
+              onSelect={(meeting) => navigate(`/app/meetings/${meeting._id}`)}
+            />
+          </div>
+        </div>
+      ) : (
+        <DataTable
+          label="All meetings"
+          icon={<Calendar size={14} />}
+          data={(meetings ?? []) as any[]}
+          rowKey={(r) => r._id}
+          filterFields={MEETING_FIELDS}
+          searchPlaceholder="Search meetings…"
+          defaultSort={{ columnId: "scheduledAt", dir: "desc" }}
+          onRowClick={(row) => navigate(`/app/meetings/${row._id}`)}
+          columns={[
+            { id: "title", header: "Title", sortable: true, accessor: (r) => r.title, render: (r) => <strong>{r.title}</strong> },
+            {
+              id: "type", header: "Type", sortable: true,
+              accessor: (r) => r.type,
+              render: (r) => <Badge tone={r.type === "AGM" ? "accent" : r.type === "SGM" ? "warn" : "info"}>{r.type}</Badge>,
             },
-          },
-          {
-            id: "location", header: "Location", sortable: true,
-            accessor: (r) => r.location ?? "",
-            render: (r) => (
-              <span>
-                {r.location ?? "—"} {r.electronic && <Badge tone="info">Electronic</Badge>}
-              </span>
-            ),
-          },
-          {
-            id: "status", header: "Status", sortable: true,
-            accessor: (r) => r.status,
-            render: (r) => <Badge tone={r.status === "Held" ? "success" : r.status === "Cancelled" ? "danger" : "warn"}>{r.status}</Badge>,
-          },
-          {
-            id: "minutes", header: "Minutes",
-            render: (r) => r.minutesId ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>,
-          },
-        ]}
-      />
+            {
+              id: "scheduledAt", header: "When", sortable: true,
+              accessor: (r) => r.scheduledAt,
+              render: (r) => {
+                const overlap = conflicts.get(r._id);
+                return (
+                  <span>
+                    <span className="mono">{formatDateTime(r.scheduledAt)}</span>
+                    {overlap && (
+                      <span
+                        title={`Overlaps with: ${overlap.join(", ")}`}
+                        style={{ marginLeft: 6, display: "inline-flex", alignItems: "center" }}
+                      >
+                        <Badge tone="warn">
+                          <AlertTriangle size={10} style={{ marginRight: 3, verticalAlign: -1 }} />
+                          {overlap.length} concurrent
+                        </Badge>
+                      </span>
+                    )}
+                  </span>
+                );
+              },
+            },
+            {
+              id: "location", header: "Location", sortable: true,
+              accessor: (r) => r.location ?? "",
+              render: (r) => (
+                <span>
+                  {r.location ?? "—"} {r.electronic && <Badge tone="info">Electronic</Badge>}
+                </span>
+              ),
+            },
+            {
+              id: "status", header: "Status", sortable: true,
+              accessor: (r) => r.status,
+              render: (r) => <Badge tone={meetingStatusTone(r.status)}>{r.status}</Badge>,
+            },
+            {
+              id: "minutes", header: "Minutes",
+              render: (r) => r.minutesId ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>,
+            },
+          ]}
+        />
+      )}
 
       <Drawer
         open={open} onClose={() => setOpen(false)} title="Schedule meeting"
@@ -283,6 +325,18 @@ function numberOrUndefined(value: unknown) {
   if (value === "" || value == null) return undefined;
   const number = Number(value);
   return Number.isFinite(number) ? number : undefined;
+}
+
+function meetingStatusTone(status: string): ToneVariant {
+  if (status === "Held") return "success";
+  if (status === "Cancelled") return "danger";
+  return "warn";
+}
+
+function meetingTimeLabel(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
 function toDateTimeLocalValue(date: Date) {

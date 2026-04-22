@@ -5,10 +5,10 @@ import { useToast } from "../components/Toast";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Badge, Drawer, Field, type ToneVariant } from "../components/ui";
 import { formatDate, formatDateTime } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, ArrowLeft, FileText, Save, Mic, FileDown, Gavel, ClipboardCheck, Upload, ExternalLink, Download, RefreshCw, Printer } from "lucide-react";
+import { Sparkles, ArrowLeft, FileText, Save, Mic, FileDown, Gavel, ClipboardCheck, Upload, ExternalLink, Download, RefreshCw, Printer, LockKeyhole } from "lucide-react";
 import { MotionEditor, Motion } from "../components/MotionEditor";
 import { Checkbox } from "../components/Controls";
 import {
@@ -49,6 +49,36 @@ type StructuredMinutesEdit = {
   specialResolutionExhibits: string;
 };
 
+const AVAILABILITY_OPTIONS = [
+  { value: "available", label: "Available" },
+  { value: "pending", label: "Pending" },
+  { value: "expired", label: "Expired" },
+  { value: "withdrawn", label: "Withdrawn" },
+];
+
+const SYNC_OPTIONS = [
+  { value: "online", label: "Online only" },
+  { value: "synced", label: "Synced copy" },
+  { value: "offline", label: "Offline copy" },
+  { value: "unavailable", label: "Unavailable offline" },
+];
+
+const ACCESS_GRANT_TYPES = [
+  { value: "attendee", label: "Attendee" },
+  { value: "member", label: "Member" },
+  { value: "director", label: "Director" },
+  { value: "user", label: "Workspace user" },
+  { value: "committee", label: "Committee" },
+  { value: "group", label: "Named group" },
+];
+
+const ACCESS_GRANT_LEVELS = [
+  { value: "view", label: "Can view" },
+  { value: "comment", label: "Can comment" },
+  { value: "sign", label: "Can sign" },
+  { value: "manage", label: "Can manage" },
+];
+
 export function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
@@ -70,6 +100,14 @@ export function MeetingDetailPage() {
   );
   const members = useQuery(
     api.members.list,
+    society ? { societyId: society._id } : "skip",
+  );
+  const users = useQuery(
+    api.users.list,
+    society ? { societyId: society._id } : "skip",
+  );
+  const committees = useQuery(
+    api.committees.list,
     society ? { societyId: society._id } : "skip",
   );
   const allDocuments = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
@@ -204,6 +242,17 @@ export function MeetingDetailPage() {
   const packageTasks = meetingPackage?.tasks ?? [];
   const openPackageTasks = packageTasks.filter((task: any) => task.status !== "Done");
   const joinDetails = getMeetingJoinDetails(meeting, minutes);
+  const packageReadiness = getPackageReadiness(packageMaterials);
+  const grantCandidates = materialDraft
+    ? buildAccessGrantCandidates(materialDraft.grantSubjectType, {
+        meeting,
+        minutes,
+        users,
+        members,
+        directors,
+        committees,
+      })
+    : [];
 
   const runGenerate = async () => {
     const sourceTranscript = transcript.trim() || transcriptOnFile.trim();
@@ -489,15 +538,24 @@ export function MeetingDetailPage() {
     toast.success("Structured minutes details saved");
   };
 
-  const openMaterialDrawer = (agendaLabel?: string) => {
+  const openMaterialDrawer = (agendaLabel?: string, material?: any) => {
     setMaterialDraft({
-      documentId: "",
-      agendaLabel: agendaLabel ?? "",
-      label: "",
-      order: packageMaterials.length + 1,
-      requiredForMeeting: true,
-      accessLevel: "board",
-      notes: "",
+      id: material?._id,
+      documentId: material?.documentId ?? "",
+      agendaLabel: material?.agendaLabel ?? agendaLabel ?? "",
+      label: material?.label ?? "",
+      order: material?.order ?? packageMaterials.length + 1,
+      requiredForMeeting: material?.requiredForMeeting ?? true,
+      accessLevel: material?.accessLevel ?? "board",
+      accessGrants: material?.accessGrants ?? [],
+      availabilityStatus: material?.availabilityStatus ?? materialEffectiveStatus(material) ?? "available",
+      syncStatus: material?.syncStatus ?? "online",
+      expiresAtISO: (material?.expiresAtISO ?? "").slice(0, 10),
+      notes: material?.notes ?? "",
+      grantSubjectType: "attendee",
+      grantSubjectId: "",
+      grantSubjectLabel: "",
+      grantAccess: "view",
     });
   };
 
@@ -507,6 +565,7 @@ export function MeetingDetailPage() {
       return;
     }
     await attachMeetingMaterial({
+      id: materialDraft.id || undefined,
       societyId: meeting.societyId,
       meetingId: meeting._id,
       documentId: materialDraft.documentId,
@@ -515,10 +574,43 @@ export function MeetingDetailPage() {
       order: Number(materialDraft.order) || packageMaterials.length + 1,
       requiredForMeeting: !!materialDraft.requiredForMeeting,
       accessLevel: materialDraft.accessLevel || "board",
+      accessGrants: materialDraft.accessGrants ?? [],
+      availabilityStatus: materialDraft.availabilityStatus || "available",
+      syncStatus: materialDraft.syncStatus || "online",
+      expiresAtISO: materialDraft.expiresAtISO || "",
       notes: materialDraft.notes || undefined,
     });
     setMaterialDraft(null);
-    toast.success("Material added to meeting package");
+    toast.success(materialDraft.id ? "Meeting material updated" : "Material added to meeting package");
+  };
+
+  const addAccessGrant = () => {
+    if (!materialDraft) return;
+    const selected = grantCandidates.find((candidate) => candidate.id === materialDraft.grantSubjectId);
+    const subjectLabel = materialDraft.grantSubjectType === "group"
+      ? materialDraft.grantSubjectLabel.trim()
+      : selected?.label ?? "";
+    if (!subjectLabel) {
+      toast.error("Choose an access target.");
+      return;
+    }
+    const nextGrant = {
+      subjectType: materialDraft.grantSubjectType,
+      subjectId: selected?.id || undefined,
+      subjectLabel,
+      access: materialDraft.grantAccess || "view",
+    };
+    const key = grantKey(nextGrant);
+    const nextGrants = [
+      ...(materialDraft.accessGrants ?? []).filter((grant: any) => grantKey(grant) !== key),
+      nextGrant,
+    ];
+    setMaterialDraft({
+      ...materialDraft,
+      accessGrants: nextGrants,
+      grantSubjectId: "",
+      grantSubjectLabel: "",
+    });
   };
 
   const startJoinEdit = () => {
@@ -812,6 +904,11 @@ export function MeetingDetailPage() {
               <div className="stat__sub">{packageMaterials.filter((m: any) => m.requiredForMeeting).length} required</div>
             </div>
             <div className="stat">
+              <div className="stat__label">Pack readiness</div>
+              <div className="stat__value">{packageReadiness.ready}/{packageReadiness.total}</div>
+              <div className="stat__sub">{packageReadiness.needsAttention} need attention</div>
+            </div>
+            <div className="stat">
               <div className="stat__label">Attendees</div>
               <div className="stat__value">{minutes?.attendees.length ?? meeting.attendeeIds?.length ?? 0}</div>
               <div className="stat__sub">{minutes ? "from minutes" : "scheduled roster"}</div>
@@ -840,21 +937,48 @@ export function MeetingDetailPage() {
                       </button>
                     </div>
                     <div className="col" style={{ gap: 6, marginTop: 8 }}>
-                      {topicMaterials.map((material: any) => (
-                        <div key={material._id} className="row" style={{ gap: 8 }}>
-                          <FileText size={12} />
-                          <Link to={`/app/documents/${material.document?._id}`}>{material.label || material.document?.title || "Document"}</Link>
-                          {material.requiredForMeeting && <Badge tone="warn">Required</Badge>}
-                          <Badge tone="neutral">{material.accessLevel}</Badge>
-                          <button
-                            className="btn btn--ghost btn--sm"
-                            style={{ marginLeft: "auto" }}
-                            onClick={() => removeMeetingMaterial({ id: material._id })}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ))}
+                      {topicMaterials.map((material: any) => {
+                        const status = materialEffectiveStatus(material);
+                        return (
+                          <div key={material._id} className="panel" style={{ padding: 10, borderRadius: 8 }}>
+                            <div className="row" style={{ gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+                              <FileText size={12} style={{ marginTop: 3 }} />
+                              <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+                                <Link to={`/app/documents/${material.document?._id}`}>
+                                  {material.label || material.document?.title || "Document"}
+                                </Link>
+                                <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>
+                                  {materialAccessSummary(material)}
+                                </div>
+                              </div>
+                              <Badge tone={availabilityTone(status)}>{availabilityLabel(status)}</Badge>
+                              {material.syncStatus && <Badge tone={syncTone(material.syncStatus)}>{syncLabel(material.syncStatus)}</Badge>}
+                              {material.requiredForMeeting && <Badge tone="warn">Required</Badge>}
+                              {material.expiresAtISO && (
+                                <Badge tone={isMaterialExpired(material) ? "danger" : "neutral"}>
+                                  Expires {formatDate(material.expiresAtISO)}
+                                </Badge>
+                              )}
+                              <Badge tone={(material.accessGrants ?? []).length ? "info" : "neutral"}>
+                                {(material.accessGrants ?? []).length ? `${material.accessGrants.length} grant${material.accessGrants.length === 1 ? "" : "s"}` : accessLevelLabel(material.accessLevel)}
+                              </Badge>
+                              <button
+                                className="btn btn--ghost btn--sm"
+                                style={{ marginLeft: "auto" }}
+                                onClick={() => openMaterialDrawer(material.agendaLabel, material)}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                className="btn btn--ghost btn--sm"
+                                onClick={() => removeMeetingMaterial({ id: material._id })}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                       {topicMaterials.length === 0 && (
                         <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>No linked materials.</div>
                       )}
@@ -1303,11 +1427,11 @@ export function MeetingDetailPage() {
       <Drawer
         open={!!materialDraft}
         onClose={() => setMaterialDraft(null)}
-        title="Attach meeting material"
+        title={materialDraft?.id ? "Edit meeting material" : "Attach meeting material"}
         footer={
           <>
             <button className="btn" onClick={() => setMaterialDraft(null)}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveMaterial}>Attach</button>
+            <button className="btn btn--accent" onClick={saveMaterial}>{materialDraft?.id ? "Save" : "Attach"}</button>
           </>
         }
       >
@@ -1351,6 +1475,90 @@ export function MeetingDetailPage() {
                   <option value="restricted">Restricted</option>
                 </select>
               </Field>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Field label="Availability">
+                <select className="input" value={materialDraft.availabilityStatus} onChange={(event) => setMaterialDraft({ ...materialDraft, availabilityStatus: event.target.value })}>
+                  {AVAILABILITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </Field>
+              <Field label="Sync / offline">
+                <select className="input" value={materialDraft.syncStatus} onChange={(event) => setMaterialDraft({ ...materialDraft, syncStatus: event.target.value })}>
+                  {SYNC_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </Field>
+            </div>
+            <Field label="Expires">
+              <input
+                className="input"
+                type="date"
+                value={materialDraft.expiresAtISO}
+                onChange={(event) => setMaterialDraft({ ...materialDraft, expiresAtISO: event.target.value })}
+              />
+            </Field>
+            <div className="panel" style={{ padding: 12, borderRadius: 8 }}>
+              <div className="row" style={{ justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                <strong><LockKeyhole size={13} style={{ verticalAlign: -2 }} /> Specific access grants</strong>
+                <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  {(materialDraft.accessGrants ?? []).length} grant{(materialDraft.accessGrants ?? []).length === 1 ? "" : "s"}
+                </span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <Field label="Target type">
+                  <select
+                    className="input"
+                    value={materialDraft.grantSubjectType}
+                    onChange={(event) => setMaterialDraft({ ...materialDraft, grantSubjectType: event.target.value, grantSubjectId: "", grantSubjectLabel: "" })}
+                  >
+                    {ACCESS_GRANT_TYPES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Permission">
+                  <select className="input" value={materialDraft.grantAccess} onChange={(event) => setMaterialDraft({ ...materialDraft, grantAccess: event.target.value })}>
+                    {ACCESS_GRANT_LEVELS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </Field>
+              </div>
+              {materialDraft.grantSubjectType === "group" ? (
+                <Field label="Group name">
+                  <input className="input" value={materialDraft.grantSubjectLabel} onChange={(event) => setMaterialDraft({ ...materialDraft, grantSubjectLabel: event.target.value })} placeholder="e.g. Recusal review group" />
+                </Field>
+              ) : (
+                <Field label="Target">
+                  <select className="input" value={materialDraft.grantSubjectId} onChange={(event) => setMaterialDraft({ ...materialDraft, grantSubjectId: event.target.value })}>
+                    <option value="">Choose target</option>
+                    {grantCandidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}
+                  </select>
+                </Field>
+              )}
+              <button className="btn btn--ghost btn--sm" type="button" onClick={addAccessGrant}>
+                Add grant
+              </button>
+              <div className="col" style={{ gap: 6, marginTop: 10 }}>
+                {(materialDraft.accessGrants ?? []).map((grant: any) => (
+                  <div key={grantKey(grant)} className="row" style={{ gap: 8, justifyContent: "space-between" }}>
+                    <span>
+                      <Badge tone="info">{grantTypeLabel(grant.subjectType)}</Badge>{" "}
+                      {grant.subjectLabel} · {accessGrantLabel(grant.access)}
+                    </span>
+                    <button
+                      className="btn btn--ghost btn--sm"
+                      type="button"
+                      onClick={() => setMaterialDraft({
+                        ...materialDraft,
+                        accessGrants: (materialDraft.accessGrants ?? []).filter((row: any) => grantKey(row) !== grantKey(grant)),
+                      })}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                {(materialDraft.accessGrants ?? []).length === 0 && (
+                  <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                    No specific people, attendee, committee, or group grants added. The broad access level still applies.
+                  </div>
+                )}
+              </div>
             </div>
             <Checkbox
               checked={!!materialDraft.requiredForMeeting}
@@ -1632,6 +1840,142 @@ function normalizePersonName(value: string) {
     .replace(/\s+/g, " ");
 }
 
+function materialEffectiveStatus(material: any): string {
+  if (!material) return "available";
+  if (material.availabilityStatus === "withdrawn") return "withdrawn";
+  if (isMaterialExpired(material)) return "expired";
+  return material.availabilityStatus ?? "available";
+}
+
+function isMaterialExpired(material: any) {
+  if (!material?.expiresAtISO) return false;
+  const expires = new Date(material.expiresAtISO).getTime();
+  if (!Number.isFinite(expires)) return false;
+  return expires < Date.now();
+}
+
+function getPackageReadiness(materials: any[]) {
+  const total = materials.length;
+  const ready = materials.filter((material) => !materialNeedsAttention(material)).length;
+  const withGrants = materials.filter((material) => (material.accessGrants ?? []).length > 0).length;
+  return {
+    total,
+    ready,
+    needsAttention: total - ready,
+    withGrants,
+  };
+}
+
+function materialNeedsAttention(material: any) {
+  const status = materialEffectiveStatus(material);
+  return status === "pending" || status === "expired" || status === "withdrawn";
+}
+
+function availabilityLabel(status: string) {
+  return AVAILABILITY_OPTIONS.find((option) => option.value === status)?.label ?? status;
+}
+
+function availabilityTone(status: string): ToneVariant {
+  if (status === "available") return "success";
+  if (status === "pending") return "warn";
+  if (status === "expired" || status === "withdrawn") return "danger";
+  return "neutral";
+}
+
+function syncLabel(status: string) {
+  return SYNC_OPTIONS.find((option) => option.value === status)?.label ?? status;
+}
+
+function syncTone(status: string): ToneVariant {
+  if (status === "synced" || status === "offline") return "info";
+  if (status === "unavailable") return "warn";
+  return "neutral";
+}
+
+function accessLevelLabel(value: string | undefined) {
+  if (!value) return "Board";
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function materialAccessSummary(material: any) {
+  const grants = material.accessGrants ?? [];
+  if (!grants.length) return `Access: ${accessLevelLabel(material.accessLevel)}`;
+  const labels = grants.slice(0, 3).map((grant: any) => `${grant.subjectLabel} (${accessGrantLabel(grant.access)})`);
+  const extra = grants.length > labels.length ? ` +${grants.length - labels.length} more` : "";
+  return `Access: ${accessLevelLabel(material.accessLevel)} plus ${labels.join(", ")}${extra}`;
+}
+
+function grantKey(grant: any) {
+  return `${grant.subjectType}:${grant.subjectId || normalizePersonName(grant.subjectLabel ?? "")}:${grant.access ?? "view"}`;
+}
+
+function grantTypeLabel(value: string) {
+  return ACCESS_GRANT_TYPES.find((option) => option.value === value)?.label ?? value;
+}
+
+function accessGrantLabel(value: string) {
+  return ACCESS_GRANT_LEVELS.find((option) => option.value === value)?.label ?? value;
+}
+
+function buildAccessGrantCandidates(
+  subjectType: string,
+  data: {
+    meeting: any;
+    minutes: any;
+    users: any[] | undefined;
+    members: any[] | undefined;
+    directors: any[] | undefined;
+    committees: any[] | undefined;
+  },
+) {
+  if (subjectType === "attendee") {
+    const attendeeNames = [
+      ...(data.minutes?.attendees ?? []),
+      ...(data.meeting?.attendeeIds ?? []).map((id: string) => personLabelForId(id, data)),
+    ].filter(Boolean);
+    return uniqueGrantCandidates(attendeeNames.map((name: string) => ({ id: normalizePersonName(name), label: name })));
+  }
+  if (subjectType === "member") {
+    return (data.members ?? []).map((member: any) => ({ id: String(member._id), label: `${member.firstName} ${member.lastName}`.trim() }));
+  }
+  if (subjectType === "director") {
+    return (data.directors ?? []).map((director: any) => ({
+      id: String(director._id),
+      label: `${director.firstName} ${director.lastName}${director.position ? `, ${director.position}` : ""}`,
+    }));
+  }
+  if (subjectType === "user") {
+    return (data.users ?? []).map((user: any) => ({ id: String(user._id), label: `${user.displayName} (${user.role})` }));
+  }
+  if (subjectType === "committee") {
+    return (data.committees ?? []).map((committee: any) => ({ id: String(committee._id), label: committee.name }));
+  }
+  return [];
+}
+
+function personLabelForId(id: string, data: { users?: any[]; members?: any[]; directors?: any[] }) {
+  const director = (data.directors ?? []).find((row: any) => String(row._id) === String(id));
+  if (director) return `${director.firstName} ${director.lastName}`.trim();
+  const member = (data.members ?? []).find((row: any) => String(row._id) === String(id));
+  if (member) return `${member.firstName} ${member.lastName}`.trim();
+  const user = (data.users ?? []).find((row: any) => String(row._id) === String(id));
+  if (user) return user.displayName;
+  return id;
+}
+
+function uniqueGrantCandidates(candidates: Array<{ id: string; label: string }>) {
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    const key = normalizePersonName(candidate.label);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function parseAttendanceName(value: string) {
   const [name, ...roleParts] = value.split(/\s+-\s+/);
   return {
@@ -1865,7 +2209,16 @@ function renderMeetingPackHtml({
   const agendaHtml = (agenda.length ? agenda : ["General materials"])
     .map((topic) => {
       const topicMaterials = materials.filter((material) => (material.agendaLabel || "General materials") === topic);
-      return `<li><strong>${escapeHtml(topic)}</strong>${topicMaterials.length ? `<ul>${topicMaterials.map((material) => `<li>${escapeHtml(material.label || material.document?.title || "Document")} ${material.requiredForMeeting ? "(required)" : ""}</li>`).join("")}</ul>` : ""}</li>`;
+      return `<li><strong>${escapeHtml(topic)}</strong>${topicMaterials.length ? `<ul>${topicMaterials.map((material) => {
+        const status = materialEffectiveStatus(material);
+        const parts = [
+          availabilityLabel(status),
+          accessLevelLabel(material.accessLevel),
+          material.requiredForMeeting ? "required" : "",
+          material.expiresAtISO ? `expires ${formatDate(material.expiresAtISO)}` : "",
+        ].filter(Boolean);
+        return `<li>${escapeHtml(material.label || material.document?.title || "Document")} <span class="meta">(${escapeHtml(parts.join(", "))})</span></li>`;
+      }).join("")}</ul>` : ""}</li>`;
     })
     .join("");
   const taskHtml = tasks.length

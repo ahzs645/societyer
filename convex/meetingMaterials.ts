@@ -1,6 +1,14 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
+const accessGrantValidator = v.object({
+  subjectType: v.string(),
+  subjectId: v.optional(v.string()),
+  subjectLabel: v.string(),
+  access: v.string(),
+  note: v.optional(v.string()),
+});
+
 export const listForMeeting = query({
   args: { meetingId: v.id("meetings") },
   handler: async (ctx, { meetingId }) => {
@@ -85,6 +93,7 @@ export const listForSociety = query({
 
 export const attach = mutation({
   args: {
+    id: v.optional(v.id("meetingMaterials")),
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
     documentId: v.id("documents"),
@@ -93,6 +102,10 @@ export const attach = mutation({
     order: v.optional(v.number()),
     requiredForMeeting: v.optional(v.boolean()),
     accessLevel: v.optional(v.string()),
+    accessGrants: v.optional(v.array(accessGrantValidator)),
+    availabilityStatus: v.optional(v.string()),
+    syncStatus: v.optional(v.string()),
+    expiresAtISO: v.optional(v.string()),
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -108,14 +121,31 @@ export const attach = mutation({
       .withIndex("by_meeting", (q) => q.eq("meetingId", args.meetingId))
       .collect();
     const same = existing.find((row) => String(row.documentId) === String(args.documentId));
+    const target = args.id ? existing.find((row) => row._id === args.id) : same;
     const patch = {
+      documentId: args.documentId,
       agendaLabel: args.agendaLabel || undefined,
       label: args.label || undefined,
-      order: args.order ?? same?.order ?? existing.length + 1,
-      requiredForMeeting: args.requiredForMeeting ?? same?.requiredForMeeting ?? true,
-      accessLevel: args.accessLevel ?? same?.accessLevel ?? "board",
+      order: args.order ?? target?.order ?? existing.length + 1,
+      requiredForMeeting: args.requiredForMeeting ?? target?.requiredForMeeting ?? true,
+      accessLevel: args.accessLevel ?? target?.accessLevel ?? "board",
+      accessGrants: args.accessGrants ? normalizeAccessGrants(args.accessGrants) : target?.accessGrants ?? [],
+      availabilityStatus: args.availabilityStatus ?? target?.availabilityStatus ?? "available",
+      syncStatus: args.syncStatus ?? target?.syncStatus ?? "online",
+      expiresAtISO: args.expiresAtISO === undefined ? target?.expiresAtISO : args.expiresAtISO || undefined,
       notes: args.notes || undefined,
     };
+
+    if (args.id) {
+      if (!target) throw new Error("Meeting material not found.");
+      await ctx.db.patch(args.id, patch);
+      await ctx.db.patch(args.documentId, {
+        meetingId: args.meetingId,
+        librarySection: document.librarySection ?? "meeting_material",
+        reviewStatus: document.reviewStatus ?? "in_review",
+      });
+      return args.id;
+    }
 
     if (same) {
       await ctx.db.patch(same._id, patch);
@@ -138,6 +168,22 @@ export const attach = mutation({
   },
 });
 
+export const setAvailability = mutation({
+  args: {
+    id: v.id("meetingMaterials"),
+    availabilityStatus: v.string(),
+    syncStatus: v.optional(v.string()),
+    expiresAtISO: v.optional(v.string()),
+  },
+  handler: async (ctx, { id, availabilityStatus, syncStatus, expiresAtISO }) => {
+    await ctx.db.patch(id, {
+      availabilityStatus,
+      syncStatus: syncStatus ?? undefined,
+      expiresAtISO: expiresAtISO || undefined,
+    });
+  },
+});
+
 export const remove = mutation({
   args: { id: v.id("meetingMaterials") },
   handler: async (ctx, { id }) => {
@@ -153,4 +199,17 @@ function parseAgenda(value: unknown) {
   } catch {
     return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   }
+}
+
+function normalizeAccessGrants(grants: any[] | undefined) {
+  if (!Array.isArray(grants)) return [];
+  return grants
+    .map((grant) => ({
+      subjectType: String(grant.subjectType ?? "").trim(),
+      subjectId: grant.subjectId ? String(grant.subjectId).trim() : undefined,
+      subjectLabel: String(grant.subjectLabel ?? "").trim(),
+      access: String(grant.access ?? "view").trim() || "view",
+      note: grant.note ? String(grant.note).trim() : undefined,
+    }))
+    .filter((grant) => grant.subjectType && grant.subjectLabel);
 }

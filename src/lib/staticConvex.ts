@@ -804,6 +804,13 @@ const meetingMaterials = [
     order: 1,
     requiredForMeeting: true,
     accessLevel: "members",
+    accessGrants: [
+      { subjectType: "group", subjectLabel: "Voting members", access: "view" },
+      { subjectType: "user", subjectId: USER_TREASURER_ID, subjectLabel: "Jordan Lee", access: "manage" },
+    ],
+    availabilityStatus: "available",
+    syncStatus: "synced",
+    expiresAtISO: "2026-06-19",
     createdAtISO: "2026-04-10T19:35:00.000Z",
   },
   {
@@ -816,6 +823,9 @@ const meetingMaterials = [
     order: 2,
     requiredForMeeting: false,
     accessLevel: "members",
+    accessGrants: [{ subjectType: "attendee", subjectLabel: "Avery Santos", access: "comment" }],
+    availabilityStatus: "available",
+    syncStatus: "online",
     createdAtISO: "2025-09-14T21:05:00.000Z",
   },
   {
@@ -828,6 +838,13 @@ const meetingMaterials = [
     order: 1,
     requiredForMeeting: true,
     accessLevel: "board",
+    accessGrants: [
+      { subjectType: "committee", subjectId: "static_committee_governance", subjectLabel: "Governance committee", access: "comment" },
+      { subjectType: "director", subjectId: "static_director_mina", subjectLabel: "Mina Patel", access: "manage" },
+    ],
+    availabilityStatus: "pending",
+    syncStatus: "offline",
+    expiresAtISO: "2026-05-15",
     createdAtISO: "2026-04-16T18:00:00.000Z",
   },
 ];

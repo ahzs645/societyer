@@ -2136,6 +2136,20 @@ export default defineSchema({
     order: v.number(),
     requiredForMeeting: v.boolean(),
     accessLevel: v.string(), // board | committee | members | public | restricted
+    accessGrants: v.optional(
+      v.array(
+        v.object({
+          subjectType: v.string(), // attendee | member | director | user | committee | group
+          subjectId: v.optional(v.string()),
+          subjectLabel: v.string(),
+          access: v.string(), // view | comment | sign | manage
+          note: v.optional(v.string()),
+        }),
+      ),
+    ),
+    availabilityStatus: v.optional(v.string()), // available | pending | expired | withdrawn
+    syncStatus: v.optional(v.string()), // online | synced | offline | unavailable
+    expiresAtISO: v.optional(v.string()),
     notes: v.optional(v.string()),
     createdAtISO: v.string(),
   })

@@ -99,6 +99,7 @@ export function LibraryPage() {
                         <FileText size={12} />
                         <span>{material.label || material.document.title}</span>
                         {material.requiredForMeeting && <Badge tone="warn">Required</Badge>}
+                        <Badge tone={materialTone(material)}>{materialLabel(material)}</Badge>
                       </Link>
                     ))}
                     {packet.materials.length > 4 && (
@@ -118,6 +119,23 @@ export function LibraryPage() {
       </div>
     </div>
   );
+}
+
+function materialLabel(material: any) {
+  if (material.availabilityStatus === "withdrawn") return "Withdrawn";
+  if (material.expiresAtISO && new Date(material.expiresAtISO).getTime() < Date.now()) return "Expired";
+  if (material.availabilityStatus === "pending") return "Pending";
+  if (material.syncStatus === "offline") return "Offline";
+  if (material.syncStatus === "synced") return "Synced";
+  return "Available";
+}
+
+function materialTone(material: any) {
+  const label = materialLabel(material);
+  if (label === "Available" || label === "Synced" || label === "Offline") return "success";
+  if (label === "Pending") return "warn";
+  if (label === "Expired" || label === "Withdrawn") return "danger";
+  return "neutral";
 }
 
 function LibraryDocumentRow({ document }: { document: any }) {
