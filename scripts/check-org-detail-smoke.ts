@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
@@ -86,6 +86,28 @@ const checks: Array<{ file: string; patterns: Array<string | RegExp> }> = [
       "upsertAnnualMaintenanceRecord",
       "upsertJurisdictionMetadata",
       "upsertSupportLog",
+      "seedStarterPolicyTemplates",
+      "STARTER_POLICY_TEMPLATES",
+    ],
+  },
+  {
+    file: "convex/starterPolicyTemplates.ts",
+    patterns: [
+      "STARTER_POLICY_TEMPLATES",
+      "Authorization Policy",
+      "Donation Recording and Receipting Policy",
+      "Meeting Minutes Examples and Drafting Guide",
+      "starterTemplateHtml",
+      "starterTemplateMarker",
+    ],
+  },
+  {
+    file: "scripts/generate-starter-template-json.ts",
+    patterns: [
+      "STARTER_POLICY_TEMPLATES",
+      "pdftotext",
+      "utf8-normalized-ascii",
+      "convex/data/starterPolicyTemplates",
     ],
   },
   {
@@ -178,6 +200,7 @@ const checks: Array<{ file: string; patterns: Array<string | RegExp> }> = [
       "TemplateEnginePage",
       "FormationMaintenancePage",
       "OptionMultiSelect",
+      "Starter templates",
       "jurisdictionByCode",
       "optionLabel(\"logTypes\"",
     ],
@@ -204,6 +227,26 @@ for (const check of checks) {
   for (const pattern of check.patterns) {
     const ok = typeof pattern === "string" ? contents.includes(pattern) : pattern.test(contents);
     if (!ok) failures.push(`${check.file}: missing ${String(pattern)}`);
+  }
+}
+
+const starterJsonDir = join(root, "convex/data/starterPolicyTemplates");
+if (!existsSync(starterJsonDir)) {
+  failures.push("convex/data/starterPolicyTemplates: missing directory");
+} else {
+  const jsonFiles = readdirSync(starterJsonDir).filter((file) => file.endsWith(".json")).sort();
+  if (jsonFiles.length !== 18) failures.push(`convex/data/starterPolicyTemplates: expected 18 json files, found ${jsonFiles.length}`);
+  for (const file of jsonFiles) {
+    const path = join(starterJsonDir, file);
+    try {
+      const parsed = JSON.parse(readFileSync(path, "utf8"));
+      if (!parsed.key) failures.push(`${file}: missing key`);
+      if (!parsed.source?.sha256) failures.push(`${file}: missing source.sha256`);
+      if (!parsed.extraction?.text) failures.push(`${file}: missing extraction.text`);
+      if (!parsed.remadeTemplate?.html) failures.push(`${file}: missing remadeTemplate.html`);
+    } catch (error) {
+      failures.push(`${file}: invalid JSON`);
+    }
   }
 }
 

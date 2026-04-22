@@ -1,0 +1,71 @@
+{
+  "key": "fund-purpose",
+  "name": "Fund Purpose Policy",
+  "policyNumber": "DON-003",
+  "templateType": "policy",
+  "documentTag": "other",
+  "source": {
+    "primaryFileName": "FundPurpose.pdf",
+    "primaryRelativePath": "New Folder With Items 3/FundPurpose.pdf",
+    "sourceRootName": "New Folder With Items",
+    "sha256": "6fa830336f3c6a3437acc52427aa9465a2280a518e69475c8818c8d3153f5375",
+    "pageCount": 1,
+    "duplicateFiles": [
+      {
+        "fileName": "FundPurpose-PolicyTemplate-20250528 .pdf",
+        "relativePath": "FundPurpose-PolicyTemplate-20250528 .pdf"
+      },
+      {
+        "fileName": "FundPurpose.pdf",
+        "relativePath": "New Folder With Items 3/FundPurpose.pdf"
+      }
+    ]
+  },
+  "extraction": {
+    "tool": "pdftotext -layout",
+    "textEncoding": "utf8-normalized-ascii",
+    "text": "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n The charitable purposes of the Corporation are to receive and maintain a fund or funds and to\n apply all or part of the principal and income therefore, by way of a formal grants program to\n qualified donees in the furtherance of the following charitable purposes beneficial to the\n community including: [CUSTOMIZATION REQUIRED: include list of charitable purposes\n approved by CRA in your charitable registration documents].\n\n The objects of the Corporation shall be limited to carrying on purposes which entitle the\n Corporation to become and remain a \"registered Canadian charitable organization or public\n Corporation\" as defined by the provisions of the Income Tax Act (Canada).\n\n Each year, the Community Corporation will allocate salaries and benefits to its charitable,\n fundraising and management functions, based on job descriptions, and prorate the operating\n expenditures on either a direct or prorated basis based on the salary allocation. This information\n will be conveyed to the auditor.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+  },
+  "remadeTemplate": {
+    "summary": "Charitable fund purposes, qualified donee grants, CRA-approved purposes, and allocation of salaries and operating costs.",
+    "signatureRequired": true,
+    "includeBoardAcceptance": true,
+    "requiredDataFields": [
+      "CorporationName",
+      "PolicyName",
+      "PolicyNumber",
+      "PolicyEffectiveDate",
+      "ReviewDate",
+      "EffectiveDate",
+      "VotingDirectors"
+    ],
+    "optionalDataFields": [],
+    "reviewDataFields": [
+      "Bylaws",
+      "SigningAuthorities",
+      "Jurisdiction",
+      "CharityStatus"
+    ],
+    "sections": [
+      {
+        "heading": "Purpose of Funds",
+        "paragraphs": [
+          "Funds are received, maintained, and applied to the organization's charitable or nonprofit purposes as described in the governing documents and applicable fund agreements."
+        ]
+      },
+      {
+        "heading": "Eligible Uses",
+        "paragraphs": [
+          "Fund principal and income may be used for approved programs, grants, qualified donee gifts, or other lawful activities that advance the stated purposes."
+        ]
+      },
+      {
+        "heading": "Allocation",
+        "paragraphs": [
+          "Salary, benefit, fundraising, management, and operating allocations are documented using a reasonable board-approved allocation basis and provided to the auditor or reviewer when required."
+        ]
+      }
+    ],
+    "html": "<h1>{PolicyName}</h1>\n\n<p><strong>Organization:</strong> {CorporationName}</p>\n\n<p><strong>Policy number:</strong> {PolicyNumber}</p>\n\n<p><strong>Effective date:</strong> {PolicyEffectiveDate}</p>\n\n<p><em>This is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.</em></p>\n\n<h2>Purpose of Funds</h2>\n<p>Funds are received, maintained, and applied to the organization's charitable or nonprofit purposes as described in the governing documents and applicable fund agreements.</p>\n<h2>Eligible Uses</h2>\n<p>Fund principal and income may be used for approved programs, grants, qualified donee gifts, or other lawful activities that advance the stated purposes.</p>\n<h2>Allocation</h2>\n<p>Salary, benefit, fundraising, management, and operating allocations are documented using a reasonable board-approved allocation basis and provided to the auditor or reviewer when required.</p>\n\n<h2>Monitoring</h2>\n\n<p>This policy will be reviewed on or around {ReviewDate} and whenever legal, operational, funding, or governance requirements materially change.</p>\n\n<h2>Board Acceptance</h2>\n<p>This policy was approved by resolution of the board of directors of {CorporationName} on {EffectiveDate}.</p>\n<p>{#SoleVotDir}Approved by the sole voting director.{/SoleVotDir}{#MultiVotDir}Approved by counterpart signatures of the voting directors.{/MultiVotDir}</p>\n<p>{#VotingDirectors}{SignerTag}<br />_________________________________________<br />{Director-Name}{/VotingDirectors}</p>\n\n<p><small>Source: FundPurpose.pdf; SHA-256 6fa830336f3c6a3437acc52427aa9465a2280a518e69475c8818c8d3153f5375</small></p>"
+  }
+}

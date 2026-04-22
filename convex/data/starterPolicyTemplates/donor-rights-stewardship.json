@@ -1,0 +1,78 @@
+{
+  "key": "donor-rights-stewardship",
+  "name": "Donor Rights and Stewardship Policy",
+  "policyNumber": "DON-002",
+  "templateType": "policy",
+  "documentTag": "other",
+  "source": {
+    "primaryFileName": "DonorRecognitionAndStewardship.pdf",
+    "primaryRelativePath": "New Folder With Items 3/DonorRecognitionAndStewardship.pdf",
+    "sourceRootName": "New Folder With Items",
+    "sha256": "ea0446a19bd748216d805462f11b4e69f1aa13b96fa2e969cbf7a0e7c2859a36",
+    "pageCount": 2,
+    "duplicateFiles": [
+      {
+        "fileName": "Donor'sRights-PolicyTemplate-20250528 (1).pdf",
+        "relativePath": "Donor'sRights-PolicyTemplate-20250528 (1).pdf"
+      },
+      {
+        "fileName": "Donor'sRights-PolicyTemplate-20250528.pdf",
+        "relativePath": "Donor'sRights-PolicyTemplate-20250528.pdf"
+      },
+      {
+        "fileName": "DonorRecognitionAndStewardship.pdf",
+        "relativePath": "New Folder With Items 3/DonorRecognitionAndStewardship.pdf"
+      },
+      {
+        "fileName": "DonorsRights.pdf",
+        "relativePath": "New Folder With Items 3/DonorsRights.pdf"
+      }
+    ]
+  },
+  "extraction": {
+    "tool": "pdftotext -layout",
+    "textEncoding": "utf8-normalized-ascii",
+    "text": "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n The Corporation believes that all donors (each a \"Donor\") have the following rights:\n\n       To be informed of the Corporation's mission, of the way the Corporation intends to use\n        donated resources, and of its capacity to use donations effectively for their intended\n        purposes.\n\n       To be informed of the identity of those serving on the Corporation's governing Board, and\n        to expect the Board to exercise prudent judgment in its stewardship responsibilities.\n\n       To have access to the Corporation's most recent financial statements and annual report.\n\n       To be assured that gifts will be used for the purposes for which they were given.\n\n       To be assured that information about donations is handled in accordance with the Privacy\n        Policy of the Corporation and consistent with provincial and federal Privacy Legislation.\n\n       To have the right to see their donor record and to challenge its accuracy.\n\n       To receive appropriate acknowledgement and recognition as per Corporation policy, and,\n        if requested by the donor, to remain anonymous.\n\n       To expect that all relationships with individuals representing the Corporation will be\n        professional in nature.\n\n       To be informed whether those seeking donations are volunteers or employees of the\n        Corporation.\n\n       To have the opportunity for their names to be deleted from mailing lists that the\n        Corporation may intend to share.\n\n       To feel free to ask questions when making a donation and to receive prompt, truthful and\n        forthright answers.\n\n       To receive an official receipt for income tax purposes within thirty (30) days for the amount\n        of the donation and for non-monetary eligible gifts (or gifts-in-kind), to receive an official\n        receipt that reflects the fair market value of the gift in accordance under the provisions of\n        the Income Tax Act (Canada) or its successor.\n\n       To receive, upon request, the Corporation's registration number as assigned by Canada\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n        Revenue Agency (CRA), any information contained in the public portion of the\n        Corporation's most recent Corporation Information Return as submitted to CRA, and a\n        copy of the Donors' Rights Policy.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+  },
+  "remadeTemplate": {
+    "summary": "Donor information rights, stewardship expectations, financial access, gift-use assurance, privacy, recognition, anonymity, and receipts.",
+    "signatureRequired": true,
+    "includeBoardAcceptance": true,
+    "requiredDataFields": [
+      "CorporationName",
+      "PolicyName",
+      "PolicyNumber",
+      "PolicyEffectiveDate",
+      "ReviewDate",
+      "EffectiveDate",
+      "VotingDirectors"
+    ],
+    "optionalDataFields": [],
+    "reviewDataFields": [
+      "Bylaws",
+      "SigningAuthorities",
+      "Jurisdiction",
+      "CharityStatus"
+    ],
+    "sections": [
+      {
+        "heading": "Donor Rights",
+        "bullets": [
+          "Receive truthful information about the organization's mission, governance, and use of donated resources.",
+          "Access recent financial statements, annual reports, and publicly available charity information.",
+          "Expect gifts to be used for their stated purposes.",
+          "Have donor records handled under privacy and confidentiality rules.",
+          "Ask questions and receive prompt, accurate answers.",
+          "Receive appropriate acknowledgement, recognition, anonymity, and receipts where applicable."
+        ]
+      },
+      {
+        "heading": "Stewardship",
+        "paragraphs": [
+          "The organization reports to donors in a manner that respects donor intent, privacy, restrictions, and board-approved recognition practices."
+        ]
+      }
+    ],
+    "html": "<h1>{PolicyName}</h1>\n\n<p><strong>Organization:</strong> {CorporationName}</p>\n\n<p><strong>Policy number:</strong> {PolicyNumber}</p>\n\n<p><strong>Effective date:</strong> {PolicyEffectiveDate}</p>\n\n<p><em>This is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.</em></p>\n\n<h2>Donor Rights</h2>\n<ul>\n  <li>Receive truthful information about the organization's mission, governance, and use of donated resources.</li>\n  <li>Access recent financial statements, annual reports, and publicly available charity information.</li>\n  <li>Expect gifts to be used for their stated purposes.</li>\n  <li>Have donor records handled under privacy and confidentiality rules.</li>\n  <li>Ask questions and receive prompt, accurate answers.</li>\n  <li>Receive appropriate acknowledgement, recognition, anonymity, and receipts where applicable.</li>\n</ul>\n<h2>Stewardship</h2>\n<p>The organization reports to donors in a manner that respects donor intent, privacy, restrictions, and board-approved recognition practices.</p>\n\n<h2>Monitoring</h2>\n\n<p>This policy will be reviewed on or around {ReviewDate} and whenever legal, operational, funding, or governance requirements materially change.</p>\n\n<h2>Board Acceptance</h2>\n<p>This policy was approved by resolution of the board of directors of {CorporationName} on {EffectiveDate}.</p>\n<p>{#SoleVotDir}Approved by the sole voting director.{/SoleVotDir}{#MultiVotDir}Approved by counterpart signatures of the voting directors.{/MultiVotDir}</p>\n<p>{#VotingDirectors}{SignerTag}<br />_________________________________________<br />{Director-Name}{/VotingDirectors}</p>\n\n<p><small>Source: DonorRecognitionAndStewardship.pdf; SHA-256 ea0446a19bd748216d805462f11b4e69f1aa13b96fa2e969cbf7a0e7c2859a36</small></p>"
+  }
+}

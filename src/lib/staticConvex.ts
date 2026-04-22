@@ -3067,6 +3067,9 @@ function mutationResult(name: string, args: StaticArgs) {
   if (name === "motionBacklog:seedToMinutes") {
     return { inserted: 1, considered: 1, minutesId: "static_minutes_board_q2" };
   }
+  if (name === "legalOperations:seedStarterPolicyTemplates") {
+    return { inserted: 18, updated: 0, skipped: 0, total: 18 };
+  }
   if (name === "documents:markOpened") return { openedAtISO: new Date().toISOString() };
   if (name === "documents:updateReviewStatus") return null;
   if (name === "documentComments:create") return "static_document_comment_new";

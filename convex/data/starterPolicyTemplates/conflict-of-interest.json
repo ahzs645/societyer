@@ -1,0 +1,69 @@
+{
+  "key": "conflict-of-interest",
+  "name": "Conflict of Interest Policy",
+  "policyNumber": "GOV-002",
+  "templateType": "policy",
+  "documentTag": "director_consents__resignations__and_indemnifications",
+  "source": {
+    "primaryFileName": "ConflictOfInterest.pdf",
+    "primaryRelativePath": "New Folder With Items 3/ConflictOfInterest.pdf",
+    "sourceRootName": "New Folder With Items",
+    "sha256": "fa85333eea4d5f2653cc1deef3f3dd330fae95946cacb9cb1a6e67474b3fc959",
+    "pageCount": 3,
+    "duplicateFiles": [
+      {
+        "fileName": "ConflictOfInterest.pdf",
+        "relativePath": "New Folder With Items 3/ConflictOfInterest.pdf"
+      }
+    ]
+  },
+  "extraction": {
+    "tool": "pdftotext -layout",
+    "textEncoding": "utf8-normalized-ascii",
+    "text": "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n\nPREAMBLE\n\nIt is important that our practices and decisions are without suspicion or influence and avoid\nany appearance of impropriety, which may raise concerns within or outside the organization.\nThe policy is designed to ensure an organization's reputation for integrity of decisions. As a\nresult, this policy addresses conflicts of interest, real or perceived. This policy will not\naddress the issue of what constitutes an actual conflict of interest as a matter of law.\nAs a result, the policy is directed towards the sources of the most potential conflict. These\ninclude conflicts arising as a result of an affiliation with:\n\n    1. An organization that has, or is negotiating, a business relationship\n\n            a. A conflict of interest arises in a situation in which\n\n                    i. The Corporation has a business or financial dealings with a Board\n                       member, volunteer* or staff member individually or with a\n                       corporation, partnership or other business enterprises of which the\n                       Board member, volunteer or staff member, or a member of his/her\n                       family**, is an officer, director, partner or substantial stockholder, or\n\n                   ii. The primary purpose of a grant from the Corporation to a qualified\n                       grantee is made to support a transaction with such a business\n                       enterprise.\n\n            b. An organization seeking funding or other support\n\n                    i. A conflict of interest arises in a situation in which the Corporation is\n                       considering or makes a grant to a qualified donee of which the\n                       community Corporation Board member, volunteer or staff member, or\n                       a member of his/her family, is an officer, director, trustee or employee\n                       of the applicant organization. This also includes situations where\n                       Board members, volunteers or staff members have an unofficial role\n                       with the applicant organization as a significant donor, volunteer,\n                       advocate or advisor.\n\n\n*Volunteer includes any person serving voluntarily on a committee with Board-delegated\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\npowers or in any other capacity that might give rise to a conflict of interest.\n\n**Family includes spouse or partner, children, grandchildren, parents or grandparents,\nsiblings (and their immediate families), as well as any member of the extended family living\nunder the same roof.\n\nIMPLEMENTATION\n\nThis policy will be conveyed to staff and all new Board and committee members.\nThe first agenda item of Board and committee meetings will be a declaration of conflict of\ninterest. Members, including staff, will be asked to verbally declare a conflict of interest and\nto identify which agenda items that are in conflict. The minutes of the meeting will reflect\ndeclared conflicts. If the member is unsure, he/she will ask for clarification and the chair will\ndetermine if there is a real or perceived conflict.\n\nWhen there is a conflict, the member will refrain from all discussion pertaining to the\nsubject and abstain from voting. When there is a conflict of interest for a member of the\nGrants Committee, the committee member will temporarily remove themselves from the\ncommittee for the round of grants being assessed.\n\nIt is the responsibility of Board and committee members to raise concerns they may have\nregarding conflict of interest with a member who is perceived to be in conflict. If there are\nstill concerns, it is their responsibility to convey these concerns to the chair.\n\nBoard, volunteers and staff are prohibited from accepting personal gifts from current and\nprospective providers of services or goods and grantees with the exception of occasional\nhospitality or other benefits of a nominal value.\n\nBoard members, volunteers and staff are prohibited from using privileged information\ngained in their role for personal or professional gain.\n\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of\n                               directors of the Corporation on {EffectiveDate}, as\n                               confirmed by {#SoleVotDir}the signature of the sole\n                               director of the Corporation\n                               below.{/SoleVotDir}{#MultiVotDir}the counterpart\n                               signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n        {#VotingDirectors}\n\n\n         {SignerTag}\n        _________________________________________\n        {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+  },
+  "remadeTemplate": {
+    "summary": "Conflict declaration, meeting procedure, abstention, gifts, grant conflicts, business relationships, and records.",
+    "signatureRequired": true,
+    "includeBoardAcceptance": true,
+    "requiredDataFields": [
+      "CorporationName",
+      "PolicyName",
+      "PolicyNumber",
+      "PolicyEffectiveDate",
+      "ReviewDate",
+      "EffectiveDate",
+      "VotingDirectors"
+    ],
+    "optionalDataFields": [],
+    "reviewDataFields": [
+      "Bylaws",
+      "SigningAuthorities",
+      "Jurisdiction",
+      "CharityStatus"
+    ],
+    "sections": [
+      {
+        "heading": "Policy",
+        "paragraphs": [
+          "Directors, officers, committee members, staff, and volunteers must avoid actual, potential, and perceived conflicts of interest and must disclose conflicts as soon as they are known."
+        ]
+      },
+      {
+        "heading": "Meeting Procedure",
+        "bullets": [
+          "Conflict declarations are requested at the start of meetings and before affected agenda items.",
+          "The minutes record the declaration and the person's recusal, abstention, or other management step.",
+          "A conflicted person does not participate in discussion, recommendation, or vote unless the board determines a different lawful process applies."
+        ]
+      },
+      {
+        "heading": "Gifts and Benefits",
+        "paragraphs": [
+          "Personal gifts, benefits, or preferential treatment from current or prospective suppliers, grantees, donors, or partners must be declined unless permitted by board-approved rules."
+        ]
+      }
+    ],
+    "html": "<h1>{PolicyName}</h1>\n\n<p><strong>Organization:</strong> {CorporationName}</p>\n\n<p><strong>Policy number:</strong> {PolicyNumber}</p>\n\n<p><strong>Effective date:</strong> {PolicyEffectiveDate}</p>\n\n<p><em>This is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.</em></p>\n\n<h2>Policy</h2>\n<p>Directors, officers, committee members, staff, and volunteers must avoid actual, potential, and perceived conflicts of interest and must disclose conflicts as soon as they are known.</p>\n<h2>Meeting Procedure</h2>\n<ul>\n  <li>Conflict declarations are requested at the start of meetings and before affected agenda items.</li>\n  <li>The minutes record the declaration and the person's recusal, abstention, or other management step.</li>\n  <li>A conflicted person does not participate in discussion, recommendation, or vote unless the board determines a different lawful process applies.</li>\n</ul>\n<h2>Gifts and Benefits</h2>\n<p>Personal gifts, benefits, or preferential treatment from current or prospective suppliers, grantees, donors, or partners must be declined unless permitted by board-approved rules.</p>\n\n<h2>Monitoring</h2>\n\n<p>This policy will be reviewed on or around {ReviewDate} and whenever legal, operational, funding, or governance requirements materially change.</p>\n\n<h2>Board Acceptance</h2>\n<p>This policy was approved by resolution of the board of directors of {CorporationName} on {EffectiveDate}.</p>\n<p>{#SoleVotDir}Approved by the sole voting director.{/SoleVotDir}{#MultiVotDir}Approved by counterpart signatures of the voting directors.{/MultiVotDir}</p>\n<p>{#VotingDirectors}{SignerTag}<br />_________________________________________<br />{Director-Name}{/VotingDirectors}</p>\n\n<p><small>Source: ConflictOfInterest.pdf; SHA-256 fa85333eea4d5f2653cc1deef3f3dd330fae95946cacb9cb1a6e67474b3fc959</small></p>"
+  }
+}

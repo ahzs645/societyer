@@ -1,0 +1,75 @@
+{
+  "key": "donation-recording-receipting",
+  "name": "Donation Recording and Receipting Policy",
+  "policyNumber": "DON-001",
+  "templateType": "policy",
+  "documentTag": "tax_numbers",
+  "source": {
+    "primaryFileName": "DonationRecordingAndReceipting.pdf",
+    "primaryRelativePath": "New Folder With Items 3/DonationRecordingAndReceipting.pdf",
+    "sourceRootName": "New Folder With Items",
+    "sha256": "b8e1853b32d80217b227a1c4eb9f057cab239a8c1bdf327c5fc0276ccafc22b5",
+    "pageCount": 2,
+    "duplicateFiles": [
+      {
+        "fileName": "DonationRecordingReceipting-PolicyTemplate-20250528.pdf",
+        "relativePath": "DonationRecordingReceipting-PolicyTemplate-20250528.pdf"
+      },
+      {
+        "fileName": "DonationRecordingAndReceipting.pdf",
+        "relativePath": "New Folder With Items 3/DonationRecordingAndReceipting.pdf"
+      }
+    ]
+  },
+  "extraction": {
+    "tool": "pdftotext -layout",
+    "textEncoding": "utf8-normalized-ascii",
+    "text": "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n Donation receipts will only be issued once the gift is the legal property of the Corporation. The\n Treasurer or Executive Director/CEO signs donation receipts. Receipts will be issued within one\n month of receipt by the Corporation.\n\n Donation receipts will include the following information:\n\n       Name and address of the donor\n\n       Name and address of the Corporation\n\n       Date gift was received\n\n       Corporation's charitable registration number\n\n       Website address of the Canada Revenue Agency\n\n       Amount of donation\n\n       Description of donation if in-kind (i.e. non-cash)\n\n If a donor wants to make a donation to a specific fund or to a specific general field of interest\n fund, there should be documentation that they are making a gift to that fund. This may simply be\n a note accompanying the gift that it is being made to a particular fund. You don't necessarily need\n (or want) a formal agreement with the donor or a formal donor designation. The reason is that\n the terms of that fund are not being set by the donor, they are set by the existing terms of the\n fund.\n\n Donation receipts for gifts of securities are based on the value of the securities at the close of\n trading on the day in which the ownership is transferred from the donor to the Corporation.\n Supporting documentation in writing must verify this valuation.\n\n One copy of the donation receipt, filed in numerical order, will be held for seven years. This can\n be an electronic copy. One copy of the receipt for a gift to an established fund will be kept in the\n fund file.\n\n Donation receipts for special events will be in accordance with regulations of the Charities\n Directorate of the Canada Revenue Agency.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+  },
+  "remadeTemplate": {
+    "summary": "Gift ownership, official donation receipt content, fund designation evidence, securities valuation, retention, and special events.",
+    "signatureRequired": true,
+    "includeBoardAcceptance": true,
+    "requiredDataFields": [
+      "CorporationName",
+      "PolicyName",
+      "PolicyNumber",
+      "PolicyEffectiveDate",
+      "ReviewDate",
+      "EffectiveDate",
+      "VotingDirectors"
+    ],
+    "optionalDataFields": [],
+    "reviewDataFields": [
+      "Bylaws",
+      "SigningAuthorities",
+      "Jurisdiction",
+      "CharityStatus"
+    ],
+    "sections": [
+      {
+        "heading": "Receipt Authority",
+        "paragraphs": [
+          "Official donation receipts are issued only after the gift has become the legal property of the organization and the required gift information is complete."
+        ]
+      },
+      {
+        "heading": "Receipt Information",
+        "bullets": [
+          "Donor name and address.",
+          "Organization legal name, address, and charitable registration number where applicable.",
+          "Date received and eligible amount.",
+          "Description and valuation support for gifts in kind.",
+          "Any required regulatory statements or website references."
+        ]
+      },
+      {
+        "heading": "Records",
+        "paragraphs": [
+          "Receipt copies, designation evidence, valuation support, and special event calculations are retained for the required retention period and linked to the applicable fund or donor record."
+        ]
+      }
+    ],
+    "html": "<h1>{PolicyName}</h1>\n\n<p><strong>Organization:</strong> {CorporationName}</p>\n\n<p><strong>Policy number:</strong> {PolicyNumber}</p>\n\n<p><strong>Effective date:</strong> {PolicyEffectiveDate}</p>\n\n<p><em>This is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.</em></p>\n\n<h2>Receipt Authority</h2>\n<p>Official donation receipts are issued only after the gift has become the legal property of the organization and the required gift information is complete.</p>\n<h2>Receipt Information</h2>\n<ul>\n  <li>Donor name and address.</li>\n  <li>Organization legal name, address, and charitable registration number where applicable.</li>\n  <li>Date received and eligible amount.</li>\n  <li>Description and valuation support for gifts in kind.</li>\n  <li>Any required regulatory statements or website references.</li>\n</ul>\n<h2>Records</h2>\n<p>Receipt copies, designation evidence, valuation support, and special event calculations are retained for the required retention period and linked to the applicable fund or donor record.</p>\n\n<h2>Monitoring</h2>\n\n<p>This policy will be reviewed on or around {ReviewDate} and whenever legal, operational, funding, or governance requirements materially change.</p>\n\n<h2>Board Acceptance</h2>\n<p>This policy was approved by resolution of the board of directors of {CorporationName} on {EffectiveDate}.</p>\n<p>{#SoleVotDir}Approved by the sole voting director.{/SoleVotDir}{#MultiVotDir}Approved by counterpart signatures of the voting directors.{/MultiVotDir}</p>\n<p>{#VotingDirectors}{SignerTag}<br />_________________________________________<br />{Director-Name}{/VotingDirectors}</p>\n\n<p><small>Source: DonationRecordingAndReceipting.pdf; SHA-256 b8e1853b32d80217b227a1c4eb9f057cab239a8c1bdf327c5fc0276ccafc22b5</small></p>"
+  }
+}

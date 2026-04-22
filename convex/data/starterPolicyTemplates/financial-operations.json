@@ -1,0 +1,78 @@
+{
+  "key": "financial-operations",
+  "name": "Financial Operations Policy",
+  "policyNumber": "FIN-004",
+  "templateType": "policy",
+  "documentTag": "other",
+  "source": {
+    "primaryFileName": "FinancialOperations.pdf",
+    "primaryRelativePath": "New Folder With Items 3/FinancialOperations.pdf",
+    "sourceRootName": "New Folder With Items",
+    "sha256": "d0c46970f09dc78dd1a86ecabd8dff62f65d40d6786c5571eb7aaf3816b75d90",
+    "pageCount": 4,
+    "duplicateFiles": [
+      {
+        "fileName": "Financial Operations -PolicyTemplate-20250528 (1).pdf",
+        "relativePath": "Financial Operations -PolicyTemplate-20250528 (1).pdf"
+      },
+      {
+        "fileName": "Financial Operations -PolicyTemplate-20250528.pdf",
+        "relativePath": "Financial Operations -PolicyTemplate-20250528.pdf"
+      },
+      {
+        "fileName": "FinancialOperations.pdf",
+        "relativePath": "New Folder With Items 3/FinancialOperations.pdf"
+      }
+    ]
+  },
+  "extraction": {
+    "tool": "pdftotext -layout",
+    "textEncoding": "utf8-normalized-ascii",
+    "text": "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n PREAMBLE\n\n It is the Board's responsibility to monitor the financial management of the Corporation. The\n Board must exercise due diligence to protect the assets of the Corporation. These policies and\n practices have been developed given the current staffing level at the Corporation.\n\n POLICY STATEMENT:\n\n Signing Officers - The signing officers of the Corporation are any two of the\n [CUSTOMIZATION REQUIRED: for example Executive Director/CEO, Board Chair, Board\n Vice-Chair, Secretary, Board Past-Chair and Treasurer].\n\n Changing Signing Officers - When the Board authorizes a change in signing officers, the Board\n secretary prepares, signs and seals a copy of the motion authorizing the change. This copy is\n endorsed by two of the previous signing officers. A copy of the document is filed with the\n Corporation's financial institution(s).\n\n Accounts Payable - Accounts will be paid within 30 days of the invoice date.\n\n Payments - For consistency in information and control, two authorizations are required on\n payments.\n\n Monthly Accounting - The monthly accounting will be completed by the end of the following\n month. Cheques, deposits and journal entries will be posted monthly to the General Ledger.\n\n Quarterly Financial Statements - The most recent quarterly financial statements (unaudited)\n will be presented to the Board as part of the Consent Agenda at each meeting.\n\n Government Remittances - A statement signed by the Executive Director will be included on\n the monthly financial statements confirming that government payroll remittances for the previous\n month have been remitted and that payroll is current. Remittances will be accrued to the\n appropriate month.\n\n Banking - On receipt, all cheques will be stamped \"For Deposit only to the Account of XXXX\n Community Corporation\". Cheques will be deposited to the Corporation's account within 5\n business days of receipt. Cheques scanned and deposited remotely will be held for 45 days and\n then shredded. Scanned copies of these cheques will be filed on the Corporation's server.\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n Petty Cash - Petty cash reimbursement will be made on a monthly basis. All receipts must be\n itemized and allocated to the relevant general ledger account. Receipts must be stamped with the\n date reimbursed.\n\n Authorization Limit - The Executive Director/CEO has the authorization to purchase or order\n items within the Corporation's approved annual budget for any individual amount under $10,000.\n Non-budgeted items in excess of $5,000 must be submitted to the Board for approval.\n\n Staff and Volunteer Travel Reimbursement - Travel will be reimbursed on a monthly basis\n upon submission of documentation outlining destination, kilometers traveled and reason for\n travel. The Executive Director/CEO will be responsible to annually review the mileage\n reimbursement and make recommendations to the board for any changes. Travel advances will\n be given with appropriate supporting documentation and must be approved by a signing officer.\n For attendance at conferences, a report to the Board must be prepared itemizing costs and\n rationale for attending conference as part of the annual budget process. Board approval must be\n given before incurring any conference expense.\n\n Year-End Audit - The Corporation's year-end is December 31st. All materials required for the\n year-end audit will be completed by the end of February for presentation to the Corporation's\n auditor. Draft audited statements will be presented to the Finance or Audit Committee annually\n for review.\n\n Donation Receipts - The Board will develop a policy regarding cash donations, securities,\n cheques and dating and timing of donations in kind. All restricted donations are to be so noted\n on the donation receipt. The deposit report should include the donation receipt number for each\n donation.\n\n Budget - A budget should be prepared on an annual basis and approved by the board. The draft\n budget will be presented to the Board no later than the first board meeting of the fiscal year\n\n Annual Meeting - Audited financial statements will be presented to the Members annually. At\n that time, auditors will be appointed for the following year.\n\n Flow-through donations - All flow through donations are to be recorded on the fund income\n statement.\n\n Grants - All grants made by the Corporation are to be recorded on the endowment or flow-\n through fund expense statement. Grants for the following year which come from flow-through\n funds received in the current year are to be recorded as Grant Commitments and Deferred\n Revenue on the balance sheet.\n\n Investment Income - Investment income includes all income from cash, interest, dividends,\n coupons, investments, realized and unrealized capital gains net of capital losses, personal\n property or real property.\n\n Investment Fees - Investment fees will be recognized monthly on the endowment or flow-\n through fund expense statement and on the balance sheet.\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n Fund Balances - Endowment and Flow-through funds will be reconciled on a monthly basis.\n\n Capital Items - Capital items valued at more than $250 will be capitalized and depreciated on a\n declining balance method at rates designed to amortize the cost of fixed assets as follows:\n equipment and furnishings at 20%, computer equipment at 30%. Additions are depreciated until\n the month of disposition. Gains or losses on assets sold or otherwise disposed of are included in\n the statement of operations. Fixed assets are recorded at cost. Expenditures for maintenance and\n repairs are charged to operating expenses.\n\n Funds available for grants - Adequate cash must be available in the Corporation bank accounts\n to ensure that the grant commitments can be paid in a timely fashion.\n\n Monthly Cheque Register - A report listing all cheques issued on each bank account will be\n prepared and vetted by a signing officer who is not the Executive Director/CEO. The Executive\n Director/CEO will provide the Finance Committee with assurance annually that this report is\n being produced and vetted as per the policy.\n\n Endowment Bank Charges - Bank charges on the endowment fund will be shared by the pool\n of funds.\n\n Reviewing Accumulated Operating Surplus - Upon confirmation of the audited annual\n operating surplus, the Finance Committee will review the current and future operating needs of\n the Corporation, the balance of the accumulated operating surplus, consider whether an allocation\n from either surplus is transferred to one or more of the funds and, if warranted, make a\n recommendation to the board on the amount to be transferred.\n\n Per Diem - When employees and volunteers are doing Corporation business, the following per\n diem applies: Breakfast - $12; Lunch - $20; Supper - $30, and if gone the entire day, the daily\n per diem will be $60.\n\n Receipts (non-donation) - The Corporation issues, by request, non-charitable receipts for\n revenue that does not meet the definition of a donation, whether in cash or in kind.\n\n Insurance - The Executive Director/CEO will prepare a report for the board annually on the\n Corporation's insurance coverage. The report will include information on substantive changes to\n the Corporation's operations that could impact coverage. The Corporation will seek comparative\n quotes every five years.\n\n Investment Acquisition Costs - When the Corporation acquires new investment assets, the\n acquisition costs are expensed in the year in which the asset is acquired.\n\n Gifts in Kind - Gifts-in-kind are recognized when fair value can be reasonably be estimated, the\n materials are used in the normal course of operations and the organization would have purchased\n the materials or services if they had not been contributed.\n\n Revenue Recognition - Contributions are recognized as revenue of the appropriate Fund as\n received, except for certain contributions that are held in trust for the Corporation. Flow-through\n donations are treated as deferred revenue until disbursed.\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+  },
+  "remadeTemplate": {
+    "summary": "Signing officers, accounts payable, monthly accounting, financial statements, remittances, banking, petty cash, authority limits, travel, audit, receipting, and budget.",
+    "signatureRequired": true,
+    "includeBoardAcceptance": true,
+    "requiredDataFields": [
+      "CorporationName",
+      "PolicyName",
+      "PolicyNumber",
+      "PolicyEffectiveDate",
+      "ReviewDate",
+      "EffectiveDate",
+      "VotingDirectors"
+    ],
+    "optionalDataFields": [],
+    "reviewDataFields": [
+      "Bylaws",
+      "SigningAuthorities",
+      "Jurisdiction",
+      "CharityStatus"
+    ],
+    "sections": [
+      {
+        "heading": "Signing Officers and Payments",
+        "paragraphs": [
+          "The board designates signing officers and approves changes to signing authority. Payments require the authorizations set out in the signing authority schedule."
+        ]
+      },
+      {
+        "heading": "Accounting and Reporting",
+        "bullets": [
+          "Accounts payable is processed within the board-approved payment timeline.",
+          "Monthly accounting, bank deposits, government remittances, and journal entries are completed and reviewed.",
+          "Quarterly or periodic financial statements are provided to the board.",
+          "The budget is prepared annually and approved by the board."
+        ]
+      },
+      {
+        "heading": "Controls",
+        "paragraphs": [
+          "Petty cash, credit cards, deposits, travel advances, audit preparation, and donation receipts are handled using documented controls and retained evidence."
+        ]
+      }
+    ],
+    "html": "<h1>{PolicyName}</h1>\n\n<p><strong>Organization:</strong> {CorporationName}</p>\n\n<p><strong>Policy number:</strong> {PolicyNumber}</p>\n\n<p><strong>Effective date:</strong> {PolicyEffectiveDate}</p>\n\n<p><em>This is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.</em></p>\n\n<h2>Signing Officers and Payments</h2>\n<p>The board designates signing officers and approves changes to signing authority. Payments require the authorizations set out in the signing authority schedule.</p>\n<h2>Accounting and Reporting</h2>\n<ul>\n  <li>Accounts payable is processed within the board-approved payment timeline.</li>\n  <li>Monthly accounting, bank deposits, government remittances, and journal entries are completed and reviewed.</li>\n  <li>Quarterly or periodic financial statements are provided to the board.</li>\n  <li>The budget is prepared annually and approved by the board.</li>\n</ul>\n<h2>Controls</h2>\n<p>Petty cash, credit cards, deposits, travel advances, audit preparation, and donation receipts are handled using documented controls and retained evidence.</p>\n\n<h2>Monitoring</h2>\n\n<p>This policy will be reviewed on or around {ReviewDate} and whenever legal, operational, funding, or governance requirements materially change.</p>\n\n<h2>Board Acceptance</h2>\n<p>This policy was approved by resolution of the board of directors of {CorporationName} on {EffectiveDate}.</p>\n<p>{#SoleVotDir}Approved by the sole voting director.{/SoleVotDir}{#MultiVotDir}Approved by counterpart signatures of the voting directors.{/MultiVotDir}</p>\n<p>{#VotingDirectors}{SignerTag}<br />_________________________________________<br />{Director-Name}{/VotingDirectors}</p>\n\n<p><small>Source: FinancialOperations.pdf; SHA-256 d0c46970f09dc78dd1a86ecabd8dff62f65d40d6786c5571eb7aaf3816b75d90</small></p>"
+  }
+}

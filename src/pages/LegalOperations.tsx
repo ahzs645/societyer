@@ -8,7 +8,7 @@ import { DatePicker } from "../components/DatePicker";
 import { OptionMultiSelect, OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { BookTemplate, Landmark, Plus, Scale, Trash2, UsersRound } from "lucide-react";
+import { BookTemplate, FileSignature, Landmark, Plus, Scale, Trash2, UsersRound } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
 
@@ -418,6 +418,7 @@ export function TemplateEnginePage() {
   const upsertRun = useMutation(api.legalOperations.upsertLegalPrecedentRun);
   const upsertDocument = useMutation(api.legalOperations.upsertGeneratedLegalDocument);
   const upsertSigner = useMutation(api.legalOperations.upsertLegalSigner);
+  const seedStarterTemplates = useMutation(api.legalOperations.seedStarterPolicyTemplates);
   const toast = useToast();
   const [draft, setDraft] = useState<any>(null);
 
@@ -527,6 +528,16 @@ export function TemplateEnginePage() {
     toast.success("Template engine record saved");
   };
 
+  const addStarterTemplates = async () => {
+    const result = await seedStarterTemplates({ societyId: society._id });
+    toast.success(
+      result.inserted || result.updated
+        ? `Added ${result.inserted} and refreshed ${result.updated} starter templates`
+        : "Starter templates already exist",
+      result.skipped ? `${result.skipped} matching custom templates were left unchanged.` : `${result.total} source templates checked.`,
+    );
+  };
+
   return (
     <div className="page page--wide">
       <PageHeader
@@ -536,6 +547,7 @@ export function TemplateEnginePage() {
         subtitle="Reusable OrgHub-style precedents, data fields, templates, generated drafts, signing state, package runs, timelines, deliverables, terms, and price items."
         actions={
           <div className="row" style={{ flexWrap: "wrap" }}>
+            <button className="btn-action" onClick={addStarterTemplates}><FileSignature size={12} /> Starter templates</button>
             <button className="btn-action" onClick={() => setDraft({ kind: "field" })}><Plus size={12} /> Field</button>
             <button className="btn-action" onClick={() => setDraft({ kind: "precedent", status: "draft" })}><Plus size={12} /> Precedent</button>
             <button className="btn-action" onClick={() => setDraft({ kind: "run", status: "draft" })}><Plus size={12} /> Run</button>

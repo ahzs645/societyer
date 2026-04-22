@@ -1,0 +1,69 @@
+{
+  "key": "committee-formation-procedure",
+  "name": "Committee Formation and Procedure Policy",
+  "policyNumber": "GOV-001",
+  "templateType": "policy",
+  "documentTag": "sub_committee_records",
+  "source": {
+    "primaryFileName": "CommitteeFormationAndProcedure.pdf",
+    "primaryRelativePath": "New Folder With Items 3/CommitteeFormationAndProcedure.pdf",
+    "sourceRootName": "New Folder With Items",
+    "sha256": "ccf57ad5f200328c72980cc7119e54011746828a90e497b7b9efaf17554456d0",
+    "pageCount": 2,
+    "duplicateFiles": [
+      {
+        "fileName": "CommitteeFormationAndProcedure.pdf",
+        "relativePath": "New Folder With Items 3/CommitteeFormationAndProcedure.pdf"
+      }
+    ]
+  },
+  "extraction": {
+    "tool": "pdftotext -layout",
+    "textEncoding": "utf8-normalized-ascii",
+    "text": "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n PREAMBLE\n\n The Board of Directors operates as a Policy and Governance Board. Most of the committees of\n the Board have an advisory and policy development role, except for the local Fund Development\n Committees, which are actively involved in promoting the Corporation in their local community.\n\n The following guidelines are to be followed to ensure effective and efficient Board and committee\n meetings.\n\n PRACTICE:\n\n    1. A Board member shall chair all committees of the Board. One member of the Board shall\n       be a member of each of the community-based Fund Development Committees.\n\n    2. Reports and minutes of meetings shall be presented to the Board following each committee\n       meeting.\n\n    3. The Standing Advisory Committees of the Board include: Nominating, Governance,\n       Community Leadership, Finance, Investment, and Grant Making.\n\n    4. Committee members are appointed for a three-year term. The board approves all committee\n       memberships. Membership can be renewed for additional three-year terms, in consultation\n       with the board chair and the Executive Director, and may be extended based on the\n       recommendation of the Committee Chair and Executive Director.\n\n    5. Committee members may be drawn from the Board of Directors or from those members of\n       the general public with the skills necessary to perform the functions of the committee.\n\n    6. All committees are advisory committees to the Board of Directors.\n\n    7. Each committee shall review committee terms of reference annually and recommendations\n       for changes shall be presented to the Board for approval.\n\n    8. Each committee will be evaluated on a bi-annual basis.\n\n    9. Every effort will be made to draw committee members from a number of municipalities\n       within the region that the Corporation operates. A minimum of three municipalities in the\n       region must be represented (either as a place of business or residence) in the total\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n        membership of each committee.\n\n    10. Each committee chair is to receive an orientation from the Board Chair and/or Executive\n        Director/CEO as to their responsibilities with respect to the Executive Director/CEO\n        Emergency Succession Plan.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+  },
+  "remadeTemplate": {
+    "summary": "Board committee creation, composition, reporting, terms of reference, chairing, evaluation, and renewal.",
+    "signatureRequired": true,
+    "includeBoardAcceptance": true,
+    "requiredDataFields": [
+      "CorporationName",
+      "PolicyName",
+      "PolicyNumber",
+      "PolicyEffectiveDate",
+      "ReviewDate",
+      "EffectiveDate",
+      "VotingDirectors"
+    ],
+    "optionalDataFields": [],
+    "reviewDataFields": [
+      "Bylaws",
+      "SigningAuthorities",
+      "Jurisdiction",
+      "CharityStatus"
+    ],
+    "sections": [
+      {
+        "heading": "Committee Authority",
+        "paragraphs": [
+          "Committees are created by board resolution and operate under board-approved terms of reference. Unless expressly delegated, committees are advisory and report recommendations to the board."
+        ]
+      },
+      {
+        "heading": "Membership and Terms",
+        "bullets": [
+          "The board approves committee chairs and members.",
+          "Committee members may include directors and non-director community members with relevant skills.",
+          "Committee terms, renewal rules, and vacancies are recorded in the committee register."
+        ]
+      },
+      {
+        "heading": "Reporting",
+        "paragraphs": [
+          "Committee reports, minutes, and material recommendations must be provided to the board and retained in the organization's records."
+        ]
+      }
+    ],
+    "html": "<h1>{PolicyName}</h1>\n\n<p><strong>Organization:</strong> {CorporationName}</p>\n\n<p><strong>Policy number:</strong> {PolicyNumber}</p>\n\n<p><strong>Effective date:</strong> {PolicyEffectiveDate}</p>\n\n<p><em>This is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.</em></p>\n\n<h2>Committee Authority</h2>\n<p>Committees are created by board resolution and operate under board-approved terms of reference. Unless expressly delegated, committees are advisory and report recommendations to the board.</p>\n<h2>Membership and Terms</h2>\n<ul>\n  <li>The board approves committee chairs and members.</li>\n  <li>Committee members may include directors and non-director community members with relevant skills.</li>\n  <li>Committee terms, renewal rules, and vacancies are recorded in the committee register.</li>\n</ul>\n<h2>Reporting</h2>\n<p>Committee reports, minutes, and material recommendations must be provided to the board and retained in the organization's records.</p>\n\n<h2>Monitoring</h2>\n\n<p>This policy will be reviewed on or around {ReviewDate} and whenever legal, operational, funding, or governance requirements materially change.</p>\n\n<h2>Board Acceptance</h2>\n<p>This policy was approved by resolution of the board of directors of {CorporationName} on {EffectiveDate}.</p>\n<p>{#SoleVotDir}Approved by the sole voting director.{/SoleVotDir}{#MultiVotDir}Approved by counterpart signatures of the voting directors.{/MultiVotDir}</p>\n<p>{#VotingDirectors}{SignerTag}<br />_________________________________________<br />{Director-Name}{/VotingDirectors}</p>\n\n<p><small>Source: CommitteeFormationAndProcedure.pdf; SHA-256 ccf57ad5f200328c72980cc7119e54011746828a90e497b7b9efaf17554456d0</small></p>"
+  }
+}

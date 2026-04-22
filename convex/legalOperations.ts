@@ -1,6 +1,12 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { assertAllowedOption } from "./lib/orgHubOptions";
+import {
+  STARTER_POLICY_TEMPLATES,
+  starterTemplateHtml,
+  starterTemplateMarker,
+  starterTemplateRequiredFields,
+} from "./starterPolicyTemplates";
 
 export const listRoleHolders = query({
   args: { societyId: v.id("societies") },
@@ -310,6 +316,74 @@ export const templateEngine = query({
       generatedDocuments: generatedDocuments.sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO))),
       signers: signers.sort((a, b) => String(a.fullName).localeCompare(String(b.fullName))),
     };
+  },
+});
+
+export const seedStarterPolicyTemplates = mutation({
+  args: { societyId: v.id("societies") },
+  handler: async (ctx, { societyId }) => {
+    const now = new Date().toISOString();
+    const existing = await ctx.db
+      .query("legalTemplates")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+    let inserted = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    for (const template of STARTER_POLICY_TEMPLATES) {
+      const marker = starterTemplateMarker(template);
+      const existingByMarker = existing.find((row) => (row.sourceExternalIds ?? []).includes(marker));
+      const existingByName = existing.find((row) => row.name.toLowerCase() === template.name.toLowerCase());
+      const payload = {
+        societyId,
+        templateType: template.templateType ?? "policy",
+        name: template.name,
+        status: "active",
+        templateDocumentId: undefined,
+        docxDocumentId: undefined,
+        pdfDocumentId: undefined,
+        html: starterTemplateHtml(template),
+        notes: [
+          template.summary,
+          "Remade from local source PDF templates supplied for Societyer template inclusion.",
+          `Source file: ${template.sourceFile}`,
+          `Source SHA-256: ${template.sourceSha256}`,
+        ].join("\n"),
+        owner: "Societyer starter catalog",
+        ownerIsTobuso: false,
+        signatureRequired: template.signatureRequired ?? true,
+        documentTag: template.documentTag ?? "other",
+        entityTypes: ["society", "corporation__nfp_"],
+        jurisdictions: ["british_columbia", "federal__canada_"],
+        requiredSigners: template.signatureRequired === false ? [] : ["all_directors"],
+        requiredDataFieldIds: [],
+        optionalDataFieldIds: [],
+        reviewDataFieldIds: [],
+        requiredDataFields: starterTemplateRequiredFields(template),
+        optionalDataFields: template.optionalDataFields ?? [],
+        reviewDataFields: template.reviewDataFields ?? ["Bylaws", "SigningAuthorities", "Jurisdiction", "CharityStatus"],
+        timeline: "Review and customize before board approval.",
+        deliverable: template.templateType === "document" ? "Editable governance document template" : "Editable policy template with board acceptance block",
+        terms: "Starter template only. Review for jurisdiction, bylaws, charity status, funder requirements, and actual operations before adoption.",
+        filingType: undefined,
+        priceItems: [],
+        sourceExternalIds: [marker, `sha256:${template.sourceSha256}`, `source-file:${template.sourceFile}`],
+        updatedAtISO: now,
+      };
+
+      if (existingByMarker) {
+        await ctx.db.patch(existingByMarker._id, payload);
+        updated += 1;
+      } else if (existingByName) {
+        skipped += 1;
+      } else {
+        await ctx.db.insert("legalTemplates", { ...payload, createdAtISO: now });
+        inserted += 1;
+      }
+    }
+
+    return { inserted, updated, skipped, total: STARTER_POLICY_TEMPLATES.length };
   },
 });
 

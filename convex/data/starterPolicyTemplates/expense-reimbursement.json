@@ -1,0 +1,68 @@
+{
+  "key": "expense-reimbursement",
+  "name": "Expense Reimbursement Policy",
+  "policyNumber": "FIN-002",
+  "templateType": "policy",
+  "documentTag": "other",
+  "source": {
+    "primaryFileName": "ExpenseReimbursement.pdf",
+    "primaryRelativePath": "New Folder With Items 3/ExpenseReimbursement.pdf",
+    "sourceRootName": "New Folder With Items",
+    "sha256": "2e7e4bdca17f970e9035c996c58bfa249fec3552b8e96bc76522ccbd152dcef7",
+    "pageCount": 1,
+    "duplicateFiles": [
+      {
+        "fileName": "ExpenseReimbursement-PolicyTemplate-20250528.pdf",
+        "relativePath": "ExpenseReimbursement-PolicyTemplate-20250528.pdf"
+      },
+      {
+        "fileName": "ExpenseReimbursement.pdf",
+        "relativePath": "New Folder With Items 3/ExpenseReimbursement.pdf"
+      }
+    ]
+  },
+  "extraction": {
+    "tool": "pdftotext -layout",
+    "textEncoding": "utf8-normalized-ascii",
+    "text": "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n Volunteers and staff will be reimbursed for expenses incurred in conducting the business of the\n Corporation. The Treasurer or Executive Director, prior to the expense being incurred, must\n approve the request for reimbursement. For approved expenses, receipts must accompany\n requests for reimbursement. The expenses for the Executive Director/CEO are reviewed annually\n by the Treasurer.\n\n Mileage will be reimbursed at the rate of $0.40 per km (or whichever other rate the Board\n determines). This rate is reviewed annually based on reasonable criteria that materially impact\n the determination of a fair reimbursement rate. Meal expenditures incurred on Corporation\n business will be reimbursed, per person, based on the following schedule: breakfast $12.00; lunch\n $17.00; supper $30.00.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+  },
+  "remadeTemplate": {
+    "summary": "Pre-approval, receipts, mileage, meals, staff and volunteer reimbursements, and executive expense review.",
+    "signatureRequired": true,
+    "includeBoardAcceptance": true,
+    "requiredDataFields": [
+      "CorporationName",
+      "PolicyName",
+      "PolicyNumber",
+      "PolicyEffectiveDate",
+      "ReviewDate",
+      "EffectiveDate",
+      "VotingDirectors"
+    ],
+    "optionalDataFields": [],
+    "reviewDataFields": [
+      "Bylaws",
+      "SigningAuthorities",
+      "Jurisdiction",
+      "CharityStatus"
+    ],
+    "sections": [
+      {
+        "heading": "Eligibility",
+        "paragraphs": [
+          "Approved staff, directors, committee members, and volunteers may be reimbursed for reasonable expenses incurred for authorized organizational business."
+        ]
+      },
+      {
+        "heading": "Approval and Documentation",
+        "bullets": [
+          "Expenses should be approved before they are incurred unless the board has approved another process.",
+          "Receipts or equivalent support must be attached to reimbursement requests.",
+          "Mileage, meals, travel, and special expenses follow the board-approved rates and limits.",
+          "Executive director or CEO expenses are reviewed by the treasurer or another board-designated person."
+        ]
+      }
+    ],
+    "html": "<h1>{PolicyName}</h1>\n\n<p><strong>Organization:</strong> {CorporationName}</p>\n\n<p><strong>Policy number:</strong> {PolicyNumber}</p>\n\n<p><strong>Effective date:</strong> {PolicyEffectiveDate}</p>\n\n<p><em>This is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.</em></p>\n\n<h2>Eligibility</h2>\n<p>Approved staff, directors, committee members, and volunteers may be reimbursed for reasonable expenses incurred for authorized organizational business.</p>\n<h2>Approval and Documentation</h2>\n<ul>\n  <li>Expenses should be approved before they are incurred unless the board has approved another process.</li>\n  <li>Receipts or equivalent support must be attached to reimbursement requests.</li>\n  <li>Mileage, meals, travel, and special expenses follow the board-approved rates and limits.</li>\n  <li>Executive director or CEO expenses are reviewed by the treasurer or another board-designated person.</li>\n</ul>\n\n<h2>Monitoring</h2>\n\n<p>This policy will be reviewed on or around {ReviewDate} and whenever legal, operational, funding, or governance requirements materially change.</p>\n\n<h2>Board Acceptance</h2>\n<p>This policy was approved by resolution of the board of directors of {CorporationName} on {EffectiveDate}.</p>\n<p>{#SoleVotDir}Approved by the sole voting director.{/SoleVotDir}{#MultiVotDir}Approved by counterpart signatures of the voting directors.{/MultiVotDir}</p>\n<p>{#VotingDirectors}{SignerTag}<br />_________________________________________<br />{Director-Name}{/VotingDirectors}</p>\n\n<p><small>Source: ExpenseReimbursement.pdf; SHA-256 2e7e4bdca17f970e9035c996c58bfa249fec3552b8e96bc76522ccbd152dcef7</small></p>"
+  }
+}

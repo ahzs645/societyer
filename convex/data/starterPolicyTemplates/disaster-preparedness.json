@@ -1,0 +1,74 @@
+{
+  "key": "disaster-preparedness",
+  "name": "Disaster Preparedness and Recovery Policy",
+  "policyNumber": "OPS-002",
+  "templateType": "policy",
+  "documentTag": "other",
+  "source": {
+    "primaryFileName": "DisasterPreparedness.pdf",
+    "primaryRelativePath": "New Folder With Items 3/DisasterPreparedness.pdf",
+    "sourceRootName": "New Folder With Items",
+    "sha256": "e20465644ec53dccb34e93693350c535c8055dcc8c5d3afb3f1d2b36326e9cbe",
+    "pageCount": 2,
+    "duplicateFiles": [
+      {
+        "fileName": "Disaster Recovery-PolicyTemplate-20250528 .pdf",
+        "relativePath": "Disaster Recovery-PolicyTemplate-20250528 .pdf"
+      },
+      {
+        "fileName": "DisasterPreparedness.pdf",
+        "relativePath": "New Folder With Items 3/DisasterPreparedness.pdf"
+      }
+    ]
+  },
+  "extraction": {
+    "tool": "pdftotext -layout",
+    "textEncoding": "utf8-normalized-ascii",
+    "text": "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n The Board of Directors (the \"Board) is obligated to ensure a disaster preparedness plan is\n reviewed annually and meets the goals of this policy. In the case of a disaster, the Corporation\n must be able to:\n\n       Continue critical business functions.\n\n       Inform staff, volunteers, board members, key donors, vendors and the community at large\n        of the disruption.\n\n       Protect assets and vital records.\n\n       Provide assurance to all stakeholders of the security of Corporation assets.\n\n Disaster Preparedness Plan\n\n In the case of a disaster, Board members shall make reasonable efforts to be available for\n emergency meetings, conference calls and approvals. In the event of a disaster, the Chief\n Executive Officer (\"CEO\") will be responsible for leading the Corporation's response, including\n but not limited to:\n\n       Assist in the establishment of an alternate office site if required.\n\n       Ensuring the Corporation's office, and business functions, are returned to normal\n        operations as quickly as possible\n\n       Develop and implement a communications plan for the purpose of providing assurance to\n        the Board, to Corporation stakeholders and to the larger community.\n\n       Develop a plan and notify key stakeholders including board members, donors, grantees,\n        suppliers and the media of the interruption to operations and strategies that will be taken\n        to address the interruption.\n\n       Recover computer and telephone technology (hardware and software). Copies of vital\n        documents are backed up regularly and stored off-site. Forms and documents are listed on\n        the Record Retention list.\n\n       Coordinate paperwork required by insurers to initiate claims.\n\n       Maintain daily cash funding for any essential business processes.\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n       Prepare and maintain a cumulative cost report for the event.\n\n       Maintain payroll.\n\n       Ensure easy access to necessary capital.\n\n       Provide and encourage access to counseling for staff.\n\n       Create, and annually review, two files with extra letterhead and envelopes, all relevant\n        plans, instructions on how to access the website, email and phone message system,\n        password list, and contact information for key stakeholders. One file shall be stored with\n        the Chair of the Board and off-site where it may be accessed by the CEO.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n        {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+  },
+  "remadeTemplate": {
+    "summary": "Continuity planning, records backup, emergency roles, communications, service restoration, and review.",
+    "signatureRequired": true,
+    "includeBoardAcceptance": true,
+    "requiredDataFields": [
+      "CorporationName",
+      "PolicyName",
+      "PolicyNumber",
+      "PolicyEffectiveDate",
+      "ReviewDate",
+      "EffectiveDate",
+      "VotingDirectors"
+    ],
+    "optionalDataFields": [],
+    "reviewDataFields": [
+      "Bylaws",
+      "SigningAuthorities",
+      "Jurisdiction",
+      "CharityStatus"
+    ],
+    "sections": [
+      {
+        "heading": "Continuity Objective",
+        "paragraphs": [
+          "The organization maintains practical plans to protect people, records, systems, funds, and essential services during and after emergencies."
+        ]
+      },
+      {
+        "heading": "Preparedness",
+        "bullets": [
+          "Identify emergency contacts, decision makers, and backup authorities.",
+          "Maintain secure offsite or cloud backups for critical records.",
+          "Document alternate communications, banking, payroll, and donor-service procedures.",
+          "Review insurance, facility access, and key supplier continuity arrangements."
+        ]
+      },
+      {
+        "heading": "Recovery",
+        "paragraphs": [
+          "After an incident, the responsible officers document the event, immediate actions, service gaps, restoration plan, and lessons learned for board review."
+        ]
+      }
+    ],
+    "html": "<h1>{PolicyName}</h1>\n\n<p><strong>Organization:</strong> {CorporationName}</p>\n\n<p><strong>Policy number:</strong> {PolicyNumber}</p>\n\n<p><strong>Effective date:</strong> {PolicyEffectiveDate}</p>\n\n<p><em>This is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.</em></p>\n\n<h2>Continuity Objective</h2>\n<p>The organization maintains practical plans to protect people, records, systems, funds, and essential services during and after emergencies.</p>\n<h2>Preparedness</h2>\n<ul>\n  <li>Identify emergency contacts, decision makers, and backup authorities.</li>\n  <li>Maintain secure offsite or cloud backups for critical records.</li>\n  <li>Document alternate communications, banking, payroll, and donor-service procedures.</li>\n  <li>Review insurance, facility access, and key supplier continuity arrangements.</li>\n</ul>\n<h2>Recovery</h2>\n<p>After an incident, the responsible officers document the event, immediate actions, service gaps, restoration plan, and lessons learned for board review.</p>\n\n<h2>Monitoring</h2>\n\n<p>This policy will be reviewed on or around {ReviewDate} and whenever legal, operational, funding, or governance requirements materially change.</p>\n\n<h2>Board Acceptance</h2>\n<p>This policy was approved by resolution of the board of directors of {CorporationName} on {EffectiveDate}.</p>\n<p>{#SoleVotDir}Approved by the sole voting director.{/SoleVotDir}{#MultiVotDir}Approved by counterpart signatures of the voting directors.{/MultiVotDir}</p>\n<p>{#VotingDirectors}{SignerTag}<br />_________________________________________<br />{Director-Name}{/VotingDirectors}</p>\n\n<p><small>Source: DisasterPreparedness.pdf; SHA-256 e20465644ec53dccb34e93693350c535c8055dcc8c5d3afb3f1d2b36326e9cbe</small></p>"
+  }
+}
