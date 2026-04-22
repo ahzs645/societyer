@@ -1,3 +1,5 @@
+import { STARTER_POLICY_TEMPLATE_SOURCE_TEXTS } from "./starterPolicyTemplateSourceTexts";
+
 export type StarterTemplateSection = {
   heading: string;
   paragraphs?: string[];
@@ -589,6 +591,16 @@ export function starterTemplateMarker(template: StarterPolicyTemplate) {
 }
 
 export function starterTemplateHtml(template: StarterPolicyTemplate) {
+  const exactSourceText = starterTemplateExactText(template);
+  if (exactSourceText) return sourceTextToHtml(exactSourceText);
+  return starterTemplateStructuredHtml(template);
+}
+
+export function starterTemplateExactText(template: StarterPolicyTemplate) {
+  return STARTER_POLICY_TEMPLATE_SOURCE_TEXTS[template.key];
+}
+
+export function starterTemplateStructuredHtml(template: StarterPolicyTemplate) {
   const body = template.sections.map(renderSection).join("\n");
   const acceptance = template.includeBoardAcceptance === false ? "" : renderBoardAcceptance();
   return [
@@ -608,6 +620,18 @@ export function starterTemplateHtml(template: StarterPolicyTemplate) {
 export function starterTemplateRequiredFields(template: StarterPolicyTemplate) {
   if (template.requiredDataFields) return template.requiredDataFields;
   return COMMON_REQUIRED_FIELDS;
+}
+
+function sourceTextToHtml(sourceText: string) {
+  return `<pre class="source-pdf-template">${escapeHtml(sourceText)}</pre>`;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function renderSection(section: StarterTemplateSection) {

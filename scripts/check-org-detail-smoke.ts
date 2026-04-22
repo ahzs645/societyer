@@ -97,8 +97,18 @@ const checks: Array<{ file: string; patterns: Array<string | RegExp> }> = [
       "Authorization Policy",
       "Donation Recording and Receipting Policy",
       "Meeting Minutes Examples and Drafting Guide",
+      "starterTemplateExactText",
+      "starterTemplateStructuredHtml",
       "starterTemplateHtml",
       "starterTemplateMarker",
+    ],
+  },
+  {
+    file: "convex/starterPolicyTemplateSourceTexts.ts",
+    patterns: [
+      "STARTER_POLICY_TEMPLATE_SOURCE_TEXTS",
+      "authorization-policy",
+      "Policy Name:",
     ],
   },
   {
@@ -107,16 +117,20 @@ const checks: Array<{ file: string; patterns: Array<string | RegExp> }> = [
       "STARTER_POLICY_TEMPLATES",
       "pdftotext",
       "utf8-normalized-ascii",
+      "starterPolicyTemplateSourceTexts.ts",
+      "exactTemplate",
+      "exact_text_from_source_pdf_extraction",
       "sampleData",
       "renderedSample",
-      "compareTemplateText",
+      "compareExactTemplateText",
       "convex/data/starterPolicyTemplates",
     ],
   },
   {
     file: "scripts/render-starter-template-documents.ts",
     patterns: [
-      "renderStarterTemplateBlocks",
+      "exactSourceTextToHtml",
+      "sourceTextToBlocks",
       "writeDocx",
       "writePdf",
       "comparison-report.md",
@@ -127,7 +141,10 @@ const checks: Array<{ file: string; patterns: Array<string | RegExp> }> = [
     file: "scripts/starter-template-rendering.ts",
     patterns: [
       "starterSampleData",
+      "exactSourceTextToHtml",
+      "renderExactSourceSampleText",
       "renderStarterTemplateSampleHtml",
+      "compareExactTemplateText",
       "compareTemplateText",
       "Dummy data for export preview",
     ],
@@ -266,9 +283,14 @@ if (!existsSync(starterJsonDir)) {
       if (!parsed.source?.sha256) failures.push(`${file}: missing source.sha256`);
       if (!parsed.extraction?.text) failures.push(`${file}: missing extraction.text`);
       if (!parsed.sampleData?.values?.CorporationName) failures.push(`${file}: missing sampleData.values.CorporationName`);
+      if (!parsed.exactTemplate?.text) failures.push(`${file}: missing exactTemplate.text`);
+      if (parsed.exactTemplate?.text !== parsed.extraction?.text) failures.push(`${file}: exactTemplate.text does not match extraction.text`);
       if (!parsed.renderedSample?.text) failures.push(`${file}: missing renderedSample.text`);
       if (!parsed.comparison?.status) failures.push(`${file}: missing comparison.status`);
+      if (parsed.comparison?.status !== "exact_text_match") failures.push(`${file}: expected exact_text_match, found ${parsed.comparison?.status}`);
       if (!parsed.remadeTemplate?.html) failures.push(`${file}: missing remadeTemplate.html`);
+      if (!parsed.remadeTemplate?.text) failures.push(`${file}: missing remadeTemplate.text`);
+      if (!parsed.structuredSummaryTemplate?.html) failures.push(`${file}: missing structuredSummaryTemplate.html`);
     } catch (error) {
       failures.push(`${file}: invalid JSON`);
     }

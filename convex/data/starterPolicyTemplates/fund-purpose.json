@@ -55,109 +55,60 @@
       }
     ]
   },
+  "exactTemplate": {
+    "textEncoding": "utf8-normalized-ascii",
+    "sourceFidelity": "exact_text_from_source_pdf_extraction",
+    "text": "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n The charitable purposes of the Corporation are to receive and maintain a fund or funds and to\n apply all or part of the principal and income therefore, by way of a formal grants program to\n qualified donees in the furtherance of the following charitable purposes beneficial to the\n community including: [CUSTOMIZATION REQUIRED: include list of charitable purposes\n approved by CRA in your charitable registration documents].\n\n The objects of the Corporation shall be limited to carrying on purposes which entitle the\n Corporation to become and remain a \"registered Canadian charitable organization or public\n Corporation\" as defined by the provisions of the Income Tax Act (Canada).\n\n Each year, the Community Corporation will allocate salaries and benefits to its charitable,\n fundraising and management functions, based on job descriptions, and prorate the operating\n expenditures on either a direct or prorated basis based on the salary allocation. This information\n will be conveyed to the auditor.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}",
+    "html": "<pre class=\"source-pdf-template\">{CorporationName}\n                                         (the &quot;Corporation&quot;)\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n The charitable purposes of the Corporation are to receive and maintain a fund or funds and to\n apply all or part of the principal and income therefore, by way of a formal grants program to\n qualified donees in the furtherance of the following charitable purposes beneficial to the\n community including: [CUSTOMIZATION REQUIRED: include list of charitable purposes\n approved by CRA in your charitable registration documents].\n\n The objects of the Corporation shall be limited to carrying on purposes which entitle the\n Corporation to become and remain a &quot;registered Canadian charitable organization or public\n Corporation&quot; as defined by the provisions of the Income Tax Act (Canada).\n\n Each year, the Community Corporation will allocate salaries and benefits to its charitable,\n fundraising and management functions, based on job descriptions, and prorate the operating\n expenditures on either a direct or prorated basis based on the salary allocation. This information\n will be conveyed to the auditor.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}</pre>"
+  },
   "renderedSample": {
-    "html": "<h1>Fund Purpose Policy</h1>\n\n<p><strong>Organization:</strong> Sample Community Society</p>\n\n<p><strong>Policy number:</strong> DON-003</p>\n\n<p><strong>Effective date:</strong> 2026-01-01</p>\n\n<p><em>This is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.</em></p>\n\n<h2>Purpose of Funds</h2>\n<p>Funds are received, maintained, and applied to the organization's charitable or nonprofit purposes as described in the governing documents and applicable fund agreements.</p>\n<h2>Eligible Uses</h2>\n<p>Fund principal and income may be used for approved programs, grants, qualified donee gifts, or other lawful activities that advance the stated purposes.</p>\n<h2>Allocation</h2>\n<p>Salary, benefit, fundraising, management, and operating allocations are documented using a reasonable board-approved allocation basis and provided to the auditor or reviewer when required.</p>\n\n<h2>Monitoring</h2>\n\n<p>This policy will be reviewed on or around 2027-01-01 and whenever legal, operational, funding, or governance requirements materially change.</p>\n\n<h2>Board Acceptance</h2>\n<p>This policy was approved by resolution of the board of directors of Sample Community Society on 2026-01-01.</p>\n<p>Approved by counterpart signatures of the voting directors.</p>\n<p>Chair<br />_________________________________________<br />Avery Chen<br />\nTreasurer<br />_________________________________________<br />Morgan Patel</p>\n\n<p><small>Source: FundPurpose.pdf; SHA-256 6fa830336f3c6a3437acc52427aa9465a2280a518e69475c8818c8d3153f5375</small></p>",
-    "text": "Fund Purpose Policy\n\nOrganization: Sample Community Society\n\nPolicy number: DON-003\n\nEffective date: 2026-01-01\n\nThis is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.\n\nPurpose of Funds\n\nFunds are received, maintained, and applied to the organization's charitable or nonprofit purposes as described in the governing documents and applicable fund agreements.\n\nEligible Uses\n\nFund principal and income may be used for approved programs, grants, qualified donee gifts, or other lawful activities that advance the stated purposes.\n\nAllocation\n\nSalary, benefit, fundraising, management, and operating allocations are documented using a reasonable board-approved allocation basis and provided to the auditor or reviewer when required.\n\nMonitoring\n\nThis policy will be reviewed on or around 2027-01-01 and whenever legal, operational, funding, or governance requirements materially change.\n\nBoard Acceptance\n\nThis policy was approved by resolution of the board of directors of Sample Community Society on 2026-01-01.\n\nApproved by counterpart signatures of the voting directors.\n\nChair\n_________________________________________\nAvery Chen\n\nTreasurer\n_________________________________________\nMorgan Patel\n\nSource: FundPurpose.pdf; SHA-256 6fa830336f3c6a3437acc52427aa9465a2280a518e69475c8818c8d3153f5375"
+    "html": "<pre class=\"source-pdf-template\">Sample Community Society\n                                         (the &quot;Corporation&quot;)\n\n Policy Name:                  Fund Purpose Policy\n\n Policy Number:                DON-003\n\n Effective Date:               2026-01-01\n\n The charitable purposes of the Corporation are to receive and maintain a fund or funds and to\n apply all or part of the principal and income therefore, by way of a formal grants program to\n qualified donees in the furtherance of the following charitable purposes beneficial to the\n community including: [CUSTOMIZATION REQUIRED: include list of charitable purposes\n approved by CRA in your charitable registration documents].\n\n The objects of the Corporation shall be limited to carrying on purposes which entitle the\n Corporation to become and remain a &quot;registered Canadian charitable organization or public\n Corporation&quot; as defined by the provisions of the Income Tax Act (Canada).\n\n Each year, the Community Corporation will allocate salaries and benefits to its charitable,\n fundraising and management functions, based on job descriptions, and prorate the operating\n expenditures on either a direct or prorated basis based on the salary allocation. This information\n will be conveyed to the auditor.\n\n Monitoring:                   This policy will be reviewed on or around 2027-01-01.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on 2026-01-01, as confirmed by\n                               the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.\n\n \n\n\n Chair\n _________________________________________\n Avery Chen<br />\n\n\n\n Treasurer\n _________________________________________\n Morgan Patel\n\n\nPolicy DON-003 - Fund Purpose Policy - Sample Community Society - 2026-01-01</pre>",
+    "text": "Sample Community Society\n                                         (the \"Corporation\")\n\n Policy Name:                  Fund Purpose Policy\n\n Policy Number:                DON-003\n\n Effective Date:               2026-01-01\n\n The charitable purposes of the Corporation are to receive and maintain a fund or funds and to\n apply all or part of the principal and income therefore, by way of a formal grants program to\n qualified donees in the furtherance of the following charitable purposes beneficial to the\n community including: [CUSTOMIZATION REQUIRED: include list of charitable purposes\n approved by CRA in your charitable registration documents].\n\n The objects of the Corporation shall be limited to carrying on purposes which entitle the\n Corporation to become and remain a \"registered Canadian charitable organization or public\n Corporation\" as defined by the provisions of the Income Tax Act (Canada).\n\n Each year, the Community Corporation will allocate salaries and benefits to its charitable,\n fundraising and management functions, based on job descriptions, and prorate the operating\n expenditures on either a direct or prorated basis based on the salary allocation. This information\n will be conveyed to the auditor.\n\n Monitoring:                   This policy will be reviewed on or around 2027-01-01.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on 2026-01-01, as confirmed by\n                               the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.\n\n \n\n\n Chair\n _________________________________________\n Avery Chen\n\n\n\n Treasurer\n _________________________________________\n Morgan Patel\n\n\nPolicy DON-003 - Fund Purpose Policy - Sample Community Society - 2026-01-01"
   },
   "comparison": {
+    "comparedAgainst": "source PDF extraction",
+    "comparedArtifact": "exactTemplate.text",
+    "method": "Normalized text equality between extracted source PDF text and the generated canonical template text.",
+    "exactTextMatch": true,
+    "originalCharacterCount": 2013,
+    "templateCharacterCount": 2013,
+    "originalLineCount": 42,
+    "templateLineCount": 42,
+    "status": "exact_text_match"
+  },
+  "dummySampleComparison": {
     "comparedAgainst": "source PDF extraction",
     "comparedArtifact": "renderedSample.text",
     "method": "Normalized keyword overlap between extracted source PDF text and the dummy-filled remade template. This flags drift only; it is not a legal-equivalence review.",
     "originalWordCount": 229,
-    "renderedSampleWordCount": 183,
+    "renderedSampleWordCount": 234,
     "sourceKeywordCount": 73,
-    "renderedKeywordCount": 93,
-    "sharedKeywordCount": 27,
-    "sourceKeywordCoverage": 0.37,
-    "renderedKeywordOverlap": 0.29,
-    "status": "low_overlap_review_required",
+    "renderedKeywordCount": 80,
+    "sharedKeywordCount": 70,
+    "sourceKeywordCoverage": 0.959,
+    "renderedKeywordOverlap": 0.875,
+    "status": "good_overlap",
     "sourceOnlyKeywords": [
-      "allocate",
-      "apply",
-      "based",
-      "become",
-      "beneficial",
-      "benefits",
-      "canada",
-      "canadian",
-      "carrying",
-      "confirmed",
-      "conveyed",
-      "customization",
-      "defined",
-      "descriptions",
-      "direct",
       "director",
-      "donees",
-      "either",
-      "entitle",
-      "expenditures",
-      "following",
-      "formal",
-      "functions",
-      "furtherance",
-      "include",
-      "including",
-      "information",
-      "limited",
-      "list",
-      "maintain",
-      "objects",
-      "part",
-      "program",
-      "prorate",
-      "prorated",
-      "provisions",
-      "public",
-      "receive",
-      "registered",
-      "registration"
+      "signature",
+      "sole"
     ],
     "renderedOnlyKeywords": [
-      "activities",
-      "actual",
-      "adoption",
-      "advance",
-      "agreements",
-      "allocations",
-      "applicable",
-      "applied",
       "avery",
-      "before",
-      "benefit",
-      "board-approved",
-      "bylaws",
       "chair",
-      "change",
-      "charity",
       "chen",
-      "described",
-      "documented",
       "don-",
-      "donee",
-      "eligible",
-      "funder",
-      "funding",
-      "fundpurpose",
-      "gifts",
-      "governance",
-      "governing",
-      "imported",
-      "jurisdiction",
-      "lawful",
-      "legal",
-      "maintained",
-      "material",
-      "materially",
       "morgan",
-      "nonprofit",
-      "operational",
-      "operations",
-      "organization's"
+      "patel",
+      "purpose",
+      "sample",
+      "society",
+      "treasurer"
     ]
   },
   "remadeTemplate": {
     "summary": "Charitable fund purposes, qualified donee grants, CRA-approved purposes, and allocation of salaries and operating costs.",
+    "sourceFidelity": "exact_text_from_source_pdf_extraction",
     "signatureRequired": true,
     "includeBoardAcceptance": true,
     "requiredDataFields": [
@@ -176,6 +127,19 @@
       "Jurisdiction",
       "CharityStatus"
     ],
+    "sections": [
+      {
+        "heading": "Exact PDF Text Extraction",
+        "paragraphs": [
+          "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n The charitable purposes of the Corporation are to receive and maintain a fund or funds and to\n apply all or part of the principal and income therefore, by way of a formal grants program to\n qualified donees in the furtherance of the following charitable purposes beneficial to the\n community including: [CUSTOMIZATION REQUIRED: include list of charitable purposes\n approved by CRA in your charitable registration documents].\n\n The objects of the Corporation shall be limited to carrying on purposes which entitle the\n Corporation to become and remain a \"registered Canadian charitable organization or public\n Corporation\" as defined by the provisions of the Income Tax Act (Canada).\n\n Each year, the Community Corporation will allocate salaries and benefits to its charitable,\n fundraising and management functions, based on job descriptions, and prorate the operating\n expenditures on either a direct or prorated basis based on the salary allocation. This information\n will be conveyed to the auditor.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+        ]
+      }
+    ],
+    "html": "<pre class=\"source-pdf-template\">{CorporationName}\n                                         (the &quot;Corporation&quot;)\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n The charitable purposes of the Corporation are to receive and maintain a fund or funds and to\n apply all or part of the principal and income therefore, by way of a formal grants program to\n qualified donees in the furtherance of the following charitable purposes beneficial to the\n community including: [CUSTOMIZATION REQUIRED: include list of charitable purposes\n approved by CRA in your charitable registration documents].\n\n The objects of the Corporation shall be limited to carrying on purposes which entitle the\n Corporation to become and remain a &quot;registered Canadian charitable organization or public\n Corporation&quot; as defined by the provisions of the Income Tax Act (Canada).\n\n Each year, the Community Corporation will allocate salaries and benefits to its charitable,\n fundraising and management functions, based on job descriptions, and prorate the operating\n expenditures on either a direct or prorated basis based on the salary allocation. This information\n will be conveyed to the auditor.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}</pre>",
+    "text": "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n The charitable purposes of the Corporation are to receive and maintain a fund or funds and to\n apply all or part of the principal and income therefore, by way of a formal grants program to\n qualified donees in the furtherance of the following charitable purposes beneficial to the\n community including: [CUSTOMIZATION REQUIRED: include list of charitable purposes\n approved by CRA in your charitable registration documents].\n\n The objects of the Corporation shall be limited to carrying on purposes which entitle the\n Corporation to become and remain a \"registered Canadian charitable organization or public\n Corporation\" as defined by the provisions of the Income Tax Act (Canada).\n\n Each year, the Community Corporation will allocate salaries and benefits to its charitable,\n fundraising and management functions, based on job descriptions, and prorate the operating\n expenditures on either a direct or prorated basis based on the salary allocation. This information\n will be conveyed to the auditor.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+  },
+  "structuredSummaryTemplate": {
+    "sourceFidelity": "condensed_structured_summary",
     "sections": [
       {
         "heading": "Purpose of Funds",

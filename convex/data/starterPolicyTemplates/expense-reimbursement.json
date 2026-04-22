@@ -55,95 +55,58 @@
       }
     ]
   },
+  "exactTemplate": {
+    "textEncoding": "utf8-normalized-ascii",
+    "sourceFidelity": "exact_text_from_source_pdf_extraction",
+    "text": "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n Volunteers and staff will be reimbursed for expenses incurred in conducting the business of the\n Corporation. The Treasurer or Executive Director, prior to the expense being incurred, must\n approve the request for reimbursement. For approved expenses, receipts must accompany\n requests for reimbursement. The expenses for the Executive Director/CEO are reviewed annually\n by the Treasurer.\n\n Mileage will be reimbursed at the rate of $0.40 per km (or whichever other rate the Board\n determines). This rate is reviewed annually based on reasonable criteria that materially impact\n the determination of a fair reimbursement rate. Meal expenditures incurred on Corporation\n business will be reimbursed, per person, based on the following schedule: breakfast $12.00; lunch\n $17.00; supper $30.00.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}",
+    "html": "<pre class=\"source-pdf-template\">{CorporationName}\n                                         (the &quot;Corporation&quot;)\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n Volunteers and staff will be reimbursed for expenses incurred in conducting the business of the\n Corporation. The Treasurer or Executive Director, prior to the expense being incurred, must\n approve the request for reimbursement. For approved expenses, receipts must accompany\n requests for reimbursement. The expenses for the Executive Director/CEO are reviewed annually\n by the Treasurer.\n\n Mileage will be reimbursed at the rate of $0.40 per km (or whichever other rate the Board\n determines). This rate is reviewed annually based on reasonable criteria that materially impact\n the determination of a fair reimbursement rate. Meal expenditures incurred on Corporation\n business will be reimbursed, per person, based on the following schedule: breakfast $12.00; lunch\n $17.00; supper $30.00.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}</pre>"
+  },
   "renderedSample": {
-    "html": "<h1>Expense Reimbursement Policy</h1>\n\n<p><strong>Organization:</strong> Sample Community Society</p>\n\n<p><strong>Policy number:</strong> FIN-002</p>\n\n<p><strong>Effective date:</strong> 2026-01-01</p>\n\n<p><em>This is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.</em></p>\n\n<h2>Eligibility</h2>\n<p>Approved staff, directors, committee members, and volunteers may be reimbursed for reasonable expenses incurred for authorized organizational business.</p>\n<h2>Approval and Documentation</h2>\n<ul>\n  <li>Expenses should be approved before they are incurred unless the board has approved another process.</li>\n  <li>Receipts or equivalent support must be attached to reimbursement requests.</li>\n  <li>Mileage, meals, travel, and special expenses follow the board-approved rates and limits.</li>\n  <li>Executive director or CEO expenses are reviewed by the treasurer or another board-designated person.</li>\n</ul>\n\n<h2>Monitoring</h2>\n\n<p>This policy will be reviewed on or around 2027-01-01 and whenever legal, operational, funding, or governance requirements materially change.</p>\n\n<h2>Board Acceptance</h2>\n<p>This policy was approved by resolution of the board of directors of Sample Community Society on 2026-01-01.</p>\n<p>Approved by counterpart signatures of the voting directors.</p>\n<p>Chair<br />_________________________________________<br />Avery Chen<br />\nTreasurer<br />_________________________________________<br />Morgan Patel</p>\n\n<p><small>Source: ExpenseReimbursement.pdf; SHA-256 2e7e4bdca17f970e9035c996c58bfa249fec3552b8e96bc76522ccbd152dcef7</small></p>",
-    "text": "Expense Reimbursement Policy\n\nOrganization: Sample Community Society\n\nPolicy number: FIN-002\n\nEffective date: 2026-01-01\n\nThis is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.\n\nEligibility\n\nApproved staff, directors, committee members, and volunteers may be reimbursed for reasonable expenses incurred for authorized organizational business.\n\nApproval and Documentation\n\n  - Expenses should be approved before they are incurred unless the board has approved another process.\n\n  - Receipts or equivalent support must be attached to reimbursement requests.\n\n  - Mileage, meals, travel, and special expenses follow the board-approved rates and limits.\n\n  - Executive director or CEO expenses are reviewed by the treasurer or another board-designated person.\n\nMonitoring\n\nThis policy will be reviewed on or around 2027-01-01 and whenever legal, operational, funding, or governance requirements materially change.\n\nBoard Acceptance\n\nThis policy was approved by resolution of the board of directors of Sample Community Society on 2026-01-01.\n\nApproved by counterpart signatures of the voting directors.\n\nChair\n_________________________________________\nAvery Chen\n\nTreasurer\n_________________________________________\nMorgan Patel\n\nSource: ExpenseReimbursement.pdf; SHA-256 2e7e4bdca17f970e9035c996c58bfa249fec3552b8e96bc76522ccbd152dcef7"
+    "html": "<pre class=\"source-pdf-template\">Sample Community Society\n                                         (the &quot;Corporation&quot;)\n\n Policy Name:                  Expense Reimbursement Policy\n\n Policy Number:                FIN-002\n\n Effective Date:               2026-01-01\n\n Volunteers and staff will be reimbursed for expenses incurred in conducting the business of the\n Corporation. The Treasurer or Executive Director, prior to the expense being incurred, must\n approve the request for reimbursement. For approved expenses, receipts must accompany\n requests for reimbursement. The expenses for the Executive Director/CEO are reviewed annually\n by the Treasurer.\n\n Mileage will be reimbursed at the rate of $0.40 per km (or whichever other rate the Board\n determines). This rate is reviewed annually based on reasonable criteria that materially impact\n the determination of a fair reimbursement rate. Meal expenditures incurred on Corporation\n business will be reimbursed, per person, based on the following schedule: breakfast $12.00; lunch\n $17.00; supper $30.00.\n\n Monitoring:                   This policy will be reviewed on or around 2027-01-01.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on 2026-01-01, as confirmed by\n                               the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.\n\n \n\n\n     Chair\n _________________________________________\n Avery Chen<br />\n\n\n\n     Treasurer\n _________________________________________\n Morgan Patel\n\n\nPolicy FIN-002 - Expense Reimbursement Policy - Sample Community Society - 2026-01-01</pre>",
+    "text": "Sample Community Society\n                                         (the \"Corporation\")\n\n Policy Name:                  Expense Reimbursement Policy\n\n Policy Number:                FIN-002\n\n Effective Date:               2026-01-01\n\n Volunteers and staff will be reimbursed for expenses incurred in conducting the business of the\n Corporation. The Treasurer or Executive Director, prior to the expense being incurred, must\n approve the request for reimbursement. For approved expenses, receipts must accompany\n requests for reimbursement. The expenses for the Executive Director/CEO are reviewed annually\n by the Treasurer.\n\n Mileage will be reimbursed at the rate of $0.40 per km (or whichever other rate the Board\n determines). This rate is reviewed annually based on reasonable criteria that materially impact\n the determination of a fair reimbursement rate. Meal expenditures incurred on Corporation\n business will be reimbursed, per person, based on the following schedule: breakfast $12.00; lunch\n $17.00; supper $30.00.\n\n Monitoring:                   This policy will be reviewed on or around 2027-01-01.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on 2026-01-01, as confirmed by\n                               the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.\n\n \n\n\n     Chair\n _________________________________________\n Avery Chen\n\n\n\n     Treasurer\n _________________________________________\n Morgan Patel\n\n\nPolicy FIN-002 - Expense Reimbursement Policy - Sample Community Society - 2026-01-01"
   },
   "comparison": {
+    "comparedAgainst": "source PDF extraction",
+    "comparedArtifact": "exactTemplate.text",
+    "method": "Normalized text equality between extracted source PDF text and the generated canonical template text.",
+    "exactTextMatch": true,
+    "originalCharacterCount": 1807,
+    "templateCharacterCount": 1807,
+    "originalLineCount": 39,
+    "templateLineCount": 39,
+    "status": "exact_text_match"
+  },
+  "dummySampleComparison": {
     "comparedAgainst": "source PDF extraction",
     "comparedArtifact": "renderedSample.text",
     "method": "Normalized keyword overlap between extracted source PDF text and the dummy-filled remade template. This flags drift only; it is not a legal-equivalence review.",
     "originalWordCount": 197,
-    "renderedSampleWordCount": 180,
+    "renderedSampleWordCount": 202,
     "sourceKeywordCount": 52,
-    "renderedKeywordCount": 87,
-    "sharedKeywordCount": 26,
-    "sourceKeywordCoverage": 0.5,
-    "renderedKeywordOverlap": 0.299,
-    "status": "partial_overlap",
+    "renderedKeywordCount": 59,
+    "sharedKeywordCount": 50,
+    "sourceKeywordCoverage": 0.962,
+    "renderedKeywordOverlap": 0.847,
+    "status": "good_overlap",
     "sourceOnlyKeywords": [
-      "accompany",
-      "annually",
-      "approve",
-      "based",
-      "being",
-      "breakfast",
-      "conducting",
-      "confirmed",
-      "criteria",
-      "determination",
-      "determines",
-      "expenditures",
-      "fair",
-      "following",
-      "impact",
-      "lunch",
-      "meal",
-      "other",
-      "prior",
-      "rate",
-      "request",
-      "schedule",
       "signature",
-      "sole",
-      "supper",
-      "whichever"
+      "sole"
     ],
     "renderedOnlyKeywords": [
-      "actual",
-      "adoption",
-      "another",
-      "approval",
-      "attached",
-      "authorized",
       "avery",
-      "bdca",
-      "before",
-      "board-approved",
-      "board-designated",
-      "bylaws",
-      "ccbd",
       "chair",
-      "change",
-      "charity",
       "chen",
-      "committee",
       "community",
-      "dcef",
-      "documentation",
-      "eligibility",
-      "equivalent",
-      "expensereimbursement",
       "fin-",
-      "follow",
-      "funder",
-      "funding",
-      "governance",
-      "imported",
-      "jurisdiction",
-      "legal",
-      "limits",
-      "material",
-      "meals",
-      "members",
       "morgan",
-      "operational",
-      "operations",
-      "organizational"
+      "patel",
+      "sample",
+      "society"
     ]
   },
   "remadeTemplate": {
     "summary": "Pre-approval, receipts, mileage, meals, staff and volunteer reimbursements, and executive expense review.",
+    "sourceFidelity": "exact_text_from_source_pdf_extraction",
     "signatureRequired": true,
     "includeBoardAcceptance": true,
     "requiredDataFields": [
@@ -162,6 +125,19 @@
       "Jurisdiction",
       "CharityStatus"
     ],
+    "sections": [
+      {
+        "heading": "Exact PDF Text Extraction",
+        "paragraphs": [
+          "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n Volunteers and staff will be reimbursed for expenses incurred in conducting the business of the\n Corporation. The Treasurer or Executive Director, prior to the expense being incurred, must\n approve the request for reimbursement. For approved expenses, receipts must accompany\n requests for reimbursement. The expenses for the Executive Director/CEO are reviewed annually\n by the Treasurer.\n\n Mileage will be reimbursed at the rate of $0.40 per km (or whichever other rate the Board\n determines). This rate is reviewed annually based on reasonable criteria that materially impact\n the determination of a fair reimbursement rate. Meal expenditures incurred on Corporation\n business will be reimbursed, per person, based on the following schedule: breakfast $12.00; lunch\n $17.00; supper $30.00.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+        ]
+      }
+    ],
+    "html": "<pre class=\"source-pdf-template\">{CorporationName}\n                                         (the &quot;Corporation&quot;)\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n Volunteers and staff will be reimbursed for expenses incurred in conducting the business of the\n Corporation. The Treasurer or Executive Director, prior to the expense being incurred, must\n approve the request for reimbursement. For approved expenses, receipts must accompany\n requests for reimbursement. The expenses for the Executive Director/CEO are reviewed annually\n by the Treasurer.\n\n Mileage will be reimbursed at the rate of $0.40 per km (or whichever other rate the Board\n determines). This rate is reviewed annually based on reasonable criteria that materially impact\n the determination of a fair reimbursement rate. Meal expenditures incurred on Corporation\n business will be reimbursed, per person, based on the following schedule: breakfast $12.00; lunch\n $17.00; supper $30.00.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}</pre>",
+    "text": "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n Volunteers and staff will be reimbursed for expenses incurred in conducting the business of the\n Corporation. The Treasurer or Executive Director, prior to the expense being incurred, must\n approve the request for reimbursement. For approved expenses, receipts must accompany\n requests for reimbursement. The expenses for the Executive Director/CEO are reviewed annually\n by the Treasurer.\n\n Mileage will be reimbursed at the rate of $0.40 per km (or whichever other rate the Board\n determines). This rate is reviewed annually based on reasonable criteria that materially impact\n the determination of a fair reimbursement rate. Meal expenditures incurred on Corporation\n business will be reimbursed, per person, based on the following schedule: breakfast $12.00; lunch\n $17.00; supper $30.00.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+  },
+  "structuredSummaryTemplate": {
+    "sourceFidelity": "condensed_structured_summary",
     "sections": [
       {
         "heading": "Eligibility",

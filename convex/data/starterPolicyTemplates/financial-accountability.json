@@ -55,109 +55,62 @@
       }
     ]
   },
+  "exactTemplate": {
+    "textEncoding": "utf8-normalized-ascii",
+    "sourceFidelity": "exact_text_from_source_pdf_extraction",
+    "text": "{CorporationName}\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n\n{CorporationName}'s (the \"Corporation\") financial affairs will be conducted in a\nresponsible manner, consistent with the ethical obligations of stewardship and the legal\nrequirements of provincial, territorial and federal regulators.\n\nAll donations will be used to support the charitable purposes of the Corporation, as specified\nin the governing documents. All donations will be used for the purposes for which they\nwere given. If an alternate use for a donation is necessary due to program or organizational\nchange, this use will be discussed with the donor or the donor's legal designate. If no\nagreement can be reached with the donor or donor's legal designate, the unexpended part\nof the donation will be returned to the donor. If the donor is deceased and the Corporation is\nunable to contact a legal designate, the donation will be used in a manner that is as\nconsistent as possible with the donor's original intent.\n\nThe Corporation prepares and issues Official Income Tax receipts for monetary gifts and\ngifts-in-kind in compliance with all regulatory requirements.\n\nThe annual financial statements will be prepared and approved by the Board, within 6\nmonths of the fiscal year-end, using generally accepted accounting principles and standards\nestablished by the Chartered Professional Accountants of Canada, in all material respects.\n\nThe Corporation discloses on our website details of the purpose and amount of payments for\nproducts or services to Board members or companies in which a Board member is an\nowner, partner or senior manager.\n\nThe annual report will disclose the total amount of donations and expenses including\nsalaries, overhead, fundraising costs and identification of government grants and\ncontributions separately from donations.\n\nThe Corporation will meet or exceed the Canada Revenue Agency's requirement to spend a\nminimum of 3.5% of the average value of the Corporations' property each year on its own\ncharitable activities or on gifts to qualified donees (for example, other registered charities).\nWhen this is not possible, any excess gained in previous years will be used to meet this\nrequirement. If this is not possible, the Corporation will apply to the Canada Revenue\nAgency to seek relief.\n\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n Board Acceptance:             This policy was approved by resolution of the board of\n                               directors of the Corporation on {EffectiveDate}, as\n                               confirmed by {#SoleVotDir}the signature of the sole\n                               director of the Corporation\n                               below.{/SoleVotDir}{#MultiVotDir}the counterpart\n                               signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n        {#VotingDirectors}\n\n\n         {SignerTag}\n        _________________________________________\n        {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}",
+    "html": "<pre class=\"source-pdf-template\">{CorporationName}\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n\n{CorporationName}'s (the &quot;Corporation&quot;) financial affairs will be conducted in a\nresponsible manner, consistent with the ethical obligations of stewardship and the legal\nrequirements of provincial, territorial and federal regulators.\n\nAll donations will be used to support the charitable purposes of the Corporation, as specified\nin the governing documents. All donations will be used for the purposes for which they\nwere given. If an alternate use for a donation is necessary due to program or organizational\nchange, this use will be discussed with the donor or the donor's legal designate. If no\nagreement can be reached with the donor or donor's legal designate, the unexpended part\nof the donation will be returned to the donor. If the donor is deceased and the Corporation is\nunable to contact a legal designate, the donation will be used in a manner that is as\nconsistent as possible with the donor's original intent.\n\nThe Corporation prepares and issues Official Income Tax receipts for monetary gifts and\ngifts-in-kind in compliance with all regulatory requirements.\n\nThe annual financial statements will be prepared and approved by the Board, within 6\nmonths of the fiscal year-end, using generally accepted accounting principles and standards\nestablished by the Chartered Professional Accountants of Canada, in all material respects.\n\nThe Corporation discloses on our website details of the purpose and amount of payments for\nproducts or services to Board members or companies in which a Board member is an\nowner, partner or senior manager.\n\nThe annual report will disclose the total amount of donations and expenses including\nsalaries, overhead, fundraising costs and identification of government grants and\ncontributions separately from donations.\n\nThe Corporation will meet or exceed the Canada Revenue Agency's requirement to spend a\nminimum of 3.5% of the average value of the Corporations' property each year on its own\ncharitable activities or on gifts to qualified donees (for example, other registered charities).\nWhen this is not possible, any excess gained in previous years will be used to meet this\nrequirement. If this is not possible, the Corporation will apply to the Canada Revenue\nAgency to seek relief.\n\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n Board Acceptance:             This policy was approved by resolution of the board of\n                               directors of the Corporation on {EffectiveDate}, as\n                               confirmed by {#SoleVotDir}the signature of the sole\n                               director of the Corporation\n                               below.{/SoleVotDir}{#MultiVotDir}the counterpart\n                               signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n        {#VotingDirectors}\n\n\n         {SignerTag}\n        _________________________________________\n        {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}</pre>"
+  },
   "renderedSample": {
-    "html": "<h1>Financial Accountability Policy</h1>\n\n<p><strong>Organization:</strong> Sample Community Society</p>\n\n<p><strong>Policy number:</strong> FIN-003</p>\n\n<p><strong>Effective date:</strong> 2026-01-01</p>\n\n<p><em>This is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.</em></p>\n\n<h2>Stewardship</h2>\n<p>The organization's financial affairs are conducted responsibly, consistently with stewardship duties, governing documents, donor restrictions, and legal requirements.</p>\n<h2>Restricted Funds and Receipts</h2>\n<p>Donations are used for the purposes for which they were given. If a restriction can no longer be met, the board follows the donor, legal, and regulatory process before changing the use of funds.</p>\n<h2>Reporting</h2>\n<ul>\n  <li>Financial statements are prepared and approved within the board-approved timeline.</li>\n  <li>The annual report discloses financial information required by law, funders, regulators, and board policy.</li>\n  <li>Payments to directors or related organizations are disclosed as required.</li>\n</ul>\n\n<h2>Monitoring</h2>\n\n<p>This policy will be reviewed on or around 2027-01-01 and whenever legal, operational, funding, or governance requirements materially change.</p>\n\n<h2>Board Acceptance</h2>\n<p>This policy was approved by resolution of the board of directors of Sample Community Society on 2026-01-01.</p>\n<p>Approved by counterpart signatures of the voting directors.</p>\n<p>Chair<br />_________________________________________<br />Avery Chen<br />\nTreasurer<br />_________________________________________<br />Morgan Patel</p>\n\n<p><small>Source: FinancialAccountability.pdf; SHA-256 2dad4da071b878c2b3fa68aa7305d2b78830c652df20176938068bd2c603fd1f</small></p>",
-    "text": "Financial Accountability Policy\n\nOrganization: Sample Community Society\n\nPolicy number: FIN-003\n\nEffective date: 2026-01-01\n\nThis is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.\n\nStewardship\n\nThe organization's financial affairs are conducted responsibly, consistently with stewardship duties, governing documents, donor restrictions, and legal requirements.\n\nRestricted Funds and Receipts\n\nDonations are used for the purposes for which they were given. If a restriction can no longer be met, the board follows the donor, legal, and regulatory process before changing the use of funds.\n\nReporting\n\n  - Financial statements are prepared and approved within the board-approved timeline.\n\n  - The annual report discloses financial information required by law, funders, regulators, and board policy.\n\n  - Payments to directors or related organizations are disclosed as required.\n\nMonitoring\n\nThis policy will be reviewed on or around 2027-01-01 and whenever legal, operational, funding, or governance requirements materially change.\n\nBoard Acceptance\n\nThis policy was approved by resolution of the board of directors of Sample Community Society on 2026-01-01.\n\nApproved by counterpart signatures of the voting directors.\n\nChair\n_________________________________________\nAvery Chen\n\nTreasurer\n_________________________________________\nMorgan Patel\n\nSource: FinancialAccountability.pdf; SHA-256 2dad4da071b878c2b3fa68aa7305d2b78830c652df20176938068bd2c603fd1f"
+    "html": "<pre class=\"source-pdf-template\">Sample Community Society\n\n Policy Name:                  Financial Accountability Policy\n\n Policy Number:                FIN-003\n\n Effective Date:               2026-01-01\n\n\nSample Community Society's (the &quot;Corporation&quot;) financial affairs will be conducted in a\nresponsible manner, consistent with the ethical obligations of stewardship and the legal\nrequirements of provincial, territorial and federal regulators.\n\nAll donations will be used to support the charitable purposes of the Corporation, as specified\nin the governing documents. All donations will be used for the purposes for which they\nwere given. If an alternate use for a donation is necessary due to program or organizational\nchange, this use will be discussed with the donor or the donor's legal designate. If no\nagreement can be reached with the donor or donor's legal designate, the unexpended part\nof the donation will be returned to the donor. If the donor is deceased and the Corporation is\nunable to contact a legal designate, the donation will be used in a manner that is as\nconsistent as possible with the donor's original intent.\n\nThe Corporation prepares and issues Official Income Tax receipts for monetary gifts and\ngifts-in-kind in compliance with all regulatory requirements.\n\nThe annual financial statements will be prepared and approved by the Board, within 6\nmonths of the fiscal year-end, using generally accepted accounting principles and standards\nestablished by the Chartered Professional Accountants of Canada, in all material respects.\n\nThe Corporation discloses on our website details of the purpose and amount of payments for\nproducts or services to Board members or companies in which a Board member is an\nowner, partner or senior manager.\n\nThe annual report will disclose the total amount of donations and expenses including\nsalaries, overhead, fundraising costs and identification of government grants and\ncontributions separately from donations.\n\nThe Corporation will meet or exceed the Canada Revenue Agency's requirement to spend a\nminimum of 3.5% of the average value of the Corporations' property each year on its own\ncharitable activities or on gifts to qualified donees (for example, other registered charities).\nWhen this is not possible, any excess gained in previous years will be used to meet this\nrequirement. If this is not possible, the Corporation will apply to the Canada Revenue\nAgency to seek relief.\n\n\n Monitoring:                   This policy will be reviewed on or around 2027-01-01.\n\n\nPolicy FIN-003 - Financial Accountability Policy - Sample Community Society - 2026-01-01\n Board Acceptance:             This policy was approved by resolution of the board of\n                               directors of the Corporation on 2026-01-01, as\n                               confirmed by the counterpart\n                               signatures of each of the directors of the Corporation\n                               below.\n\n        \n\n\n         Chair\n        _________________________________________\n        Avery Chen<br />\n\n\n\n         Treasurer\n        _________________________________________\n        Morgan Patel\n\n\nPolicy FIN-003 - Financial Accountability Policy - Sample Community Society - 2026-01-01</pre>",
+    "text": "Sample Community Society\n\n Policy Name:                  Financial Accountability Policy\n\n Policy Number:                FIN-003\n\n Effective Date:               2026-01-01\n\n\nSample Community Society's (the \"Corporation\") financial affairs will be conducted in a\nresponsible manner, consistent with the ethical obligations of stewardship and the legal\nrequirements of provincial, territorial and federal regulators.\n\nAll donations will be used to support the charitable purposes of the Corporation, as specified\nin the governing documents. All donations will be used for the purposes for which they\nwere given. If an alternate use for a donation is necessary due to program or organizational\nchange, this use will be discussed with the donor or the donor's legal designate. If no\nagreement can be reached with the donor or donor's legal designate, the unexpended part\nof the donation will be returned to the donor. If the donor is deceased and the Corporation is\nunable to contact a legal designate, the donation will be used in a manner that is as\nconsistent as possible with the donor's original intent.\n\nThe Corporation prepares and issues Official Income Tax receipts for monetary gifts and\ngifts-in-kind in compliance with all regulatory requirements.\n\nThe annual financial statements will be prepared and approved by the Board, within 6\nmonths of the fiscal year-end, using generally accepted accounting principles and standards\nestablished by the Chartered Professional Accountants of Canada, in all material respects.\n\nThe Corporation discloses on our website details of the purpose and amount of payments for\nproducts or services to Board members or companies in which a Board member is an\nowner, partner or senior manager.\n\nThe annual report will disclose the total amount of donations and expenses including\nsalaries, overhead, fundraising costs and identification of government grants and\ncontributions separately from donations.\n\nThe Corporation will meet or exceed the Canada Revenue Agency's requirement to spend a\nminimum of 3.5% of the average value of the Corporations' property each year on its own\ncharitable activities or on gifts to qualified donees (for example, other registered charities).\nWhen this is not possible, any excess gained in previous years will be used to meet this\nrequirement. If this is not possible, the Corporation will apply to the Canada Revenue\nAgency to seek relief.\n\n\n Monitoring:                   This policy will be reviewed on or around 2027-01-01.\n\n\nPolicy FIN-003 - Financial Accountability Policy - Sample Community Society - 2026-01-01\n Board Acceptance:             This policy was approved by resolution of the board of\n                               directors of the Corporation on 2026-01-01, as\n                               confirmed by the counterpart\n                               signatures of each of the directors of the Corporation\n                               below.\n\n        \n\n\n         Chair\n        _________________________________________\n        Avery Chen\n\n\n\n         Treasurer\n        _________________________________________\n        Morgan Patel\n\n\nPolicy FIN-003 - Financial Accountability Policy - Sample Community Society - 2026-01-01"
   },
   "comparison": {
+    "comparedAgainst": "source PDF extraction",
+    "comparedArtifact": "exactTemplate.text",
+    "method": "Normalized text equality between extracted source PDF text and the generated canonical template text.",
+    "exactTextMatch": true,
+    "originalCharacterCount": 3324,
+    "templateCharacterCount": 3324,
+    "originalLineCount": 66,
+    "templateLineCount": 66,
+    "status": "exact_text_match"
+  },
+  "dummySampleComparison": {
     "comparedAgainst": "source PDF extraction",
     "comparedArtifact": "renderedSample.text",
     "method": "Normalized keyword overlap between extracted source PDF text and the dummy-filled remade template. This flags drift only; it is not a legal-equivalence review.",
     "originalWordCount": 437,
-    "renderedSampleWordCount": 199,
+    "renderedSampleWordCount": 451,
     "sourceKeywordCount": 147,
-    "renderedKeywordCount": 91,
-    "sharedKeywordCount": 36,
-    "sourceKeywordCoverage": 0.245,
-    "renderedKeywordOverlap": 0.396,
-    "status": "low_overlap_review_required",
+    "renderedKeywordCount": 156,
+    "sharedKeywordCount": 144,
+    "sourceKeywordCoverage": 0.98,
+    "renderedKeywordOverlap": 0.923,
+    "status": "good_overlap",
     "sourceOnlyKeywords": [
-      "accepted",
-      "accountants",
-      "accounting",
-      "activities",
-      "agency",
-      "agency's",
-      "agreement",
-      "alternate",
-      "amount",
-      "apply",
-      "average",
-      "canada",
-      "charitable",
-      "charities",
-      "chartered",
-      "companies",
-      "compliance",
-      "confirmed",
-      "consistent",
-      "contact",
-      "contributions",
-      "corporations",
-      "costs",
-      "deceased",
-      "designate",
-      "details",
       "director",
-      "disclose",
-      "discussed",
-      "donation",
-      "donees",
-      "donor's",
-      "established",
-      "ethical",
-      "example",
-      "exceed",
-      "excess",
-      "expenses",
-      "federal",
-      "fiscal"
+      "signature",
+      "sole"
     ],
     "renderedOnlyKeywords": [
       "accountability",
-      "actual",
-      "adoption",
       "avery",
-      "before",
-      "board-approved",
-      "bylaws",
       "chair",
-      "changing",
-      "charity",
       "chen",
       "community",
-      "consistently",
-      "disclosed",
-      "duties",
       "fin-",
-      "financialaccountability",
-      "follows",
-      "funder",
-      "funders",
-      "funding",
-      "funds",
-      "governance",
-      "imported",
-      "information",
-      "jurisdiction",
-      "longer",
-      "materially",
       "morgan",
-      "operational",
-      "operations",
-      "organization's",
-      "organizations",
       "patel",
-      "process",
-      "related",
-      "remade",
-      "reporting",
-      "required",
-      "responsibly"
+      "sample",
+      "society",
+      "society's",
+      "treasurer"
     ]
   },
   "remadeTemplate": {
     "summary": "Financial stewardship, restricted gifts, receipting, statements, disclosure, annual reporting, and charity disbursement obligations.",
+    "sourceFidelity": "exact_text_from_source_pdf_extraction",
     "signatureRequired": true,
     "includeBoardAcceptance": true,
     "requiredDataFields": [
@@ -176,6 +129,19 @@
       "Jurisdiction",
       "CharityStatus"
     ],
+    "sections": [
+      {
+        "heading": "Exact PDF Text Extraction",
+        "paragraphs": [
+          "{CorporationName}\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n\n{CorporationName}'s (the \"Corporation\") financial affairs will be conducted in a\nresponsible manner, consistent with the ethical obligations of stewardship and the legal\nrequirements of provincial, territorial and federal regulators.\n\nAll donations will be used to support the charitable purposes of the Corporation, as specified\nin the governing documents. All donations will be used for the purposes for which they\nwere given. If an alternate use for a donation is necessary due to program or organizational\nchange, this use will be discussed with the donor or the donor's legal designate. If no\nagreement can be reached with the donor or donor's legal designate, the unexpended part\nof the donation will be returned to the donor. If the donor is deceased and the Corporation is\nunable to contact a legal designate, the donation will be used in a manner that is as\nconsistent as possible with the donor's original intent.\n\nThe Corporation prepares and issues Official Income Tax receipts for monetary gifts and\ngifts-in-kind in compliance with all regulatory requirements.\n\nThe annual financial statements will be prepared and approved by the Board, within 6\nmonths of the fiscal year-end, using generally accepted accounting principles and standards\nestablished by the Chartered Professional Accountants of Canada, in all material respects.\n\nThe Corporation discloses on our website details of the purpose and amount of payments for\nproducts or services to Board members or companies in which a Board member is an\nowner, partner or senior manager.\n\nThe annual report will disclose the total amount of donations and expenses including\nsalaries, overhead, fundraising costs and identification of government grants and\ncontributions separately from donations.\n\nThe Corporation will meet or exceed the Canada Revenue Agency's requirement to spend a\nminimum of 3.5% of the average value of the Corporations' property each year on its own\ncharitable activities or on gifts to qualified donees (for example, other registered charities).\nWhen this is not possible, any excess gained in previous years will be used to meet this\nrequirement. If this is not possible, the Corporation will apply to the Canada Revenue\nAgency to seek relief.\n\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n Board Acceptance:             This policy was approved by resolution of the board of\n                               directors of the Corporation on {EffectiveDate}, as\n                               confirmed by {#SoleVotDir}the signature of the sole\n                               director of the Corporation\n                               below.{/SoleVotDir}{#MultiVotDir}the counterpart\n                               signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n        {#VotingDirectors}\n\n\n         {SignerTag}\n        _________________________________________\n        {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+        ]
+      }
+    ],
+    "html": "<pre class=\"source-pdf-template\">{CorporationName}\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n\n{CorporationName}'s (the &quot;Corporation&quot;) financial affairs will be conducted in a\nresponsible manner, consistent with the ethical obligations of stewardship and the legal\nrequirements of provincial, territorial and federal regulators.\n\nAll donations will be used to support the charitable purposes of the Corporation, as specified\nin the governing documents. All donations will be used for the purposes for which they\nwere given. If an alternate use for a donation is necessary due to program or organizational\nchange, this use will be discussed with the donor or the donor's legal designate. If no\nagreement can be reached with the donor or donor's legal designate, the unexpended part\nof the donation will be returned to the donor. If the donor is deceased and the Corporation is\nunable to contact a legal designate, the donation will be used in a manner that is as\nconsistent as possible with the donor's original intent.\n\nThe Corporation prepares and issues Official Income Tax receipts for monetary gifts and\ngifts-in-kind in compliance with all regulatory requirements.\n\nThe annual financial statements will be prepared and approved by the Board, within 6\nmonths of the fiscal year-end, using generally accepted accounting principles and standards\nestablished by the Chartered Professional Accountants of Canada, in all material respects.\n\nThe Corporation discloses on our website details of the purpose and amount of payments for\nproducts or services to Board members or companies in which a Board member is an\nowner, partner or senior manager.\n\nThe annual report will disclose the total amount of donations and expenses including\nsalaries, overhead, fundraising costs and identification of government grants and\ncontributions separately from donations.\n\nThe Corporation will meet or exceed the Canada Revenue Agency's requirement to spend a\nminimum of 3.5% of the average value of the Corporations' property each year on its own\ncharitable activities or on gifts to qualified donees (for example, other registered charities).\nWhen this is not possible, any excess gained in previous years will be used to meet this\nrequirement. If this is not possible, the Corporation will apply to the Canada Revenue\nAgency to seek relief.\n\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n Board Acceptance:             This policy was approved by resolution of the board of\n                               directors of the Corporation on {EffectiveDate}, as\n                               confirmed by {#SoleVotDir}the signature of the sole\n                               director of the Corporation\n                               below.{/SoleVotDir}{#MultiVotDir}the counterpart\n                               signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n        {#VotingDirectors}\n\n\n         {SignerTag}\n        _________________________________________\n        {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}</pre>",
+    "text": "{CorporationName}\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n\n{CorporationName}'s (the \"Corporation\") financial affairs will be conducted in a\nresponsible manner, consistent with the ethical obligations of stewardship and the legal\nrequirements of provincial, territorial and federal regulators.\n\nAll donations will be used to support the charitable purposes of the Corporation, as specified\nin the governing documents. All donations will be used for the purposes for which they\nwere given. If an alternate use for a donation is necessary due to program or organizational\nchange, this use will be discussed with the donor or the donor's legal designate. If no\nagreement can be reached with the donor or donor's legal designate, the unexpended part\nof the donation will be returned to the donor. If the donor is deceased and the Corporation is\nunable to contact a legal designate, the donation will be used in a manner that is as\nconsistent as possible with the donor's original intent.\n\nThe Corporation prepares and issues Official Income Tax receipts for monetary gifts and\ngifts-in-kind in compliance with all regulatory requirements.\n\nThe annual financial statements will be prepared and approved by the Board, within 6\nmonths of the fiscal year-end, using generally accepted accounting principles and standards\nestablished by the Chartered Professional Accountants of Canada, in all material respects.\n\nThe Corporation discloses on our website details of the purpose and amount of payments for\nproducts or services to Board members or companies in which a Board member is an\nowner, partner or senior manager.\n\nThe annual report will disclose the total amount of donations and expenses including\nsalaries, overhead, fundraising costs and identification of government grants and\ncontributions separately from donations.\n\nThe Corporation will meet or exceed the Canada Revenue Agency's requirement to spend a\nminimum of 3.5% of the average value of the Corporations' property each year on its own\ncharitable activities or on gifts to qualified donees (for example, other registered charities).\nWhen this is not possible, any excess gained in previous years will be used to meet this\nrequirement. If this is not possible, the Corporation will apply to the Canada Revenue\nAgency to seek relief.\n\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n Board Acceptance:             This policy was approved by resolution of the board of\n                               directors of the Corporation on {EffectiveDate}, as\n                               confirmed by {#SoleVotDir}the signature of the sole\n                               director of the Corporation\n                               below.{/SoleVotDir}{#MultiVotDir}the counterpart\n                               signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n        {#VotingDirectors}\n\n\n         {SignerTag}\n        _________________________________________\n        {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+  },
+  "structuredSummaryTemplate": {
+    "sourceFidelity": "condensed_structured_summary",
     "sections": [
       {
         "heading": "Stewardship",

@@ -63,109 +63,60 @@
       }
     ]
   },
+  "exactTemplate": {
+    "textEncoding": "utf8-normalized-ascii",
+    "sourceFidelity": "exact_text_from_source_pdf_extraction",
+    "text": "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n The Corporation believes that all donors (each a \"Donor\") have the following rights:\n\n       To be informed of the Corporation's mission, of the way the Corporation intends to use\n        donated resources, and of its capacity to use donations effectively for their intended\n        purposes.\n\n       To be informed of the identity of those serving on the Corporation's governing Board, and\n        to expect the Board to exercise prudent judgment in its stewardship responsibilities.\n\n       To have access to the Corporation's most recent financial statements and annual report.\n\n       To be assured that gifts will be used for the purposes for which they were given.\n\n       To be assured that information about donations is handled in accordance with the Privacy\n        Policy of the Corporation and consistent with provincial and federal Privacy Legislation.\n\n       To have the right to see their donor record and to challenge its accuracy.\n\n       To receive appropriate acknowledgement and recognition as per Corporation policy, and,\n        if requested by the donor, to remain anonymous.\n\n       To expect that all relationships with individuals representing the Corporation will be\n        professional in nature.\n\n       To be informed whether those seeking donations are volunteers or employees of the\n        Corporation.\n\n       To have the opportunity for their names to be deleted from mailing lists that the\n        Corporation may intend to share.\n\n       To feel free to ask questions when making a donation and to receive prompt, truthful and\n        forthright answers.\n\n       To receive an official receipt for income tax purposes within thirty (30) days for the amount\n        of the donation and for non-monetary eligible gifts (or gifts-in-kind), to receive an official\n        receipt that reflects the fair market value of the gift in accordance under the provisions of\n        the Income Tax Act (Canada) or its successor.\n\n       To receive, upon request, the Corporation's registration number as assigned by Canada\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n        Revenue Agency (CRA), any information contained in the public portion of the\n        Corporation's most recent Corporation Information Return as submitted to CRA, and a\n        copy of the Donors' Rights Policy.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}",
+    "html": "<pre class=\"source-pdf-template\">{CorporationName}\n                                         (the &quot;Corporation&quot;)\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n The Corporation believes that all donors (each a &quot;Donor&quot;) have the following rights:\n\n       To be informed of the Corporation's mission, of the way the Corporation intends to use\n        donated resources, and of its capacity to use donations effectively for their intended\n        purposes.\n\n       To be informed of the identity of those serving on the Corporation's governing Board, and\n        to expect the Board to exercise prudent judgment in its stewardship responsibilities.\n\n       To have access to the Corporation's most recent financial statements and annual report.\n\n       To be assured that gifts will be used for the purposes for which they were given.\n\n       To be assured that information about donations is handled in accordance with the Privacy\n        Policy of the Corporation and consistent with provincial and federal Privacy Legislation.\n\n       To have the right to see their donor record and to challenge its accuracy.\n\n       To receive appropriate acknowledgement and recognition as per Corporation policy, and,\n        if requested by the donor, to remain anonymous.\n\n       To expect that all relationships with individuals representing the Corporation will be\n        professional in nature.\n\n       To be informed whether those seeking donations are volunteers or employees of the\n        Corporation.\n\n       To have the opportunity for their names to be deleted from mailing lists that the\n        Corporation may intend to share.\n\n       To feel free to ask questions when making a donation and to receive prompt, truthful and\n        forthright answers.\n\n       To receive an official receipt for income tax purposes within thirty (30) days for the amount\n        of the donation and for non-monetary eligible gifts (or gifts-in-kind), to receive an official\n        receipt that reflects the fair market value of the gift in accordance under the provisions of\n        the Income Tax Act (Canada) or its successor.\n\n       To receive, upon request, the Corporation's registration number as assigned by Canada\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n        Revenue Agency (CRA), any information contained in the public portion of the\n        Corporation's most recent Corporation Information Return as submitted to CRA, and a\n        copy of the Donors' Rights Policy.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}</pre>"
+  },
   "renderedSample": {
-    "html": "<h1>Donor Rights and Stewardship Policy</h1>\n\n<p><strong>Organization:</strong> Sample Community Society</p>\n\n<p><strong>Policy number:</strong> DON-002</p>\n\n<p><strong>Effective date:</strong> 2026-01-01</p>\n\n<p><em>This is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.</em></p>\n\n<h2>Donor Rights</h2>\n<ul>\n  <li>Receive truthful information about the organization's mission, governance, and use of donated resources.</li>\n  <li>Access recent financial statements, annual reports, and publicly available charity information.</li>\n  <li>Expect gifts to be used for their stated purposes.</li>\n  <li>Have donor records handled under privacy and confidentiality rules.</li>\n  <li>Ask questions and receive prompt, accurate answers.</li>\n  <li>Receive appropriate acknowledgement, recognition, anonymity, and receipts where applicable.</li>\n</ul>\n<h2>Stewardship</h2>\n<p>The organization reports to donors in a manner that respects donor intent, privacy, restrictions, and board-approved recognition practices.</p>\n\n<h2>Monitoring</h2>\n\n<p>This policy will be reviewed on or around 2027-01-01 and whenever legal, operational, funding, or governance requirements materially change.</p>\n\n<h2>Board Acceptance</h2>\n<p>This policy was approved by resolution of the board of directors of Sample Community Society on 2026-01-01.</p>\n<p>Approved by counterpart signatures of the voting directors.</p>\n<p>Chair<br />_________________________________________<br />Avery Chen<br />\nTreasurer<br />_________________________________________<br />Morgan Patel</p>\n\n<p><small>Source: DonorRecognitionAndStewardship.pdf; SHA-256 ea0446a19bd748216d805462f11b4e69f1aa13b96fa2e969cbf7a0e7c2859a36</small></p>",
-    "text": "Donor Rights and Stewardship Policy\n\nOrganization: Sample Community Society\n\nPolicy number: DON-002\n\nEffective date: 2026-01-01\n\nThis is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.\n\nDonor Rights\n\n  - Receive truthful information about the organization's mission, governance, and use of donated resources.\n\n  - Access recent financial statements, annual reports, and publicly available charity information.\n\n  - Expect gifts to be used for their stated purposes.\n\n  - Have donor records handled under privacy and confidentiality rules.\n\n  - Ask questions and receive prompt, accurate answers.\n\n  - Receive appropriate acknowledgement, recognition, anonymity, and receipts where applicable.\n\nStewardship\n\nThe organization reports to donors in a manner that respects donor intent, privacy, restrictions, and board-approved recognition practices.\n\nMonitoring\n\nThis policy will be reviewed on or around 2027-01-01 and whenever legal, operational, funding, or governance requirements materially change.\n\nBoard Acceptance\n\nThis policy was approved by resolution of the board of directors of Sample Community Society on 2026-01-01.\n\nApproved by counterpart signatures of the voting directors.\n\nChair\n_________________________________________\nAvery Chen\n\nTreasurer\n_________________________________________\nMorgan Patel\n\nSource: DonorRecognitionAndStewardship.pdf; SHA-256 ea0446a19bd748216d805462f11b4e69f1aa13b96fa2e969cbf7a0e7c2859a36"
+    "html": "<pre class=\"source-pdf-template\">Sample Community Society\n                                         (the &quot;Corporation&quot;)\n\n Policy Name:                  Donor Rights and Stewardship Policy\n\n Policy Number:                DON-002\n\n Effective Date:               2026-01-01\n\n The Corporation believes that all donors (each a &quot;Donor&quot;) have the following rights:\n\n       To be informed of the Corporation's mission, of the way the Corporation intends to use\n        donated resources, and of its capacity to use donations effectively for their intended\n        purposes.\n\n       To be informed of the identity of those serving on the Corporation's governing Board, and\n        to expect the Board to exercise prudent judgment in its stewardship responsibilities.\n\n       To have access to the Corporation's most recent financial statements and annual report.\n\n       To be assured that gifts will be used for the purposes for which they were given.\n\n       To be assured that information about donations is handled in accordance with the Privacy\n        Policy of the Corporation and consistent with provincial and federal Privacy Legislation.\n\n       To have the right to see their donor record and to challenge its accuracy.\n\n       To receive appropriate acknowledgement and recognition as per Corporation policy, and,\n        if requested by the donor, to remain anonymous.\n\n       To expect that all relationships with individuals representing the Corporation will be\n        professional in nature.\n\n       To be informed whether those seeking donations are volunteers or employees of the\n        Corporation.\n\n       To have the opportunity for their names to be deleted from mailing lists that the\n        Corporation may intend to share.\n\n       To feel free to ask questions when making a donation and to receive prompt, truthful and\n        forthright answers.\n\n       To receive an official receipt for income tax purposes within thirty (30) days for the amount\n        of the donation and for non-monetary eligible gifts (or gifts-in-kind), to receive an official\n        receipt that reflects the fair market value of the gift in accordance under the provisions of\n        the Income Tax Act (Canada) or its successor.\n\n       To receive, upon request, the Corporation's registration number as assigned by Canada\n\n\nPolicy DON-002 - Donor Rights and Stewardship Policy - Sample Community Society - 2026-01-01\n        Revenue Agency (CRA), any information contained in the public portion of the\n        Corporation's most recent Corporation Information Return as submitted to CRA, and a\n        copy of the Donors' Rights Policy.\n\n Monitoring:                   This policy will be reviewed on or around 2027-01-01.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on 2026-01-01, as confirmed by\n                               the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.\n\n \n\n\n     Chair\n _________________________________________\n Avery Chen<br />\n\n\n\n     Treasurer\n _________________________________________\n Morgan Patel\n\n\nPolicy DON-002 - Donor Rights and Stewardship Policy - Sample Community Society - 2026-01-01</pre>",
+    "text": "Sample Community Society\n                                         (the \"Corporation\")\n\n Policy Name:                  Donor Rights and Stewardship Policy\n\n Policy Number:                DON-002\n\n Effective Date:               2026-01-01\n\n The Corporation believes that all donors (each a \"Donor\") have the following rights:\n\n       To be informed of the Corporation's mission, of the way the Corporation intends to use\n        donated resources, and of its capacity to use donations effectively for their intended\n        purposes.\n\n       To be informed of the identity of those serving on the Corporation's governing Board, and\n        to expect the Board to exercise prudent judgment in its stewardship responsibilities.\n\n       To have access to the Corporation's most recent financial statements and annual report.\n\n       To be assured that gifts will be used for the purposes for which they were given.\n\n       To be assured that information about donations is handled in accordance with the Privacy\n        Policy of the Corporation and consistent with provincial and federal Privacy Legislation.\n\n       To have the right to see their donor record and to challenge its accuracy.\n\n       To receive appropriate acknowledgement and recognition as per Corporation policy, and,\n        if requested by the donor, to remain anonymous.\n\n       To expect that all relationships with individuals representing the Corporation will be\n        professional in nature.\n\n       To be informed whether those seeking donations are volunteers or employees of the\n        Corporation.\n\n       To have the opportunity for their names to be deleted from mailing lists that the\n        Corporation may intend to share.\n\n       To feel free to ask questions when making a donation and to receive prompt, truthful and\n        forthright answers.\n\n       To receive an official receipt for income tax purposes within thirty (30) days for the amount\n        of the donation and for non-monetary eligible gifts (or gifts-in-kind), to receive an official\n        receipt that reflects the fair market value of the gift in accordance under the provisions of\n        the Income Tax Act (Canada) or its successor.\n\n       To receive, upon request, the Corporation's registration number as assigned by Canada\n\n\nPolicy DON-002 - Donor Rights and Stewardship Policy - Sample Community Society - 2026-01-01\n        Revenue Agency (CRA), any information contained in the public portion of the\n        Corporation's most recent Corporation Information Return as submitted to CRA, and a\n        copy of the Donors' Rights Policy.\n\n Monitoring:                   This policy will be reviewed on or around 2027-01-01.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on 2026-01-01, as confirmed by\n                               the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.\n\n \n\n\n     Chair\n _________________________________________\n Avery Chen\n\n\n\n     Treasurer\n _________________________________________\n Morgan Patel\n\n\nPolicy DON-002 - Donor Rights and Stewardship Policy - Sample Community Society - 2026-01-01"
   },
   "comparison": {
+    "comparedAgainst": "source PDF extraction",
+    "comparedArtifact": "exactTemplate.text",
+    "method": "Normalized text equality between extracted source PDF text and the generated canonical template text.",
+    "exactTextMatch": true,
+    "originalCharacterCount": 3366,
+    "templateCharacterCount": 3366,
+    "originalLineCount": 73,
+    "templateLineCount": 73,
+    "status": "exact_text_match"
+  },
+  "dummySampleComparison": {
     "comparedAgainst": "source PDF extraction",
     "comparedArtifact": "renderedSample.text",
     "method": "Normalized keyword overlap between extracted source PDF text and the dummy-filled remade template. This flags drift only; it is not a legal-equivalence review.",
     "originalWordCount": 412,
-    "renderedSampleWordCount": 188,
+    "renderedSampleWordCount": 430,
     "sourceKeywordCount": 127,
-    "renderedKeywordCount": 91,
-    "sharedKeywordCount": 36,
-    "sourceKeywordCoverage": 0.283,
-    "renderedKeywordOverlap": 0.396,
-    "status": "low_overlap_review_required",
+    "renderedKeywordCount": 134,
+    "sharedKeywordCount": 124,
+    "sourceKeywordCoverage": 0.976,
+    "renderedKeywordOverlap": 0.925,
+    "status": "good_overlap",
     "sourceOnlyKeywords": [
-      "accordance",
-      "accuracy",
-      "agency",
-      "amount",
-      "anonymous",
-      "assigned",
-      "assured",
-      "believes",
-      "canada",
-      "capacity",
-      "challenge",
-      "confirmed",
-      "consistent",
-      "contained",
-      "copy",
-      "corporation's",
-      "days",
-      "deleted",
       "director",
-      "donation",
-      "donations",
-      "effectively",
-      "eligible",
-      "employees",
-      "exercise",
-      "fair",
-      "federal",
-      "feel",
-      "following",
-      "forthright",
-      "free",
-      "gift",
-      "gifts-in-kind",
-      "given",
-      "governing",
-      "identity",
-      "income",
-      "individuals",
-      "informed",
-      "intend"
+      "signature",
+      "sole"
     ],
     "renderedOnlyKeywords": [
-      "accurate",
-      "actual",
-      "adoption",
-      "anonymity",
-      "applicable",
-      "available",
       "avery",
-      "before",
-      "board-approved",
-      "bylaws",
       "chair",
-      "change",
-      "charity",
       "chen",
       "community",
-      "confidentiality",
       "don-",
-      "donorrecognitionandstewardship",
-      "funder",
-      "funding",
-      "governance",
-      "imported",
-      "intent",
-      "jurisdiction",
-      "legal",
-      "manner",
-      "material",
-      "materially",
       "morgan",
-      "operational",
-      "operations",
-      "organization's",
       "patel",
-      "practices",
-      "publicly",
-      "receipts",
-      "records",
-      "remade",
-      "reports",
-      "requirements"
+      "sample",
+      "society",
+      "treasurer"
     ]
   },
   "remadeTemplate": {
     "summary": "Donor information rights, stewardship expectations, financial access, gift-use assurance, privacy, recognition, anonymity, and receipts.",
+    "sourceFidelity": "exact_text_from_source_pdf_extraction",
     "signatureRequired": true,
     "includeBoardAcceptance": true,
     "requiredDataFields": [
@@ -184,6 +135,19 @@
       "Jurisdiction",
       "CharityStatus"
     ],
+    "sections": [
+      {
+        "heading": "Exact PDF Text Extraction",
+        "paragraphs": [
+          "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n The Corporation believes that all donors (each a \"Donor\") have the following rights:\n\n       To be informed of the Corporation's mission, of the way the Corporation intends to use\n        donated resources, and of its capacity to use donations effectively for their intended\n        purposes.\n\n       To be informed of the identity of those serving on the Corporation's governing Board, and\n        to expect the Board to exercise prudent judgment in its stewardship responsibilities.\n\n       To have access to the Corporation's most recent financial statements and annual report.\n\n       To be assured that gifts will be used for the purposes for which they were given.\n\n       To be assured that information about donations is handled in accordance with the Privacy\n        Policy of the Corporation and consistent with provincial and federal Privacy Legislation.\n\n       To have the right to see their donor record and to challenge its accuracy.\n\n       To receive appropriate acknowledgement and recognition as per Corporation policy, and,\n        if requested by the donor, to remain anonymous.\n\n       To expect that all relationships with individuals representing the Corporation will be\n        professional in nature.\n\n       To be informed whether those seeking donations are volunteers or employees of the\n        Corporation.\n\n       To have the opportunity for their names to be deleted from mailing lists that the\n        Corporation may intend to share.\n\n       To feel free to ask questions when making a donation and to receive prompt, truthful and\n        forthright answers.\n\n       To receive an official receipt for income tax purposes within thirty (30) days for the amount\n        of the donation and for non-monetary eligible gifts (or gifts-in-kind), to receive an official\n        receipt that reflects the fair market value of the gift in accordance under the provisions of\n        the Income Tax Act (Canada) or its successor.\n\n       To receive, upon request, the Corporation's registration number as assigned by Canada\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n        Revenue Agency (CRA), any information contained in the public portion of the\n        Corporation's most recent Corporation Information Return as submitted to CRA, and a\n        copy of the Donors' Rights Policy.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+        ]
+      }
+    ],
+    "html": "<pre class=\"source-pdf-template\">{CorporationName}\n                                         (the &quot;Corporation&quot;)\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n The Corporation believes that all donors (each a &quot;Donor&quot;) have the following rights:\n\n       To be informed of the Corporation's mission, of the way the Corporation intends to use\n        donated resources, and of its capacity to use donations effectively for their intended\n        purposes.\n\n       To be informed of the identity of those serving on the Corporation's governing Board, and\n        to expect the Board to exercise prudent judgment in its stewardship responsibilities.\n\n       To have access to the Corporation's most recent financial statements and annual report.\n\n       To be assured that gifts will be used for the purposes for which they were given.\n\n       To be assured that information about donations is handled in accordance with the Privacy\n        Policy of the Corporation and consistent with provincial and federal Privacy Legislation.\n\n       To have the right to see their donor record and to challenge its accuracy.\n\n       To receive appropriate acknowledgement and recognition as per Corporation policy, and,\n        if requested by the donor, to remain anonymous.\n\n       To expect that all relationships with individuals representing the Corporation will be\n        professional in nature.\n\n       To be informed whether those seeking donations are volunteers or employees of the\n        Corporation.\n\n       To have the opportunity for their names to be deleted from mailing lists that the\n        Corporation may intend to share.\n\n       To feel free to ask questions when making a donation and to receive prompt, truthful and\n        forthright answers.\n\n       To receive an official receipt for income tax purposes within thirty (30) days for the amount\n        of the donation and for non-monetary eligible gifts (or gifts-in-kind), to receive an official\n        receipt that reflects the fair market value of the gift in accordance under the provisions of\n        the Income Tax Act (Canada) or its successor.\n\n       To receive, upon request, the Corporation's registration number as assigned by Canada\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n        Revenue Agency (CRA), any information contained in the public portion of the\n        Corporation's most recent Corporation Information Return as submitted to CRA, and a\n        copy of the Donors' Rights Policy.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}</pre>",
+    "text": "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n The Corporation believes that all donors (each a \"Donor\") have the following rights:\n\n       To be informed of the Corporation's mission, of the way the Corporation intends to use\n        donated resources, and of its capacity to use donations effectively for their intended\n        purposes.\n\n       To be informed of the identity of those serving on the Corporation's governing Board, and\n        to expect the Board to exercise prudent judgment in its stewardship responsibilities.\n\n       To have access to the Corporation's most recent financial statements and annual report.\n\n       To be assured that gifts will be used for the purposes for which they were given.\n\n       To be assured that information about donations is handled in accordance with the Privacy\n        Policy of the Corporation and consistent with provincial and federal Privacy Legislation.\n\n       To have the right to see their donor record and to challenge its accuracy.\n\n       To receive appropriate acknowledgement and recognition as per Corporation policy, and,\n        if requested by the donor, to remain anonymous.\n\n       To expect that all relationships with individuals representing the Corporation will be\n        professional in nature.\n\n       To be informed whether those seeking donations are volunteers or employees of the\n        Corporation.\n\n       To have the opportunity for their names to be deleted from mailing lists that the\n        Corporation may intend to share.\n\n       To feel free to ask questions when making a donation and to receive prompt, truthful and\n        forthright answers.\n\n       To receive an official receipt for income tax purposes within thirty (30) days for the amount\n        of the donation and for non-monetary eligible gifts (or gifts-in-kind), to receive an official\n        receipt that reflects the fair market value of the gift in accordance under the provisions of\n        the Income Tax Act (Canada) or its successor.\n\n       To receive, upon request, the Corporation's registration number as assigned by Canada\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}\n        Revenue Agency (CRA), any information contained in the public portion of the\n        Corporation's most recent Corporation Information Return as submitted to CRA, and a\n        copy of the Donors' Rights Policy.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+  },
+  "structuredSummaryTemplate": {
+    "sourceFidelity": "condensed_structured_summary",
     "sections": [
       {
         "heading": "Donor Rights",

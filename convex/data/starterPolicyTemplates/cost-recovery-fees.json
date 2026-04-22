@@ -51,98 +51,60 @@
       }
     ]
   },
+  "exactTemplate": {
+    "textEncoding": "utf8-normalized-ascii",
+    "sourceFidelity": "exact_text_from_source_pdf_extraction",
+    "text": "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n Cost recovery fees will be charged on all funds. This fee will be determined by the Finance\n Committee and presented to the Board for approval.\n\n The provision of fees will be included in all fund agreement/deed of gifts. Donors will be\n informed annually of the fee.\n\n The fee will be calculated based on the capital and undistributed earnings in each fund as of the\n beginning of the month.\n\n Any extraordinary costs associated with creating a fund will be borne by the donor unless\n previously agreed to differently by the Board.\n\n All transaction fees incurred for Credit Card or other electronically facilitated donations to Funds\n will be charged against the Fund as incurred.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}",
+    "html": "<pre class=\"source-pdf-template\">{CorporationName}\n                                         (the &quot;Corporation&quot;)\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n Cost recovery fees will be charged on all funds. This fee will be determined by the Finance\n Committee and presented to the Board for approval.\n\n The provision of fees will be included in all fund agreement/deed of gifts. Donors will be\n informed annually of the fee.\n\n The fee will be calculated based on the capital and undistributed earnings in each fund as of the\n beginning of the month.\n\n Any extraordinary costs associated with creating a fund will be borne by the donor unless\n previously agreed to differently by the Board.\n\n All transaction fees incurred for Credit Card or other electronically facilitated donations to Funds\n will be charged against the Fund as incurred.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}</pre>"
+  },
   "renderedSample": {
-    "html": "<h1>Cost Recovery Fees Policy</h1>\n\n<p><strong>Organization:</strong> Sample Community Society</p>\n\n<p><strong>Policy number:</strong> FIN-001</p>\n\n<p><strong>Effective date:</strong> 2026-01-01</p>\n\n<p><em>This is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.</em></p>\n\n<h2>Fee Approval</h2>\n<p>Cost recovery or administration fees charged to funds must be recommended by the finance committee or treasurer and approved by the board.</p>\n<h2>Disclosure and Calculation</h2>\n<ul>\n  <li>Fee provisions are included in fund agreements or donor communications where applicable.</li>\n  <li>Donors are informed of the current fee and any material changes.</li>\n  <li>Fees are calculated using the board-approved basis, such as fund capital and undistributed earnings at a specified date.</li>\n</ul>\n<h2>Extraordinary Costs</h2>\n<p>Extraordinary costs and electronic transaction fees may be charged to the applicable fund if permitted by the board-approved fee schedule and donor documentation.</p>\n\n<h2>Monitoring</h2>\n\n<p>This policy will be reviewed on or around 2027-01-01 and whenever legal, operational, funding, or governance requirements materially change.</p>\n\n<h2>Board Acceptance</h2>\n<p>This policy was approved by resolution of the board of directors of Sample Community Society on 2026-01-01.</p>\n<p>Approved by counterpart signatures of the voting directors.</p>\n<p>Chair<br />_________________________________________<br />Avery Chen<br />\nTreasurer<br />_________________________________________<br />Morgan Patel</p>\n\n<p><small>Source: CostRecoveryFees.pdf; SHA-256 4529e19269bdc9fcfc3f41692aaab8331d9c8b4c5730cd21a676410269149312</small></p>",
-    "text": "Cost Recovery Fees Policy\n\nOrganization: Sample Community Society\n\nPolicy number: FIN-001\n\nEffective date: 2026-01-01\n\nThis is a Societyer starter template remade from imported source material. Review it for your jurisdiction, bylaws, funder requirements, charity status, and actual operations before adoption.\n\nFee Approval\n\nCost recovery or administration fees charged to funds must be recommended by the finance committee or treasurer and approved by the board.\n\nDisclosure and Calculation\n\n  - Fee provisions are included in fund agreements or donor communications where applicable.\n\n  - Donors are informed of the current fee and any material changes.\n\n  - Fees are calculated using the board-approved basis, such as fund capital and undistributed earnings at a specified date.\n\nExtraordinary Costs\n\nExtraordinary costs and electronic transaction fees may be charged to the applicable fund if permitted by the board-approved fee schedule and donor documentation.\n\nMonitoring\n\nThis policy will be reviewed on or around 2027-01-01 and whenever legal, operational, funding, or governance requirements materially change.\n\nBoard Acceptance\n\nThis policy was approved by resolution of the board of directors of Sample Community Society on 2026-01-01.\n\nApproved by counterpart signatures of the voting directors.\n\nChair\n_________________________________________\nAvery Chen\n\nTreasurer\n_________________________________________\nMorgan Patel\n\nSource: CostRecoveryFees.pdf; SHA-256 4529e19269bdc9fcfc3f41692aaab8331d9c8b4c5730cd21a676410269149312"
+    "html": "<pre class=\"source-pdf-template\">Sample Community Society\n                                         (the &quot;Corporation&quot;)\n\n Policy Name:                  Cost Recovery Fees Policy\n\n Policy Number:                FIN-001\n\n Effective Date:               2026-01-01\n\n Cost recovery fees will be charged on all funds. This fee will be determined by the Finance\n Committee and presented to the Board for approval.\n\n The provision of fees will be included in all fund agreement/deed of gifts. Donors will be\n informed annually of the fee.\n\n The fee will be calculated based on the capital and undistributed earnings in each fund as of the\n beginning of the month.\n\n Any extraordinary costs associated with creating a fund will be borne by the donor unless\n previously agreed to differently by the Board.\n\n All transaction fees incurred for Credit Card or other electronically facilitated donations to Funds\n will be charged against the Fund as incurred.\n\n Monitoring:                   This policy will be reviewed on or around 2027-01-01.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on 2026-01-01, as confirmed by\n                               the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.\n\n \n\n\n     Chair\n _________________________________________\n Avery Chen<br />\n\n\n\n     Treasurer\n _________________________________________\n Morgan Patel\n\n\nPolicy FIN-001 - Cost Recovery Fees Policy - Sample Community Society - 2026-01-01</pre>",
+    "text": "Sample Community Society\n                                         (the \"Corporation\")\n\n Policy Name:                  Cost Recovery Fees Policy\n\n Policy Number:                FIN-001\n\n Effective Date:               2026-01-01\n\n Cost recovery fees will be charged on all funds. This fee will be determined by the Finance\n Committee and presented to the Board for approval.\n\n The provision of fees will be included in all fund agreement/deed of gifts. Donors will be\n informed annually of the fee.\n\n The fee will be calculated based on the capital and undistributed earnings in each fund as of the\n beginning of the month.\n\n Any extraordinary costs associated with creating a fund will be borne by the donor unless\n previously agreed to differently by the Board.\n\n All transaction fees incurred for Credit Card or other electronically facilitated donations to Funds\n will be charged against the Fund as incurred.\n\n Monitoring:                   This policy will be reviewed on or around 2027-01-01.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on 2026-01-01, as confirmed by\n                               the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.\n\n \n\n\n     Chair\n _________________________________________\n Avery Chen\n\n\n\n     Treasurer\n _________________________________________\n Morgan Patel\n\n\nPolicy FIN-001 - Cost Recovery Fees Policy - Sample Community Society - 2026-01-01"
   },
   "comparison": {
+    "comparedAgainst": "source PDF extraction",
+    "comparedArtifact": "exactTemplate.text",
+    "method": "Normalized text equality between extracted source PDF text and the generated canonical template text.",
+    "exactTextMatch": true,
+    "originalCharacterCount": 1697,
+    "templateCharacterCount": 1697,
+    "originalLineCount": 42,
+    "templateLineCount": 42,
+    "status": "exact_text_match"
+  },
+  "dummySampleComparison": {
     "comparedAgainst": "source PDF extraction",
     "comparedArtifact": "renderedSample.text",
     "method": "Normalized keyword overlap between extracted source PDF text and the dummy-filled remade template. This flags drift only; it is not a legal-equivalence review.",
     "originalWordCount": 192,
-    "renderedSampleWordCount": 201,
+    "renderedSampleWordCount": 199,
     "sourceKeywordCount": 58,
-    "renderedKeywordCount": 87,
-    "sharedKeywordCount": 29,
-    "sourceKeywordCoverage": 0.5,
-    "renderedKeywordOverlap": 0.333,
-    "status": "partial_overlap",
+    "renderedKeywordCount": 65,
+    "sharedKeywordCount": 55,
+    "sourceKeywordCoverage": 0.948,
+    "renderedKeywordOverlap": 0.846,
+    "status": "good_overlap",
     "sourceOnlyKeywords": [
-      "against",
-      "agreed",
-      "agreement",
-      "annually",
-      "associated",
-      "based",
-      "beginning",
-      "borne",
-      "card",
-      "confirmed",
-      "creating",
-      "credit",
-      "deed",
-      "determined",
-      "differently",
       "director",
-      "donations",
-      "electronically",
-      "facilitated",
-      "gifts",
-      "incurred",
-      "month",
-      "other",
-      "presented",
-      "previously",
-      "provision",
       "signature",
-      "sole",
-      "unless"
+      "sole"
     ],
     "renderedOnlyKeywords": [
-      "aaab",
-      "actual",
-      "administration",
-      "adoption",
-      "agreements",
-      "applicable",
       "avery",
-      "basis",
-      "before",
-      "board-approved",
-      "bylaws",
-      "calculation",
       "chair",
-      "change",
-      "changes",
-      "charity",
       "chen",
-      "communications",
       "community",
-      "costrecoveryfees",
-      "current",
-      "disclosure",
-      "documentation",
-      "electronic",
-      "fcfc",
       "fin-",
-      "funder",
-      "funding",
-      "governance",
-      "imported",
-      "jurisdiction",
-      "legal",
-      "material",
-      "materially",
       "morgan",
-      "operational",
-      "operations",
       "patel",
-      "permitted",
-      "provisions"
+      "sample",
+      "society",
+      "treasurer"
     ]
   },
   "remadeTemplate": {
     "summary": "Fund administration fees, donor disclosure, calculation basis, extraordinary costs, and transaction fees.",
+    "sourceFidelity": "exact_text_from_source_pdf_extraction",
     "signatureRequired": true,
     "includeBoardAcceptance": true,
     "requiredDataFields": [
@@ -161,6 +123,19 @@
       "Jurisdiction",
       "CharityStatus"
     ],
+    "sections": [
+      {
+        "heading": "Exact PDF Text Extraction",
+        "paragraphs": [
+          "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n Cost recovery fees will be charged on all funds. This fee will be determined by the Finance\n Committee and presented to the Board for approval.\n\n The provision of fees will be included in all fund agreement/deed of gifts. Donors will be\n informed annually of the fee.\n\n The fee will be calculated based on the capital and undistributed earnings in each fund as of the\n beginning of the month.\n\n Any extraordinary costs associated with creating a fund will be borne by the donor unless\n previously agreed to differently by the Board.\n\n All transaction fees incurred for Credit Card or other electronically facilitated donations to Funds\n will be charged against the Fund as incurred.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+        ]
+      }
+    ],
+    "html": "<pre class=\"source-pdf-template\">{CorporationName}\n                                         (the &quot;Corporation&quot;)\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n Cost recovery fees will be charged on all funds. This fee will be determined by the Finance\n Committee and presented to the Board for approval.\n\n The provision of fees will be included in all fund agreement/deed of gifts. Donors will be\n informed annually of the fee.\n\n The fee will be calculated based on the capital and undistributed earnings in each fund as of the\n beginning of the month.\n\n Any extraordinary costs associated with creating a fund will be borne by the donor unless\n previously agreed to differently by the Board.\n\n All transaction fees incurred for Credit Card or other electronically facilitated donations to Funds\n will be charged against the Fund as incurred.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}</pre>",
+    "text": "{CorporationName}\n                                         (the \"Corporation\")\n\n Policy Name:                  {PolicyName}\n\n Policy Number:                {PolicyNumber}\n\n Effective Date:               {PolicyEffectiveDate}\n\n Cost recovery fees will be charged on all funds. This fee will be determined by the Finance\n Committee and presented to the Board for approval.\n\n The provision of fees will be included in all fund agreement/deed of gifts. Donors will be\n informed annually of the fee.\n\n The fee will be calculated based on the capital and undistributed earnings in each fund as of the\n beginning of the month.\n\n Any extraordinary costs associated with creating a fund will be borne by the donor unless\n previously agreed to differently by the Board.\n\n All transaction fees incurred for Credit Card or other electronically facilitated donations to Funds\n will be charged against the Fund as incurred.\n\n Monitoring:                   This policy will be reviewed on or around {ReviewDate}.\n\n Board Acceptance:             This policy was approved by resolution of the board of directors\n                               of the Corporation on {EffectiveDate}, as confirmed by\n                               {#SoleVotDir}the signature of the sole director of the\n                               Corporation below.{/SoleVotDir}{#MultiVotDir}the\n                               counterpart signatures of each of the directors of the Corporation\n                               below.{/MultiVotDir}\n\n {#VotingDirectors}\n\n\n     {SignerTag}\n _________________________________________\n {Director-Name}{/VotingDirectors}\n\n\nPolicy {PolicyNumber} - {PolicyName} - {CorporationName} - {PolicyEffectiveDate}"
+  },
+  "structuredSummaryTemplate": {
+    "sourceFidelity": "condensed_structured_summary",
     "sections": [
       {
         "heading": "Fee Approval",

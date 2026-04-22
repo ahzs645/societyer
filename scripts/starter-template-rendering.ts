@@ -22,7 +22,7 @@ export type StarterTemplateSampleData = {
 };
 
 export type StarterTemplateBlock = {
-  kind: "title" | "heading" | "paragraph" | "listItem" | "small";
+  kind: "title" | "heading" | "paragraph" | "listItem" | "small" | "preformatted";
   text: string;
 };
 
@@ -103,6 +103,24 @@ export function renderStarterTemplateSampleHtml(
   return replacePlaceholders(rendered, sampleData.values);
 }
 
+export function exactSourceTextToHtml(sourceText: string) {
+  return `<pre class="source-pdf-template">${escapeHtml(sourceText)}</pre>`;
+}
+
+export function renderExactSourceSampleText(sourceText: string, sampleData: StarterTemplateSampleData) {
+  let rendered = sourceText;
+  rendered = rendered.replace(/\{#SoleVotDir\}[\s\S]*?\{\/SoleVotDir\}/g, "");
+  rendered = rendered.replace(/\{#MultiVotDir\}([\s\S]*?)\{\/MultiVotDir\}/g, "$1");
+  rendered = rendered.replace(/\{#VotingDirectors\}([\s\S]*?)\{\/VotingDirectors\}/g, (_match, inner: string) =>
+    sampleData.directors.map((director) => replacePlaceholders(inner, { ...sampleData.values, ...director })).join("\n"),
+  );
+  return replacePlaceholders(rendered, sampleData.values);
+}
+
+export function sourceTextToBlocks(sourceText: string) {
+  return [{ kind: "preformatted", text: sourceText }] satisfies StarterTemplateBlock[];
+}
+
 export function renderStarterTemplateBlocks(template: StarterTemplateLike, sampleData = starterSampleData(template)) {
   const blocks: StarterTemplateBlock[] = [
     { kind: "title", text: sampleData.values.PolicyName },
@@ -151,6 +169,9 @@ export function renderStarterTemplateBlocks(template: StarterTemplateLike, sampl
 }
 
 export function blocksToPlainText(blocks: StarterTemplateBlock[]) {
+  if (blocks.every((block) => block.kind === "preformatted")) {
+    return blocks.map((block) => block.text).join("\n");
+  }
   return blocks.map((block) => block.text).join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
@@ -195,12 +216,39 @@ export function compareTemplateText(originalText: string, renderedText: string) 
   };
 }
 
+export function compareExactTemplateText(originalText: string, templateText: string) {
+  const normalizedOriginal = normalizeForExactComparison(originalText);
+  const normalizedTemplate = normalizeForExactComparison(templateText);
+  const exactTextMatch = normalizedOriginal === normalizedTemplate;
+  return {
+    method: "Normalized text equality between extracted source PDF text and the generated canonical template text.",
+    exactTextMatch,
+    originalCharacterCount: normalizedOriginal.length,
+    templateCharacterCount: normalizedTemplate.length,
+    originalLineCount: normalizedOriginal ? normalizedOriginal.split("\n").length : 0,
+    templateLineCount: normalizedTemplate ? normalizedTemplate.split("\n").length : 0,
+    status: exactTextMatch ? "exact_text_match" : "text_mismatch_review_required",
+  };
+}
+
 function fillText(value: string, sampleData: StarterTemplateSampleData) {
   return replacePlaceholders(value, sampleData.values);
 }
 
 function replacePlaceholders(input: string, values: Record<string, string>) {
   return input.replace(/\{([A-Za-z0-9_-]+)\}/g, (_match, key: string) => values[key] ?? `[${key}]`);
+}
+
+function normalizeForExactComparison(value: string) {
+  return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function keywordSet(value: string) {

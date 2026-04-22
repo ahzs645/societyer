@@ -98,6 +98,7 @@ import type * as seed from "../seed.js";
 import type * as seedRecordTableMetadata from "../seedRecordTableMetadata.js";
 import type * as signatures from "../signatures.js";
 import type * as society from "../society.js";
+import type * as starterPolicyTemplateSourceTexts from "../starterPolicyTemplateSourceTexts.js";
 import type * as starterPolicyTemplates from "../starterPolicyTemplates.js";
 import type * as subscriptions from "../subscriptions.js";
 import type * as tasks from "../tasks.js";
@@ -209,6 +210,7 @@ declare const fullApi: ApiFromModules<{
   seedRecordTableMetadata: typeof seedRecordTableMetadata;
   signatures: typeof signatures;
   society: typeof society;
+  starterPolicyTemplateSourceTexts: typeof starterPolicyTemplateSourceTexts;
   starterPolicyTemplates: typeof starterPolicyTemplates;
   subscriptions: typeof subscriptions;
   tasks: typeof tasks;
