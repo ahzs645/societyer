@@ -1,3 +1,5 @@
+import { RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinitions";
+
 const FUNCTION_NAME = Symbol.for("functionName");
 
 export const STATIC_DEMO_SOCIETY_ID = "static_society_riverside";
@@ -1929,100 +1931,13 @@ function member(id: string, firstName: string, lastName: string, membershipClass
   };
 }
 
-type StaticRecordField = {
-  name: string;
-  label: string;
-  fieldType: string;
-  icon?: string;
-  config?: Record<string, unknown>;
-  isSystem?: boolean;
-  isReadOnly?: boolean;
-};
-
-const staticRecordTables: Record<
-  string,
-  {
-    namePlural: string;
-    labelSingular: string;
-    labelPlural: string;
-    icon: string;
-    iconColor: string;
-    routePath: string;
-    labelIdentifierFieldName: string;
-    fields: StaticRecordField[];
-    defaultView: {
-      name: string;
-      columns: { fieldName: string; size?: number }[];
-    };
-  }
-> = {
-  director: {
-    namePlural: "directors",
-    labelSingular: "Director",
-    labelPlural: "Directors",
-    icon: "ShieldCheck",
-    iconColor: "violet",
-    routePath: "/app/directors",
-    labelIdentifierFieldName: "fullName",
-    fields: [
-      { name: "firstName", label: "First name", fieldType: "TEXT", icon: "User", isSystem: true },
-      { name: "lastName", label: "Last name", fieldType: "TEXT", icon: "User", isSystem: true },
-      { name: "email", label: "Email", fieldType: "EMAIL", icon: "Mail" },
-      {
-        name: "position",
-        label: "Position",
-        fieldType: "SELECT",
-        icon: "Briefcase",
-        config: {
-          options: [
-            { value: "President", label: "President", color: "blue" },
-            { value: "Vice President", label: "Vice President", color: "teal" },
-            { value: "Secretary", label: "Secretary", color: "purple" },
-            { value: "Treasurer", label: "Treasurer", color: "green" },
-            { value: "Director", label: "Director", color: "gray" },
-          ],
-        },
-      },
-      { name: "isBCResident", label: "BC resident", fieldType: "BOOLEAN", icon: "MapPin" },
-      { name: "consentOnFile", label: "Consent on file", fieldType: "BOOLEAN", icon: "FileCheck" },
-      { name: "termStart", label: "Term start", fieldType: "DATE", icon: "Calendar" },
-      { name: "termEnd", label: "Term end", fieldType: "DATE", icon: "Calendar" },
-      { name: "resignedAt", label: "Resigned", fieldType: "DATE", icon: "LogOut" },
-      {
-        name: "status",
-        label: "Status",
-        fieldType: "SELECT",
-        icon: "Activity",
-        config: {
-          options: [
-            { value: "Active", label: "Active", color: "green" },
-            { value: "Resigned", label: "Resigned", color: "amber" },
-            { value: "Inactive", label: "Inactive", color: "gray" },
-          ],
-        },
-      },
-      { name: "aliases", label: "Aliases", fieldType: "ARRAY", icon: "Tag", isReadOnly: true },
-      { name: "notes", label: "Notes", fieldType: "TEXT", icon: "StickyNote" },
-    ],
-    defaultView: {
-      name: "All directors",
-      columns: [
-        { fieldName: "firstName", size: 150 },
-        { fieldName: "lastName", size: 150 },
-        { fieldName: "position", size: 160 },
-        { fieldName: "status", size: 120 },
-        { fieldName: "termStart", size: 140 },
-        { fieldName: "termEnd", size: 140 },
-        { fieldName: "isBCResident", size: 110 },
-        { fieldName: "consentOnFile", size: 120 },
-      ],
-    },
-  },
-};
+const staticRecordTableDefinitions = new Map(
+  RECORD_TABLE_OBJECTS.map((definition) => [definition.nameSingular, definition]),
+);
 
 function staticRecordTableSetup(args: StaticArgs) {
   const nameSingular = String(args?.nameSingular ?? "");
-  const definition = staticRecordTables[nameSingular];
+  const definition = staticRecordTableDefinitions.get(nameSingular);
   if (!definition) return { object: null, views: [], activeView: null };
 
   const objectMetadataId = `static_object_${nameSingular}`;
@@ -2034,11 +1949,12 @@ function staticRecordTableSetup(args: StaticArgs) {
     objectMetadataId,
     name: field.name,
     label: field.label,
+    description: field.description,
     icon: field.icon,
     fieldType: field.fieldType,
     configJson: field.config ? JSON.stringify(field.config) : undefined,
     isSystem: field.isSystem ?? false,
-    isHidden: false,
+    isHidden: field.isHidden ?? false,
     isNullable: true,
     isReadOnly: field.isReadOnly ?? false,
     position,
