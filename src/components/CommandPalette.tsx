@@ -86,6 +86,7 @@ const NAV_ITEMS: CommandItem[] = [
   { id: "nav-tasks", label: "Tasks", to: "/app/tasks", icon: ListTodo, category: "Navigation" },
   { id: "nav-members", label: "Members", to: "/app/members", icon: Users, category: "Navigation" },
   { id: "nav-directors", label: "Directors", to: "/app/directors", icon: UserCog, category: "Navigation" },
+  { id: "nav-role-holders", label: "Role holders", to: "/app/role-holders", icon: UsersRound, category: "Navigation" },
   { id: "nav-documents", label: "Documents", to: "/app/documents", icon: FolderOpen, category: "Navigation" },
   { id: "nav-deadlines", label: "Deadlines", to: "/app/deadlines", icon: Calendar, category: "Navigation" },
   { id: "nav-commitments", label: "Commitments", to: "/app/commitments", icon: ClipboardList, category: "Navigation" },
@@ -113,6 +114,7 @@ const NAV_ITEMS: CommandItem[] = [
   { id: "gov-auditors", label: "Auditors", to: "/app/auditors", icon: Calculator, category: "Governance", module: "auditors" },
   { id: "gov-court-orders", label: "Court orders", to: "/app/court-orders", icon: Gavel, category: "Governance", module: "courtOrders" },
   { id: "gov-registers", label: "Governance registers", to: "/app/governance-registers", icon: ShieldCheck, category: "Governance" },
+  { id: "gov-rights-ledger", label: "Rights ledger", to: "/app/rights-ledger", icon: Gavel, category: "Governance" },
   { id: "gov-minute-book", label: "Minute book", to: "/app/minute-book", icon: BookOpen, category: "Governance" },
 
   // Finance
@@ -127,6 +129,7 @@ const NAV_ITEMS: CommandItem[] = [
   // Compliance
   { id: "comp-filings", label: "Filings", to: "/app/filings", icon: ClipboardList, category: "Compliance" },
   { id: "comp-filings-prefill", label: "Filing pre-fill", to: "/app/filings/prefill", icon: FileCog, category: "Compliance", module: "filingPrefill" },
+  { id: "comp-formation-maintenance", label: "Formation & annual", to: "/app/formation-maintenance", icon: Gavel, category: "Compliance" },
   { id: "comp-policies", label: "Policies", to: "/app/policies", icon: FileText, category: "Compliance" },
   { id: "comp-transparency", label: "Public transparency", to: "/app/transparency", icon: Globe, category: "Compliance", module: "transparency" },
   { id: "comp-retention", label: "Records retention", to: "/app/retention", icon: Archive, category: "Compliance", module: "recordsInspection" },
@@ -143,6 +146,7 @@ const NAV_ITEMS: CommandItem[] = [
   { id: "sys-imports", label: "Import sessions", to: "/app/imports", icon: FileJson, category: "System" },
   { id: "sys-paperless", label: "Paperless-ngx", to: "/app/paperless", icon: Database, category: "System", module: "paperless" },
   { id: "sys-workflow-packages", label: "Workflow packages", to: "/app/workflow-packages", icon: Workflow, category: "System", module: "workflows" },
+  { id: "sys-template-engine", label: "Template engine", to: "/app/template-engine", icon: FileCog, category: "System" },
   { id: "sys-audit", label: "Audit log", to: "/app/audit", icon: ShieldCheck, category: "System" },
   { id: "sys-exports", label: "Data export", to: "/app/exports", icon: Download, category: "System" },
   { id: "sys-settings", label: "Settings", to: "/app/settings", icon: Settings, category: "System", shortcut: "," },

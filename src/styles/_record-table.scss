@@ -511,17 +511,14 @@
 // Shared palette used by `.record-cell__chip` *and* `.ui-tag`. Adding a
 // new tone here teaches both the table cell chip and the standalone
 // `<Tag />` component about the new color in one step.
-$chip-tones: (
-  "blue": (bg: #dbeafe, fg: #1e40af, border: #93c5fd),
-  "green": (bg: #dcfce7, fg: #166534, border: #86efac),
-  "red": (bg: #fee2e2, fg: #991b1b, border: #fca5a5),
-  "amber": (bg: #fef3c7, fg: #92400e, border: #fcd34d),
-  "purple": (bg: #ede9fe, fg: #5b21b6, border: #c4b5fd),
-  "teal": (bg: #ccfbf1, fg: #115e59, border: #5eead4),
-  "gray": (bg: #e5e7eb, fg: #374151, border: #d1d5db),
-  "pink": (bg: #fce7f3, fg: #9d174d, border: #f9a8d4),
-  "violet": (bg: #ede9fe, fg: #5b21b6, border: #c4b5fd),
-);
+//
+// Each name must correspond to a Radix color family defined in
+// `src/theme/palette.css` (both `:root/.light` and `.dark`). The chip
+// styles below reference those families via CSS custom properties
+// (`--{name}-4`, `--{name}-11`, `--{name}-7`) so every tone automatically
+// flips when `.dark` is applied to `<html>`. Do NOT hard-code hex values
+// here — that breaks dark mode.
+$chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink", "violet");
 
 // Table-cell chip — Twenty-style: 20px tall, 4px radius, 8px horiz
 // padding. No icon slot here; use `<Tag />` when you need one.
@@ -544,10 +541,10 @@ $chip-tones: (
   }
 }
 
-@each $name, $tones in $chip-tones {
+@each $name in $chip-tones {
   .record-cell__chip--#{$name} {
-    background: map-get($tones, bg);
-    color: map-get($tones, fg);
+    background: var(--#{$name}-4);
+    color: var(--#{$name}-11);
   }
 }
 
@@ -590,21 +587,21 @@ $chip-tones: (
   white-space: nowrap;
 }
 
-@each $name, $tones in $chip-tones {
+@each $name in $chip-tones {
   .ui-tag--#{$name}.ui-tag--solid {
-    background: map-get($tones, bg);
-    color: map-get($tones, fg);
+    background: var(--#{$name}-4);
+    color: var(--#{$name}-11);
   }
   .ui-tag--#{$name}.ui-tag--outline {
     background: transparent;
-    color: map-get($tones, fg);
+    color: var(--#{$name}-11);
     border-style: dashed;
-    border-color: map-get($tones, border);
+    border-color: var(--#{$name}-7);
   }
   .ui-tag--#{$name}.ui-tag--border {
     background: transparent;
-    color: map-get($tones, fg);
-    border-color: map-get($tones, border);
+    color: var(--#{$name}-11);
+    border-color: var(--#{$name}-7);
   }
 }
 
@@ -646,14 +643,17 @@ $chip-tones: (
   border-radius: 999px;
 }
 
+// Use the theme-aware Radix palette so these pills flip with `.dark`.
+// Green for truthy/"Yes", neutral gray for falsy/"No" (matches the
+// chip/tag palette defined above).
 .record-cell__boolean--true {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--green-4);
+  color: var(--green-11);
 }
 
 .record-cell__boolean--false {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--gray-3);
+  color: var(--gray-11);
 }
 
 .record-cell__rating {

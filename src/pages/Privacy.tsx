@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import {
+  CalendarPlus,
   ClipboardCheck,
+  ClipboardList,
   ExternalLink,
   FileDown,
   FileCheck2,
@@ -64,10 +66,12 @@ export function PrivacyPage() {
     api.communications.listMemberPrefs,
     society && communicationsEnabled ? { societyId: society._id } : "skip",
   );
+  const motionBacklog = useQuery(api.motionBacklog.list, society ? { societyId: society._id } : "skip");
   const createPolicyDraft = useMutation(api.documents.createPipaPolicyDraft);
   const createMemberDataGapMemoDraft = useMutation(api.documents.createMemberDataGapMemoDraft);
   const updateDraftContent = useMutation(api.documents.updateDraftContent);
   const linkPrivacyPolicyEvidence = useMutation(api.documents.linkPrivacyPolicyEvidence);
+  const seedPipaSetupMotions = useMutation(api.motionBacklog.seedPipaSetup);
   const [draftEditor, setDraftEditor] = useState<DraftEditorState | null>(null);
   const [draftViewMode, setDraftViewMode] = useState<DraftViewMode>("edit");
   const [draftBusy, setDraftBusy] = useState(false);
@@ -79,6 +83,7 @@ export function PrivacyPage() {
   const documentRows = documents ?? [];
   const policyDraft = documentRows.find(isPrivacyPolicyDraft);
   const memberDataMemoDraft = documentRows.find(isMemberDataMemoDraft);
+  const pipaSetupMotionCount = (motionBacklog ?? []).filter((item: any) => item.source === "pipa-setup").length;
   const adoptedPolicyDocument = society.privacyPolicyDocId
     ? documentRows.find((document) => String(document._id) === String(society.privacyPolicyDocId))
     : null;
@@ -250,6 +255,14 @@ export function PrivacyPage() {
     toast.success("Word document exported", "Uses the same rendered Markdown as the preview.");
   };
 
+  const addPipaSetupMotions = async () => {
+    const result = await seedPipaSetupMotions({ societyId: society._id });
+    toast.success(
+      result.inserted ? `Added ${result.inserted} PIPA setup motions` : "PIPA setup motions already exist",
+      result.existing ? `${result.existing} already in the backlog.` : undefined,
+    );
+  };
+
   return (
     <div className="page">
       <PageHeader
@@ -311,6 +324,42 @@ export function PrivacyPage() {
                     {memberDataMemoDraft ? <PenLine size={12} /> : <Plus size={12} />}
                     {memberDataMemoDraft ? "Edit data memo" : "Create data memo"}
                   </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card privacy-create-card">
+            <div className="card__head">
+              <div>
+                <h2 className="card__title">
+                  <ClipboardList size={14} />
+                  Setup motions backlog
+                </h2>
+                <p className="card__subtitle">
+                  Keep draft motions separate until you are ready to place them on a future agenda and seed them into minutes.
+                </p>
+              </div>
+            </div>
+            <div className="card__body">
+              <div className="privacy-document-path">
+                <div className="privacy-document-path__copy">
+                  <strong>{pipaSetupMotionCount ? `${pipaSetupMotionCount} PIPA setup motions in backlog` : "No PIPA setup motions in backlog"}</strong>
+                  <span>
+                    Seed motions for designating the privacy officer, adopting the policy and complaint process, documenting member-data access, and setting the training review cycle.
+                  </span>
+                </div>
+                <div className="privacy-document-path__actions">
+                  <button className="btn btn--accent btn--sm" onClick={addPipaSetupMotions}>
+                    <Plus size={12} />
+                    Add setup motions
+                  </button>
+                  <Link className="btn btn--ghost btn--sm" to="/app/motion-backlog">
+                    <ClipboardList size={12} /> Backlog
+                  </Link>
+                  <Link className="btn btn--ghost btn--sm" to="/app/agendas">
+                    <CalendarPlus size={12} /> Agendas
+                  </Link>
                 </div>
               </div>
             </div>

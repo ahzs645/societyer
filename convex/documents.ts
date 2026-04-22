@@ -15,6 +15,7 @@ const VISIBLE_DOCUMENT_CATEGORIES = [
   "Receipt",
   "CourtOrder",
   "WorkflowGenerated",
+  "Library",
 ];
 
 export const list = query({
@@ -32,6 +33,11 @@ export const list = query({
   },
 });
 
+export const get = query({
+  args: { id: v.id("documents") },
+  handler: async (ctx, { id }) => ctx.db.get(id),
+});
+
 export const getMany = query({
   args: { ids: v.array(v.id("documents")) },
   handler: async (ctx, { ids }) => {
@@ -44,6 +50,8 @@ export const create = mutation({
   args: {
     societyId: v.id("societies"),
     committeeId: v.optional(v.id("committees")),
+    meetingId: v.optional(v.id("meetings")),
+    agendaItemId: v.optional(v.id("agendaItems")),
     title: v.string(),
     category: v.string(),
     fileName: v.optional(v.string()),
@@ -51,6 +59,8 @@ export const create = mutation({
     content: v.optional(v.string()),
     url: v.optional(v.string()),
     retentionYears: v.optional(v.number()),
+    reviewStatus: v.optional(v.string()),
+    librarySection: v.optional(v.string()),
     tags: v.array(v.string()),
   },
   handler: async (ctx, args) =>
@@ -59,6 +69,122 @@ export const create = mutation({
       createdAtISO: new Date().toISOString(),
       flaggedForDeletion: false,
     }),
+});
+
+export const markOpened = mutation({
+  args: {
+    id: v.id("documents"),
+    userId: v.optional(v.id("users")),
+    actorName: v.optional(v.string()),
+  },
+  handler: async (ctx, { id, userId, actorName }) => {
+    const document = await ctx.db.get(id);
+    if (!document) throw new Error("Document not found.");
+    const nowISO = new Date().toISOString();
+    const patch: any = { lastOpenedAtISO: nowISO };
+    if (userId) patch.lastOpenedByUserId = userId;
+    await ctx.db.patch(id, patch);
+    await ctx.db.insert("activity", {
+      societyId: document.societyId,
+      actor: actorName ?? "You",
+      entityType: "document",
+      entityId: id,
+      action: "opened",
+      summary: `Opened ${document.title}`,
+      createdAtISO: nowISO,
+    });
+    return { openedAtISO: nowISO };
+  },
+});
+
+export const updateReviewStatus = mutation({
+  args: {
+    id: v.id("documents"),
+    reviewStatus: v.optional(v.string()),
+    actorName: v.optional(v.string()),
+  },
+  handler: async (ctx, { id, reviewStatus, actorName }) => {
+    const document = await ctx.db.get(id);
+    if (!document) throw new Error("Document not found.");
+    await ctx.db.patch(id, { reviewStatus });
+    await ctx.db.insert("activity", {
+      societyId: document.societyId,
+      actor: actorName ?? "You",
+      entityType: "document",
+      entityId: id,
+      action: "review-status",
+      summary: `Marked ${document.title} ${reviewStatus ? reviewStatus.replace(/_/g, " ") : "not reviewed"}`,
+      createdAtISO: new Date().toISOString(),
+    });
+  },
+});
+
+export const reviewQueues = query({
+  args: { societyId: v.id("societies") },
+  handler: async (ctx, { societyId }) => {
+    const [documents, tasks, comments, signatures, materials] = await Promise.all([
+      ctx.db.query("documents").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("tasks").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("documentComments").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("signatures").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("meetingMaterials").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ]);
+
+    const docs = documents.filter((doc) => !isInternalDocumentRecord(doc));
+    const taskCounts = countByDocument(tasks.filter((task) => task.status !== "Done"));
+    const openCommentCounts = countByDocument(comments.filter((comment) => comment.status !== "resolved"));
+    const signatureCounts = new Map<string, number>();
+    for (const signature of signatures) {
+      if (signature.entityType !== "document") continue;
+      signatureCounts.set(signature.entityId, (signatureCounts.get(signature.entityId) ?? 0) + 1);
+    }
+    const materialDocIds = new Set(materials.map((row) => String(row.documentId)));
+    const annotate = (doc: any) => ({
+      ...doc,
+      openTaskCount: taskCounts.get(String(doc._id)) ?? 0,
+      openCommentCount: openCommentCounts.get(String(doc._id)) ?? 0,
+      signatureCount: signatureCounts.get(String(doc._id)) ?? 0,
+      linkedToMeetingPackage: materialDocIds.has(String(doc._id)) || !!doc.meetingId,
+    });
+
+    const annotated = docs.map(annotate);
+    const recent = annotated
+      .filter((doc) => doc.lastOpenedAtISO || doc.createdAtISO)
+      .sort((a, b) => String(b.lastOpenedAtISO ?? b.createdAtISO).localeCompare(String(a.lastOpenedAtISO ?? a.createdAtISO)))
+      .slice(0, 8);
+    const actionRequired = annotated
+      .filter((doc) =>
+        doc.reviewStatus === "needs_signature" ||
+        doc.reviewStatus === "blocked" ||
+        doc.openTaskCount > 0 ||
+        doc.openCommentCount > 0 ||
+        (doc.tags ?? []).includes("needs-signature") ||
+        (doc.tags ?? []).includes("action-required"),
+      )
+      .sort((a, b) => Number(b.openTaskCount + b.openCommentCount) - Number(a.openTaskCount + a.openCommentCount))
+      .slice(0, 8);
+    const workInProgress = annotated
+      .filter((doc) =>
+        doc.reviewStatus === "in_review" ||
+        doc.reviewStatus === "needs_signature" ||
+        doc.linkedToMeetingPackage ||
+        doc.openCommentCount > 0,
+      )
+      .sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO)))
+      .slice(0, 8);
+
+    return {
+      recent,
+      actionRequired,
+      workInProgress,
+      counts: {
+        documents: annotated.length,
+        recent: recent.length,
+        actionRequired: actionRequired.length,
+        workInProgress: workInProgress.length,
+      },
+    };
+  },
 });
 
 export const createPipaPolicyDraft = mutation({

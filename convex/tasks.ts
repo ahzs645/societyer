@@ -28,6 +28,15 @@ export const byGoal = query({
       .collect(),
 });
 
+export const byMeeting = query({
+  args: { meetingId: v.id("meetings") },
+  handler: async (ctx, { meetingId }) =>
+    ctx.db
+      .query("tasks")
+      .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
+      .collect(),
+});
+
 export const create = mutation({
   args: {
     societyId: v.id("societies"),

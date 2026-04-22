@@ -1346,6 +1346,39 @@ const workflows = [
 
 const workflowRuns: any[] = [];
 
+const motionBacklog = [
+  {
+    _id: "static_motion_backlog_pipa_policy",
+    societyId: SOCIETY_ID,
+    title: "Adopt PIPA privacy policy and complaint process",
+    motionText:
+      "BE IT RESOLVED THAT the Society adopt the PIPA privacy policy, privacy practices, access and correction process, complaint process, safeguards, and retention approach presented to the meeting, effective [date], and authorize the privacy officer to maintain the working copy and evidence record.",
+    category: "privacy",
+    status: "Backlog",
+    priority: "high",
+    source: "pipa-setup",
+    seededKey: "pipa-adopt-privacy-policy",
+    notes: "Use after the draft policy has been reviewed and is ready for approval.",
+    createdAtISO: "2026-04-21T18:00:00.000Z",
+    updatedAtISO: "2026-04-21T18:00:00.000Z",
+  },
+  {
+    _id: "static_motion_backlog_pipa_data_gap",
+    societyId: SOCIETY_ID,
+    title: "Approve member-data access gap memo",
+    motionText:
+      "BE IT RESOLVED THAT the Society approve the member-data access gap memo presented to the meeting, recording which member or eligibility records are controlled by the Society, which records are held by the university or other institution, and how privacy and records requests will be handled.",
+    category: "privacy",
+    status: "Backlog",
+    priority: "normal",
+    source: "pipa-setup",
+    seededKey: "pipa-member-data-gap-memo",
+    notes: "Useful where an institution does not share the full member list.",
+    createdAtISO: "2026-04-21T18:00:00.000Z",
+    updatedAtISO: "2026-04-21T18:00:00.000Z",
+  },
+];
+
 const tables: Record<string, any[]> = {
   activity: [
     {
@@ -1369,6 +1402,7 @@ const tables: Record<string, any[]> = {
   ],
   workflows,
   workflowRuns,
+  motionBacklog,
   pendingEmails: [
     {
       _id: "static_pending_email_unbc",
@@ -2311,6 +2345,7 @@ const STATIC_EXPORT_TABLES = [
   "agendas",
   "agendaItems",
   "motionTemplates",
+  "motionBacklog",
   "recordsLocation",
   "sourceEvidence",
   "secretVaultItems",
@@ -2807,6 +2842,15 @@ function mutationResult(name: string, args: StaticArgs) {
       status: "complete",
       tags: ["societyer", "demo"],
     };
+  }
+  if (name === "motionBacklog:seedPipaSetup") {
+    return { inserted: 0, existing: motionBacklog.length };
+  }
+  if (name === "motionBacklog:addToAgenda") {
+    return { agendaItemId: "static_agenda_item_motion_backlog", reused: false };
+  }
+  if (name === "motionBacklog:seedToMinutes") {
+    return { inserted: 1, considered: 1, minutesId: "static_minutes_board_q2" };
   }
   if (name === "documents:createPipaPolicyDraft") {
     return {

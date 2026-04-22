@@ -26,6 +26,10 @@ export function AgendaBuilderPage() {
     api.motionTemplates.list,
     society ? { societyId: society._id } : "skip",
   );
+  const backlog = useQuery(
+    api.motionBacklog.list,
+    society ? { societyId: society._id } : "skip",
+  );
 
   const [selectedAgendaId, setSelectedAgendaId] = useState<Id<"agendas"> | null>(null);
   const [newMeetingId, setNewMeetingId] = useState<string>("");
@@ -41,6 +45,7 @@ export function AgendaBuilderPage() {
   const removeItem = useMutation(api.agendas.removeItem);
   const reorder = useMutation(api.agendas.reorderItems);
   const updateItem = useMutation(api.agendas.updateItem);
+  const addBacklogToAgenda = useMutation(api.motionBacklog.addToAgenda);
 
   const meetingById = useMemo(() => {
     const map = new Map<string, any>();
@@ -87,6 +92,12 @@ export function AgendaBuilderPage() {
     if (target < 0 || target >= ids.length) return;
     [ids[index], ids[target]] = [ids[target], ids[index]];
     await reorder({ agendaId: selected.agenda._id, orderedItemIds: ids });
+  };
+
+  const handleAddBacklogItem = async (backlogId: string) => {
+    if (!selectedAgendaId || !backlogId) return;
+    const result = await addBacklogToAgenda({ backlogId, agendaId: selectedAgendaId });
+    toast.success(result.reused ? "Backlog motion already on this agenda" : "Backlog motion added to agenda");
   };
 
   return (
@@ -196,6 +207,27 @@ export function AgendaBuilderPage() {
                     {t.title}
                   </option>
                 ))}
+              </select>
+              <select
+                className="input"
+                defaultValue=""
+                onChange={(e) => {
+                  const backlogId = e.target.value;
+                  if (!backlogId) return;
+                  handleAddBacklogItem(backlogId);
+                  e.target.value = "";
+                }}
+              >
+                <option value="">
+                  Add from motion backlog...
+                </option>
+                {(backlog ?? [])
+                  .filter((item: any) => item.status !== "Archived" && item.status !== "Adopted")
+                  .map((item: any) => (
+                    <option key={item._id} value={item._id}>
+                      {item.title} ({item.status})
+                    </option>
+                  ))}
               </select>
             </div>
 

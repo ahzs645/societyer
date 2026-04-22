@@ -155,6 +155,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/app/members", label: "Members", icon: Users, color: "blue" },
       { to: "/app/directors", label: "Directors", icon: UserCog, color: "blue" },
+      { to: "/app/role-holders", label: "Role holders", icon: UsersRound, color: "blue" },
       { to: "/app/committees", label: "Committees", icon: UsersRound, color: "pink" },
       { to: "/app/volunteers", label: "Volunteers", icon: HandHeart, color: "pink", module: "volunteers" },
       { to: "/app/employees", label: "Employees", icon: Users, color: "blue", module: "employees" },
@@ -199,6 +200,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/app/auditors", label: "Auditors", icon: Calculator, color: "green", module: "auditors" },
       { to: "/app/court-orders", label: "Court orders", icon: Gavel, color: "red", module: "courtOrders" },
       { to: "/app/governance-registers", label: "Governance registers", icon: Scale, color: "blue" },
+      { to: "/app/rights-ledger", label: "Rights ledger", icon: Scale, color: "purple" },
       { to: "/app/minute-book", label: "Minute book", icon: BookOpen, color: "purple" },
       { to: "/app/bylaw-rules", label: "Bylaw rules", icon: Scale, color: "purple" },
       { to: "/app/bylaw-diff", label: "Bylaw redline", icon: GitCompare, color: "purple" },
@@ -211,6 +213,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/app/filings", label: "Filings", icon: ClipboardList, color: "orange" },
       { to: "/app/filings/prefill", label: "Filing pre-fill", icon: FileCog, color: "orange", module: "filingPrefill" },
+      { to: "/app/formation-maintenance", label: "Formation & annual", icon: Gavel, color: "orange" },
       { to: "/app/policies", label: "Policies", icon: FileText, color: "green" },
       { to: "/app/retention", label: "Records retention", icon: Archive, color: "gray", module: "recordsInspection" },
       { to: "/app/records-archive", label: "Records archive", icon: Archive, color: "gray" },
@@ -243,6 +246,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/app/workflows", label: "Workflows", icon: Workflow, color: "orange", module: "workflows" },
       { to: "/app/workflow-runs", label: "Workflow runs", icon: History, color: "gray", module: "workflows" },
       { to: "/app/workflow-packages", label: "Workflow packages", icon: FileJson, color: "orange", module: "workflows" },
+      { to: "/app/template-engine", label: "Template engine", icon: FileCog, color: "green" },
     ],
   },
   {

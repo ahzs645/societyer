@@ -95,6 +95,10 @@ const WorkflowsPage = React.lazy(() => import("./pages/Workflows").then((m) => (
 const WorkflowDetailPage = React.lazy(() => import("./pages/WorkflowDetail").then((m) => ({ default: m.WorkflowDetailPage })));
 const WorkflowRunsPage = React.lazy(() => import("./pages/WorkflowRuns").then((m) => ({ default: m.WorkflowRunsPage })));
 const WorkflowPackagesPage = React.lazy(() => import("./pages/WorkflowPackages").then((m) => ({ default: m.WorkflowPackagesPage })));
+const RoleHoldersPage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.RoleHoldersPage })));
+const RightsLedgerPage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.RightsLedgerPage })));
+const TemplateEnginePage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.TemplateEnginePage })));
+const FormationMaintenancePage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.FormationMaintenancePage })));
 const OutboxPage = React.lazy(() => import("./pages/Outbox").then((m) => ({ default: m.OutboxPage })));
 const CustomFieldsPage = React.lazy(() => import("./pages/CustomFields").then((m) => ({ default: m.CustomFieldsPage })));
 const PublicTransparencyPage = React.lazy(() => import("./pages/PublicTransparency").then((m) => ({ default: m.PublicTransparencyPage })));
@@ -215,6 +219,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route index element={<Dashboard />} />
             <Route path="society" element={<SocietyPage />} />
             <Route path="organization-details" element={<OrganizationDetailsPage />} />
+            <Route path="role-holders" element={<RoleHoldersPage />} />
+            <Route path="rights-ledger" element={<RightsLedgerPage />} />
+            <Route path="template-engine" element={<TemplateEnginePage />} />
+            <Route path="formation-maintenance" element={<FormationMaintenancePage />} />
             <Route path="org-history" element={<OrganizationHistoryPage />} />
             <Route path="org-history/budgets/:budgetId" element={<OrganizationHistoryBudgetPage />} />
             <Route path="governance-registers" element={<GovernanceRegistersPage />} />
