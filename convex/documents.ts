@@ -724,9 +724,6 @@ Last review date: ${today}
 
 Next review date: [YYYY-MM-DD]
 
-## Source Notes
-
-This draft was prepared using public resources including BC PIPA, BC OIPC private-organization guidance, BC OIPC guidance on developing a privacy policy under PIPA, and BC OIPC PrivacyRight training.
 `;
 }
 

@@ -2716,6 +2716,7 @@ export default defineSchema({
     presenter: v.optional(v.string()),
     timeAllottedMinutes: v.optional(v.number()),
     motionTemplateId: v.optional(v.id("motionTemplates")),
+    motionBacklogId: v.optional(v.id("motionBacklog")),
     motionText: v.optional(v.string()),
     outcome: v.optional(v.string()), // carried | defeated | tabled | deferred
     resolutionId: v.optional(v.id("writtenResolutions")),
@@ -2737,6 +2738,29 @@ export default defineSchema({
   })
     .index("by_society", ["societyId"])
     .index("by_society_category", ["societyId", "category"]),
+
+  motionBacklog: defineTable({
+    societyId: v.id("societies"),
+    title: v.string(),
+    motionText: v.string(),
+    category: v.string(), // privacy | governance | finance | membership | operations | bylaws | other
+    status: v.string(), // Backlog | Agenda | MinutesDraft | Adopted | Deferred | Archived
+    priority: v.optional(v.string()), // high | normal | low
+    source: v.optional(v.string()), // pipa-setup | manual | imported
+    seededKey: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    targetMeetingId: v.optional(v.id("meetings")),
+    agendaId: v.optional(v.id("agendas")),
+    agendaItemId: v.optional(v.id("agendaItems")),
+    minutesId: v.optional(v.id("minutes")),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_society_seeded", ["societyId", "seededKey"])
+    .index("by_agenda", ["agendaId"])
+    .index("by_meeting", ["targetMeetingId"]),
 
   minuteBookItems: defineTable({
     societyId: v.id("societies"),

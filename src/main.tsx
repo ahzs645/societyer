@@ -55,6 +55,7 @@ const UsersPage = React.lazy(() => import("./pages/Users").then((m) => ({ defaul
 const AuditLogPage = React.lazy(() => import("./pages/AuditLog").then((m) => ({ default: m.AuditLogPage })));
 const ExportsPage = React.lazy(() => import("./pages/Exports").then((m) => ({ default: m.ExportsPage })));
 const AgendaBuilderPage = React.lazy(() => import("./pages/AgendaBuilder").then((m) => ({ default: m.AgendaBuilderPage })));
+const MotionBacklogPage = React.lazy(() => import("./pages/MotionBacklog").then((m) => ({ default: m.MotionBacklogPage })));
 const MotionLibraryPage = React.lazy(() => import("./pages/MotionLibrary").then((m) => ({ default: m.MotionLibraryPage })));
 const TreasurerPage = React.lazy(() => import("./pages/Treasurer").then((m) => ({ default: m.TreasurerPage })));
 const MembershipPage = React.lazy(() => import("./pages/Membership").then((m) => ({ default: m.MembershipPage })));
@@ -270,6 +271,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="audit" element={<AuditLogPage />} />
             <Route path="exports" element={<ExportsPage />} />
             <Route path="agendas" element={<AgendaBuilderPage />} />
+            <Route path="motion-backlog" element={<MotionBacklogPage />} />
             <Route path="motion-library" element={<MotionLibraryPage />} />
             <Route path="treasurer" element={<TreasurerPage />} />
             <Route

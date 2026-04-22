@@ -40,6 +40,21 @@ const SECTION_RECORD_KINDS = [
   "policy",
   "workflowPackage",
   "minuteBookItem",
+  "roleHolder",
+  "rightsClass",
+  "rightsholdingTransfer",
+  "legalTemplateDataField",
+  "legalTemplate",
+  "legalPrecedent",
+  "legalPrecedentRun",
+  "generatedLegalDocument",
+  "legalSigner",
+  "formationRecord",
+  "nameSearchItem",
+  "entityAmendment",
+  "annualMaintenanceRecord",
+  "jurisdictionMetadata",
+  "supportLog",
   "sourceEvidence",
   "secretVaultItem",
   "pipaTraining",
@@ -1429,6 +1444,422 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
     });
   }
 
+  if (record.recordKind === "roleHolder") {
+    return await ctx.db.insert("roleHolders", {
+      societyId,
+      roleType: cleanText(payload.roleType) || cleanText(payload.type) || cleanText(payload.role) || "authorized_representative",
+      status: cleanText(payload.status) || "needs_review",
+      fullName: cleanText(payload.fullName) || cleanText(payload.name) || [payload.firstName, payload.lastName].map(cleanText).filter(Boolean).join(" ") || "Imported role holder",
+      firstName: cleanText(payload.firstName),
+      middleName: cleanText(payload.middleName),
+      lastName: cleanText(payload.lastName),
+      email: cleanText(payload.email),
+      phone: cleanText(payload.phone),
+      signerTag: cleanText(payload.signerTag),
+      membershipId: cleanText(payload.membershipId),
+      membershipClassName: cleanText(payload.membershipClassName) || cleanText(payload.membershipClass),
+      membershipClassId: cleanText(payload.membershipClassId) as any,
+      officerTitle: cleanText(payload.officerTitle) || cleanText(payload.title),
+      directorTerm: cleanText(payload.directorTerm) || cleanText(payload.term),
+      startDate: cleanDate(payload.startDate),
+      endDate: cleanDate(payload.endDate),
+      referenceDate: cleanDate(payload.referenceDate),
+      street: cleanText(payload.street) || cleanText(payload.address),
+      unit: cleanText(payload.unit),
+      city: cleanText(payload.city),
+      provinceState: cleanText(payload.provinceState) || cleanText(payload.province),
+      postalCode: cleanText(payload.postalCode),
+      country: cleanText(payload.country),
+      alternateStreet: cleanText(payload.alternateStreet) || cleanText(payload.alternateAddress),
+      alternateUnit: cleanText(payload.alternateUnit),
+      alternateCity: cleanText(payload.alternateCity),
+      alternateProvinceState: cleanText(payload.alternateProvinceState) || cleanText(payload.alternateProvince),
+      alternatePostalCode: cleanText(payload.alternatePostalCode),
+      alternateCountry: cleanText(payload.alternateCountry),
+      serviceStreet: cleanText(payload.serviceStreet) || cleanText(payload.serviceAddress),
+      serviceUnit: cleanText(payload.serviceUnit),
+      serviceCity: cleanText(payload.serviceCity),
+      serviceProvinceState: cleanText(payload.serviceProvinceState) || cleanText(payload.serviceProvince),
+      servicePostalCode: cleanText(payload.servicePostalCode),
+      serviceCountry: cleanText(payload.serviceCountry),
+      ageOver18: optionalBoolean(payload.ageOver18 ?? payload.age18OrGreater),
+      dateOfBirth: cleanDate(payload.dateOfBirth ?? payload.dob),
+      occupation: cleanText(payload.occupation),
+      citizenshipResidency: cleanText(payload.citizenshipResidency),
+      citizenshipCountries: arrayOf(payload.citizenshipCountries ?? payload.citizenship).map(String).map(cleanText).filter(Boolean),
+      taxResidenceCountries: arrayOf(payload.taxResidenceCountries ?? payload.taxResidence).map(String).map(cleanText).filter(Boolean),
+      nonNaturalPerson: optionalBoolean(payload.nonNaturalPerson),
+      nonNaturalPersonType: cleanText(payload.nonNaturalPersonType),
+      nonNaturalJurisdiction: cleanText(payload.nonNaturalJurisdiction),
+      natureOfControl: cleanText(payload.natureOfControl),
+      authorizedRepresentative: optionalBoolean(payload.authorizedRepresentative),
+      relatedRoleHolderId: cleanText(payload.relatedRoleHolderId) as any,
+      relatedShareholderIds: arrayOf(payload.relatedShareholderIds).map(String).map(cleanText).filter(Boolean),
+      controllingIndividualIds: arrayOf(payload.controllingIndividualIds).map(String).map(cleanText).filter(Boolean),
+      extraProvincialRegistrationId: cleanText(payload.extraProvincialRegistrationId) as any,
+      sourceDocumentIds,
+      sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
+      notes: sourceNote,
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "rightsClass") {
+    return await ctx.db.insert("rightsClasses", {
+      societyId,
+      className: cleanText(payload.className) || cleanText(payload.name) || cleanText(payload.rightsClassName) || "Imported rights class",
+      classType: cleanText(payload.classType) || cleanText(payload.type) || "membership",
+      status: cleanText(payload.status) || "needs_review",
+      idPrefix: cleanText(payload.idPrefix),
+      highestAssignedNumber: numberOrUndefined(payload.highestAssignedNumber),
+      votingRights: cleanText(payload.votingRights),
+      startDate: cleanDate(payload.startDate),
+      endDate: cleanDate(payload.endDate),
+      conditionsToHold: cleanText(payload.conditionsToHold),
+      conditionsToTransfer: cleanText(payload.conditionsToTransfer),
+      conditionsForRemoval: cleanText(payload.conditionsForRemoval ?? payload.conditionsToRemove),
+      otherProvisions: cleanText(payload.otherProvisions),
+      sourceDocumentIds,
+      sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
+      notes: sourceNote,
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "rightsholdingTransfer") {
+    return await ctx.db.insert("rightsholdingTransfers", {
+      societyId,
+      transferType: cleanText(payload.transferType) || cleanText(payload.type) || "transfer",
+      status: cleanText(payload.status) || "needs_review",
+      transferDate: cleanDate(payload.transferDate) || cleanDate(payload.date),
+      eventId: cleanText(payload.eventId) || cleanText(payload.relatedEventId),
+      precedentRunId: cleanText(payload.precedentRunId) as any,
+      rightsClassId: cleanText(payload.rightsClassId) as any,
+      sourceRoleHolderId: cleanText(payload.sourceRoleHolderId) as any,
+      destinationRoleHolderId: cleanText(payload.destinationRoleHolderId) as any,
+      sourceHolderName: cleanText(payload.sourceHolderName) || cleanText(payload.sourceShareholder),
+      destinationHolderName: cleanText(payload.destinationHolderName) || cleanText(payload.destinationShareholder),
+      quantity: numberOrUndefined(payload.quantity),
+      considerationType: cleanText(payload.considerationType),
+      considerationDescription: cleanText(payload.considerationDescription),
+      priceToOrganizationCents: numberOrUndefined(payload.priceToOrganizationCents ?? payload.priceToCorpCents),
+      priceToOrganizationCurrency: cleanText(payload.priceToOrganizationCurrency ?? payload.priceToCorpCurrency),
+      priceToVendorCents: numberOrUndefined(payload.priceToVendorCents),
+      priceToVendorCurrency: cleanText(payload.priceToVendorCurrency),
+      sourceDocumentIds,
+      sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
+      notes: sourceNote,
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "legalTemplateDataField") {
+    return await ctx.db.insert("legalTemplateDataFields", {
+      societyId,
+      name: cleanText(payload.name) || cleanText(payload.fieldName) || "Imported data field",
+      label: cleanText(payload.label),
+      fieldType: cleanText(payload.fieldType) || cleanText(payload.type),
+      number: numberOrUndefined(payload.number),
+      dynamicIndicator: cleanText(payload.dynamicIndicator),
+      required: optionalBoolean(payload.required),
+      reviewRequired: optionalBoolean(payload.reviewRequired),
+      notes: sourceNote,
+      sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "legalTemplate") {
+    return await ctx.db.insert("legalTemplates", {
+      societyId,
+      templateType: cleanText(payload.templateType) || cleanText(payload.type) || "document",
+      name: cleanText(payload.name) || cleanText(payload.templateName) || record.title || "Imported template",
+      status: cleanText(payload.status) || "needs_review",
+      templateDocumentId: cleanText(payload.templateDocumentId) as any,
+      docxDocumentId: cleanText(payload.docxDocumentId) as any,
+      pdfDocumentId: cleanText(payload.pdfDocumentId) as any,
+      html: cleanText(payload.html),
+      notes: sourceNote,
+      owner: cleanText(payload.owner),
+      ownerIsTobuso: optionalBoolean(payload.ownerIsTobuso),
+      signatureRequired: optionalBoolean(payload.signatureRequired),
+      documentTag: cleanText(payload.documentTag),
+      entityTypes: arrayOf(payload.entityTypes).map(String).map(cleanText).filter(Boolean),
+      jurisdictions: arrayOf(payload.jurisdictions).map(String).map(cleanText).filter(Boolean),
+      requiredSigners: arrayOf(payload.requiredSigners).map(String).map(cleanText).filter(Boolean),
+      requiredDataFieldIds: arrayOf(payload.requiredDataFieldIds).map(String).map(cleanText).filter(Boolean) as any,
+      optionalDataFieldIds: arrayOf(payload.optionalDataFieldIds).map(String).map(cleanText).filter(Boolean) as any,
+      reviewDataFieldIds: arrayOf(payload.reviewDataFieldIds).map(String).map(cleanText).filter(Boolean) as any,
+      requiredDataFields: arrayOf(payload.requiredDataFields).map(String).map(cleanText).filter(Boolean),
+      optionalDataFields: arrayOf(payload.optionalDataFields).map(String).map(cleanText).filter(Boolean),
+      reviewDataFields: arrayOf(payload.reviewDataFields).map(String).map(cleanText).filter(Boolean),
+      timeline: cleanText(payload.timeline),
+      deliverable: cleanText(payload.deliverable),
+      terms: cleanText(payload.terms),
+      filingType: cleanText(payload.filingType),
+      priceItems: arrayOf(payload.priceItems).map(String).map(cleanText).filter(Boolean),
+      sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "legalPrecedent") {
+    return await ctx.db.insert("legalPrecedents", {
+      societyId,
+      packageName: cleanText(payload.packageName) || cleanText(payload.name) || record.title || "Imported precedent",
+      partType: cleanText(payload.partType),
+      status: cleanText(payload.status) || "needs_review",
+      description: cleanText(payload.description),
+      shortDescription: cleanText(payload.shortDescription),
+      timeline: cleanText(payload.timeline),
+      deliverables: cleanText(payload.deliverables),
+      internalNotes: cleanText(payload.internalNotes),
+      addOnTerms: cleanText(payload.addOnTerms),
+      templateIds: arrayOf(payload.templateIds).map(String).map(cleanText).filter(Boolean) as any,
+      templateNames: arrayOf(payload.templateNames ?? payload.templates).map(String).map(cleanText).filter(Boolean),
+      templateFilingNames: arrayOf(payload.templateFilingNames).map(String).map(cleanText).filter(Boolean),
+      templateSearchNames: arrayOf(payload.templateSearchNames).map(String).map(cleanText).filter(Boolean),
+      templateRegistrationNames: arrayOf(payload.templateRegistrationNames).map(String).map(cleanText).filter(Boolean),
+      requiresAmendmentRecord: optionalBoolean(payload.requiresAmendmentRecord),
+      requiresAnnualMaintenanceRecord: optionalBoolean(payload.requiresAnnualMaintenanceRecord),
+      priceItems: arrayOf(payload.priceItems).map(String).map(cleanText).filter(Boolean),
+      entityTypes: arrayOf(payload.entityTypes).map(String).map(cleanText).filter(Boolean),
+      jurisdictions: arrayOf(payload.jurisdictions).map(String).map(cleanText).filter(Boolean),
+      subloopPairs: arrayOf(payload.subloopPairs),
+      sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "legalPrecedentRun") {
+    return await ctx.db.insert("legalPrecedentRuns", {
+      societyId,
+      name: cleanText(payload.name) || cleanText(payload.partName) || record.title || "Imported package run",
+      status: cleanText(payload.status) || "needs_review",
+      precedentId: cleanText(payload.precedentId) as any,
+      eventId: cleanText(payload.eventId) || cleanText(payload.relatedEventId),
+      dateTime: cleanDateTime(payload.dateTime) || cleanDateTime(payload.createdAtISO),
+      dataJson: typeof payload.dataJson === "string" ? payload.dataJson : payload.dataJson != null ? JSON.stringify(payload.dataJson) : undefined,
+      dataJsonList: arrayOf(payload.dataJsonList),
+      dataReviewed: optionalBoolean(payload.dataReviewed),
+      externalNotes: cleanText(payload.externalNotes),
+      searchIds: arrayOf(payload.searchIds).map(String).map(cleanText).filter(Boolean),
+      registrationIds: arrayOf(payload.registrationIds).map(String).map(cleanText).filter(Boolean),
+      filingIds: arrayOf(payload.filingIds).map(String).map(cleanText).filter(Boolean) as any,
+      generatedDocumentIds: arrayOf(payload.generatedDocumentIds).map(String).map(cleanText).filter(Boolean) as any,
+      signerRoleHolderIds: arrayOf(payload.signerRoleHolderIds).map(String).map(cleanText).filter(Boolean) as any,
+      priceItems: arrayOf(payload.priceItems).map(String).map(cleanText).filter(Boolean),
+      abstainingDirectorIds: arrayOf(payload.abstainingDirectorIds).map(String).map(cleanText).filter(Boolean),
+      abstainingRightsholderIds: arrayOf(payload.abstainingRightsholderIds).map(String).map(cleanText).filter(Boolean),
+      sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
+      notes: sourceNote,
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "generatedLegalDocument") {
+    return await ctx.db.insert("generatedLegalDocuments", {
+      societyId,
+      title: cleanText(payload.title) || cleanText(payload.documentName) || record.title || "Imported generated document",
+      status: cleanText(payload.status) || "needs_review",
+      draftDocumentId: cleanText(payload.draftDocumentId) as any,
+      signedDocumentId: cleanText(payload.signedDocumentId) as any,
+      draftFileUrl: cleanText(payload.draftFileUrl) || cleanText(payload.draftUrl),
+      sourceTemplateId: cleanText(payload.sourceTemplateId) as any,
+      sourceTemplateName: cleanText(payload.sourceTemplateName),
+      precedentRunId: cleanText(payload.precedentRunId) as any,
+      eventId: cleanText(payload.eventId) || cleanText(payload.relatedEventId),
+      effectiveDate: cleanDate(payload.effectiveDate),
+      documentTag: cleanText(payload.documentTag),
+      dataJson: typeof payload.dataJson === "string" ? payload.dataJson : payload.dataJson != null ? JSON.stringify(payload.dataJson) : undefined,
+      subloopJsonList: arrayOf(payload.subloopJsonList ?? payload.subloops),
+      syngrafiiFileId: cleanText(payload.syngrafiiFileId),
+      syngrafiiDocumentId: cleanText(payload.syngrafiiDocumentId),
+      syngrafiiPackageId: cleanText(payload.syngrafiiPackageId),
+      signersRequiredRoleHolderIds: arrayOf(payload.signersRequiredRoleHolderIds).map(String).map(cleanText).filter(Boolean) as any,
+      signersWhoSignedIds: arrayOf(payload.signersWhoSignedIds).map(String).map(cleanText).filter(Boolean) as any,
+      signerTagsRequired: arrayOf(payload.signerTagsRequired ?? payload.signersRequired).map(String).map(cleanText).filter(Boolean),
+      signerTagsSigned: arrayOf(payload.signerTagsSigned ?? payload.signersWhoSigned).map(String).map(cleanText).filter(Boolean),
+      sourceDocumentIds,
+      sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
+      notes: sourceNote,
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "legalSigner") {
+    return await ctx.db.insert("legalSigners", {
+      societyId,
+      status: cleanText(payload.status) || cleanText(payload.signerStatus) || "needs_review",
+      fullName: cleanText(payload.fullName) || cleanText(payload.name) || [payload.firstName, payload.lastName].map(cleanText).filter(Boolean).join(" ") || "Imported signer",
+      firstName: cleanText(payload.firstName),
+      lastName: cleanText(payload.lastName),
+      email: cleanText(payload.email),
+      phone: cleanText(payload.phone),
+      signerId: cleanText(payload.signerId),
+      signerTag: cleanText(payload.signerTag),
+      eventId: cleanText(payload.eventId) || cleanText(payload.relatedEventId),
+      generatedDocumentId: cleanText(payload.generatedDocumentId) as any,
+      roleHolderId: cleanText(payload.roleHolderId) as any,
+      sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
+      notes: sourceNote,
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "formationRecord") {
+    return await ctx.db.insert("formationRecords", {
+      societyId,
+      status: cleanText(payload.status) || "needs_review",
+      statusNumber: numberOrUndefined(payload.statusNumber),
+      logStartDate: cleanDate(payload.logStartDate),
+      nuansDate: cleanDate(payload.nuansDate),
+      nuansNumber: cleanText(payload.nuansNumber),
+      relatedUserId: cleanText(payload.relatedUserId) as any,
+      addressRental: optionalBoolean(payload.addressRental),
+      stepDataInput: cleanText(payload.stepDataInput),
+      assignedStaffIds: arrayOf(payload.assignedStaffIds).map(String).map(cleanText).filter(Boolean),
+      signingPackageIds: arrayOf(payload.signingPackageIds).map(String).map(cleanText).filter(Boolean),
+      articlesRestrictionOnActivities: cleanText(payload.articlesRestrictionOnActivities),
+      purposeStatement: cleanText(payload.purposeStatement),
+      additionalProvisions: cleanText(payload.additionalProvisions),
+      classesOfMembership: cleanText(payload.classesOfMembership),
+      distributionOfProperty: cleanText(payload.distributionOfProperty),
+      draftDocumentIds: arrayOf(payload.draftDocumentIds).map(String).map(cleanText).filter(Boolean) as any,
+      supportingDocumentIds: sourceDocumentIds,
+      relatedIncorporationEventId: cleanText(payload.relatedIncorporationEventId),
+      relatedOrganizingEventId: cleanText(payload.relatedOrganizingEventId),
+      priceItems: arrayOf(payload.priceItems).map(String).map(cleanText).filter(Boolean),
+      jurisdiction: cleanText(payload.jurisdiction),
+      extraProvincialRegistrationJurisdiction: cleanText(payload.extraProvincialRegistrationJurisdiction),
+      sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
+      notes: sourceNote,
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "nameSearchItem") {
+    return await ctx.db.insert("nameSearchItems", {
+      societyId,
+      formationRecordId: cleanText(payload.formationRecordId) as any,
+      name: cleanText(payload.name) || record.title || "Imported name search",
+      success: optionalBoolean(payload.success),
+      errors: arrayOf(payload.errors).map(String).map(cleanText).filter(Boolean),
+      reportUrl: cleanText(payload.reportUrl) || cleanText(payload.reportLink),
+      reportDocumentId: cleanText(payload.reportDocumentId) as any,
+      rank: numberOrUndefined(payload.rank),
+      expressService: optionalBoolean(payload.expressService),
+      descriptiveElement: cleanText(payload.descriptiveElement),
+      distinctiveElement: cleanText(payload.distinctiveElement),
+      nuansReportNumber: cleanText(payload.nuansReportNumber),
+      suffix: cleanText(payload.suffix),
+      sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
+      notes: sourceNote,
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "entityAmendment") {
+    return await ctx.db.insert("entityAmendments", {
+      societyId,
+      status: cleanText(payload.status) || "needs_review",
+      effectiveDate: cleanDate(payload.effectiveDate),
+      entityNameNew: cleanText(payload.entityNameNew) || cleanText(payload.newEntityName),
+      directorsMinimum: numberOrUndefined(payload.directorsMinimum),
+      directorsMaximum: numberOrUndefined(payload.directorsMaximum),
+      relatedPrecedentRunId: cleanText(payload.relatedPrecedentRunId) as any,
+      shareClassAmendmentText: cleanText(payload.shareClassAmendmentText),
+      jurisdictionNew: cleanText(payload.jurisdictionNew) || cleanText(payload.newJurisdiction),
+      sourceDocumentIds,
+      sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
+      notes: sourceNote,
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "annualMaintenanceRecord") {
+    return await ctx.db.insert("annualMaintenanceRecords", {
+      societyId,
+      status: cleanText(payload.status) || "needs_review",
+      yearFilingFor: cleanText(payload.yearFilingFor) || cleanText(payload.filingYear),
+      lastAgmDate: cleanDate(payload.lastAgmDate),
+      filingDate: cleanDate(payload.filingDate),
+      draftFilingDocumentId: cleanText(payload.draftFilingDocumentId) as any,
+      signedFilingDocumentId: cleanText(payload.signedFilingDocumentId) as any,
+      processedFilingDocumentId: cleanText(payload.processedFilingDocumentId) as any,
+      relatedPrecedentRunId: cleanText(payload.relatedPrecedentRunId) as any,
+      filingId: cleanText(payload.filingId) as any,
+      keyVaultItemId: cleanText(payload.keyVaultItemId) as any,
+      templateFilingId: cleanText(payload.templateFilingId) as any,
+      authorizingPhone: cleanText(payload.authorizingPhone),
+      authorizingRoleHolderId: cleanText(payload.authorizingRoleHolderId) as any,
+      financialStatementsDocumentId: cleanText(payload.financialStatementsDocumentId) as any,
+      fiscalYearEndDate: cleanDate(payload.fiscalYearEndDate),
+      incomeTaxReturnDate: cleanDate(payload.incomeTaxReturnDate),
+      annualFinancialStatementType: cleanText(payload.annualFinancialStatementType),
+      financialStatementReportDate: cleanDate(payload.financialStatementReportDate),
+      financialStatementReportType: cleanText(payload.financialStatementReportType),
+      auditedFinancialStatements: optionalBoolean(payload.auditedFinancialStatements),
+      auditedFinancialStatementsNextYear: optionalBoolean(payload.auditedFinancialStatementsNextYear),
+      annualFinancialsEngagementLevel: cleanText(payload.annualFinancialsEngagementLevel),
+      annualFinancialStatementOption: cleanText(payload.annualFinancialStatementOption),
+      sourceDocumentIds,
+      sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
+      notes: sourceNote,
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "jurisdictionMetadata") {
+    return await ctx.db.insert("jurisdictionMetadata", {
+      jurisdiction: cleanText(payload.jurisdiction) || cleanText(payload.value) || "foreign",
+      label: cleanText(payload.label) || cleanText(payload.jurisdiction) || "Imported jurisdiction",
+      actFormedUnder: cleanText(payload.actFormedUnder),
+      nuansJurisdictionNumber: cleanText(payload.nuansJurisdictionNumber),
+      nuansReservationReportTypeId: cleanText(payload.nuansReservationReportTypeId),
+      incorporationServiceEligible: optionalBoolean(payload.incorporationServiceEligible),
+      sourceOptionId: cleanText(payload.sourceOptionId) || cleanText(payload.id),
+      notes: sourceNote,
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    });
+  }
+
+  if (record.recordKind === "supportLog") {
+    return await ctx.db.insert("supportLogs", {
+      societyId,
+      logType: cleanText(payload.logType) || cleanText(payload.type) || "edit",
+      severity: cleanText(payload.severity) || (cleanText(payload.errorMessage) ? "error" : "info"),
+      page: cleanText(payload.page),
+      pageLocationUrl: cleanText(payload.pageLocationUrl) || cleanText(payload.url),
+      userId: cleanText(payload.userId) as any,
+      relatedUserId: cleanText(payload.relatedUserId) as any,
+      relatedEventId: cleanText(payload.relatedEventId),
+      relatedEntityId: cleanText(payload.relatedEntityId) as any,
+      relatedSubscriptionId: cleanText(payload.relatedSubscriptionId),
+      relatedIncorporationId: cleanText(payload.relatedIncorporationId),
+      errorCode: cleanText(payload.errorCode),
+      errorMessage: cleanText(payload.errorMessage),
+      detailsHeading: cleanText(payload.detailsHeading),
+      detailsBody: cleanText(payload.detailsBody),
+      sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
+      createdAtISO: cleanDateTime(payload.createdAtISO) || new Date().toISOString(),
+    });
+  }
+
   if (record.recordKind === "sourceEvidence") {
     const externalId = cleanText(payload.externalId) || cleanText(payload.sourceExternalIds?.[0]);
     return await ctx.db.insert("sourceEvidence", {
@@ -1810,6 +2241,21 @@ async function importPromotionIssues(ctx: any, societyId: string, record: any) {
     "policy",
     "workflowPackage",
     "minuteBookItem",
+    "roleHolder",
+    "rightsClass",
+    "rightsholdingTransfer",
+    "legalTemplateDataField",
+    "legalTemplate",
+    "legalPrecedent",
+    "legalPrecedentRun",
+    "generatedLegalDocument",
+    "legalSigner",
+    "formationRecord",
+    "nameSearchItem",
+    "entityAmendment",
+    "annualMaintenanceRecord",
+    "jurisdictionMetadata",
+    "supportLog",
   ].includes(kind)) {
     return [];
   }
@@ -1896,6 +2342,156 @@ async function importPromotionIssues(ctx: any, societyId: string, record: any) {
     }
   }
 
+  if (kind === "roleHolder") {
+    if (!cleanText(payload.fullName) && !cleanText(payload.name) && !cleanText(payload.firstName) && !cleanText(payload.lastName)) {
+      issues.push("Role holder name is required.");
+    }
+    addIssue(issues, invalidOptionIssue("representativeTypes", payload.roleType ?? payload.type ?? payload.role, "Role-holder type", false));
+    addIssue(issues, invalidOptionIssue("roleHolderStatuses", payload.status, "Role-holder status"));
+    addIssue(issues, invalidOptionIssue("officerTitles", payload.officerTitle ?? payload.title, "Officer title"));
+    addIssue(issues, invalidOptionIssue("directorTerms", payload.directorTerm ?? payload.term, "Director term"));
+    addIssue(issues, invalidOptionIssue("citizenshipResidencies", payload.citizenshipResidency, "Citizenship/residency"));
+    const rows = await ctx.db.query("roleHolders").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.fullName ?? payload.name, payload.email, payload.roleType ?? payload.type ?? payload.role, payload.startDate]);
+    if (key && rows.some((row: any) => compactKey([row.fullName, row.email, row.roleType, row.startDate]) === key)) {
+      issues.push("Duplicate role holder already exists.");
+    }
+  }
+
+  if (kind === "rightsClass") {
+    if (!cleanText(payload.className) && !cleanText(payload.name) && !cleanText(payload.rightsClassName)) issues.push("Rights class name is required.");
+    addIssue(issues, invalidOptionIssue("rightsClassTypes", payload.classType ?? payload.type, "Rights class type", false));
+    addIssue(issues, invalidOptionIssue("rightsClassStatuses", payload.status, "Rights class status"));
+    const rows = await ctx.db.query("rightsClasses").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.className ?? payload.name ?? payload.rightsClassName, payload.classType ?? payload.type]);
+    if (key && rows.some((row: any) => compactKey([row.className, row.classType]) === key)) issues.push("Duplicate rights class already exists.");
+  }
+
+  if (kind === "rightsholdingTransfer") {
+    addIssue(issues, invalidOptionIssue("rightsholdingTransferTypes", payload.transferType ?? payload.type, "Rights transfer type", false));
+    addIssue(issues, invalidOptionIssue("rightsholdingTransferStatuses", payload.status, "Rights transfer status"));
+    addIssue(issues, invalidOptionIssue("currencies", payload.priceToOrganizationCurrency ?? payload.priceToCorpCurrency, "Organization consideration currency"));
+    addIssue(issues, invalidOptionIssue("currencies", payload.priceToVendorCurrency, "Vendor consideration currency"));
+    const rows = await ctx.db.query("rightsholdingTransfers").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.transferDate ?? payload.date, payload.rightsClassId ?? payload.rightsClassName, payload.sourceHolderName, payload.destinationHolderName, payload.quantity]);
+    if (key && rows.some((row: any) => compactKey([row.transferDate, row.rightsClassId, row.sourceHolderName, row.destinationHolderName, row.quantity]) === key)) {
+      issues.push("Duplicate rightsholding transfer already exists.");
+    }
+  }
+
+  if (kind === "legalTemplateDataField") {
+    if (!cleanText(payload.name) && !cleanText(payload.fieldName)) issues.push("Template data field name is required.");
+    const rows = await ctx.db.query("legalTemplateDataFields").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.name ?? payload.fieldName]);
+    if (key && rows.some((row: any) => compactKey([row.name]) === key)) issues.push("Duplicate template data field already exists.");
+  }
+
+  if (kind === "legalTemplate") {
+    if (!cleanText(payload.name) && !cleanText(payload.templateName)) issues.push("Template name is required.");
+    addIssue(issues, invalidOptionIssue("templateTypes", payload.templateType ?? payload.type, "Template type", false));
+    addIssue(issues, invalidOptionIssue("templateStatuses", payload.status, "Template status"));
+    addIssue(issues, invalidOptionIssue("documentTags", payload.documentTag, "Document tag"));
+    addIssue(issues, invalidOptionIssue("filingTypes", payload.filingType, "Filing type"));
+    issues.push(...invalidOptionListIssues("requiredSigners", payload.requiredSigners, "Required signers"));
+    issues.push(...invalidOptionListIssues("entityJurisdictions", payload.jurisdictions, "Jurisdictions"));
+    issues.push(...invalidOptionListIssues("entityTypes", payload.entityTypes, "Entity types"));
+    const rows = await ctx.db.query("legalTemplates").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.templateType ?? payload.type, payload.name ?? payload.templateName]);
+    if (key && rows.some((row: any) => compactKey([row.templateType, row.name]) === key)) issues.push("Duplicate legal template already exists.");
+  }
+
+  if (kind === "legalPrecedent") {
+    if (!cleanText(payload.packageName) && !cleanText(payload.name)) issues.push("Precedent package name is required.");
+    addIssue(issues, invalidOptionIssue("precedentStatuses", payload.status, "Precedent status"));
+    addIssue(issues, invalidOptionIssue("partTypes", payload.partType, "Part type"));
+    const rows = await ctx.db.query("legalPrecedents").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.packageName ?? payload.name, payload.partType]);
+    if (key && rows.some((row: any) => compactKey([row.packageName, row.partType]) === key)) issues.push("Duplicate legal precedent already exists.");
+  }
+
+  if (kind === "legalPrecedentRun") {
+    if (!cleanText(payload.name) && !cleanText(payload.partName)) issues.push("Precedent run name is required.");
+    addIssue(issues, invalidOptionIssue("precedentRunStatuses", payload.status, "Precedent run status"));
+    const rows = await ctx.db.query("legalPrecedentRuns").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.name ?? payload.partName, payload.eventId ?? payload.relatedEventId, payload.dateTime]);
+    if (key && rows.some((row: any) => compactKey([row.name, row.eventId, row.dateTime]) === key)) issues.push("Duplicate legal precedent run already exists.");
+  }
+
+  if (kind === "generatedLegalDocument") {
+    if (!cleanText(payload.title) && !cleanText(payload.documentName)) issues.push("Generated document title is required.");
+    addIssue(issues, invalidOptionIssue("generatedDocumentStatuses", payload.status, "Generated document status"));
+    addIssue(issues, invalidOptionIssue("documentTags", payload.documentTag, "Generated document tag"));
+    const rows = await ctx.db.query("generatedLegalDocuments").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.title ?? payload.documentName, payload.syngrafiiDocumentId, payload.effectiveDate]);
+    if (key && rows.some((row: any) => compactKey([row.title, row.syngrafiiDocumentId, row.effectiveDate]) === key)) {
+      issues.push("Duplicate generated legal document already exists.");
+    }
+  }
+
+  if (kind === "legalSigner") {
+    if (!cleanText(payload.fullName) && !cleanText(payload.name) && !cleanText(payload.email)) issues.push("Signer name or email is required.");
+    addIssue(issues, invalidOptionIssue("signerStatuses", payload.status ?? payload.signerStatus, "Signer status"));
+    const rows = await ctx.db.query("legalSigners").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.email, payload.signerId, payload.signerTag]);
+    if (key && rows.some((row: any) => compactKey([row.email, row.signerId, row.signerTag]) === key)) issues.push("Duplicate legal signer already exists.");
+  }
+
+  if (kind === "formationRecord") {
+    addIssue(issues, invalidOptionIssue("formationStatuses", payload.status, "Formation status"));
+    addIssue(issues, invalidOptionIssue("entityJurisdictions", payload.jurisdiction, "Formation jurisdiction"));
+    addIssue(issues, invalidOptionIssue("entityJurisdictions", payload.extraProvincialRegistrationJurisdiction, "Extra-provincial registration jurisdiction"));
+    const rows = await ctx.db.query("formationRecords").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.nuansNumber, payload.jurisdiction, payload.relatedIncorporationEventId]);
+    if (key && rows.some((row: any) => compactKey([row.nuansNumber, row.jurisdiction, row.relatedIncorporationEventId]) === key)) {
+      issues.push("Duplicate formation record already exists.");
+    }
+  }
+
+  if (kind === "nameSearchItem") {
+    if (!cleanText(payload.name)) issues.push("Name search name is required.");
+    addIssue(issues, invalidOptionIssue("suffixCompanyNames", payload.suffix, "Name suffix"));
+    const rows = await ctx.db.query("nameSearchItems").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.name, payload.nuansReportNumber, payload.rank]);
+    if (key && rows.some((row: any) => compactKey([row.name, row.nuansReportNumber, row.rank]) === key)) issues.push("Duplicate name search item already exists.");
+  }
+
+  if (kind === "entityAmendment") {
+    addIssue(issues, invalidOptionIssue("amendmentStatuses", payload.status, "Amendment status"));
+    addIssue(issues, invalidOptionIssue("entityJurisdictions", payload.jurisdictionNew ?? payload.newJurisdiction, "New jurisdiction"));
+    const rows = await ctx.db.query("entityAmendments").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.entityNameNew ?? payload.newEntityName, payload.effectiveDate, payload.jurisdictionNew ?? payload.newJurisdiction]);
+    if (key && rows.some((row: any) => compactKey([row.entityNameNew, row.effectiveDate, row.jurisdictionNew]) === key)) issues.push("Duplicate entity amendment already exists.");
+  }
+
+  if (kind === "annualMaintenanceRecord") {
+    addIssue(issues, invalidOptionIssue("annualMaintenanceStatuses", payload.status, "Annual maintenance status"));
+    addIssue(issues, invalidOptionIssue("annualFinancialStatementOptions", payload.annualFinancialStatementOption, "Annual financial statement option"));
+    const rows = await ctx.db.query("annualMaintenanceRecords").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.yearFilingFor ?? payload.filingYear, payload.filingDate, payload.lastAgmDate]);
+    if (key && rows.some((row: any) => compactKey([row.yearFilingFor, row.filingDate, row.lastAgmDate]) === key)) {
+      issues.push("Duplicate annual maintenance record already exists.");
+    }
+  }
+
+  if (kind === "jurisdictionMetadata") {
+    if (!cleanText(payload.jurisdiction) && !cleanText(payload.value)) issues.push("Jurisdiction value is required.");
+    addIssue(issues, invalidOptionIssue("entityJurisdictions", payload.jurisdiction ?? payload.value, "Jurisdiction", false));
+    addIssue(issues, invalidOptionIssue("actsFormedUnder", payload.actFormedUnder, "Act formed under"));
+    const rows = await ctx.db.query("jurisdictionMetadata").collect();
+    const key = compactKey([payload.jurisdiction ?? payload.value]);
+    if (key && rows.some((row: any) => compactKey([row.jurisdiction]) === key)) issues.push("Duplicate jurisdiction metadata already exists.");
+  }
+
+  if (kind === "supportLog") {
+    addIssue(issues, invalidOptionIssue("logTypes", payload.logType ?? payload.type, "Log type", false));
+    addIssue(issues, invalidOptionIssue("logSeverities", payload.severity, "Log severity"));
+    const rows = await ctx.db.query("supportLogs").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const key = compactKey([payload.createdAtISO, payload.logType ?? payload.type, payload.errorCode, payload.errorMessage, payload.pageLocationUrl ?? payload.url]);
+    if (key && rows.some((row: any) => compactKey([row.createdAtISO, row.logType, row.errorCode, row.errorMessage, row.pageLocationUrl]) === key)) {
+      issues.push("Duplicate support log already exists.");
+    }
+  }
+
   return unique(issues);
 }
 
@@ -1954,6 +2550,21 @@ function recordsFromBundle(bundle: any) {
   for (const policy of arrayOf(bundle?.policies)) records.push(makeRecord("policy", "policies", policy));
   for (const workflowPackage of arrayOf(bundle?.workflowPackages)) records.push(makeRecord("workflowPackage", "workflowPackages", workflowPackage));
   for (const item of arrayOf(bundle?.minuteBookItems)) records.push(makeRecord("minuteBookItem", "minuteBookItems", item));
+  for (const holder of arrayOf(bundle?.roleHolders ?? bundle?.representatives)) records.push(makeRecord("roleHolder", "roleHolders", holder));
+  for (const rightsClass of arrayOf(bundle?.rightsClasses ?? bundle?.shareClasses)) records.push(makeRecord("rightsClass", "rightsClasses", rightsClass));
+  for (const transfer of arrayOf(bundle?.rightsholdingTransfers ?? bundle?.shareTransfers)) records.push(makeRecord("rightsholdingTransfer", "rightsholdingTransfers", transfer));
+  for (const field of arrayOf(bundle?.legalTemplateDataFields ?? bundle?.dataFields)) records.push(makeRecord("legalTemplateDataField", "legalTemplateDataFields", field));
+  for (const template of arrayOf(bundle?.legalTemplates ?? bundle?.templates)) records.push(makeRecord("legalTemplate", "legalTemplates", template));
+  for (const precedent of arrayOf(bundle?.legalPrecedents ?? bundle?.parts ?? bundle?.partPrecedents)) records.push(makeRecord("legalPrecedent", "legalPrecedents", precedent));
+  for (const run of arrayOf(bundle?.legalPrecedentRuns ?? bundle?.partRuns)) records.push(makeRecord("legalPrecedentRun", "legalPrecedentRuns", run));
+  for (const doc of arrayOf(bundle?.generatedLegalDocuments ?? bundle?.draftDocuments)) records.push(makeRecord("generatedLegalDocument", "generatedLegalDocuments", doc));
+  for (const signer of arrayOf(bundle?.legalSigners ?? bundle?.signers)) records.push(makeRecord("legalSigner", "legalSigners", signer));
+  for (const formation of arrayOf(bundle?.formationRecords ?? bundle?.incorporations)) records.push(makeRecord("formationRecord", "formationRecords", formation));
+  for (const search of arrayOf(bundle?.nameSearchItems ?? bundle?.nameSearches)) records.push(makeRecord("nameSearchItem", "nameSearchItems", search));
+  for (const amendment of arrayOf(bundle?.entityAmendments ?? bundle?.amendments)) records.push(makeRecord("entityAmendment", "entityAmendments", amendment));
+  for (const annual of arrayOf(bundle?.annualMaintenanceRecords ?? bundle?.annualGeneralMeetings)) records.push(makeRecord("annualMaintenanceRecord", "annualMaintenanceRecords", annual));
+  for (const jurisdiction of arrayOf(bundle?.jurisdictionMetadata)) records.push(makeRecord("jurisdictionMetadata", "jurisdictionMetadata", jurisdiction));
+  for (const log of arrayOf(bundle?.supportLogs ?? bundle?.logs)) records.push(makeRecord("supportLog", "supportLogs", log));
   for (const evidence of arrayOf(bundle?.sourceEvidence)) records.push(makeRecord("sourceEvidence", "sourceEvidence", evidence));
   for (const secret of arrayOf(bundle?.secretVaultItems)) records.push(makeRecord("secretVaultItem", "secrets", secret));
   for (const training of arrayOf(bundle?.pipaTrainings)) records.push(makeRecord("pipaTraining", "pipaTraining", training));
@@ -2287,6 +2898,21 @@ function titleForRecord(recordKind: string, payload: any) {
   if (recordKind === "policy") return cleanText(payload?.policyName) || cleanText(payload?.name) || "Policy";
   if (recordKind === "workflowPackage") return cleanText(payload?.packageName) || cleanText(payload?.eventType) || "Workflow package";
   if (recordKind === "minuteBookItem") return cleanText(payload?.title) || cleanText(payload?.recordType) || "Minute book record";
+  if (recordKind === "roleHolder") return cleanText(payload?.fullName) || cleanText(payload?.name) || [payload?.firstName, payload?.lastName].map(cleanText).filter(Boolean).join(" ") || "Role holder";
+  if (recordKind === "rightsClass") return cleanText(payload?.className) || cleanText(payload?.rightsClassName) || cleanText(payload?.name) || "Rights class";
+  if (recordKind === "rightsholdingTransfer") return cleanText(payload?.title) || cleanText(payload?.transferType) || "Rightsholding transfer";
+  if (recordKind === "legalTemplateDataField") return cleanText(payload?.name) || cleanText(payload?.fieldName) || "Template data field";
+  if (recordKind === "legalTemplate") return cleanText(payload?.name) || cleanText(payload?.templateName) || "Legal template";
+  if (recordKind === "legalPrecedent") return cleanText(payload?.packageName) || cleanText(payload?.name) || "Legal precedent";
+  if (recordKind === "legalPrecedentRun") return cleanText(payload?.name) || cleanText(payload?.partName) || "Legal package run";
+  if (recordKind === "generatedLegalDocument") return cleanText(payload?.title) || cleanText(payload?.documentName) || "Generated legal document";
+  if (recordKind === "legalSigner") return cleanText(payload?.fullName) || cleanText(payload?.name) || cleanText(payload?.email) || "Legal signer";
+  if (recordKind === "formationRecord") return cleanText(payload?.nuansNumber) || cleanText(payload?.jurisdiction) || "Formation record";
+  if (recordKind === "nameSearchItem") return cleanText(payload?.name) || cleanText(payload?.nuansReportNumber) || "Name search";
+  if (recordKind === "entityAmendment") return cleanText(payload?.entityNameNew) || cleanText(payload?.newEntityName) || "Entity amendment";
+  if (recordKind === "annualMaintenanceRecord") return cleanText(payload?.yearFilingFor) || cleanText(payload?.filingYear) || "Annual maintenance";
+  if (recordKind === "jurisdictionMetadata") return cleanText(payload?.label) || cleanText(payload?.jurisdiction) || cleanText(payload?.value) || "Jurisdiction metadata";
+  if (recordKind === "supportLog") return cleanText(payload?.detailsHeading) || cleanText(payload?.logType) || cleanText(payload?.type) || "Support log";
   if (recordKind === "sourceEvidence") return cleanText(payload?.sourceTitle) || cleanText(payload?.title) || "Source evidence";
   if (recordKind === "secretVaultItem") return cleanText(payload?.name) || cleanText(payload?.title) || cleanText(payload?.service) || "Access custody reference";
   if (recordKind === "pipaTraining") return cleanText(payload?.participantName) || cleanText(payload?.title) || "PIPA training";
@@ -2384,6 +3010,21 @@ function targetTableForRecordKind(kind: string) {
     policy: "policies",
     workflowPackage: "workflowPackages",
     minuteBookItem: "minuteBookItems",
+    roleHolder: "roleHolders",
+    rightsClass: "rightsClasses",
+    rightsholdingTransfer: "rightsholdingTransfers",
+    legalTemplateDataField: "legalTemplateDataFields",
+    legalTemplate: "legalTemplates",
+    legalPrecedent: "legalPrecedents",
+    legalPrecedentRun: "legalPrecedentRuns",
+    generatedLegalDocument: "generatedLegalDocuments",
+    legalSigner: "legalSigners",
+    formationRecord: "formationRecords",
+    nameSearchItem: "nameSearchItems",
+    entityAmendment: "entityAmendments",
+    annualMaintenanceRecord: "annualMaintenanceRecords",
+    jurisdictionMetadata: "jurisdictionMetadata",
+    supportLog: "supportLogs",
     secretVaultItem: "secretVaultItems",
     pipaTraining: "pipaTrainings",
     employee: "employees",
@@ -2569,7 +3210,29 @@ function riskFlagsFor(recordKind: string, targetModule: string, payload: any) {
 
 function staticValidationFlagsFor(recordKind: string, payload: any) {
   const flags: string[] = [];
-  if (["organizationAddress", "organizationRegistration", "organizationIdentifier", "policy", "workflowPackage", "minuteBookItem"].includes(recordKind)) {
+  if ([
+    "organizationAddress",
+    "organizationRegistration",
+    "organizationIdentifier",
+    "policy",
+    "workflowPackage",
+    "minuteBookItem",
+    "roleHolder",
+    "rightsClass",
+    "rightsholdingTransfer",
+    "legalTemplateDataField",
+    "legalTemplate",
+    "legalPrecedent",
+    "legalPrecedentRun",
+    "generatedLegalDocument",
+    "legalSigner",
+    "formationRecord",
+    "nameSearchItem",
+    "entityAmendment",
+    "annualMaintenanceRecord",
+    "jurisdictionMetadata",
+    "supportLog",
+  ].includes(recordKind)) {
     if (confidenceFor(payload) === "Review") flags.push("confidence");
   }
   if (recordKind === "organizationAddress" && (!cleanText(payload?.street) && !cleanText(payload?.address))) flags.push("validation");
@@ -2579,6 +3242,16 @@ function staticValidationFlagsFor(recordKind: string, payload: any) {
   if (recordKind === "policy" && !cleanText(payload?.policyName) && !cleanText(payload?.name)) flags.push("validation");
   if (recordKind === "workflowPackage" && (!cleanText(payload?.eventType) || (!cleanText(payload?.packageName) && !cleanText(payload?.package)))) flags.push("validation");
   if (recordKind === "minuteBookItem" && !cleanText(payload?.title)) flags.push("validation");
+  if (recordKind === "roleHolder" && !cleanText(payload?.fullName) && !cleanText(payload?.name) && !cleanText(payload?.firstName) && !cleanText(payload?.lastName)) flags.push("validation");
+  if (recordKind === "rightsClass" && !cleanText(payload?.className) && !cleanText(payload?.name) && !cleanText(payload?.rightsClassName)) flags.push("validation");
+  if (recordKind === "legalTemplateDataField" && !cleanText(payload?.name) && !cleanText(payload?.fieldName)) flags.push("validation");
+  if (recordKind === "legalTemplate" && !cleanText(payload?.name) && !cleanText(payload?.templateName)) flags.push("validation");
+  if (recordKind === "legalPrecedent" && !cleanText(payload?.packageName) && !cleanText(payload?.name)) flags.push("validation");
+  if (recordKind === "legalPrecedentRun" && !cleanText(payload?.name) && !cleanText(payload?.partName)) flags.push("validation");
+  if (recordKind === "generatedLegalDocument" && !cleanText(payload?.title) && !cleanText(payload?.documentName)) flags.push("validation");
+  if (recordKind === "legalSigner" && !cleanText(payload?.fullName) && !cleanText(payload?.name) && !cleanText(payload?.email)) flags.push("validation");
+  if (recordKind === "nameSearchItem" && !cleanText(payload?.name)) flags.push("validation");
+  if (recordKind === "jurisdictionMetadata" && !cleanText(payload?.jurisdiction) && !cleanText(payload?.value)) flags.push("validation");
   return flags;
 }
 

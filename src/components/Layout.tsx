@@ -180,6 +180,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/app/meetings", label: "Meetings", icon: Calendar, color: "orange" },
       { to: "/app/agendas", label: "Agendas", icon: ClipboardList, color: "orange" },
+      { to: "/app/motion-backlog", label: "Motion backlog", icon: ClipboardList, color: "orange" },
       { to: "/app/motion-library", label: "Motion library", icon: BookOpen, color: "purple" },
       { to: "/app/minutes", label: "Minutes", icon: FileText, color: "turquoise" },
       { to: "/app/meeting-evidence", label: "Meeting evidence", icon: ClipboardList, color: "orange" },

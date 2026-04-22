@@ -97,6 +97,7 @@ const NAV_ITEMS: CommandItem[] = [
   // Governance
   { id: "gov-meetings", label: "Meetings", to: "/app/meetings", icon: Calendar, category: "Governance" },
   { id: "gov-agendas", label: "Agendas", to: "/app/agendas", icon: ClipboardList, category: "Governance" },
+  { id: "gov-motion-backlog", label: "Motion backlog", to: "/app/motion-backlog", icon: ClipboardList, category: "Governance" },
   { id: "gov-motions", label: "Motion library", to: "/app/motion-library", icon: ClipboardList, category: "Governance" },
   { id: "gov-minutes", label: "Minutes", to: "/app/minutes", icon: FileText, category: "Governance" },
   { id: "gov-evidence", label: "Meeting evidence", to: "/app/meeting-evidence", icon: ClipboardList, category: "Governance" },

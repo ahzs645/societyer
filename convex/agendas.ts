@@ -92,6 +92,7 @@ export const addItem = mutation({
     presenter: v.optional(v.string()),
     timeAllottedMinutes: v.optional(v.number()),
     motionTemplateId: v.optional(v.id("motionTemplates")),
+    motionBacklogId: v.optional(v.id("motionBacklog")),
     motionText: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -126,6 +127,7 @@ export const addItem = mutation({
       presenter: args.presenter,
       timeAllottedMinutes: args.timeAllottedMinutes,
       motionTemplateId: args.motionTemplateId,
+      motionBacklogId: args.motionBacklogId,
       motionText,
       createdAtISO: now,
     });
@@ -155,6 +157,12 @@ export const removeItem = mutation({
   handler: async (ctx, { itemId }) => {
     const item = await ctx.db.get(itemId);
     if (!item) return;
+    if (item.motionBacklogId) {
+      await ctx.db.patch(item.motionBacklogId, {
+        status: "Backlog",
+        updatedAtISO: new Date().toISOString(),
+      });
+    }
     await ctx.db.delete(itemId);
     const siblings = await ctx.db
       .query("agendaItems")
