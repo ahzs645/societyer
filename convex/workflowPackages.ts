@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { assertAllowedOption } from "./lib/orgHubOptions";
 
 export const list = query({
   args: {
@@ -53,6 +54,8 @@ export const upsert = mutation({
     stripeCheckoutSessionId: v.optional(v.string()),
   },
   handler: async (ctx, { id, ...args }) => {
+    assertAllowedOption("eventTypes", args.eventType, "Event type", false);
+    assertAllowedOption("workflowPackageStatuses", args.status, "Workflow package status");
     const now = new Date().toISOString();
     const payload = {
       societyId: args.societyId,

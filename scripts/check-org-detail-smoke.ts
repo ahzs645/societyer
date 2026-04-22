@@ -29,6 +29,23 @@ const checks: Array<{ file: string; patterns: Array<string | RegExp> }> = [
       "importPromotionIssues",
       "patchRecordPromotionBlocked",
       "Promotion blocked:",
+      "invalidOptionIssue",
+      "invalidOptionListIssues",
+    ],
+  },
+  {
+    file: "convex/lib/orgHubOptions.ts",
+    patterns: [
+      "SOURCE_OPTION_VALUES",
+      "assertAllowedOption",
+      "invalidOptionIssue",
+      "invalidOptionListIssues",
+      "entityJurisdictions",
+      "actsFormedUnder",
+      "documentTags",
+      "requiredSigners",
+      "companyKeyTypes",
+      "officerTitles",
     ],
   },
   {
@@ -37,6 +54,8 @@ const checks: Array<{ file: string; patterns: Array<string | RegExp> }> = [
       "backfillFromExistingRecords",
       "minuteBookRecordTypeForDocument",
       "Backfilled from existing document category/tags.",
+      "assertAllowedOption(\"addressTypes\"",
+      "assertAllowedOption(\"taxNumberTypes\"",
     ],
   },
   {
@@ -48,6 +67,7 @@ const checks: Array<{ file: string; patterns: Array<string | RegExp> }> = [
       "open_filings",
       "unresolved_resolutions",
       "paper_archive_gap",
+      "assertAllowedOption(\"minuteBookRecordTypes\"",
     ],
   },
   {
@@ -59,6 +79,8 @@ const checks: Array<{ file: string; patterns: Array<string | RegExp> }> = [
       "createTransparencyDraft",
       "pipaTrainings",
       "documentVersions",
+      "invalidOptionListIssues(\"requiredSigners\"",
+      "assertAllowedOption(\"policyStatuses\"",
     ],
   },
   {
@@ -70,23 +92,39 @@ const checks: Array<{ file: string; patterns: Array<string | RegExp> }> = [
       "signerState",
       "paymentState",
       "openTaskCount",
+      "assertAllowedOption(\"eventTypes\"",
     ],
   },
   {
+    file: "src/lib/orgHubOptions.ts",
+    patterns: [
+      "ORG_HUB_OPTION_SETS",
+      "entityJurisdictions",
+      "actsFormedUnder",
+      "documentTags",
+      "requiredSigners",
+      "optionLabel",
+    ],
+  },
+  {
+    file: "src/components/OptionSelect.tsx",
+    patterns: ["OptionSelect", "OptionMultiSelect", "optionChoices"],
+  },
+  {
     file: "src/pages/OrganizationDetails.tsx",
-    patterns: ["backfillFromExistingRecords", "Backfill records"],
+    patterns: ["backfillFromExistingRecords", "Backfill records", "OptionSelect", "optionLabel(\"addressTypes\""],
   },
   {
     file: "src/pages/MinuteBook.tsx",
-    patterns: ["Completeness checks", "openCheckCount"],
+    patterns: ["Completeness checks", "openCheckCount", "OptionSelect", "optionLabel(\"minuteBookRecordTypes\""],
   },
   {
     file: "src/pages/Policies.tsx",
-    patterns: ["LifecycleBadges", "Review task", "Signer task", "Publish draft"],
+    patterns: ["LifecycleBadges", "Review task", "Signer task", "Publish draft", "OptionMultiSelect", "optionLabel(\"requiredSigners\""],
   },
   {
     file: "src/pages/WorkflowPackages.tsx",
-    patterns: ["PackageLifecycle", "Package task", "Package marked filed"],
+    patterns: ["PackageLifecycle", "Package task", "Package marked filed", "OptionSelect", "optionLabel(\"eventTypes\""],
   },
   {
     file: "src/pages/Tasks.tsx",

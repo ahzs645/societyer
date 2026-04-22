@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { assertAllowedOption } from "./lib/orgHubOptions";
 
 export const overview = query({
   args: { societyId: v.id("societies") },
@@ -83,6 +84,8 @@ export const upsert = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, { id, ...args }) => {
+    assertAllowedOption("minuteBookRecordTypes", args.recordType, "Minute-book record type", false);
+    assertAllowedOption("minuteBookStatuses", args.status, "Minute-book status");
     const now = new Date().toISOString();
     const payload = {
       societyId: args.societyId,

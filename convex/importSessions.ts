@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { invalidOptionIssue, invalidOptionListIssues } from "./lib/orgHubOptions";
 
 const SESSION_TAG = "import-session";
 const RECORD_TAG = "import-session-record";
@@ -1822,6 +1823,8 @@ async function importPromotionIssues(ctx: any, societyId: string, record: any) {
   if (kind === "organizationAddress") {
     if (!cleanText(payload.street) && !cleanText(payload.address)) issues.push("Address street/address is required.");
     if (!cleanText(payload.city)) issues.push("Address city is required.");
+    addIssue(issues, invalidOptionIssue("addressTypes", payload.type, "Address type", false));
+    addIssue(issues, invalidOptionIssue("addressStatuses", payload.status, "Address status"));
     const rows = await ctx.db.query("organizationAddresses").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
     const key = addressKey({
       type: cleanText(payload.type) || "other",
@@ -1836,6 +1839,8 @@ async function importPromotionIssues(ctx: any, societyId: string, record: any) {
 
   if (kind === "organizationRegistration") {
     if (!cleanText(payload.jurisdiction)) issues.push("Registration jurisdiction is required.");
+    addIssue(issues, invalidOptionIssue("entityJurisdictions", payload.jurisdiction, "Registration jurisdiction", false));
+    addIssue(issues, invalidOptionIssue("registrationStatuses", payload.status, "Registration status"));
     const rows = await ctx.db.query("organizationRegistrations").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
     const key = compactKey([payload.jurisdiction, payload.registrationNumber, payload.assumedName]);
     if (key && rows.some((row: any) => compactKey([row.jurisdiction, row.registrationNumber, row.assumedName]) === key)) {
@@ -1846,6 +1851,10 @@ async function importPromotionIssues(ctx: any, societyId: string, record: any) {
   if (kind === "organizationIdentifier") {
     if (!cleanText(payload.number)) issues.push("Identifier number is required.");
     if (!cleanText(payload.kind) && !cleanText(payload.type)) issues.push("Identifier kind is required.");
+    addIssue(issues, invalidOptionIssue("taxNumberTypes", payload.kind ?? payload.type, "Identifier kind", false));
+    addIssue(issues, invalidOptionIssue("entityJurisdictions", payload.jurisdiction, "Identifier jurisdiction"));
+    addIssue(issues, invalidOptionIssue("identifierStatuses", payload.status, "Identifier status"));
+    addIssue(issues, invalidOptionIssue("accessLevels", payload.accessLevel, "Identifier access level"));
     const rows = await ctx.db.query("organizationIdentifiers").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
     const key = compactKey([payload.kind ?? payload.type, payload.number, payload.jurisdiction, payload.foreignJurisdiction]);
     if (key && rows.some((row: any) => compactKey([row.kind, row.number, row.jurisdiction, row.foreignJurisdiction]) === key)) {
@@ -1855,6 +1864,10 @@ async function importPromotionIssues(ctx: any, societyId: string, record: any) {
 
   if (kind === "policy") {
     if (!cleanText(payload.policyName) && !cleanText(payload.name)) issues.push("Policy name is required.");
+    addIssue(issues, invalidOptionIssue("policyStatuses", payload.status, "Policy status"));
+    issues.push(...invalidOptionListIssues("requiredSigners", payload.requiredSigners, "Required signers"));
+    issues.push(...invalidOptionListIssues("entityJurisdictions", payload.jurisdictions, "Jurisdictions"));
+    issues.push(...invalidOptionListIssues("entityTypes", payload.entityTypes, "Entity types"));
     const rows = await ctx.db.query("policies").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
     const key = compactKey([payload.policyNumber || payload.policyName || payload.name]);
     if (key && rows.some((row: any) => compactKey([row.policyNumber || row.policyName]) === key)) issues.push("Duplicate policy already exists.");
@@ -1863,6 +1876,8 @@ async function importPromotionIssues(ctx: any, societyId: string, record: any) {
   if (kind === "workflowPackage") {
     if (!cleanText(payload.eventType)) issues.push("Workflow package event type is required.");
     if (!cleanText(payload.packageName) && !cleanText(payload.package)) issues.push("Workflow package name is required.");
+    addIssue(issues, invalidOptionIssue("eventTypes", payload.eventType, "Workflow package event type", false));
+    addIssue(issues, invalidOptionIssue("workflowPackageStatuses", payload.status, "Workflow package status"));
     const rows = await ctx.db.query("workflowPackages").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
     const key = compactKey([payload.eventType, payload.packageName ?? payload.package, payload.effectiveDate]);
     if (key && rows.some((row: any) => compactKey([row.eventType, row.packageName, row.effectiveDate]) === key)) {
@@ -1872,6 +1887,8 @@ async function importPromotionIssues(ctx: any, societyId: string, record: any) {
 
   if (kind === "minuteBookItem") {
     if (!cleanText(payload.title)) issues.push("Minute book title is required.");
+    addIssue(issues, invalidOptionIssue("minuteBookRecordTypes", payload.recordType ?? payload.type, "Minute book record type"));
+    addIssue(issues, invalidOptionIssue("minuteBookStatuses", payload.status, "Minute book status"));
     const rows = await ctx.db.query("minuteBookItems").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
     const key = compactKey([payload.title, payload.recordType ?? payload.type, payload.effectiveDate ?? payload.sourceDate]);
     if (key && rows.some((row: any) => compactKey([row.title, row.recordType, row.effectiveDate]) === key)) {
@@ -1888,6 +1905,10 @@ function addressKey(row: any) {
 
 function compactKey(values: unknown[]) {
   return values.map((value) => cleanText(value)?.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()).filter(Boolean).join("|");
+}
+
+function addIssue(issues: string[], issue?: string) {
+  if (issue) issues.push(issue);
 }
 
 async function patchSessionUpdatedAt(ctx: any, sessionId: string) {

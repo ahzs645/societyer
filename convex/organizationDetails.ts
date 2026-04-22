@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { assertAllowedOption } from "./lib/orgHubOptions";
 
 export const overview = query({
   args: { societyId: v.id("societies") },
@@ -147,6 +148,8 @@ export const upsertAddress = mutation({
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
   },
   handler: async (ctx, { id, ...args }) => {
+    assertAllowedOption("addressTypes", args.type, "Address type", false);
+    assertAllowedOption("addressStatuses", args.status, "Address status", false);
     const now = new Date().toISOString();
     const payload = {
       ...cleanObject(args),
@@ -193,6 +196,8 @@ export const upsertRegistration = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, { id, ...args }) => {
+    assertAllowedOption("entityJurisdictions", args.jurisdiction, "Registration jurisdiction", false);
+    assertAllowedOption("registrationStatuses", args.status, "Registration status");
     const now = new Date().toISOString();
     const payload = {
       ...cleanObject(args),
@@ -234,6 +239,10 @@ export const upsertIdentifier = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, { id, ...args }) => {
+    assertAllowedOption("taxNumberTypes", args.kind, "Identifier kind", false);
+    assertAllowedOption("entityJurisdictions", args.jurisdiction, "Identifier jurisdiction");
+    assertAllowedOption("identifierStatuses", args.status, "Identifier status");
+    assertAllowedOption("accessLevels", args.accessLevel, "Identifier access level");
     const now = new Date().toISOString();
     const payload = {
       ...cleanObject(args),

@@ -6,10 +6,12 @@ import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { Toggle } from "../components/Controls";
+import { OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Building2, KeyRound, Landmark, MapPin, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
+import { optionLabel } from "../lib/orgHubOptions";
 
 type DrawerKind = "address" | "registration" | "identifier";
 
@@ -125,7 +127,7 @@ export function OrganizationDetailsPage() {
     }
     if (kind === "registration") {
       setDraft({
-        jurisdiction: "",
+        jurisdiction: "british_columbia",
         representativeIds: [],
         status: "needs_review",
       });
@@ -231,18 +233,12 @@ export function OrganizationDetailsPage() {
         </div>
         <div className="card__body">
           <div className="grid two">
-            <Field label="Entity type">
-              <input className="input" value={profile.entityType ?? ""} onChange={(e) => set("entityType", e.target.value)} placeholder="society, corporation, co-op" />
-            </Field>
-            <Field label="Act formed under">
-              <input className="input" value={profile.actFormedUnder ?? ""} onChange={(e) => set("actFormedUnder", e.target.value)} placeholder="Societies Act" />
-            </Field>
+            <OptionSelect label="Entity type" setName="entityTypes" value={profile.entityType ?? ""} onChange={(value) => set("entityType", value)} emptyLabel="No entity type" />
+            <OptionSelect label="Act formed under" setName="actsFormedUnder" value={profile.actFormedUnder ?? ""} onChange={(value) => set("actFormedUnder", value)} emptyLabel="No act selected" />
             <Field label="Official email">
               <input className="input" value={profile.officialEmail ?? ""} onChange={(e) => set("officialEmail", e.target.value)} />
             </Field>
-            <Field label="Organization status">
-              <input className="input" value={profile.organizationStatus ?? ""} onChange={(e) => set("organizationStatus", e.target.value)} placeholder="active, archived, removed" />
-            </Field>
+            <OptionSelect label="Organization status" setName="organizationStatuses" value={profile.organizationStatus ?? ""} onChange={(value) => set("organizationStatus", value)} emptyLabel="No status" />
             <Field label="Continuance date">
               <DatePicker value={profile.continuanceDate ?? ""} onChange={(value) => set("continuanceDate", value)} />
             </Field>
@@ -281,8 +277,8 @@ export function OrganizationDetailsPage() {
           empty="No structured addresses yet."
           columns={["Type", "Status", "Address", "Effective", ""]}
           render={(row: any) => [
-            labelize(row.type),
-            <Badge key="s" tone={row.status === "current" ? "success" : "neutral"}>{labelize(row.status)}</Badge>,
+            optionLabel("addressTypes", row.type),
+            <Badge key="s" tone={row.status === "current" ? "success" : "neutral"}>{optionLabel("addressStatuses", row.status)}</Badge>,
             addressLine(row),
             dateRange(row.effectiveFrom, row.effectiveTo),
             <RowActions key="a" onEdit={() => { setDrawerKind("address"); setDraft(row); }} onRemove={() => removeRow("address", row)} />,
@@ -301,10 +297,10 @@ export function OrganizationDetailsPage() {
           empty="No external or extra-provincial registrations yet."
           columns={["Jurisdiction", "Registration", "Dates", "Status", ""]}
           render={(row: any) => [
-            row.jurisdiction,
+            optionLabel("entityJurisdictions", row.jurisdiction),
             <div key="r"><strong>{row.assumedName || "Legal name"}</strong><div className="mono muted">{row.registrationNumber ?? "No number"}{row.nuansNumber ? ` · NUANS ${row.nuansNumber}` : ""}</div></div>,
             dateRange(row.registrationDate, row.deRegistrationDate || row.activityCommencementDate),
-            <Badge key="s" tone={row.status === "active" ? "success" : "warn"}>{labelize(row.status)}</Badge>,
+            <Badge key="s" tone={row.status === "active" ? "success" : "warn"}>{optionLabel("registrationStatuses", row.status)}</Badge>,
             <RowActions key="a" onEdit={() => { setDrawerKind("registration"); setDraft({ ...row, representativeIdsText: (row.representativeIds ?? []).join(", ") }); }} onRemove={() => removeRow("registration", row)} />,
           ]}
         />
@@ -321,10 +317,10 @@ export function OrganizationDetailsPage() {
           empty="No tax or registry identifiers yet."
           columns={["Kind", "Number", "Jurisdiction", "Status", ""]}
           render={(row: any) => [
-            labelize(row.kind),
+            optionLabel("taxNumberTypes", row.kind),
             <span key="n" className="mono">{row.accessLevel === "restricted" ? mask(row.number) : row.number}</span>,
             row.foreignJurisdiction || row.jurisdiction || "-",
-            <Badge key="s" tone={row.accessLevel === "restricted" ? "danger" : row.status === "active" ? "success" : "warn"}>{labelize(row.status)}</Badge>,
+            <Badge key="s" tone={row.accessLevel === "restricted" ? "danger" : row.status === "active" ? "success" : "warn"}>{optionLabel("identifierStatuses", row.status)}</Badge>,
             <RowActions key="a" onEdit={() => { setDrawerKind("identifier"); setDraft(row); }} onRemove={() => removeRow("identifier", row)} />,
           ]}
         />
@@ -392,8 +388,8 @@ function AddressFields({ draft, setDraft }: any) {
   return (
     <>
       <div className="row" style={{ gap: 12 }}>
-        <Field label="Type"><input className="input" value={draft.type ?? ""} onChange={(e) => setDraft({ ...draft, type: e.target.value })} /></Field>
-        <Field label="Status"><input className="input" value={draft.status ?? ""} onChange={(e) => setDraft({ ...draft, status: e.target.value })} /></Field>
+        <OptionSelect label="Type" setName="addressTypes" value={draft.type ?? ""} onChange={(value) => setDraft({ ...draft, type: value })} />
+        <OptionSelect label="Status" setName="addressStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} />
       </div>
       <Field label="Street"><input className="input" value={draft.street ?? ""} onChange={(e) => setDraft({ ...draft, street: e.target.value })} /></Field>
       <div className="row" style={{ gap: 12 }}>
@@ -417,7 +413,7 @@ function AddressFields({ draft, setDraft }: any) {
 function RegistrationFields({ draft, setDraft }: any) {
   return (
     <>
-      <Field label="Jurisdiction"><input className="input" value={draft.jurisdiction ?? ""} onChange={(e) => setDraft({ ...draft, jurisdiction: e.target.value })} /></Field>
+      <OptionSelect label="Jurisdiction" setName="entityJurisdictions" value={draft.jurisdiction ?? ""} onChange={(value) => setDraft({ ...draft, jurisdiction: value })} emptyLabel="No jurisdiction" />
       <Field label="Assumed name"><input className="input" value={draft.assumedName ?? ""} onChange={(e) => setDraft({ ...draft, assumedName: e.target.value })} /></Field>
       <div className="row" style={{ gap: 12 }}>
         <Field label="Registration number"><input className="input" value={draft.registrationNumber ?? ""} onChange={(e) => setDraft({ ...draft, registrationNumber: e.target.value })} /></Field>
@@ -429,7 +425,7 @@ function RegistrationFields({ draft, setDraft }: any) {
       </div>
       <div className="row" style={{ gap: 12 }}>
         <Field label="De-registration date"><DatePicker value={draft.deRegistrationDate ?? ""} onChange={(value) => setDraft({ ...draft, deRegistrationDate: value })} /></Field>
-        <Field label="Status"><input className="input" value={draft.status ?? ""} onChange={(e) => setDraft({ ...draft, status: e.target.value })} /></Field>
+        <OptionSelect label="Status" setName="registrationStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} />
       </div>
       <Field label="Official email"><input className="input" value={draft.officialEmail ?? ""} onChange={(e) => setDraft({ ...draft, officialEmail: e.target.value })} /></Field>
       <Field label="Representatives"><input className="input" value={draft.representativeIdsText ?? (draft.representativeIds ?? []).join(", ")} onChange={(e) => setDraft({ ...draft, representativeIdsText: e.target.value })} placeholder="Name or record IDs, comma separated" /></Field>
@@ -442,17 +438,17 @@ function IdentifierFields({ draft, setDraft }: any) {
   return (
     <>
       <div className="row" style={{ gap: 12 }}>
-        <Field label="Kind"><input className="input" value={draft.kind ?? ""} onChange={(e) => setDraft({ ...draft, kind: e.target.value })} /></Field>
-        <Field label="Status"><input className="input" value={draft.status ?? ""} onChange={(e) => setDraft({ ...draft, status: e.target.value })} /></Field>
+        <OptionSelect label="Kind" setName="taxNumberTypes" value={draft.kind ?? ""} onChange={(value) => setDraft({ ...draft, kind: value })} />
+        <OptionSelect label="Status" setName="identifierStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} />
       </div>
       <Field label="Number"><input className="input mono" value={draft.number ?? ""} onChange={(e) => setDraft({ ...draft, number: e.target.value })} /></Field>
       <div className="row" style={{ gap: 12 }}>
-        <Field label="Jurisdiction"><input className="input" value={draft.jurisdiction ?? ""} onChange={(e) => setDraft({ ...draft, jurisdiction: e.target.value })} /></Field>
+        <OptionSelect label="Jurisdiction" setName="entityJurisdictions" value={draft.jurisdiction ?? ""} onChange={(value) => setDraft({ ...draft, jurisdiction: value })} emptyLabel="No jurisdiction" />
         <Field label="Foreign jurisdiction"><input className="input" value={draft.foreignJurisdiction ?? ""} onChange={(e) => setDraft({ ...draft, foreignJurisdiction: e.target.value })} /></Field>
       </div>
       <div className="row" style={{ gap: 12 }}>
         <Field label="Registered at"><DatePicker value={draft.registeredAt ?? ""} onChange={(value) => setDraft({ ...draft, registeredAt: value })} /></Field>
-        <Field label="Access level"><input className="input" value={draft.accessLevel ?? ""} onChange={(e) => setDraft({ ...draft, accessLevel: e.target.value })} /></Field>
+        <OptionSelect label="Access level" setName="accessLevels" value={draft.accessLevel ?? ""} onChange={(value) => setDraft({ ...draft, accessLevel: value })} />
       </div>
       <Field label="Notes"><textarea className="textarea" value={draft.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></Field>
     </>

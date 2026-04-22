@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { assertAllowedOption, invalidOptionListIssues } from "./lib/orgHubOptions";
 
 export const list = query({
   args: { societyId: v.id("societies") },
@@ -51,6 +52,14 @@ export const upsert = mutation({
   },
   handler: async (ctx, { id, ...args }) => {
     const now = new Date().toISOString();
+    assertAllowedOption("policyStatuses", args.status, "Policy status");
+    for (const issue of [
+      ...invalidOptionListIssues("requiredSigners", args.requiredSigners, "Required signers"),
+      ...invalidOptionListIssues("entityJurisdictions", args.jurisdictions, "Jurisdictions"),
+      ...invalidOptionListIssues("entityTypes", args.entityTypes, "Entity types"),
+    ]) {
+      throw new Error(issue);
+    }
     const payload = {
       societyId: args.societyId,
       policyName: cleanText(args.policyName) || "Untitled policy",

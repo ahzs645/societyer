@@ -48,6 +48,7 @@ import type * as insurance from "../insurance.js";
 import type * as invitations from "../invitations.js";
 import type * as lib_bylawRules from "../lib/bylawRules.js";
 import type * as lib_moduleSettings from "../lib/moduleSettings.js";
+import type * as lib_orgHubOptions from "../lib/orgHubOptions.js";
 import type * as lib_permissions from "../lib/permissions.js";
 import type * as meetings from "../meetings.js";
 import type * as memberProposals from "../memberProposals.js";
@@ -148,6 +149,7 @@ declare const fullApi: ApiFromModules<{
   invitations: typeof invitations;
   "lib/bylawRules": typeof lib_bylawRules;
   "lib/moduleSettings": typeof lib_moduleSettings;
+  "lib/orgHubOptions": typeof lib_orgHubOptions;
   "lib/permissions": typeof lib_permissions;
   meetings: typeof meetings;
   memberProposals: typeof memberProposals;

@@ -6,10 +6,12 @@ import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
+import { OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Plus, Trash2, Workflow } from "lucide-react";
 import { formatDate } from "../lib/format";
+import { optionLabel } from "../lib/orgHubOptions";
 
 export function WorkflowPackagesPage() {
   const society = useSociety();
@@ -138,7 +140,7 @@ export function WorkflowPackagesPage() {
                       <div className="muted">{row.effectiveDate ? formatDate(row.effectiveDate) : "No effective date"}</div>
                     </td>
                     <td>
-                      <div className="mono">{row.eventType}</div>
+                      <div>{optionLabel("eventTypes", row.eventType)}</div>
                       <div className="muted">{row.parts?.length ? `${row.parts.length} parts` : "No parts listed"}</div>
                     </td>
                     <td>
@@ -153,7 +155,7 @@ export function WorkflowPackagesPage() {
                       <div className="mono muted">{row.stripeCheckoutSessionId || row.transactionId || ""}</div>
                     </td>
                     <td><PackageLifecycle lifecycle={row.lifecycle} /></td>
-                    <td><Badge tone={toneForPackageStatus(row.status)}>{labelize(row.status)}</Badge></td>
+                    <td><Badge tone={toneForPackageStatus(row.status)}>{optionLabel("workflowPackageStatuses", row.status)}</Badge></td>
                     <td>
                       <div className="row" style={{ justifyContent: "flex-end" }}>
                         <button className="btn btn--ghost btn--sm" onClick={() => createPackageTask(row)}>Task</button>
@@ -206,8 +208,8 @@ export function WorkflowPackagesPage() {
           <>
             <Field label="Package name"><input className="input" value={draft.packageName ?? ""} onChange={(e) => setDraft({ ...draft, packageName: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Event type"><input className="input mono" value={draft.eventType ?? ""} onChange={(e) => setDraft({ ...draft, eventType: e.target.value })} /></Field>
-              <Field label="Status"><input className="input" value={draft.status ?? ""} onChange={(e) => setDraft({ ...draft, status: e.target.value })} /></Field>
+              <OptionSelect label="Event type" setName="eventTypes" value={draft.eventType ?? ""} onChange={(value) => setDraft({ ...draft, eventType: value })} />
+              <OptionSelect label="Status" setName="workflowPackageStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} />
             </div>
             <Field label="Effective date"><DatePicker value={draft.effectiveDate ?? ""} onChange={(value) => setDraft({ ...draft, effectiveDate: value })} /></Field>
             <Field label="Workflow">

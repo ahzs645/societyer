@@ -6,10 +6,12 @@ import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { Toggle } from "../components/Controls";
+import { OptionMultiSelect, OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { FileText, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
+import { optionLabel } from "../lib/orgHubOptions";
 
 export function PoliciesPage() {
   const society = useSociety();
@@ -38,9 +40,9 @@ export function PoliciesPage() {
       policyName: "",
       status: "Draft",
       signatureRequired: false,
-      requiredSignersText: "",
-      jurisdictionsText: "CA-BC",
-      entityTypesText: "society",
+      requiredSigners: [],
+      jurisdictions: ["british_columbia"],
+      entityTypes: ["corporation__nfp_"],
     });
     setOpen(true);
   };
@@ -59,10 +61,10 @@ export function PoliciesPage() {
       docxDocumentId: draft.docxDocumentId || undefined,
       pdfDocumentId: draft.pdfDocumentId || undefined,
       html: draft.html || undefined,
-      requiredSigners: csv(draft.requiredSignersText ?? draft.requiredSigners),
+      requiredSigners: listValues(draft.requiredSignersText ?? draft.requiredSigners),
       signatureRequired: !!draft.signatureRequired,
-      jurisdictions: csv(draft.jurisdictionsText ?? draft.jurisdictions),
-      entityTypes: csv(draft.entityTypesText ?? draft.entityTypes),
+      jurisdictions: listValues(draft.jurisdictionsText ?? draft.jurisdictions),
+      entityTypes: listValues(draft.entityTypesText ?? draft.entityTypes),
       status: draft.status || "Draft",
       notes: draft.notes || undefined,
     });
@@ -145,7 +147,7 @@ export function PoliciesPage() {
                   </td>
                   <td>
                     {row.signatureRequired ? (
-                      <Badge tone="warn">{row.requiredSigners?.length || 0} required</Badge>
+                      <Badge tone="warn">{(row.requiredSigners ?? []).map((value: string) => optionLabel("requiredSigners", value)).join(", ") || "Needs review"}</Badge>
                     ) : (
                       <span className="muted">Not required</span>
                     )}
@@ -164,9 +166,6 @@ export function PoliciesPage() {
                         onClick={() => {
                           setDraft({
                             ...row,
-                            requiredSignersText: (row.requiredSigners ?? []).join(", "),
-                            jurisdictionsText: (row.jurisdictions ?? []).join(", "),
-                            entityTypesText: (row.entityTypes ?? []).join(", "),
                           });
                           setOpen(true);
                         }}
@@ -212,9 +211,9 @@ export function PoliciesPage() {
               <Field label="Ceased date"><DatePicker value={draft.ceasedDate ?? ""} onChange={(value) => setDraft({ ...draft, ceasedDate: value })} /></Field>
             </div>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Status"><input className="input" value={draft.status ?? ""} onChange={(e) => setDraft({ ...draft, status: e.target.value })} /></Field>
-              <Field label="Jurisdictions"><input className="input" value={draft.jurisdictionsText ?? ""} onChange={(e) => setDraft({ ...draft, jurisdictionsText: e.target.value })} /></Field>
-              <Field label="Entity types"><input className="input" value={draft.entityTypesText ?? ""} onChange={(e) => setDraft({ ...draft, entityTypesText: e.target.value })} /></Field>
+              <OptionSelect label="Status" setName="policyStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} />
+              <OptionMultiSelect label="Jurisdictions" setName="entityJurisdictions" values={listValues(draft.jurisdictions)} onChange={(values) => setDraft({ ...draft, jurisdictions: values })} />
+              <OptionMultiSelect label="Entity types" setName="entityTypes" values={listValues(draft.entityTypes)} onChange={(values) => setDraft({ ...draft, entityTypes: values })} rows={3} />
             </div>
             <Field label="DOCX document">
               <select className="input" value={draft.docxDocumentId ?? ""} onChange={(e) => setDraft({ ...draft, docxDocumentId: e.target.value || undefined })}>
@@ -229,7 +228,7 @@ export function PoliciesPage() {
               </select>
             </Field>
             <Toggle checked={!!draft.signatureRequired} onChange={(value) => setDraft({ ...draft, signatureRequired: value })} label="Signature required" />
-            <Field label="Required signers"><input className="input" value={draft.requiredSignersText ?? ""} onChange={(e) => setDraft({ ...draft, requiredSignersText: e.target.value })} placeholder="Chair, Secretary, Treasurer" /></Field>
+            <OptionMultiSelect label="Required signers" setName="requiredSigners" values={listValues(draft.requiredSigners)} onChange={(values) => setDraft({ ...draft, requiredSigners: values })} />
             <Field label="HTML"><textarea className="textarea mono" value={draft.html ?? ""} onChange={(e) => setDraft({ ...draft, html: e.target.value })} /></Field>
             <Field label="Notes"><textarea className="textarea" value={draft.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></Field>
           </>
@@ -239,7 +238,7 @@ export function PoliciesPage() {
   );
 }
 
-function csv(value: any) {
+function listValues(value: any) {
   if (Array.isArray(value)) return value.map(String).map((item) => item.trim()).filter(Boolean);
   return String(value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
 }

@@ -23,8 +23,9 @@ Purpose: track the first implementation pass for broader organization detail sup
 - Added idempotent auto-backfill plus manual re-run from legacy society address strings and existing legal document categories/tags into structured organization address and minute-book records.
 - Added richer task editing for linked filing/workflow/document/event fields and completion notes.
 - Added `npm run test:org-details` as a focused smoke check for the new schema, promotion paths, lifecycle actions, and pages.
+- Added a source-derived OrgHub option catalog, select/multiselect UI controls for controlled organization-detail values, backend mutation validation, and import-promotion option gates.
 
-Remaining refinement areas: deeper duplicate review UX inside import sessions, more precise minute-book jurisdiction checklists, and end-to-end browser tests after a seeded legal-record fixture exists.
+Remaining refinement areas: deeper duplicate review UX inside import sessions, more precise minute-book jurisdiction checklists, end-to-end browser tests after a seeded legal-record fixture exists, and broader dropdown adoption for older governance/permission screens that still predate the organization-detail pass.
 
 ## What To Implement First
 

@@ -2,6 +2,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { disabledModulesValidator } from "./lib/moduleSettings";
+import { assertAllowedOption } from "./lib/orgHubOptions";
 
 export const get = query({
   args: {},
@@ -73,6 +74,9 @@ export const upsert = mutation({
   },
   handler: async (ctx, args) => {
     const { id, ...rest } = args;
+    assertAllowedOption("entityTypes", rest.entityType, "Entity type");
+    assertAllowedOption("actsFormedUnder", rest.actFormedUnder, "Act formed under");
+    assertAllowedOption("organizationStatuses", rest.organizationStatus, "Organization status");
     const payload = { ...rest, updatedAt: Date.now() };
     if (id) {
       await ctx.db.patch(id, payload);

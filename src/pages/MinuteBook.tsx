@@ -6,10 +6,12 @@ import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
+import { OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { BookOpen, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
+import { optionLabel } from "../lib/orgHubOptions";
 
 export function MinuteBookPage() {
   const society = useSociety();
@@ -150,11 +152,11 @@ export function MinuteBookPage() {
                 <tr key={row._id}>
                   <td>
                     <strong>{row.title}</strong>
-                    <div className="muted">{labelize(row.recordType)}</div>
+                    <div className="muted">{optionLabel("minuteBookRecordTypes", row.recordType)}</div>
                   </td>
                   <td>{linkSummary(row, maps)}</td>
                   <td>{row.effectiveDate ? formatDate(row.effectiveDate) : "-"}</td>
-                  <td><Badge tone={toneForStatus(row.status)}>{labelize(row.status)}</Badge></td>
+                  <td><Badge tone={toneForStatus(row.status)}>{optionLabel("minuteBookStatuses", row.status)}</Badge></td>
                   <td>
                     <div className="row" style={{ justifyContent: "flex-end" }}>
                       <button
@@ -203,8 +205,8 @@ export function MinuteBookPage() {
           <>
             <Field label="Title"><input className="input" value={draft.title ?? ""} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Record type"><input className="input" value={draft.recordType ?? ""} onChange={(e) => setDraft({ ...draft, recordType: e.target.value })} /></Field>
-              <Field label="Status"><input className="input" value={draft.status ?? ""} onChange={(e) => setDraft({ ...draft, status: e.target.value })} /></Field>
+              <OptionSelect label="Record type" setName="minuteBookRecordTypes" value={draft.recordType ?? ""} onChange={(value) => setDraft({ ...draft, recordType: value })} />
+              <OptionSelect label="Status" setName="minuteBookStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} />
             </div>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Effective date"><DatePicker value={draft.effectiveDate ?? ""} onChange={(value) => setDraft({ ...draft, effectiveDate: value })} /></Field>

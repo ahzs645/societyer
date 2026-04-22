@@ -1,0 +1,319 @@
+export type OptionChoice = {
+  value: string;
+  label: string;
+};
+
+export const ORG_HUB_OPTION_SETS = {
+  entityTypes: [
+    { value: "corporation__nfp_", label: "Not-for-profit Corporation" },
+    { value: "society", label: "Society" },
+  ],
+  entityJurisdictions: [
+    { value: "federal__canada_", label: "Canada (federal)" },
+    { value: "ontario", label: "Ontario" },
+    { value: "british_columbia", label: "British Columbia" },
+    { value: "alberta", label: "Alberta" },
+    { value: "saskatchewan", label: "Saskatchewan" },
+    { value: "newfoundland_and_labrador", label: "Newfoundland and Labrador" },
+    { value: "nova_scotia", label: "Nova Scotia" },
+    { value: "prince_edward_island", label: "Prince Edward Island" },
+    { value: "new_brunswick", label: "New Brunswick" },
+    { value: "quebec", label: "Quebec" },
+    { value: "manitoba", label: "Manitoba" },
+    { value: "nunavut", label: "Nunavut" },
+    { value: "north_west_territories", label: "Northwest Territories" },
+    { value: "yukon", label: "Yukon" },
+    { value: "foreign", label: "Foreign" },
+    { value: "CA-BC", label: "British Columbia (Societyer code)" },
+  ],
+  actsFormedUnder: [
+    { value: "canada_not_for_profit_corporations_act", label: "Canada Not-for-profit Corporations Act" },
+    { value: "not_for_profit_corporations_act__2010__ontario_", label: "Not-for-Profit Corporations Act, 2010 (Ontario)" },
+    { value: "corporations_act__ontario_", label: "Corporations Act (Ontario)" },
+    { value: "companies_act__new_brunswick_", label: "Companies Act (New Brunswick)" },
+    { value: "non_profit_corporations_act__saskatchewan_", label: "Non-Profit Corporations Act (Saskatchewan)" },
+    { value: "societies_act", label: "Societies Act (British Columbia)" },
+    { value: "companies_act__alberta_", label: "Companies Act (Alberta)" },
+    { value: "the_corporations_act__manitoba_", label: "The Corporations Act (Manitoba)" },
+    { value: "business_corporations_act__quebec_", label: "Business Corporations Act (Quebec)" },
+    { value: "societies_act__nova_scotia_", label: "Societies Act (Nova Scotia)" },
+    { value: "companies_act__prince_edward_island_", label: "Companies Act (Prince Edward Island)" },
+    { value: "corporations_act__newfoundland_", label: "Corporations Act (Newfoundland and Labrador)" },
+    { value: "societies_act__yukon_", label: "Societies Act (Yukon)" },
+    { value: "societies_act__northwest_territories_", label: "Societies Act (Northwest Territories)" },
+    { value: "societies_act__nunavut_", label: "Societies Act (Nunavut)" },
+    { value: "foreign", label: "Foreign" },
+    { value: "companies_act__quebec_", label: "Companies Act (Quebec)" },
+    { value: "societies_act__alberta_", label: "Societies Act (Alberta)" },
+  ],
+  addressTypes: [
+    { value: "registered_office", label: "Registered Office" },
+    { value: "registered_mailing", label: "Registered Mailing" },
+    { value: "records_office", label: "Records Office" },
+    { value: "records_mailing", label: "Records Mailing" },
+    { value: "mailing", label: "Mailing" },
+    { value: "physical", label: "Physical" },
+    { value: "other", label: "Other" },
+  ],
+  addressStatuses: [
+    { value: "current", label: "Current" },
+    { value: "proposed", label: "Proposed" },
+    { value: "past", label: "Past" },
+  ],
+  eventTypes: [
+    { value: "incorporation0", label: "Incorporation" },
+    { value: "extra_provincial_registration0", label: "Extra-Provincial Registration" },
+    { value: "annual_maintenance", label: "Annual Maintenance" },
+    { value: "annual_filing", label: "Annual Filing" },
+    { value: "change_director", label: "Change Directors" },
+    { value: "officer_change", label: "Change Officers" },
+    { value: "address_change", label: "Change Address" },
+    { value: "transparency_register_change", label: "Change Individuals with Significant Control" },
+    { value: "share_transfer__internal_only_", label: "Share Transfer (beta)" },
+    { value: "share_issuance_additional", label: "Share Issuance Additional" },
+    { value: "dividend", label: "Dividend" },
+    { value: "management_bonus", label: "Management Bonus" },
+    { value: "organizing_post_incorporation", label: "Organizing Post-Incorporation" },
+    { value: "clean_up__no_minute_book_", label: "Clean-Up (beta)" },
+    { value: "digitize_minute_book", label: "Digitize Minute Book" },
+    { value: "custom", label: "Custom" },
+    { value: "custom.event", label: "Custom event (legacy object type)" },
+  ],
+  eventStatuses: [
+    { value: "initial", label: "0" },
+    { value: "step_1", label: "1" },
+    { value: "step_2", label: "2" },
+    { value: "2b", label: "2b" },
+    { value: "step_3", label: "3" },
+    { value: "step_4", label: "4" },
+    { value: "5_", label: "5" },
+    { value: "6_", label: "6" },
+    { value: "7_", label: "7" },
+    { value: "8_", label: "8" },
+    { value: "9_", label: "9" },
+    { value: "step_5", label: "Done" },
+    { value: "100_", label: "100" },
+  ],
+  documentTags: [
+    { value: "0___corporate_summary_sheet", label: "Corporate Summary Sheet" },
+    { value: "1___incorporation_documents", label: "Incorporation Documents" },
+    { value: "2___business_numbers", label: "Registration Documents" },
+    { value: "charitable_status_documents", label: "Charitable Status Documents" },
+    { value: "3___by_laws", label: "By-Laws" },
+    { value: "members_meetings_and_resolutions0", label: "Member Resolutions and Meeting Minutes" },
+    { value: "5___directors_meetings_and_resolutions", label: "Director Resolutions and Meeting Minutes" },
+    { value: "sub_committee_records", label: "Committee Records" },
+    { value: "director_consents__resignations__and_indemnifications", label: "Director Consents, Resignations, and Indemnifications" },
+    { value: "officer_consents__resignations__and_indemnifications", label: "Officer Consents, Resignations, and Indemnifications" },
+    { value: "members_register0", label: "Members Register" },
+    { value: "9___transfer_register", label: "Transfer Register" },
+    { value: "6___directors_register_and_consents", label: "Directors Register" },
+    { value: "7___officers_register_and_consents", label: "Officers Register" },
+    { value: "member_applications_and_resignations", label: "Member Applications and Resignations" },
+    { value: "corporate_profile_reports", label: "Profile Reports" },
+    { value: "12___shareholder_agreements", label: "Notices Filed" },
+    { value: "13___annual_return_filings", label: "Annual Return Filings" },
+    { value: "debt_obligations", label: "Debt Obligations" },
+    { value: "13___material_agreements", label: "Important Agreements" },
+    { value: "extra_provincial_registrations", label: "Extra-Provincial Registrations" },
+    { value: "tax_numbers", label: "Tax Numbers" },
+    { value: "16___electronic_signing_records", label: "Electronic Signing Records" },
+    { value: "other", label: "Other" },
+    { value: "company_keys", label: "Company Keys" },
+    { value: "paper_minute_book_archive", label: "Paper Minute Book Archive" },
+  ],
+  requiredSigners: [
+    { value: "all_voting_members", label: "Members - All Voting" },
+    { value: "all_members", label: "Members - All" },
+    { value: "select_members", label: "Member - Entering" },
+    { value: "member___exiting", label: "Member - Exiting" },
+    { value: "all_directors", label: "Directors - All" },
+    { value: "directors___exiting", label: "Director - Exiting" },
+    { value: "directors___entering", label: "Director - Entering" },
+    { value: "officer___entering", label: "Officer - Entering" },
+    { value: "officer___exiting", label: "Officer - Exiting" },
+    { value: "officer___president", label: "Officer - President" },
+    { value: "shareholder___entering", label: "Applicant" },
+    { value: "transfer_participants", label: "Transfer Participants" },
+  ],
+  taxNumberTypes: [
+    { value: "business_number", label: "Business Number" },
+    { value: "income_tax", label: "Income Tax" },
+    { value: "sales_tax", label: "Sales Tax (GST/HST/PST)" },
+    { value: "import___export", label: "Import / Export Tax" },
+    { value: "payroll_tax", label: "Payroll Tax" },
+    { value: "charity_number", label: "Charity number" },
+    { value: "registry_account", label: "Registry account" },
+    { value: "gst", label: "GST" },
+    { value: "payroll", label: "Payroll" },
+    { value: "other", label: "Other" },
+  ],
+  companyKeyTypes: [
+    { value: "company_key", label: "Company Key" },
+    { value: "password__bc_", label: "Password" },
+    { value: "access_code", label: "Access Code" },
+  ],
+  permissionLevels: [
+    { value: "entity_administrator", label: "Entity Lead" },
+    { value: "entity_editor", label: "Entity Assistant" },
+    { value: "entity_viewer", label: "Entity Viewer" },
+  ],
+  signerStatuses: [
+    { value: "opened_package", label: "Unsigned" },
+    { value: "all_signed", label: "Signed" },
+  ],
+  filingTypes: [
+    { value: "annual", label: "Annual" },
+    { value: "notice_of_change", label: "Notice of Change" },
+    { value: "formation", label: "Formation" },
+  ],
+  officerTitles: [
+    { value: "assistant_secretary", label: "Assistant Secretary" },
+    { value: "assistant_treasurer", label: "Assistant Treasurer" },
+    { value: "authorized_signing_officer", label: "Authorized Signing Officer" },
+    { value: "chair", label: "Chair" },
+    { value: "chairman", label: "Chairman" },
+    { value: "chair_person", label: "Chair Person" },
+    { value: "chairwoman", label: "Chairwoman" },
+    { value: "chief_administrative_officer", label: "Chief Administrative Officer" },
+    { value: "chief_executive_officer", label: "Chief Executive Officer" },
+    { value: "chief_financial_officer", label: "Chief Financial Officer" },
+    { value: "chief_information_officer", label: "Chief Information Officer" },
+    { value: "chief_manager", label: "Chief Manager" },
+    { value: "chief_operating_officer", label: "Chief Operating Officer" },
+    { value: "comptroller", label: "Comptroller" },
+    { value: "executive_director", label: "Executive Director" },
+    { value: "general_manager", label: "General Manager" },
+    { value: "managing_director", label: "Managing Director" },
+    { value: "other", label: "Other (untitled)" },
+    { value: "president", label: "President" },
+    { value: "secretary", label: "Secretary" },
+    { value: "secretary_treasurer", label: "Secretary-Treasurer" },
+    { value: "treasurer", label: "Treasurer" },
+    { value: "vice_chair", label: "Vice-Chair" },
+    { value: "vice_president", label: "Vice-President" },
+  ],
+  directorTerms: [
+    { value: "none_specified", label: "None specified" },
+    { value: "until_the_next_annual_general_meeting", label: "Until the next annual general meeting" },
+    { value: "1_year", label: "1 year" },
+    { value: "2_years", label: "2 years" },
+    { value: "3_years", label: "3 years" },
+    { value: "4_years", label: "4 years" },
+    { value: "5_years", label: "5 years" },
+    { value: "other", label: "Other" },
+  ],
+  citizenshipResidencies: [
+    { value: "a_canadian_citizen_ordinarily_resident_in_canada", label: "a Canadian citizen ordinarily resident in Canada" },
+    { value: "a_permanent_resident_within_the_meaning_of_the_immigration_and_refugee_protection_act__canada__and_ordinarily_resides_in_canada", label: "a permanent resident within the meaning of subsection 2(1) of the Immigration and Refugee Protection Act (Canada) and ordinarily resident in Canada" },
+    { value: "not_a_canadian_citizen_and_not_a_permanent_resident_in_canada__as_defined_above_", label: "not a Canadian citizen and not a permanent resident in Canada" },
+    { value: "a_canadian_citizen_that_meets_the_test_in_schedule_a", label: "a Canadian citizen not ordinarily resident in Canada who is a member of a class of persons described in Section 13 of the Canada Business Corporations Regulations" },
+    { value: "a_canadian_citizen_that_is_not_ordinarily_resident_in_canada_and_who_does_not_meet_the_qualifications_set_out_in_schedule_a", label: "a Canadian citizen that is not ordinarily resident in Canada and who is not a member of a class of persons described in Section 13 of the Canada Business Corporations Regulations" },
+  ],
+  representativeTypes: [
+    { value: "officer", label: "Officer" },
+    { value: "director", label: "Director" },
+    { value: "member", label: "Member" },
+    { value: "shareholder_representative", label: "Rep of Non-Natural Role Holder" },
+    { value: "trustee", label: "Trustee" },
+    { value: "incorporator", label: "Incorporator" },
+    { value: "attorney_for_service", label: "Attorney for Service" },
+    { value: "chief_officer___manager", label: "Chief Officer / Manager" },
+    { value: "authorized_contact_person", label: "Authorized Contact Person" },
+    { value: "authorized_representative", label: "Other" },
+    { value: "treasury", label: "Treasury" },
+  ],
+} as const satisfies Record<string, readonly OptionChoice[]>;
+
+export const LOCAL_OPTION_SETS = {
+  organizationStatuses: [
+    { value: "active", label: "Active" },
+    { value: "archived", label: "Archived" },
+    { value: "removed", label: "Removed" },
+    { value: "needs_review", label: "Needs review" },
+  ],
+  registrationStatuses: [
+    { value: "active", label: "Active" },
+    { value: "inactive", label: "Inactive" },
+    { value: "pending", label: "Pending" },
+    { value: "needs_review", label: "Needs review" },
+  ],
+  identifierStatuses: [
+    { value: "active", label: "Active" },
+    { value: "inactive", label: "Inactive" },
+    { value: "needs_review", label: "Needs review" },
+  ],
+  accessLevels: [
+    { value: "internal", label: "Internal" },
+    { value: "restricted", label: "Restricted" },
+  ],
+  policyStatuses: [
+    { value: "Draft", label: "Draft" },
+    { value: "Active", label: "Active" },
+    { value: "ReviewDue", label: "Review due" },
+    { value: "Superseded", label: "Superseded" },
+    { value: "Ceased", label: "Ceased" },
+  ],
+  workflowPackageStatuses: [
+    { value: "draft", label: "Draft" },
+    { value: "collecting_signatures", label: "Collecting signatures" },
+    { value: "ready", label: "Ready" },
+    { value: "filed", label: "Filed" },
+    { value: "cancelled", label: "Cancelled" },
+    { value: "archived", label: "Archived" },
+    ...ORG_HUB_OPTION_SETS.eventStatuses,
+  ],
+  minuteBookRecordTypes: [
+    { value: "constitution", label: "Constitution" },
+    { value: "bylaws", label: "Bylaws" },
+    { value: "minutes", label: "Minutes" },
+    { value: "resolution", label: "Resolution" },
+    { value: "filing", label: "Filing" },
+    { value: "policy", label: "Policy" },
+    { value: "ledger", label: "Ledger" },
+    { value: "document", label: "Document" },
+    { value: "package", label: "Package" },
+    { value: "financial_statement", label: "Financial statement" },
+    { value: "workflow_package_document", label: "Workflow package document" },
+    { value: "paper_minute_book_archive", label: "Paper minute-book archive" },
+    { value: "minute_book_record", label: "Minute-book record" },
+    { value: "imported_record", label: "Imported record" },
+    { value: "other", label: "Other" },
+  ],
+  minuteBookStatuses: [
+    { value: "Draft", label: "Draft" },
+    { value: "Current", label: "Current" },
+    { value: "NeedsReview", label: "Needs review" },
+    { value: "Archived", label: "Archived" },
+    { value: "Superseded", label: "Superseded" },
+  ],
+} as const satisfies Record<string, readonly OptionChoice[]>;
+
+export const OPTION_SETS = {
+  ...ORG_HUB_OPTION_SETS,
+  ...LOCAL_OPTION_SETS,
+} as const;
+
+export type OptionSetName = keyof typeof OPTION_SETS;
+
+export function optionChoices(setName: OptionSetName, currentValues: string[] = []) {
+  const options: OptionChoice[] = [...OPTION_SETS[setName]];
+  const known = new Set(options.map((option) => option.value));
+  for (const value of currentValues.filter(Boolean)) {
+    if (!known.has(value)) options.push({ value, label: labelizeOptionValue(value) });
+  }
+  return options;
+}
+
+export function optionLabel(setName: OptionSetName, value?: string | null) {
+  if (!value) return "";
+  return OPTION_SETS[setName].find((option) => option.value === value)?.label ?? labelizeOptionValue(value);
+}
+
+export function labelizeOptionValue(value: string) {
+  return value
+    .replace(/_+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
