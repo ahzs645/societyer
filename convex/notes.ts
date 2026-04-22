@@ -7,6 +7,7 @@ export const listForRecord = query({
     entityType: v.string(),
     entityId: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, entityType, entityId }) => {
     return ctx.db
       .query("notes")
@@ -26,6 +27,7 @@ export const create = mutation({
     author: v.string(),
     body: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     if (!args.body.trim()) throw new Error("Note body is required");
     return ctx.db.insert("notes", {
@@ -37,6 +39,7 @@ export const create = mutation({
 
 export const update = mutation({
   args: { id: v.id("notes"), body: v.string() },
+  returns: v.any(),
   handler: async (ctx, { id, body }) => {
     if (!body.trim()) throw new Error("Note body is required");
     await ctx.db.patch(id, {
@@ -48,6 +51,7 @@ export const update = mutation({
 
 export const remove = mutation({
   args: { id: v.id("notes") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

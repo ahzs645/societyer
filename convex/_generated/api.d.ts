@@ -56,6 +56,7 @@ import type * as lib_bylawRules from "../lib/bylawRules.js";
 import type * as lib_moduleSettings from "../lib/moduleSettings.js";
 import type * as lib_orgHubOptions from "../lib/orgHubOptions.js";
 import type * as lib_permissions from "../lib/permissions.js";
+import type * as lib_serviceAuth from "../lib/serviceAuth.js";
 import type * as library from "../library.js";
 import type * as meetingMaterials from "../meetingMaterials.js";
 import type * as meetings from "../meetings.js";
@@ -168,6 +169,7 @@ declare const fullApi: ApiFromModules<{
   "lib/moduleSettings": typeof lib_moduleSettings;
   "lib/orgHubOptions": typeof lib_orgHubOptions;
   "lib/permissions": typeof lib_permissions;
+  "lib/serviceAuth": typeof lib_serviceAuth;
   library: typeof library;
   meetingMaterials: typeof meetingMaterials;
   meetings: typeof meetings;

@@ -272,6 +272,7 @@ export const LOCAL_OPTION_SETS = {
     { value: "bylaws", label: "Bylaws" },
     { value: "minutes", label: "Minutes" },
     { value: "resolution", label: "Resolution" },
+    { value: "written_resolution", label: "Written resolution" },
     { value: "filing", label: "Filing" },
     { value: "policy", label: "Policy" },
     { value: "ledger", label: "Ledger" },

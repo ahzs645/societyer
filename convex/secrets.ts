@@ -125,6 +125,7 @@ async function logActivity(ctx: any, row: any, actorName: string, action: string
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const rows = await ctx.db
       .query("secretVaultItems")
@@ -163,6 +164,7 @@ export const create = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const { user } = await assertVaultWrite(ctx, args.societyId, args.actingUserId);
     const now = new Date().toISOString();
@@ -222,6 +224,7 @@ export const update = mutation({
       notes: v.optional(v.string()),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId, patch }) => {
     const existing = await ctx.db.get(id);
     if (!existing) throw new ConvexError({ code: "NOT_FOUND", message: "Access vault record not found." });
@@ -247,6 +250,7 @@ export const revealSecret = mutation({
     id: v.id("secretVaultItems"),
     actingUserId: v.id("users"),
   },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const row = await ctx.db.get(id);
     if (!row) throw new ConvexError({ code: "NOT_FOUND", message: "Access vault record not found." });
@@ -267,6 +271,7 @@ export const revealSecret = mutation({
 
 export const remove = mutation({
   args: { id: v.id("secretVaultItems"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const existing = await ctx.db.get(id);
     if (!existing) return;

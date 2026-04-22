@@ -19,6 +19,7 @@ const REGISTER_TABLES = [
 
 export const overview = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const result: Record<string, any[]> = {};
     for (const table of REGISTER_TABLES) {
@@ -53,6 +54,7 @@ export const updateReview = mutation({
     status: v.optional(v.string()),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { table, id, status, notes }) => {
     if (!REGISTER_TABLES.includes(table as any)) throw new Error(`Unsupported register table: ${table}`);
     const patch: Record<string, any> = {};
@@ -73,6 +75,7 @@ export const promoteBoardRoleToDirector = mutation({
     status: v.optional(v.string()),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const assignment = await ctx.db.get(args.assignmentId);
     if (!assignment) throw new Error("Board role assignment not found.");
@@ -106,6 +109,7 @@ export const promoteBoardRoleToDirector = mutation({
 
 export const finishFinancePaperlessReview = mutation({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const completedAt = todayDate();
     const counts = {
@@ -211,6 +215,7 @@ export const finishFinancePaperlessReview = mutation({
 
 export const finishSafePaperlessReview = mutation({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const completedAt = todayDate();
     const counts: Record<string, number> = {
@@ -422,6 +427,7 @@ export const createManual = mutation({
     kind: v.string(),
     payload: v.any(),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, kind, payload }) => {
     const now = new Date().toISOString();
     const p = payload ?? {};

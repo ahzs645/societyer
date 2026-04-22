@@ -4,6 +4,7 @@ import { getActiveBylawRuleSet } from "./lib/bylawRules";
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("proxies")
@@ -13,6 +14,7 @@ export const list = query({
 
 export const forMeeting = query({
   args: { meetingId: v.id("meetings") },
+  returns: v.any(),
   handler: async (ctx, { meetingId }) =>
     ctx.db
       .query("proxies")
@@ -31,6 +33,7 @@ export const create = mutation({
     instructions: v.optional(v.string()),
     signedAtISO: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const rules = await getActiveBylawRuleSet(ctx, args.societyId);
     if (!rules.allowProxyVoting) {
@@ -75,6 +78,7 @@ export const update = mutation({
       signedAtISO: v.optional(v.string()),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     await ctx.db.patch(id, patch);
   },
@@ -82,6 +86,7 @@ export const update = mutation({
 
 export const revoke = mutation({
   args: { id: v.id("proxies") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.patch(id, { revokedAtISO: new Date().toISOString() });
   },
@@ -89,6 +94,7 @@ export const revoke = mutation({
 
 export const remove = mutation({
   args: { id: v.id("proxies") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

@@ -12,6 +12,7 @@ import { v } from "convex/values";
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("objectMetadata")
@@ -21,6 +22,7 @@ export const list = query({
 
 export const get = query({
   args: { id: v.id("objectMetadata") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
@@ -29,6 +31,7 @@ export const getByNameSingular = query({
     societyId: v.id("societies"),
     nameSingular: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, nameSingular }) =>
     ctx.db
       .query("objectMetadata")
@@ -43,6 +46,7 @@ export const getByNamePlural = query({
     societyId: v.id("societies"),
     namePlural: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, namePlural }) =>
     ctx.db
       .query("objectMetadata")
@@ -58,6 +62,7 @@ export const getByNamePlural = query({
  */
 export const getWithFields = query({
   args: { objectMetadataId: v.id("objectMetadata") },
+  returns: v.any(),
   handler: async (ctx, { objectMetadataId }) => {
     const object = await ctx.db.get(objectMetadataId);
     if (!object) return null;
@@ -88,6 +93,7 @@ export const getFullTableSetup = query({
     nameSingular: v.string(),
     viewId: v.optional(v.id("views")),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, nameSingular, viewId }) => {
     const object = await ctx.db
       .query("objectMetadata")
@@ -169,6 +175,7 @@ export const create = mutation({
     isActive: v.optional(v.boolean()),
     routePath: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
     return ctx.db.insert("objectMetadata", {
@@ -206,6 +213,7 @@ export const update = mutation({
       routePath: v.optional(v.string()),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     await ctx.db.patch(id, { ...patch, updatedAtISO: new Date().toISOString() });
   },
@@ -213,6 +221,7 @@ export const update = mutation({
 
 export const remove = mutation({
   args: { id: v.id("objectMetadata") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     const object = await ctx.db.get(id);
     if (!object) return;

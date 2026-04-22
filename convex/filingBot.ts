@@ -31,6 +31,7 @@ const STEP_DEFINITIONS: Record<string, { label: string; note?: string }[]> = {
 
 export const listRuns = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
+  returns: v.any(),
   handler: async (ctx, { societyId, limit }) =>
     ctx.db
       .query("filingBotRuns")
@@ -41,6 +42,7 @@ export const listRuns = query({
 
 export const runsForFiling = query({
   args: { filingId: v.id("filings") },
+  returns: v.any(),
   handler: async (ctx, { filingId }) =>
     ctx.db
       .query("filingBotRuns")
@@ -51,6 +53,7 @@ export const runsForFiling = query({
 
 export const getRun = query({
   args: { id: v.id("filingBotRuns") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
@@ -62,6 +65,7 @@ export const _createRun = internalMutation({
     demo: v.boolean(),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -93,6 +97,7 @@ export const _updateStep = internalMutation({
     status: v.string(),
     note: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, stepIndex, status, note }) => {
     const run = await ctx.db.get(id);
     if (!run) return;
@@ -112,6 +117,7 @@ export const _completeRun = internalMutation({
     confirmationNumber: v.optional(v.string()),
     pdfDocumentId: v.optional(v.id("documents")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await ctx.db.patch(args.id, {
       status: args.status,
@@ -129,6 +135,7 @@ export const _patchFiling = internalMutation({
     confirmationNumber: v.optional(v.string()),
     status: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const { filingId, ...rest } = args;
     const patch: Record<string, unknown> = {};
@@ -143,6 +150,7 @@ export const _patchFiling = internalMutation({
 // via an HTTP action — here we return the structured data.
 export const buildFilingPacket = query({
   args: { societyId: v.id("societies"), kind: v.string() },
+  returns: v.any(),
   handler: async (ctx, { societyId, kind }) => {
     const [society, directors, members, minutes, meetings] = await Promise.all([
       ctx.db.get(societyId),
@@ -222,6 +230,7 @@ export const run = action({
     filingId: v.id("filings"),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, filingId, actingUserId }) => {
     const filing = await ctx.runQuery(api.filings.get, { id: filingId });
     if (!filing) throw new Error("Filing not found.");

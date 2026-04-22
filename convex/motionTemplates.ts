@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const rows = await ctx.db
       .query("motionTemplates")
@@ -22,6 +23,7 @@ export const create = mutation({
     requiresSpecialResolution: v.optional(v.boolean()),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
     return await ctx.db.insert("motionTemplates", {
@@ -47,6 +49,7 @@ export const update = mutation({
     requiresSpecialResolution: v.optional(v.boolean()),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { templateId, ...patch }) => {
     const clean: Record<string, unknown> = { updatedAtISO: new Date().toISOString() };
     for (const [k, v] of Object.entries(patch)) if (v !== undefined) clean[k] = v;
@@ -57,6 +60,7 @@ export const update = mutation({
 
 export const remove = mutation({
   args: { templateId: v.id("motionTemplates") },
+  returns: v.any(),
   handler: async (ctx, { templateId }) => {
     await ctx.db.delete(templateId);
   },
@@ -134,6 +138,7 @@ const SEED_MOTIONS: Array<{
 
 export const seedDefaults = mutation({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const existing = await ctx.db
       .query("motionTemplates")

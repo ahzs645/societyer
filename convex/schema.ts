@@ -932,7 +932,11 @@ export default defineSchema({
   })
     .index("by_society", ["societyId"])
     .index("by_account", ["accountId"])
-    .index("by_society_date", ["societyId", "date"]),
+    .index("by_society_date", ["societyId", "date"])
+    .index("by_society_counterparty_external", ["societyId", "counterpartyExternalId"])
+    .index("by_society_counterparty_external_type", ["societyId", "counterpartyExternalId", "counterpartyResourceType"])
+    .index("by_society_category_account_external", ["societyId", "categoryAccountExternalId"])
+    .index("by_society_category", ["societyId", "category"]),
 
   budgets: defineTable({
     societyId: v.id("societies"),
@@ -2220,6 +2224,9 @@ export default defineSchema({
     ceasedDate: v.optional(v.string()),
     docxDocumentId: v.optional(v.id("documents")),
     pdfDocumentId: v.optional(v.id("documents")),
+    adoptedAtMeetingId: v.optional(v.id("meetings")),
+    adoptedInMinutesId: v.optional(v.id("minutes")),
+    adoptingMotionEvidenceId: v.optional(v.id("motionEvidence")),
     html: v.optional(v.string()),
     requiredSigners: v.array(v.string()),
     signatureRequired: v.boolean(),
@@ -2872,7 +2879,7 @@ export default defineSchema({
   minuteBookItems: defineTable({
     societyId: v.id("societies"),
     title: v.string(),
-    recordType: v.string(), // meeting | minutes | resolution | filing | policy | document | package | other
+    recordType: v.string(), // meeting | minutes | resolution | written_resolution | filing | policy | document | package | other
     effectiveDate: v.optional(v.string()),
     status: v.string(), // Draft | Current | NeedsReview | Archived | Superseded
     documentIds: v.array(v.id("documents")),
@@ -2881,6 +2888,7 @@ export default defineSchema({
     filingId: v.optional(v.id("filings")),
     policyId: v.optional(v.id("policies")),
     workflowPackageId: v.optional(v.id("workflowPackages")),
+    writtenResolutionId: v.optional(v.id("writtenResolutions")),
     signatureIds: v.array(v.id("signatures")),
     sourceEvidenceIds: v.array(v.id("sourceEvidence")),
     archivedAtISO: v.optional(v.string()),

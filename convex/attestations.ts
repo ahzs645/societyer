@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("directorAttestations")
@@ -12,6 +13,7 @@ export const list = query({
 
 export const forDirector = query({
   args: { directorId: v.id("directors") },
+  returns: v.any(),
   handler: async (ctx, { directorId }) =>
     ctx.db
       .query("directorAttestations")
@@ -30,6 +32,7 @@ export const sign = mutation({
     stillResidentOrEligible: v.boolean(),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     // Upsert by (director, year)
     const existing = await ctx.db
@@ -49,6 +52,7 @@ export const sign = mutation({
 
 export const remove = mutation({
   args: { id: v.id("directorAttestations") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -57,6 +61,7 @@ export const remove = mutation({
 /** Returns directors who haven't attested for the current year. */
 export const missingForYear = query({
   args: { societyId: v.id("societies"), year: v.number() },
+  returns: v.any(),
   handler: async (ctx, { societyId, year }) => {
     const [directors, atts] = await Promise.all([
       ctx.db

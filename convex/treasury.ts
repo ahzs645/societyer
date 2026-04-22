@@ -7,6 +7,7 @@ export const profitAndLoss = query({
     from: v.string(),
     to: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, from, to }) => {
     const txns = await ctx.db
       .query("financialTransactions")
@@ -65,6 +66,7 @@ export const budgetVariance = query({
     societyId: v.id("societies"),
     fiscalYear: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, fiscalYear }) => {
     const budgets = await ctx.db
       .query("budgets")
@@ -101,6 +103,7 @@ export const budgetVariance = query({
 
 export const restrictedFunds = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const grants = await ctx.db
       .query("grants")

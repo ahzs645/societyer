@@ -4,6 +4,7 @@ import { assertAllowedOption, invalidOptionListIssues } from "./lib/orgHubOption
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const [rows, pipaTrainings, publications, workflows, documentVersions, tasks] = await Promise.all([
       ctx.db.query("policies").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
@@ -30,6 +31,23 @@ export const list = query({
   },
 });
 
+export const adoptionOptions = query({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, { societyId }) => {
+    const [meetings, minutes, motionEvidence] = await Promise.all([
+      ctx.db.query("meetings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("minutes").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("motionEvidence").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ]);
+    return {
+      meetings: sortDesc(meetings, "scheduledAt"),
+      minutes: sortDesc(minutes, "heldAt"),
+      motionEvidence: sortDesc(motionEvidence, "meetingDate"),
+    };
+  },
+});
+
 export const upsert = mutation({
   args: {
     id: v.optional(v.id("policies")),
@@ -42,6 +60,9 @@ export const upsert = mutation({
     ceasedDate: v.optional(v.string()),
     docxDocumentId: v.optional(v.id("documents")),
     pdfDocumentId: v.optional(v.id("documents")),
+    adoptedAtMeetingId: v.optional(v.id("meetings")),
+    adoptedInMinutesId: v.optional(v.id("minutes")),
+    adoptingMotionEvidenceId: v.optional(v.id("motionEvidence")),
     html: v.optional(v.string()),
     requiredSigners: v.optional(v.array(v.string())),
     signatureRequired: v.optional(v.boolean()),
@@ -50,6 +71,7 @@ export const upsert = mutation({
     status: v.optional(v.string()),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     const now = new Date().toISOString();
     assertAllowedOption("policyStatuses", args.status, "Policy status");
@@ -70,6 +92,9 @@ export const upsert = mutation({
       ceasedDate: cleanText(args.ceasedDate),
       docxDocumentId: args.docxDocumentId,
       pdfDocumentId: args.pdfDocumentId,
+      adoptedAtMeetingId: args.adoptedAtMeetingId,
+      adoptedInMinutesId: args.adoptedInMinutesId,
+      adoptingMotionEvidenceId: args.adoptingMotionEvidenceId,
       html: cleanText(args.html),
       requiredSigners: cleanList(args.requiredSigners),
       signatureRequired: Boolean(args.signatureRequired),
@@ -92,6 +117,7 @@ export const upsert = mutation({
 
 export const remove = mutation({
   args: { id: v.id("policies") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -102,6 +128,7 @@ export const createReviewTask = mutation({
     policyId: v.id("policies"),
     dueDate: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { policyId, dueDate }) => {
     const policy = await ctx.db.get(policyId);
     if (!policy) throw new Error("Policy not found.");
@@ -122,6 +149,7 @@ export const createReviewTask = mutation({
 
 export const createRequiredSignerTask = mutation({
   args: { policyId: v.id("policies") },
+  returns: v.any(),
   handler: async (ctx, { policyId }) => {
     const policy = await ctx.db.get(policyId);
     if (!policy) throw new Error("Policy not found.");
@@ -143,6 +171,7 @@ export const createRequiredSignerTask = mutation({
 
 export const createTransparencyDraft = mutation({
   args: { policyId: v.id("policies") },
+  returns: v.any(),
   handler: async (ctx, { policyId }) => {
     const policy = await ctx.db.get(policyId);
     if (!policy) throw new Error("Policy not found.");
@@ -207,7 +236,16 @@ function policyLifecycle(policy: any, related: Record<string, any[]>) {
     signatureState: policy.signatureRequired
       ? (policy.requiredSigners?.length ? "required" : "missing_signers")
       : "not_required",
+    adoptionState: policy.adoptedAtMeetingId || policy.adoptedInMinutesId || policy.adoptingMotionEvidenceId
+      ? "linked"
+      : policy.status === "Active"
+        ? "missing_adoption_record"
+        : "not_linked",
   };
+}
+
+function sortDesc(rows: any[], field: string) {
+  return rows.slice().sort((a, b) => String(b[field] ?? "").localeCompare(String(a[field] ?? "")));
 }
 
 function cleanText(value: unknown) {

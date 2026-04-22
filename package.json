@@ -6,13 +6,17 @@
   "scripts": {
     "dev": "vite",
     "dev:full": "concurrently -k \"npm run auth:server\" \"npm run dev\"",
-    "build": "tsc -b && vite build",
-    "build:pages": "tsc -b && VITE_STABLE_ASSET_NAMES=1 vite build && node scripts/prepare-pages.mjs",
+    "build": "npm run convex:typecheck && tsc -b && vite build",
+    "build:pages": "npm run convex:typecheck && tsc -b && VITE_STABLE_ASSET_NAMES=1 vite build && node scripts/prepare-pages.mjs",
     "preview": "vite preview",
     "convex": "convex dev",
-    "convex:seed": "convex run seed:run",
-    "convex:reset": "convex run seed:reset",
+    "convex:seed": "node scripts/convex-maintenance.mjs seed:run",
+    "convex:reset": "node scripts/convex-maintenance.mjs seed:reset",
+    "convex:metadata": "node scripts/convex-maintenance.mjs seedRecordTableMetadata:run",
     "convex:codegen": "npx convex codegen",
+    "convex:typecheck": "tsc -p convex/tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "lint:convex": "eslint convex",
     "templates:json": "tsx scripts/generate-starter-template-json.ts",
     "templates:exports": "tsx scripts/render-starter-template-documents.ts",
     "docker:up": "docker compose up -d",
@@ -55,13 +59,16 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@convex-dev/eslint-plugin": "^2.0.0",
     "@playwright/test": "^1.59.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/swagger-ui-express": "^4.1.8",
     "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^10.2.1",
     "sass": "^1.99.0",
     "typescript": "~5.6.3",
+    "typescript-eslint": "^8.59.0",
     "vite": "^5.4.11"
   }
 }

@@ -1,19 +1,36 @@
 import { Sparkles } from "lucide-react";
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { EmptyState, TintedIconTile } from "../components/ui";
-import { useMutation } from "convex/react";
-import { api } from "@/lib/convexApi";
+import { useToast } from "../components/Toast";
+import { setStoredSocietyId } from "../hooks/useSociety";
+import { maintenanceErrorMessage, seedDemoSociety } from "../lib/maintenanceApi";
 
 export function SeedPrompt() {
-  const seed = useMutation(api.seed.run);
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
   return (
     <div className="page">
       <EmptyState
         icon={<Sparkles size={20} />}
         title="No society yet"
         action={
-          <button className="btn btn--accent" onClick={() => seed({})}>
-            <Sparkles size={14} /> Seed demo society
+          <button
+            className="btn btn--accent"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                const result = await seedDemoSociety();
+                setStoredSocietyId(result.societyId);
+                toast.success("Demo society seeded");
+              } catch (error) {
+                toast.error(maintenanceErrorMessage(error));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <Sparkles size={14} /> {busy ? "Seeding..." : "Seed demo society"}
           </button>
         }
       >

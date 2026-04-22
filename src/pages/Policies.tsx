@@ -17,6 +17,7 @@ export function PoliciesPage() {
   const society = useSociety();
   const policies = useQuery(api.policies.list, society ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
+  const adoptionOptions = useQuery(api.policies.adoptionOptions, society ? { societyId: society._id } : "skip");
   const upsert = useMutation(api.policies.upsert);
   const remove = useMutation(api.policies.remove);
   const createReviewTask = useMutation(api.policies.createReviewTask);
@@ -30,6 +31,14 @@ export function PoliciesPage() {
   const docById = useMemo(
     () => new Map<string, any>((documents ?? []).map((doc: any) => [doc._id, doc])),
     [documents],
+  );
+  const adoptionMaps = useMemo(
+    () => ({
+      meetings: new Map<string, any>((adoptionOptions?.meetings ?? []).map((row: any) => [row._id, row])),
+      minutes: new Map<string, any>((adoptionOptions?.minutes ?? []).map((row: any) => [row._id, row])),
+      motionEvidence: new Map<string, any>((adoptionOptions?.motionEvidence ?? []).map((row: any) => [row._id, row])),
+    }),
+    [adoptionOptions],
   );
 
   if (society === undefined) return <div className="page">Loading...</div>;
@@ -60,6 +69,9 @@ export function PoliciesPage() {
       ceasedDate: draft.ceasedDate || undefined,
       docxDocumentId: draft.docxDocumentId || undefined,
       pdfDocumentId: draft.pdfDocumentId || undefined,
+      adoptedAtMeetingId: draft.adoptedAtMeetingId || undefined,
+      adoptedInMinutesId: draft.adoptedInMinutesId || undefined,
+      adoptingMotionEvidenceId: draft.adoptingMotionEvidenceId || undefined,
       html: draft.html || undefined,
       requiredSigners: listValues(draft.requiredSignersText ?? draft.requiredSigners),
       signatureRequired: !!draft.signatureRequired,
@@ -123,6 +135,7 @@ export function PoliciesPage() {
                 <th>Owner</th>
                 <th>Dates</th>
                 <th>Documents</th>
+                <th>Adoption</th>
                 <th>Signers</th>
                 <th>Lifecycle</th>
                 <th>Status</th>
@@ -145,6 +158,7 @@ export function PoliciesPage() {
                     <div>{row.docxDocumentId ? docById.get(row.docxDocumentId)?.title ?? "DOCX linked" : "No DOCX"}</div>
                     <div className="muted">{row.pdfDocumentId ? docById.get(row.pdfDocumentId)?.title ?? "PDF linked" : "No PDF"}</div>
                   </td>
+                  <td><AdoptionCell row={row} maps={adoptionMaps} /></td>
                   <td>
                     {row.signatureRequired ? (
                       <Badge tone="warn">{(row.requiredSigners ?? []).map((value: string) => optionLabel("requiredSigners", value)).join(", ") || "Needs review"}</Badge>
@@ -180,7 +194,7 @@ export function PoliciesPage() {
                 </tr>
               ))}
               {(policies ?? []).length === 0 && (
-                <tr><td colSpan={8} className="muted" style={{ textAlign: "center", padding: 24 }}>No policies yet.</td></tr>
+                <tr><td colSpan={9} className="muted" style={{ textAlign: "center", padding: 24 }}>No policies yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -227,6 +241,29 @@ export function PoliciesPage() {
                 {(documents ?? []).map((doc: any) => <option key={doc._id} value={doc._id}>{doc.title}</option>)}
               </select>
             </Field>
+            <div className="row" style={{ gap: 12 }}>
+              <RecordSelect
+                label="Adoption meeting"
+                value={draft.adoptedAtMeetingId}
+                rows={adoptionOptions?.meetings ?? []}
+                onChange={(value: string | undefined) => setDraft({ ...draft, adoptedAtMeetingId: value })}
+                getLabel={(row: any) => `${row.title} - ${row.scheduledAt ? formatDate(row.scheduledAt) : "unscheduled"}`}
+              />
+              <RecordSelect
+                label="Adoption minutes"
+                value={draft.adoptedInMinutesId}
+                rows={adoptionOptions?.minutes ?? []}
+                onChange={(value: string | undefined) => setDraft({ ...draft, adoptedInMinutesId: value })}
+                getLabel={(row: any) => `${row.heldAt ? formatDate(row.heldAt) : "Minutes"} - ${row.status ?? "draft"}`}
+              />
+            </div>
+            <RecordSelect
+              label="Adopting resolution evidence"
+              value={draft.adoptingMotionEvidenceId}
+              rows={adoptionOptions?.motionEvidence ?? []}
+              onChange={(value: string | undefined) => setDraft({ ...draft, adoptingMotionEvidenceId: value })}
+              getLabel={(row: any) => `${row.meetingDate ? formatDate(row.meetingDate) : "Motion"} - ${shortText(row.motionText, 92)}`}
+            />
             <Toggle checked={!!draft.signatureRequired} onChange={(value) => setDraft({ ...draft, signatureRequired: value })} label="Signature required" />
             <OptionMultiSelect label="Required signers" setName="requiredSigners" values={listValues(draft.requiredSigners)} onChange={(values) => setDraft({ ...draft, requiredSigners: values })} />
             <Field label="HTML"><textarea className="textarea mono" value={draft.html ?? ""} onChange={(e) => setDraft({ ...draft, html: e.target.value })} /></Field>
@@ -238,9 +275,36 @@ export function PoliciesPage() {
   );
 }
 
+function RecordSelect({ label, value, rows, onChange, getLabel }: any) {
+  return (
+    <Field label={label}>
+      <select className="input" value={value ?? ""} onChange={(e) => onChange(e.target.value || undefined)}>
+        <option value="">No {label.toLowerCase()}</option>
+        {rows.map((row: any) => <option key={row._id} value={row._id}>{getLabel(row)}</option>)}
+      </select>
+    </Field>
+  );
+}
+
 function listValues(value: any) {
   if (Array.isArray(value)) return value.map(String).map((item) => item.trim()).filter(Boolean);
   return String(value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function AdoptionCell({ row, maps }: { row: any; maps: any }) {
+  const meeting = row.adoptedAtMeetingId ? maps.meetings.get(row.adoptedAtMeetingId) : null;
+  const minutes = row.adoptedInMinutesId ? maps.minutes.get(row.adoptedInMinutesId) : null;
+  const motion = row.adoptingMotionEvidenceId ? maps.motionEvidence.get(row.adoptingMotionEvidenceId) : null;
+  if (!meeting && !minutes && !motion) {
+    return <Badge tone={row.status === "Active" ? "warn" : "neutral"}>{row.status === "Active" ? "Needs adoption record" : "Not linked"}</Badge>;
+  }
+  return (
+    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+      {meeting && <Badge tone="success">{meeting.title}</Badge>}
+      {minutes && <Badge tone="success">Minutes {minutes.heldAt ? formatDate(minutes.heldAt) : ""}</Badge>}
+      {motion && <Badge tone="info">{shortText(motion.motionText, 42)}</Badge>}
+    </div>
+  );
 }
 
 function LifecycleBadges({ lifecycle }: { lifecycle?: any }) {
@@ -253,6 +317,9 @@ function LifecycleBadges({ lifecycle }: { lifecycle?: any }) {
       <Badge tone={lifecycle.publicationId ? "success" : "neutral"}>{lifecycle.publicationStatus ?? "not published"}</Badge>
       <Badge tone={lifecycle.signatureState === "missing_signers" ? "danger" : lifecycle.signatureState === "required" ? "warn" : "neutral"}>
         {labelize(lifecycle.signatureState)}
+      </Badge>
+      <Badge tone={lifecycle.adoptionState === "linked" ? "success" : lifecycle.adoptionState === "missing_adoption_record" ? "warn" : "neutral"}>
+        {labelize(lifecycle.adoptionState)}
       </Badge>
       <Badge>{lifecycle.versionCount ?? 0} versions</Badge>
       <Badge>{lifecycle.taskCount ?? 0} tasks</Badge>
@@ -270,4 +337,9 @@ function toneForStatus(status?: string) {
 
 function labelize(value?: string) {
   return String(value ?? "-").replace(/_/g, " ");
+}
+
+function shortText(value: unknown, max: number) {
+  const text = String(value ?? "").trim();
+  return text.length > max ? `${text.slice(0, max - 1)}...` : text;
 }

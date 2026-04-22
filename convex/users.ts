@@ -36,6 +36,7 @@ export async function requireRole(
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("users")
@@ -45,11 +46,13 @@ export const list = query({
 
 export const get = query({
   args: { id: v.id("users") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
 export const getByEmail = query({
   args: { email: v.string() },
+  returns: v.any(),
   handler: async (ctx, { email }) => {
     const rows = await ctx.db
       .query("users")
@@ -61,6 +64,7 @@ export const getByEmail = query({
 
 export const getByAuthSubject = query({
   args: { authSubject: v.string() },
+  returns: v.any(),
   handler: async (ctx, { authSubject }) => {
     const rows = await ctx.db
       .query("users")
@@ -78,6 +82,7 @@ export const resolveAuthSession = mutation({
     displayName: v.string(),
     emailVerified: v.boolean(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const [existingByAuth, members, users] = await Promise.all([
       ctx.db
@@ -152,6 +157,7 @@ export const upsert = mutation({
     avatarColor: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -176,6 +182,7 @@ export const setRole = mutation({
     role: v.string(),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, role, actingUserId }) => {
     const target = await ctx.db.get(id);
     if (!target) throw new Error("User not found.");
@@ -190,6 +197,7 @@ export const setRole = mutation({
 
 export const remove = mutation({
   args: { id: v.id("users"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const target = await ctx.db.get(id);
     if (!target) return;
@@ -204,6 +212,7 @@ export const remove = mutation({
 
 export const recordLogin = mutation({
   args: { id: v.id("users") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.patch(id, { lastLoginAtISO: new Date().toISOString() });
   },

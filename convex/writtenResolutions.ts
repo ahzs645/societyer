@@ -9,6 +9,7 @@ const signature = v.object({
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("writtenResolutions")
@@ -25,6 +26,7 @@ export const create = mutation({
     requiredCount: v.number(),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) =>
     ctx.db.insert("writtenResolutions", {
       ...args,
@@ -40,6 +42,7 @@ export const sign = mutation({
     signerName: v.string(),
     memberId: v.optional(v.id("members")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, signerName, memberId }) => {
     const row = await ctx.db.get(id);
     if (!row) return;
@@ -57,6 +60,7 @@ export const sign = mutation({
 
 export const markFailed = mutation({
   args: { id: v.id("writtenResolutions"), note: v.optional(v.string()) },
+  returns: v.any(),
   handler: async (ctx, { id, note }) => {
     await ctx.db.patch(id, { status: "Failed", notes: note });
   },
@@ -64,6 +68,7 @@ export const markFailed = mutation({
 
 export const remove = mutation({
   args: { id: v.id("writtenResolutions") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

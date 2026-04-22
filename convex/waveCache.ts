@@ -30,6 +30,7 @@ const structureValidator = v.object({
 
 export const summary = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const snapshot = await latestSnapshot(ctx, societyId);
     if (!snapshot) return null;
@@ -47,6 +48,7 @@ export const resources = query({
     search: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, resourceType, search, limit }) => {
     const snapshot = await latestSnapshot(ctx, societyId);
     if (!snapshot) return [];
@@ -75,6 +77,7 @@ export const resources = query({
 
 export const resource = query({
   args: { id: v.id("waveCacheResources") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     const row = await ctx.db.get(id);
     if (!row) return null;
@@ -101,6 +104,7 @@ export const resourceByExternalId = query({
     externalId: v.string(),
     resourceType: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, externalId, resourceType }) => {
     const snapshot = await latestSnapshot(ctx, societyId);
     if (!snapshot) return null;
@@ -133,6 +137,7 @@ export const structures = query({
     search: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, search, limit }) => {
     const snapshot = await latestSnapshot(ctx, societyId);
     if (!snapshot) return [];
@@ -158,6 +163,7 @@ export const sync = action({
     connectionId: v.optional(v.id("financialConnections")),
     businessId: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, connectionId, businessId }) => {
     const connection = connectionId
       ? await ctx.runQuery(api.financialHub.getConnection, { id: connectionId })
@@ -203,6 +209,7 @@ export const healthCheck = action({
   args: {
     businessId: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (_ctx, { businessId }) => {
     try {
       return await waveHealthCheck({ businessId });
@@ -236,6 +243,7 @@ export const invoicePaymentProbe = action({
     maxInvoices: v.optional(v.number()),
     maxPayments: v.optional(v.number()),
   },
+  returns: v.any(),
   handler: async (_ctx, args) => {
     try {
       return await waveInvoicePaymentProbe(args);
@@ -262,6 +270,7 @@ export const _replaceSnapshot = internalMutation({
     resources: v.array(resourceValidator),
     structures: v.array(structureValidator),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const previous = await ctx.db
       .query("waveCacheSnapshots")

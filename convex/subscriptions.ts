@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { v } from "convex/values";
 import { query, internalMutation, mutation, action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
@@ -78,6 +77,7 @@ async function syncCurrentFeePeriod(ctx: any, planId: Id<"subscriptionPlans">, p
 
 export const plans = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("subscriptionPlans")
@@ -87,6 +87,7 @@ export const plans = query({
 
 export const mySubscriptions = query({
   args: { societyId: v.id("societies"), email: v.string() },
+  returns: v.any(),
   handler: async (ctx, { societyId, email }) => {
     const rows = await ctx.db
       .query("memberSubscriptions")
@@ -98,6 +99,7 @@ export const mySubscriptions = query({
 
 export const allSubscriptions = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("memberSubscriptions")
@@ -120,6 +122,7 @@ export const upsertPlan = mutation({
     active: v.boolean(),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -151,6 +154,7 @@ export const upsertPlan = mutation({
 
 export const feeTimeline = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const [plans, periods] = await Promise.all([
       ctx.db
@@ -222,6 +226,7 @@ export const upsertFeePeriod = mutation({
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -250,6 +255,7 @@ export const upsertFeePeriod = mutation({
 
 export const removeFeePeriod = mutation({
   args: { id: v.id("membershipFeePeriods"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const row = await ctx.db.get(id);
     if (!row) return;
@@ -260,6 +266,7 @@ export const removeFeePeriod = mutation({
 
 export const removePlan = mutation({
   args: { id: v.id("subscriptionPlans"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const row = await ctx.db.get(id);
     if (!row) return;
@@ -275,6 +282,7 @@ export const removePlan = mutation({
 
 export const cancelSubscription = mutation({
   args: { id: v.id("memberSubscriptions"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const sub = await ctx.db.get(id);
     if (!sub) return;
@@ -305,6 +313,7 @@ export const beginCheckout = action({
     email: v.string(),
     fullName: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const plan = await ctx.runQuery(api.subscriptions.getPlan, { id: args.planId });
     if (!plan) throw new Error("Plan not found.");
@@ -343,6 +352,7 @@ export const beginCheckout = action({
 
 export const getPlan = query({
   args: { id: v.id("subscriptionPlans") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
@@ -354,6 +364,7 @@ export const _createPending = internalMutation({
     fullName: v.string(),
     demo: v.boolean(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     return await ctx.db.insert("memberSubscriptions", {
       societyId: args.societyId,
@@ -376,6 +387,7 @@ export const simulateActivation = mutation({
     email: v.string(),
     fullName: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const plan = await ctx.db.get(args.planId);
     if (!plan) throw new Error("Plan not found.");
@@ -433,11 +445,12 @@ export const simulateActivation = mutation({
   },
 });
 
-export const handleStripeEvent = mutation({
+export const handleStripeEvent = internalMutation({
   args: {
     type: v.string(),
     payload: v.string(),
   },
+  returns: v.null(),
   handler: async (ctx, { type, payload }) => {
     const object = JSON.parse(payload);
 
@@ -446,9 +459,9 @@ export const handleStripeEvent = mutation({
       const societyId = metadata.societyId as Id<"societies"> | undefined;
       const planId = metadata.planId as Id<"subscriptionPlans"> | undefined;
       const email = object?.customer_email ?? object?.customer_details?.email;
-      if (!societyId || !planId || !email) return;
+      if (!societyId || !planId || !email) return null;
       const plan = await ctx.db.get(planId);
-      if (!plan) return;
+      if (!plan) return null;
 
       const pending = await ctx.db
         .query("memberSubscriptions")
@@ -486,7 +499,6 @@ export const handleStripeEvent = mutation({
         await ctx.db.insert("memberSubscriptions", {
           societyId,
           planId,
-          memberId: member?._id,
           email,
           fullName:
             metadata.fullName ??
@@ -507,17 +519,17 @@ export const handleStripeEvent = mutation({
         linkHref: "/membership",
         createdAtISO: new Date().toISOString(),
       });
-      return;
+      return null;
     }
 
     if (type === "invoice.paid" || type === "invoice.payment_failed") {
       const subscriptionId = object?.subscription;
-      if (!subscriptionId) return;
+      if (!subscriptionId) return null;
       const subscriptions = await ctx.db.query("memberSubscriptions").collect();
       const match = subscriptions.find(
         (row) => row.stripeSubscriptionId === subscriptionId,
       );
-      if (!match) return;
+      if (!match) return null;
       const patch: Record<string, unknown> = {
         lastPaymentAtISO: new Date().toISOString(),
       };
@@ -549,7 +561,7 @@ export const handleStripeEvent = mutation({
         linkHref: "/membership",
         createdAtISO: new Date().toISOString(),
       });
-      return;
+      return null;
     }
 
     if (
@@ -557,12 +569,12 @@ export const handleStripeEvent = mutation({
       type === "customer.subscription.updated"
     ) {
       const subscriptionId = object?.id;
-      if (!subscriptionId) return;
+      if (!subscriptionId) return null;
       const subscriptions = await ctx.db.query("memberSubscriptions").collect();
       const match = subscriptions.find(
         (row) => row.stripeSubscriptionId === subscriptionId,
       );
-      if (!match) return;
+      if (!match) return null;
       const status =
         type === "customer.subscription.deleted"
           ? "canceled"
@@ -587,5 +599,6 @@ export const handleStripeEvent = mutation({
         createdAtISO: new Date().toISOString(),
       });
     }
+    return null;
   },
 });

@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("courtOrders")
@@ -22,6 +23,7 @@ export const create = mutation({
     status: v.string(),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => ctx.db.insert("courtOrders", args),
 });
 
@@ -39,6 +41,7 @@ export const update = mutation({
       notes: v.optional(v.string()),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     await ctx.db.patch(id, patch);
   },
@@ -46,6 +49,7 @@ export const update = mutation({
 
 export const remove = mutation({
   args: { id: v.id("courtOrders") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

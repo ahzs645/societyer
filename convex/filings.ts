@@ -42,11 +42,13 @@ function filingDefaults(kind: string) {
 
 export const get = query({
   args: { id: v.id("filings") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("filings")
@@ -57,6 +59,7 @@ export const list = query({
 
 export const guidance = query({
   args: { kind: v.string() },
+  returns: v.any(),
   handler: async (_ctx, { kind }) => filingDefaults(kind),
 });
 
@@ -73,6 +76,7 @@ export const create = mutation({
     registryUrl: v.optional(v.string()),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const defaults = filingDefaults(args.kind);
     return await ctx.db.insert("filings", {
@@ -97,6 +101,7 @@ export const markFiled = mutation({
     attestedByUserId: v.optional(v.id("users")),
     submissionChecklist: v.optional(v.array(v.string())),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...rest }) => {
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Filing not found.");
@@ -147,6 +152,7 @@ export const update = mutation({
       notes: v.optional(v.string()),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Filing not found.");
@@ -187,6 +193,7 @@ export const importBcRegistryHistory = mutation({
       }),
     ),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("filings")
@@ -259,6 +266,7 @@ export const importBcRegistryHistory = mutation({
 
 export const remove = mutation({
   args: { id: v.id("filings") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

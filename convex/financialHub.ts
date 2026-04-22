@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { v } from "convex/values";
 import { query, internalMutation, mutation, action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
@@ -17,6 +16,7 @@ function normalizeCategoryLabel(value: unknown) {
 
 export const connections = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("financialConnections")
@@ -26,6 +26,7 @@ export const connections = query({
 
 export const accounts = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("financialAccounts")
@@ -35,6 +36,7 @@ export const accounts = query({
 
 export const transactions = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
+  returns: v.any(),
   handler: async (ctx, { societyId, limit }) =>
     ctx.db
       .query("financialTransactions")
@@ -49,6 +51,7 @@ export const transactionsForAccountExternalId = query({
     externalId: v.string(),
     limit: v.optional(v.number()),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, externalId, limit }) => {
     const accounts = await ctx.db
       .query("financialAccounts")
@@ -80,16 +83,25 @@ export const transactionsForCounterpartyExternalId = query({
     resourceType: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, externalId, resourceType, limit }) => {
-    const [accounts, allRows, snapshots] = await Promise.all([
+    const transactionQuery = resourceType
+      ? ctx.db
+          .query("financialTransactions")
+          .withIndex("by_society_counterparty_external_type", (q) =>
+            q.eq("societyId", societyId).eq("counterpartyExternalId", externalId).eq("counterpartyResourceType", resourceType),
+          )
+      : ctx.db
+          .query("financialTransactions")
+          .withIndex("by_society_counterparty_external", (q) =>
+            q.eq("societyId", societyId).eq("counterpartyExternalId", externalId),
+          );
+    const [accounts, transactionRows, snapshots] = await Promise.all([
       ctx.db
         .query("financialAccounts")
         .withIndex("by_society", (q) => q.eq("societyId", societyId))
         .collect(),
-      ctx.db
-        .query("financialTransactions")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
+      transactionQuery.collect(),
       ctx.db
         .query("waveCacheSnapshots")
         .withIndex("by_society_provider", (q) => q.eq("societyId", societyId).eq("provider", "wave"))
@@ -114,10 +126,7 @@ export const transactionsForCounterpartyExternalId = query({
         }
       }
     }
-    const rows = allRows
-      .filter((row) => row.counterpartyExternalId === externalId)
-      .filter((row) => !resourceType || row.counterpartyResourceType === resourceType)
-      .sort((a, b) => b.date.localeCompare(a.date));
+    const rows = transactionRows.sort((a, b) => b.date.localeCompare(a.date));
     const linkedTotalCents = rows.reduce((sum, row) => sum + row.amountCents, 0);
     return {
       transactions: rows.slice(0, limit ?? 500).map((row) => ({
@@ -140,16 +149,27 @@ export const transactionsForCategoryAccountExternalId = query({
     label: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, externalId, label, limit }) => {
-    const [accounts, allRows, snapshots] = await Promise.all([
+    const labelText = label?.trim();
+    const normalizedLabel = normalizeCategoryLabel(labelText);
+    const [accounts, rowsByExternalId, rowsByLabel, snapshots] = await Promise.all([
       ctx.db
         .query("financialAccounts")
         .withIndex("by_society", (q) => q.eq("societyId", societyId))
         .collect(),
       ctx.db
         .query("financialTransactions")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
+        .withIndex("by_society_category_account_external", (q) =>
+          q.eq("societyId", societyId).eq("categoryAccountExternalId", externalId),
+        )
         .collect(),
+      labelText
+        ? ctx.db
+            .query("financialTransactions")
+            .withIndex("by_society_category", (q) => q.eq("societyId", societyId).eq("category", labelText))
+            .collect()
+        : Promise.resolve([]),
       ctx.db
         .query("waveCacheSnapshots")
         .withIndex("by_society_provider", (q) => q.eq("societyId", societyId).eq("provider", "wave"))
@@ -174,14 +194,13 @@ export const transactionsForCategoryAccountExternalId = query({
         }
       }
     }
-    const normalizedLabel = normalizeCategoryLabel(label);
-    const rows = allRows
-      .filter((row) => {
-        if (row.categoryAccountExternalId === externalId) return true;
-        if (!row.categoryAccountExternalId && normalizedLabel && normalizeCategoryLabel(row.category) === normalizedLabel) return true;
-        return false;
-      })
-      .sort((a, b) => b.date.localeCompare(a.date));
+    const rowById = new Map(rowsByExternalId.map((row) => [String(row._id), row]));
+    for (const row of rowsByLabel) {
+      if (!row.categoryAccountExternalId && normalizedLabel && normalizeCategoryLabel(row.category) === normalizedLabel) {
+        rowById.set(String(row._id), row);
+      }
+    }
+    const rows = Array.from(rowById.values()).sort((a, b) => b.date.localeCompare(a.date));
     const linkedTotalCents = rows.reduce((sum, row) => sum + row.amountCents, 0);
     return {
       transactions: rows.slice(0, limit ?? 500).map((row) => {
@@ -200,6 +219,7 @@ export const transactionsForCategoryAccountExternalId = query({
 
 export const budgets = query({
   args: { societyId: v.id("societies"), fiscalYear: v.optional(v.string()) },
+  returns: v.any(),
   handler: async (ctx, { societyId, fiscalYear }) => {
     const rows = await ctx.db
       .query("budgets")
@@ -213,6 +233,7 @@ export const budgets = query({
 
 export const operatingSubscriptions = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const rows = await ctx.db
       .query("operatingSubscriptions")
@@ -241,6 +262,7 @@ export const upsertBudget = mutation({
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -271,6 +293,7 @@ export const upsertOperatingSubscription = mutation({
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -296,6 +319,7 @@ export const upsertOperatingSubscription = mutation({
 
 export const removeOperatingSubscription = mutation({
   args: { id: v.id("operatingSubscriptions"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const row = await ctx.db.get(id);
     if (!row) return;
@@ -306,6 +330,7 @@ export const removeOperatingSubscription = mutation({
 
 export const removeBudget = mutation({
   args: { id: v.id("budgets"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const row = await ctx.db.get(id);
     if (!row) return;
@@ -323,6 +348,7 @@ function monthlyEquivalentCents(amountCents: number, interval: string) {
 
 export const oauthUrl = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const p = providers.accounting();
     const society = await ctx.db.get(societyId);
@@ -343,6 +369,7 @@ export const markConnectionConnected = mutation({
     demo: v.boolean(),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -378,6 +405,7 @@ export const markConnectionConnected = mutation({
 
 export const disconnect = mutation({
   args: { connectionId: v.id("financialConnections"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { connectionId, actingUserId }) => {
     const conn = await ctx.db.get(connectionId);
     if (!conn) return;
@@ -388,6 +416,7 @@ export const disconnect = mutation({
 
 export const removeDemoData = mutation({
   args: { societyId: v.id("societies"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { societyId, actingUserId }) => {
     await requireRole(ctx, { actingUserId, societyId, required: "Admin" });
 
@@ -505,6 +534,7 @@ export const _replaceSyncedData = internalMutation({
       }),
     ),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const prevAccounts = await ctx.db
       .query("financialAccounts")
@@ -595,6 +625,7 @@ export const importBrowserWaveTransactions = mutation({
     ),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -722,6 +753,7 @@ export const importBrowserWaveTransactions = mutation({
 
 export const sync = action({
   args: { connectionId: v.id("financialConnections") },
+  returns: v.any(),
   handler: async (ctx, { connectionId }) => {
     const conn = await ctx.runQuery(api.financialHub.getConnection, { id: connectionId });
     if (!conn) throw new Error("Connection not found.");
@@ -766,11 +798,13 @@ export const sync = action({
 
 export const getConnection = query({
   args: { id: v.id("financialConnections") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
 export const _markSyncError = internalMutation({
   args: { connectionId: v.id("financialConnections"), error: v.string() },
+  returns: v.any(),
   handler: async (ctx, { connectionId, error }) => {
     await ctx.db.patch(connectionId, { status: "error", lastError: error });
   },
@@ -779,6 +813,7 @@ export const _markSyncError = internalMutation({
 // A small derived query for the dashboard — balances by purpose/category.
 export const summary = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const [accounts, transactions, budgets] = await Promise.all([
       ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),

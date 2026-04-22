@@ -42,6 +42,7 @@ const PIPA_SETUP_MOTIONS = [
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const rows = await ctx.db
       .query("motionBacklog")
@@ -61,6 +62,7 @@ export const create = mutation({
     source: v.optional(v.string()),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
     return await ctx.db.insert("motionBacklog", {
@@ -88,6 +90,7 @@ export const update = mutation({
     priority: v.optional(v.string()),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { backlogId, ...patch }) => {
     const clean: Record<string, unknown> = { updatedAtISO: new Date().toISOString() };
     for (const [key, value] of Object.entries(patch)) if (value !== undefined) clean[key] = value;
@@ -98,6 +101,7 @@ export const update = mutation({
 
 export const remove = mutation({
   args: { backlogId: v.id("motionBacklog") },
+  returns: v.any(),
   handler: async (ctx, { backlogId }) => {
     await ctx.db.delete(backlogId);
   },
@@ -105,6 +109,7 @@ export const remove = mutation({
 
 export const seedPipaSetup = mutation({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const existing = await ctx.db
       .query("motionBacklog")
@@ -139,6 +144,7 @@ export const addToAgenda = mutation({
     backlogId: v.id("motionBacklog"),
     agendaId: v.id("agendas"),
   },
+  returns: v.any(),
   handler: async (ctx, { backlogId, agendaId }) => {
     const [backlogItem, agenda] = await Promise.all([
       ctx.db.get(backlogId),
@@ -191,6 +197,7 @@ export const addToAgenda = mutation({
 
 export const seedToMinutes = mutation({
   args: { meetingId: v.id("meetings") },
+  returns: v.any(),
   handler: async (ctx, { meetingId }) => {
     const minutesRows = await ctx.db
       .query("minutes")

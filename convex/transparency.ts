@@ -7,6 +7,7 @@ import { createDownloadUrl } from "./providers/storage";
 
 export const listPublications = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }): Promise<any[]> =>
     ctx.db
       .query("publications")
@@ -31,6 +32,7 @@ export const upsertPublication = mutation({
     featured: v.optional(v.boolean()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args): Promise<any> => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -57,6 +59,7 @@ export const upsertPublication = mutation({
 
 export const removePublication = mutation({
   args: { id: v.id("publications"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }): Promise<void> => {
     const publication: any = await ctx.db.get(id);
     if (!publication) return;
@@ -71,6 +74,7 @@ export const removePublication = mutation({
 
 export const publicCenter = query({
   args: { slug: v.optional(v.string()) },
+  returns: v.any(),
   handler: async (ctx, { slug }): Promise<any> => {
     if (!slug) return null;
     const societies: any[] = await ctx.db.query("societies").collect();

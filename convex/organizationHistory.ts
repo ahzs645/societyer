@@ -9,6 +9,7 @@ const ITEM_CATEGORY = "Org History Item";
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const [sourceDocs, itemDocs, minutesRows, meetingRows] = await Promise.all([
       docsByCategory(ctx, societyId, SOURCE_CATEGORY),
@@ -65,6 +66,7 @@ export const saveSource = mutation({
     id: v.optional(v.id("documents")),
     payload: v.any(),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, id, payload }) => {
     const source = normalizeSource(payload);
     if (!source.title) return null;
@@ -96,6 +98,7 @@ export const saveSource = mutation({
 
 export const removeSource = mutation({
   args: { id: v.id("documents") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     const source = await ctx.db.get(id);
     if (!isHistorySource(source)) return;
@@ -124,6 +127,7 @@ export const saveItem = mutation({
     kind: v.string(),
     payload: v.any(),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, id, kind, payload }) => {
     if (!isItemKind(kind)) return null;
     const item = normalizeItem(kind, payload);
@@ -166,6 +170,7 @@ export const bulkSetItemReviewStatus = mutation({
       }),
     ),
   },
+  returns: v.any(),
   handler: async (ctx, { updates }) => {
     const results: any[] = [];
 
@@ -218,6 +223,7 @@ export const extractBudgetSourceDetails = mutation({
     societyId: v.id("societies"),
     budgetId: v.id("documents"),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, budgetId }) => {
     const budgetDoc = await ctx.db.get(budgetId);
     if (!isHistoryItem(budgetDoc) || budgetDoc.societyId !== societyId) return null;
@@ -318,6 +324,7 @@ export const extractBudgetSourceDetails = mutation({
 
 export const removeItem = mutation({
   args: { id: v.id("documents"), kind: v.string() },
+  returns: v.any(),
   handler: async (ctx, { id, kind }) => {
     if (!isItemKind(kind)) return;
     const existing = await ctx.db.get(id);
@@ -338,6 +345,7 @@ export const bulkImport = mutation({
     motions: v.optional(v.array(v.any())),
     budgets: v.optional(v.array(v.any())),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const docs = await docsByCategory(ctx, args.societyId, SOURCE_CATEGORY);
     const existingSources = docs.filter(isHistorySource).map(hydrateSource);

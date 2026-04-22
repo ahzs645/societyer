@@ -15,6 +15,7 @@ const keyResult = v.object({
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("goals")
@@ -24,11 +25,13 @@ export const list = query({
 
 export const get = query({
   args: { id: v.id("goals") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
 export const byCommittee = query({
   args: { committeeId: v.id("committees") },
+  returns: v.any(),
   handler: async (ctx, { committeeId }) =>
     ctx.db
       .query("goals")
@@ -51,6 +54,7 @@ export const create = mutation({
     milestones: v.array(milestone),
     keyResults: v.array(keyResult),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const id = await ctx.db.insert("goals", {
       ...args,
@@ -86,6 +90,7 @@ export const update = mutation({
       committeeId: v.optional(v.id("committees")),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     await ctx.db.patch(id, patch);
   },
@@ -93,6 +98,7 @@ export const update = mutation({
 
 export const toggleMilestone = mutation({
   args: { id: v.id("goals"), index: v.number() },
+  returns: v.any(),
   handler: async (ctx, { id, index }) => {
     const goal = await ctx.db.get(id);
     if (!goal) return;
@@ -107,6 +113,7 @@ export const toggleMilestone = mutation({
 
 export const remove = mutation({
   args: { id: v.id("goals") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

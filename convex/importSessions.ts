@@ -64,6 +64,7 @@ const SECTION_RECORD_KINDS = [
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const sessions = await docsByCategory(ctx, societyId, SESSION_CATEGORY);
     const rows: any[] = [];
@@ -84,6 +85,7 @@ export const list = query({
 
 export const get = query({
   args: { sessionId: v.id("documents") },
+  returns: v.any(),
   handler: async (ctx, { sessionId }) => {
     const sessionDoc = await ctx.db.get(sessionId);
     if (!isImportSession(sessionDoc)) return null;
@@ -111,6 +113,7 @@ export const createFromBundle = mutation({
     name: v.optional(v.string()),
     bundle: v.any(),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, name, bundle }) => {
     const now = new Date().toISOString();
     const records = recordsFromBundle(bundle);
@@ -170,6 +173,7 @@ export const updateRecord = mutation({
     payload: v.optional(v.any()),
     sourceExternalIds: v.optional(v.array(v.string())),
   },
+  returns: v.any(),
   handler: async (ctx, { recordId, status, reviewNotes, payload, sourceExternalIds }) => {
     const doc = await ctx.db.get(recordId);
     if (!isImportRecord(doc)) return null;
@@ -203,6 +207,7 @@ export const bulkSetStatus = mutation({
     status: v.string(),
     recordIds: v.optional(v.array(v.id("documents"))),
   },
+  returns: v.any(),
   handler: async (ctx, { sessionId, status, recordIds }) => {
     const session = await ctx.db.get(sessionId);
     if (!isImportSession(session)) return { updated: 0 };
@@ -230,6 +235,7 @@ export const bulkSetStatusByKind = mutation({
     recordKinds: v.array(v.string()),
     sourceExternalIds: v.optional(v.array(v.string())),
   },
+  returns: v.any(),
   handler: async (ctx, { sessionId, status, recordKinds, sourceExternalIds }) => {
     const session = await ctx.db.get(sessionId);
     if (!isImportSession(session)) return { updated: 0 };
@@ -257,6 +263,7 @@ export const bulkSetStatusByKind = mutation({
 
 export const removeSession = mutation({
   args: { sessionId: v.id("documents") },
+  returns: v.any(),
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get(sessionId);
     if (!isImportSession(session)) return;
@@ -274,6 +281,7 @@ export const removeSession = mutation({
 
 export const applyApprovedToOrgHistory = mutation({
   args: { sessionId: v.id("documents") },
+  returns: v.any(),
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get(sessionId);
     if (!isImportSession(session)) return { sources: 0, items: 0 };
@@ -323,6 +331,7 @@ export const applyApprovedToOrgHistory = mutation({
 
 export const applyApprovedMeetings = mutation({
   args: { sessionId: v.id("documents") },
+  returns: v.any(),
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get(sessionId);
     if (!isImportSession(session)) return { meetings: 0, minutes: 0, motions: 0 };
@@ -622,6 +631,7 @@ function appendImportNote(current: unknown, note: string) {
 
 export const backfillApprovedMeetingReferences = mutation({
   args: { sessionId: v.id("documents") },
+  returns: v.any(),
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get(sessionId);
     if (!isImportSession(session)) return { meetings: 0, minutes: 0, documents: 0 };
@@ -679,6 +689,7 @@ export const backfillApprovedMeetingReferences = mutation({
 
 export const applyApprovedDocuments = mutation({
   args: { sessionId: v.id("documents") },
+  returns: v.any(),
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get(sessionId);
     if (!isImportSession(session)) return { documents: 0 };
@@ -750,6 +761,7 @@ export const applyApprovedDocuments = mutation({
 
 export const applyApprovedSectionRecords = mutation({
   args: { sessionId: v.id("documents") },
+  returns: v.any(),
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get(sessionId);
     if (!isImportSession(session)) return { total: 0, byKind: {} };

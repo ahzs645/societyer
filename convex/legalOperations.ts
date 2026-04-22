@@ -10,6 +10,7 @@ import {
 
 export const listRoleHolders = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const rows = await ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
     return rows.sort((a, b) => String(a.fullName).localeCompare(String(b.fullName)));
@@ -74,6 +75,7 @@ export const upsertRoleHolder = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("representativeTypes", args.roleType, "Role-holder type", false);
     assertAllowedOption("roleHolderStatuses", args.status, "Role-holder status");
@@ -148,6 +150,7 @@ export const upsertRoleHolder = mutation({
 
 export const removeRoleHolder = mutation({
   args: { id: v.id("roleHolders") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -155,6 +158,7 @@ export const removeRoleHolder = mutation({
 
 export const rightsLedger = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const [classes, transfers, roleHolders] = await Promise.all([
       ctx.db.query("rightsClasses").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
@@ -189,6 +193,7 @@ export const upsertRightsClass = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("rightsClassTypes", args.classType, "Rights class type", false);
     assertAllowedOption("rightsClassStatuses", args.status, "Rights class status");
@@ -245,6 +250,7 @@ export const upsertRightsholdingTransfer = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("rightsholdingTransferTypes", args.transferType, "Rights transfer type", false);
     assertAllowedOption("rightsholdingTransferStatuses", args.status, "Rights transfer status");
@@ -285,6 +291,7 @@ export const upsertRightsholdingTransfer = mutation({
 
 export const removeRightsClass = mutation({
   args: { id: v.id("rightsClasses") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -292,6 +299,7 @@ export const removeRightsClass = mutation({
 
 export const removeRightsholdingTransfer = mutation({
   args: { id: v.id("rightsholdingTransfers") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -299,6 +307,7 @@ export const removeRightsholdingTransfer = mutation({
 
 export const templateEngine = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const [dataFields, templates, precedents, runs, generatedDocuments, signers] = await Promise.all([
       ctx.db.query("legalTemplateDataFields").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
@@ -321,6 +330,7 @@ export const templateEngine = query({
 
 export const seedStarterPolicyTemplates = mutation({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const now = new Date().toISOString();
     const existing = await ctx.db
@@ -401,6 +411,7 @@ export const upsertTemplateDataField = mutation({
     notes: v.optional(v.string()),
     sourceExternalIds: v.optional(v.array(v.string())),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     const now = new Date().toISOString();
     const payload = {
@@ -456,6 +467,7 @@ export const upsertLegalTemplate = mutation({
     priceItems: v.optional(v.array(v.string())),
     sourceExternalIds: v.optional(v.array(v.string())),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("templateTypes", args.templateType, "Template type", false);
     assertAllowedOption("templateStatuses", args.status, "Template status");
@@ -527,6 +539,7 @@ export const upsertLegalPrecedent = mutation({
     subloopPairs: v.optional(v.array(v.any())),
     sourceExternalIds: v.optional(v.array(v.string())),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("precedentStatuses", args.status, "Precedent status");
     assertAllowedOption("partTypes", args.partType, "Part type");
@@ -588,6 +601,7 @@ export const upsertLegalPrecedentRun = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("precedentRunStatuses", args.status, "Precedent run status");
     const now = new Date().toISOString();
@@ -650,6 +664,7 @@ export const upsertGeneratedLegalDocument = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("generatedDocumentStatuses", args.status, "Generated document status");
     assertAllowedOption("documentTags", args.documentTag, "Generated document tag");
@@ -707,6 +722,7 @@ export const upsertLegalSigner = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("signerStatuses", args.status, "Signer status");
     const now = new Date().toISOString();
@@ -737,6 +753,7 @@ export const upsertLegalSigner = mutation({
 
 export const removeTemplateDataField = mutation({
   args: { id: v.id("legalTemplateDataFields") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -744,6 +761,7 @@ export const removeTemplateDataField = mutation({
 
 export const removeLegalTemplate = mutation({
   args: { id: v.id("legalTemplates") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -751,6 +769,7 @@ export const removeLegalTemplate = mutation({
 
 export const removeLegalPrecedent = mutation({
   args: { id: v.id("legalPrecedents") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -758,6 +777,7 @@ export const removeLegalPrecedent = mutation({
 
 export const removeLegalPrecedentRun = mutation({
   args: { id: v.id("legalPrecedentRuns") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -765,6 +785,7 @@ export const removeLegalPrecedentRun = mutation({
 
 export const removeGeneratedLegalDocument = mutation({
   args: { id: v.id("generatedLegalDocuments") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -772,6 +793,7 @@ export const removeGeneratedLegalDocument = mutation({
 
 export const removeLegalSigner = mutation({
   args: { id: v.id("legalSigners") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -779,6 +801,7 @@ export const removeLegalSigner = mutation({
 
 export const formationMaintenance = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const [formations, nameSearches, amendments, annualRecords, jurisdictionRows, logs] = await Promise.all([
       ctx.db.query("formationRecords").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
@@ -828,6 +851,7 @@ export const upsertFormationRecord = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("formationStatuses", args.status, "Formation status");
     assertAllowedOption("entityJurisdictions", args.jurisdiction, "Formation jurisdiction");
@@ -888,6 +912,7 @@ export const upsertNameSearchItem = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("suffixCompanyNames", args.suffix, "Name suffix");
     const now = new Date().toISOString();
@@ -933,6 +958,7 @@ export const upsertEntityAmendment = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("amendmentStatuses", args.status, "Amendment status");
     assertAllowedOption("entityJurisdictions", args.jurisdictionNew, "New jurisdiction");
@@ -991,6 +1017,7 @@ export const upsertAnnualMaintenanceRecord = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("annualMaintenanceStatuses", args.status, "Annual maintenance status");
     assertAllowedOption("annualFinancialStatementOptions", args.annualFinancialStatementOption, "Annual financial statement option");
@@ -1045,6 +1072,7 @@ export const upsertJurisdictionMetadata = mutation({
     sourceOptionId: v.optional(v.string()),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("entityJurisdictions", args.jurisdiction, "Jurisdiction", false);
     assertAllowedOption("actsFormedUnder", args.actFormedUnder, "Act formed under");
@@ -1089,6 +1117,7 @@ export const upsertSupportLog = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
     createdAtISO: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("logTypes", args.logType, "Log type", false);
     assertAllowedOption("logSeverities", args.severity, "Log severity");
@@ -1121,6 +1150,7 @@ export const upsertSupportLog = mutation({
 
 export const removeFormationRecord = mutation({
   args: { id: v.id("formationRecords") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -1128,6 +1158,7 @@ export const removeFormationRecord = mutation({
 
 export const removeNameSearchItem = mutation({
   args: { id: v.id("nameSearchItems") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -1135,6 +1166,7 @@ export const removeNameSearchItem = mutation({
 
 export const removeEntityAmendment = mutation({
   args: { id: v.id("entityAmendments") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -1142,6 +1174,7 @@ export const removeEntityAmendment = mutation({
 
 export const removeAnnualMaintenanceRecord = mutation({
   args: { id: v.id("annualMaintenanceRecords") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -1149,6 +1182,7 @@ export const removeAnnualMaintenanceRecord = mutation({
 
 export const removeJurisdictionMetadata = mutation({
   args: { id: v.id("jurisdictionMetadata") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -1156,6 +1190,7 @@ export const removeJurisdictionMetadata = mutation({
 
 export const removeSupportLog = mutation({
   args: { id: v.id("supportLogs") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

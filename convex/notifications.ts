@@ -11,6 +11,7 @@ export const list = query({
     limit: v.optional(v.number()),
     unreadOnly: v.optional(v.boolean()),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, userId, limit, unreadOnly }) => {
     const rows = await ctx.db
       .query("notifications")
@@ -27,6 +28,7 @@ export const list = query({
 
 export const unreadCount = query({
   args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { societyId, userId }) => {
     const rows = await ctx.db
       .query("notifications")
@@ -51,6 +53,7 @@ export const create = mutation({
     body: v.optional(v.string()),
     linkHref: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args): Promise<Id<"notifications">> => {
     return await ctx.db.insert("notifications", {
       ...args,
@@ -61,6 +64,7 @@ export const create = mutation({
 
 export const markRead = mutation({
   args: { id: v.id("notifications") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.patch(id, { readAt: new Date().toISOString() });
   },
@@ -68,6 +72,7 @@ export const markRead = mutation({
 
 export const markAllRead = mutation({
   args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { societyId, userId }) => {
     const rows = await ctx.db
       .query("notifications")
@@ -84,6 +89,7 @@ export const markAllRead = mutation({
 
 export const listPrefs = query({
   args: { userId: v.id("users") },
+  returns: v.any(),
   handler: async (ctx, { userId }) =>
     ctx.db
       .query("notificationPrefs")
@@ -98,6 +104,7 @@ export const upsertPref = mutation({
     kind: v.string(),
     enabled: v.boolean(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("notificationPrefs")
@@ -118,6 +125,7 @@ export const upsertPref = mutation({
 // due in ≤ 14 days that we haven't already notified about.
 export const scanUpcoming = internalMutation({
   args: { societyId: v.optional(v.id("societies")) },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const societies = societyId
       ? [await ctx.db.get(societyId)]
@@ -271,6 +279,7 @@ export const scanUpcoming = internalMutation({
 // Action: bundle digest emails for anyone who wants them.
 export const sendDigest = action({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const users = await ctx.runQuery(api.users.list, { societyId });
     const notifications = await ctx.runQuery(api.notifications.list, {

@@ -64,16 +64,16 @@ If the helper script can't find the binary in your image version, open the dashb
 
 ```bash
 npx convex dev           # terminal 1 — pushes ./convex to localhost:3210
-npm run dev              # terminal 2 — Vite at http://localhost:5173
+npm run dev:full         # terminal 2 — API gateway + Vite at http://localhost:5173
 ```
 
 ### 4. Seed the demo society
 
 - Click **Seed demo society** in the in-app demo banner, **or**
 - `⌘K` → "Seed demo society" in the command palette, **or**
-- `npm run convex:seed` (= `npx convex run seed:run`)
+- `npm run convex:seed` from the terminal
 
-Wipe with `npm run convex:reset`.
+In-app seed/reset calls go through the local API gateway so the Convex maintenance token never reaches the browser. Wipe with the settings page or `npm run convex:reset`.
 
 ---
 

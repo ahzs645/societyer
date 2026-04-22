@@ -4,6 +4,7 @@ import { assertAllowedOption } from "./lib/orgHubOptions";
 
 export const overview = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const [addresses, registrations, identifiers] = await Promise.all([
       ctx.db
@@ -32,6 +33,7 @@ export const overview = query({
 
 export const seedFromSocietyAddresses = mutation({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const society = await ctx.db.get(societyId);
     if (!society) throw new Error("Society not found.");
@@ -69,6 +71,7 @@ export const seedFromSocietyAddresses = mutation({
 
 export const backfillFromExistingRecords = mutation({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const society = await ctx.db.get(societyId);
     if (!society) throw new Error("Society not found.");
@@ -147,6 +150,7 @@ export const upsertAddress = mutation({
     notes: v.optional(v.string()),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("addressTypes", args.type, "Address type", false);
     assertAllowedOption("addressStatuses", args.status, "Address status", false);
@@ -173,6 +177,7 @@ export const upsertAddress = mutation({
 
 export const removeAddress = mutation({
   args: { id: v.id("organizationAddresses") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -195,6 +200,7 @@ export const upsertRegistration = mutation({
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("entityJurisdictions", args.jurisdiction, "Registration jurisdiction", false);
     assertAllowedOption("registrationStatuses", args.status, "Registration status");
@@ -219,6 +225,7 @@ export const upsertRegistration = mutation({
 
 export const removeRegistration = mutation({
   args: { id: v.id("organizationRegistrations") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -238,6 +245,7 @@ export const upsertIdentifier = mutation({
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("taxNumberTypes", args.kind, "Identifier kind", false);
     assertAllowedOption("entityJurisdictions", args.jurisdiction, "Identifier jurisdiction");
@@ -265,6 +273,7 @@ export const upsertIdentifier = mutation({
 
 export const removeIdentifier = mutation({
   args: { id: v.id("organizationIdentifiers") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

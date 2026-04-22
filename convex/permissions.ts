@@ -8,6 +8,7 @@ export const check = query({
     societyId: v.id("societies"),
     permission: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, { userId, societyId, permission }) => {
     const user = await ctx.db.get(userId);
     if (!user || user.societyId !== societyId) return false;
@@ -20,6 +21,7 @@ export const myPermissions = query({
     userId: v.id("users"),
     societyId: v.id("societies"),
   },
+  returns: v.any(),
   handler: async (ctx, { userId, societyId }) => {
     const user = await ctx.db.get(userId);
     if (!user || user.societyId !== societyId) return { role: null, permissions: [] };
@@ -32,5 +34,6 @@ export const myPermissions = query({
 
 export const listAll = query({
   args: {},
+  returns: v.any(),
   handler: async () => PERMISSIONS.map((p) => p),
 });

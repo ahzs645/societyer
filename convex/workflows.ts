@@ -413,6 +413,7 @@ export function computeEffectiveNodePreview(
 
 export const listCatalog = query({
   args: {},
+  returns: v.any(),
   handler: async () =>
     RECIPE_CATALOG.map((entry) => ({
       ...entry,
@@ -424,11 +425,13 @@ export const listCatalog = query({
 
 export const listNodeTypes = query({
   args: {},
+  returns: v.any(),
   handler: async () => NODE_TYPE_CATALOG,
 });
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("workflows")
@@ -439,6 +442,7 @@ export const list = query({
 
 export const listRuns = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
+  returns: v.any(),
   handler: async (ctx, { societyId, limit }) =>
     ctx.db
       .query("workflowRuns")
@@ -449,6 +453,7 @@ export const listRuns = query({
 
 export const runsForWorkflow = query({
   args: { workflowId: v.id("workflows") },
+  returns: v.any(),
   handler: async (ctx, { workflowId }) =>
     ctx.db
       .query("workflowRuns")
@@ -459,11 +464,13 @@ export const runsForWorkflow = query({
 
 export const getRun = query({
   args: { id: v.id("workflowRuns") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
 export const get = query({
   args: { id: v.id("workflows") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     const wf = await ctx.db.get(id);
     if (!wf) return null;
@@ -505,6 +512,7 @@ export const create = mutation({
     config: v.optional(v.any()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -544,6 +552,7 @@ export const setStatus = mutation({
     status: v.string(), // active | paused | archived
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, status, actingUserId }) => {
     const wf = await ctx.db.get(id);
     if (!wf) throw new Error("Workflow not found");
@@ -570,6 +579,7 @@ export const update = mutation({
     }),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch, actingUserId }) => {
     const wf = await ctx.db.get(id);
     if (!wf) throw new Error("Workflow not found");
@@ -593,6 +603,7 @@ export const updateProviderLink = mutation({
     }),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, provider, providerConfig, actingUserId }) => {
     const wf = await ctx.db.get(id);
     if (!wf) throw new Error("Workflow not found");
@@ -610,6 +621,7 @@ export const updateProviderLink = mutation({
 
 export const remove = mutation({
   args: { id: v.id("workflows"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const wf = await ctx.db.get(id);
     if (!wf) return;
@@ -638,6 +650,7 @@ export const addNode = mutation({
     afterKey: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, node, afterKey, actingUserId }) => {
     const wf = await ctx.db.get(id);
     if (!wf) throw new Error("Workflow not found");
@@ -693,6 +706,7 @@ export const updateNodeConfig = mutation({
     description: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, key, config, label, description, actingUserId }) => {
     const wf = await ctx.db.get(id);
     if (!wf) throw new Error("Workflow not found");
@@ -722,6 +736,7 @@ export const removeNode = mutation({
     key: v.string(),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, key, actingUserId }) => {
     const wf = await ctx.db.get(id);
     if (!wf) throw new Error("Workflow not found");
@@ -755,6 +770,7 @@ export const receiveExternalCallback = mutation({
       }),
     ),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.runId);
     if (!run || run.workflowId !== args.workflowId) {
@@ -939,6 +955,7 @@ export const recordGeneratedDocument = mutation({
     mimeType: v.string(),
     fileSizeBytes: v.number(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.runId);
     if (!run || run.workflowId !== args.workflowId || run.societyId !== args.societyId) {
@@ -1017,6 +1034,7 @@ export const _createRun = internalMutation({
     triggeredBy: v.string(),
     triggeredByUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const steps = stepsForRun(args.recipe, args.nodePreview);
     return await ctx.db.insert("workflowRuns", {
@@ -1041,6 +1059,7 @@ export const _updateStep = internalMutation({
     status: v.string(),
     note: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, stepIndex, status, note }) => {
     const run = await ctx.db.get(id);
     if (!run) return;
@@ -1063,6 +1082,7 @@ export const _markExternalQueued = internalMutation({
     externalStatus: v.optional(v.string()),
     output: v.optional(v.any()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.id);
     if (!run) return;
@@ -1081,6 +1101,7 @@ export const _completeRun = internalMutation({
     status: v.string(),
     output: v.optional(v.any()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, status, output }) => {
     const run = await ctx.db.get(id);
     const now = new Date().toISOString();
@@ -1106,6 +1127,7 @@ export const _completeRun = internalMutation({
 
 export const _touchSchedule = internalMutation({
   args: { id: v.id("workflows") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     const wf = await ctx.db.get(id);
     if (!wf) return;
@@ -1137,6 +1159,7 @@ function computeNextRunAt(
 
 export const scan = internalAction({
   args: {},
+  returns: v.any(),
   handler: async (ctx) => {
     const dueBefore = new Date().toISOString();
     const candidates: any[] = await ctx.runQuery(internal.workflows._listDue, {
@@ -1154,6 +1177,7 @@ export const scan = internalAction({
 
 export const _listDue = query({
   args: { dueBefore: v.string() },
+  returns: v.any(),
   handler: async (ctx, { dueBefore }) => {
     const rows = await ctx.db
       .query("workflows")
@@ -1178,6 +1202,7 @@ export const run = action({
     actingUserId: v.optional(v.id("users")),
     input: v.optional(v.any()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const wf: any = await ctx.runQuery(api.workflows.get, {
       id: args.workflowId,
@@ -1621,6 +1646,7 @@ export const _gatherMappingContext = internalQuery({
     actingUserId: v.optional(v.id("users")),
     personRefs: v.array(v.object({ category: v.string(), personId: v.string() })),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, actingUserId, personRefs }) => {
     const society = await ctx.db.get(societyId);
     const actor = actingUserId ? await ctx.db.get(actingUserId) : null;

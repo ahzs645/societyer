@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const get = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const rows = await ctx.db
       .query("recordsLocation")
@@ -21,6 +22,7 @@ export const upsert = mutation({
     computerProvidedForInspection: v.boolean(),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("recordsLocation")

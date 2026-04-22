@@ -3,6 +3,7 @@ import { httpAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 
 const http = httpRouter();
+const WEBHOOK_TOLERANCE_MS = 5 * 60 * 1000;
 
 function env(name: string) {
   return (globalThis as any)?.process?.env?.[name] as string | undefined;
@@ -16,6 +17,31 @@ function toHex(buffer: ArrayBuffer) {
   return [...new Uint8Array(buffer)]
     .map((value) => value.toString(16).padStart(2, "0"))
     .join("");
+}
+
+async function sha256Hex(value: string) {
+  return toHex(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)),
+  );
+}
+
+async function constantTimeStringEqual(left: string, right: string) {
+  if (!left || !right) return false;
+  const [leftHash, rightHash] = await Promise.all([
+    sha256Hex(left),
+    sha256Hex(right),
+  ]);
+  let diff = 0;
+  for (let i = 0; i < leftHash.length; i += 1) {
+    diff |= leftHash.charCodeAt(i) ^ rightHash.charCodeAt(i);
+  }
+  return left.length === right.length && diff === 0;
+}
+
+function timestampWithinTolerance(timestampSeconds: string) {
+  const timestampMs = Number(timestampSeconds) * 1000;
+  if (!Number.isFinite(timestampMs)) return false;
+  return Math.abs(Date.now() - timestampMs) <= WEBHOOK_TOLERANCE_MS;
 }
 
 async function signStripePayload(secret: string, payload: string) {
@@ -51,10 +77,14 @@ async function verifyStripeSignature(body: string, signatureHeader: string | nul
   const timestamp = parts.t?.[0];
   const signatures = parts.v1 ?? [];
   if (!timestamp || signatures.length === 0) return false;
+  if (!timestampWithinTolerance(timestamp)) return false;
 
   const expected = await signStripePayload(secret, `${timestamp}.${body}`);
 
-  return signatures.some((signature) => signature === expected);
+  for (const signature of signatures) {
+    if (await constantTimeStringEqual(signature, expected)) return true;
+  }
+  return false;
 }
 
 async function signTwilioPayload(secret: string, payload: string) {
@@ -75,6 +105,65 @@ async function signTwilioPayload(secret: string, payload: string) {
     : Buffer.from(new Uint8Array(signature)).toString("base64");
 }
 
+function base64ToBytes(value: string) {
+  const normalized = value
+    .replace(/-/g, "+")
+    .replace(/_/g, "/")
+    .padEnd(value.length + ((4 - (value.length % 4)) % 4), "=");
+  const binary =
+    typeof globalThis.atob === "function"
+      ? globalThis.atob(normalized)
+      : Buffer.from(normalized, "base64").toString("binary");
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+async function signSvixPayload(secret: string, payload: string) {
+  const secretBody = secret.startsWith("whsec_")
+    ? secret.slice("whsec_".length)
+    : secret;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    base64ToBytes(secretBody),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(payload),
+  );
+  return typeof globalThis.btoa === "function"
+    ? globalThis.btoa(String.fromCharCode(...new Uint8Array(signature)))
+    : Buffer.from(new Uint8Array(signature)).toString("base64");
+}
+
+function versionedSignatures(header: string | null, version: string) {
+  return String(header ?? "")
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .flatMap((part) => {
+      const [receivedVersion, signature] = part.split(",");
+      return receivedVersion === version && signature ? [signature] : [];
+    });
+}
+
+async function verifyResendSignature(body: string, request: Request) {
+  const secret = env("RESEND_WEBHOOK_SECRET");
+  const id = request.headers.get("svix-id");
+  const timestamp = request.headers.get("svix-timestamp");
+  const signatureHeader = request.headers.get("svix-signature");
+  if (!secret || !id || !timestamp || !signatureHeader) return false;
+  if (!timestampWithinTolerance(timestamp)) return false;
+
+  const expected = await signSvixPayload(secret, `${id}.${timestamp}.${body}`);
+  for (const signature of versionedSignatures(signatureHeader, "v1")) {
+    if (await constantTimeStringEqual(signature, expected)) return true;
+  }
+  return false;
+}
+
 async function verifyTwilioSignature(request: Request, body: string) {
   const secret = env("TWILIO_AUTH_TOKEN");
   const signatureHeader =
@@ -88,7 +177,7 @@ async function verifyTwilioSignature(request: Request, body: string) {
     .map(([key, value]) => `${key}${value}`)
     .join("");
   const expected = await signTwilioPayload(secret, `${request.url}${payload}`);
-  return expected === signatureHeader;
+  return await constantTimeStringEqual(expected, signatureHeader);
 }
 
 async function findDeliveriesByProviderMessageId(ctx: any, providerMessageId: string) {
@@ -147,7 +236,7 @@ http.route({
     }
 
     const event = JSON.parse(body);
-    await ctx.runMutation(api.subscriptions.handleStripeEvent, {
+    await ctx.runMutation(internal.subscriptions.handleStripeEvent, {
       type: String(event?.type ?? "unknown"),
       payload: JSON.stringify(event?.data?.object ?? {}),
     });
@@ -161,6 +250,9 @@ http.route({
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     const body = await request.text();
+    if (!(await verifyResendSignature(body, request))) {
+      return new Response("Invalid Resend signature", { status: 400 });
+    }
     const event = JSON.parse(body);
     const eventType = String(event?.type ?? "");
     const data = (event?.data ?? {}) as Record<string, any>;

@@ -1,12 +1,14 @@
-// @ts-nocheck
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { assertMaintenanceToken, serviceTokenValidator } from "./lib/serviceAuth";
 
 // Seed the demo society "Riverside Community Society".
 // Idempotent-ish: if a society already exists, it wipes everything first.
 export const run = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { serviceToken: serviceTokenValidator },
+  returns: v.object({ societyId: v.id("societies") }),
+  handler: async (ctx, { serviceToken }) => {
+    await assertMaintenanceToken(serviceToken);
     await wipe(ctx);
 
     const societyId = await ctx.db.insert("societies", {
@@ -1475,8 +1477,10 @@ export const run = mutation({
 });
 
 export const reset = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { serviceToken: serviceTokenValidator },
+  returns: v.object({ ok: v.boolean() }),
+  handler: async (ctx, { serviceToken }) => {
+    await assertMaintenanceToken(serviceToken);
     await wipe(ctx);
     return { ok: true };
   },

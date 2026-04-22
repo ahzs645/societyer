@@ -6,6 +6,7 @@ import { assertAllowedOption } from "./lib/orgHubOptions";
 
 export const get = query({
   args: {},
+  returns: v.any(),
   handler: async (ctx) => {
     const all = await ctx.db.query("societies").collect();
     return all[0] ?? null;
@@ -14,11 +15,13 @@ export const get = query({
 
 export const list = query({
   args: {},
+  returns: v.any(),
   handler: async (ctx) => ctx.db.query("societies").collect(),
 });
 
 export const getById = query({
   args: { id: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
@@ -72,6 +75,7 @@ export const upsert = mutation({
     publicGrantIntakeEnabled: v.optional(v.boolean()),
     demoMode: v.optional(v.boolean()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const { id, ...rest } = args;
     assertAllowedOption("entityTypes", rest.entityType, "Entity type");
@@ -91,6 +95,7 @@ export const updateModules = mutation({
     societyId: v.id("societies"),
     disabledModules: disabledModulesValidator,
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, disabledModules }) => {
     await ctx.db.patch(societyId, {
       disabledModules,

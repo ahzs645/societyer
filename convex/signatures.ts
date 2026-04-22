@@ -4,6 +4,7 @@ import { canActAs, type Role } from "./users";
 
 export const listForEntity = query({
   args: { entityType: v.string(), entityId: v.string() },
+  returns: v.any(),
   handler: async (ctx, { entityType, entityId }) =>
     ctx.db
       .query("signatures")
@@ -24,6 +25,7 @@ export const sign = mutation({
     demo: v.optional(v.boolean()),
     actingUserId: v.id("users"),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const actor = await ctx.db.get(args.actingUserId);
     if (!actor || actor.societyId !== args.societyId) throw new Error("Signature actor is not part of this society.");
@@ -66,6 +68,7 @@ export const sign = mutation({
 
 export const revoke = mutation({
   args: { id: v.id("signatures"), actingUserId: v.id("users") },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const sig = await ctx.db.get(id);
     if (!sig) return;

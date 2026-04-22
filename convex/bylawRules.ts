@@ -9,6 +9,7 @@ import {
 
 export const getActive = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const active = await getActiveBylawRuleSet(ctx, societyId);
     return {
@@ -20,6 +21,7 @@ export const getActive = query({
 
 export const getForDate = query({
   args: { societyId: v.id("societies"), dateISO: v.string() },
+  returns: v.any(),
   handler: async (ctx, { societyId, dateISO }) => {
     const rules = await getBylawRuleSetForDate(ctx, societyId, dateISO);
     return {
@@ -31,6 +33,7 @@ export const getForDate = query({
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const rows = await ctx.db
       .query("bylawRuleSets")
@@ -78,6 +81,7 @@ export const upsertActive = mutation({
     specialResolutionThresholdPct: v.number(),
     unanimousWrittenSpecialResolution: v.boolean(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
     const {
@@ -111,6 +115,7 @@ export const upsertActive = mutation({
 
 export const resetToDefault = mutation({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const now = new Date().toISOString();
     const defaults = {

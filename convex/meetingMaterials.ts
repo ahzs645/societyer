@@ -15,6 +15,7 @@ const accessGrantValidator = v.object({
 
 export const listForMeeting = query({
   args: { meetingId: v.id("meetings") },
+  returns: v.any(),
   handler: async (ctx, { meetingId }) => {
     const materials = await ctx.db
       .query("meetingMaterials")
@@ -32,6 +33,7 @@ export const listForMeeting = query({
 
 export const packageForMeeting = query({
   args: { meetingId: v.id("meetings") },
+  returns: v.any(),
   handler: async (ctx, { meetingId }) => {
     const meeting = await ctx.db.get(meetingId);
     if (!meeting) return null;
@@ -85,6 +87,7 @@ export const packageForMeeting = query({
 
 export const listForSociety = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const materials = await ctx.db
       .query("meetingMaterials")
@@ -118,6 +121,7 @@ export const attach = mutation({
     expiresAtISO: v.optional(v.string()),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const [meeting, document] = await Promise.all([
       ctx.db.get(args.meetingId),
@@ -184,6 +188,7 @@ export const setAvailability = mutation({
     syncStatus: v.optional(v.string()),
     expiresAtISO: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, availabilityStatus, syncStatus, expiresAtISO }) => {
     await ctx.db.patch(id, {
       availabilityStatus,
@@ -195,6 +200,7 @@ export const setAvailability = mutation({
 
 export const remove = mutation({
   args: { id: v.id("meetingMaterials") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

@@ -89,6 +89,7 @@ function getRollupGroup(groups: Map<string, any>, name: string, sourceType: stri
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const [sources, events, grants, members] = await Promise.all([
       ctx.db
@@ -147,6 +148,7 @@ export const rollup = query({
     from: v.optional(v.string()),
     to: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, from, to }) => {
     const [sources, sourceEvents, grants, grantTransactions, receipts, subscriptions, plans] = await Promise.all([
       ctx.db
@@ -299,6 +301,7 @@ export const upsertSource = mutation({
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -321,6 +324,7 @@ export const upsertSource = mutation({
 
 export const removeSource = mutation({
   args: { id: v.id("fundingSources"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const source = await ctx.db.get(id);
     if (!source) return;
@@ -353,6 +357,7 @@ export const upsertEvent = mutation({
     documentId: v.optional(v.id("documents")),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const source = await ctx.db.get(args.sourceId);
     if (!source || source.societyId !== args.societyId) {
@@ -379,6 +384,7 @@ export const upsertEvent = mutation({
 
 export const removeEvent = mutation({
   args: { id: v.id("fundingSourceEvents"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const event = await ctx.db.get(id);
     if (!event) return;
@@ -430,6 +436,7 @@ export const importStudentLevy = mutation({
     ),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -589,6 +596,7 @@ export const applyOtenFeeStructure = mutation({
     societyId: v.optional(v.id("societies")),
     societyName: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     if (args.confirm !== "apply-oten-fee-structure") {
       throw new Error('Pass confirm: "apply-oten-fee-structure" to apply the OTEN local fixture.');

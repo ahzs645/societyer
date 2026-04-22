@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("bylawAmendments")
@@ -12,6 +13,7 @@ export const list = query({
 
 export const get = query({
   args: { id: v.id("bylawAmendments") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
@@ -31,6 +33,7 @@ export const createDraft = mutation({
     createdByName: v.optional(v.string()),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
     return ctx.db.insert("bylawAmendments", {
@@ -54,6 +57,7 @@ export const updateDraft = mutation({
     }),
     actor: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch, actor }) => {
     const row = await ctx.db.get(id);
     if (!row) return;
@@ -71,6 +75,7 @@ export const updateDraft = mutation({
 
 export const startConsultation = mutation({
   args: { id: v.id("bylawAmendments"), actor: v.optional(v.string()) },
+  returns: v.any(),
   handler: async (ctx, { id, actor }) => {
     const row = await ctx.db.get(id);
     if (!row || row.status !== "Draft") return;
@@ -93,6 +98,7 @@ export const markResolutionPassed = mutation({
     abstentions: v.optional(v.number()),
     actor: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, meetingId, votesFor, votesAgainst, abstentions, actor }) => {
     const row = await ctx.db.get(id);
     if (!row) return;
@@ -120,6 +126,7 @@ export const markFiled = mutation({
     filingId: v.optional(v.id("filings")),
     actor: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, filingId, actor }) => {
     const row = await ctx.db.get(id);
     if (!row) return;
@@ -136,6 +143,7 @@ export const markFiled = mutation({
 
 export const withdraw = mutation({
   args: { id: v.id("bylawAmendments"), actor: v.optional(v.string()), reason: v.optional(v.string()) },
+  returns: v.any(),
   handler: async (ctx, { id, actor, reason }) => {
     const row = await ctx.db.get(id);
     if (!row) return;
@@ -150,6 +158,7 @@ export const withdraw = mutation({
 
 export const remove = mutation({
   args: { id: v.id("bylawAmendments") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

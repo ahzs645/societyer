@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("members")
@@ -12,6 +13,7 @@ export const list = query({
 
 export const get = query({
   args: { id: v.id("members") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
@@ -30,6 +32,7 @@ export const create = mutation({
     votingRights: v.boolean(),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => ctx.db.insert("members", args),
 });
 
@@ -51,6 +54,7 @@ export const update = mutation({
       notes: v.optional(v.string()),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     await ctx.db.patch(id, patch);
   },
@@ -58,6 +62,7 @@ export const update = mutation({
 
 export const remove = mutation({
   args: { id: v.id("members") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -81,6 +86,7 @@ export const merge = mutation({
       notes: v.optional(v.string()),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { keepId, dropIds, patch }) => {
     await ctx.db.patch(keepId, patch);
     for (const id of dropIds) {

@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const listForMeeting = query({
   args: { meetingId: v.id("meetings") },
+  returns: v.any(),
   handler: async (ctx, { meetingId }) => {
     const agendas = await ctx.db
       .query("agendas")
@@ -14,6 +15,7 @@ export const listForMeeting = query({
 
 export const get = query({
   args: { agendaId: v.id("agendas") },
+  returns: v.any(),
   handler: async (ctx, { agendaId }) => {
     const agenda = await ctx.db.get(agendaId);
     if (!agenda) return null;
@@ -28,6 +30,7 @@ export const get = query({
 
 export const listForSociety = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     return await ctx.db
       .query("agendas")
@@ -43,6 +46,7 @@ export const create = mutation({
     title: v.string(),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
     return await ctx.db.insert("agendas", {
@@ -61,6 +65,7 @@ export const updateAgenda = mutation({
     status: v.optional(v.string()),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { agendaId, ...patch }) => {
     const updatedAtISO = new Date().toISOString();
     const clean: Record<string, unknown> = { updatedAtISO };
@@ -72,6 +77,7 @@ export const updateAgenda = mutation({
 
 export const remove = mutation({
   args: { agendaId: v.id("agendas") },
+  returns: v.any(),
   handler: async (ctx, { agendaId }) => {
     const items = await ctx.db
       .query("agendaItems")
@@ -95,6 +101,7 @@ export const addItem = mutation({
     motionBacklogId: v.optional(v.id("motionBacklog")),
     motionText: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const agenda = await ctx.db.get(args.agendaId);
     if (!agenda) throw new Error("Agenda not found");
@@ -144,6 +151,7 @@ export const updateItem = mutation({
     motionText: v.optional(v.string()),
     outcome: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { itemId, ...patch }) => {
     const clean: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(patch)) if (v !== undefined) clean[k] = v;
@@ -154,6 +162,7 @@ export const updateItem = mutation({
 
 export const removeItem = mutation({
   args: { itemId: v.id("agendaItems") },
+  returns: v.any(),
   handler: async (ctx, { itemId }) => {
     const item = await ctx.db.get(itemId);
     if (!item) return;
@@ -182,6 +191,7 @@ export const reorderItems = mutation({
     agendaId: v.id("agendas"),
     orderedItemIds: v.array(v.id("agendaItems")),
   },
+  returns: v.any(),
   handler: async (ctx, { agendaId, orderedItemIds }) => {
     for (let i = 0; i < orderedItemIds.length; i++) {
       const item = await ctx.db.get(orderedItemIds[i]);

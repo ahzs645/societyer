@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const runForMeeting = query({
   args: { meetingId: v.id("meetings") },
+  returns: v.any(),
   handler: async (ctx, { meetingId }) => {
     const rows = await ctx.db
       .query("agmRuns")
@@ -14,6 +15,7 @@ export const runForMeeting = query({
 
 export const init = mutation({
   args: { societyId: v.id("societies"), meetingId: v.id("meetings") },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("agmRuns")
@@ -45,6 +47,7 @@ export const markStep = mutation({
       }),
     ),
   },
+  returns: v.any(),
   handler: async (ctx, { id, step, patch }) => {
     await ctx.db.patch(id, {
       step,
@@ -71,6 +74,7 @@ export const logNoticeDelivery = mutation({
     bouncedAtISO: v.optional(v.string()),
     status: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, args) =>
     ctx.db.insert("noticeDeliveries", {
       ...args,
@@ -80,6 +84,7 @@ export const logNoticeDelivery = mutation({
 
 export const noticeDeliveries = query({
   args: { meetingId: v.id("meetings") },
+  returns: v.any(),
   handler: async (ctx, { meetingId }) =>
     ctx.db
       .query("noticeDeliveries")
@@ -94,6 +99,7 @@ export const queueNoticeToAllVotingMembers = mutation({
     meetingId: v.id("meetings"),
     channel: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, meetingId, channel }) => {
     const members = await ctx.db
       .query("members")

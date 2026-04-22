@@ -8,6 +8,7 @@ import { v } from "convex/values";
  */
 export const disclosureForYear = query({
   args: { societyId: v.id("societies"), fiscalYear: v.string() },
+  returns: v.any(),
   handler: async (ctx, { societyId, fiscalYear }) => {
     const employees = await ctx.db
       .query("employees")
@@ -39,6 +40,7 @@ export const applyToFinancials = mutation({
     financialsId: v.id("financials"),
     disclosures: v.array(v.object({ role: v.string(), amountCents: v.number() })),
   },
+  returns: v.any(),
   handler: async (ctx, { financialsId, disclosures }) => {
     await ctx.db.patch(financialsId, { remunerationDisclosures: disclosures });
   },

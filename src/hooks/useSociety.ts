@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useEffect, useMemo, useState } from "react";
@@ -83,8 +83,4 @@ export function useSocietySelection() {
 
 export function useSociety() {
   return useSocietySelection().society;
-}
-
-export function useSeed() {
-  return useMutation(api.seed.run);
 }

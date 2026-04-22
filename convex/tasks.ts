@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("tasks")
@@ -12,6 +13,7 @@ export const list = query({
 
 export const byCommittee = query({
   args: { committeeId: v.id("committees") },
+  returns: v.any(),
   handler: async (ctx, { committeeId }) =>
     ctx.db
       .query("tasks")
@@ -21,6 +23,7 @@ export const byCommittee = query({
 
 export const byGoal = query({
   args: { goalId: v.id("goals") },
+  returns: v.any(),
   handler: async (ctx, { goalId }) =>
     ctx.db
       .query("tasks")
@@ -30,6 +33,7 @@ export const byGoal = query({
 
 export const byMeeting = query({
   args: { meetingId: v.id("meetings") },
+  returns: v.any(),
   handler: async (ctx, { meetingId }) =>
     ctx.db
       .query("tasks")
@@ -57,6 +61,7 @@ export const create = mutation({
     eventId: v.optional(v.string()),
     tags: v.array(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const id = await ctx.db.insert("tasks", {
       ...args,
@@ -100,6 +105,7 @@ export const update = mutation({
       completionNote: v.optional(v.string()),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     const task = await ctx.db.get(id);
     if (!task) return;
@@ -127,6 +133,7 @@ export const update = mutation({
 
 export const remove = mutation({
   args: { id: v.id("tasks") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

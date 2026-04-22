@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const overview = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const [documents, materials] = await Promise.all([
       ctx.db

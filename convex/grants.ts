@@ -54,6 +54,7 @@ const grantAnswerLibraryItem = v.object({
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("grants")
@@ -63,11 +64,13 @@ export const list = query({
 
 export const get = query({
   args: { id: v.id("grants") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
 export const publicOpenings = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const rows = await ctx.db
       .query("grants")
@@ -79,6 +82,7 @@ export const publicOpenings = query({
 
 export const applications = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("grantApplications")
@@ -88,6 +92,7 @@ export const applications = query({
 
 export const transactions = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("grantTransactions")
@@ -97,6 +102,7 @@ export const transactions = query({
 
 export const reports = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("grantReports")
@@ -106,6 +112,7 @@ export const reports = query({
 
 export const summary = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const [grants, reports, accounts, applications, ledger] = await Promise.all([
       ctx.db
@@ -185,6 +192,7 @@ export const submitApplication = mutation({
     expectedOutcomes: v.optional(v.string()),
     source: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireEnabledModule(ctx, args.societyId, "grants");
     return await ctx.db.insert("grantApplications", {
@@ -203,6 +211,7 @@ export const reviewApplication = mutation({
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, status, notes, actingUserId }) => {
     const application = await ctx.db.get(id);
     if (!application) throw new Error("Application not found.");
@@ -227,6 +236,7 @@ export const convertApplication = mutation({
     program: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, funder, program, actingUserId }) => {
     const application = await ctx.db.get(id);
     if (!application) throw new Error("Application not found.");
@@ -309,6 +319,7 @@ export const upsertGrant = mutation({
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -331,6 +342,7 @@ export const upsertGrant = mutation({
 
 export const removeGrant = mutation({
   args: { id: v.id("grants"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const grant = await ctx.db.get(id);
     if (!grant) return;
@@ -371,6 +383,7 @@ export const upsertReport = mutation({
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -388,6 +401,7 @@ export const upsertReport = mutation({
 
 export const removeReport = mutation({
   args: { id: v.id("grantReports"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const report = await ctx.db.get(id);
     if (!report) return;
@@ -414,6 +428,7 @@ export const upsertTransaction = mutation({
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -431,6 +446,7 @@ export const upsertTransaction = mutation({
 
 export const removeTransaction = mutation({
   args: { id: v.id("grantTransactions"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const row = await ctx.db.get(id);
     if (!row) return;

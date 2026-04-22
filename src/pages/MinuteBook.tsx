@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Badge, Button, Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
@@ -32,6 +32,7 @@ export function MinuteBookPage() {
       filings: new Map<string, any>((d.filings ?? []).map((row: any) => [row._id, row])),
       policies: new Map<string, any>((d.policies ?? []).map((row: any) => [row._id, row])),
       workflowPackages: new Map<string, any>((d.workflowPackages ?? []).map((row: any) => [row._id, row])),
+      writtenResolutions: new Map<string, any>((d.writtenResolutions ?? []).map((row: any) => [row._id, row])),
     };
   }, [detail]);
 
@@ -62,6 +63,7 @@ export function MinuteBookPage() {
       filingId: draft.filingId || undefined,
       policyId: draft.policyId || undefined,
       workflowPackageId: draft.workflowPackageId || undefined,
+      writtenResolutionId: draft.writtenResolutionId || undefined,
       signatureIds: draft.signatureIds ?? [],
       sourceEvidenceIds: draft.sourceEvidenceIds ?? [],
       archivedAtISO: draft.archivedAtISO || undefined,
@@ -86,7 +88,9 @@ export function MinuteBookPage() {
 
   const items = Array.isArray(detail) ? [] : detail?.items ?? [];
   const checks = safeRows(detail, "checks");
+  const recordBundles = safeRows(detail, "recordBundles");
   const openCheckCount = checks.filter((check: any) => !check.ok).length;
+  const bundleGapCount = recordBundles.reduce((count: number, row: any) => count + actionableGaps(row.gaps).length, 0);
 
   return (
     <div className="page page--wide">
@@ -96,18 +100,20 @@ export function MinuteBookPage() {
         iconColor="purple"
         subtitle="A legal record spine tying documents, meetings, minutes, resolutions, filings, signatures, policies, and workflow packages together."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
-            <Plus size={12} /> New record
-          </button>
+          <Button variant="accent" icon={<Plus size={14} />} onClick={openNew}>New record</Button>
         }
       />
 
       <div className="stat-grid" style={{ marginBottom: 16 }}>
+        <Stat label="Connected records" value={recordBundles.length} />
         <Stat label="Manual records" value={items.length} />
         <Stat label="Documents" value={safeCount(detail, "documents")} />
         <Stat label="Meetings" value={safeCount(detail, "meetings")} />
+        <Stat label="Record gaps" value={bundleGapCount} tone={bundleGapCount ? "warn" : undefined} />
         <Stat label="Open checks" value={openCheckCount} tone={openCheckCount ? "warn" : undefined} />
       </div>
+
+      <RecordBundlesCard rows={recordBundles} />
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
@@ -159,18 +165,24 @@ export function MinuteBookPage() {
                   <td><Badge tone={toneForStatus(row.status)}>{optionLabel("minuteBookStatuses", row.status)}</Badge></td>
                   <td>
                     <div className="row" style={{ justifyContent: "flex-end" }}>
-                      <button
-                        className="btn btn--ghost btn--sm"
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => {
                           setDraft({ ...row, documentId: row.documentIds?.[0] });
                           setOpen(true);
                         }}
                       >
                         Edit
-                      </button>
-                      <button className="btn btn--ghost btn--sm btn--icon" aria-label="Delete minute book record" onClick={() => confirmDelete(row)}>
-                        <Trash2 size={12} />
-                      </button>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<Trash2 size={12} />}
+                        iconOnly
+                        aria-label="Delete minute book record"
+                        onClick={() => confirmDelete(row)}
+                      />
                     </div>
                   </td>
                 </tr>
@@ -196,8 +208,8 @@ export function MinuteBookPage() {
         title={draft?._id ? "Edit minute book record" : "New minute book record"}
         footer={
           <>
-            <button className="btn" onClick={() => { setOpen(false); setDraft(null); }}>Cancel</button>
-            <button className="btn btn--accent" onClick={save}>Save</button>
+            <Button onClick={() => { setOpen(false); setDraft(null); }}>Cancel</Button>
+            <Button variant="accent" onClick={save}>Save</Button>
           </>
         }
       >
@@ -218,6 +230,7 @@ export function MinuteBookPage() {
             <RecordSelect label="Filing" value={draft.filingId} rows={safeRows(detail, "filings")} onChange={(value) => setDraft({ ...draft, filingId: value })} getLabel={(row: any) => row.kind} />
             <RecordSelect label="Policy" value={draft.policyId} rows={safeRows(detail, "policies")} onChange={(value) => setDraft({ ...draft, policyId: value })} getLabel={(row: any) => row.policyName} />
             <RecordSelect label="Workflow package" value={draft.workflowPackageId} rows={safeRows(detail, "workflowPackages")} onChange={(value) => setDraft({ ...draft, workflowPackageId: value })} getLabel={(row: any) => row.packageName} />
+            <RecordSelect label="Written resolution" value={draft.writtenResolutionId} rows={safeRows(detail, "writtenResolutions")} onChange={(value) => setDraft({ ...draft, writtenResolutionId: value })} getLabel={(row: any) => row.title} />
             <Field label="Notes"><textarea className="textarea" value={draft.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></Field>
           </>
         )}
@@ -233,6 +246,111 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: "wa
       <div className="stat__value" style={{ color: tone === "warn" ? "var(--warn)" : undefined }}>{value}</div>
     </div>
   );
+}
+
+function RecordBundlesCard({ rows }: { rows: any[] }) {
+  const gapCount = rows.reduce((count, row) => count + actionableGaps(row.gaps).length, 0);
+  const visibleRows = rows
+    .slice()
+    .sort((a, b) => {
+      const gapDifference = gapScore(b.gaps) - gapScore(a.gaps);
+      if (gapDifference !== 0) return gapDifference;
+      return String(b.date ?? "").localeCompare(String(a.date ?? ""));
+    })
+    .slice(0, 40);
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card__head">
+        <h2 className="card__title">Connected records</h2>
+        <Badge tone={gapCount ? "warn" : "success"}>{gapCount ? `${gapCount} gaps` : `${rows.length} records`}</Badge>
+      </div>
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Record</th>
+              <th>Connected evidence</th>
+              <th>Counts</th>
+              <th>Gaps</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleRows.map((row) => (
+              <tr key={row.key}>
+                <td>
+                  <div>{row.href ? <Link to={row.href}><strong>{row.title}</strong></Link> : <strong>{row.title}</strong>}</div>
+                  <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 4 }}>
+                    <Badge>{labelize(row.type)}</Badge>
+                    {(row.badges ?? []).slice(0, 3).map((badge: any) => <Badge key={`${row.key}:${badge.label}`} tone={badge.tone}>{badge.label}</Badge>)}
+                  </div>
+                </td>
+                <td><BundleLinks links={row.links ?? []} /></td>
+                <td><CountBadges counts={row.counts ?? {}} /></td>
+                <td><GapBadges gaps={row.gaps ?? []} /></td>
+                <td><Badge tone={toneForStatus(row.status)}>{row.status ?? "-"}</Badge></td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 24 }}>No connected record bundles yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {rows.length > 40 && <div className="card__body muted">Showing the first 40 connected records.</div>}
+    </div>
+  );
+}
+
+function BundleLinks({ links }: { links: any[] }) {
+  if (!links.length) return <span className="muted">No linked evidence</span>;
+  return (
+    <div style={{ display: "grid", gap: 4 }}>
+      {links.slice(0, 5).map((link) => (
+        <div key={`${link.kind}:${link.label}`} style={{ fontSize: "var(--fs-sm)" }}>
+          <Link to={link.href}>{link.kind}</Link>
+          <span className="muted"> - {link.label}</span>
+        </div>
+      ))}
+      {links.length > 5 && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>+{links.length - 5} more links</div>}
+    </div>
+  );
+}
+
+function CountBadges({ counts }: { counts: Record<string, number> }) {
+  const entries = Object.entries(counts).filter(([, value]) => Number(value) > 0);
+  if (!entries.length) return <span className="muted">No counts</span>;
+  return (
+    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+      {entries.slice(0, 6).map(([key, value]) => <Badge key={key}>{labelize(key)} {value}</Badge>)}
+    </div>
+  );
+}
+
+function GapBadges({ gaps }: { gaps: any[] }) {
+  const visibleGaps = actionableGaps(gaps);
+  if (!visibleGaps.length) return <Badge tone="success">No gaps</Badge>;
+  return (
+    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+      {visibleGaps.slice(0, 4).map((gap) => (
+        <Badge key={gap.key} tone={gap.severity === "danger" ? "danger" : gap.severity === "warn" ? "warn" : "info"}>{gap.label}</Badge>
+      ))}
+      {visibleGaps.length > 4 && <Badge tone="warn">+{visibleGaps.length - 4}</Badge>}
+    </div>
+  );
+}
+
+function actionableGaps(gaps: any[] = []) {
+  return gaps.filter((gap) => gap.severity === "warn" || gap.severity === "danger");
+}
+
+function gapScore(gaps: any[] = []) {
+  return gaps.reduce((score, gap) => {
+    if (gap.severity === "danger") return score + 3;
+    if (gap.severity === "warn") return score + 2;
+    return score;
+  }, 0);
 }
 
 function LinkedList({ title, rows, getTitle, getMeta }: any) {
@@ -279,6 +397,8 @@ function linkSummary(row: any, maps: any) {
   if (policy) return <Link to="/app/policies">{policy.policyName}</Link>;
   const workflowPackage = row.workflowPackageId ? maps.workflowPackages.get(row.workflowPackageId) : null;
   if (workflowPackage) return <Link to="/app/workflow-packages">{workflowPackage.packageName}</Link>;
+  const writtenResolution = row.writtenResolutionId ? maps.writtenResolutions.get(row.writtenResolutionId) : null;
+  if (writtenResolution) return <Link to="/app/written-resolutions">{writtenResolution.title}</Link>;
   return <span className="muted">Not linked</span>;
 }
 
@@ -297,8 +417,8 @@ function labelize(value?: string) {
 
 function toneForStatus(status?: string) {
   const value = String(status ?? "").toLowerCase();
-  if (value.includes("current") || value.includes("verified") || value.includes("filed")) return "success" as const;
-  if (value.includes("review") || value.includes("draft")) return "warn" as const;
-  if (value.includes("archiv") || value.includes("reject")) return "danger" as const;
+  if (value.includes("current") || value.includes("active") || value.includes("approved") || value.includes("verified") || value.includes("filed") || value.includes("complete") || value.includes("carried") || value.includes("ready")) return "success" as const;
+  if (value.includes("review") || value.includes("draft") || value.includes("pending") || value.includes("circulating") || value.includes("collecting")) return "warn" as const;
+  if (value.includes("archiv") || value.includes("reject") || value.includes("failed") || value.includes("cancelled") || value.includes("superseded") || value.includes("ceased")) return "danger" as const;
   return "neutral" as const;
 }

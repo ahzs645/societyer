@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const list = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
+  returns: v.any(),
   handler: async (ctx, { societyId, limit }) => {
     const rows = await ctx.db
       .query("activity")
@@ -20,6 +21,7 @@ export const listForRecord = query({
     entityId: v.string(),
     limit: v.optional(v.number()),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, entityType, entityId, limit }) => {
     return ctx.db
       .query("activity")
@@ -40,6 +42,7 @@ export const log = mutation({
     action: v.string(),
     summary: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, args) =>
     ctx.db.insert("activity", { ...args, createdAtISO: new Date().toISOString() }),
 });

@@ -4,6 +4,7 @@ import { v } from "convex/values";
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("donationReceipts")
@@ -26,6 +27,7 @@ export const issue = mutation({
     isNonCash: v.boolean(),
     appraiserName: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     // Serial receipt numbers per society — next = count + 1, zero-padded.
     const existing = await ctx.db
@@ -43,6 +45,7 @@ export const issue = mutation({
 
 export const voidReceipt = mutation({
   args: { id: v.id("donationReceipts"), reason: v.string() },
+  returns: v.any(),
   handler: async (ctx, { id, reason }) => {
     await ctx.db.patch(id, {
       voidedAtISO: new Date().toISOString(),
@@ -53,6 +56,7 @@ export const voidReceipt = mutation({
 
 export const remove = mutation({
   args: { id: v.id("donationReceipts") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

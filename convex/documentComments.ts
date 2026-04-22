@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const listForDocument = query({
   args: { documentId: v.id("documents") },
+  returns: v.any(),
   handler: async (ctx, { documentId }) =>
     ctx.db
       .query("documentComments")
@@ -21,6 +22,7 @@ export const create = mutation({
     authorUserId: v.optional(v.id("users")),
     body: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     if (!args.body.trim()) throw new Error("Comment body is required.");
     const document = await ctx.db.get(args.documentId);
@@ -51,6 +53,7 @@ export const setStatus = mutation({
     status: v.string(),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, status, actingUserId }) => {
     const comment = await ctx.db.get(id);
     if (!comment) return;
@@ -64,6 +67,7 @@ export const setStatus = mutation({
 
 export const remove = mutation({
   args: { id: v.id("documentComments") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

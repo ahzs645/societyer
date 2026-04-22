@@ -499,6 +499,7 @@ export function mountApiGateway(app: express.Express) {
 
   router.use(express.json({ limit: "10mb" }));
 
+  mountMaintenanceRoutes(router, client);
   mountPlatformRoutes(router, client);
   mountBrowserConnectorRoutes(router, client);
   mountWorkflowBridgeRoutes(router, client);
@@ -515,6 +516,37 @@ function createConvexClient() {
     process.env.VITE_CONVEX_URL ??
     "http://127.0.0.1:3220";
   return new ConvexHttpClient(url);
+}
+
+function mountMaintenanceRoutes(router: Router, client: ConvexHttpClient) {
+  router.post(
+    "/maintenance/seed",
+    requireLocalMaintenanceAccess,
+    asyncHandler(async (_req, res) => {
+      const result = await convexCall(client, mutation("seed.run"), {
+        serviceToken: maintenanceServiceToken(),
+      });
+      res.json(result);
+    }),
+  );
+
+  router.post(
+    "/maintenance/reset",
+    requireLocalMaintenanceAccess,
+    asyncHandler(async (_req, res) => {
+      const result = await convexCall(client, mutation("seed.reset"), {
+        serviceToken: maintenanceServiceToken(),
+      });
+      res.json(result ?? { ok: true });
+    }),
+  );
+}
+
+function requireLocalMaintenanceAccess(req: Request, _res: Response, next: NextFunction) {
+  if (getAuthMode() !== "none" || process.env.NODE_ENV === "production" || !isLocalRequest(req)) {
+    throw httpError(403, "maintenance_unavailable", "Maintenance endpoints are local development only.");
+  }
+  next();
 }
 
 function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
@@ -584,6 +616,7 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
         scopes: normalizeScopes(req.body?.scopes),
         expiresAtISO: req.body?.expiresAtISO,
         createdByUserId: req.actor?.userId,
+        serviceToken: apiPlatformServiceToken(),
       });
       res.status(201).json(singleResponse({ id, token: rawToken }));
     }),
@@ -654,6 +687,7 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
         secretEncrypted,
         status: req.body?.status,
         createdByUserId: req.actor?.userId,
+        serviceToken: apiPlatformServiceToken(),
       });
       res.status(201).json(singleResponse({ id, signingSecret: rawSecret }));
     }),
@@ -1098,6 +1132,7 @@ async function resolveActor(client: ConvexHttpClient, req: Request, requiredScop
     const result = await convexCall(client, mutation("apiPlatform.verifyToken"), {
       tokenHash: hashApiToken(apiToken),
       requiredScope,
+      serviceToken: apiPlatformServiceToken(),
     });
     if (!result?.valid) {
       throw httpError(
@@ -1193,6 +1228,7 @@ async function emitWebhookEvent(client: ConvexHttpClient, actor: Actor, type: st
   const subscriptions = await convexCall(client, query("apiPlatform.listWebhookSubscriptionsForEvent"), {
     societyId: actor.societyId,
     eventType: type,
+    serviceToken: apiPlatformServiceToken(),
   });
   for (const subscription of subscriptions ?? []) {
     void deliverWebhook(client, subscription, event, 0);
@@ -2326,6 +2362,7 @@ async function deliverWebhook(client: ConvexHttpClient, subscription: any, event
     payloadJson: body,
     status: "pending",
     attempts: attemptsAlready,
+    serviceToken: apiPlatformServiceToken(),
   });
 
   const attemptNumber = attemptsAlready + 1;
@@ -2355,6 +2392,7 @@ async function deliverWebhook(client: ConvexHttpClient, subscription: any, event
       attempts: attemptNumber,
       lastStatusCode: response.status,
       deliveredAtISO: new Date().toISOString(),
+      serviceToken: apiPlatformServiceToken(),
     });
   } catch (error: any) {
     clearTimeout(timeout);
@@ -2367,6 +2405,7 @@ async function deliverWebhook(client: ConvexHttpClient, subscription: any, event
       nextAttemptAtISO: shouldRetry ? new Date(Date.now() + retryDelay).toISOString() : undefined,
       lastStatusCode: error?.statusCode,
       lastError: error?.message ?? "Webhook delivery failed.",
+      serviceToken: apiPlatformServiceToken(),
     });
     if (shouldRetry) {
       setTimeout(() => {
@@ -2828,6 +2867,30 @@ function createApiToken() {
 
 function createWebhookSecret() {
   return `whsec_${crypto.randomBytes(32).toString("base64url")}`;
+}
+
+function apiPlatformServiceToken() {
+  const configured =
+    process.env.SOCIETYER_API_PLATFORM_TOKEN ??
+    process.env.CONVEX_INSTANCE_SECRET;
+  if (configured) return configured;
+  throw httpError(
+    500,
+    "api_platform_service_token_missing",
+    "SOCIETYER_API_PLATFORM_TOKEN or CONVEX_INSTANCE_SECRET is required.",
+  );
+}
+
+function maintenanceServiceToken() {
+  const configured =
+    process.env.SOCIETYER_MAINTENANCE_TOKEN ??
+    process.env.CONVEX_INSTANCE_SECRET;
+  if (configured) return configured;
+  throw httpError(
+    500,
+    "maintenance_token_missing",
+    "SOCIETYER_MAINTENANCE_TOKEN or CONVEX_INSTANCE_SECRET is required.",
+  );
 }
 
 function encryptionKey() {

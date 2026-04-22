@@ -1929,6 +1929,191 @@ function member(id: string, firstName: string, lastName: string, membershipClass
   };
 }
 
+type StaticRecordField = {
+  name: string;
+  label: string;
+  fieldType: string;
+  icon?: string;
+  config?: Record<string, unknown>;
+  isSystem?: boolean;
+  isReadOnly?: boolean;
+};
+
+const staticRecordTables: Record<
+  string,
+  {
+    namePlural: string;
+    labelSingular: string;
+    labelPlural: string;
+    icon: string;
+    iconColor: string;
+    routePath: string;
+    labelIdentifierFieldName: string;
+    fields: StaticRecordField[];
+    defaultView: {
+      name: string;
+      columns: { fieldName: string; size?: number }[];
+    };
+  }
+> = {
+  director: {
+    namePlural: "directors",
+    labelSingular: "Director",
+    labelPlural: "Directors",
+    icon: "ShieldCheck",
+    iconColor: "violet",
+    routePath: "/app/directors",
+    labelIdentifierFieldName: "fullName",
+    fields: [
+      { name: "firstName", label: "First name", fieldType: "TEXT", icon: "User", isSystem: true },
+      { name: "lastName", label: "Last name", fieldType: "TEXT", icon: "User", isSystem: true },
+      { name: "email", label: "Email", fieldType: "EMAIL", icon: "Mail" },
+      {
+        name: "position",
+        label: "Position",
+        fieldType: "SELECT",
+        icon: "Briefcase",
+        config: {
+          options: [
+            { value: "President", label: "President", color: "blue" },
+            { value: "Vice President", label: "Vice President", color: "teal" },
+            { value: "Secretary", label: "Secretary", color: "purple" },
+            { value: "Treasurer", label: "Treasurer", color: "green" },
+            { value: "Director", label: "Director", color: "gray" },
+          ],
+        },
+      },
+      { name: "isBCResident", label: "BC resident", fieldType: "BOOLEAN", icon: "MapPin" },
+      { name: "consentOnFile", label: "Consent on file", fieldType: "BOOLEAN", icon: "FileCheck" },
+      { name: "termStart", label: "Term start", fieldType: "DATE", icon: "Calendar" },
+      { name: "termEnd", label: "Term end", fieldType: "DATE", icon: "Calendar" },
+      { name: "resignedAt", label: "Resigned", fieldType: "DATE", icon: "LogOut" },
+      {
+        name: "status",
+        label: "Status",
+        fieldType: "SELECT",
+        icon: "Activity",
+        config: {
+          options: [
+            { value: "Active", label: "Active", color: "green" },
+            { value: "Resigned", label: "Resigned", color: "amber" },
+            { value: "Inactive", label: "Inactive", color: "gray" },
+          ],
+        },
+      },
+      { name: "aliases", label: "Aliases", fieldType: "ARRAY", icon: "Tag", isReadOnly: true },
+      { name: "notes", label: "Notes", fieldType: "TEXT", icon: "StickyNote" },
+    ],
+    defaultView: {
+      name: "All directors",
+      columns: [
+        { fieldName: "firstName", size: 150 },
+        { fieldName: "lastName", size: 150 },
+        { fieldName: "position", size: 160 },
+        { fieldName: "status", size: 120 },
+        { fieldName: "termStart", size: 140 },
+        { fieldName: "termEnd", size: 140 },
+        { fieldName: "isBCResident", size: 110 },
+        { fieldName: "consentOnFile", size: 120 },
+      ],
+    },
+  },
+};
+
+function staticRecordTableSetup(args: StaticArgs) {
+  const nameSingular = String(args?.nameSingular ?? "");
+  const definition = staticRecordTables[nameSingular];
+  if (!definition) return { object: null, views: [], activeView: null };
+
+  const objectMetadataId = `static_object_${nameSingular}`;
+  const viewId = `static_view_${nameSingular}_all`;
+  const now = "2026-04-16T16:00:00.000Z";
+  const fields = definition.fields.map((field, position) => ({
+    _id: `static_field_${nameSingular}_${field.name}`,
+    societyId: args?.societyId ?? SOCIETY_ID,
+    objectMetadataId,
+    name: field.name,
+    label: field.label,
+    icon: field.icon,
+    fieldType: field.fieldType,
+    configJson: field.config ? JSON.stringify(field.config) : undefined,
+    isSystem: field.isSystem ?? false,
+    isHidden: false,
+    isNullable: true,
+    isReadOnly: field.isReadOnly ?? false,
+    position,
+    createdAtISO: now,
+    updatedAtISO: now,
+  }));
+  const view = {
+    _id: viewId,
+    societyId: args?.societyId ?? SOCIETY_ID,
+    objectMetadataId,
+    name: definition.defaultView.name,
+    type: "table",
+    icon: definition.icon,
+    filtersJson: "[]",
+    sortsJson: "[]",
+    density: "compact",
+    isShared: true,
+    isSystem: true,
+    position: 0,
+    createdAtISO: now,
+    updatedAtISO: now,
+  };
+  const fieldsByName = new Map(fields.map((field) => [field.name, field]));
+  const columns = definition.defaultView.columns
+    .map((column, position) => {
+      const field = fieldsByName.get(column.fieldName);
+      if (!field) return null;
+      return {
+        viewField: {
+          _id: `static_view_field_${nameSingular}_${column.fieldName}`,
+          societyId: args?.societyId ?? SOCIETY_ID,
+          viewId,
+          fieldMetadataId: field._id,
+          position,
+          size: column.size ?? 160,
+          isVisible: true,
+          aggregateOperation: null,
+          createdAtISO: now,
+          updatedAtISO: now,
+        },
+        field,
+      };
+    })
+    .filter((column): column is { viewField: any; field: any } => column !== null);
+
+  return {
+    object: {
+      _id: objectMetadataId,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      nameSingular,
+      namePlural: definition.namePlural,
+      labelSingular: definition.labelSingular,
+      labelPlural: definition.labelPlural,
+      icon: definition.icon,
+      iconColor: definition.iconColor,
+      labelIdentifierFieldName: definition.labelIdentifierFieldName,
+      isSystem: true,
+      isActive: true,
+      routePath: definition.routePath,
+      createdAtISO: now,
+      updatedAtISO: now,
+      fields,
+    },
+    views: [
+      {
+        _id: view._id,
+        name: view.name,
+        position: view.position,
+        isSystem: view.isSystem,
+      },
+    ],
+    activeView: { view, columns },
+  };
+}
+
 function waveResource(id: string, resourceType: string, externalId: string, label: string, secondaryLabel: string, raw: any) {
   const rawJson = JSON.stringify(raw);
   return {
@@ -3021,6 +3206,8 @@ function queryResult(name: string, args: StaticArgs) {
       return notifications.slice(0, args?.limit ?? notifications.length);
     case "notifications:unreadCount":
       return notifications.filter((notification) => !notification.readAt).length;
+    case "objectMetadata:getFullTableSetup":
+      return staticRecordTableSetup(args);
     case "publicPortal:getSocietyBySlug":
       return society.publicSlug === args?.slug ? society : null;
     case "publicPortal:grantIntakeContext":
@@ -3090,7 +3277,8 @@ function queryResult(name: string, args: StaticArgs) {
 }
 
 function mutationResult(name: string, args: StaticArgs) {
-  if (name === "seed:run") return SOCIETY_ID;
+  if (name === "seed:run") return { societyId: SOCIETY_ID };
+  if (name === "seed:reset") return { ok: true };
   if (name === "users:resolveAuthSession") return { userId: USER_OWNER_ID };
   if (name === "paperless:testConnection") {
     return {

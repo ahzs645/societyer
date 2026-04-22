@@ -7,6 +7,7 @@ import {
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("meetings")
@@ -17,6 +18,7 @@ export const list = query({
 
 export const get = query({
   args: { id: v.id("meetings") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
@@ -51,6 +53,7 @@ export const create = mutation({
     packageReviewedByUserId: v.optional(v.id("users")),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const rules = await getBylawRuleSetForDate(
       ctx,
@@ -120,6 +123,7 @@ export const update = mutation({
       notes: v.optional(v.string()),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     await ctx.db.patch(id, patch);
   },
@@ -132,6 +136,7 @@ export const markSourceReview = mutation({
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, status, notes, actingUserId }) => {
     const meeting = await ctx.db.get(id);
     if (!meeting) throw new Error("Meeting not found.");
@@ -182,6 +187,7 @@ export const setPackageReviewStatus = mutation({
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, status, notes, actingUserId }) => {
     const meeting = await ctx.db.get(id);
     if (!meeting) throw new Error("Meeting not found.");
@@ -213,6 +219,7 @@ export const setPackageReviewStatus = mutation({
 
 export const backfillQuorumSnapshot = mutation({
   args: { id: v.id("meetings") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     const meeting = await ctx.db.get(id);
     if (!meeting) return null;
@@ -250,6 +257,7 @@ export const backfillQuorumSnapshot = mutation({
 
 export const remove = mutation({
   args: { id: v.id("meetings") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

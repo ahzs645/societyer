@@ -16,6 +16,7 @@ import { createDownloadUrl } from "./providers/storage";
 
 export const tagProfiles = query({
   args: {},
+  returns: v.any(),
   handler: async () => [
     {
       scope: "Core record",
@@ -42,6 +43,7 @@ export const tagProfiles = query({
 
 export const listConnection = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const rows = await ctx.db
       .query("paperlessConnections")
@@ -53,6 +55,7 @@ export const listConnection = query({
 
 export const connectionStatus = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const connection = await ctx.db
       .query("paperlessConnections")
@@ -68,6 +71,7 @@ export const connectionStatus = query({
 
 export const recentSyncs = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
+  returns: v.any(),
   handler: async (ctx, { societyId, limit }) => {
     const rows = await ctx.db
       .query("paperlessDocumentSyncs")
@@ -91,6 +95,7 @@ export const recentSyncs = query({
 
 export const syncForDocument = query({
   args: { documentId: v.id("documents") },
+  returns: v.any(),
   handler: async (ctx, { documentId }) => {
     const rows = await ctx.db
       .query("paperlessDocumentSyncs")
@@ -106,6 +111,7 @@ export const sourcePullContext = query({
     documentId: v.id("documents"),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     if (args.actingUserId) {
       await requireRole(ctx, {
@@ -130,6 +136,7 @@ export const pullSourceDocument = action({
     original: v.optional(v.boolean()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const { document } = await ctx.runQuery(api.paperless.sourcePullContext, {
       societyId: args.societyId,
@@ -179,6 +186,7 @@ export const recordPulledSourceDocument = mutation({
     fileSizeBytes: v.optional(v.number()),
     metadata: v.optional(v.any()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const document = await ctx.db.get(args.documentId);
     if (!document || document.societyId !== args.societyId) {
@@ -215,6 +223,7 @@ export const createMeetingMinutesImportSession = action({
     maxDocuments: v.optional(v.number()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     if (args.actingUserId) {
       await ctx.runQuery(api.paperless.authorizeMeetingImport, {
@@ -286,6 +295,7 @@ export const createDiscoveryImportSession = action({
     maxDocuments: v.optional(v.number()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     if (args.actingUserId) {
       await ctx.runQuery(api.paperless.authorizeMeetingImport, {
@@ -353,6 +363,7 @@ export const createTransposedImportSession = action({
     maxDocuments: v.optional(v.number()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     if (args.actingUserId) {
       await ctx.runQuery(api.paperless.authorizeMeetingImport, {
@@ -407,6 +418,7 @@ export const createBylawsHistoryImportSession = action({
     maxDocuments: v.optional(v.number()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     if (args.actingUserId) {
       await ctx.runQuery(api.paperless.authorizeMeetingImport, {
@@ -447,6 +459,7 @@ export const authorizeMeetingImport = query({
     societyId: v.id("societies"),
     actingUserId: v.id("users"),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -459,6 +472,7 @@ export const authorizeMeetingImport = query({
 
 export const getSync = query({
   args: { id: v.id("paperlessDocumentSyncs") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
@@ -470,6 +484,7 @@ export const upsertConnection = mutation({
     tagPrefix: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     if (args.actingUserId) {
       await requireRole(ctx, {
@@ -513,6 +528,7 @@ export const disconnect = mutation({
     societyId: v.id("societies"),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     if (args.actingUserId) {
       await requireRole(ctx, {
@@ -531,6 +547,7 @@ export const disconnect = mutation({
 
 export const testConnection = action({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const result = await testPaperlessConnection();
     await ctx.runMutation(api.paperless.recordConnectionTest, {
@@ -556,6 +573,7 @@ export const recordConnectionTest = mutation({
     error: v.optional(v.string()),
     demo: v.boolean(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const connection = await ctx.db
       .query("paperlessConnections")
@@ -583,6 +601,7 @@ export const syncContext = query({
     versionId: v.optional(v.id("documentVersions")),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     if (args.actingUserId) {
       await requireRole(ctx, {
@@ -655,6 +674,7 @@ export const syncDocument = action({
     versionId: v.optional(v.id("documentVersions")),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const syncCtx = await ctx.runQuery(api.paperless.syncContext, args);
     if (!syncCtx.source) {
@@ -730,6 +750,7 @@ export const syncDocument = action({
 
 export const refreshSync = action({
   args: { syncId: v.id("paperlessDocumentSyncs") },
+  returns: v.any(),
   handler: async (ctx, { syncId }) => {
     const sync = await ctx.runQuery(api.paperless.getSync, { id: syncId });
     if (!sync?.paperlessTaskId) return null;
@@ -760,6 +781,7 @@ export const recordSyncResult = mutation({
     tags: v.array(v.string()),
     lastError: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const existingRows = await ctx.db
       .query("paperlessDocumentSyncs")
@@ -812,6 +834,7 @@ export const recordSyncRefresh = mutation({
     paperlessDocumentUrl: v.optional(v.string()),
     lastError: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
     await ctx.db.patch(args.syncId, {

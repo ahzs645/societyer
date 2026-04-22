@@ -5,6 +5,7 @@ import { getActiveBylawRuleSet } from "./lib/bylawRules";
 
 export const summary = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const [society, members, directors, meetings, filings, deadlines, conflicts, committees, goals, tasks, rules] = await Promise.all([
       ctx.db.get(societyId),

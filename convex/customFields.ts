@@ -14,6 +14,7 @@ export const listDefinitions = query({
     societyId: v.id("societies"),
     entityType: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, entityType }) => {
     if (entityType) {
       const rows = await ctx.db
@@ -45,6 +46,7 @@ export const createDefinition = mutation({
     order: v.optional(v.number()),
     description: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     assertEntityType(args.entityType);
     const existing = await ctx.db
@@ -86,6 +88,7 @@ export const updateDefinition = mutation({
     order: v.optional(v.number()),
     description: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...patch }) => {
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Custom field definition not found");
@@ -95,6 +98,7 @@ export const updateDefinition = mutation({
 
 export const deleteDefinition = mutation({
   args: { id: v.id("customFieldDefinitions") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     const existing = await ctx.db.get(id);
     if (!existing) return;
@@ -112,6 +116,7 @@ export const listValues = query({
     entityType: v.string(),
     entityId: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, { entityType, entityId }) => {
     return await ctx.db
       .query("customFieldValues")
@@ -128,6 +133,7 @@ export const setValue = mutation({
     entityId: v.string(),
     value: v.any(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     assertEntityType(args.entityType);
     const def = await ctx.db.get(args.definitionId);
@@ -160,6 +166,7 @@ export const clearValue = mutation({
     entityId: v.string(),
     definitionId: v.id("customFieldDefinitions"),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("customFieldValues")

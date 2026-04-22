@@ -10,6 +10,7 @@ import { v } from "convex/values";
  */
 export const overview = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const [txns, filings, receipts, employees] = await Promise.all([
       ctx.db
@@ -110,6 +111,7 @@ export const match = mutation({
     note: v.optional(v.string()),
     actor: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await ctx.db.patch(args.txnId, {
       reconciledAtISO: new Date().toISOString(),
@@ -127,6 +129,7 @@ export const markManual = mutation({
     note: v.string(),
     actor: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { txnId, note, actor }) => {
     await ctx.db.patch(txnId, {
       reconciledAtISO: new Date().toISOString(),
@@ -140,6 +143,7 @@ export const markManual = mutation({
 
 export const unmatch = mutation({
   args: { txnId: v.id("financialTransactions") },
+  returns: v.any(),
   handler: async (ctx, { txnId }) => {
     await ctx.db.patch(txnId, {
       reconciledAtISO: undefined,

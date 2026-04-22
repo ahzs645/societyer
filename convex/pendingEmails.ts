@@ -13,6 +13,7 @@ export const list = query({
     societyId: v.id("societies"),
     status: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, status }) => {
     const rows = status
       ? await ctx.db
@@ -33,6 +34,7 @@ export const list = query({
 
 export const get = query({
   args: { id: v.id("pendingEmails") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
@@ -52,6 +54,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const id = await ctx.db.insert("pendingEmails", {
       societyId: args.societyId,
@@ -88,6 +91,7 @@ export const update = mutation({
     }),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Pending email not found");
@@ -102,6 +106,7 @@ export const markSent = mutation({
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, sentChannel, notes, actingUserId }) => {
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Pending email not found");
@@ -121,6 +126,7 @@ export const cancel = mutation({
     reason: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, reason }) => {
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Pending email not found");
@@ -136,6 +142,7 @@ export const remove = mutation({
     id: v.id("pendingEmails"),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

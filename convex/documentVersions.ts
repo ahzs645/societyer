@@ -11,6 +11,7 @@ import {
 
 export const listForDocument = query({
   args: { documentId: v.id("documents") },
+  returns: v.any(),
   handler: async (ctx, { documentId }) => {
     const rows = await ctx.db
       .query("documentVersions")
@@ -22,6 +23,7 @@ export const listForDocument = query({
 
 export const latest = query({
   args: { documentId: v.id("documents") },
+  returns: v.any(),
   handler: async (ctx, { documentId }) => {
     const rows = await ctx.db
       .query("documentVersions")
@@ -42,6 +44,7 @@ export const beginUpload = action({
     fileSizeBytes: v.optional(v.number()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     if (!args.actingUserId) {
       throw new Error("Role Director required — no authenticated actor.");
@@ -86,6 +89,7 @@ export const recordUploadedVersion = mutation({
     changeNote: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -147,6 +151,7 @@ export const recordUploadedVersion = mutation({
 
 export const getDownloadUrl = action({
   args: { versionId: v.id("documentVersions") },
+  returns: v.any(),
   handler: async (ctx, { versionId }): Promise<string | null> => {
     const version = await ctx.runQuery(api.documentVersions.get, { id: versionId });
     if (!version) return null;
@@ -166,6 +171,7 @@ export const getDownloadUrl = action({
 
 export const get = query({
   args: { id: v.id("documentVersions") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
@@ -182,6 +188,7 @@ export const createDemoVersion = mutation({
     changeNote: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args): Promise<Id<"documentVersions">> => {
     const existing = await ctx.db
       .query("documentVersions")
@@ -239,6 +246,7 @@ export const rollback = mutation({
     versionId: v.id("documentVersions"),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { versionId, actingUserId }) => {
     const v = await ctx.db.get(versionId);
     if (!v) throw new Error("Version not found.");

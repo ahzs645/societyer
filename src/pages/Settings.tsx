@@ -8,7 +8,8 @@ import { useToast } from "../components/Toast";
 import { RadioGroup, Toggle } from "../components/Controls";
 import { LocaleSwitcher } from "../components/LocaleSwitcher";
 import { getAuthMode } from "../lib/authMode";
-import { useSociety } from "../hooks/useSociety";
+import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
+import { maintenanceErrorMessage, resetDemoData, seedDemoSociety } from "../lib/maintenanceApi";
 import { useThemePreference } from "../hooks/useThemePreference";
 import { useTranslation } from "react-i18next";
 import type { ThemePreference } from "../lib/theme";
@@ -26,14 +27,13 @@ export function SettingsPage() {
   const society = useSociety();
   const [demo, setDemo] = useState(isDemoMode());
   const authMode = getAuthMode();
-  const seed = useMutation(api.seed.run);
-  const reset = useMutation(api.seed.reset);
   const updateModules = useMutation(api.society.updateModules);
   const confirm = useConfirm();
   const toast = useToast();
   const { preference: theme, resolvedTheme, setPreference: setTheme } = useThemePreference();
   const [moduleSettings, setModuleSettings] = useState(() => normalizeModuleSettings(undefined));
   const [savingModule, setSavingModule] = useState<ModuleKey | null>(null);
+  const [maintenanceBusy, setMaintenanceBusy] = useState<"seed" | "reset" | null>(null);
 
   useEffect(() => {
     if (!society) return;
@@ -184,9 +184,27 @@ export function SettingsPage() {
             Append <code className="mono">?demo=1</code> to any URL to force-enable, <code className="mono">?demo=0</code> to disable.
           </div>
           <div className="row">
-            <button className="btn btn--accent" onClick={() => seed({})}>Seed / reseed demo society</button>
+            <button
+              className="btn btn--accent"
+              disabled={maintenanceBusy !== null}
+              onClick={async () => {
+                setMaintenanceBusy("seed");
+                try {
+                  const result = await seedDemoSociety();
+                  setStoredSocietyId(result.societyId);
+                  toast.success("Demo society seeded");
+                } catch (error) {
+                  toast.error(maintenanceErrorMessage(error));
+                } finally {
+                  setMaintenanceBusy(null);
+                }
+              }}
+            >
+              {maintenanceBusy === "seed" ? "Seeding..." : "Seed / reseed demo society"}
+            </button>
             <button
               className="btn btn--danger"
+              disabled={maintenanceBusy !== null}
               onClick={async () => {
                 const ok = await confirm({
                   title: "Wipe all data?",
@@ -195,11 +213,19 @@ export function SettingsPage() {
                   tone: "danger",
                 });
                 if (!ok) return;
-                await reset({});
-                toast.success("All data wiped");
+                setMaintenanceBusy("reset");
+                try {
+                  await resetDemoData();
+                  setStoredSocietyId(null);
+                  toast.success("All data wiped");
+                } catch (error) {
+                  toast.error(maintenanceErrorMessage(error));
+                } finally {
+                  setMaintenanceBusy(null);
+                }
               }}
             >
-              Wipe all data
+              {maintenanceBusy === "reset" ? "Wiping..." : "Wipe all data"}
             </button>
           </div>
         </div>

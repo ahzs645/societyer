@@ -43,9 +43,9 @@ import {
   Inbox,
   Workflow,
 } from "lucide-react";
-import { useMutation } from "convex/react";
-import { api } from "@/lib/convexApi";
-import { useSociety } from "../hooks/useSociety";
+import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
+import { useToast } from "./Toast";
+import { maintenanceErrorMessage, seedDemoSociety } from "../lib/maintenanceApi";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { useUIStore } from "../lib/store";
 import { useRegisteredCommands } from "../lib/commands";
@@ -194,7 +194,7 @@ export function CommandPalette() {
   const listId = useId();
   const navigate = useNavigate();
   const society = useSociety();
-  const seed = useMutation(api.seed.run);
+  const toast = useToast();
 
   const actions = useMemo<CommandItem[]>(
     () => [
@@ -204,11 +204,17 @@ export function CommandPalette() {
         icon: Sparkles,
         category: "Actions",
         run: async () => {
-          await seed({});
+          try {
+            const result = await seedDemoSociety();
+            setStoredSocietyId(result.societyId);
+            toast.success("Demo society seeded");
+          } catch (error) {
+            toast.error(maintenanceErrorMessage(error));
+          }
         },
       },
     ],
-    [seed],
+    [toast],
   );
 
   useEffect(() => {

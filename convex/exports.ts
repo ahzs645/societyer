@@ -132,6 +132,7 @@ const SOCIETY_INDEX_BY_TABLE: Record<string, string> = {
 
 export const listExportableTables = query({
   args: { societyId: v.optional(v.id("societies")) },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     if (!societyId) {
       return EXPORTABLE_TABLES.map((name) => ({ name, rowCount: null, exportable: true }));
@@ -147,6 +148,7 @@ export const exportTable = query({
     societyId: v.id("societies"),
     table: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, table }) => {
     const result = await paginateForSociety(ctx, table, societyId, { cursor: null, numItems: 100 });
     if (!result.isDone) {
@@ -162,6 +164,7 @@ export const exportTablePage = query({
     table: v.string(),
     paginationOpts: paginationOptsValidator,
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, table, paginationOpts }) => {
     return await paginateForSociety(ctx, table, societyId, paginationOpts);
   },
@@ -173,6 +176,7 @@ export const countTablePage = query({
     table: v.string(),
     paginationOpts: paginationOptsValidator,
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, table, paginationOpts }) => {
     const result = await paginateForSociety(ctx, table, societyId, paginationOpts);
     return {
@@ -188,6 +192,7 @@ export const exportWorkspace = query({
     societyId: v.id("societies"),
     includeEmptyTables: v.optional(v.boolean()),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, includeEmptyTables }) => {
     const society = await ctx.db.get(societyId);
     if (!society) throw new Error("Society not found.");
@@ -218,6 +223,7 @@ export const exportWorkspace = query({
 
 export const validateCurrentDatabase = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const society = await ctx.db.get(societyId);
     if (!society) {

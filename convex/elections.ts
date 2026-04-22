@@ -30,6 +30,7 @@ async function logAudit(
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("elections")
@@ -42,6 +43,7 @@ export const get = query({
     id: v.id("elections"),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const election = await ctx.db.get(id);
     if (!election) return null;
@@ -89,6 +91,7 @@ export const listNominations = query({
     electionId: v.id("elections"),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { electionId, actingUserId }) => {
     const election = await ctx.db.get(electionId);
     if (!election) return [];
@@ -116,6 +119,7 @@ export const listMine = query({
     societyId: v.id("societies"),
     userId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, userId }) => {
     if (!userId) return [];
     const user = await ctx.db.get(userId);
@@ -151,6 +155,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const { user } = await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -197,6 +202,7 @@ export const updateSettings = mutation({
     evidenceDocumentId: v.optional(v.id("documents")),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const election = await ctx.db.get(args.electionId);
     if (!election) throw new Error("Election not found.");
@@ -238,6 +244,7 @@ export const addQuestion = mutation({
     ),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const election = await ctx.db.get(args.electionId);
     if (!election) throw new Error("Election not found.");
@@ -279,6 +286,7 @@ export const submitNomination = mutation({
     statement: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const election = await ctx.db.get(args.electionId);
     if (!election) throw new Error("Election not found.");
@@ -321,6 +329,7 @@ export const reviewNomination = mutation({
     status: v.string(),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, status, actingUserId }) => {
     const nomination = await ctx.db.get(id);
     if (!nomination) throw new Error("Nomination not found.");
@@ -350,6 +359,7 @@ export const publishNominationToBallot = mutation({
     questionId: v.id("electionQuestions"),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, questionId, actingUserId }) => {
     const nomination = await ctx.db.get(id);
     if (!nomination) throw new Error("Nomination not found.");
@@ -399,6 +409,7 @@ export const snapshotEligibleVoters = mutation({
     electionId: v.id("elections"),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { electionId, actingUserId }) => {
     const election = await ctx.db.get(electionId);
     if (!election) throw new Error("Election not found.");
@@ -478,6 +489,7 @@ export const castBallot = mutation({
     ),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { electionId, choices, actingUserId }) => {
     const election = await ctx.db.get(electionId);
     if (!election) throw new Error("Election not found.");
@@ -564,6 +576,7 @@ export const close = mutation({
     electionId: v.id("elections"),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { electionId, actingUserId }) => {
     const election = await ctx.db.get(electionId);
     if (!election) throw new Error("Election not found.");
@@ -592,6 +605,7 @@ export const tallyElection = mutation({
     evidenceDocumentId: v.optional(v.id("documents")),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { electionId, resultsSummary, evidenceDocumentId, actingUserId }) => {
     const election = await ctx.db.get(electionId);
     if (!election) throw new Error("Election not found.");
@@ -626,6 +640,7 @@ export const tally = query({
     electionId: v.id("elections"),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { electionId, actingUserId }) => {
     const election = await ctx.db.get(electionId);
     if (!election) return [];

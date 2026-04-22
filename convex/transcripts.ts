@@ -191,6 +191,7 @@ function parseVttTranscript(vttText: string): {
 
 export const getByMeeting = query({
   args: { meetingId: v.id("meetings") },
+  returns: v.any(),
   handler: async (ctx, { meetingId }) => {
     const rows = await ctx.db
       .query("transcripts")
@@ -202,6 +203,7 @@ export const getByMeeting = query({
 
 export const jobForMeeting = query({
   args: { meetingId: v.id("meetings") },
+  returns: v.any(),
   handler: async (ctx, { meetingId }) => {
     const rows = await ctx.db
       .query("transcriptionJobs")
@@ -217,6 +219,7 @@ export const createJob = mutation({
     meetingId: v.id("meetings"),
     provider: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     return await ctx.db.insert("transcriptionJobs", {
       societyId: args.societyId,
@@ -239,6 +242,7 @@ export const updateJob = mutation({
       transcriptId: v.optional(v.id("transcripts")),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     await ctx.db.patch(id, patch);
   },
@@ -256,6 +260,7 @@ export const saveTranscript = mutation({
     storageKey: v.optional(v.string()),
     demo: v.boolean(),
   },
+  returns: v.any(),
   handler: async (ctx, args): Promise<Id<"transcripts">> => {
     return await upsertTranscriptRow(ctx, args);
   },
@@ -272,6 +277,7 @@ export const saveText = mutation({
     storageKey: v.optional(v.string()),
     demo: v.optional(v.boolean()),
   },
+  returns: v.any(),
   handler: async (ctx, args): Promise<Id<"transcripts">> => {
     const text = args.text.trim();
     const transcriptId = await upsertTranscriptRow(ctx, {
@@ -296,6 +302,7 @@ export const importVtt = mutation({
     meetingId: v.id("meetings"),
     vttText: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, args): Promise<Id<"transcripts">> => {
     const parsed = parseVttTranscript(args.vttText);
     if (!parsed.text) throw new Error("No transcript cues were found in that VTT file.");
@@ -326,6 +333,7 @@ export const runPipeline = action({
     sourceMimeType: v.optional(v.string()),
     draftMinutes: v.optional(v.boolean()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const transcriptionProvider = providers.transcription();
     const jobId = await ctx.runMutation(api.transcripts.createJob, {

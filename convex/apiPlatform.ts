@@ -1,5 +1,7 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { assertApiPlatformServiceToken, serviceTokenValidator } from "./lib/serviceAuth";
+import { requireRole } from "./users";
 
 const idString = v.string();
 
@@ -56,11 +58,15 @@ const webhookSubscriptionReturn = v.object({
   name: v.string(),
   targetUrl: v.string(),
   eventTypes: v.array(v.string()),
-  secretEncrypted: v.string(),
+  hasSecret: v.boolean(),
   status: v.string(),
   createdByUserId: v.optional(v.id("users")),
   createdAtISO: v.string(),
   updatedAtISO: v.string(),
+});
+
+const webhookSubscriptionPrivateReturn = webhookSubscriptionReturn.extend({
+  secretEncrypted: v.string(),
 });
 
 const webhookDeliveryReturn = v.object({
@@ -89,6 +95,40 @@ function nowISO() {
 function redactToken(row: any) {
   const { tokenHash: _tokenHash, ...rest } = row;
   return rest;
+}
+
+function redactWebhookSubscription(row: any) {
+  const { secretEncrypted, ...rest } = row;
+  return {
+    ...rest,
+    hasSecret: Boolean(secretEncrypted),
+  };
+}
+
+function privateWebhookSubscription(row: any) {
+  return {
+    ...redactWebhookSubscription(row),
+    secretEncrypted: row.secretEncrypted,
+  };
+}
+
+async function assertCanManageApiPlatform(
+  ctx: any,
+  societyId: any,
+  actingUserId?: any,
+  serviceToken?: string,
+) {
+  if (serviceToken) {
+    await assertApiPlatformServiceToken(serviceToken);
+    return;
+  }
+  if (!actingUserId) {
+    throw new ConvexError({
+      code: "FORBIDDEN",
+      message: "Admin role required.",
+    });
+  }
+  await requireRole(ctx, { societyId, actingUserId, required: "Admin" });
 }
 
 function scopeAllows(scopes: string[], requiredScope?: string) {
@@ -183,18 +223,31 @@ export const createToken = mutation({
     scopes: v.array(v.string()),
     expiresAtISO: v.optional(v.string()),
     createdByUserId: v.optional(v.id("users")),
+    serviceToken: serviceTokenValidator,
   },
   returns: v.id("apiTokens"),
-  handler: async (ctx, args) =>
-    ctx.db.insert("apiTokens", {
-      ...args,
+  handler: async (ctx, args) => {
+    await assertCanManageApiPlatform(
+      ctx,
+      args.societyId,
+      args.createdByUserId,
+      args.serviceToken,
+    );
+    const { serviceToken: _serviceToken, ...rest } = args;
+    return await ctx.db.insert("apiTokens", {
+      ...rest,
       status: "active",
       createdAtISO: nowISO(),
-    }),
+    });
+  },
 });
 
 export const verifyToken = mutation({
-  args: { tokenHash: v.string(), requiredScope: v.optional(v.string()) },
+  args: {
+    tokenHash: v.string(),
+    requiredScope: v.optional(v.string()),
+    serviceToken: serviceTokenValidator,
+  },
   returns: v.union(
     v.object({
       valid: v.literal(false),
@@ -209,7 +262,8 @@ export const verifyToken = mutation({
       userId: v.optional(v.id("users")),
     }),
   ),
-  handler: async (ctx, { tokenHash, requiredScope }) => {
+  handler: async (ctx, { tokenHash, requiredScope, serviceToken }) => {
+    await assertApiPlatformServiceToken(serviceToken);
     const rows = await ctx.db
       .query("apiTokens")
       .withIndex("by_token_hash", (q) => q.eq("tokenHash", tokenHash))
@@ -295,25 +349,30 @@ export const listWebhookSubscriptions = query({
   args: { societyId: v.id("societies") },
   returns: v.array(webhookSubscriptionReturn),
   handler: async (ctx, { societyId }) =>
-    ctx.db
+    (await ctx.db
       .query("webhookSubscriptions")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+      .collect()).map(redactWebhookSubscription),
 });
 
 export const listWebhookSubscriptionsForEvent = query({
-  args: { societyId: v.id("societies"), eventType: v.string() },
-  returns: v.array(webhookSubscriptionReturn),
-  handler: async (ctx, { societyId, eventType }) => {
+  args: {
+    societyId: v.id("societies"),
+    eventType: v.string(),
+    serviceToken: serviceTokenValidator,
+  },
+  returns: v.array(webhookSubscriptionPrivateReturn),
+  handler: async (ctx, { societyId, eventType, serviceToken }) => {
+    await assertApiPlatformServiceToken(serviceToken);
     const rows = await ctx.db
       .query("webhookSubscriptions")
       .withIndex("by_society_status", (q) =>
         q.eq("societyId", societyId).eq("status", "active"),
       )
       .collect();
-    return rows.filter(
-      (row) => row.eventTypes.includes("*") || row.eventTypes.includes(eventType),
-    );
+    return rows
+      .filter((row) => row.eventTypes.includes("*") || row.eventTypes.includes(eventType))
+      .map(privateWebhookSubscription);
   },
 });
 
@@ -329,11 +388,18 @@ export const upsertWebhookSubscription = mutation({
     secretEncrypted: v.string(),
     status: v.optional(v.string()),
     createdByUserId: v.optional(v.id("users")),
+    serviceToken: serviceTokenValidator,
   },
   returns: v.id("webhookSubscriptions"),
   handler: async (ctx, args) => {
+    await assertCanManageApiPlatform(
+      ctx,
+      args.societyId,
+      args.createdByUserId,
+      args.serviceToken,
+    );
     const at = nowISO();
-    const { id, ...rest } = args;
+    const { id, serviceToken: _serviceToken, ...rest } = args;
     if (id) {
       await ctx.db.patch(id, {
         ...rest,
@@ -363,10 +429,12 @@ export const createWebhookDelivery = mutation({
     attemptHistoryJson: v.optional(v.string()),
     nextAttemptAtISO: v.optional(v.string()),
     lastError: v.optional(v.string()),
+    serviceToken: serviceTokenValidator,
   },
   returns: v.id("webhookDeliveries"),
-  handler: async (ctx, args) =>
-    ctx.db.insert("webhookDeliveries", {
+  handler: async (ctx, args) => {
+    await assertApiPlatformServiceToken(args.serviceToken);
+    return await ctx.db.insert("webhookDeliveries", {
       societyId: args.societyId,
       subscriptionId: args.subscriptionId,
       eventId: args.eventId,
@@ -378,7 +446,8 @@ export const createWebhookDelivery = mutation({
       nextAttemptAtISO: args.nextAttemptAtISO,
       lastError: args.lastError,
       createdAtISO: nowISO(),
-    }),
+    });
+  },
 });
 
 export const updateWebhookDelivery = mutation({
@@ -390,9 +459,11 @@ export const updateWebhookDelivery = mutation({
     lastStatusCode: v.optional(v.number()),
     lastError: v.optional(v.string()),
     deliveredAtISO: v.optional(v.string()),
+    serviceToken: serviceTokenValidator,
   },
   returns: v.null(),
-  handler: async (ctx, { id, ...patch }) => {
+  handler: async (ctx, { id, serviceToken, ...patch }) => {
+    await assertApiPlatformServiceToken(serviceToken);
     const existing = await ctx.db.get(id);
     const at = nowISO();
     const history = existing?.attemptHistoryJson

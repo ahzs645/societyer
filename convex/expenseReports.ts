@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const reports = await ctx.db
       .query("expenseReports")
@@ -38,6 +39,7 @@ export const upsert = mutation({
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     if (!args.title.trim()) throw new Error("Expense title is required.");
     if (!args.claimantName.trim()) throw new Error("Claimant name is required.");
@@ -83,6 +85,7 @@ export const setStatus = mutation({
     actingUserId: v.optional(v.id("users")),
     paymentReference: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, status, actingUserId, paymentReference }) => {
     const report = await ctx.db.get(id);
     if (!report) return;
@@ -106,6 +109,7 @@ export const setStatus = mutation({
 
 export const remove = mutation({
   args: { id: v.id("expenseReports") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

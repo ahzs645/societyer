@@ -1,15 +1,16 @@
-// @ts-nocheck
 /**
  * Seeds objectMetadata + fieldMetadata + a default "All records" view for
  * each Twenty-style object. Idempotent — re-running tops up missing rows
  * instead of creating duplicates.
  *
- * Run with: `npx convex run seedRecordTableMetadata:run`
- * Or per-society: `npx convex run seedRecordTableMetadata:runForSociety '{"societyId":"..."}'`
+ * Run with: `node scripts/convex-maintenance.mjs seedRecordTableMetadata:run`
+ * Or per-society: `npx convex run seedRecordTableMetadata:runForSociety '{"societyId":"...","serviceToken":"..."}'`
  */
 
 import { mutation } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
 import { v } from "convex/values";
+import { assertMaintenanceToken, serviceTokenValidator } from "./lib/serviceAuth";
 
 // Field types the registry understands — keep in sync with
 // src/modules/object-record/types/FieldType.ts
@@ -1265,10 +1266,10 @@ async function seedSociety(ctx: any, societyId: any) {
     }
 
     // Seed fields, skipping any name already present.
-    const existingFields = await ctx.db
+    const existingFields = (await ctx.db
       .query("fieldMetadata")
       .withIndex("by_object", (q) => q.eq("objectMetadataId", objectRow._id))
-      .collect();
+      .collect()) as Doc<"fieldMetadata">[];
     const existingByName = new Map(existingFields.map((f) => [f.name, f]));
 
     for (let i = 0; i < obj.fields.length; i++) {
@@ -1331,10 +1332,10 @@ async function seedSociety(ctx: any, societyId: any) {
         updatedAtISO: now,
       });
       // Look up fields again, now that they exist.
-      const allFields = await ctx.db
+      const allFields = (await ctx.db
         .query("fieldMetadata")
         .withIndex("by_object", (q) => q.eq("objectMetadataId", objectRow._id))
-        .collect();
+        .collect()) as Doc<"fieldMetadata">[];
       const byName = new Map(allFields.map((f) => [f.name, f]));
       for (let i = 0; i < obj.defaultView.columns.length; i++) {
         const col = obj.defaultView.columns[i];
@@ -1356,8 +1357,10 @@ async function seedSociety(ctx: any, societyId: any) {
 }
 
 export const run = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { serviceToken: serviceTokenValidator },
+  returns: v.object({ seededSocieties: v.number(), objects: v.number() }),
+  handler: async (ctx, { serviceToken }) => {
+    await assertMaintenanceToken(serviceToken);
     const societies = await ctx.db.query("societies").collect();
     for (const society of societies) {
       await seedSociety(ctx, society._id);
@@ -1367,8 +1370,10 @@ export const run = mutation({
 });
 
 export const runForSociety = mutation({
-  args: { societyId: v.id("societies") },
-  handler: async (ctx, { societyId }) => {
+  args: { societyId: v.id("societies"), serviceToken: serviceTokenValidator },
+  returns: v.object({ ok: v.boolean(), objects: v.number() }),
+  handler: async (ctx, { societyId, serviceToken }) => {
+    await assertMaintenanceToken(serviceToken);
     await seedSociety(ctx, societyId);
     return { ok: true, objects: OBJECTS.length };
   },
@@ -1378,8 +1383,10 @@ export const runForSociety = mutation({
  * Nukes metadata rows for testing. Leaves underlying record tables alone.
  */
 export const wipe = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { serviceToken: serviceTokenValidator },
+  returns: v.object({ ok: v.boolean() }),
+  handler: async (ctx, { serviceToken }) => {
+    await assertMaintenanceToken(serviceToken);
     for (const name of ["viewFields", "views", "fieldMetadata", "objectMetadata"] as const) {
       const rows = await ctx.db.query(name).collect();
       for (const row of rows) await ctx.db.delete(row._id);

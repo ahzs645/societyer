@@ -5,6 +5,7 @@ const remItem = v.object({ role: v.string(), amountCents: v.number() });
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("financials")
@@ -14,6 +15,7 @@ export const list = query({
 
 export const detailByFiscalYear = query({
   args: { societyId: v.id("societies"), fiscalYear: v.string() },
+  returns: v.any(),
   handler: async (ctx, { societyId, fiscalYear }) => {
     const rows = await ctx.db
       .query("financials")
@@ -83,6 +85,7 @@ export const create = mutation({
     auditorName: v.optional(v.string()),
     remunerationDisclosures: v.array(remItem),
   },
+  returns: v.any(),
   handler: async (ctx, args) => ctx.db.insert("financials", args),
 });
 
@@ -103,6 +106,7 @@ export const update = mutation({
       remunerationDisclosures: v.optional(v.array(remItem)),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     await ctx.db.patch(id, patch);
   },
@@ -110,6 +114,7 @@ export const update = mutation({
 
 export const remove = mutation({
   args: { id: v.id("financials") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

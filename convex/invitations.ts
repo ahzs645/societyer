@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("invitations")
@@ -18,6 +19,7 @@ export const create = mutation({
     role: v.string(),
     invitedByUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     if (!args.email.trim()) throw new Error("Email is required");
     const token = `inv_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
@@ -32,6 +34,7 @@ export const create = mutation({
 
 export const revoke = mutation({
   args: { id: v.id("invitations") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.patch(id, { revokedAtISO: new Date().toISOString() });
   },
@@ -39,6 +42,7 @@ export const revoke = mutation({
 
 export const getByToken = query({
   args: { token: v.string() },
+  returns: v.any(),
   handler: async (ctx, { token }) =>
     ctx.db
       .query("invitations")

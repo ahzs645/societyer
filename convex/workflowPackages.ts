@@ -7,6 +7,7 @@ export const list = query({
     societyId: v.id("societies"),
     workflowId: v.optional(v.id("workflows")),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, workflowId }) => {
     const packagesQuery = workflowId
       ? ctx.db
@@ -53,6 +54,7 @@ export const upsert = mutation({
     signingPackageIds: v.optional(v.array(v.string())),
     stripeCheckoutSessionId: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("eventTypes", args.eventType, "Event type", false);
     assertAllowedOption("workflowPackageStatuses", args.status, "Workflow package status");
@@ -89,6 +91,7 @@ export const upsert = mutation({
 
 export const remove = mutation({
   args: { id: v.id("workflowPackages") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -100,6 +103,7 @@ export const createFollowUpTask = mutation({
     title: v.optional(v.string()),
     dueDate: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { packageId, title, dueDate }) => {
     const pkg = await ctx.db.get(packageId);
     if (!pkg) throw new Error("Workflow package not found.");
@@ -129,6 +133,7 @@ export const markFiled = mutation({
     transactionId: v.optional(v.string()),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { packageId, transactionId, notes }) => {
     const pkg = await ctx.db.get(packageId);
     if (!pkg) throw new Error("Workflow package not found.");

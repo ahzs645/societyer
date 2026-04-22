@@ -213,6 +213,7 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
     "bylaws",
     "minutes",
     "resolution",
+    "written_resolution",
     "filing",
     "policy",
     "ledger",

@@ -9,6 +9,7 @@ import { v } from "convex/values";
  */
 export const societiesOnlinePreFill = query({
   args: { societyId: v.id("societies"), kind: v.string() },
+  returns: v.any(),
   handler: async (ctx, { societyId, kind }) => {
     const society = await ctx.db.get(societyId);
     if (!society) throw new Error("Society not found");
@@ -107,6 +108,7 @@ export const societiesOnlinePreFill = query({
  * compute; the PDF form itself is filed by the user. */
 export const craPreFill = query({
   args: { societyId: v.id("societies"), kind: v.string(), fiscalYear: v.string() },
+  returns: v.any(),
   handler: async (ctx, { societyId, kind, fiscalYear }) => {
     const financials = (
       await ctx.db

@@ -13,6 +13,7 @@ function fullName(row: { firstName: string; lastName: string }) {
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("volunteers")
@@ -22,6 +23,7 @@ export const list = query({
 
 export const applications = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("volunteerApplications")
@@ -31,6 +33,7 @@ export const applications = query({
 
 export const screenings = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("volunteerScreenings")
@@ -40,6 +43,7 @@ export const screenings = query({
 
 export const summary = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const [volunteers, screenings, applications] = await Promise.all([
       ctx.db
@@ -92,6 +96,7 @@ export const submitApplication = mutation({
     notes: v.optional(v.string()),
     source: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireEnabledModule(ctx, args.societyId, "volunteers");
     return await ctx.db.insert("volunteerApplications", {
@@ -109,6 +114,7 @@ export const reviewApplication = mutation({
     status: v.string(),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, status, actingUserId }) => {
     const application = await ctx.db.get(id);
     if (!application) throw new Error("Application not found.");
@@ -132,6 +138,7 @@ export const convertApplication = mutation({
     screeningRequired: v.boolean(),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, committeeId, screeningRequired, actingUserId }) => {
     const application = await ctx.db.get(id);
     if (!application) throw new Error("Application not found.");
@@ -202,6 +209,7 @@ export const upsertVolunteer = mutation({
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -222,6 +230,7 @@ export const removeVolunteer = mutation({
     id: v.id("volunteers"),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const volunteer = await ctx.db.get(id);
     if (!volunteer) return;
@@ -266,6 +275,7 @@ export const upsertScreening = mutation({
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
@@ -286,6 +296,7 @@ export const removeScreening = mutation({
     id: v.id("volunteerScreenings"),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const screening = await ctx.db.get(id);
     if (!screening) return;
@@ -300,6 +311,7 @@ export const removeScreening = mutation({
 
 export const buildCrrpDraft = query({
   args: { volunteerId: v.id("volunteers") },
+  returns: v.any(),
   handler: async (ctx, { volunteerId }) => {
     const volunteer = await ctx.db.get(volunteerId);
     if (!volunteer) return null;

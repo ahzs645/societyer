@@ -115,6 +115,7 @@ const structuredMinutesFields = {
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("minutes")
@@ -124,6 +125,7 @@ export const list = query({
 
 export const getByMeeting = query({
   args: { meetingId: v.id("meetings") },
+  returns: v.any(),
   handler: async (ctx, { meetingId }) => {
     const rows = await ctx.db
       .query("minutes")
@@ -160,6 +162,7 @@ export const create = mutation({
     sourceReviewedByUserId: v.optional(v.id("users")),
     draftTranscript: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await assertMotionPersonLinksBelongToSociety(ctx, args.societyId, args.motions);
     const meeting = await ctx.db.get(args.meetingId);
@@ -205,6 +208,7 @@ export const update = mutation({
       draftTranscript: v.optional(v.string()),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     const minutes = await ctx.db.get(id);
     if (!minutes) throw new Error("Minutes not found");
@@ -243,6 +247,7 @@ export const upsertFromDraft = mutation({
     sourceReviewedByUserId: v.optional(v.id("users")),
     draftTranscript: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await assertMotionPersonLinksBelongToSociety(ctx, args.societyId, args.motions);
     const meeting = await ctx.db.get(args.meetingId);
@@ -274,6 +279,7 @@ export const upsertFromDraft = mutation({
 
 export const backfillMotionPersonLinks = mutation({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const [rows, members, directors] = await Promise.all([
       ctx.db
@@ -344,6 +350,7 @@ export const backfillMotionPersonLinks = mutation({
 
 export const backfillQuorumSnapshot = mutation({
   args: { id: v.id("minutes") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     const minutes = await ctx.db.get(id);
     if (!minutes) return null;
@@ -385,6 +392,7 @@ export const generateDraft = action({
     meetingId: v.id("meetings"),
     transcript: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, { meetingId, transcript }) => {
     const meeting = await ctx.runQuery(api.meetings.get, { id: meetingId });
     if (!meeting) throw new Error("Meeting not found");

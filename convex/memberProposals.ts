@@ -4,6 +4,7 @@ import { getActiveBylawRuleSet } from "./lib/bylawRules";
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("memberProposals")
@@ -24,6 +25,7 @@ export const create = mutation({
     eligibleVotersAtSubmission: v.optional(v.number()),
     notes: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const rules = await getActiveBylawRuleSet(ctx, args.societyId);
     const thresholdPercent =
@@ -75,6 +77,7 @@ export const update = mutation({
       notes: v.optional(v.string()),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     await ctx.db.patch(id, patch);
   },
@@ -82,6 +85,7 @@ export const update = mutation({
 
 export const remove = mutation({
   args: { id: v.id("memberProposals") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

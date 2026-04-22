@@ -20,6 +20,7 @@ const VISIBLE_DOCUMENT_CATEGORIES = [
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const groups = await Promise.all(
       VISIBLE_DOCUMENT_CATEGORIES.map((category) =>
@@ -35,11 +36,13 @@ export const list = query({
 
 export const get = query({
   args: { id: v.id("documents") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
 export const getMany = query({
   args: { ids: v.array(v.id("documents")) },
+  returns: v.any(),
   handler: async (ctx, { ids }) => {
     const rows = await Promise.all(ids.map((id) => ctx.db.get(id)));
     return rows.filter(Boolean);
@@ -63,6 +66,7 @@ export const create = mutation({
     librarySection: v.optional(v.string()),
     tags: v.array(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) =>
     ctx.db.insert("documents", {
       ...args,
@@ -77,6 +81,7 @@ export const markOpened = mutation({
     userId: v.optional(v.id("users")),
     actorName: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, userId, actorName }) => {
     const document = await ctx.db.get(id);
     if (!document) throw new Error("Document not found.");
@@ -103,6 +108,7 @@ export const updateReviewStatus = mutation({
     reviewStatus: v.optional(v.string()),
     actorName: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, { id, reviewStatus, actorName }) => {
     const document = await ctx.db.get(id);
     if (!document) throw new Error("Document not found.");
@@ -121,6 +127,7 @@ export const updateReviewStatus = mutation({
 
 export const reviewQueues = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const [documents, tasks, comments, signatures, materials] = await Promise.all([
       ctx.db.query("documents").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
@@ -189,6 +196,7 @@ export const reviewQueues = query({
 
 export const createPipaPolicyDraft = mutation({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const society = await ctx.db.get(societyId);
     if (!society) throw new Error("Society not found.");
@@ -230,6 +238,7 @@ export const createPipaPolicyDraft = mutation({
 
 export const rebuildPipaPolicyDraftFromSociety = mutation({
   args: { id: v.id("documents") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     const document = await ctx.db.get(id);
     if (!document) throw new Error("Document not found.");
@@ -264,6 +273,7 @@ export const rebuildPipaPolicyDraftFromSociety = mutation({
 
 export const createMemberDataGapMemoDraft = mutation({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const society = await ctx.db.get(societyId);
     if (!society) throw new Error("Society not found.");
@@ -307,6 +317,7 @@ export const updateDraftContent = mutation({
     content: v.string(),
     tags: v.optional(v.array(v.string())),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const document = await ctx.db.get(args.id);
     if (!document) throw new Error("Document not found.");
@@ -334,6 +345,7 @@ export const linkPrivacyPolicyEvidence = mutation({
     societyId: v.id("societies"),
     documentId: v.id("documents"),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, documentId }) => {
     const [society, document] = await Promise.all([
       ctx.db.get(societyId),
@@ -382,6 +394,7 @@ export const createGovernanceDocumentFromLocalFile = mutation({
     actingUserId: v.optional(v.id("users")),
     replaceExisting: v.optional(v.boolean()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const society = await ctx.db.get(args.societyId);
     if (!society) throw new Error("Society not found.");
@@ -490,6 +503,7 @@ export const createLocalDocumentFromConnector = mutation({
     actingUserId: v.optional(v.id("users")),
     skipDuplicateCheck: v.optional(v.boolean()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const sourceIds = args.sourceExternalIds ?? [];
     if (!args.skipDuplicateCheck) {
@@ -571,6 +585,7 @@ export const mergeConnectorDocumentMetadata = mutation({
     sourcePayloadJson: v.optional(v.string()),
     changeNote: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const document = await ctx.db.get(args.documentId);
     if (!document) throw new Error("Document not found.");
@@ -611,6 +626,7 @@ export const mergeConnectorDocumentMetadata = mutation({
 
 export const flagForDeletion = mutation({
   args: { id: v.id("documents"), flagged: v.boolean() },
+  returns: v.any(),
   handler: async (ctx, { id, flagged }) => {
     await ctx.db.patch(id, { flaggedForDeletion: flagged });
   },
@@ -618,6 +634,7 @@ export const flagForDeletion = mutation({
 
 export const archive = mutation({
   args: { id: v.id("documents"), reason: v.string() },
+  returns: v.any(),
   handler: async (ctx, { id, reason }) => {
     await ctx.db.patch(id, {
       archivedAtISO: new Date().toISOString(),
@@ -629,6 +646,7 @@ export const archive = mutation({
 
 export const remove = mutation({
   args: { id: v.id("documents") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

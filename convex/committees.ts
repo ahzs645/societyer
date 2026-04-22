@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("committees")
@@ -12,11 +13,13 @@ export const list = query({
 
 export const get = query({
   args: { id: v.id("committees") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
 export const detail = query({
   args: { id: v.id("committees") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     const committee = await ctx.db.get(id);
     if (!committee) return null;
@@ -53,6 +56,7 @@ export const create = mutation({
     chairDirectorId: v.optional(v.id("directors")),
     color: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const id = await ctx.db.insert("committees", {
       ...args,
@@ -87,6 +91,7 @@ export const update = mutation({
       status: v.optional(v.string()),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     await ctx.db.patch(id, patch);
   },
@@ -94,6 +99,7 @@ export const update = mutation({
 
 export const remove = mutation({
   args: { id: v.id("committees") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     const members = await ctx.db
       .query("committeeMembers")
@@ -114,6 +120,7 @@ export const addMember = mutation({
     directorId: v.optional(v.id("directors")),
     memberId: v.optional(v.id("members")),
   },
+  returns: v.any(),
   handler: async (ctx, args) =>
     ctx.db.insert("committeeMembers", {
       ...args,
@@ -123,6 +130,7 @@ export const addMember = mutation({
 
 export const removeMember = mutation({
   args: { id: v.id("committeeMembers") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },

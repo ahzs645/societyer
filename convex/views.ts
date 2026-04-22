@@ -9,6 +9,7 @@ import { v } from "convex/values";
 
 export const listForObject = query({
   args: { objectMetadataId: v.id("objectMetadata") },
+  returns: v.any(),
   handler: async (ctx, { objectMetadataId }) => {
     const rows = await ctx.db
       .query("views")
@@ -22,6 +23,7 @@ export const listForObject = query({
 
 export const get = query({
   args: { id: v.id("views") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
@@ -31,6 +33,7 @@ export const get = query({
  */
 export const getHydrated = query({
   args: { id: v.id("views") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     const view = await ctx.db.get(id);
     if (!view) return null;
@@ -68,6 +71,7 @@ export const create = mutation({
     isSystem: v.optional(v.boolean()),
     createdByUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
     const existing = await ctx.db
@@ -111,6 +115,7 @@ export const update = mutation({
       position: v.optional(v.number()),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     await ctx.db.patch(id, { ...patch, updatedAtISO: new Date().toISOString() });
   },
@@ -118,6 +123,7 @@ export const update = mutation({
 
 export const remove = mutation({
   args: { id: v.id("views") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     const view = await ctx.db.get(id);
     if (!view) return;
@@ -138,6 +144,7 @@ export const remove = mutation({
 
 export const listFieldsForView = query({
   args: { viewId: v.id("views") },
+  returns: v.any(),
   handler: async (ctx, { viewId }) => {
     const rows = await ctx.db
       .query("viewFields")
@@ -158,6 +165,7 @@ export const addField = mutation({
     size: v.optional(v.number()),
     aggregateOperation: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
     let position = args.position;
@@ -192,6 +200,7 @@ export const updateField = mutation({
       aggregateOperation: v.optional(v.string()),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     await ctx.db.patch(id, { ...patch, updatedAtISO: new Date().toISOString() });
   },
@@ -199,6 +208,7 @@ export const updateField = mutation({
 
 export const removeField = mutation({
   args: { id: v.id("viewFields") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -214,6 +224,7 @@ export const reorderFields = mutation({
     viewId: v.id("views"),
     orderedIds: v.array(v.id("viewFields")),
   },
+  returns: v.any(),
   handler: async (ctx, { orderedIds }) => {
     const now = new Date().toISOString();
     for (let i = 0; i < orderedIds.length; i++) {

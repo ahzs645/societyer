@@ -9,6 +9,7 @@ import { v } from "convex/values";
  */
 export const flagExpired = internalMutation({
   args: {},
+  returns: v.any(),
   handler: async (ctx) => {
     const all = await ctx.db.query("documents").collect();
     const now = Date.now();
@@ -48,6 +49,7 @@ export const flagExpired = internalMutation({
  */
 export const openAttestationYear = internalMutation({
   args: {},
+  returns: v.any(),
   handler: async (ctx) => {
     const societies = await ctx.db.query("societies").collect();
     const year = new Date().getFullYear();
@@ -68,6 +70,7 @@ export const openAttestationYear = internalMutation({
 /** Browse-time query: documents past retention (for the UI page). */
 export const expiredForSociety = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const docs = await ctx.db
       .query("documents")

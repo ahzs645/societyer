@@ -9,6 +9,7 @@ import { v } from "convex/values";
 
 export const listForObject = query({
   args: { objectMetadataId: v.id("objectMetadata") },
+  returns: v.any(),
   handler: async (ctx, { objectMetadataId }) => {
     const rows = await ctx.db
       .query("fieldMetadata")
@@ -21,6 +22,7 @@ export const listForObject = query({
 
 export const listForSociety = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("fieldMetadata")
@@ -30,6 +32,7 @@ export const listForSociety = query({
 
 export const get = query({
   args: { id: v.id("fieldMetadata") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
@@ -38,6 +41,7 @@ export const getByName = query({
     objectMetadataId: v.id("objectMetadata"),
     name: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, { objectMetadataId, name }) =>
     ctx.db
       .query("fieldMetadata")
@@ -64,6 +68,7 @@ export const create = mutation({
     isReadOnly: v.optional(v.boolean()),
     position: v.optional(v.number()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
     // Compute the next position if none provided.
@@ -112,6 +117,7 @@ export const update = mutation({
       position: v.optional(v.number()),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Field not found.");
@@ -124,6 +130,7 @@ export const update = mutation({
 
 export const remove = mutation({
   args: { id: v.id("fieldMetadata") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     const field = await ctx.db.get(id);
     if (!field) return;

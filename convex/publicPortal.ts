@@ -7,6 +7,7 @@ import { isSocietyModuleEnabled } from "./lib/moduleSettings";
 
 export const getSocietyBySlug = query({
   args: { slug: v.string() },
+  returns: v.any(),
   handler: async (ctx, { slug }) => {
     const society = await ctx.db
       .query("societies")
@@ -26,6 +27,7 @@ export const getSocietyBySlug = query({
 
 export const volunteerIntakeContext = query({
   args: { slug: v.string() },
+  returns: v.any(),
   handler: async (ctx, { slug }) => {
     const society = await ctx.db
       .query("societies")
@@ -63,6 +65,7 @@ export const volunteerIntakeContext = query({
 
 export const grantIntakeContext = query({
   args: { slug: v.string() },
+  returns: v.any(),
   handler: async (ctx, { slug }) => {
     const society = await ctx.db
       .query("societies")

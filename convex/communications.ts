@@ -284,6 +284,7 @@ async function resolveAudienceRecipients(
 
 export const listTemplates = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("communicationTemplates")
@@ -293,11 +294,13 @@ export const listTemplates = query({
 
 export const getTemplate = query({
   args: { id: v.id("communicationTemplates") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
 export const listCampaigns = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
+  returns: v.any(),
   handler: async (ctx, { societyId, limit }) =>
     ctx.db
       .query("communicationCampaigns")
@@ -313,6 +316,7 @@ export const listDeliveries = query({
     meetingId: v.optional(v.id("meetings")),
     limit: v.optional(v.number()),
   },
+  returns: v.any(),
   handler: async (ctx, { societyId, campaignId, meetingId, limit }) => {
     let rows = await ctx.db
       .query("communicationDeliveries")
@@ -327,6 +331,7 @@ export const listDeliveries = query({
 
 export const listMemberPrefs = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("memberCommunicationPrefs")
@@ -336,6 +341,7 @@ export const listMemberPrefs = query({
 
 export const listSegments = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("communicationSegments")
@@ -357,6 +363,7 @@ export const upsertTemplate = mutation({
     bodyHtml: v.optional(v.string()),
     system: v.boolean(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const { id, ...rest } = args;
     const payload = { ...rest, updatedAtISO: new Date().toISOString() };
@@ -382,6 +389,7 @@ export const upsertSegment = mutation({
     hasPhone: v.optional(v.boolean()),
     volunteerStatus: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const { id, ...rest } = args;
     const payload = { ...rest, updatedAtISO: new Date().toISOString() };
@@ -395,6 +403,7 @@ export const upsertSegment = mutation({
 
 export const removeSegment = mutation({
   args: { id: v.id("communicationSegments") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.delete(id);
   },
@@ -402,6 +411,7 @@ export const removeSegment = mutation({
 
 export const ensureDefaultTemplates = mutation({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const existing = await ctx.db
       .query("communicationTemplates")
@@ -443,6 +453,7 @@ export const upsertMemberPref = mutation({
     unsubscribedAtISO: v.optional(v.string()),
     unsubscribeReason: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("memberCommunicationPrefs")
@@ -486,6 +497,7 @@ export const _createCampaign = internalMutation({
     status: v.string(),
     createdByUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) =>
     ctx.db.insert("communicationCampaigns", {
       ...args,
@@ -506,6 +518,7 @@ export const _completeCampaign = internalMutation({
     openedCount: v.number(),
     bouncedCount: v.number(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await ctx.db.patch(args.id, {
       status: args.status,
@@ -542,6 +555,7 @@ export const _recordDelivery = internalMutation({
     bouncedAtISO: v.optional(v.string()),
     unsubscribedAtISO: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) =>
     ctx.db.insert("communicationDeliveries", {
       ...args,
@@ -551,6 +565,7 @@ export const _recordDelivery = internalMutation({
 
 export const markDeliveryOpened = mutation({
   args: { id: v.id("communicationDeliveries") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     await ctx.db.patch(id, {
       status: "opened",
@@ -561,6 +576,7 @@ export const markDeliveryOpened = mutation({
 
 export const markDeliveryBounced = mutation({
   args: { id: v.id("communicationDeliveries"), errorMessage: v.optional(v.string()) },
+  returns: v.any(),
   handler: async (ctx, { id, errorMessage }) => {
     await ctx.db.patch(id, {
       status: "bounced",
@@ -993,6 +1009,7 @@ export const sendCampaign = action({
     customMessage: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireEnabledModule(ctx, args.societyId, "communications");
     return sendCampaignInternal(ctx, {
@@ -1016,6 +1033,7 @@ export const sendMeetingNotice = action({
     channel: v.string(),
     actingUserId: v.optional(v.id("users")),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await requireEnabledModule(ctx, args.societyId, "communications");
     const templates = await ctx.runQuery(api.communications.listTemplates, {

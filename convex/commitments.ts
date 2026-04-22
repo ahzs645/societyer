@@ -23,6 +23,7 @@ const commitmentFields = {
 
 export const list = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("commitments")
@@ -32,11 +33,13 @@ export const list = query({
 
 export const get = query({
   args: { id: v.id("commitments") },
+  returns: v.any(),
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
 export const eventsForSociety = query({
   args: { societyId: v.id("societies") },
+  returns: v.any(),
   handler: async (ctx, { societyId }) =>
     ctx.db
       .query("commitmentEvents")
@@ -47,6 +50,7 @@ export const eventsForSociety = query({
 
 export const eventsForCommitment = query({
   args: { commitmentId: v.id("commitments") },
+  returns: v.any(),
   handler: async (ctx, { commitmentId }) =>
     ctx.db
       .query("commitmentEvents")
@@ -59,6 +63,7 @@ export const create = mutation({
     societyId: v.id("societies"),
     ...commitmentFields,
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     await assertSocietyRefs(ctx, args.societyId, {
       sourceDocumentId: args.sourceDocumentId,
@@ -105,6 +110,7 @@ export const update = mutation({
       notes: v.optional(v.string()),
     }),
   },
+  returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     const commitment = await ctx.db.get(id);
     if (!commitment) throw new Error("Commitment not found.");
@@ -130,6 +136,7 @@ export const recordEvent = mutation({
     summary: v.optional(v.string()),
     nextDueDate: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const commitment = await ctx.db.get(args.commitmentId);
     if (!commitment) throw new Error("Commitment not found.");
@@ -182,6 +189,7 @@ export const recordEvent = mutation({
 
 export const removeEvent = mutation({
   args: { id: v.id("commitmentEvents") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     const event = await ctx.db.get(id);
     if (!event) return;
@@ -201,6 +209,7 @@ export const removeEvent = mutation({
 
 export const remove = mutation({
   args: { id: v.id("commitments") },
+  returns: v.any(),
   handler: async (ctx, { id }) => {
     const events = await ctx.db
       .query("commitmentEvents")
