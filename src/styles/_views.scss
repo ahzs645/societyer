@@ -538,6 +538,134 @@
 }
 .motion__text { font-weight: 500; margin-bottom: 4px; }
 .motion__meta { font-size: var(--fs-sm); color: var(--text-tertiary); display: flex; gap: var(--s-3); flex-wrap: wrap; }
+.meeting-minutes-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: var(--s-4);
+  align-items: start;
+}
+.meeting-minutes-side {
+  min-width: 0;
+}
+.meeting-minutes-agenda-card {
+  position: sticky;
+  top: var(--s-4);
+}
+.meeting-minutes-agenda-list {
+  display: grid;
+  gap: 6px;
+  max-height: 620px;
+  margin: 0;
+  padding-left: 28px;
+  overflow: auto;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+.meeting-minutes-agenda-list li {
+  padding-right: var(--s-1);
+  line-height: 1.35;
+}
+.meeting-minutes-main,
+.meeting-minutes-primary,
+.meeting-minutes-secondary {
+  display: grid;
+  gap: var(--s-4);
+  min-width: 0;
+}
+.meeting-minutes-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: start;
+}
+.minutes-section--panel {
+  min-width: 0;
+  margin: 0;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
+}
+.meeting-minutes-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.85fr);
+  gap: var(--s-4);
+  align-items: start;
+}
+.meeting-minutes-discussion {
+  max-height: 260px;
+  overflow: auto;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+.meeting-minutes-section-list {
+  display: grid;
+  gap: var(--s-3);
+  max-height: 560px;
+  overflow: auto;
+  padding-right: var(--s-1);
+}
+.meeting-minutes-section-item {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
+}
+.meeting-minutes-section-item__head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  align-items: flex-start;
+}
+.meeting-minutes-section-item p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.meeting-minutes-section-item ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+.meeting-minutes-section-actions {
+  display: flex;
+  gap: var(--s-1);
+  flex-wrap: wrap;
+}
+.meeting-minutes-compact-list {
+  display: grid;
+  gap: var(--s-2);
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+.meeting-minutes-compact-list li {
+  padding-left: 2px;
+}
+.action-list--compact {
+  gap: var(--s-2);
+}
+.action-list--compact .action-item {
+  align-items: flex-start;
+  padding: var(--s-2) 0;
+}
+@media (max-width: 1180px) {
+  .meeting-minutes-content-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .minutes-export-gaps {
   display: flex;
   flex-direction: column;
@@ -836,11 +964,22 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .meeting-overview-grid,
+  .meeting-minutes-layout,
+  .meeting-minutes-overview-grid,
+  .meeting-minutes-content-grid,
   .meeting-package-grid,
   .meeting-package-review-grid,
   .meeting-export-layout,
   .meeting-preview-page__layout {
     grid-template-columns: 1fr;
+  }
+  .meeting-minutes-agenda-card {
+    position: static;
+  }
+  .meeting-minutes-agenda-list,
+  .meeting-minutes-discussion,
+  .meeting-minutes-section-list {
+    max-height: none;
   }
   .meeting-detail-page .minutes-export-gaps {
     grid-template-columns: 1fr;

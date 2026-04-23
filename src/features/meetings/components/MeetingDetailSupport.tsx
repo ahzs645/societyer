@@ -151,8 +151,8 @@ export function StructuredMinutesEditor({
         <textarea className="textarea" rows={5} value={value.detailedAttendance} onChange={(event) => patch({ detailedAttendance: event.target.value })} />
       </Field>
 
-      <Field label="Per-agenda sections" hint="One row per section: type | title | presenter | discussion | report yes/no | decisions ; separated | action items ; separated">
-        <textarea className="textarea" rows={5} value={value.sections} onChange={(event) => patch({ sections: event.target.value })} />
+      <Field label="Agenda record / per-topic notes" hint="One row per section: type | title | presenter | discussion | report yes/no | decisions ; separated | action items ; separated">
+        <textarea className="textarea" rows={10} value={value.sections} onChange={(event) => patch({ sections: event.target.value })} />
       </Field>
 
       <Field label="Session segments" hint="One row per segment: type | title | started | ended | notes">

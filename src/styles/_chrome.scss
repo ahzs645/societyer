@@ -684,12 +684,40 @@
 }
 
 /* ---- Society profile page ----------------------------------------------
- * Splits the Privacy operations card into two columns (Privacy program /
- * Member data access) on wide screens, and pairs Board cadence + Governance
- * documents side-by-side so each gets its share of horizontal space instead
- * of owning a full-width stripe.
- *
+ * Main/side layout: the left rail holds constitution and privacy state; the
+ * right rail holds operational cards that should scan as reference material.
  * All helpers collapse to a single column at 1100px to match `.two-col`. */
+
+.society-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(360px, 0.95fr);
+  gap: var(--s-4);
+  align-items: start;
+}
+.society-layout__main,
+.society-layout__side {
+  display: grid;
+  gap: var(--s-4);
+  min-width: 0;
+}
+.society-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+  align-items: start;
+}
+.society-field-grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.society-field-grid > * {
+  min-width: 0;
+}
+.society-toggle-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-4);
+  align-items: center;
+}
 
 .society-split {
   display: grid;
@@ -710,6 +738,41 @@
   text-transform: uppercase;
   color: var(--text-tertiary);
 }
+.society-address-list {
+  display: grid;
+  gap: var(--s-3);
+}
+.society-address-item {
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
+  min-width: 0;
+}
+.society-address-item__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin-bottom: var(--s-2);
+}
+.society-address-item__head strong {
+  min-width: 0;
+  font-size: var(--fs-sm);
+}
+.society-address-item__line {
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.society-doc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: var(--s-3);
+}
+@media (max-width: 1100px) {
+  .society-layout { grid-template-columns: 1fr; }
+}
 @media (max-width: 1100px) {
   .society-split { grid-template-columns: 1fr; gap: 0; }
   .society-split > * + * {
@@ -718,6 +781,17 @@
     padding-top: var(--s-3);
     margin-top: var(--s-3);
     border-top: 1px solid var(--border);
+  }
+}
+@media (max-width: 760px) {
+  .society-layout,
+  .society-layout__main,
+  .society-layout__side {
+    gap: var(--s-3);
+  }
+  .society-field-grid,
+  .society-field-grid--three {
+    grid-template-columns: 1fr;
   }
 }
 
