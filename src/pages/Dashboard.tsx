@@ -15,6 +15,7 @@ export function Dashboard() {
   const activity = useQuery(api.activity.list, society ? { societyId: society._id, limit: 10 } : "skip");
   const goals = useQuery(api.goals.list, society ? { societyId: society._id } : "skip");
   const tasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
+  const [showComplianceDetails, setShowComplianceDetails] = useState(false);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -62,17 +63,54 @@ export function Dashboard() {
               <h2 className="card__title">Compliance posture</h2>
               <span className="card__subtitle">Automated checks against the Societies Act</span>
             </div>
-            <div className="card__body" style={{ display: "grid", gap: 6 }}>
-              {complianceFlags.map((f, i) => (
-                <Flag
-                  key={i}
-                  level={f.level}
-                  citationId={(f as any).citationId}
-                  citationIds={(f as any).citationIds}
+            <div className="card__body dashboard-compliance">
+              <div className="dashboard-compliance__summary">
+                <div>
+                  <div className="dashboard-compliance__count">
+                    {complianceFlags.length} item{complianceFlags.length === 1 ? "" : "s"} to resolve
+                  </div>
+                  <div className="muted">
+                    Start with the operational gaps below. Citations and full detail are available when needed.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn-action"
+                  onClick={() => setShowComplianceDetails((value) => !value)}
+                  aria-expanded={showComplianceDetails}
                 >
-                  {f.text}
-                </Flag>
-              ))}
+                  {showComplianceDetails ? "Hide details" : "View details"}
+                </button>
+              </div>
+
+              <ul className="dashboard-compliance__todo">
+                {complianceFlags.slice(0, showComplianceDetails ? complianceFlags.length : 3).map((f: any, i: number) => (
+                  <li key={i}>{f.text}</li>
+                ))}
+              </ul>
+
+              {!showComplianceDetails && complianceFlags.length > 3 && (
+                <button
+                  type="button"
+                  className="dashboard-compliance__more"
+                  onClick={() => setShowComplianceDetails(true)}
+                >
+                  Show {complianceFlags.length - 3} more
+                </button>
+              )}
+
+              <div className={`dashboard-compliance__details${showComplianceDetails ? " is-open" : ""}`}>
+                {complianceFlags.map((f: any, i: number) => (
+                  <Flag
+                    key={i}
+                    level={f.level}
+                    citationId={(f as any).citationId}
+                    citationIds={(f as any).citationIds}
+                  >
+                    {f.text}
+                  </Flag>
+                ))}
+              </div>
             </div>
           </div>
 

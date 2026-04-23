@@ -34,6 +34,9 @@ type PendingEmail = {
   workflowId?: string;
   workflowRunId?: string;
   nodeKey?: string;
+  fromName?: string;
+  fromEmail?: string;
+  replyTo?: string;
   to: string;
   cc?: string;
   bcc?: string;
@@ -138,6 +141,9 @@ export function OutboxPage() {
       await update({
         id: _id as any,
         patch: {
+          fromName: rest.fromName,
+          fromEmail: rest.fromEmail,
+          replyTo: rest.replyTo,
           to: rest.to,
           cc: rest.cc,
           bcc: rest.bcc,
@@ -153,6 +159,9 @@ export function OutboxPage() {
     } else {
       const id = await create({
         societyId: society._id,
+        fromName: rest.fromName,
+        fromEmail: rest.fromEmail,
+        replyTo: rest.replyTo,
         to: rest.to,
         cc: rest.cc,
         bcc: rest.bcc,
@@ -389,6 +398,24 @@ export function OutboxPage() {
               )}
             </div>
 
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="From name">
+                <input
+                  className="input"
+                  value={selected.fromName ?? ""}
+                  onChange={(e) => setSelected({ ...selected, fromName: e.target.value })}
+                  disabled={selected.status === "sent"}
+                />
+              </Field>
+              <Field label="From email">
+                <input
+                  className="input"
+                  value={selected.fromEmail ?? ""}
+                  onChange={(e) => setSelected({ ...selected, fromEmail: e.target.value })}
+                  disabled={selected.status === "sent"}
+                />
+              </Field>
+            </div>
             <Field label="To">
               <input
                 className="input"
@@ -398,6 +425,14 @@ export function OutboxPage() {
               />
             </Field>
             <div className="row" style={{ gap: 12 }}>
+              <Field label="Reply-To">
+                <input
+                  className="input"
+                  value={selected.replyTo ?? ""}
+                  onChange={(e) => setSelected({ ...selected, replyTo: e.target.value })}
+                  disabled={selected.status === "sent"}
+                />
+              </Field>
               <Field label="CC">
                 <input
                   className="input"

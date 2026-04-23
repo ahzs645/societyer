@@ -28,9 +28,11 @@
     "rustfs:setup": "./scripts/setup-rustfs.sh",
     "connector-runner:typecheck": "npm --prefix services/connector-runner run typecheck",
     "auth:server": "tsx server/auth-server.ts",
+    "setup:ote-keycard": "node scripts/setup-ote-keycard-workflow.mjs",
     "test:smoke": "npx playwright test",
     "test:api-contract": "tsx scripts/check-api-contract.ts",
     "test:org-details": "tsx scripts/check-org-detail-smoke.ts",
+    "test:pdf-ingestion": "tsx scripts/check-pdf-table-normalization.ts",
     "test:exports": "tsx scripts/check-export-coverage.ts",
     "test:exports:db": "tsx scripts/validate-export-database.ts"
   },

@@ -1,0 +1,140 @@
+{
+  "id": "societyer-unbc-key-access-request",
+  "name": "Societyer - UNBC Key Access Request",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "societyer/unbc-key-access-request",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Societyer Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-760, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$json.body.callbackUrl}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-societyer-workflow-secret",
+              "value": "={{$json.body.callbackSecret}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({ workflowId: $json.body.workflowId, runId: $json.body.runId, event: 'step.started', stepKey: 'fill_pdf', note: 'n8n started the key/access PDF fill step.' })}}",
+        "options": {}
+      },
+      "id": "callback-pdf-started",
+      "name": "Callback PDF Started",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-520, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Societyer Webhook').item.json.body.pdfFillUrl}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-societyer-workflow-secret",
+              "value": "={{$('Societyer Webhook').item.json.body.callbackSecret}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({ pdfTemplateKey: $('Societyer Webhook').item.json.body.input.pdfTemplateKey, fieldValues: $('Societyer Webhook').item.json.body.input.fieldValues, affiliate: $('Societyer Webhook').item.json.body.input.affiliate })}}",
+        "options": {}
+      },
+      "id": "fill-key-access-pdf",
+      "name": "Fill Key Access PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-280, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Societyer Webhook').item.json.body.callbackUrl}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-societyer-workflow-secret",
+              "value": "={{$('Societyer Webhook').item.json.body.callbackSecret}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({ workflowId: $('Societyer Webhook').item.json.body.workflowId, runId: $('Societyer Webhook').item.json.body.runId, event: 'document.created', stepKey: 'save_document', note: 'Generated key/access PDF returned from Societyer PDF service.', generatedPdf: $json.data })}}",
+        "options": {}
+      },
+      "id": "callback-generated-document",
+      "name": "Callback Generated Document",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-40, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Societyer Webhook').item.json.body.callbackUrl}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-societyer-workflow-secret",
+              "value": "={{$('Societyer Webhook').item.json.body.callbackSecret}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({ workflowId: $('Societyer Webhook').item.json.body.workflowId, runId: $('Societyer Webhook').item.json.body.runId, event: 'run.completed', stepKey: 'notify', note: 'n8n completed the UNBC Key Access workflow.', output: { engine: 'n8n', pdfTemplateKey: $('Societyer Webhook').item.json.body.input.pdfTemplateKey } })}}",
+        "options": {}
+      },
+      "id": "callback-run-complete",
+      "name": "Callback Run Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [200, 0]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Societyer Webhook": {
+      "main": [[{ "node": "Callback PDF Started", "type": "main", "index": 0 }]]
+    },
+    "Callback PDF Started": {
+      "main": [[{ "node": "Fill Key Access PDF", "type": "main", "index": 0 }]]
+    },
+    "Fill Key Access PDF": {
+      "main": [[{ "node": "Callback Generated Document", "type": "main", "index": 0 }]]
+    },
+    "Callback Generated Document": {
+      "main": [[{ "node": "Callback Run Complete", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "societyer-unbc-key-access-request-v1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

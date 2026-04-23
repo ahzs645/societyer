@@ -28,6 +28,7 @@ const MembersPage = React.lazy(() => import("./pages/Members").then((m) => ({ de
 const DirectorsPage = React.lazy(() => import("./pages/Directors").then((m) => ({ default: m.DirectorsPage })));
 const MeetingsPage = React.lazy(() => import("./pages/Meetings").then((m) => ({ default: m.MeetingsPage })));
 const MeetingDetailPage = React.lazy(() => import("./pages/MeetingDetail").then((m) => ({ default: m.MeetingDetailPage })));
+const MeetingMinutesPreviewPage = React.lazy(() => import("./pages/MeetingDetail").then((m) => ({ default: m.MeetingMinutesPreviewPage })));
 const MinutesPage = React.lazy(() => import("./pages/Minutes").then((m) => ({ default: m.MinutesPage })));
 const FilingsPage = React.lazy(() => import("./pages/Filings").then((m) => ({ default: m.FilingsPage })));
 const DeadlinesPage = React.lazy(() => import("./pages/Deadlines").then((m) => ({ default: m.DeadlinesPage })));
@@ -236,6 +237,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="directors" element={<DirectorsPage />} />
             <Route path="meetings" element={<MeetingsPage />} />
             <Route path="meetings/:id" element={<MeetingDetailPage />} />
+            <Route path="meetings/:id/preview" element={<MeetingMinutesPreviewPage />} />
             <Route path="minutes" element={<MinutesPage />} />
             <Route path="filings" element={<FilingsPage />} />
             <Route path="deadlines" element={<DeadlinesPage />} />

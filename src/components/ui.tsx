@@ -554,12 +554,14 @@ export function Drawer({
   title,
   children,
   footer,
+  size = "default",
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
   footer?: ReactNode;
+  size?: "default" | "wide";
 }) {
   const inspector = useInspectorPanel();
   const panelId = useId();
@@ -576,7 +578,7 @@ export function Drawer({
   if (inspector?.portalTarget) {
     return createPortal(
       <div
-        className="inspector-panel"
+        className={`inspector-panel${size === "wide" ? " inspector-panel--wide" : ""}`}
         role="dialog"
         aria-labelledby={titleId}
         ref={dialogRef}
@@ -601,7 +603,7 @@ export function Drawer({
     <>
       <div className="drawer-backdrop" onClick={onClose} />
       <div
-        className="drawer"
+        className={`drawer${size === "wide" ? " drawer--wide" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

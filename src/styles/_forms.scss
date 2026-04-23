@@ -21,6 +21,9 @@
   flex-direction: column;
   animation: slide 0.18s ease;
 }
+.drawer--wide {
+  width: min(980px, calc(100vw - 32px));
+}
 @keyframes fade { from { opacity: 0 } to { opacity: 1 } }
 @keyframes slide { from { transform: translateX(24px); opacity: 0 } to { transform: translateX(0); opacity: 1 } }
 .drawer__head {
@@ -444,6 +447,10 @@
 
 @media (max-width: 760px) {
   .drawer {
+    width: 100vw;
+  }
+
+  .drawer--wide {
     width: 100vw;
   }
 

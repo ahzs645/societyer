@@ -97,12 +97,12 @@ export function WorkflowsPage() {
   const openNew = (recipeKey?: string) => {
     const first = recipeKey ?? catalog?.[0]?.key ?? "agm_prep";
     const selected = catalog?.find((c: any) => c.key === first);
-    const isUnbc = first === "unbc_affiliate_id_request";
+    const manualByDefault = selected?.provider === "n8n" || selected?.config?.defaultTriggerKind === "manual";
     setForm({
       recipe: first,
       name: selected?.label ?? "New workflow",
-      triggerKind: isUnbc ? "manual" : "cron",
-      cron: isUnbc ? "" : "0 8 * * 1",
+      triggerKind: manualByDefault ? "manual" : "cron",
+      cron: manualByDefault ? "" : "0 8 * * 1",
       daysBefore: "30",
       anchor: "insurancePolicies.renewalDate",
       provider: selected?.provider ?? "internal",
@@ -149,6 +149,12 @@ export function WorkflowsPage() {
             </Link>
             <button className="btn-action" onClick={() => openNew("unbc_affiliate_id_request")}>
               <WorkflowIcon size={12} /> UNBC example
+            </button>
+            <button className="btn-action" onClick={() => openNew("unbc_key_access_request")}>
+              <WorkflowIcon size={12} /> Key request
+            </button>
+            <button className="btn-action" onClick={() => openNew("ote_keycard_access_request")}>
+              <WorkflowIcon size={12} /> OTE access
             </button>
             <button className="btn-action btn-action--primary" onClick={() => openNew()}>
               <Plus size={12} /> New workflow
@@ -293,14 +299,14 @@ export function WorkflowsPage() {
                 value={form.recipe}
                 onChange={(e) => {
                   const next = catalog?.find((c: any) => c.key === e.target.value);
-                  const isUnbc = e.target.value === "unbc_affiliate_id_request";
+                  const manualByDefault = next?.provider === "n8n" || next?.config?.defaultTriggerKind === "manual";
                   setForm({
                     ...form,
                     recipe: e.target.value,
                     name: next?.label ?? form.name,
                     provider: next?.provider ?? "internal",
-                    triggerKind: isUnbc ? "manual" : form.triggerKind,
-                    cron: isUnbc ? "" : form.cron,
+                    triggerKind: manualByDefault ? "manual" : form.triggerKind,
+                    cron: manualByDefault ? "" : form.cron,
                   });
                 }}
               >

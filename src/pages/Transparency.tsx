@@ -69,6 +69,7 @@ export function TransparencyPage() {
 
   const records = (publications ?? []) as any[];
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  const publicPageLive = Boolean(society.publicTransparencyEnabled && society.publicSlug);
 
   return (
     <div className="page">
@@ -79,22 +80,30 @@ export function TransparencyPage() {
         subtitle="Publish board info, bylaws, annual reports, AGM materials, and contact details without exposing the private workspace."
         actions={
           <>
-            <Link className="btn-action" to={publicHref} target="_blank" rel="noreferrer">
-              <Globe size={12} /> View public page
-            </Link>
-            <button
-              className="btn-action"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(absolutePublicHref);
-                  toast.success("Public link copied");
-                } catch {
-                  toast.error("Could not copy the link in this browser");
-                }
-              }}
-            >
-              <Copy size={12} /> Copy link
-            </button>
+            {publicPageLive ? (
+              <>
+                <Link className="btn-action" to={publicHref} target="_blank" rel="noreferrer">
+                  <Globe size={12} /> View public page
+                </Link>
+                <button
+                  className="btn-action"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(absolutePublicHref);
+                      toast.success("Public link copied");
+                    } catch {
+                      toast.error("Could not copy the link in this browser");
+                    }
+                  }}
+                >
+                  <Copy size={12} /> Copy link
+                </button>
+              </>
+            ) : (
+              <button className="btn-action" type="button" disabled title="Enable the public page before sharing this link.">
+                <Globe size={12} /> Public page disabled
+              </button>
+            )}
             <button
               className="btn-action"
               onClick={() => setSettingsDraft({

@@ -618,6 +618,10 @@ export function FormationMaintenancePage() {
   const upsertLog = useMutation(api.legalOperations.upsertSupportLog);
   const toast = useToast();
   const [draft, setDraft] = useState<any>(null);
+  const latestJurisdictionByCode = useMemo(
+    () => new Map((data?.jurisdictionMetadata ?? []).map((row: any) => [row.jurisdiction, row])),
+    [data],
+  );
 
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
@@ -661,8 +665,6 @@ export function FormationMaintenancePage() {
     setDraft(null);
     toast.success("Formation and maintenance record saved");
   };
-
-  const latestJurisdictionByCode = useMemo(() => new Map((data?.jurisdictionMetadata ?? []).map((row: any) => [row.jurisdiction, row])), [data]);
 
   return (
     <div className="page page--wide">

@@ -58,15 +58,17 @@ const FIELD_LABELS = [
   "Check Box1",
 ];
 
-type IntakeFieldType = "text" | "email" | "phone" | "date" | "checkbox" | "textarea";
+type IntakeFieldType = "text" | "email" | "phone" | "date" | "checkbox" | "textarea" | "person";
 
 type IntakeField = {
   key: string;
   label: string;
   type: IntakeFieldType;
   required?: boolean;
-  defaultValue?: string | boolean;
+  defaultValue?: unknown;
   helpText?: string;
+  categories?: string[];
+  isHidden?: boolean;
 };
 
 type TemplateToken = {
@@ -128,11 +130,13 @@ export function WorkflowDetailPage() {
   }
 
   const providerConfig = workflow.providerConfig ?? {};
-  const sampleAffiliate = workflow.config?.sampleAffiliate ?? {};
+  const sampleInput = workflow.config?.sampleInput ?? workflow.config?.sampleAffiliate ?? {};
   const intakeFields = configuredIntakeFields(workflow);
+  const visibleIntakeFields = intakeFields.filter((field) => !field.isHidden);
+  const launchUsesIntake = visibleIntakeFields.length > 0;
 
   const openIntake = () => {
-    setIntake(initialIntakeValues(intakeFields, sampleAffiliate));
+    setIntake(initialIntakeValues(intakeFields, sampleInput));
     setIntakeOpen(true);
   };
 
@@ -155,7 +159,6 @@ export function WorkflowDetailPage() {
     }
   };
 
-  const isUnbc = workflow.recipe === "unbc_affiliate_id_request";
   const isActive = workflow.status === "active";
 
   return (
@@ -194,7 +197,7 @@ export function WorkflowDetailPage() {
           <button
             className="btn btn--ghost btn--sm"
             disabled={busy}
-            onClick={() => (isUnbc ? openIntake() : runWorkflow())}
+            onClick={() => (launchUsesIntake ? openIntake() : runWorkflow())}
           >
             <Play size={12} /> Launch
           </button>
@@ -294,7 +297,7 @@ export function WorkflowDetailPage() {
                 node={selectedNode}
                 workflow={workflow}
                 documents={documents ?? []}
-                onLaunch={() => (isUnbc ? openIntake() : runWorkflow())}
+                onLaunch={() => (launchUsesIntake ? openIntake() : runWorkflow())}
                 launchDisabled={busy}
                 onSave={async (patch) => {
                   await updateNodeConfig({
@@ -389,7 +392,7 @@ export function WorkflowDetailPage() {
       <Modal
         open={intakeOpen}
         onClose={() => setIntakeOpen(false)}
-        title="Launch affiliate request"
+        title={`Launch ${workflow.name}`}
         size="lg"
         footer={
           <>
@@ -409,13 +412,13 @@ export function WorkflowDetailPage() {
                 runWorkflow({ intake: payload, affiliate: payload });
               }}
             >
-              <Play size={12} /> Run in n8n
+              <Play size={12} /> Run workflow
             </button>
           </>
         }
       >
         <div className="workflow-intake">
-          {intakeFields.map((field) => {
+          {visibleIntakeFields.map((field) => {
             return (
               <Field
                 key={field.key}
@@ -438,6 +441,21 @@ export function WorkflowDetailPage() {
                     rows={3}
                     value={intake[field.key] ?? ""}
                     onChange={(event) => setIntake({ ...intake, [field.key]: event.target.value })}
+                  />
+                ) : field.type === "person" ? (
+                  <AccessPersonPicker
+                    societyId={society._id}
+                    field={field}
+                    value={intake[field.key]}
+                    onChange={(personValue) => {
+                      setIntake({
+                        ...intake,
+                        [field.key]: personValue,
+                        access_person_name: personValue?.name ?? "",
+                        access_person_email: personValue?.email ?? "",
+                        access_person_context: personValue?.role ? ` (${personValue.role})` : "",
+                      });
+                    }}
                   />
                 ) : (
                   <input
@@ -580,7 +598,7 @@ function normalizeIntakeFields(raw: any, fallback?: any): IntakeField[] {
       if (!label) return null;
       const rawKey = String(entry.key ?? entry.name ?? slugifyFieldKey(label)).trim();
       const key = uniqueFieldKey(slugifyFieldKey(rawKey), seen);
-      const type = ["text", "email", "phone", "date", "checkbox", "textarea"].includes(entry.type)
+      const type = ["text", "email", "phone", "date", "checkbox", "textarea", "person"].includes(entry.type)
         ? entry.type as IntakeFieldType
         : inferIntakeFieldType(label);
       return {
@@ -590,6 +608,8 @@ function normalizeIntakeFields(raw: any, fallback?: any): IntakeField[] {
         required: Boolean(entry.required),
         defaultValue: entry.defaultValue,
         helpText: typeof entry.helpText === "string" ? entry.helpText : undefined,
+        categories: Array.isArray(entry.categories) ? entry.categories.map(String) : undefined,
+        isHidden: Boolean(entry.isHidden),
       };
     })
     .filter(Boolean) as IntakeField[];
@@ -610,8 +630,10 @@ function configuredIntakeFields(workflow: any) {
   const fallback =
     workflow?.config?.intakeFields ??
     workflow?.config?.pdfFields ??
-    (workflow?.config?.sampleAffiliate && typeof workflow.config.sampleAffiliate === "object"
-      ? Object.keys(workflow.config.sampleAffiliate)
+    (workflow?.config?.sampleInput && typeof workflow.config.sampleInput === "object"
+      ? Object.keys(workflow.config.sampleInput)
+      : workflow?.config?.sampleAffiliate && typeof workflow.config.sampleAffiliate === "object"
+        ? Object.keys(workflow.config.sampleAffiliate)
       : FIELD_LABELS);
   return normalizeIntakeFields(intakeNode?.config?.fields, fallback);
 }
@@ -641,10 +663,124 @@ function missingRequiredIntakeFields(fields: IntakeField[], values: Record<strin
     .filter((field) => {
       if (!field.required) return false;
       const value = values[field.key];
+      if (field.type === "person") {
+        return !value || typeof value !== "object" || (!value.recordId && !value.name);
+      }
       if (field.type === "checkbox") return !Boolean(value);
       return value == null || String(value).trim() === "";
     })
     .map((field) => field.label);
+}
+
+function AccessPersonPicker({
+  societyId,
+  field,
+  value,
+  onChange,
+}: {
+  societyId: string;
+  field: IntakeField;
+  value: any;
+  onChange: (value: any) => void;
+}) {
+  const categoryOptions = (field.categories?.length
+    ? field.categories
+    : ["directors", "volunteers", "employees"]
+  ).filter((category) => ["directors", "volunteers", "employees"].includes(category));
+  const selectedCategory = typeof value?.category === "string" ? value.category : categoryOptions[0];
+  const societyArg = { societyId: societyId as any };
+  const directors = useQuery(api.directors.list, selectedCategory === "directors" ? societyArg : "skip");
+  const volunteers = useQuery(api.volunteers.list, selectedCategory === "volunteers" ? societyArg : "skip");
+  const employees = useQuery(api.employees.list, selectedCategory === "employees" ? societyArg : "skip");
+  const people =
+    selectedCategory === "directors"
+      ? directors ?? []
+      : selectedCategory === "volunteers"
+        ? volunteers ?? []
+        : selectedCategory === "employees"
+          ? employees ?? []
+          : [];
+
+  const labelForCategory = (category: string) =>
+    category === "directors" ? "Directors" : category === "volunteers" ? "Volunteers" : "Employees";
+  const displayName = (person: any) => {
+    const full = `${person.firstName ?? ""} ${person.lastName ?? ""}`.trim();
+    return full || person.name || person.email || "Unnamed";
+  };
+  const roleForPerson = (person: any) => {
+    if (selectedCategory === "directors") return person.position || "Director";
+    if (selectedCategory === "volunteers") return person.roleWanted || person.status || "Volunteer";
+    if (selectedCategory === "employees") return person.role || person.employmentType || "Employee";
+    return "";
+  };
+  const selectedId = typeof value?.recordId === "string" ? value.recordId : "";
+
+  const updateCategory = (category: string) => {
+    onChange({
+      category,
+      recordId: "",
+      name: "",
+      email: "",
+      role: "",
+    });
+  };
+
+  const updatePerson = (recordId: string) => {
+    const person = people.find((row: any) => String(row._id) === recordId);
+    if (!person) {
+      onChange({
+        category: selectedCategory,
+        recordId: "",
+        name: "",
+        email: "",
+        role: "",
+      });
+      return;
+    }
+    onChange({
+      category: selectedCategory,
+      recordId,
+      name: displayName(person),
+      email: person.email ?? "",
+      role: roleForPerson(person),
+    });
+  };
+
+  return (
+    <div className="person-ref-picker">
+      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+        <select
+          className="input"
+          value={selectedCategory}
+          onChange={(event) => updateCategory(event.target.value)}
+        >
+          {categoryOptions.map((category) => (
+            <option key={category} value={category}>
+              {labelForCategory(category)}
+            </option>
+          ))}
+        </select>
+        <select
+          className="input"
+          value={selectedId}
+          onChange={(event) => updatePerson(event.target.value)}
+        >
+          <option value="">Pick individual</option>
+          {people.map((person: any) => (
+            <option key={person._id} value={person._id}>
+              {displayName(person)}
+              {person.email ? ` · ${person.email}` : ""}
+            </option>
+          ))}
+        </select>
+      </div>
+      {selectedCategory && people.length === 0 && (
+        <div className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+          No {labelForCategory(selectedCategory).toLowerCase()} are available yet.
+        </div>
+      )}
+    </div>
+  );
 }
 
 function documentDefaults(workflow: any) {
@@ -1337,6 +1473,7 @@ function IntakeFieldWizardModal({
                     <option value="phone">Phone</option>
                     <option value="date">Date</option>
                     <option value="checkbox">Checkbox</option>
+                    <option value="person">Person picker</option>
                   </select>
                 </Field>
                 <Field label="Default value">
@@ -1415,6 +1552,9 @@ function PdfFillSetup({
   const selectedDoc = pdfs.find((doc: any) => doc._id === cfg.templateDocumentId);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [mapperOpen, setMapperOpen] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const inspectPdfTemplate = useAction(api.workflows.inspectPdfTemplate);
+  const toast = useToast();
 
   const mappings: Record<string, any> = (cfg.fieldMappings && typeof cfg.fieldMappings === "object")
     ? cfg.fieldMappings
@@ -1425,6 +1565,47 @@ function PdfFillSetup({
       ? recipeFields
       : Object.keys(mappings);
   const mappingSummary = summariseMappings(currentFields, mappings);
+  const inspection = cfg.fieldInspection && typeof cfg.fieldInspection === "object"
+    ? cfg.fieldInspection
+    : null;
+
+  const autoDetectFields = async () => {
+    if (!selectedDoc) return;
+    setDetecting(true);
+    try {
+      const result = await inspectPdfTemplate({ documentId: selectedDoc._id });
+      const detected = Array.isArray(result?.fields)
+        ? result.fields.map((field: any) => String(field.name)).filter(Boolean)
+        : [];
+      if (detected.length === 0) {
+        toast.error("No fillable PDF fields found");
+        return;
+      }
+      const nextMappings = { ...mappings };
+      for (const field of detected) {
+        if (nextMappings[field]) continue;
+        nextMappings[field] = suggestMappingForField(field, intakeFields) ?? { kind: "empty" };
+      }
+      await onSave({
+        fields: detected,
+        fieldMappings: nextMappings,
+        fieldInspection: {
+          detectedAtISO: result.detectedAtISO,
+          fieldCount: result.fieldCount,
+          pageCount: result.pageCount,
+          tables: result.tables ?? [],
+        },
+      });
+      toast.success(
+        "PDF fields detected",
+        `${detected.length} fields${result?.tables?.length ? ` · ${result.tables.length} table group(s)` : ""}`,
+      );
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not inspect the PDF");
+    } finally {
+      setDetecting(false);
+    }
+  };
 
   return (
     <>
@@ -1513,14 +1694,26 @@ function PdfFillSetup({
         onMappingsChange={(next) => onSave({ fieldMappings: next })}
       />
 
+      {inspection && (
+        <Field label="Detected structure">
+          <div className="workflow-codebox">
+            {inspection.fieldCount ?? currentFields.length} fields
+            {Array.isArray(inspection.tables) && inspection.tables.length > 0
+              ? ` · ${inspection.tables.map((table: any) => `${table.label}: ${table.rowCount} rows`).join(" · ")}`
+              : " · no repeated field tables detected"}
+          </div>
+        </Field>
+      )}
+
       <div style={{ marginTop: 8 }}>
         <button
           type="button"
           className="btn btn--ghost btn--sm"
-          disabled
-          title="Auto-detection reads AcroForm field names from the selected PDF. Coming in Phase 2."
+          disabled={!selectedDoc || detecting}
+          title={selectedDoc ? "Read AcroForm field names from the selected PDF." : "Pick a PDF template first."}
+          onClick={autoDetectFields}
         >
-          Auto-detect fields
+          {detecting ? "Detecting..." : "Auto-detect fields"}
         </button>
       </div>
     </>

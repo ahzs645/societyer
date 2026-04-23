@@ -357,6 +357,9 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
     labelIdentifierFieldName: "subject",
     fields: [
       { name: "subject", label: "Subject", fieldType: FIELD_TYPES.TEXT, icon: "Mail", isReadOnly: true, isSystem: true },
+      { name: "fromEmail", label: "From", fieldType: FIELD_TYPES.EMAIL, icon: "Send", isReadOnly: true },
+      { name: "fromName", label: "From name", fieldType: FIELD_TYPES.TEXT, icon: "User", isReadOnly: true, isHidden: true },
+      { name: "replyTo", label: "Reply-To", fieldType: FIELD_TYPES.EMAIL, icon: "Reply", isReadOnly: true, isHidden: true },
       { name: "to", label: "To", fieldType: FIELD_TYPES.EMAIL, icon: "User", isReadOnly: true },
       { name: "cc", label: "CC", fieldType: FIELD_TYPES.EMAIL, icon: "Users", isReadOnly: true, isHidden: true },
       { name: "bcc", label: "BCC", fieldType: FIELD_TYPES.EMAIL, icon: "Users", isReadOnly: true, isHidden: true },
@@ -385,6 +388,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       name: "All pending emails",
       columns: [
         { fieldName: "subject", size: 280 },
+        { fieldName: "fromEmail", size: 190 },
         { fieldName: "to", size: 220 },
         { fieldName: "status", size: 110 },
         { fieldName: "createdAtISO", size: 180 },

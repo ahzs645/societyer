@@ -55,6 +55,7 @@ import type * as lib_access_materialAccess from "../lib/access/materialAccess.js
 import type * as lib_bylawRules from "../lib/bylawRules.js";
 import type * as lib_moduleSettings from "../lib/moduleSettings.js";
 import type * as lib_orgHubOptions from "../lib/orgHubOptions.js";
+import type * as lib_pdfTableNormalization from "../lib/pdfTableNormalization.js";
 import type * as lib_permissions from "../lib/permissions.js";
 import type * as lib_serviceAuth from "../lib/serviceAuth.js";
 import type * as library from "../library.js";
@@ -91,6 +92,7 @@ import type * as proxies from "../proxies.js";
 import type * as publicPortal from "../publicPortal.js";
 import type * as receipts from "../receipts.js";
 import type * as reconciliation from "../reconciliation.js";
+import type * as recordTableMetadataDefinitions from "../recordTableMetadataDefinitions.js";
 import type * as recordsLocation from "../recordsLocation.js";
 import type * as remuneration from "../remuneration.js";
 import type * as retention from "../retention.js";
@@ -168,6 +170,7 @@ declare const fullApi: ApiFromModules<{
   "lib/bylawRules": typeof lib_bylawRules;
   "lib/moduleSettings": typeof lib_moduleSettings;
   "lib/orgHubOptions": typeof lib_orgHubOptions;
+  "lib/pdfTableNormalization": typeof lib_pdfTableNormalization;
   "lib/permissions": typeof lib_permissions;
   "lib/serviceAuth": typeof lib_serviceAuth;
   library: typeof library;
@@ -204,6 +207,7 @@ declare const fullApi: ApiFromModules<{
   publicPortal: typeof publicPortal;
   receipts: typeof receipts;
   reconciliation: typeof reconciliation;
+  recordTableMetadataDefinitions: typeof recordTableMetadataDefinitions;
   recordsLocation: typeof recordsLocation;
   remuneration: typeof remuneration;
   retention: typeof retention;

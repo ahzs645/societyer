@@ -7,14 +7,15 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
+import { Tabs } from "../components/primitives";
 import { formatDate, formatDateTime } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ClipboardCheck, Download, ExternalLink, EyeOff, FileDown, Printer } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, Download, ExternalLink, Eye, EyeOff, FileDown, FileText, PackageCheck, Printer, Settings2 } from "lucide-react";
 import type { Motion } from "../components/MotionEditor";
 import {
   MINUTES_EXPORT_STYLES,
   MinutesExportStyleId,
-  exportWordDoc,
+  exportWordDocx,
   getMinutesStyleGaps,
   openPrintableDocument,
   renderMinutesHtml,
@@ -52,6 +53,24 @@ import {
   structuredEditFromMinutes,
   structuredPatchFromEdit,
 } from "../features/meetings/lib/structuredMinutes";
+
+const MINUTES_EXPORT_PREF_PREFIX = "societyer.minutesExport.";
+type MeetingDetailTab = "overview" | "minutes" | "package" | "export" | "sources";
+
+function readStoredMinutesStyle(): MinutesExportStyleId {
+  if (typeof window === "undefined") return "numbered-agenda";
+  const stored = window.localStorage.getItem(`${MINUTES_EXPORT_PREF_PREFIX}style`);
+  return MINUTES_EXPORT_STYLES.some((style) => style.id === stored)
+    ? stored as MinutesExportStyleId
+    : "numbered-agenda";
+}
+
+function readStoredExportBool(key: string, fallback: boolean) {
+  if (typeof window === "undefined") return fallback;
+  const stored = window.localStorage.getItem(`${MINUTES_EXPORT_PREF_PREFIX}${key}`);
+  if (stored == null) return fallback;
+  return stored === "true";
+}
 
 export function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -121,12 +140,14 @@ export function MeetingDetailPage() {
   const [savingTranscript, setSavingTranscript] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [structuredEdit, setStructuredEdit] = useState<StructuredMinutesEdit | null>(null);
-  const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>("standard");
-  const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(true);
-  const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(true);
-  const [includeApprovalInExport, setIncludeApprovalInExport] = useState(true);
-  const [includeSignaturesInExport, setIncludeSignaturesInExport] = useState(true);
-  const [includePlaceholdersInExport, setIncludePlaceholdersInExport] = useState(false);
+  const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
+  const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", true));
+  const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
+  const [includeApprovalInExport, setIncludeApprovalInExport] = useState(() => readStoredExportBool("includeApproval", true));
+  const [includeSignaturesInExport, setIncludeSignaturesInExport] = useState(() => readStoredExportBool("includeSignatures", true));
+  const [includePlaceholdersInExport, setIncludePlaceholdersInExport] = useState(() => readStoredExportBool("includePlaceholders", false));
+  const [minutesPreviewOpen, setMinutesPreviewOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<MeetingDetailTab>("overview");
   const [materialDraft, setMaterialDraft] = useState<any | null>(null);
   const [joinEdit, setJoinEdit] = useState<any | null>(null);
   const [sourceReviewNote, setSourceReviewNote] = useState("");
@@ -137,6 +158,24 @@ export function MeetingDetailPage() {
     if (meeting.quorumComputedAtISO && meeting.quorumSourceLabel) return;
     void backfillMeetingQuorum({ id: meeting._id }).catch(() => undefined);
   }, [backfillMeetingQuorum, meeting?._id, meeting?.quorumComputedAtISO, meeting?.quorumSourceLabel]);
+
+  useEffect(() => {
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}style`, minutesExportStyle);
+  }, [minutesExportStyle]);
+
+  useEffect(() => {
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeTranscript`, String(includeTranscriptInExport));
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeActionItems`, String(includeActionItemsInExport));
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeApproval`, String(includeApprovalInExport));
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeSignatures`, String(includeSignaturesInExport));
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includePlaceholders`, String(includePlaceholdersInExport));
+  }, [
+    includeActionItemsInExport,
+    includeApprovalInExport,
+    includePlaceholdersInExport,
+    includeSignaturesInExport,
+    includeTranscriptInExport,
+  ]);
 
   useEffect(() => {
     if (!minutes) return;
@@ -441,12 +480,12 @@ export function MeetingDetailPage() {
     if (!meeting || !minutes || !society) return;
     const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
     const bodyHtml = renderExportBody();
-    exportWordDoc({
-      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.doc`,
+    exportWordDocx({
+      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.docx`,
       title: `${meeting.title} — Minutes`,
       bodyHtml,
     });
-    toast.success("Minutes exported", "Opens in Word, Pages, or Google Docs.");
+    toast.success("Minutes exported", "Downloaded as a Word .docx file.");
   };
 
   const exportToPdf = () => {
@@ -459,14 +498,24 @@ export function MeetingDetailPage() {
     else toast.error("Popup blocked", "Allow popups for this site to open the printable PDF view.");
   };
 
+  const openMinutesPreview = () => {
+    if (!minutes) return;
+    setMinutesPreviewOpen(true);
+  };
+
+  const openMinutesPreviewPage = () => {
+    if (!meeting || !minutes) return;
+    window.open(`/app/meetings/${meeting._id}/preview`, "_blank", "noopener,noreferrer");
+  };
+
   const exportPublicMinutes = () => {
     if (!meeting || !minutes || !society) return;
     const pii = redactOpts();
     const redact = (s: string) => redactText(s, pii);
     const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
     const bodyHtml = renderExportBody(redact);
-    exportWordDoc({
-      filename: `${safe}-public-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.doc`,
+    exportWordDocx({
+      filename: `${safe}-public-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.docx`,
       title: `${meeting.title} — Public minutes`,
       bodyHtml,
     });
@@ -719,7 +768,7 @@ export function MeetingDetailPage() {
   };
 
   return (
-    <div className="page page--narrow">
+    <div className="page page--wide meeting-detail-page">
       <Link to="/app/meetings" className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
         <ArrowLeft size={12} /> All meetings
       </Link>
@@ -748,7 +797,17 @@ export function MeetingDetailPage() {
               <Download size={12} /> Meeting pack
             </button>
             {minutes && (
-              <button className="btn-action" onClick={exportToWord} title="Download as .doc (opens in Word, Pages, or Google Docs)">
+              <button className="btn-action" onClick={openMinutesPreview} title="Preview the selected Word/PDF export layout">
+                <Eye size={12} /> Preview
+              </button>
+            )}
+            {minutes && (
+              <button className="btn-action" onClick={openMinutesPreviewPage} title="Open the Word preview as a separate page">
+                <ExternalLink size={12} /> Open preview
+              </button>
+            )}
+            {minutes && (
+              <button className="btn-action" onClick={exportToWord} title="Download as .docx (opens in Word, Pages, or Google Docs)">
                 <FileDown size={12} /> Export to Word
               </button>
             )}
@@ -770,105 +829,304 @@ export function MeetingDetailPage() {
         }
       />
 
-      <MeetingPackageHub
-        meeting={meeting}
-        minutes={minutes}
-        agenda={agenda}
-        packageMaterials={packageMaterials}
-        openPackageTasks={openPackageTasks}
-        joinDetails={joinDetails}
-        packageReadiness={packageReadiness}
-        sourceReviewStatus={sourceReviewStatus}
-        packageReviewStatus={packageReviewStatus}
-        packageReviewBlockers={packageReviewBlockers}
-        sourceReviewNote={sourceReviewNote}
-        packageReviewNote={packageReviewNote}
-        setSourceReviewNote={setSourceReviewNote}
-        setPackageReviewNote={setPackageReviewNote}
-        openMaterialDrawer={openMaterialDrawer}
-        startJoinEdit={startJoinEdit}
-        downloadMeetingPack={downloadMeetingPack}
-        completeSourceReview={completeSourceReview}
-        reopenSourceReview={reopenSourceReview}
-        markPackageReady={markPackageReady}
-        sendPackageBackToReview={sendPackageBackToReview}
-        removeMeetingMaterial={removeMeetingMaterial}
+      <div className="meeting-detail-summary">
+        <div>
+          <span>Agenda topics</span>
+          <strong>{agenda.length}</strong>
+        </div>
+        <div>
+          <span>Attendees</span>
+          <strong>{minutes?.attendees.length ?? meeting.attendeeIds?.length ?? 0}</strong>
+        </div>
+        <div>
+          <span>Motions</span>
+          <strong>{minutes?.motions.length ?? 0}</strong>
+        </div>
+      <div>
+        <span>Materials</span>
+        <strong>{packageMaterials.length}</strong>
+      </div>
+    </div>
+
+      <Tabs<MeetingDetailTab>
+        value={activeTab}
+        onChange={setActiveTab}
+        items={[
+          { id: "overview", label: "Overview", icon: <ClipboardCheck size={12} /> },
+          { id: "minutes", label: "Minutes", count: minutes?.motions.length ?? 0, icon: <FileText size={12} /> },
+          { id: "package", label: "Package", count: packageMaterials.length, icon: <PackageCheck size={12} /> },
+          { id: "export", label: "Export", icon: <Settings2 size={12} /> },
+          { id: "sources", label: "Sources", count: linkedSourceCount, icon: <Download size={12} /> },
+        ]}
       />
 
-      <div className="two-col">
-        <MeetingMinutesColumn
-          meeting={meeting}
-          minutes={minutes}
-          agenda={agenda}
-          agendaEdit={agendaEdit}
-          setAgendaEdit={setAgendaEdit}
-          saveAgenda={saveAgenda}
-          attendanceEdit={attendanceEdit}
-          setAttendanceEdit={setAttendanceEdit}
-          startAttendanceEdit={startAttendanceEdit}
-          saveAttendance={saveAttendance}
-          structuredEdit={structuredEdit}
-          setStructuredEdit={setStructuredEdit}
-          startStructuredEdit={startStructuredEdit}
-          saveStructuredDetails={saveStructuredDetails}
-          quorumSnapshot={quorumSnapshot}
-          quorumLegalGuides={quorumLegalGuides}
-          members={members}
-          directors={directors}
-          directorNames={directorNames}
-          motionPeople={motionPeople}
-          saveMotions={saveMotions}
-          transcript={transcript}
-          setTranscript={setTranscript}
-          transcriptOnFile={transcriptOnFile}
-          busy={busy}
-          runGenerate={runGenerate}
-        />
+      <div className="meeting-detail-tabpanel">
+        {activeTab === "overview" && (
+          <div className="meeting-overview-grid">
+            <MeetingSidebarColumn
+              meeting={meeting}
+              minutes={minutes}
+              society={society}
+              visiblePanels={meeting.type === "AGM" ? ["details", "agm"] : ["details"]}
+              selectedMinutesExportStyle={selectedMinutesExportStyle}
+              minutesExportStyle={minutesExportStyle}
+              setMinutesExportStyle={setMinutesExportStyle}
+              includeTranscriptInExport={includeTranscriptInExport}
+              setIncludeTranscriptInExport={setIncludeTranscriptInExport}
+              includeActionItemsInExport={includeActionItemsInExport}
+              setIncludeActionItemsInExport={setIncludeActionItemsInExport}
+              includeApprovalInExport={includeApprovalInExport}
+              setIncludeApprovalInExport={setIncludeApprovalInExport}
+              includeSignaturesInExport={includeSignaturesInExport}
+              setIncludeSignaturesInExport={setIncludeSignaturesInExport}
+              includePlaceholdersInExport={includePlaceholdersInExport}
+              setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
+              exportToWord={exportToWord}
+              exportToPdf={exportToPdf}
+              exportPublicMinutes={exportPublicMinutes}
+              openMinutesPreview={openMinutesPreview}
+              minutesExportGaps={minutesExportGaps}
+              quorumSnapshot={quorumSnapshot}
+              quorumLegalGuides={quorumLegalGuides}
+              legalGuideDateISO={legalGuideDateISO}
+              linkedSourceCount={linkedSourceCount}
+              sourceDocuments={sourceDocuments}
+              minutesSourceExternalIds={minutesSourceExternalIds}
+              vttInputRef={vttInputRef}
+              audioInputRef={audioInputRef}
+              transcriptOnFile={transcriptOnFile}
+              transcriptProvider={transcriptProvider}
+              transcriptionJob={transcriptionJob}
+              transcriptStatusTone={transcriptStatusTone}
+              transcriptEdit={transcriptEdit}
+              savingTranscript={savingTranscript}
+              pipelineBusy={pipelineBusy}
+              audioFile={audioFile}
+              importNote={importNote}
+              setTranscriptEdit={setTranscriptEdit}
+              setAudioFile={setAudioFile}
+              importTranscriptVtt={importTranscriptVtt}
+              saveTranscriptEditText={saveTranscriptEditText}
+              uploadAudioAndRun={uploadAudioAndRun}
+            />
+            <MeetingSidebarColumn
+              meeting={meeting}
+              minutes={minutes}
+              society={society}
+              visiblePanels={["export"]}
+              selectedMinutesExportStyle={selectedMinutesExportStyle}
+              minutesExportStyle={minutesExportStyle}
+              setMinutesExportStyle={setMinutesExportStyle}
+              includeTranscriptInExport={includeTranscriptInExport}
+              setIncludeTranscriptInExport={setIncludeTranscriptInExport}
+              includeActionItemsInExport={includeActionItemsInExport}
+              setIncludeActionItemsInExport={setIncludeActionItemsInExport}
+              includeApprovalInExport={includeApprovalInExport}
+              setIncludeApprovalInExport={setIncludeApprovalInExport}
+              includeSignaturesInExport={includeSignaturesInExport}
+              setIncludeSignaturesInExport={setIncludeSignaturesInExport}
+              includePlaceholdersInExport={includePlaceholdersInExport}
+              setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
+              exportToWord={exportToWord}
+              exportToPdf={exportToPdf}
+              exportPublicMinutes={exportPublicMinutes}
+              openMinutesPreview={openMinutesPreview}
+              minutesExportGaps={minutesExportGaps}
+              quorumSnapshot={quorumSnapshot}
+              quorumLegalGuides={quorumLegalGuides}
+              legalGuideDateISO={legalGuideDateISO}
+              linkedSourceCount={linkedSourceCount}
+              sourceDocuments={sourceDocuments}
+              minutesSourceExternalIds={minutesSourceExternalIds}
+              vttInputRef={vttInputRef}
+              audioInputRef={audioInputRef}
+              transcriptOnFile={transcriptOnFile}
+              transcriptProvider={transcriptProvider}
+              transcriptionJob={transcriptionJob}
+              transcriptStatusTone={transcriptStatusTone}
+              transcriptEdit={transcriptEdit}
+              savingTranscript={savingTranscript}
+              pipelineBusy={pipelineBusy}
+              audioFile={audioFile}
+              importNote={importNote}
+              setTranscriptEdit={setTranscriptEdit}
+              setAudioFile={setAudioFile}
+              importTranscriptVtt={importTranscriptVtt}
+              saveTranscriptEditText={saveTranscriptEditText}
+              uploadAudioAndRun={uploadAudioAndRun}
+            />
+          </div>
+        )}
 
-        <MeetingSidebarColumn
-          meeting={meeting}
-          minutes={minutes}
-          society={society}
-          selectedMinutesExportStyle={selectedMinutesExportStyle}
-          minutesExportStyle={minutesExportStyle}
-          setMinutesExportStyle={setMinutesExportStyle}
-          includeTranscriptInExport={includeTranscriptInExport}
-          setIncludeTranscriptInExport={setIncludeTranscriptInExport}
-          includeActionItemsInExport={includeActionItemsInExport}
-          setIncludeActionItemsInExport={setIncludeActionItemsInExport}
-          includeApprovalInExport={includeApprovalInExport}
-          setIncludeApprovalInExport={setIncludeApprovalInExport}
-          includeSignaturesInExport={includeSignaturesInExport}
-          setIncludeSignaturesInExport={setIncludeSignaturesInExport}
-          includePlaceholdersInExport={includePlaceholdersInExport}
-          setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
-          exportToWord={exportToWord}
-          exportToPdf={exportToPdf}
-          exportPublicMinutes={exportPublicMinutes}
-          minutesExportGaps={minutesExportGaps}
-          quorumSnapshot={quorumSnapshot}
-          quorumLegalGuides={quorumLegalGuides}
-          legalGuideDateISO={legalGuideDateISO}
-          linkedSourceCount={linkedSourceCount}
-          sourceDocuments={sourceDocuments}
-          minutesSourceExternalIds={minutesSourceExternalIds}
-          vttInputRef={vttInputRef}
-          audioInputRef={audioInputRef}
-          transcriptOnFile={transcriptOnFile}
-          transcriptProvider={transcriptProvider}
-          transcriptionJob={transcriptionJob}
-          transcriptStatusTone={transcriptStatusTone}
-          transcriptEdit={transcriptEdit}
-          savingTranscript={savingTranscript}
-          pipelineBusy={pipelineBusy}
-          audioFile={audioFile}
-          importNote={importNote}
-          setTranscriptEdit={setTranscriptEdit}
-          setAudioFile={setAudioFile}
-          importTranscriptVtt={importTranscriptVtt}
-          saveTranscriptEditText={saveTranscriptEditText}
-          uploadAudioAndRun={uploadAudioAndRun}
-        />
+        {activeTab === "minutes" && (
+          <MeetingMinutesColumn
+            meeting={meeting}
+            minutes={minutes}
+            agenda={agenda}
+            agendaEdit={agendaEdit}
+            setAgendaEdit={setAgendaEdit}
+            saveAgenda={saveAgenda}
+            attendanceEdit={attendanceEdit}
+            setAttendanceEdit={setAttendanceEdit}
+            startAttendanceEdit={startAttendanceEdit}
+            saveAttendance={saveAttendance}
+            structuredEdit={structuredEdit}
+            setStructuredEdit={setStructuredEdit}
+            startStructuredEdit={startStructuredEdit}
+            saveStructuredDetails={saveStructuredDetails}
+            quorumSnapshot={quorumSnapshot}
+            quorumLegalGuides={quorumLegalGuides}
+            members={members}
+            directors={directors}
+            directorNames={directorNames}
+            motionPeople={motionPeople}
+            saveMotions={saveMotions}
+            transcript={transcript}
+            setTranscript={setTranscript}
+            transcriptOnFile={transcriptOnFile}
+            busy={busy}
+            runGenerate={runGenerate}
+          />
+        )}
+
+        {activeTab === "package" && (
+          <MeetingPackageHub
+            meeting={meeting}
+            minutes={minutes}
+            agenda={agenda}
+            packageMaterials={packageMaterials}
+            openPackageTasks={openPackageTasks}
+            joinDetails={joinDetails}
+            packageReadiness={packageReadiness}
+            sourceReviewStatus={sourceReviewStatus}
+            packageReviewStatus={packageReviewStatus}
+            packageReviewBlockers={packageReviewBlockers}
+            sourceReviewNote={sourceReviewNote}
+            packageReviewNote={packageReviewNote}
+            setSourceReviewNote={setSourceReviewNote}
+            setPackageReviewNote={setPackageReviewNote}
+            openMaterialDrawer={openMaterialDrawer}
+            startJoinEdit={startJoinEdit}
+            downloadMeetingPack={downloadMeetingPack}
+            completeSourceReview={completeSourceReview}
+            reopenSourceReview={reopenSourceReview}
+            markPackageReady={markPackageReady}
+            sendPackageBackToReview={sendPackageBackToReview}
+            removeMeetingMaterial={removeMeetingMaterial}
+          />
+        )}
+
+        {activeTab === "export" && (
+          <div className="meeting-export-layout">
+            <MeetingSidebarColumn
+              meeting={meeting}
+              minutes={minutes}
+              society={society}
+              visiblePanels={["export"]}
+              selectedMinutesExportStyle={selectedMinutesExportStyle}
+              minutesExportStyle={minutesExportStyle}
+              setMinutesExportStyle={setMinutesExportStyle}
+              includeTranscriptInExport={includeTranscriptInExport}
+              setIncludeTranscriptInExport={setIncludeTranscriptInExport}
+              includeActionItemsInExport={includeActionItemsInExport}
+              setIncludeActionItemsInExport={setIncludeActionItemsInExport}
+              includeApprovalInExport={includeApprovalInExport}
+              setIncludeApprovalInExport={setIncludeApprovalInExport}
+              includeSignaturesInExport={includeSignaturesInExport}
+              setIncludeSignaturesInExport={setIncludeSignaturesInExport}
+              includePlaceholdersInExport={includePlaceholdersInExport}
+              setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
+              exportToWord={exportToWord}
+              exportToPdf={exportToPdf}
+              exportPublicMinutes={exportPublicMinutes}
+              openMinutesPreview={openMinutesPreview}
+              minutesExportGaps={minutesExportGaps}
+              quorumSnapshot={quorumSnapshot}
+              quorumLegalGuides={quorumLegalGuides}
+              legalGuideDateISO={legalGuideDateISO}
+              linkedSourceCount={linkedSourceCount}
+              sourceDocuments={sourceDocuments}
+              minutesSourceExternalIds={minutesSourceExternalIds}
+              vttInputRef={vttInputRef}
+              audioInputRef={audioInputRef}
+              transcriptOnFile={transcriptOnFile}
+              transcriptProvider={transcriptProvider}
+              transcriptionJob={transcriptionJob}
+              transcriptStatusTone={transcriptStatusTone}
+              transcriptEdit={transcriptEdit}
+              savingTranscript={savingTranscript}
+              pipelineBusy={pipelineBusy}
+              audioFile={audioFile}
+              importNote={importNote}
+              setTranscriptEdit={setTranscriptEdit}
+              setAudioFile={setAudioFile}
+              importTranscriptVtt={importTranscriptVtt}
+              saveTranscriptEditText={saveTranscriptEditText}
+              uploadAudioAndRun={uploadAudioAndRun}
+            />
+            <div className="minutes-preview minutes-preview--inline">
+              <div className="minutes-preview__toolbar">
+                <div>
+                  <strong>{selectedMinutesExportStyle.label}</strong>
+                  <p className="muted">{selectedMinutesExportStyle.tone}</p>
+                </div>
+                <button className="btn-action" onClick={openMinutesPreviewPage}>
+                  <ExternalLink size={12} /> Open separate page
+                </button>
+              </div>
+              <div className="minutes-preview__page" dangerouslySetInnerHTML={{ __html: renderExportBody() }} />
+            </div>
+          </div>
+        )}
+
+        {activeTab === "sources" && (
+          <MeetingSidebarColumn
+            meeting={meeting}
+            minutes={minutes}
+            society={society}
+            visiblePanels={["sources", "transcript"]}
+            selectedMinutesExportStyle={selectedMinutesExportStyle}
+            minutesExportStyle={minutesExportStyle}
+            setMinutesExportStyle={setMinutesExportStyle}
+            includeTranscriptInExport={includeTranscriptInExport}
+            setIncludeTranscriptInExport={setIncludeTranscriptInExport}
+            includeActionItemsInExport={includeActionItemsInExport}
+            setIncludeActionItemsInExport={setIncludeActionItemsInExport}
+            includeApprovalInExport={includeApprovalInExport}
+            setIncludeApprovalInExport={setIncludeApprovalInExport}
+            includeSignaturesInExport={includeSignaturesInExport}
+            setIncludeSignaturesInExport={setIncludeSignaturesInExport}
+            includePlaceholdersInExport={includePlaceholdersInExport}
+            setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
+            exportToWord={exportToWord}
+            exportToPdf={exportToPdf}
+            exportPublicMinutes={exportPublicMinutes}
+            openMinutesPreview={openMinutesPreview}
+            minutesExportGaps={minutesExportGaps}
+            quorumSnapshot={quorumSnapshot}
+            quorumLegalGuides={quorumLegalGuides}
+            legalGuideDateISO={legalGuideDateISO}
+            linkedSourceCount={linkedSourceCount}
+            sourceDocuments={sourceDocuments}
+            minutesSourceExternalIds={minutesSourceExternalIds}
+            vttInputRef={vttInputRef}
+            audioInputRef={audioInputRef}
+            transcriptOnFile={transcriptOnFile}
+            transcriptProvider={transcriptProvider}
+            transcriptionJob={transcriptionJob}
+            transcriptStatusTone={transcriptStatusTone}
+            transcriptEdit={transcriptEdit}
+            savingTranscript={savingTranscript}
+            pipelineBusy={pipelineBusy}
+            audioFile={audioFile}
+            importNote={importNote}
+            setTranscriptEdit={setTranscriptEdit}
+            setAudioFile={setAudioFile}
+            importTranscriptVtt={importTranscriptVtt}
+            saveTranscriptEditText={saveTranscriptEditText}
+            uploadAudioAndRun={uploadAudioAndRun}
+          />
+        )}
       </div>
 
       <MeetingMaterialDrawer
@@ -912,6 +1170,198 @@ export function MeetingDetailPage() {
           </div>
         )}
       </Drawer>
+
+      <Drawer
+        open={minutesPreviewOpen}
+        onClose={() => setMinutesPreviewOpen(false)}
+        title="Word preview"
+        size="wide"
+        footer={
+          <>
+            <button className="btn" onClick={() => setMinutesPreviewOpen(false)}>Close</button>
+            <button className="btn" onClick={openMinutesPreviewPage}>
+              <ExternalLink size={14} /> Open page
+            </button>
+            <button className="btn btn--accent" onClick={exportToWord}>
+              <FileDown size={14} /> Export Word
+            </button>
+            <button className="btn" onClick={exportToPdf}>
+              <Printer size={14} /> Print / PDF
+            </button>
+          </>
+        }
+      >
+        <div className="minutes-preview">
+          <div className="minutes-preview__toolbar">
+            <div>
+              <strong>{selectedMinutesExportStyle.label}</strong>
+              <p className="muted">{selectedMinutesExportStyle.tone}</p>
+            </div>
+            <select
+              className="input"
+              value={minutesExportStyle}
+              onChange={(event) => setMinutesExportStyle(event.target.value as MinutesExportStyleId)}
+              aria-label="Preview export style"
+            >
+              {MINUTES_EXPORT_STYLES.map((style) => (
+                <option key={style.id} value={style.id}>{style.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="minutes-preview__page" dangerouslySetInnerHTML={{ __html: renderExportBody() }} />
+        </div>
+      </Drawer>
+    </div>
+  );
+}
+
+export function MeetingMinutesPreviewPage() {
+  const { id } = useParams<{ id: string }>();
+  const society = useSociety();
+  const meeting = useQuery(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
+  const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
+  const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", true));
+  const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
+  const [includeApprovalInExport, setIncludeApprovalInExport] = useState(() => readStoredExportBool("includeApproval", true));
+  const [includeSignaturesInExport, setIncludeSignaturesInExport] = useState(() => readStoredExportBool("includeSignatures", true));
+  const [includePlaceholdersInExport, setIncludePlaceholdersInExport] = useState(() => readStoredExportBool("includePlaceholders", false));
+
+  useEffect(() => {
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}style`, minutesExportStyle);
+  }, [minutesExportStyle]);
+
+  useEffect(() => {
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeTranscript`, String(includeTranscriptInExport));
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeActionItems`, String(includeActionItemsInExport));
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeApproval`, String(includeApprovalInExport));
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeSignatures`, String(includeSignaturesInExport));
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includePlaceholders`, String(includePlaceholdersInExport));
+  }, [
+    includeActionItemsInExport,
+    includeApprovalInExport,
+    includePlaceholdersInExport,
+    includeSignaturesInExport,
+    includeTranscriptInExport,
+  ]);
+
+  if (society === undefined || !meeting || minutes === undefined) return <div className="page">Loading…</div>;
+  if (society === null) return <SeedPrompt />;
+  if (!minutes) return <div className="page">No minutes recorded for this meeting.</div>;
+
+  const agenda = parseAgenda(meeting.agendaJson);
+  const quorumSnapshot = getQuorumSnapshot(minutes, meeting);
+  const selectedMinutesExportStyle =
+    MINUTES_EXPORT_STYLES.find((style) => style.id === minutesExportStyle) ??
+    MINUTES_EXPORT_STYLES[0];
+
+  const bodyHtml = renderMinutesHtml({
+    society: { name: society.name, incorporationNumber: society.incorporationNumber ?? null },
+    meeting: {
+      title: meeting.title,
+      type: meeting.type,
+      scheduledAt: meeting.scheduledAt,
+      location: meeting.location ?? null,
+      electronic: !!meeting.electronic,
+      noticeSentAt: meeting.noticeSentAt ?? null,
+      agendaItems: agenda,
+    },
+    minutes: {
+      heldAt: minutes.heldAt,
+      chairName: minutes.chairName ?? null,
+      secretaryName: minutes.secretaryName ?? null,
+      recorderName: minutes.recorderName ?? null,
+      calledToOrderAt: minutes.calledToOrderAt ?? null,
+      adjournedAt: minutes.adjournedAt ?? null,
+      remoteParticipation: minutes.remoteParticipation ?? null,
+      detailedAttendance: minutes.detailedAttendance ?? null,
+      attendees: minutes.attendees,
+      absent: minutes.absent,
+      quorumMet: minutes.quorumMet,
+      quorumRequired: quorumSnapshot.required,
+      quorumSourceLabel: quorumSnapshot.label,
+      discussion: minutes.discussion,
+      sections: minutes.sections ?? null,
+      motions: minutes.motions as any,
+      decisions: minutes.decisions,
+      actionItems: minutes.actionItems as any,
+      approvedAt: minutes.approvedAt ?? null,
+      nextMeetingAt: minutes.nextMeetingAt ?? null,
+      nextMeetingLocation: minutes.nextMeetingLocation ?? null,
+      nextMeetingNotes: minutes.nextMeetingNotes ?? null,
+      sessionSegments: minutes.sessionSegments ?? null,
+      appendices: minutes.appendices ?? null,
+      agmDetails: minutes.agmDetails ?? null,
+      draftTranscript: minutes.draftTranscript ?? null,
+    },
+    styleId: minutesExportStyle,
+    options: {
+      includeTranscript: includeTranscriptInExport,
+      includeActionItems: includeActionItemsInExport,
+      includeApprovalBlock: includeApprovalInExport,
+      includeSignatures: includeSignaturesInExport,
+      includePlaceholders: includePlaceholdersInExport,
+    },
+  });
+
+  const exportPreviewToWord = () => {
+    const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    exportWordDocx({
+      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.docx`,
+      title: `${meeting.title} — Minutes`,
+      bodyHtml,
+    });
+  };
+
+  const printPreview = () => {
+    openPrintableDocument({
+      title: `${meeting.title} — Minutes`,
+      bodyHtml,
+    });
+  };
+
+  return (
+    <div className="page page--wide meeting-preview-page">
+      <div className="meeting-preview-page__header">
+        <div>
+          <Link to={`/app/meetings/${meeting._id}`} className="row muted" style={{ marginBottom: 6, fontSize: "var(--fs-sm)" }}>
+            <ArrowLeft size={12} /> Back to meeting
+          </Link>
+          <h1>{meeting.title}</h1>
+          <p>{selectedMinutesExportStyle.label} · {selectedMinutesExportStyle.source}</p>
+        </div>
+        <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
+          <button className="btn-action" onClick={() => window.close()}>Close page</button>
+          <button className="btn-action btn-action--primary" onClick={exportPreviewToWord}>
+            <FileDown size={12} /> Export Word
+          </button>
+          <button className="btn-action" onClick={printPreview}>
+            <Printer size={12} /> Print / PDF
+          </button>
+        </div>
+      </div>
+
+      <div className="meeting-preview-page__layout">
+        <aside className="meeting-preview-page__settings">
+          <Field label="Style">
+            <select className="input" value={minutesExportStyle} onChange={(event) => setMinutesExportStyle(event.target.value as MinutesExportStyleId)}>
+              {MINUTES_EXPORT_STYLES.map((style) => (
+                <option key={style.id} value={style.id}>{style.label}</option>
+              ))}
+            </select>
+          </Field>
+          <div className="col" style={{ gap: 6 }}>
+            <label><input type="checkbox" checked={includeTranscriptInExport} onChange={(event) => setIncludeTranscriptInExport(event.target.checked)} /> Include transcript</label>
+            <label><input type="checkbox" checked={includeActionItemsInExport} onChange={(event) => setIncludeActionItemsInExport(event.target.checked)} /> Include action items</label>
+            <label><input type="checkbox" checked={includeApprovalInExport} onChange={(event) => setIncludeApprovalInExport(event.target.checked)} /> Include approval block</label>
+            <label><input type="checkbox" checked={includeSignaturesInExport} onChange={(event) => setIncludeSignaturesInExport(event.target.checked)} /> Include signature lines</label>
+            <label><input type="checkbox" checked={includePlaceholdersInExport} onChange={(event) => setIncludePlaceholdersInExport(event.target.checked)} /> Show placeholders</label>
+          </div>
+        </aside>
+        <div className="minutes-preview minutes-preview--standalone">
+          <div className="minutes-preview__page" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+        </div>
+      </div>
     </div>
   );
 }

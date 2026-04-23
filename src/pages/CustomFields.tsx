@@ -137,7 +137,7 @@ export function CustomFieldsPage() {
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   return (
-    <div className="page">
+    <div className="page custom-fields-page">
       <PageHeader
         title="Custom fields"
         icon={<Sliders size={16} />}
@@ -150,6 +150,57 @@ export function CustomFieldsPage() {
         }
       />
 
+      <div className="custom-fields-mobile-list" aria-label="Custom field definitions">
+        {definitions === undefined ? (
+          <div className="record-table__loading">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="record-table__loading-row" />
+            ))}
+          </div>
+        ) : records.length === 0 ? (
+          <div className="record-table__empty">
+            <div className="record-table__empty-title">No custom fields</div>
+            <div className="record-table__empty-desc">
+              Add fields for members, directors, volunteers, or employees.
+            </div>
+          </div>
+        ) : (
+          records.map((row: any) => (
+            <article
+              key={row._id}
+              className="custom-field-card"
+              onClick={() => {
+                setDraft({ ...row });
+                setDrawerOpen(true);
+              }}
+            >
+              <div className="custom-field-card__main">
+                <div className="custom-field-card__title">{row.label}</div>
+                <div className="custom-field-card__meta">
+                  {ENTITY_LABELS[row.entityType] ?? row.entityType} · {fieldKindLabel(row.kind)}
+                  {row.required ? " · Required" : ""}
+                </div>
+                {row.description && (
+                  <div className="custom-field-card__description">{row.description}</div>
+                )}
+                <div className="custom-field-card__key">{row.key}</div>
+              </div>
+              <button
+                className="btn btn--ghost btn--sm btn--icon"
+                aria-label={`Delete ${row.label}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  doDelete(row);
+                }}
+              >
+                <Trash2 size={12} />
+              </button>
+            </article>
+          ))
+        )}
+      </div>
+
+      <div className="custom-fields-record-table">
       {showMetadataWarning ? (
         <div className="record-table__empty">
           <div className="record-table__empty-title">Metadata not seeded</div>
@@ -218,6 +269,7 @@ export function CustomFieldsPage() {
           ))}
         </div>
       )}
+      </div>
 
       <Drawer
         open={drawerOpen}
@@ -303,4 +355,8 @@ export function CustomFieldsPage() {
       </Drawer>
     </div>
   );
+}
+
+function fieldKindLabel(kind: string) {
+  return FIELD_KINDS.find((item) => item.value === kind)?.label ?? kind;
 }
