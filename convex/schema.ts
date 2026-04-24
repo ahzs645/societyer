@@ -2870,6 +2870,9 @@ export default defineSchema({
     agendaId: v.optional(v.id("agendas")),
     agendaItemId: v.optional(v.id("agendaItems")),
     minutesId: v.optional(v.id("minutes")),
+    sourceMinutesId: v.optional(v.id("minutes")),
+    sourceMotionIndex: v.optional(v.number()),
+    sourceSectionIndex: v.optional(v.number()),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })

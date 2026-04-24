@@ -14,6 +14,7 @@
    npx convex env set N8N_WEBHOOK_BASE_URL "http://n8n:5678/webhook"
    npx convex env set N8N_UNBC_AFFILIATE_WEBHOOK_PATH "societyer-unbc-affiliate-id/societyer%2520webhook/societyer/unbc-affiliate-id"
    npx convex env set N8N_UNBC_KEY_REQUEST_WEBHOOK_PATH "societyer-unbc-key-access-request/societyer%2520webhook/societyer/unbc-key-access-request"
+   npx convex env set N8N_OTE_KEYCARD_WEBHOOK_PATH "societyer-ote-individual-access-request/societyer%2520webhook/societyer/ote-individual-access-request"
    npx convex env set SOCIETYER_WORKFLOW_CALLBACK_URL "http://host.docker.internal:8787/api/v1/workflow-callbacks/n8n"
    npx convex env set SOCIETYER_WORKFLOW_PDF_FILL_URL "http://host.docker.internal:8787/api/v1/workflow-pdf/unbc-affiliate-id/fill"
    ```
@@ -25,6 +26,7 @@
 4. Open n8n at `http://127.0.0.1:5678`.
 5. Import `integrations/n8n/unbc-affiliate-id.workflow.json`.
    Import `integrations/n8n/unbc-key-access-request.workflow.json` as well for the Facilities key/access form.
+   Import `integrations/n8n/ote-individual-access-request.workflow.json` for the Over the Edge individual access workflow.
 6. Activate the imported workflow.
 7. In Societyer, create the `UNBC Affiliate ID Request` workflow and open its canvas.
 
@@ -35,6 +37,12 @@ because n8n runs inside Docker on local macOS.
 On n8n 2.16, the active production webhook for this imported workflow is
 registered under the published workflow path, so the UNBC path is:
 `societyer-unbc-affiliate-id/societyer%2520webhook/societyer/unbc-affiliate-id`.
+
+The Over the Edge individual access workflow defaults to n8n and posts selected
+director/volunteer/employee intake to:
+`societyer-ote-individual-access-request/societyer%2520webhook/societyer/ote-individual-access-request`.
+That n8n workflow calls Societyer's callback endpoint with `run.completed`; the
+Outbox draft is then queued by Societyer from the configured Email node.
 
 The UNBC PDF file is intentionally not committed. The local template path is
 read from `UNBC_AFFILIATE_TEMPLATE_PATH`.

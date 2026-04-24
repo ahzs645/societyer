@@ -10,8 +10,8 @@ import { Badge, Drawer, Field } from "../components/ui";
 import { Tabs } from "../components/primitives";
 import { formatDate, formatDateTime } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ClipboardCheck, Download, ExternalLink, Eye, EyeOff, FileDown, FileText, PackageCheck, Printer, Settings2 } from "lucide-react";
-import type { Motion } from "../components/MotionEditor";
+import { ArrowLeft, ClipboardCheck, Download, ExternalLink, Eye, EyeOff, FileDown, FileText, Gavel, PackageCheck, Printer, Settings2 } from "lucide-react";
+import { MotionEditor, type Motion } from "../components/MotionEditor";
 import {
   MINUTES_EXPORT_STYLES,
   MinutesExportStyleId,
@@ -55,7 +55,7 @@ import {
 } from "../features/meetings/lib/structuredMinutes";
 
 const MINUTES_EXPORT_PREF_PREFIX = "societyer.minutesExport.";
-type MeetingDetailTab = "overview" | "minutes" | "package" | "export" | "sources";
+type MeetingDetailTab = "overview" | "minutes" | "motions" | "package" | "export" | "sources";
 
 function readStoredMinutesStyle(): MinutesExportStyleId {
   if (typeof window === "undefined") return "numbered-agenda";
@@ -116,6 +116,8 @@ export function MeetingDetailPage() {
   const backfillMeetingQuorum = useMutation(api.meetings.backfillQuorumSnapshot);
   const updateMinutes = useMutation(api.minutes.update);
   const backfillMinutesQuorum = useMutation(api.minutes.backfillQuorumSnapshot);
+  const createBacklogFromMinutesMotion = useMutation(api.motionBacklog.createFromMinutesMotion);
+  const createBacklogFromMinutesSection = useMutation(api.motionBacklog.createFromMinutesSection);
   const saveTranscriptText = useMutation(api.transcripts.saveText);
   const importVtt = useMutation(api.transcripts.importVtt);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
@@ -551,6 +553,29 @@ export function MeetingDetailPage() {
   const saveMotions = (next: Motion[]) =>
     minutes ? updateMinutes({ id: minutes._id, patch: { motions: next } }) : undefined;
 
+  const saveMinuteSections = (next: any[]) =>
+    minutes ? updateMinutes({ id: minutes._id, patch: { sections: next } }) : undefined;
+
+  const addMotionToBacklog = async (_motion: Motion, motionIndex: number) => {
+    if (!minutes) return;
+    const result = await createBacklogFromMinutesMotion({
+      minutesId: minutes._id,
+      motionIndex,
+    });
+    toast.success(result.reused ? "Motion already in backlog" : "Motion added to backlog");
+  };
+
+  const addSectionToBacklog = async (section: any) => {
+    if (!minutes) return;
+    const sectionIndex = (minutes.sections ?? []).findIndex((candidate: any) => candidate === section);
+    if (sectionIndex < 0) return;
+    const result = await createBacklogFromMinutesSection({
+      minutesId: minutes._id,
+      sectionIndex,
+    });
+    toast.success(result.reused ? "Agenda item already in backlog" : "Agenda item added to backlog");
+  };
+
   const saveAgenda = async () => {
     const next = parseLines(agendaEdit ?? "");
     await updateMeeting({
@@ -853,7 +878,8 @@ export function MeetingDetailPage() {
         onChange={setActiveTab}
         items={[
           { id: "overview", label: "Overview", icon: <ClipboardCheck size={12} /> },
-          { id: "minutes", label: "Minutes", count: minutes?.motions.length ?? 0, icon: <FileText size={12} /> },
+          { id: "minutes", label: "Minutes", icon: <FileText size={12} /> },
+          { id: "motions", label: "Motions", count: minutes?.motions.length ?? 0, icon: <Gavel size={12} /> },
           { id: "package", label: "Package", count: packageMaterials.length, icon: <PackageCheck size={12} /> },
           { id: "export", label: "Export", icon: <Settings2 size={12} /> },
           { id: "sources", label: "Sources", count: linkedSourceCount, icon: <Download size={12} /> },
@@ -978,15 +1004,47 @@ export function MeetingDetailPage() {
             quorumLegalGuides={quorumLegalGuides}
             members={members}
             directors={directors}
-            directorNames={directorNames}
-            motionPeople={motionPeople}
-            saveMotions={saveMotions}
+            saveMinuteSections={saveMinuteSections}
+            addSectionToBacklog={addSectionToBacklog}
             transcript={transcript}
             setTranscript={setTranscript}
             transcriptOnFile={transcriptOnFile}
             busy={busy}
             runGenerate={runGenerate}
           />
+        )}
+
+        {activeTab === "motions" && (
+          <div className="card">
+            <div className="card__head">
+              <h2 className="card__title">
+                <Gavel size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+                Motions
+              </h2>
+              {minutes?.motions?.length ? (
+                <span className="card__subtitle">
+                  {minutes.motions.filter((motion: any) => motion.outcome === "Carried").length} carried
+                  {" / "}
+                  {minutes.motions.filter((motion: any) => motion.outcome === "Defeated").length} defeated
+                  {" / "}
+                  {minutes.motions.filter((motion: any) => motion.outcome === "Tabled").length} tabled
+                </span>
+              ) : null}
+            </div>
+            <div className="card__body">
+              {minutes ? (
+                <MotionEditor
+                  motions={minutes.motions as Motion[]}
+                  directorNames={directorNames}
+                  people={motionPeople}
+                  onChange={saveMotions}
+                  onAddToBacklog={addMotionToBacklog}
+                />
+              ) : (
+                <div className="muted">Create minutes before recording motions.</div>
+              )}
+            </div>
+          </div>
         )}
 
         {activeTab === "package" && (

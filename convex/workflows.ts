@@ -158,7 +158,7 @@ const RECIPE_DESCRIPTIONS: Record<RecipeKey, string> = {
   unbc_key_access_request:
     "Collects key/access request intake, fills the UNBC Facilities PDF, and stages the generated request for review.",
   ote_keycard_access_request:
-    "Creates the Over the Edge Facilities keycard email draft to add and remove board member access.",
+    "Sends an Over the Edge individual access request through n8n, then queues the Facilities email draft.",
 };
 
 const RECIPE_PROVIDERS: Record<RecipeKey, WorkflowProvider> = {
@@ -167,7 +167,7 @@ const RECIPE_PROVIDERS: Record<RecipeKey, WorkflowProvider> = {
   annual_report_filing: "internal",
   unbc_affiliate_id_request: "n8n",
   unbc_key_access_request: "n8n",
-  ote_keycard_access_request: "internal",
+  ote_keycard_access_request: "n8n",
 };
 
 const RECIPE_STEPS: Record<RecipeKey, RecipeStep[]> = {
@@ -205,7 +205,7 @@ const RECIPE_STEPS: Record<RecipeKey, RecipeStep[]> = {
   ],
   ote_keycard_access_request: [
     { key: "manual", label: "Launch manually" },
-    { key: "access_change", label: "Confirm board access change" },
+    { key: "access_change", label: "Select individual for access" },
     { key: "facilities_email", label: "Queue Facilities email draft" },
   ],
 };
@@ -1749,6 +1749,10 @@ export const run = action({
 });
 
 async function runExternalWorkflow(ctx: any, wf: any, runId: any, args: any) {
+  if (wf.recipe === "ote_keycard_access_request" || wf.config?.workflowTemplateKey === "ote_keycard_access_request") {
+    return await runExternalNotificationWorkflow(ctx, wf, runId, args);
+  }
+
   const webhookUrl = wf.providerConfig?.externalWebhookUrl;
   const callbackSecret = env("SOCIETYER_WORKFLOW_CALLBACK_SECRET");
   const callbackUrl =
@@ -1848,6 +1852,116 @@ async function runExternalWorkflow(ctx: any, wf: any, runId: any, args: any) {
       severity: "info",
       title: `Workflow queued in n8n: ${wf.name}`,
       body: "Societyer is waiting for n8n callbacks to update the run timeline.",
+      linkHref: "/app/workflow-runs",
+    });
+    return { runId, status: "running", externalRunId };
+  } catch (err: any) {
+    await ctx.runMutation(internal.workflows._completeRun, {
+      id: runId,
+      status: "failed",
+      output: { error: err?.message ?? "unknown" },
+    });
+    await ctx.runMutation(api.notifications.create, {
+      societyId: args.societyId,
+      kind: "bot",
+      severity: "err",
+      title: `Workflow failed: ${wf.name}`,
+      body: err?.message ?? "Unknown error",
+      linkHref: "/app/workflow-runs",
+    });
+    throw err;
+  }
+}
+
+async function runExternalNotificationWorkflow(ctx: any, wf: any, runId: any, args: any) {
+  const webhookUrl = wf.providerConfig?.externalWebhookUrl;
+  const callbackSecret = env("SOCIETYER_WORKFLOW_CALLBACK_SECRET");
+  const callbackUrl =
+    env("SOCIETYER_WORKFLOW_CALLBACK_URL") ??
+    "http://host.docker.internal:8787/api/v1/workflow-callbacks/n8n";
+
+  try {
+    if (!webhookUrl) {
+      throw new Error("n8n webhook URL is missing. Set N8N_WEBHOOK_BASE_URL or add providerConfig.externalWebhookUrl.");
+    }
+    if (!callbackSecret) {
+      throw new Error("SOCIETYER_WORKFLOW_CALLBACK_SECRET is missing.");
+    }
+
+    await ctx.runMutation(internal.workflows._updateStep, {
+      id: runId,
+      stepIndex: 0,
+      status: "ok",
+      note: "Manual launch accepted by Societyer.",
+    });
+    await ctx.runMutation(internal.workflows._updateStep, {
+      id: runId,
+      stepIndex: 1,
+      status: "ok",
+      note: "Individual access payload prepared for n8n.",
+    });
+    await ctx.runMutation(internal.workflows._updateStep, {
+      id: runId,
+      stepIndex: 2,
+      status: "running",
+      note: "Waiting for n8n to confirm the Facilities email draft.",
+    });
+
+    const rawIntake = normalizeWorkflowRunInput(wf, args.input);
+    const emailDraft = await buildExternalEmailDraft(ctx, wf, runId, args, rawIntake);
+    const payload = {
+      workflowId: args.workflowId,
+      runId,
+      societyId: args.societyId,
+      recipe: wf.recipe,
+      callbackUrl,
+      callbackSecret,
+      input: {
+        intake: rawIntake,
+        fieldValues: rawIntake,
+        emailDraft,
+      },
+    };
+
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(`n8n webhook returned ${response.status}: ${text.slice(0, 240)}`);
+    }
+    const responseJson = safeJson(text);
+    const externalRunId =
+      responseJson?.executionId ??
+      responseJson?.id ??
+      responseJson?.data?.executionId ??
+      undefined;
+
+    await ctx.runMutation(internal.workflows._markExternalQueued, {
+      id: runId,
+      externalRunId,
+      externalStatus: "webhook.accepted",
+      output: {
+        intake: rawIntake,
+        fieldValues: rawIntake,
+        emailDraft,
+        n8n: {
+          webhookUrl,
+          response: responseJson ?? text.slice(0, 400),
+        },
+      },
+    });
+    await ctx.runMutation(internal.workflows._touchSchedule, {
+      id: args.workflowId,
+    });
+    await ctx.runMutation(api.notifications.create, {
+      societyId: args.societyId,
+      kind: "bot",
+      severity: "info",
+      title: `Workflow queued in n8n: ${wf.name}`,
+      body: "Societyer is waiting for n8n to confirm the Facilities email draft.",
       linkHref: "/app/workflow-runs",
     });
     return { runId, status: "running", externalRunId };
@@ -2005,21 +2119,31 @@ function configForRecipe(recipe: RecipeKey) {
 }
 
 function providerConfigForRecipe(recipe: RecipeKey) {
-  if (recipe !== "unbc_affiliate_id_request" && recipe !== "unbc_key_access_request") return undefined;
+  if (
+    recipe !== "unbc_affiliate_id_request" &&
+    recipe !== "unbc_key_access_request" &&
+    recipe !== "ote_keycard_access_request"
+  ) return undefined;
   const base = env("N8N_WEBHOOK_BASE_URL") ?? "http://127.0.0.1:5678/webhook";
   const webhookPath =
     recipe === "unbc_key_access_request"
       ? env("N8N_UNBC_KEY_REQUEST_WEBHOOK_PATH") ??
         "societyer-unbc-key-access-request/societyer%2520webhook/societyer/unbc-key-access-request"
+      : recipe === "ote_keycard_access_request"
+        ? env("N8N_OTE_KEYCARD_WEBHOOK_PATH") ??
+          "societyer-ote-individual-access-request/societyer%2520webhook/societyer/ote-individual-access-request"
       : env("N8N_UNBC_AFFILIATE_WEBHOOK_PATH") ??
         "societyer-unbc-affiliate-id/societyer%2520webhook/societyer/unbc-affiliate-id";
   const externalEditUrl = env("N8N_BASE_URL")
     ? `${env("N8N_BASE_URL")}/workflow`
     : "http://127.0.0.1:5678/workflow";
   return {
-    externalWorkflowId: recipe === "unbc_key_access_request"
-      ? "societyer-unbc-key-access-request"
-      : "societyer-unbc-affiliate-id",
+    externalWorkflowId:
+      recipe === "unbc_key_access_request"
+        ? "societyer-unbc-key-access-request"
+        : recipe === "ote_keycard_access_request"
+          ? "societyer-ote-individual-access-request"
+          : "societyer-unbc-affiliate-id",
     externalWebhookUrl: `${base.replace(/\/$/, "")}/${webhookPath}`,
     externalEditUrl,
   };
@@ -2261,6 +2385,51 @@ function findFillPdfNode(wf: any) {
 function findWorkflowNode(wf: any, type: string) {
   const nodes = Array.isArray(wf?.nodePreview) ? wf.nodePreview : [];
   return nodes.find((n: any) => n?.type === type);
+}
+
+async function buildExternalEmailDraft(ctx: any, wf: any, runId: any, args: any, intake: Record<string, any>) {
+  const actor = args.actingUserId ? await ctx.runQuery(api.users.get, { id: args.actingUserId }) : null;
+  const emailNode = findWorkflowNode(wf, "email");
+  const cfg = effectiveEmailConfig(emailNode?.config ?? {}, wf.config ?? {});
+  const templateContext = {
+    today: new Date().toISOString().slice(0, 10),
+    workflow: {
+      id: String(wf?._id ?? ""),
+      name: wf?.name ?? "",
+      recipe: wf?.recipe ?? "",
+    },
+    run: {
+      id: String(runId ?? ""),
+      status: "running",
+      startedAtISO: "",
+      completedAtISO: "",
+    },
+    currentUser: {
+      name: actor?.displayName ?? "",
+      email: actor?.email ?? "",
+    },
+    intake,
+    fieldValues: intake,
+    document: {
+      title: "",
+      fileName: "",
+      category: "",
+    },
+  };
+  const subjectTemplate =
+    typeof cfg.subject === "string" && cfg.subject.length > 0
+      ? cfg.subject
+      : emailNode?.label ?? "Workflow notification";
+  return {
+    fromName: typeof cfg.fromName === "string" ? renderWorkflowTemplate(cfg.fromName, templateContext).trim() : undefined,
+    fromEmail: typeof cfg.fromEmail === "string" ? renderWorkflowTemplate(cfg.fromEmail, templateContext).trim() : undefined,
+    replyTo: typeof cfg.replyTo === "string" ? renderWorkflowTemplate(cfg.replyTo, templateContext).trim() : undefined,
+    to: typeof cfg.to === "string" ? renderWorkflowTemplate(cfg.to, templateContext).trim() : "",
+    cc: typeof cfg.cc === "string" ? renderWorkflowTemplate(cfg.cc, templateContext).trim() : undefined,
+    bcc: typeof cfg.bcc === "string" ? renderWorkflowTemplate(cfg.bcc, templateContext).trim() : undefined,
+    subject: renderWorkflowTemplate(subjectTemplate, templateContext).trim(),
+    body: renderWorkflowTemplate(typeof cfg.body === "string" ? cfg.body : "", templateContext),
+  };
 }
 
 async function buildWorkflowTemplateContext(ctx: any, wf: any, run: any, extra: Record<string, any> = {}) {

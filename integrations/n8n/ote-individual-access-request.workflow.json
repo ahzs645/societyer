@@ -1,0 +1,91 @@
+{
+  "id": "societyer-ote-individual-access-request",
+  "name": "Societyer - OTE Individual Access Request",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "societyer/ote-individual-access-request",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Societyer Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-560, 0]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "draft-summary",
+              "name": "summary",
+              "type": "string",
+              "value": "={{`Facilities draft prepared for ${$json.body.input.intake.access_person_name || 'selected individual'}`}}"
+            },
+            {
+              "id": "email-draft",
+              "name": "emailDraft",
+              "type": "object",
+              "value": "={{$json.body.input.emailDraft}}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "prepare-draft",
+      "name": "Prepare Facilities Draft",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-320, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Societyer Webhook').item.json.body.callbackUrl}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-societyer-workflow-secret",
+              "value": "={{$('Societyer Webhook').item.json.body.callbackSecret}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({ workflowId: $('Societyer Webhook').item.json.body.workflowId, runId: $('Societyer Webhook').item.json.body.runId, event: 'run.completed', stepKey: 'facilities_email', note: $json.summary || 'n8n confirmed the OTE Facilities email draft.', output: { engine: 'n8n', emailDraft: $('Societyer Webhook').item.json.body.input.emailDraft } })}}",
+        "options": {}
+      },
+      "id": "callback-run-complete",
+      "name": "Callback Run Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-80, 0]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Societyer Webhook": {
+      "main": [[{ "node": "Prepare Facilities Draft", "type": "main", "index": 0 }]]
+    },
+    "Prepare Facilities Draft": {
+      "main": [[{ "node": "Callback Run Complete", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "societyer-ote-individual-access-request-v1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

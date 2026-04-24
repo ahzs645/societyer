@@ -226,105 +226,132 @@ export function OrganizationDetailsPage() {
         }
       />
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card__head">
-          <h2 className="card__title">Statutory profile</h2>
-          <span className="card__subtitle">Stable registry facts used across filings and workflows.</span>
-        </div>
-        <div className="card__body">
-          <div className="grid two">
-            <OptionSelect label="Entity type" setName="entityTypes" value={profile.entityType ?? ""} onChange={(value) => set("entityType", value)} emptyLabel="No entity type" />
-            <OptionSelect label="Act formed under" setName="actsFormedUnder" value={profile.actFormedUnder ?? ""} onChange={(value) => set("actFormedUnder", value)} emptyLabel="No act selected" />
-            <Field label="Official email">
-              <input className="input" value={profile.officialEmail ?? ""} onChange={(e) => set("officialEmail", e.target.value)} />
-            </Field>
-            <OptionSelect label="Organization status" setName="organizationStatuses" value={profile.organizationStatus ?? ""} onChange={(value) => set("organizationStatus", value)} emptyLabel="No status" />
-            <Field label="Continuance date">
-              <DatePicker value={profile.continuanceDate ?? ""} onChange={(value) => set("continuanceDate", value)} />
-            </Field>
-            <Field label="Amalgamation date">
-              <DatePicker value={profile.amalgamationDate ?? ""} onChange={(value) => set("amalgamationDate", value)} />
-            </Field>
-            <Field label="Archived date">
-              <DatePicker value={profile.archivedAtISO ?? ""} onChange={(value) => set("archivedAtISO", value)} />
-            </Field>
-            <Field label="Removed date">
-              <DatePicker value={profile.removedAtISO ?? ""} onChange={(value) => set("removedAtISO", value)} />
-            </Field>
-            <Field label="NAICS code">
-              <input className="input" value={profile.naicsCode ?? ""} onChange={(e) => set("naicsCode", e.target.value)} />
-            </Field>
-            <Field label="Nice classification">
-              <input className="input" value={profile.niceClassification ?? ""} onChange={(e) => set("niceClassification", e.target.value)} />
-            </Field>
+      <div className="org-details-top">
+        <div className="card">
+          <div className="card__head">
+            <h2 className="card__title">Registry profile</h2>
+            <span className="card__subtitle">Stable facts used across filings and workflows.</span>
           </div>
-          <div className="row" style={{ gap: 24, marginTop: 12 }}>
-            <Toggle checked={!!profile.numbered} onChange={(value) => set("numbered", value)} label="Numbered entity" />
-            <Toggle checked={!!profile.distributing} onChange={(value) => set("distributing", value)} label="Distributing" />
-            <Toggle checked={!!profile.solicitingPublicBenefit} onChange={(value) => set("solicitingPublicBenefit", value)} label="Soliciting / public benefit" />
+          <div className="card__body">
+            <div className="org-details-field-grid">
+              <OptionSelect label="Entity type" setName="entityTypes" value={profile.entityType ?? ""} onChange={(value) => set("entityType", value)} emptyLabel="No entity type" />
+              <OptionSelect label="Act formed under" setName="actsFormedUnder" value={profile.actFormedUnder ?? ""} onChange={(value) => set("actFormedUnder", value)} emptyLabel="No act selected" />
+              <Field label="Official email">
+                <input className="input" value={profile.officialEmail ?? ""} onChange={(e) => set("officialEmail", e.target.value)} />
+              </Field>
+              <OptionSelect label="Organization status" setName="organizationStatuses" value={profile.organizationStatus ?? ""} onChange={(value) => set("organizationStatus", value)} emptyLabel="No status" />
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card__head">
+            <h2 className="card__title">Lifecycle dates</h2>
+            <span className="card__subtitle">Registry timeline events.</span>
+          </div>
+          <div className="card__body">
+            <div className="org-details-field-grid">
+              <Field label="Continuance date">
+                <DatePicker value={profile.continuanceDate ?? ""} onChange={(value) => set("continuanceDate", value)} />
+              </Field>
+              <Field label="Amalgamation date">
+                <DatePicker value={profile.amalgamationDate ?? ""} onChange={(value) => set("amalgamationDate", value)} />
+              </Field>
+              <Field label="Archived date">
+                <DatePicker value={profile.archivedAtISO ?? ""} onChange={(value) => set("archivedAtISO", value)} />
+              </Field>
+              <Field label="Removed date">
+                <DatePicker value={profile.removedAtISO ?? ""} onChange={(value) => set("removedAtISO", value)} />
+              </Field>
+            </div>
+          </div>
+        </div>
+
+        <div className="card org-details-classification-card">
+          <div className="card__head">
+            <h2 className="card__title">Classification and flags</h2>
+          </div>
+          <div className="card__body">
+            <div className="org-details-field-grid">
+              <Field label="NAICS code">
+                <input className="input" value={profile.naicsCode ?? ""} onChange={(e) => set("naicsCode", e.target.value)} />
+              </Field>
+              <Field label="Nice classification">
+                <input className="input" value={profile.niceClassification ?? ""} onChange={(e) => set("niceClassification", e.target.value)} />
+              </Field>
+            </div>
+            <div className="org-details-toggle-row">
+              <Toggle checked={!!profile.numbered} onChange={(value) => set("numbered", value)} label="Numbered entity" />
+              <Toggle checked={!!profile.distributing} onChange={(value) => set("distributing", value)} label="Distributing" />
+              <Toggle checked={!!profile.solicitingPublicBenefit} onChange={(value) => set("solicitingPublicBenefit", value)} label="Soliciting / public benefit" />
+            </div>
           </div>
         </div>
       </div>
 
-      <DetailSection
-        icon={<MapPin size={14} />}
-        title="Structured addresses"
-        count={detail?.addresses?.length ?? 0}
-        action={<button className="btn-action btn-action--primary" onClick={() => openNew("address")}><Plus size={12} /> Address</button>}
-      >
-        <SimpleTable
-          rows={detail?.addresses ?? []}
-          empty="No structured addresses yet."
-          columns={["Type", "Status", "Address", "Effective", ""]}
-          render={(row: any) => [
-            optionLabel("addressTypes", row.type),
-            <Badge key="s" tone={row.status === "current" ? "success" : "neutral"}>{optionLabel("addressStatuses", row.status)}</Badge>,
-            addressLine(row),
-            dateRange(row.effectiveFrom, row.effectiveTo),
-            <RowActions key="a" onEdit={() => { setDrawerKind("address"); setDraft(row); }} onRemove={() => removeRow("address", row)} />,
-          ]}
-        />
-      </DetailSection>
+      <div className="org-detail-registers">
+        <DetailSection
+          icon={<MapPin size={14} />}
+          title="Structured addresses"
+          count={detail?.addresses?.length ?? 0}
+          action={<button className="btn-action btn-action--primary" onClick={() => openNew("address")}><Plus size={12} /> Address</button>}
+        >
+          <SimpleTable
+            rows={detail?.addresses ?? []}
+            empty="No structured addresses yet."
+            columns={["Type", "Status", "Address", "Effective", ""]}
+            render={(row: any) => [
+              optionLabel("addressTypes", row.type),
+              <Badge key="s" tone={row.status === "current" ? "success" : "neutral"}>{optionLabel("addressStatuses", row.status)}</Badge>,
+              addressLine(row),
+              dateRange(row.effectiveFrom, row.effectiveTo),
+              <RowActions key="a" onEdit={() => { setDrawerKind("address"); setDraft(row); }} onRemove={() => removeRow("address", row)} />,
+            ]}
+          />
+        </DetailSection>
 
-      <DetailSection
-        icon={<Landmark size={14} />}
-        title="Registration records"
-        count={detail?.registrations?.length ?? 0}
-        action={<button className="btn-action btn-action--primary" onClick={() => openNew("registration")}><Plus size={12} /> Registration</button>}
-      >
-        <SimpleTable
-          rows={detail?.registrations ?? []}
-          empty="No external or extra-provincial registrations yet."
-          columns={["Jurisdiction", "Registration", "Dates", "Status", ""]}
-          render={(row: any) => [
-            optionLabel("entityJurisdictions", row.jurisdiction),
-            <div key="r"><strong>{row.assumedName || "Legal name"}</strong><div className="mono muted">{row.registrationNumber ?? "No number"}{row.nuansNumber ? ` · NUANS ${row.nuansNumber}` : ""}</div></div>,
-            dateRange(row.registrationDate, row.deRegistrationDate || row.activityCommencementDate),
-            <Badge key="s" tone={row.status === "active" ? "success" : "warn"}>{optionLabel("registrationStatuses", row.status)}</Badge>,
-            <RowActions key="a" onEdit={() => { setDrawerKind("registration"); setDraft({ ...row, representativeIdsText: (row.representativeIds ?? []).join(", ") }); }} onRemove={() => removeRow("registration", row)} />,
-          ]}
-        />
-      </DetailSection>
+        <div className="org-detail-registers__pair">
+          <DetailSection
+            icon={<Landmark size={14} />}
+            title="Registration records"
+            count={detail?.registrations?.length ?? 0}
+            action={<button className="btn-action btn-action--primary" onClick={() => openNew("registration")}><Plus size={12} /> Registration</button>}
+          >
+            <SimpleTable
+              rows={detail?.registrations ?? []}
+              empty="No external or extra-provincial registrations yet."
+              columns={["Jurisdiction", "Registration", "Dates", "Status", ""]}
+              render={(row: any) => [
+                optionLabel("entityJurisdictions", row.jurisdiction),
+                <div key="r"><strong>{row.assumedName || "Legal name"}</strong><div className="mono muted">{row.registrationNumber ?? "No number"}{row.nuansNumber ? ` · NUANS ${row.nuansNumber}` : ""}</div></div>,
+                dateRange(row.registrationDate, row.deRegistrationDate || row.activityCommencementDate),
+                <Badge key="s" tone={row.status === "active" ? "success" : "warn"}>{optionLabel("registrationStatuses", row.status)}</Badge>,
+                <RowActions key="a" onEdit={() => { setDrawerKind("registration"); setDraft({ ...row, representativeIdsText: (row.representativeIds ?? []).join(", ") }); }} onRemove={() => removeRow("registration", row)} />,
+              ]}
+            />
+          </DetailSection>
 
-      <DetailSection
-        icon={<KeyRound size={14} />}
-        title="Tax and registry identifiers"
-        count={detail?.identifiers?.length ?? 0}
-        action={<button className="btn-action btn-action--primary" onClick={() => openNew("identifier")}><Plus size={12} /> Identifier</button>}
-      >
-        <SimpleTable
-          rows={detail?.identifiers ?? []}
-          empty="No tax or registry identifiers yet."
-          columns={["Kind", "Number", "Jurisdiction", "Status", ""]}
-          render={(row: any) => [
-            optionLabel("taxNumberTypes", row.kind),
-            <span key="n" className="mono">{row.accessLevel === "restricted" ? mask(row.number) : row.number}</span>,
-            row.foreignJurisdiction || row.jurisdiction || "-",
-            <Badge key="s" tone={row.accessLevel === "restricted" ? "danger" : row.status === "active" ? "success" : "warn"}>{optionLabel("identifierStatuses", row.status)}</Badge>,
-            <RowActions key="a" onEdit={() => { setDrawerKind("identifier"); setDraft(row); }} onRemove={() => removeRow("identifier", row)} />,
-          ]}
-        />
-      </DetailSection>
+          <DetailSection
+            icon={<KeyRound size={14} />}
+            title="Tax and registry identifiers"
+            count={detail?.identifiers?.length ?? 0}
+            action={<button className="btn-action btn-action--primary" onClick={() => openNew("identifier")}><Plus size={12} /> Identifier</button>}
+          >
+            <SimpleTable
+              rows={detail?.identifiers ?? []}
+              empty="No tax or registry identifiers yet."
+              columns={["Kind", "Number", "Jurisdiction", "Status", ""]}
+              render={(row: any) => [
+                optionLabel("taxNumberTypes", row.kind),
+                <span key="n" className="mono">{row.accessLevel === "restricted" ? mask(row.number) : row.number}</span>,
+                row.foreignJurisdiction || row.jurisdiction || "-",
+                <Badge key="s" tone={row.accessLevel === "restricted" ? "danger" : row.status === "active" ? "success" : "warn"}>{optionLabel("identifierStatuses", row.status)}</Badge>,
+                <RowActions key="a" onEdit={() => { setDrawerKind("identifier"); setDraft(row); }} onRemove={() => removeRow("identifier", row)} />,
+              ]}
+            />
+          </DetailSection>
+        </div>
+      </div>
 
       <Drawer
         open={!!drawerKind}
@@ -347,7 +374,7 @@ export function OrganizationDetailsPage() {
 
 function DetailSection({ icon, title, count, action, children }: any) {
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
+    <div className="card org-detail-section">
       <div className="card__head">
         <div className="row" style={{ gap: 8 }}>
           {icon}

@@ -140,12 +140,14 @@ export function MotionEditor({
   onChange,
   directorNames,
   people = [],
+  onAddToBacklog,
 }: {
   motions: Motion[];
   onChange: (next: Motion[]) => void;
   /** Director full names used to autofill movedBy/secondedBy. */
   directorNames: string[];
   people?: MotionPerson[];
+  onAddToBacklog?: (motion: Motion, index: number) => void | Promise<void>;
 }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<Motion>({ text: "", outcome: "Pending" });
@@ -191,6 +193,7 @@ export function MotionEditor({
           onPatch={(diff) => patch(i, diff)}
           onBumpVote={(k, d) => bumpVote(i, k, d)}
           onDelete={() => onChange(motions.filter((_, j) => j !== i))}
+          onAddToBacklog={onAddToBacklog ? () => onAddToBacklog(m, i) : undefined}
         />
       ))}
 
@@ -292,6 +295,7 @@ function MotionRow({
   onPatch,
   onBumpVote,
   onDelete,
+  onAddToBacklog,
 }: {
   motion: Motion;
   listId: string;
@@ -300,6 +304,7 @@ function MotionRow({
   onPatch: (diff: Partial<Motion>) => void;
   onBumpVote: (k: "votesFor" | "votesAgainst" | "abstentions", d: number) => void;
   onDelete: () => void;
+  onAddToBacklog?: () => void | Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -377,6 +382,11 @@ function MotionRow({
             </div>
           )}
           <div className="row" style={{ gap: 4 }}>
+            {onAddToBacklog && /^(Tabled|Deferred)$/i.test(motion.outcome) && (
+              <button className="btn-action" onClick={onAddToBacklog}>
+                Add to backlog
+              </button>
+            )}
             <button className="btn-action" onClick={() => setExpanded((v) => !v)}>
               {expanded ? "Done" : isPending ? "Record vote" : "Edit"}
             </button>

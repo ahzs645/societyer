@@ -809,6 +809,82 @@
   .society-bottom { gap: var(--s-3); }
 }
 
+/* ---- Organization details page -----------------------------------------
+ * Keep the registry dossier scannable by grouping fields into compact cards,
+ * then treat detail tables as a register area instead of independent stripes. */
+
+.org-details-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.85fr);
+  gap: var(--s-4);
+  align-items: start;
+}
+.org-details-top > * {
+  min-width: 0;
+}
+.org-details-classification-card {
+  grid-column: 1 / -1;
+}
+.org-details-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+  align-items: start;
+}
+.org-details-field-grid > * {
+  min-width: 0;
+}
+.org-details-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-5);
+  align-items: center;
+  margin-top: var(--s-3);
+}
+.org-detail-registers {
+  display: grid;
+  gap: var(--s-4);
+  margin-top: var(--s-4);
+}
+.org-detail-registers__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s-4);
+  align-items: start;
+}
+.org-detail-section {
+  min-width: 0;
+}
+.org-detail-section .card__head > .btn-action {
+  margin-left: auto;
+}
+.org-detail-section .table {
+  table-layout: fixed;
+}
+.org-detail-section .table th,
+.org-detail-section .table td {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1100px) {
+  .org-details-top,
+  .org-detail-registers__pair {
+    grid-template-columns: 1fr;
+  }
+  .org-details-classification-card {
+    grid-column: auto;
+  }
+}
+@media (max-width: 760px) {
+  .org-details-top,
+  .org-detail-registers,
+  .org-detail-registers__pair {
+    gap: var(--s-3);
+  }
+  .org-details-field-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---- Settings page ----------------------------------------------------
  * Pair compact sibling cards side-by-side on desktop (Language +
  * Appearance, Authentication + Convex deployment) so they don't each own

@@ -107,6 +107,115 @@ export const remove = mutation({
   },
 });
 
+export const createFromMinutesMotion = mutation({
+  args: {
+    minutesId: v.id("minutes"),
+    motionIndex: v.number(),
+    title: v.optional(v.string()),
+    category: v.optional(v.string()),
+    priority: v.optional(v.string()),
+    notes: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const minutes = await ctx.db.get(args.minutesId);
+    if (!minutes) throw new Error("Minutes not found.");
+    const motion = Array.isArray(minutes.motions) ? minutes.motions[args.motionIndex] : undefined;
+    if (!motion?.text) throw new Error("Motion not found.");
+
+    const existing = await ctx.db
+      .query("motionBacklog")
+      .withIndex("by_society", (q) => q.eq("societyId", minutes.societyId))
+      .collect();
+    const duplicate = existing.find((item) =>
+      String(item.sourceMinutesId ?? "") === String(args.minutesId) &&
+      item.sourceMotionIndex === args.motionIndex
+    );
+    if (duplicate) return { backlogId: duplicate._id, reused: true };
+
+    const meeting = await ctx.db.get(minutes.meetingId);
+    const now = new Date().toISOString();
+    const backlogId = await ctx.db.insert("motionBacklog", {
+      societyId: minutes.societyId,
+      title: args.title?.trim() || summarizeMotionTitle(motion.text),
+      motionText: motion.text,
+      category: args.category ?? "governance",
+      status: "Deferred",
+      priority: args.priority ?? "normal",
+      source: "minutes-motion",
+      notes: [
+        meeting ? `Carried forward from ${meeting.title}.` : "Carried forward from meeting minutes.",
+        motion.outcome ? `Recorded outcome: ${motion.outcome}.` : "",
+        args.notes,
+      ].filter(Boolean).join(" "),
+      minutesId: args.minutesId,
+      sourceMinutesId: args.minutesId,
+      sourceMotionIndex: args.motionIndex,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    return { backlogId, reused: false };
+  },
+});
+
+export const createFromMinutesSection = mutation({
+  args: {
+    minutesId: v.id("minutes"),
+    sectionIndex: v.number(),
+    title: v.optional(v.string()),
+    motionText: v.optional(v.string()),
+    category: v.optional(v.string()),
+    priority: v.optional(v.string()),
+    notes: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const minutes = await ctx.db.get(args.minutesId);
+    if (!minutes) throw new Error("Minutes not found.");
+    const section = Array.isArray(minutes.sections) ? minutes.sections[args.sectionIndex] : undefined;
+    if (!section?.title) throw new Error("Minutes section not found.");
+
+    const existing = await ctx.db
+      .query("motionBacklog")
+      .withIndex("by_society", (q) => q.eq("societyId", minutes.societyId))
+      .collect();
+    const duplicate = existing.find((item) =>
+      String(item.sourceMinutesId ?? "") === String(args.minutesId) &&
+      item.sourceSectionIndex === args.sectionIndex
+    );
+    if (duplicate) return { backlogId: duplicate._id, reused: true };
+
+    const meeting = await ctx.db.get(minutes.meetingId);
+    const now = new Date().toISOString();
+    const sectionNotes = [
+      section.discussion,
+      ...(section.decisions ?? []).map((decision: string) => `Decision: ${decision}`),
+      ...(section.actionItems ?? []).map((item: any) => `Action: ${item.assignee ? `${item.assignee}: ` : ""}${item.text}`),
+    ].filter(Boolean).join(" ");
+    const title = args.title?.trim() || section.title;
+    const backlogId = await ctx.db.insert("motionBacklog", {
+      societyId: minutes.societyId,
+      title,
+      motionText: args.motionText?.trim() || `Discuss and decide next steps for ${title}.`,
+      category: args.category ?? "governance",
+      status: "Deferred",
+      priority: args.priority ?? "normal",
+      source: "minutes-section",
+      notes: [
+        meeting ? `Carried forward from ${meeting.title}.` : "Carried forward from meeting minutes.",
+        sectionNotes,
+        args.notes,
+      ].filter(Boolean).join(" "),
+      minutesId: args.minutesId,
+      sourceMinutesId: args.minutesId,
+      sourceSectionIndex: args.sectionIndex,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    return { backlogId, reused: false };
+  },
+});
+
 export const seedPipaSetup = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
@@ -273,4 +382,12 @@ function comparableMotionText(value: unknown) {
     .replace(/\s+/g, " ")
     .replace(/\b(be it resolved that|resolved that|motion to|motion)\b[:\s-]*/gi, "")
     .trim();
+}
+
+function summarizeMotionTitle(value: unknown) {
+  const text = comparableMotionText(value)
+    .replace(/^(approve|adopt|authorize|accept|confirm)\s+/i, "")
+    .trim();
+  if (!text) return "Deferred motion";
+  return text.length > 72 ? `${text.slice(0, 69).trim()}...` : text.charAt(0).toUpperCase() + text.slice(1);
 }

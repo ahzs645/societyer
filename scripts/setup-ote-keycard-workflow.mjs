@@ -1,6 +1,7 @@
 // One-shot local setup for the Over the Edge keycard access workflow.
-// It creates/reuses the OTE Facilities workflow and, by default, runs it
-// once to queue a Facilities email draft for one director/volunteer/employee.
+// It creates/reuses the OTE Facilities workflow with n8n as the execution
+// provider. By default it runs once, which requires the n8n workflow to be
+// imported and active; pass --workflow-only to only configure Societyer.
 //
 // Run: npm run setup:ote-keycard
 //      npm run setup:ote-keycard -- --workflow-only
@@ -61,7 +62,8 @@ if (!workflow) {
       recipe: RECIPE,
       name: WORKFLOW_NAME,
       status: "active",
-      provider: "internal",
+      provider: "n8n",
+      providerConfig: providerConfigForOte(),
       trigger: { kind: "manual" },
       actingUserId: actor._id,
     });
@@ -78,7 +80,8 @@ if (!workflow) {
       patch: {
         name: WORKFLOW_NAME,
         status: "active",
-        provider: "internal",
+        provider: "n8n",
+        providerConfig: providerConfigForOte(),
         trigger: { kind: "manual" },
         nodePreview: sanitizeNodePreview(recipe.nodePreview),
         config: recipe.config,
@@ -254,4 +257,19 @@ function sanitizeNodePreview(nodes) {
     ...(node.status ? { status: node.status } : {}),
     ...(node.config ? { config: node.config } : {}),
   }));
+}
+
+function providerConfigForOte() {
+  const base = process.env.N8N_WEBHOOK_BASE_URL ?? "http://127.0.0.1:5678/webhook";
+  const webhookPath =
+    process.env.N8N_OTE_KEYCARD_WEBHOOK_PATH ??
+    "societyer-ote-individual-access-request/societyer%2520webhook/societyer/ote-individual-access-request";
+  const externalEditUrl = process.env.N8N_BASE_URL
+    ? `${process.env.N8N_BASE_URL.replace(/\/$/, "")}/workflow`
+    : "http://127.0.0.1:5678/workflow";
+  return {
+    externalWorkflowId: "societyer-ote-individual-access-request",
+    externalWebhookUrl: `${base.replace(/\/$/, "")}/${webhookPath}`,
+    externalEditUrl,
+  };
 }
