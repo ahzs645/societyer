@@ -28,6 +28,7 @@ import { exportWordDoc, escapeHtml } from "../lib/exportWord";
 
 // Word-level diff reused from BylawDiff (inline so we don't couple the pages)
 type Chunk = { kind: "same" | "add" | "del"; text: string };
+const MAX_EXACT_DIFF_CELLS = 2_500_000;
 
 function tokenize(s: string): string[] {
   return s.match(/(\s+|[\wÀ-ÿ]+|[^\s\w])/g) ?? [];
@@ -56,25 +57,87 @@ function diff(oldTokens: string[], newTokens: string[]): Chunk[] {
   return chunks;
 }
 
-function countDiff(oldText: string, newText: string): { adds: number; dels: number } {
-  const chunks = diff(tokenize(oldText), tokenize(newText));
-  let adds = 0, dels = 0;
-  for (const c of chunks) {
-    if (c.kind === "add") adds += c.text.trim() ? 1 : 0;
-    if (c.kind === "del") dels += c.text.trim() ? 1 : 0;
-  }
-  return { adds, dels };
+function wordCount(text: string): number {
+  return text.match(/[\wÀ-ÿ]+/g)?.length ?? 0;
+}
+
+function textChangeSummary(oldText: string, newText: string): string {
+  const oldWords = wordCount(oldText);
+  const newWords = wordCount(newText);
+  const delta = newWords - oldWords;
+  if (delta === 0) return `${newWords.toLocaleString()} words`;
+  return `${newWords.toLocaleString()} words (${delta > 0 ? "+" : ""}${delta.toLocaleString()})`;
 }
 
 function DiffView({ oldText, newText }: { oldText: string; newText: string }) {
-  const chunks = useMemo(() => diff(tokenize(oldText), tokenize(newText)), [oldText, newText]);
+  const diffState = useMemo(() => {
+    const oldTokens = tokenize(oldText);
+    const newTokens = tokenize(newText);
+    if (oldTokens.length * newTokens.length > MAX_EXACT_DIFF_CELLS) {
+      return { tooLarge: true as const, oldWords: wordCount(oldText), newWords: wordCount(newText), chunks: [], adds: 0, dels: 0 };
+    }
+    const chunks = diff(oldTokens, newTokens);
+    let adds = 0, dels = 0;
+    for (const c of chunks) {
+      if (c.kind === "add") adds += c.text.trim() ? 1 : 0;
+      if (c.kind === "del") dels += c.text.trim() ? 1 : 0;
+    }
+    return { tooLarge: false as const, oldWords: 0, newWords: 0, chunks, adds, dels };
+  }, [oldText, newText]);
+
+  if (diffState.tooLarge) {
+    return (
+      <div className="col" style={{ gap: 12 }}>
+        <Banner tone="warn" title="Exact redline skipped">
+          This bylaws version is too large for the in-browser word diff. Use the current text export or split the amendment into smaller sections to review the exact redline.
+        </Banner>
+        <div className="row" style={{ gap: 12, alignItems: "stretch", flexWrap: "wrap" }}>
+          <TextSnapshot title={`Before (${diffState.oldWords.toLocaleString()} words)`} text={oldText} />
+          <TextSnapshot title={`After (${diffState.newWords.toLocaleString()} words)`} text={newText} />
+        </div>
+      </div>
+    );
+  }
+
+  const chunks = diffState.chunks;
   return (
-    <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6, fontSize: "var(--fs-md)" }}>
-      {chunks.map((c, i) => {
-        if (c.kind === "same") return <span key={i}>{c.text}</span>;
-        if (c.kind === "add") return <span key={i} style={{ background: "#d4f4dd", color: "#0a5e32" }}>{c.text}</span>;
-        return <span key={i} style={{ background: "#fde1e6", color: "#9b1c3a", textDecoration: "line-through" }}>{c.text}</span>;
-      })}
+    <>
+      <div className="muted" style={{ marginBottom: 8, fontSize: "var(--fs-sm)" }}>
+        <span style={{ color: "var(--success)" }}>+{diffState.adds}</span>{" "}
+        <span style={{ color: "var(--danger)" }}>−{diffState.dels}</span>{" "}
+        words changed
+      </div>
+      <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6, fontSize: "var(--fs-md)" }}>
+        {chunks.map((c, i) => {
+          if (c.kind === "same") return <span key={i}>{c.text}</span>;
+          if (c.kind === "add") return <span key={i} style={{ background: "#d4f4dd", color: "#0a5e32" }}>{c.text}</span>;
+          return <span key={i} style={{ background: "#fde1e6", color: "#9b1c3a", textDecoration: "line-through" }}>{c.text}</span>;
+        })}
+      </div>
+    </>
+  );
+}
+
+function TextSnapshot({ title, text }: { title: string; text: string }) {
+  return (
+    <div style={{ flex: "1 1 320px", minWidth: 0 }}>
+      <div className="muted" style={{ marginBottom: 6, fontSize: "var(--fs-sm)" }}>{title}</div>
+      <pre
+        style={{
+          margin: 0,
+          maxHeight: 420,
+          overflow: "auto",
+          whiteSpace: "pre-wrap",
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--fs-sm)",
+          background: "var(--bg-subtle)",
+          padding: 12,
+          borderRadius: 6,
+          lineHeight: 1.5,
+        }}
+      >
+        {text}
+      </pre>
     </div>
   );
 }
@@ -347,7 +410,6 @@ export function BylawsHistoryPage() {
               <div className="timeline-vertical">
                 {filed.map((a: any, i: number) => {
                   const isExpanded = expanded.has(a._id);
-                  const stats = countDiff(a.baseText, a.proposedText);
                   return (
                     <div className="timeline-vertical__item" key={a._id}>
                       <span className="timeline-vertical__dot" style={{ borderColor: "var(--success)", background: "var(--success)" }} />
@@ -366,9 +428,7 @@ export function BylawsHistoryPage() {
                         <strong>{a.title}</strong>
                       </div>
                       <div className="timeline-vertical__desc">
-                        <span style={{ color: "var(--success)" }}>+{stats.adds}</span>{" "}
-                        <span style={{ color: "var(--danger)" }}>−{stats.dels}</span>{" "}
-                        words changed · consultation {a.consultationStartedAtISO ? formatDate(a.consultationStartedAtISO) : "—"} → resolution {a.resolutionPassedAtISO ? formatDate(a.resolutionPassedAtISO) : "—"}
+                        {textChangeSummary(a.baseText, a.proposedText)} · consultation {a.consultationStartedAtISO ? formatDate(a.consultationStartedAtISO) : "—"} → resolution {a.resolutionPassedAtISO ? formatDate(a.resolutionPassedAtISO) : "—"}
                       </div>
                       <div className="row" style={{ marginTop: 8, gap: 4 }}>
                         <button

@@ -131,6 +131,39 @@ export const connectors: ConnectorManifest[] = [
       ],
     },
   },
+  {
+    id: "gcos",
+    name: "GCOS",
+    category: "Government funding",
+    description: "User-authorized Grants and Contributions Online Services project snapshot exports.",
+    auth: {
+      startUrl: "https://www.canada.ca/en/employment-social-development/services/funding/gcos.html",
+      allowedOrigins: ["https://www.canada.ca", "https://srv136.services.gc.ca"],
+      profileKeyPrefix: "gcos",
+      confirmMode: "profile",
+    },
+    actions: [
+      {
+        id: "exportProjects",
+        name: "Export projects",
+        description: "Read the GCOS Applications and Projects page and return project cards, statuses, and action URLs.",
+      },
+      {
+        id: "exportProjectSnapshot",
+        name: "Export project snapshot",
+        description: "Read a selected GCOS project, including summary, approved values, agreement metadata, and correspondence.",
+      },
+    ],
+    utility: {
+      title: "GCOS grant import",
+      description: "Collect ESDC/GCOS project records from the signed-in browser without submitting forms.",
+      steps: [
+        "Open GCOS in the live browser and finish GCKey or Sign-In Partner login.",
+        "Run Project list to confirm the Applications and Projects page is available.",
+        "Run Project snapshot for a selected project while the live browser remains signed in.",
+      ],
+    },
+  },
 ];
 
 export function getConnectorManifest(connectorId: string) {
@@ -176,6 +209,30 @@ const bcRegistryFilingHistoryProfileSchema = bcRegistryFilingHistorySchema.exten
   profileKey: z.string().min(1),
 });
 
+export const gcosExportProjectsSchema = z.object({
+  search: z.string().optional(),
+  pageSize: z.number().int().min(0).max(250).default(0),
+  maxPages: z.number().int().min(1).max(25).default(10),
+});
+
+export type GcosExportProjectsInput = z.infer<typeof gcosExportProjectsSchema>;
+
+const gcosExportProjectsProfileSchema = gcosExportProjectsSchema.extend({
+  profileKey: z.string().min(1),
+});
+
+export const gcosProjectSnapshotSchema = z.object({
+  projectId: z.string().min(1).optional(),
+  programCode: z.string().min(1).optional(),
+  includeAgreementPdfs: z.boolean().default(false),
+});
+
+export type GcosProjectSnapshotInput = z.infer<typeof gcosProjectSnapshotSchema>;
+
+const gcosProjectSnapshotProfileSchema = gcosProjectSnapshotSchema.extend({
+  profileKey: z.string().min(1),
+});
+
 export type WaveNormalizedAccount = {
   externalId: string;
   name: string;
@@ -201,6 +258,7 @@ export type WaveNormalizedTransaction = {
 
 const WAVE_CONNECTOR = requireConnectorManifest("wave");
 const BC_REGISTRY_CONNECTOR = requireConnectorManifest("bc-registry");
+const GCOS_CONNECTOR = requireConnectorManifest("gcos");
 const WAVE_GQL_ENDPOINT = "https://gql.waveapps.com/graphql/internal";
 
 const WAVE_TRANSACTIONS_QUERY = `
@@ -1234,6 +1292,404 @@ async function downloadBcRegistryDocuments(page: Page, extracted: any) {
   };
 }
 
+function gcosProjectIdFromUrl(url: string) {
+  try {
+    return new URL(url).pathname.match(/\/Project\/Project\/(?:Display|Manage|Agreement|Correspondence|ViewDocument)\/([^/?#]+)/i)?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+function gcosProgramCodeFromUrl(url: string) {
+  try {
+    return new URL(url).pathname.match(/\/OSR\/pro\/([^/?#]+)/i)?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+async function assertGcosAuthenticated(page: Page) {
+  const url = page.url();
+  const bodyText = await page.locator("body").innerText({ timeout: 5_000 }).catch(() => "");
+  if (
+    /\/auth|gckey|sign-?in|login|credential|banque|bank/i.test(url)
+    || /Sign in with GCKey|Sign in with your bank|Welcome to GCKey|session has expired|Start with GCKey/i.test(bodyText)
+  ) {
+    throw new ConnectorActionError(
+      401,
+      "reauth_required",
+      "GCOS login is not complete or the session expired. Finish login in the live browser, then run the GCOS export again.",
+    );
+  }
+}
+
+async function openGcosPage(page: Page, pathOrUrl: string) {
+  const target = pathOrUrl.startsWith("http")
+    ? pathOrUrl
+    : `https://srv136.services.gc.ca${pathOrUrl}`;
+  await page.goto(target, { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
+  await assertGcosAuthenticated(page);
+}
+
+async function readGcosPage(page: Page, pathOrUrl: string) {
+  await openGcosPage(page, pathOrUrl);
+  return await page.evaluate(`(() => {
+    const clean = (value) => String(value ?? "").replace(/\\s+/g, " ").trim();
+    const pageText = clean(document.body?.innerText);
+    const hidden = {};
+    for (const input of document.querySelectorAll("input[type=hidden][name]")) {
+      const name = input.getAttribute("name");
+      if (name) hidden[name] = input.value ?? "";
+    }
+    const screenIdentifier = clean(document.querySelector("#screenIdentifier, [name=ScreenIdentifier], [id*=ScreenIdentifier]")?.textContent)
+      || hidden.ScreenIdentifier
+      || hidden.screenIdentifier
+      || "";
+    const fields = [];
+    const addField = (label, value, name, id) => {
+      const normalizedLabel = clean(label).replace(/[:*]+$/, "").trim();
+      const normalizedValue = clean(value);
+      if (!normalizedLabel || !normalizedValue) return;
+      if (/social insurance|\\bSIN\\b|account number|direct deposit|bank/i.test(normalizedLabel)) return;
+      fields.push({ label: normalizedLabel, value: normalizedValue, name: name || undefined, id: id || undefined });
+    };
+    for (const input of document.querySelectorAll("input, textarea, select")) {
+      const element = input;
+      const type = (element.getAttribute("type") || "").toLowerCase();
+      const name = element.getAttribute("name") || "";
+      const id = element.getAttribute("id") || "";
+      if (type === "hidden" || type === "password" || /sin|accountnumber|bank|directdeposit/i.test(name + " " + id)) continue;
+      const label = id ? document.querySelector(\`label[for="\${CSS.escape(id)}"]\`)?.textContent : "";
+      let value = "";
+      if (element.tagName === "SELECT") {
+        value = element.options?.[element.selectedIndex]?.textContent || element.value || "";
+      } else if (type === "checkbox" || type === "radio") {
+        if (!element.checked) continue;
+        value = document.querySelector(\`label[for="\${CSS.escape(id)}"]\`)?.textContent || element.value || "Selected";
+      } else {
+        value = element.value || "";
+      }
+      addField(label || name || id, value, name, id);
+    }
+    for (const row of document.querySelectorAll("dt, th, .control-label, label, strong")) {
+      const label = clean(row.textContent);
+      const sibling = row.nextElementSibling;
+      if (sibling) addField(label, sibling.textContent, undefined, sibling.id || undefined);
+    }
+    const links = [...document.querySelectorAll("a[href]")].map((link) => ({
+      text: clean(link.textContent),
+      href: new URL(link.getAttribute("href"), location.origin).href,
+    })).filter((link) => link.text || link.href);
+    return {
+      url: location.href,
+      title: document.title,
+      screenIdentifier,
+      hidden,
+      fields,
+      links,
+      text: pageText.slice(0, 20000),
+    };
+  })()`);
+}
+
+function gcosExtractMoneyCents(value: unknown) {
+  const text = String(value ?? "");
+  const match = text.replace(/,/g, "").match(/-?\$?\s*(\d+(?:\.\d{1,2})?)/);
+  if (!match) return undefined;
+  return Math.round(Number(match[1]) * 100);
+}
+
+function gcosExtractDate(value: unknown) {
+  const text = String(value ?? "");
+  const iso = text.match(/\b(20\d{2}-\d{2}-\d{2})\b/)?.[1];
+  if (iso) return iso;
+  const parsed = Date.parse(text);
+  if (Number.isNaN(parsed)) return undefined;
+  return new Date(parsed).toISOString().slice(0, 10);
+}
+
+function gcosFieldValue(pageData: any, patterns: RegExp[]) {
+  const fields = Array.isArray(pageData?.fields) ? pageData.fields : [];
+  const found = fields.find((field: any) => patterns.some((pattern) => pattern.test(String(field.label ?? ""))));
+  return found?.value;
+}
+
+function normalizeGcosSnapshot(snapshot: any) {
+  const summary = snapshot.summary ?? {};
+  const approved = snapshot.approvedJobs ?? {};
+  const projectNumber = gcosFieldValue(summary, [/project number/i, /tracking number/i]);
+  const title = gcosFieldValue(summary, [/project title/i]) ?? snapshot.project?.title ?? "GCOS project";
+  const cfpTitle = gcosFieldValue(summary, [/cfp title/i, /call for proposal/i]) ?? "ESDC GCOS";
+  const requested = gcosExtractMoneyCents(gcosFieldValue(summary, [/total contribution.*esdc/i, /amount requested/i, /requested/i]));
+  const awarded = gcosExtractMoneyCents(gcosFieldValue(approved, [/total contribution.*esdc/i, /approved/i, /contribution.*esdc/i]));
+  const startDate = gcosExtractDate(gcosFieldValue(summary, [/start date/i]));
+  const endDate = gcosExtractDate(gcosFieldValue(summary, [/end date/i]));
+  return {
+    title,
+    funder: "Employment and Social Development Canada",
+    program: cfpTitle,
+    status: /closed/i.test(String(snapshot.project?.status ?? "")) ? "Closed" : /active|agreement|approved/i.test(String(snapshot.project?.status ?? "")) ? "Active" : "Submitted",
+    amountRequestedCents: requested,
+    amountAwardedCents: awarded,
+    startDate,
+    endDate,
+    confirmationCode: projectNumber,
+    sourceExternalIds: [
+      snapshot.projectId ? `gcos:project:${snapshot.projectId}` : undefined,
+      projectNumber ? `gcos:project-number:${projectNumber}` : undefined,
+    ].filter(Boolean),
+    opportunityUrl: snapshot.currentUrl,
+    keyFacts: [
+      projectNumber ? `Project number: ${projectNumber}` : undefined,
+      snapshot.projectId ? `GCOS project ID: ${snapshot.projectId}` : undefined,
+      snapshot.programCode ? `Program code: ${snapshot.programCode}` : undefined,
+      awarded != null && requested != null ? `Approved/requested delta: $${((awarded - requested) / 100).toFixed(2)}` : undefined,
+    ].filter(Boolean),
+    sourceNotes: "Imported from a read-only GCOS browser connector snapshot. Sensitive employee and banking fields are intentionally excluded.",
+  };
+}
+
+export async function runGcosExportProjects(page: Page, input: GcosExportProjectsInput) {
+  await openGcosPage(page, "/OSR/pro/Project");
+  const extracted: any = await page.evaluate(`(() => {
+    const clean = (value) => String(value ?? "").replace(/\\s+/g, " ").trim();
+    const cards = [...document.querySelectorAll("#containerResult article, #containerResult .panel, #containerResult .card, article, .panel, .card")];
+    const containers = cards.length ? cards : [...document.querySelectorAll("tr, li")];
+    const seen = new Set();
+    const projects = [];
+    for (const container of containers) {
+      const text = clean(container.textContent);
+      const links = [...container.querySelectorAll("a[href]")].map((link) => ({
+        text: clean(link.textContent),
+        href: new URL(link.getAttribute("href"), location.origin).href,
+      }));
+      const id = links.map((link) => link.href).join(" ").match(/\\/Project\\/Project\\/(?:Display|Manage|Agreement|Correspondence|ViewDocument)\\/([^/?#]+)/i)?.[1];
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      const fields = {};
+      for (const line of text.split(/\\n+/).map(clean).filter(Boolean)) {
+        const match = line.match(/^([^:]{2,80}):\\s*(.+)$/);
+        if (match) fields[clean(match[1])] = clean(match[2]);
+      }
+      const title = links.find((link) => /display|view application/i.test(link.href + " " + link.text))?.text
+        || text.split(/\\n+/).map(clean).filter(Boolean)[0]
+        || \`GCOS project \${id}\`;
+      const actionUrl = (kind) => links.find((link) => new RegExp(\`/Project/Project/\${kind}/\`, "i").test(link.href))?.href;
+      projects.push({
+        projectId: id,
+        title,
+        status: Object.entries(fields).find(([key]) => /status/i.test(key))?.[1],
+        trackingNumber: Object.entries(fields).find(([key]) => /tracking|project number/i.test(key))?.[1],
+        fields,
+        urls: {
+          display: actionUrl("Display"),
+          manage: actionUrl("Manage"),
+          agreement: actionUrl("Agreement"),
+          correspondence: actionUrl("Correspondence"),
+          documents: actionUrl("ViewDocument"),
+        },
+        text: text.slice(0, 4000),
+      });
+    }
+    return {
+      currentUrl: location.href,
+      title: document.title,
+      projectCount: projects.length,
+      projects,
+    };
+  })()`);
+  if (!extracted.projectCount && /canada\.ca/.test(page.url())) {
+    throw new ConnectorActionError(
+      401,
+      "gcos_project_list_not_open",
+      "GCOS did not open the Applications and Projects page. Use the live browser to sign in and open GCOS, then run the export again.",
+    );
+  }
+  return {
+    ...extracted,
+    resultLog: [{
+      level: "info",
+      step: "collect",
+      message: "Collected GCOS project rows from the authenticated browser page.",
+      projectCount: extracted.projectCount,
+      timestampISO: new Date().toISOString(),
+    }],
+  };
+}
+
+export async function runGcosProjectSnapshot(page: Page, input: GcosProjectSnapshotInput) {
+  const resultLog: Array<Record<string, unknown>> = [];
+  const projectId = input.projectId?.trim() || gcosProjectIdFromUrl(page.url());
+  if (projectId) {
+    await openGcosPage(page, `/OSR/pro/Project/Project/Display/${encodeURIComponent(projectId)}`);
+  } else {
+    await assertGcosAuthenticated(page);
+  }
+  const programCode = input.programCode?.trim() || gcosProgramCodeFromUrl(page.url());
+  if (!programCode || /^Project|Agreement|DD|EED|DocumentBundle|GCOS$/i.test(programCode)) {
+    throw new ConnectorActionError(
+      422,
+      "gcos_program_not_detected",
+      "Open a GCOS project application page or provide projectId/programCode before exporting a project snapshot.",
+    );
+  }
+
+  resultLog.push({
+    level: "info",
+    step: "open",
+    message: "Opened GCOS project application.",
+    projectId,
+    programCode,
+    currentUrl: page.url(),
+    timestampISO: new Date().toISOString(),
+  });
+
+  const landing: any = await readGcosPage(page, `/OSR/pro/${encodeURIComponent(programCode)}`);
+  const summary: any = await readGcosPage(page, `/OSR/pro/${encodeURIComponent(programCode)}/Summary/Summary`).catch((error: any) => ({
+    error: error?.message ?? "Summary page unavailable.",
+  }));
+  const approvedJobs: any = await readGcosPage(page, `/OSR/pro/${encodeURIComponent(programCode)}/JobDetails/IndexApproved`).catch((error: any) => ({
+    error: error?.message ?? "Approved job details unavailable.",
+  }));
+  const agreement: any = await readGcosPage(page, "/OSR/pro/Agreement").catch((error: any) => ({
+    error: error?.message ?? "Agreement page unavailable.",
+  }));
+  const correspondence: any = await readGcosPage(page, "/OSR/pro/Project/Correspondence").catch((error: any) => ({
+    error: error?.message ?? "Correspondence page unavailable.",
+  }));
+  const eed: any = await readGcosPage(page, "/OSR/pro/EED").catch((error: any) => ({
+    error: error?.message ?? "EED page unavailable.",
+  }));
+  const documents: any = await readGcosPage(page, "/OSR/pro/DocumentBundle").catch((error: any) => ({
+    error: error?.message ?? "Supporting documents page unavailable.",
+  }));
+
+  const agreementLinks = Array.isArray(agreement?.links)
+    ? agreement.links.filter((link: any) => /OpenDocument\/\d+/i.test(String(link.href)) && /IsAgreement=True/i.test(String(link.href)))
+    : [];
+  const correspondenceLinks = Array.isArray(correspondence?.links)
+    ? correspondence.links.filter((link: any) => /ViewCorrespondence\/\d+/i.test(String(link.href)))
+    : [];
+  const correspondenceBodies = [];
+  for (const link of correspondenceLinks.slice(0, 20)) {
+    correspondenceBodies.push(await readGcosPage(page, link.href).catch((error: any) => ({
+      url: link.href,
+      error: error?.message ?? "Correspondence body unavailable.",
+    })));
+  }
+
+  const downloadedAgreementPdfs = input.includeAgreementPdfs
+    ? await downloadGcosAgreementDocuments(page, agreementLinks)
+    : undefined;
+
+  const snapshot = {
+    projectId,
+    programCode,
+    currentUrl: page.url(),
+    exportedAtISO: new Date().toISOString(),
+    project: {
+      title: gcosFieldValue(summary, [/project title/i]) ?? gcosFieldValue(landing, [/project title/i]),
+      status: gcosFieldValue(landing, [/status/i]),
+    },
+    landing,
+    summary,
+    approvedJobs,
+    agreement: {
+      ...agreement,
+      agreementLinks,
+      downloadedAgreementPdfs,
+    },
+    correspondence: {
+      ...correspondence,
+      viewLinks: correspondenceLinks,
+      bodies: correspondenceBodies,
+    },
+    eed,
+    documents,
+  };
+
+  resultLog.push({
+    level: "info",
+    step: "collect",
+    message: "Collected GCOS project snapshot pages.",
+    agreementCount: agreementLinks.length,
+    correspondenceCount: correspondenceLinks.length,
+    timestampISO: new Date().toISOString(),
+  });
+
+  return {
+    ...snapshot,
+    normalizedGrant: normalizeGcosSnapshot(snapshot),
+    resultLog,
+  };
+}
+
+async function downloadGcosAgreementDocuments(page: Page, links: Array<{ href: string; text?: string }>) {
+  const exportRoot = process.env.CONNECTOR_EXPORT_DIR ?? "/tmp/societyer-browser-exports";
+  const exportPublicRoot = process.env.CONNECTOR_EXPORT_PUBLIC_DIR;
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const folderName = `gcos-agreements-${stamp}`;
+  const exportDirectory = path.join(exportRoot, folderName);
+  await fs.mkdir(exportDirectory, { recursive: true });
+  const files = [];
+  for (const link of links) {
+    const documentId = String(link.href).match(/OpenDocument\/(\d+)/i)?.[1] ?? "agreement";
+    const filename = safeExportFilename(`gcos_agreement_${documentId}.pdf`);
+    const filePath = path.join(exportDirectory, filename);
+    try {
+      const browserFetch: any = await page.evaluate(`(async () => {
+        const response = await fetch(${JSON.stringify(link.href)}, {
+          credentials: "include",
+          headers: { accept: "application/pdf,application/octet-stream,*/*" },
+        });
+        const buffer = await response.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = "";
+        const chunkSize = 0x8000;
+        for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+          binary += String.fromCharCode(...bytes.slice(offset, offset + chunkSize));
+        }
+        return {
+          status: response.status,
+          contentType: response.headers.get("content-type"),
+          byteLength: bytes.byteLength,
+          startsWithPdf: new TextDecoder().decode(bytes.slice(0, 8)).startsWith("%PDF"),
+          base64: btoa(binary),
+        };
+      })()`);
+      if (!browserFetch.startsWithPdf) {
+        throw new Error(`Agreement download did not return a PDF (${browserFetch.contentType ?? "unknown content type"}).`);
+      }
+      await fs.writeFile(filePath, Buffer.from(browserFetch.base64, "base64"));
+      files.push({
+        status: "ok",
+        documentId,
+        filename,
+        path: filePath,
+        publicPath: exportPublicRoot ? path.posix.join(exportPublicRoot, folderName, filename) : undefined,
+        byteLength: browserFetch.byteLength,
+        contentType: browserFetch.contentType,
+      });
+    } catch (error: any) {
+      files.push({
+        status: "error",
+        documentId,
+        filename,
+        url: link.href,
+        error: error?.message ?? "Agreement PDF download failed.",
+      });
+    }
+  }
+  return {
+    exportDirectory,
+    exportPublicDirectory: exportPublicRoot ? path.posix.join(exportPublicRoot, folderName) : undefined,
+    downloadedCount: files.filter((file) => file.status === "ok").length,
+    failedCount: files.filter((file) => file.status !== "ok").length,
+    files,
+  };
+}
+
 export const connectorProviders: ConnectorProvider[] = [
   {
     manifest: WAVE_CONNECTOR,
@@ -1259,6 +1715,21 @@ export const connectorProviders: ConnectorProvider[] = [
         inputSchema: bcRegistryFilingHistoryProfileSchema,
         activeInputSchema: bcRegistryFilingHistorySchema,
         run: (page, input) => runBcRegistryFilingHistoryExport(page, input),
+      },
+    },
+  },
+  {
+    manifest: GCOS_CONNECTOR,
+    actions: {
+      exportProjects: {
+        inputSchema: gcosExportProjectsProfileSchema,
+        activeInputSchema: gcosExportProjectsSchema,
+        run: (page, input) => runGcosExportProjects(page, input),
+      },
+      exportProjectSnapshot: {
+        inputSchema: gcosProjectSnapshotProfileSchema,
+        activeInputSchema: gcosProjectSnapshotSchema,
+        run: (page, input) => runGcosProjectSnapshot(page, input),
       },
     },
   },

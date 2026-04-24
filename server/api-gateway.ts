@@ -881,6 +881,53 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
   );
 
   router.post(
+    "/browser-connectors/connectors/gcos/auth/sessions/:sessionId/import-project-snapshot",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      const sessionId = encodeURIComponent(String(req.params.sessionId));
+      const body = stripActor(req.body ?? {});
+      const runnerOutput: any = await connectorRunnerRequest(
+        "POST",
+        `/connectors/gcos/auth/sessions/${sessionId}/actions/exportProjectSnapshot`,
+        body,
+      );
+      if (!runnerOutput?.normalizedGrant) {
+        throw httpError(502, "connector_import_invalid", "GCOS connector did not return a normalized grant snapshot.");
+      }
+      const importResult = await convexCall(client, mutation("grants.importGcosProjectSnapshot"), {
+        societyId: societyIdFrom(req, req.actor!),
+        normalizedGrant: runnerOutput.normalizedGrant,
+        snapshot: runnerOutput,
+        actingUserId: req.actor?.userId,
+      });
+      res.json(singleResponse({ ...runnerOutput, import: importResult }));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/connectors/gcos/import-project-snapshot",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      const body = stripActor(req.body ?? {});
+      const runnerOutput: any = await connectorRunnerRequest(
+        "POST",
+        "/connectors/gcos/actions/exportProjectSnapshot",
+        body,
+      );
+      if (!runnerOutput?.normalizedGrant) {
+        throw httpError(502, "connector_import_invalid", "GCOS connector did not return a normalized grant snapshot.");
+      }
+      const importResult = await convexCall(client, mutation("grants.importGcosProjectSnapshot"), {
+        societyId: societyIdFrom(req, req.actor!),
+        normalizedGrant: runnerOutput.normalizedGrant,
+        snapshot: runnerOutput,
+        actingUserId: req.actor?.userId,
+      });
+      res.json(singleResponse({ ...runnerOutput, import: importResult }));
+    }),
+  );
+
+  router.post(
     "/browser-connectors/connectors/:connectorId/actions/:actionId",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {

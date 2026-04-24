@@ -538,6 +538,21 @@
 }
 .motion__text { font-weight: 500; margin-bottom: 4px; }
 .motion__meta { font-size: var(--fs-sm); color: var(--text-tertiary); display: flex; gap: var(--s-3); flex-wrap: wrap; }
+.motion-adjournment {
+  display: grid;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
+}
+.motion-adjournment__head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  align-items: center;
+}
 .meeting-minutes-layout {
   display: grid;
   grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
@@ -551,10 +566,14 @@
   position: sticky;
   top: var(--s-4);
 }
+.meeting-minutes-agenda-card .card__body {
+  display: grid;
+  gap: var(--s-3);
+}
 .meeting-minutes-agenda-list {
   display: grid;
   gap: 6px;
-  max-height: 620px;
+  max-height: 360px;
   margin: 0;
   padding-left: 28px;
   overflow: auto;
@@ -579,8 +598,13 @@
 .meeting-minutes-agenda-link:hover,
 .meeting-minutes-agenda-link.is-active {
   color: var(--text-primary);
+}
+.meeting-minutes-agenda-link:hover {
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+.meeting-minutes-agenda-link.is-active {
+  font-weight: 700;
 }
 .meeting-minutes-main,
 .meeting-minutes-primary,
@@ -594,6 +618,9 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--s-3);
   align-items: start;
+}
+.meeting-minutes-overview-grid--single {
+  grid-template-columns: 1fr;
 }
 .minutes-section--panel {
   min-width: 0;
@@ -637,6 +664,12 @@
   max-height: 180px;
   margin: 0 var(--s-3) var(--s-3);
 }
+.meeting-minutes-narrative--agenda {
+  margin: 0;
+}
+.meeting-minutes-narrative--agenda .meeting-minutes-discussion {
+  max-height: 220px;
+}
 .meeting-minutes-section-list {
   display: grid;
   gap: var(--s-3);
@@ -676,11 +709,17 @@
   transform: rotate(180deg);
 }
 .meeting-minutes-section-item__meta {
-  display: flex;
-  gap: var(--s-1);
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  display: none;
   flex: 0 1 auto;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  line-height: 1.35;
+  text-align: right;
+  white-space: nowrap;
+}
+.meeting-minutes-section-item:hover .meeting-minutes-section-item__meta,
+.meeting-minutes-section-item:focus-within .meeting-minutes-section-item__meta {
+  display: block;
 }
 .meeting-minutes-section-item__body {
   display: grid;
@@ -715,9 +754,12 @@
   gap: var(--s-1);
 }
 .meeting-minutes-section-actions {
-  display: flex;
+  display: grid;
   gap: var(--s-1);
-  flex-wrap: wrap;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
 }
 .meeting-minutes-section-motions {
   display: grid;
@@ -733,14 +775,169 @@
   font-size: var(--fs-sm);
 }
 .meeting-minutes-section-motion__meta {
-  display: flex;
-  gap: var(--s-1);
-  flex-wrap: wrap;
   color: var(--text-tertiary);
 }
 .meeting-minutes-section-editor {
   display: grid;
   gap: var(--s-3);
+}
+.meeting-minutes-section-editor__top {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(140px, 0.7fr) minmax(160px, 0.9fr);
+  gap: var(--s-3);
+  align-items: start;
+}
+.meeting-minutes-section-editor__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.82fr);
+  gap: var(--s-3);
+  align-items: start;
+}
+.meeting-minutes-section-editor__tabs {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
+  overflow-x: auto;
+}
+.meeting-minutes-section-editor-tab {
+  min-height: 30px;
+  padding: 0 var(--s-3);
+  border: 0;
+  border-radius: calc(var(--r-sm) - 2px);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.meeting-minutes-section-editor-tab.is-active {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-xs);
+}
+.meeting-minutes-section-editor__panel {
+  display: grid;
+  gap: var(--s-3);
+}
+.meeting-minutes-section-editor__note-options {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s-3);
+  align-items: end;
+}
+.meeting-minutes-section-editor__side-fields {
+  display: grid;
+  gap: var(--s-3);
+}
+.meeting-minutes-markdown-preview {
+  min-height: 190px;
+  max-height: 300px;
+  overflow: auto;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-base);
+}
+.meeting-minutes-markdown-preview__label {
+  margin-bottom: var(--s-2);
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.meeting-minutes-section-markdown {
+  display: grid;
+  gap: var(--s-2);
+}
+.meeting-minutes-section-markdown h4,
+.meeting-minutes-section-markdown h5,
+.meeting-minutes-markdown-preview h4,
+.meeting-minutes-markdown-preview h5 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+}
+.meeting-minutes-section-markdown ul ul,
+.meeting-minutes-markdown-preview ul ul {
+  margin-top: var(--s-1);
+}
+.meeting-minutes-motion-assignment {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-base);
+}
+.meeting-minutes-motion-assignment__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+.meeting-minutes-motion-assignment__list {
+  display: grid;
+  gap: var(--s-2);
+}
+.meeting-minutes-motion-assignment__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  gap: var(--s-2);
+  align-items: start;
+  padding: var(--s-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
+}
+.meeting-minutes-motion-assignment__row.is-current {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.meeting-minutes-motion-assignment__text {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+}
+.meeting-minutes-motion-assignment__text span {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+}
+.meeting-minutes-motion-picklist {
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
+}
+.meeting-minutes-motion-picklist summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+.meeting-minutes-motion-picklist .meeting-minutes-motion-assignment__list {
+  margin-top: var(--s-2);
+}
+.meeting-minutes-action-editor {
+  display: grid;
+  gap: var(--s-2);
+}
+.meeting-minutes-action-editor__row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(140px, 0.5fr) minmax(120px, 0.35fr) auto auto;
+  gap: var(--s-2);
+  align-items: end;
+  padding: var(--s-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-base);
 }
 .meeting-minutes-compact-list {
   display: grid;
@@ -760,8 +957,27 @@
   align-items: flex-start;
   padding: var(--s-2) 0;
 }
+.action-list--compact .action-item__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.action-item__context {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  line-height: 1.35;
+}
 @media (max-width: 1180px) {
   .meeting-minutes-content-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .meeting-minutes-section-editor__grid,
+  .meeting-minutes-section-editor__note-options,
+  .meeting-minutes-action-editor__row,
+  .meeting-minutes-section-editor__top,
+  .meeting-minutes-motion-assignment__row {
     grid-template-columns: 1fr;
   }
 }
@@ -1779,6 +1995,32 @@
 }
 .tab__count {
   margin-left: 2px;
+}
+
+@media (max-width: 760px) {
+  .meeting-detail-page .tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .meeting-detail-page .tab {
+    width: 36px;
+    min-width: 36px;
+    height: 34px;
+    justify-content: center;
+    padding: 0;
+    gap: 0;
+  }
+
+  .meeting-detail-page .tab__label,
+  .meeting-detail-page .tab__count {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
 }
 
 /* Progress */
@@ -3028,4 +3270,353 @@
   .budget-line-row > input[placeholder="Line label"] { grid-area: label; }
   .budget-line-row > input[placeholder="Amount"] { grid-area: amount; }
   .budget-line-row > button { grid-area: remove; }
+}
+
+.insurance-brief {
+  display: grid;
+  gap: var(--s-4);
+  min-width: 0;
+}
+
+.insurance-insights {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+
+.insurance-insight-card {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  min-height: 104px;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-panel);
+}
+
+.insurance-insight-card span {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.insurance-insight-card strong {
+  color: var(--text-primary);
+  font-size: var(--fs-lg);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.insurance-insight-card small {
+  align-self: end;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.insurance-full-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1060px) minmax(280px, 330px);
+  gap: var(--s-4);
+  align-items: start;
+  justify-content: center;
+}
+
+.insurance-full-layout__main,
+.insurance-full-layout__side {
+  min-width: 0;
+}
+
+.insurance-full-layout__side {
+  display: grid;
+  gap: var(--s-4);
+}
+
+@media (min-width: 901px) {
+  .insurance-full-layout__side {
+    position: sticky;
+    top: var(--s-4);
+  }
+}
+
+.insurance-version-link {
+  display: grid;
+  gap: 4px;
+  padding: var(--s-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text-primary);
+  text-decoration: none;
+  min-width: 0;
+}
+
+.insurance-version-link:hover {
+  background: var(--bg-hover);
+}
+
+.insurance-full-layout__side .card__body .row {
+  display: grid;
+  grid-template-columns: minmax(76px, 0.45fr) minmax(0, 1fr);
+  gap: var(--s-2);
+  align-items: start;
+}
+
+.insurance-full-layout__side .card__body .row > span:first-child {
+  color: var(--text-tertiary);
+}
+
+.insurance-full-layout__side .card__body .row > span:last-child {
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.insurance-brief__hero {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-panel);
+  padding: var(--s-4);
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.insurance-brief__eyebrow,
+.insurance-brief__metric-label {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.insurance-brief__title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+.insurance-brief__title-row h2 {
+  margin: 0;
+  font-size: var(--fs-xl);
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.insurance-brief__subtitle,
+.insurance-brief__summary,
+.insurance-empty {
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.insurance-brief__summary {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-subtle);
+  padding: var(--s-3);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.insurance-brief__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+
+.insurance-brief__metric {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-panel);
+  padding: var(--s-3);
+  min-width: 0;
+}
+
+.insurance-brief__metric-value {
+  margin-top: 4px;
+  color: var(--text-primary);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.insurance-brief__metric-sub {
+  margin-top: 2px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.insurance-brief__section {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-panel);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.insurance-brief__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin: 0;
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.insurance-brief__section-head h3 {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.insurance-brief__section-head span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.insurance-brief__items {
+  display: grid;
+}
+
+.insurance-brief__item {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--border-color-light);
+  min-width: 0;
+}
+
+.insurance-brief__item:last-child {
+  border-bottom: 0;
+}
+
+.insurance-brief__item:hover {
+  background: var(--bg-hover);
+}
+
+.insurance-brief__item-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+.insurance-brief__item-main strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.insurance-brief__item p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.insurance-brief__meta,
+.insurance-brief__proof {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.insurance-brief__meta {
+  margin-top: 6px;
+}
+
+.insurance-brief__meta span,
+.insurance-source-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 22px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.insurance-source-chip {
+  cursor: help;
+}
+
+.insurance-brief__amount {
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.insurance-brief__amount small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+
+@media (max-width: 900px) {
+  .insurance-full-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .insurance-insights,
+  .insurance-brief__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .insurance-insights,
+  .insurance-brief__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .insurance-brief__title-row,
+  .insurance-brief__item-main {
+    display: grid;
+  }
+
+  .insurance-brief__amount {
+    text-align: left;
+  }
 }

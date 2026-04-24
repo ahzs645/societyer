@@ -66,6 +66,7 @@ const InspectionsPage = React.lazy(() => import("./pages/Inspections").then((m) 
 const AttestationsPage = React.lazy(() => import("./pages/Attestations").then((m) => ({ default: m.AttestationsPage })));
 const RetentionPage = React.lazy(() => import("./pages/Retention").then((m) => ({ default: m.RetentionPage })));
 const InsurancePage = React.lazy(() => import("./pages/Insurance").then((m) => ({ default: m.InsurancePage })));
+const InsurancePolicyDetailPage = React.lazy(() => import("./pages/Insurance").then((m) => ({ default: m.InsurancePolicyDetailPage })));
 const SecretsPage = React.lazy(() => import("./pages/Secrets").then((m) => ({ default: m.SecretsPage })));
 const PipaTrainingPage = React.lazy(() => import("./pages/PipaTraining").then((m) => ({ default: m.PipaTrainingPage })));
 const ProxiesPage = React.lazy(() => import("./pages/Proxies").then((m) => ({ default: m.ProxiesPage })));
@@ -148,18 +149,27 @@ function PageLoader() {
 
 function RootErrorFallback() {
   return (
-    <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        padding: 24,
+        fontFamily: "system-ui, sans-serif",
+        background: "var(--bg-app, #f8fafc)",
+        color: "var(--text-primary, #111827)",
+      }}
+    >
       <h1 style={{ fontSize: 20, marginBottom: 8 }}>Something went wrong.</h1>
-      <p style={{ color: "#555", marginBottom: 16 }}>
+      <p style={{ color: "var(--text-secondary, #4b5563)", marginBottom: 16 }}>
         The page hit an unrecoverable error. Try reloading. If it keeps happening, contact your administrator.
       </p>
       <button
         onClick={() => window.location.reload()}
         style={{
           padding: "8px 14px",
-          border: "1px solid #ccc",
+          border: "1px solid var(--border-strong, #d1d5db)",
           borderRadius: 6,
-          background: "#fff",
+          background: "var(--bg-panel, #ffffff)",
+          color: "var(--text-primary, #111827)",
           cursor: "pointer",
         }}
       >
@@ -307,6 +317,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route
               path="insurance"
               element={withModule("insurance", <InsurancePage />)}
+            />
+            <Route
+              path="insurance/:id"
+              element={withModule("insurance", <InsurancePolicyDetailPage />)}
             />
             <Route
               path="access-custody"

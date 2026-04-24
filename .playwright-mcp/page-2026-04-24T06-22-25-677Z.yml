@@ -1,0 +1,501 @@
+- generic [ref=e3]:
+  - button "Open sidebar":
+    - img
+  - complementary "navigation" [ref=e4]:
+    - generic [ref=e5]:
+      - button "Select workspace — Over the Edge Newspaper Society" [ref=e370] [cursor=pointer]:
+        - generic [ref=e7]: O
+        - generic [ref=e8]: Over the Edge Newspaper Society
+        - img [ref=e10]
+      - generic [ref=e12]:
+        - button "Notifications (200 unread)" [ref=e371] [cursor=pointer]:
+          - img [ref=e372]
+          - generic [ref=e375]: 9+
+        - button "Search" [ref=e13] [cursor=pointer]:
+          - img [ref=e14]
+        - button "Collapse sidebar" [ref=e17] [cursor=pointer]:
+          - img [ref=e18]
+    - generic "Sidebar mode" [ref=e21]:
+      - tablist "Navigation mode" [ref=e22]:
+        - tab "Workspace" [selected] [ref=e23] [cursor=pointer]:
+          - img [ref=e24]
+        - tab "Search (⌘K)" [ref=e29] [cursor=pointer]:
+          - img [ref=e30]
+        - tab "Workflows" [ref=e33] [cursor=pointer]:
+          - img [ref=e34]
+    - button "OTE Records Admin Owner" [ref=e376] [cursor=pointer]:
+      - img [ref=e377]
+      - generic [ref=e380]: OTE Records Admin
+      - generic [ref=e381]: Owner
+      - img [ref=e382]
+    - generic [ref=e39]:
+      - button "Operations desk" [expanded] [ref=e40] [cursor=pointer]:
+        - generic [ref=e41]: Operations desk
+        - img [ref=e42]
+      - generic [ref=e44]:
+        - generic [ref=e45]: Open tasks
+        - generic [ref=e46]: "0"
+      - generic [ref=e47]:
+        - generic [ref=e48]: Upcoming deadlines
+        - generic [ref=e49]: "99"
+    - navigation [ref=e50]:
+      - generic [ref=e52]: Favorites
+      - link "Dashboard" [ref=e53] [cursor=pointer]:
+        - /url: /app
+        - img [ref=e55]
+        - generic [ref=e60]: Dashboard
+      - link "Tasks" [ref=e61] [cursor=pointer]:
+        - /url: /app/tasks
+        - img [ref=e63]
+        - generic [ref=e66]: Tasks
+      - link "Deadlines 99" [ref=e384] [cursor=pointer]:
+        - /url: /app/deadlines
+        - img [ref=e69]
+        - generic [ref=e71]: Deadlines
+        - generic [ref=e385]: "99"
+      - link "Commitments" [ref=e72] [cursor=pointer]:
+        - /url: /app/commitments
+        - img [ref=e74]
+        - generic [ref=e77]: Commitments
+      - link "Meetings 1" [ref=e386] [cursor=pointer]:
+        - /url: /app/meetings
+        - img [ref=e80]
+        - generic [ref=e82]: Meetings
+        - generic [ref=e387]: "1"
+      - link "Documents" [ref=e83] [cursor=pointer]:
+        - /url: /app/documents
+        - img [ref=e85]
+        - generic [ref=e87]: Documents
+      - generic [ref=e89]: All records
+      - generic [ref=e90]:
+        - button "Workspace 4" [expanded] [ref=e91] [cursor=pointer]:
+          - generic [ref=e92]: Workspace
+          - generic [ref=e93]:
+            - generic [ref=e94]: "4"
+            - img [ref=e95]
+        - generic [ref=e97]:
+          - link "Society" [ref=e98] [cursor=pointer]:
+            - /url: /app/society
+            - img [ref=e100]
+            - generic [ref=e104]: Society
+          - link "Org details" [ref=e105] [cursor=pointer]:
+            - /url: /app/organization-details
+            - img [ref=e107]
+            - generic [ref=e111]: Org details
+          - link "Org history" [ref=e112] [cursor=pointer]:
+            - /url: /app/org-history
+            - img [ref=e114]
+            - generic [ref=e117]: Org history
+          - link "Timeline" [ref=e118] [cursor=pointer]:
+            - /url: /app/timeline
+            - img [ref=e120]
+            - generic [ref=e124]: Timeline
+      - generic [ref=e125]:
+        - button "People 6" [expanded] [ref=e126] [cursor=pointer]:
+          - generic [ref=e127]: People
+          - generic [ref=e128]:
+            - generic [ref=e129]: "6"
+            - img [ref=e130]
+        - generic [ref=e132]:
+          - link "Members 0" [ref=e388] [cursor=pointer]:
+            - /url: /app/members
+            - img [ref=e135]
+            - generic [ref=e140]: Members
+            - generic [ref=e389]: "0"
+          - link "Directors 5" [ref=e390] [cursor=pointer]:
+            - /url: /app/directors
+            - img [ref=e143]
+            - generic [ref=e155]: Directors
+            - generic [ref=e391]: "5"
+          - link "Role holders" [ref=e156] [cursor=pointer]:
+            - /url: /app/role-holders
+            - img [ref=e158]
+            - generic [ref=e162]: Role holders
+          - link "Committees" [ref=e163] [cursor=pointer]:
+            - /url: /app/committees
+            - img [ref=e165]
+            - generic [ref=e169]: Committees
+          - link "Volunteers" [ref=e170] [cursor=pointer]:
+            - /url: /app/volunteers
+            - img [ref=e172]
+            - generic [ref=e177]: Volunteers
+          - link "Employees" [ref=e178] [cursor=pointer]:
+            - /url: /app/employees
+            - img [ref=e180]
+            - generic [ref=e185]: Employees
+      - generic [ref=e186]:
+        - button "Work 4" [expanded] [ref=e187] [cursor=pointer]:
+          - generic [ref=e188]: Work
+          - generic [ref=e189]:
+            - generic [ref=e190]: "4"
+            - img [ref=e191]
+        - generic [ref=e193]:
+          - link "Goals" [ref=e194] [cursor=pointer]:
+            - /url: /app/goals
+            - img [ref=e196]
+            - generic [ref=e200]: Goals
+          - link "Library" [ref=e201] [cursor=pointer]:
+            - /url: /app/library
+            - img [ref=e203]
+            - generic [ref=e205]: Library
+          - link "Communications" [ref=e206] [cursor=pointer]:
+            - /url: /app/communications
+            - img [ref=e208]
+            - generic [ref=e211]: Communications
+          - link "Outbox" [ref=e212] [cursor=pointer]:
+            - /url: /app/outbox
+            - img [ref=e214]
+            - generic [ref=e217]: Outbox
+      - button "Meetings & votes 9" [ref=e219] [cursor=pointer]:
+        - generic [ref=e220]: Meetings & votes
+        - generic [ref=e221]:
+          - generic [ref=e222]: "9"
+          - img [ref=e223]
+      - button "Governance records 10" [ref=e226] [cursor=pointer]:
+        - generic [ref=e227]: Governance records
+        - generic [ref=e228]:
+          - generic [ref=e229]: "10"
+          - img [ref=e230]
+      - generic [ref=e232]:
+        - button "Compliance 12" [expanded] [ref=e233] [cursor=pointer]:
+          - generic [ref=e234]: Compliance
+          - generic [ref=e235]:
+            - generic [ref=e236]: "12"
+            - img [ref=e237]
+        - generic [ref=e239]:
+          - link "Filings" [ref=e240] [cursor=pointer]:
+            - /url: /app/filings
+            - img [ref=e242]
+            - generic [ref=e245]: Filings
+          - link "Filing pre-fill" [ref=e246] [cursor=pointer]:
+            - /url: /app/filings/prefill
+            - img [ref=e248]
+            - generic [ref=e260]: Filing pre-fill
+          - link "Formation & annual" [ref=e261] [cursor=pointer]:
+            - /url: /app/formation-maintenance
+            - img [ref=e263]
+            - generic [ref=e269]: Formation & annual
+          - link "Policies" [ref=e270] [cursor=pointer]:
+            - /url: /app/policies
+            - img [ref=e272]
+            - generic [ref=e275]: Policies
+          - link "Records retention" [ref=e276] [cursor=pointer]:
+            - /url: /app/retention
+            - img [ref=e278]
+            - generic [ref=e281]: Records retention
+          - link "Records archive" [ref=e282] [cursor=pointer]:
+            - /url: /app/records-archive
+            - img [ref=e284]
+            - generic [ref=e287]: Records archive
+          - link "Records inspections" [ref=e288] [cursor=pointer]:
+            - /url: /app/inspections
+            - img [ref=e290]
+            - generic [ref=e293]: Records inspections
+          - link "Privacy (PIPA)" [ref=e294] [cursor=pointer]:
+            - /url: /app/privacy
+            - img [ref=e296]
+            - generic [ref=e298]: Privacy (PIPA)
+          - link "PIPA training" [ref=e299] [cursor=pointer]:
+            - /url: /app/pipa-training
+            - img [ref=e301]
+            - generic [ref=e304]: PIPA training
+          - link "Insurance" [ref=e305] [cursor=pointer]:
+            - /url: /app/insurance
+            - img [ref=e307]
+            - generic [ref=e309]: Insurance
+          - link "Access custody" [ref=e310] [cursor=pointer]:
+            - /url: /app/access-custody
+            - img [ref=e312]
+            - generic [ref=e315]: Access custody
+          - link "Public transparency" [ref=e316] [cursor=pointer]:
+            - /url: /app/transparency
+            - img [ref=e318]
+            - generic [ref=e321]: Public transparency
+      - button "Finance 7" [ref=e323] [cursor=pointer]:
+        - generic [ref=e324]: Finance
+        - generic [ref=e325]:
+          - generic [ref=e326]: "7"
+          - img [ref=e327]
+      - button "Workflows 5" [ref=e330] [cursor=pointer]:
+        - generic [ref=e331]: Workflows
+        - generic [ref=e332]:
+          - generic [ref=e333]: "5"
+          - img [ref=e334]
+      - button "Administration 8" [ref=e337] [cursor=pointer]:
+        - generic [ref=e338]: Administration
+        - generic [ref=e339]:
+          - generic [ref=e340]: "8"
+          - img [ref=e341]
+      - generic [ref=e344]: Resources
+      - link "Documentation" [ref=e345] [cursor=pointer]:
+        - /url: https://www2.gov.bc.ca/gov/content/employment-business/non-profits-sector/not-for-profit-organizations
+        - img [ref=e347]
+        - generic [ref=e350]: Documentation
+  - generic [ref=e366]:
+    - generic [ref=e615]:
+      - link "Insurance policies" [ref=e616] [cursor=pointer]:
+        - /url: /app/insurance
+        - img [ref=e617]
+        - text: Insurance policies
+      - generic [ref=e619]:
+        - generic [ref=e620]:
+          - img [ref=e622]
+          - generic [ref=e624]:
+            - generic [ref=e625]: Workspace view
+            - heading "General liability 501332671" [level=1] [ref=e626]
+            - paragraph [ref=e627]: Intact Insurance Company · 2025-2026 · Brownridge Insurance
+        - generic [ref=e628]:
+          - generic [ref=e629]: Active
+          - generic [ref=e630]: restricted
+      - generic [ref=e631]:
+        - generic [ref=e633]:
+          - generic [ref=e634]:
+            - generic [ref=e635]: General liability coverage
+            - generic [ref=e636]:
+              - heading "Intact Insurance Company" [level=2] [ref=e637]
+              - generic [ref=e638]: Active
+            - generic [ref=e639]: Policy 501332671 · 2025-2026 · Brownridge Insurance
+            - generic [ref=e640]: restricted
+            - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e641]: 2 sources
+          - generic [ref=e642]:
+            - generic [ref=e643]:
+              - generic [ref=e644]: Policy
+              - generic [ref=e645]: "501332671"
+              - generic [ref=e646]: 2025-2026 · renewal
+            - generic [ref=e647]:
+              - generic [ref=e648]: Coverage
+              - generic [ref=e649]: $2,000,000
+              - generic [ref=e650]: Deductible $1,000
+            - generic [ref=e651]:
+              - generic [ref=e652]: Premium
+              - generic [ref=e653]: $1,082
+              - generic [ref=e654]: Brownridge Insurance
+            - generic [ref=e655]:
+              - generic [ref=e656]: Renewal
+              - generic [ref=e657]: Nov 1, 2026
+              - generic [ref=e658]: Nov 1, 2025 to Nov 1, 2026
+          - generic [ref=e659]: Commercial general liability, products-completed operations aggregate, personal injury, and non-owned automobile liability each shown at $2,000,000; medical payments $50,000; tenants legal liability $500,000.
+          - generic [ref=e660]:
+            - heading "Who is covered" [level=3] [ref=e661]
+            - generic [ref=e662]:
+              - generic [ref=e663]:
+                - generic [ref=e665]:
+                  - strong [ref=e666]: Over The Edge Newspaper Society
+                  - generic [ref=e667]:
+                    - generic [ref=e668]: named insured
+                    - generic [ref=e669]: organization
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e671]: 2 sources
+              - generic [ref=e672]:
+                - generic [ref=e674]:
+                  - strong [ref=e675]: University of Northern British Columbia
+                  - generic [ref=e676]:
+                    - generic [ref=e677]: additional insured
+                    - generic [ref=e678]: facility/certificate holder
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e680]: 2 sources
+              - generic [ref=e681]:
+                - generic [ref=e683]:
+                  - strong [ref=e684]: UNBC Northern Undergraduate Student Society
+                  - generic [ref=e685]:
+                    - generic [ref=e686]: additional insured
+                    - generic [ref=e687]: certificate holder
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e689]: 2 sources
+              - generic [ref=e690]:
+                - generic [ref=e692]:
+                  - strong [ref=e693]: Executive officers, directors, employees, and volunteer workers
+                  - generic [ref=e694]:
+                    - generic [ref=e695]: covered class
+                    - generic [ref=e696]: insured persons
+                - paragraph [ref=e697]: Captured as a class from CGL wording/OCR; verify before relying on member-specific coverage.
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e699]: 2 sources
+          - generic [ref=e700]:
+            - heading "Coverage items" [level=3] [ref=e701]
+            - generic [ref=e702]:
+              - generic [ref=e703]:
+                - generic [ref=e704]:
+                  - generic [ref=e705]:
+                    - strong [ref=e706]: Commercial general liability
+                    - generic [ref=e708]: Commercial general liability
+                  - generic [ref=e709]:
+                    - text: $2,000,000
+                    - generic [ref=e710]: Deductible $1,000
+                - paragraph [ref=e711]: Policy-level CGL limit shown in renewal/declaration materials.
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e713]: 2 sources
+              - generic [ref=e714]:
+                - generic [ref=e715]:
+                  - generic [ref=e716]:
+                    - strong [ref=e717]: Products-completed operations aggregate
+                    - generic [ref=e719]: Aggregate liability
+                  - generic [ref=e720]: $2,000,000
+                - paragraph [ref=e721]: Products-completed operations aggregate limit.
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e723]: 2 sources
+              - generic [ref=e724]:
+                - generic [ref=e725]:
+                  - generic [ref=e726]:
+                    - strong [ref=e727]: Personal injury liability
+                    - generic [ref=e729]: Personal injury
+                  - generic [ref=e730]: $2,000,000
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e732]: 2 sources
+              - generic [ref=e733]:
+                - generic [ref=e734]:
+                  - generic [ref=e735]:
+                    - strong [ref=e736]: Non-owned automobile liability
+                    - generic [ref=e738]: Non-owned auto
+                  - generic [ref=e739]: $2,000,000
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e741]: 2 sources
+              - generic [ref=e742]:
+                - generic [ref=e743]:
+                  - generic [ref=e744]:
+                    - strong [ref=e745]: Medical payments
+                    - generic [ref=e747]: Medical payments
+                  - generic [ref=e748]: $50,000
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e750]: 2 sources
+              - generic [ref=e751]:
+                - generic [ref=e752]:
+                  - generic [ref=e753]:
+                    - strong [ref=e754]: Tenants legal liability
+                    - generic [ref=e756]: Premises / room coverage
+                  - generic [ref=e757]:
+                    - text: $500,000
+                    - generic [ref=e758]: Deductible $1,000
+                - paragraph [ref=e759]: This is the closest source-backed room/building coverage found; verify exact room or premises schedule against the policy.
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e761]: 2 sources
+          - generic [ref=e762]:
+            - heading "Rooms / locations" [level=3] [ref=e763]
+            - generic [ref=e765]:
+              - generic [ref=e766]:
+                - generic [ref=e767]:
+                  - strong [ref=e768]: UNBC campus premises / room use
+                  - generic [ref=e769]:
+                    - generic [ref=e770]: Room Not specified in source
+                    - generic [ref=e771]: "#6-350 3333 University Way, Prince George, BC V2N 4Z9"
+                - generic [ref=e772]: $500,000
+              - paragraph [ref=e773]: Staged from tenants legal liability; exact room schedule was not found in the import data.
+              - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e775]: 2 sources
+          - generic [ref=e776]:
+            - heading "Definitions" [level=3] [ref=e777]
+            - generic [ref=e778]:
+              - generic [ref=e779]:
+                - strong [ref=e782]: Tenants legal liability
+                - paragraph [ref=e783]: Premises-related liability coverage shown with a $500,000 limit in the CGL renewal materials; use this as the room/building coverage reference pending review of the exact premises schedule.
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e785]: 2 sources
+              - generic [ref=e786]:
+                - strong [ref=e789]: Volunteer worker
+                - paragraph [ref=e790]: CGL wording/OCR indicates volunteer workers are included as an insured class. Verify the exact definition in the policy wording before use.
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e792]: 2 sources
+              - generic [ref=e793]:
+                - strong [ref=e796]: Occurrence
+                - paragraph [ref=e797]: CGL occurrence definition should be reviewed in the policy wording for claim intake and incident reporting.
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e799]: 2 sources
+          - generic [ref=e800]:
+            - heading "Certificates of insurance" [level=3] [ref=e801]
+            - generic [ref=e802]:
+              - generic [ref=e803]:
+                - generic [ref=e804]:
+                  - generic [ref=e805]:
+                    - strong [ref=e806]: University of Northern British Columbia
+                    - generic [ref=e807]:
+                      - generic [ref=e808]: University of Northern British Columbia
+                      - generic [ref=e809]: Referenced
+                  - generic [ref=e810]: $2,000,000
+                - paragraph [ref=e811]: Additional insured appears in the CGL source material. Verify whether a certificate was issued for a specific room booking or term.
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e813]: 2 sources
+              - generic [ref=e814]:
+                - generic [ref=e815]:
+                  - generic [ref=e816]:
+                    - strong [ref=e817]: UNBC Northern Undergraduate Student Society
+                    - generic [ref=e818]:
+                      - generic [ref=e819]: UNBC Northern Undergraduate Student Society
+                      - generic [ref=e820]: Referenced
+                  - generic [ref=e821]: $2,000,000
+                - paragraph [ref=e822]: Additional insured appears in the CGL source material. Verify exact certificate wording and issue date.
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e824]: 2 sources
+          - generic [ref=e825]:
+            - heading "Event / room requirements" [level=3] [ref=e826]
+            - generic [ref=e828]:
+              - generic [ref=e829]:
+                - generic [ref=e830]:
+                  - strong [ref=e831]: UNBC campus room / premises use
+                  - generic [ref=e832]:
+                    - generic [ref=e833]: event_or_facility
+                    - generic [ref=e834]: Society CGL policy
+                    - generic [ref=e835]: Open
+                - generic [ref=e836]:
+                  - text: Confirmed $2,000,000
+                  - generic [ref=e837]: Tenants legal liability $500,000
+              - paragraph [ref=e838]: "additional insured: University of Northern British Columbia · triggers: room_booking, premises_use · Source-backed limits exist, but the exact UNBC room booking requirement and certificate issue status need review."
+              - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e840]: 2 sources
+          - generic [ref=e841]:
+            - heading "Annual reviews" [level=3] [ref=e842]
+            - generic [ref=e844]:
+              - generic [ref=e846]:
+                - strong [ref=e847]: Nov 5, 2025
+                - generic [ref=e849]: 2025-2026 CGL renewal terms staged for approval
+              - paragraph [ref=e850]: Import review · Next Sep 1, 2026
+              - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e852]: 2 sources
+          - generic [ref=e853]:
+            - heading "Compliance checks" [level=3] [ref=e854]
+            - generic [ref=e855]:
+              - generic [ref=e856]:
+                - generic [ref=e858]:
+                  - strong [ref=e859]: Confirm WorkSafeBC coverage or exemption if workers are hired
+                  - generic [ref=e860]:
+                    - generic [ref=e861]: Open
+                    - generic [ref=e862]: Due Sep 1, 2026
+                - paragraph [ref=e863]: Online research added this as a renewal check; no WorkSafeBC number was found in the insurance sources.
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e865]: 2 sources
+              - generic [ref=e866]:
+                - generic [ref=e868]:
+                  - strong [ref=e869]: Review event risk triggers before issuing COIs
+                  - generic [ref=e870]:
+                    - generic [ref=e871]: Open
+                    - generic [ref=e872]: Due Sep 1, 2026
+                - paragraph [ref=e873]: Check alcohol, vendors, fees/donations, non-student attendees, and large setups against UNBC booking requirements.
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e875]: 2 sources
+        - complementary [ref=e876]:
+          - generic [ref=e877]:
+            - heading "Policy file" [level=2] [ref=e879]
+            - generic [ref=e880]:
+              - generic [ref=e881]:
+                - generic [ref=e882]: Kind
+                - generic [ref=e883]: General liability
+              - generic [ref=e884]:
+                - generic [ref=e885]: "Policy #"
+                - generic [ref=e886]: "501332671"
+              - generic [ref=e887]:
+                - generic [ref=e888]: Series
+                - generic [ref=e889]: cgl|intact-insurance-company|brownridge-insurance|501332671
+              - generic [ref=e890]:
+                - generic [ref=e891]: Term
+                - generic [ref=e892]: 2025-2026
+              - generic [ref=e893]:
+                - generic [ref=e894]: Period
+                - generic [ref=e895]: Nov 1, 2025 to Nov 1, 2026
+              - generic [ref=e896]:
+                - generic [ref=e897]: Renewal
+                - generic [ref=e898]: Nov 1, 2026
+              - generic [ref=e899]:
+                - generic [ref=e900]: Confidence
+                - generic [ref=e901]: High
+          - generic [ref=e902]:
+            - heading "Renewal history" [level=2] [ref=e904]
+            - generic [ref=e905]:
+              - link "2025-2026 Active $1,082 premium" [ref=e906] [cursor=pointer]:
+                - /url: /app/insurance/q97frzv11yfeqjyvma6n0ht7vd85fcbr
+                - generic [ref=e907]: 2025-2026
+                - generic [ref=e908]: Active
+                - generic [ref=e909]: $1,082 premium
+              - link "2024-2025 Lapsed $1,055 premium" [ref=e910] [cursor=pointer]:
+                - /url: /app/insurance/q97669dv9m4gy9c7cs72sqqrr585eypc
+                - generic [ref=e911]: 2024-2025
+                - generic [ref=e912]: Lapsed
+                - generic [ref=e913]: $1,055 premium
+          - generic [ref=e914]:
+            - heading "Sources" [level=2] [ref=e916]
+            - generic [ref=e917]:
+              - generic [ref=e918]: Source IDs are collapsed in the brief. Hover a source chip to see the preserved IDs.
+              - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e919]: 2 sources
+          - generic [ref=e920]:
+            - heading "Notes" [level=2] [ref=e922]
+            - paragraph [ref=e924]: "Policy terms and declaration pages agree on policy number, term, premium, and principal liability limits. Invoice 19117 is staged separately as a transaction candidate. Sources: local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e, local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3 Linked source document ids: mn72yj3kcbj84ytt9q9wv5d5cs85fbgk, mn7766aa2r0ery2vnsqdjpxyvx85eckv Confidence: High Sensitivity: restricted"
+    - generic:
+      - complementary

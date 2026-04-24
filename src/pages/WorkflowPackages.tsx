@@ -3,8 +3,8 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
+import { SeedPrompt } from "./_helpers";
+import { Badge, Button, Drawer, Field, SettingsShell } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
@@ -99,17 +99,20 @@ export function WorkflowPackagesPage() {
 
   return (
     <div className="page page--wide">
-      <PageHeader
+      <SettingsShell
         title="Workflow packages"
-        icon={<Workflow size={16} />}
-        iconColor="orange"
-        subtitle="Legal package metadata for events, effective dates, signer rosters, supporting documents, and payment references."
+        description="Legal package metadata for events, effective dates, signer rosters, supporting documents, and payment references."
+        tabs={[
+          { id: "packages", label: "Packages", icon: <Workflow size={14} /> },
+          { id: "lifecycle", label: "Lifecycle" },
+        ]}
+        activeTab="packages"
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <Button variant="accent" onClick={openNew}>
             <Plus size={12} /> New package
-          </button>
+          </Button>
         }
-      />
+      >
 
       <div className="card">
         <div className="card__head">
@@ -237,6 +240,7 @@ export function WorkflowPackagesPage() {
           </>
         )}
       </Drawer>
+      </SettingsShell>
     </div>
   );
 }

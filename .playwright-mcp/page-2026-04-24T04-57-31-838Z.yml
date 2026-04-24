@@ -1,0 +1,36 @@
+- generic [ref=e3]:
+  - button "Open navigation":
+    - img
+  - generic [ref=e6]:
+    - generic [ref=e7]:
+      - img [ref=e8]
+      - generic [ref=e10]:
+        - strong [ref=e11]: Demo mode.
+        - text: No demo society yet. Click Seed to load Riverside Community Society.
+      - button "Seed demo society" [ref=e13] [cursor=pointer]:
+        - img [ref=e14]
+        - text: Seed demo society
+    - generic [ref=e19]:
+      - generic [ref=e22]: Loading workspace…
+      - generic:
+        - complementary
+  - navigation "navigation" [ref=e23]:
+    - link "Dashboard" [ref=e24] [cursor=pointer]:
+      - /url: /app
+      - img [ref=e25]
+      - generic [ref=e30]: Dashboard
+    - link "Tasks" [ref=e31] [cursor=pointer]:
+      - /url: /app/tasks
+      - img [ref=e32]
+      - generic [ref=e35]: Tasks
+    - link "Meetings" [ref=e36] [cursor=pointer]:
+      - /url: /app/meetings
+      - img [ref=e37]
+      - generic [ref=e39]: Meetings
+    - link "Documents" [ref=e40] [cursor=pointer]:
+      - /url: /app/documents
+      - img [ref=e41]
+      - generic [ref=e43]: Documents
+    - button "More" [ref=e44] [cursor=pointer]:
+      - img [ref=e45]
+      - generic [ref=e46]: More

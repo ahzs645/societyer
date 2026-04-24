@@ -143,6 +143,14 @@ export function ImportSessionsPage() {
         record.description,
         record.targetModule,
         record.recordKind,
+        record.payload?.insurer,
+        record.payload?.broker,
+        record.payload?.policyNumber,
+        record.payload?.policySeriesKey,
+        record.payload?.policyTermLabel,
+        record.payload?.versionType,
+        record.payload?.importReadiness,
+        record.payload?.visualReviewStatus,
         ...(record.sourceExternalIds ?? []),
         ...(record.riskFlags ?? []),
         ...(Array.isArray(record.payload?.tags) ? record.payload.tags : []),
@@ -185,6 +193,19 @@ export function ImportSessionsPage() {
       recordIds: filteredRecords.map((record: any) => record._id),
     });
     toast.success(`${result.updated} records updated`, status);
+  };
+
+  const approveImportReadyInsurance = async () => {
+    if (!session) return;
+    const insuranceRecords = records.filter(isImportReadyInsuranceRecord);
+    const result = await bulkSetStatus({
+      sessionId: session._id,
+      status: "Approved",
+      recordIds: insuranceRecords.map((record: any) => record._id),
+    });
+    setKindFilter("insurancePolicy");
+    setStatusFilter("Approved");
+    toast.success(`${result.updated} insurance records approved`, "Apply sections when ready to publish them to Insurance");
   };
 
   const runOrgHistoryApply = async () => {
@@ -465,6 +486,15 @@ export function ImportSessionsPage() {
                     {session.qualitySummary.importBlockers ?? 0} import blockers, {session.qualitySummary.badDateDocuments ?? 0} bad-date documents, and {session.qualitySummary.sensitiveDocuments ?? 0} sensitive documents were reported in the source bundle.
                   </InspectorNote>
                 )}
+                <InsuranceImportReviewPanel
+                  records={records}
+                  onShow={() => {
+                    setKindFilter("insurancePolicy");
+                    setStatusFilter("all");
+                    setSearchText("");
+                  }}
+                  onApproveReady={approveImportReadyInsurance}
+                />
                 <div className="import-review-filters">
                   <Segmented value={statusFilter} onChange={setStatusFilter} items={STATUS_ITEMS} />
                   <select className="input import-review-filter-select" value={kindFilter} onChange={(event) => setKindFilter(event.target.value)}>
@@ -515,6 +545,7 @@ export function ImportSessionsPage() {
                         <td>
                           <strong>{record.title}</strong>
                           {record.description && <div className="muted clamp-2">{record.description}</div>}
+                          {record.recordKind === "insurancePolicy" && <InsuranceRecordSummary record={record} />}
                           {(record.sourceExternalIds ?? []).length > 0 && (
                             <div className="mono muted" style={{ fontSize: 11 }}>
                               {record.sourceExternalIds.slice(0, 3).join(", ")}
@@ -674,6 +705,89 @@ function RecordDrawer({
       )}
     </Drawer>
   );
+}
+
+function InsuranceImportReviewPanel({
+  records,
+  onShow,
+  onApproveReady,
+}: {
+  records: any[];
+  onShow: () => void;
+  onApproveReady: () => void;
+}) {
+  const insurance = records.filter((record) => record.recordKind === "insurancePolicy");
+  if (!insurance.length) return null;
+  const ready = insurance.filter(isImportReadyInsuranceRecord);
+  const approved = insurance.filter((record) => record.status === "Approved");
+  const series = new Set(insurance.map((record) => record.payload?.policySeriesKey).filter(Boolean));
+  return (
+    <InspectorNote title="Insurance import review">
+      <div className="col" style={{ gap: 10 }}>
+        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+          <Badge tone="info">{insurance.length} policy version{insurance.length === 1 ? "" : "s"}</Badge>
+          <Badge tone="success">{ready.length} import-ready</Badge>
+          <Badge tone={approved.length === ready.length && ready.length > 0 ? "success" : "warn"}>{approved.length} approved</Badge>
+          {series.size > 0 && <Badge>{series.size} policy series</Badge>}
+        </div>
+        <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+          These records are deduped by policy series and term. Source/visual-review notes remain attached, and certificates/payment-option sources stay as evidence instead of duplicate policy rows.
+        </div>
+        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+          <button className="btn-action" type="button" onClick={onShow}>
+            <ListChecks size={12} /> Show insurance records
+          </button>
+          <button className="btn-action btn-action--primary" type="button" onClick={onApproveReady} disabled={!ready.length}>
+            <Check size={12} /> Approve import-ready insurance
+          </button>
+        </div>
+        <div style={{ display: "grid", gap: 6 }}>
+          {insurance.slice(0, 6).map((record) => (
+            <InsuranceRecordSummary key={record._id} record={record} compact />
+          ))}
+        </div>
+      </div>
+    </InspectorNote>
+  );
+}
+
+function InsuranceRecordSummary({ record, compact = false }: { record: any; compact?: boolean }) {
+  const payload = record.payload ?? {};
+  const term = payload.policyTermLabel || [payload.startDate, payload.endDate].filter(Boolean).join(" to ");
+  const reviewed = payload.visualReviewStatus || payload.sourceReviewStatus;
+  return (
+    <div className={compact ? "muted" : ""} style={{ fontSize: compact ? "var(--fs-sm)" : 12, marginTop: compact ? 0 : 4 }}>
+      <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+        <span className="mono">{payload.policyNumber || "Policy # not set"}</span>
+        {payload.kind && <Badge tone="info">{insuranceKindLabel(payload.kind)}</Badge>}
+        {term && <Badge>{term}</Badge>}
+        {payload.versionType && <Badge>{payload.versionType}</Badge>}
+        {payload.importReadiness && <Badge tone={payload.importReadiness === "Ready" ? "success" : "warn"}>{payload.importReadiness}</Badge>}
+        {reviewed && <Badge tone="success">{reviewed}</Badge>}
+      </div>
+      {!compact && (
+        <div className="muted">
+          {[payload.insurer, payload.broker, payload.policySeriesKey && `series ${payload.policySeriesKey}`].filter(Boolean).join(" · ")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function isImportReadyInsuranceRecord(record: any) {
+  if (record.recordKind !== "insurancePolicy") return false;
+  const payload = record.payload ?? {};
+  return payload.importReadiness === "Ready" ||
+    Boolean(payload.policySeriesKey && payload.policyTermLabel && payload.policyNumber && payload.policyNumber !== "Needs review" && payload.insurer && payload.insurer !== "Needs review");
+}
+
+function insuranceKindLabel(kind: string) {
+  return ({
+    DirectorsOfficers: "D&O",
+    GeneralLiability: "CGL",
+    PropertyCasualty: "Property",
+    CyberLiability: "Cyber",
+  } as Record<string, string>)[kind] ?? kind;
 }
 
 function renderPayloadEditor(form: any, onChange: (form: any) => void) {

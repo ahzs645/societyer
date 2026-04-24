@@ -1,11 +1,12 @@
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
-import { PageHeader, SeedPrompt } from "./_helpers";
+import { SeedPrompt } from "./_helpers";
 import { isDemoMode, setDemoMode } from "../lib/demoMode";
 import { useEffect, useMemo, useState } from "react";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { RadioGroup, Toggle } from "../components/Controls";
+import { SettingsShell } from "../components/ui";
 import { LocaleSwitcher } from "../components/LocaleSwitcher";
 import { getAuthMode } from "../lib/authMode";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
@@ -95,7 +96,16 @@ export function SettingsPage() {
 
   return (
     <div className="page page--wide">
-      <PageHeader title={t("settings.title")} subtitle={t("settings.subtitle")} />
+      <SettingsShell
+        title={t("settings.title")}
+        description={t("settings.subtitle")}
+        tabs={[
+          { id: "workspace", label: "Workspace" },
+          { id: "modules", label: "Modules" },
+          { id: "runtime", label: "Runtime" },
+        ]}
+        activeTab="workspace"
+      >
 
       <div className="settings-pair" style={{ marginBottom: 16 }}>
         <div className="card">
@@ -259,6 +269,7 @@ export function SettingsPage() {
           </div>
         </div>
       </div>
+      </SettingsShell>
     </div>
   );
 }

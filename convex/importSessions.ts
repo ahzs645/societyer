@@ -150,7 +150,7 @@ export const createFromBundle = mutation({
           sessionId,
           kind: "importRecord",
           status: "Pending",
-          reviewNotes: "",
+          reviewNotes: cleanText(record.payload?.reviewNotes) || cleanText(record.payload?.reviewSummary) || "",
           importedTargets: {},
           createdAtISO: now,
           updatedAtISO: now,
@@ -849,23 +849,6 @@ async function ensureImportSourceDocuments(
       byExternalId.set(externalId, { _id: evidence.sourceDocumentId });
     }
   }
-  if (byExternalId.size < externalIds.length) {
-    const existingDocs = await ctx.db
-      .query("documents")
-      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
-      .collect();
-    const missing = externalIds.filter((externalId) => !byExternalId.has(externalId));
-    for (const doc of existingDocs) {
-      if (doc.importSessionId) continue;
-      if (!doc.fileName && !doc.url && !doc.mimeType) continue;
-      const docExternalIds = arrayOf(doc.sourceExternalIds).map(String);
-      for (const externalId of missing) {
-        if (byExternalId.has(externalId)) continue;
-        if (docExternalIds.includes(externalId)) byExternalId.set(externalId, { _id: doc._id });
-      }
-    }
-  }
-
   const ids: any[] = [];
   for (const externalId of externalIds) {
     const existing = byExternalId.get(externalId);
@@ -1009,11 +992,26 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       insurer: cleanText(payload.insurer) || "Needs review",
       broker: cleanText(payload.broker),
       policyNumber: cleanText(payload.policyNumber) || "Needs review",
+      policySeriesKey: cleanText(payload.policySeriesKey) || insurancePolicySeriesKey(payload),
+      policyTermLabel: cleanText(payload.policyTermLabel) || insurancePolicyTermLabel(payload),
+      versionType: cleanText(payload.versionType),
+      renewalOfPolicyNumber: cleanText(payload.renewalOfPolicyNumber),
       coverageCents: numberOrUndefined(payload.coverageCents),
       premiumCents: numberOrUndefined(payload.premiumCents),
       deductibleCents: numberOrUndefined(payload.deductibleCents),
       coverageSummary: cleanText(payload.coverageSummary),
       additionalInsureds: arrayOf(payload.additionalInsureds).map(String).map(cleanText).filter(Boolean),
+      coveredParties: normalizeCoveredParties(payload.coveredParties),
+      coverageItems: normalizeCoverageItems(payload.coverageItems),
+      coveredLocations: normalizeCoveredLocations(payload.coveredLocations),
+      policyDefinitions: normalizePolicyDefinitions(payload.policyDefinitions),
+      declinedCoverages: normalizeDeclinedCoverages(payload.declinedCoverages),
+      certificatesOfInsurance: normalizeCertificatesOfInsurance(payload.certificatesOfInsurance),
+      insuranceRequirements: normalizeInsuranceRequirements(payload.insuranceRequirements),
+      claimsMadeTerms: normalizeClaimsMadeTerms(payload.claimsMadeTerms),
+      claimIncidents: normalizeClaimIncidents(payload.claimIncidents),
+      annualReviews: normalizeAnnualReviews(payload.annualReviews),
+      complianceChecks: normalizeComplianceChecks(payload.complianceChecks),
       startDate: cleanDate(payload.startDate) || cleanDate(payload.sourceDate) || todayDate(),
       endDate: cleanDate(payload.endDate),
       renewalDate: cleanDate(payload.renewalDate) || cleanDate(payload.endDate) || cleanDate(payload.sourceDate) || todayDate(),
@@ -2569,7 +2567,7 @@ function recordsFromBundle(bundle: any) {
   for (const deadline of arrayOf(bundle?.deadlines)) records.push(makeRecord("deadline", "deadlines", deadline));
   for (const amendment of arrayOf(bundle?.bylawAmendments)) records.push(makeRecord("bylawAmendment", "bylawAmendments", amendment));
   for (const publication of arrayOf(bundle?.publications)) records.push(makeRecord("publication", "publications", publication));
-  for (const policy of arrayOf(bundle?.insurancePolicies)) records.push(makeRecord("insurancePolicy", "insurance", policy));
+  for (const policy of dedupeInsurancePolicies(arrayOf(bundle?.insurancePolicies))) records.push(makeRecord("insurancePolicy", "insurance", policy));
   for (const financial of arrayOf(bundle?.financialStatements)) records.push(makeRecord("financialStatement", "financials", financial));
   for (const financial of arrayOf(bundle?.financialStatementImports)) records.push(makeRecord("financialStatementImport", "financialStatementImports", financial));
   for (const grant of arrayOf(bundle?.grants)) records.push(makeRecord("grant", "grants", grant));
@@ -2894,8 +2892,292 @@ function normalizeSectionPayload(payload: any) {
     endingBalanceCents: numberOrUndefined(payload?.endingBalanceCents),
     cashBalanceCents: numberOrUndefined(payload?.cashBalanceCents),
     amountCents: numberOrUndefined(payload?.amountCents),
+    policySeriesKey: cleanText(payload?.policySeriesKey),
+    policyTermLabel: cleanText(payload?.policyTermLabel),
+    versionType: cleanText(payload?.versionType),
+    renewalOfPolicyNumber: cleanText(payload?.renewalOfPolicyNumber),
     additionalInsureds: arrayOf(payload?.additionalInsureds).map(String).map(cleanText).filter(Boolean),
+    coveredParties: normalizeCoveredParties(payload?.coveredParties),
+    coverageItems: normalizeCoverageItems(payload?.coverageItems),
+    coveredLocations: normalizeCoveredLocations(payload?.coveredLocations),
+    policyDefinitions: normalizePolicyDefinitions(payload?.policyDefinitions),
+    declinedCoverages: normalizeDeclinedCoverages(payload?.declinedCoverages),
+    certificatesOfInsurance: normalizeCertificatesOfInsurance(payload?.certificatesOfInsurance),
+    insuranceRequirements: normalizeInsuranceRequirements(payload?.insuranceRequirements),
+    claimsMadeTerms: normalizeClaimsMadeTerms(payload?.claimsMadeTerms),
+    claimIncidents: normalizeClaimIncidents(payload?.claimIncidents),
+    annualReviews: normalizeAnnualReviews(payload?.annualReviews),
+    complianceChecks: normalizeComplianceChecks(payload?.complianceChecks),
   };
+}
+
+function dedupeInsurancePolicies(value: unknown[]) {
+  const byKey = new Map<string, any>();
+  for (const raw of value) {
+    const policy = normalizeSectionPayload(raw);
+    if (!isImportableInsurancePolicy(policy)) continue;
+    const key = insurancePolicyDedupeKey(policy);
+    const existing = byKey.get(key);
+    byKey.set(key, existing ? mergeInsurancePolicies(existing, policy) : policy);
+  }
+  return Array.from(byKey.values()).sort((a, b) =>
+    String(a.policySeriesKey ?? "").localeCompare(String(b.policySeriesKey ?? "")) ||
+    String(b.startDate ?? "").localeCompare(String(a.startDate ?? "")),
+  );
+}
+
+function isImportableInsurancePolicy(policy: any) {
+  const policyNumber = cleanText(policy?.policyNumber);
+  const insurer = cleanText(policy?.insurer);
+  const hasKnownPolicy = Boolean(policyNumber && policyNumber !== "Needs review");
+  const hasKnownInsurer = Boolean(insurer && insurer !== "Needs review");
+  const hasInsuranceEvidence = Boolean(
+    policy?.coverageCents != null ||
+    policy?.premiumCents != null ||
+    policy?.coverageSummary ||
+    arrayOf(policy?.coverageItems).length ||
+    arrayOf(policy?.coveredParties).length ||
+    arrayOf(policy?.sourceExternalIds).some((id) => /^local:|^paperless:/i.test(String(id))),
+  );
+  return (hasKnownPolicy || hasKnownInsurer) && hasInsuranceEvidence;
+}
+
+function insurancePolicyDedupeKey(policy: any) {
+  return compactKey([
+    cleanText(policy?.policySeriesKey) || insurancePolicySeriesKey(policy),
+    cleanText(policy?.policyNumber),
+    cleanDate(policy?.startDate),
+    cleanDate(policy?.endDate),
+    cleanText(policy?.kind),
+  ]);
+}
+
+function insurancePolicySeriesKey(policy: any) {
+  const kind = cleanText(policy?.kind) || "Other";
+  const insurer = cleanText(policy?.insurer);
+  const broker = cleanText(policy?.broker);
+  const policyNumber = cleanText(policy?.policyNumber);
+  if (kind === "GeneralLiability" && policyNumber && policyNumber !== "Needs review") {
+    return compactKey(["cgl", insurer, broker, policyNumber]);
+  }
+  if (kind === "DirectorsOfficers") {
+    return compactKey(["dno", insurer, broker, "management-liability"]);
+  }
+  return compactKey([kind, insurer, broker, policyNumber]);
+}
+
+function insurancePolicyTermLabel(policy: any) {
+  const start = cleanDate(policy?.startDate);
+  const end = cleanDate(policy?.endDate);
+  if (start && end) return `${start.slice(0, 4)}-${end.slice(0, 4)}`;
+  return start?.slice(0, 4) || cleanDate(policy?.renewalDate)?.slice(0, 4);
+}
+
+function mergeInsurancePolicies(existing: any, incoming: any) {
+  const merged: any = { ...existing };
+  for (const [key, value] of Object.entries(incoming ?? {})) {
+    if (value == null || value === "") continue;
+    if (Array.isArray(value)) {
+      merged[key] = mergeRecordArrays(merged[key], value);
+      continue;
+    }
+    const current = merged[key];
+    if (current == null || current === "" || current === "Needs review") {
+      merged[key] = value;
+    }
+  }
+  merged.sourceExternalIds = unique([...(existing.sourceExternalIds ?? []), ...(incoming.sourceExternalIds ?? [])]);
+  merged.riskFlags = unique([...(existing.riskFlags ?? []), ...(incoming.riskFlags ?? [])]);
+  merged.notes = [existing.notes, incoming.notes].map(cleanText).filter(Boolean).filter((note, index, arr) => arr.indexOf(note) === index).join("\n") || undefined;
+  return merged;
+}
+
+function mergeRecordArrays(a: unknown, b: unknown) {
+  const rows = [...arrayOf(a), ...arrayOf(b)];
+  const seen = new Set<string>();
+  const out: any[] = [];
+  for (const row of rows) {
+    const key = JSON.stringify(row);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
+
+function normalizeCoveredParties(value: unknown) {
+  return arrayOf(value)
+    .map((party: any) => compactRecord({
+      name: cleanText(party?.name),
+      partyType: cleanText(party?.partyType),
+      coveredClass: cleanText(party?.coveredClass),
+      sourceExternalIds: unique(arrayOf(party?.sourceExternalIds)),
+      citationId: cleanText(party?.citationId),
+      notes: cleanText(party?.notes),
+    }))
+    .filter((party): party is any => Boolean(party?.name));
+}
+
+function normalizeCoverageItems(value: unknown) {
+  return arrayOf(value)
+    .map((item: any) => compactRecord({
+      label: cleanText(item?.label),
+      coverageType: cleanText(item?.coverageType),
+      coveredClass: cleanText(item?.coveredClass),
+      limitCents: numberOrUndefined(item?.limitCents),
+      deductibleCents: numberOrUndefined(item?.deductibleCents),
+      summary: cleanText(item?.summary),
+      sourceExternalIds: unique(arrayOf(item?.sourceExternalIds)),
+      citationId: cleanText(item?.citationId),
+    }))
+    .filter((item): item is any => Boolean(item?.label));
+}
+
+function normalizeCoveredLocations(value: unknown) {
+  return arrayOf(value)
+    .map((location: any) => compactRecord({
+      label: cleanText(location?.label),
+      address: cleanText(location?.address),
+      room: cleanText(location?.room),
+      coverageCents: numberOrUndefined(location?.coverageCents),
+      sourceExternalIds: unique(arrayOf(location?.sourceExternalIds)),
+      citationId: cleanText(location?.citationId),
+      notes: cleanText(location?.notes),
+    }))
+    .filter((location): location is any => Boolean(location?.label));
+}
+
+function normalizePolicyDefinitions(value: unknown) {
+  return arrayOf(value)
+    .map((definition: any) => compactRecord({
+      term: cleanText(definition?.term),
+      definition: cleanText(definition?.definition),
+      sourceExternalIds: unique(arrayOf(definition?.sourceExternalIds)),
+      citationId: cleanText(definition?.citationId),
+    }))
+    .filter((definition): definition is any => Boolean(definition?.term && definition?.definition));
+}
+
+function normalizeDeclinedCoverages(value: unknown) {
+  return arrayOf(value)
+    .map((declined: any) => compactRecord({
+      label: cleanText(declined?.label),
+      reason: cleanText(declined?.reason),
+      offeredLimitCents: numberOrUndefined(declined?.offeredLimitCents),
+      premiumCents: numberOrUndefined(declined?.premiumCents),
+      declinedAt: cleanDate(declined?.declinedAt),
+      sourceExternalIds: unique(arrayOf(declined?.sourceExternalIds)),
+      citationId: cleanText(declined?.citationId),
+      notes: cleanText(declined?.notes),
+    }))
+    .filter((declined): declined is any => Boolean(declined?.label));
+}
+
+function normalizeCertificatesOfInsurance(value: unknown) {
+  return arrayOf(value)
+    .map((certificate: any) => compactRecord({
+      holderName: cleanText(certificate?.holderName),
+      additionalInsuredLegalName: cleanText(certificate?.additionalInsuredLegalName),
+      eventName: cleanText(certificate?.eventName),
+      eventDate: cleanDate(certificate?.eventDate),
+      requiredLimitCents: numberOrUndefined(certificate?.requiredLimitCents),
+      issuedAt: cleanDate(certificate?.issuedAt),
+      expiresAt: cleanDate(certificate?.expiresAt),
+      status: cleanText(certificate?.status),
+      sourceExternalIds: unique(arrayOf(certificate?.sourceExternalIds)),
+      citationId: cleanText(certificate?.citationId),
+      notes: cleanText(certificate?.notes),
+    }))
+    .filter((certificate): certificate is any => Boolean(certificate?.holderName));
+}
+
+function normalizeInsuranceRequirements(value: unknown) {
+  return arrayOf(value)
+    .map((requirement: any) => compactRecord({
+      context: cleanText(requirement?.context),
+      requirementType: cleanText(requirement?.requirementType),
+      coverageSource: cleanText(requirement?.coverageSource),
+      cglLimitRequiredCents: numberOrUndefined(requirement?.cglLimitRequiredCents),
+      cglLimitConfirmedCents: numberOrUndefined(requirement?.cglLimitConfirmedCents),
+      additionalInsuredRequired: optionalBoolean(requirement?.additionalInsuredRequired),
+      additionalInsuredLegalName: cleanText(requirement?.additionalInsuredLegalName),
+      coiStatus: cleanText(requirement?.coiStatus),
+      coiDueDate: cleanDate(requirement?.coiDueDate),
+      tenantLegalLiabilityLimitCents: numberOrUndefined(requirement?.tenantLegalLiabilityLimitCents),
+      hostLiquorLiability: cleanText(requirement?.hostLiquorLiability),
+      indemnityRequired: optionalBoolean(requirement?.indemnityRequired),
+      waiverRequired: optionalBoolean(requirement?.waiverRequired),
+      vendorCoiRequired: optionalBoolean(requirement?.vendorCoiRequired),
+      studentEventChecklistRequired: optionalBoolean(requirement?.studentEventChecklistRequired),
+      riskTriggers: unique(arrayOf(requirement?.riskTriggers)),
+      sourceExternalIds: unique(arrayOf(requirement?.sourceExternalIds)),
+      citationId: cleanText(requirement?.citationId),
+      notes: cleanText(requirement?.notes),
+    }))
+    .filter((requirement): requirement is any => Boolean(requirement?.context));
+}
+
+function normalizeClaimsMadeTerms(value: unknown) {
+  const terms = value && typeof value === "object" ? value as any : undefined;
+  if (!terms) return undefined;
+  return compactRecord({
+    retroactiveDate: cleanDate(terms.retroactiveDate),
+    continuityDate: cleanDate(terms.continuityDate),
+    reportingDeadline: cleanDate(terms.reportingDeadline),
+    extendedReportingPeriod: cleanText(terms.extendedReportingPeriod),
+    defenseCostsInsideLimit: optionalBoolean(terms.defenseCostsInsideLimit),
+    territory: cleanText(terms.territory),
+    retentionCents: numberOrUndefined(terms.retentionCents),
+    claimsNoticeContact: cleanText(terms.claimsNoticeContact),
+    sourceExternalIds: unique(arrayOf(terms.sourceExternalIds)),
+    citationId: cleanText(terms.citationId),
+    notes: cleanText(terms.notes),
+  });
+}
+
+function normalizeClaimIncidents(value: unknown) {
+  return arrayOf(value)
+    .map((incident: any) => compactRecord({
+      incidentDate: cleanDate(incident?.incidentDate),
+      claimNoticeDate: cleanDate(incident?.claimNoticeDate),
+      status: cleanText(incident?.status),
+      privacyFlag: optionalBoolean(incident?.privacyFlag),
+      insurerNotifiedAt: cleanDateTime(incident?.insurerNotifiedAt),
+      brokerNotifiedAt: cleanDateTime(incident?.brokerNotifiedAt),
+      sourceExternalIds: unique(arrayOf(incident?.sourceExternalIds)),
+      citationId: cleanText(incident?.citationId),
+      notes: cleanText(incident?.notes),
+    }))
+    .filter((incident): incident is any => Boolean(incident?.incidentDate || incident?.claimNoticeDate || incident?.notes));
+}
+
+function normalizeAnnualReviews(value: unknown) {
+  return arrayOf(value)
+    .map((review: any) => compactRecord({
+      reviewDate: cleanDate(review?.reviewDate),
+      boardMeetingDate: cleanDate(review?.boardMeetingDate),
+      reviewer: cleanText(review?.reviewer),
+      outcome: cleanText(review?.outcome),
+      nextReviewDate: cleanDate(review?.nextReviewDate),
+      sourceExternalIds: unique(arrayOf(review?.sourceExternalIds)),
+      citationId: cleanText(review?.citationId),
+      notes: cleanText(review?.notes),
+    }))
+    .filter((review): review is any => Boolean(review?.reviewDate));
+}
+
+function normalizeComplianceChecks(value: unknown) {
+  return arrayOf(value)
+    .map((check: any) => compactRecord({
+      label: cleanText(check?.label),
+      status: cleanText(check?.status),
+      dueDate: cleanDate(check?.dueDate),
+      completedAt: cleanDate(check?.completedAt),
+      sourceExternalIds: unique(arrayOf(check?.sourceExternalIds)),
+      citationId: cleanText(check?.citationId),
+      notes: cleanText(check?.notes),
+    }))
+    .filter((check): check is any => Boolean(check?.label));
 }
 
 function sourceExternalIdsFor(recordKind: string, payload: any) {

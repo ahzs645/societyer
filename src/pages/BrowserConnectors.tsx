@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, ClipboardPaste, ExternalLink, MonitorPlay, Play, RefreshCw, ShieldCheck, Square, XCircle } from "lucide-react";
-import { PageHeader, SeedPrompt } from "./_helpers";
-import { Badge, Field } from "../components/ui";
+import { SeedPrompt } from "./_helpers";
+import { Badge, Button, Field, SettingsShell } from "../components/ui";
 import { LiveBrowserView } from "../components/LiveBrowserView";
 import { useSociety } from "../hooks/useSociety";
 import { useToast } from "../components/Toast";
@@ -123,6 +123,39 @@ const FALLBACK_CONNECTORS: ConnectorManifest[] = [
       ],
     },
   },
+  {
+    id: "gcos",
+    name: "GCOS",
+    category: "Government funding",
+    description: "User-authorized Grants and Contributions Online Services project snapshot exports.",
+    auth: {
+      startUrl: "https://www.canada.ca/en/employment-social-development/services/funding/gcos.html",
+      allowedOrigins: ["https://www.canada.ca", "https://srv136.services.gc.ca"],
+      profileKeyPrefix: "gcos",
+      confirmMode: "profile",
+    },
+    actions: [
+      {
+        id: "exportProjects",
+        name: "Export projects",
+        description: "Read the GCOS Applications and Projects page and return project cards, statuses, and action URLs.",
+      },
+      {
+        id: "exportProjectSnapshot",
+        name: "Export project snapshot",
+        description: "Read a selected GCOS project, including summary, approved values, agreement metadata, and correspondence.",
+      },
+    ],
+    utility: {
+      title: "GCOS grant import",
+      description: "Collect ESDC/GCOS project records from the signed-in browser without submitting forms.",
+      steps: [
+        "Open GCOS in the live browser and finish GCKey or Sign-In Partner login.",
+        "Run Project list to confirm the Applications and Projects page is available.",
+        "Run Project snapshot for a selected project while the live browser remains signed in.",
+      ],
+    },
+  },
 ];
 
 function profileKeyFor(connector: ConnectorManifest | undefined) {
@@ -177,6 +210,9 @@ export function BrowserConnectorsPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [bcRegistryCorpNum, setBcRegistryCorpNum] = useState("S0048345");
+  const [gcosProjectId, setGcosProjectId] = useState("");
+  const [gcosProgramCode, setGcosProgramCode] = useState("");
+  const [gcosIncludeAgreementPdfs, setGcosIncludeAgreementPdfs] = useState(true);
   const [pasteText, setPasteText] = useState("");
   const [workspaceConnectorId, setWorkspaceConnectorId] = useState<string | null>(null);
 
@@ -199,6 +235,7 @@ export function BrowserConnectorsPage() {
   const connectorPanelRenderers: Record<string, () => JSX.Element> = {
     wave: renderWaveProviderPanel,
     "bc-registry": renderBcRegistryProviderPanel,
+    gcos: renderGcosProviderPanel,
   };
   const connectorPanelPolicy: Record<string, { hideGenericUtilities?: boolean }> = {
     wave: { hideGenericUtilities: true },
@@ -509,6 +546,103 @@ export function BrowserConnectorsPage() {
     }
   }
 
+  async function exportGcosProjects() {
+    const gcosSession = sessionForConnectorId("gcos");
+    setBusy(true);
+    try {
+      const path = connectorActionPath({
+        connectorId: "gcos",
+        actionId: "exportProjects",
+        session: gcosSession,
+      });
+      const payload = await apiFetch<{ data: any }>(path, {
+        method: "POST",
+        body: JSON.stringify({
+          societyId: society._id,
+          profileKey,
+          pageSize: 0,
+          maxPages: 10,
+        }),
+      });
+      setLastRun(payload.data);
+      const firstProjectId = payload.data?.projects?.[0]?.projectId;
+      if (!gcosProjectId && firstProjectId) setGcosProjectId(firstProjectId);
+      toast.success("GCOS projects exported", `${payload.data?.projectCount ?? 0} project(s) found`);
+      await refresh();
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not export GCOS projects");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function exportGcosProjectSnapshot() {
+    const gcosSession = sessionForConnectorId("gcos");
+    setBusy(true);
+    try {
+      const path = connectorActionPath({
+        connectorId: "gcos",
+        actionId: "exportProjectSnapshot",
+        session: gcosSession,
+      });
+      const payload = await apiFetch<{ data: any }>(path, {
+        method: "POST",
+        body: JSON.stringify({
+          societyId: society._id,
+          profileKey,
+          projectId: gcosProjectId.trim() || undefined,
+          programCode: gcosProgramCode.trim() || undefined,
+          includeAgreementPdfs: gcosIncludeAgreementPdfs,
+        }),
+      });
+      setLastRun(payload.data);
+      const normalized = payload.data?.normalizedGrant;
+      toast.success(
+        "GCOS project snapshot exported",
+        normalized?.title ?? `${payload.data?.agreement?.agreementLinks?.length ?? 0} agreement link(s), ${payload.data?.correspondence?.viewLinks?.length ?? 0} correspondence item(s)`,
+      );
+      await refresh();
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not export GCOS project snapshot");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importGcosProjectSnapshot() {
+    const gcosSession = sessionForConnectorId("gcos");
+    setBusy(true);
+    try {
+      const path = connectorActionPath({
+        connectorId: "gcos",
+        actionId: "exportProjectSnapshot",
+        session: gcosSession,
+        importAlias: "import-project-snapshot",
+      });
+      const payload = await apiFetch<{ data: any }>(path, {
+        method: "POST",
+        body: JSON.stringify({
+          societyId: society._id,
+          profileKey,
+          projectId: gcosProjectId.trim() || undefined,
+          programCode: gcosProgramCode.trim() || undefined,
+          includeAgreementPdfs: gcosIncludeAgreementPdfs,
+        }),
+      });
+      setLastRun(payload.data);
+      const imported = payload.data?.import;
+      toast.success(
+        imported?.created ? "GCOS grant imported" : "GCOS grant updated",
+        payload.data?.normalizedGrant?.title ?? imported?.grantId,
+      );
+      await refresh();
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not import GCOS project snapshot");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function finishSession(sessionId: string) {
     setBusy(true);
     try {
@@ -674,6 +808,76 @@ export function BrowserConnectorsPage() {
     );
   }
 
+  function renderGcosProviderPanel() {
+    const gcosSession = sessionForConnectorId("gcos");
+    const gcosNeedsLogin = Boolean(gcosSession && /gckey|sign-?in|login|credential|bank/i.test(gcosSession.currentUrl));
+    return (
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">GCOS grant import</h2>
+          <span className="card__subtitle">Export project records, agreement metadata, PDFs, and correspondence through the signed-in browser.</span>
+        </div>
+        <div className="card__body col" style={{ gap: 12 }}>
+          {gcosSession && (
+            <div className="panel" style={{ padding: 12 }}>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <Badge tone={gcosNeedsLogin ? "warn" : "success"}>
+                  {gcosNeedsLogin ? "GCOS login in progress" : "Active GCOS session"}
+                </Badge>
+                <strong>{gcosSession.profileKey}</strong>
+              </div>
+              <div className="muted" style={{ marginTop: 4, overflowWrap: "anywhere" }}>
+                {gcosNeedsLogin
+                  ? "Finish login in the live browser, then run the project export while the session is still active."
+                  : gcosSession.currentUrl}
+              </div>
+            </div>
+          )}
+          <div className="grid two">
+            <Field label="Project ID" hint="Optional if the live browser is already on a project page.">
+              <input
+                className="input"
+                value={gcosProjectId}
+                onChange={(event) => setGcosProjectId(event.target.value)}
+                placeholder="1539280"
+              />
+            </Field>
+            <Field label="Program code" hint="Optional; CSJ is Canada Summer Jobs.">
+              <input
+                className="input"
+                value={gcosProgramCode}
+                onChange={(event) => setGcosProgramCode(event.target.value)}
+                placeholder="CSJ"
+              />
+            </Field>
+          </div>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={gcosIncludeAgreementPdfs}
+              onChange={(event) => setGcosIncludeAgreementPdfs(event.target.checked)}
+            />
+            Download agreement PDFs into the connector export folder
+          </label>
+          <div className="muted">
+            This action is read-only. It redacts sensitive employee and banking fields and does not submit EEDs, claims, direct deposit, or signatures.
+          </div>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <button className="btn" disabled={busy || !runnerReady || gcosNeedsLogin} onClick={exportGcosProjects}>
+              <Play size={14} /> Project list
+            </button>
+            <button className="btn" disabled={busy || !runnerReady || gcosNeedsLogin} onClick={exportGcosProjectSnapshot}>
+              <Play size={14} /> Preview snapshot
+            </button>
+            <button className="btn btn--accent" disabled={busy || !runnerReady || gcosNeedsLogin} onClick={importGcosProjectSnapshot}>
+              <Play size={14} /> Import grant
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function renderWaveProviderPanel() {
     const waveSession = sessionForConnectorId("wave");
     const waveNeedsLogin = Boolean(waveSession && /auth\.waveapps\.com|\/login|identifier/i.test(waveSession.currentUrl));
@@ -740,29 +944,33 @@ export function BrowserConnectorsPage() {
 
   return (
     <div className="page">
-      <PageHeader
+      <SettingsShell
         title={workspaceConnector ? workspaceConnector.name : "Browser apps"}
-        icon={<MonitorPlay size={16} />}
-        iconColor="orange"
-        subtitle={workspaceConnector
+        description={workspaceConnector
           ? `Live browser workspace for ${workspaceConnector.name}.`
           : "Open an installed browser app for imports, downloads, and page utilities."}
+        tabs={[
+          { id: "apps", label: "Apps", icon: <MonitorPlay size={14} /> },
+          { id: "runtime", label: "Runtime" },
+          { id: "sessions", label: "Sessions" },
+        ]}
+        activeTab={workspaceConnector ? "sessions" : "apps"}
         actions={
           <>
             {workspaceConnector && (
-              <button className="btn-action" disabled={busy} onClick={backToApps}>
+              <Button size="sm" disabled={busy} onClick={backToApps}>
                 <ArrowLeft size={12} /> Apps
-              </button>
+              </Button>
             )}
-            <button className="btn-action" disabled={busy} onClick={refresh}>
+            <Button size="sm" disabled={busy} onClick={refresh}>
               <RefreshCw size={12} /> Refresh
-            </button>
-            <a className="btn-action" href={activeDashboardUrl} target="_blank" rel="noreferrer">
+            </Button>
+            <a className="btn btn--sm" href={activeDashboardUrl} target="_blank" rel="noreferrer">
               <ExternalLink size={12} /> Open runtime
             </a>
           </>
         }
-      />
+      >
 
       {!workspaceConnector && (
         <>
@@ -1050,6 +1258,7 @@ export function BrowserConnectorsPage() {
           </div>
         </>
       )}
+      </SettingsShell>
     </div>
   );
 }

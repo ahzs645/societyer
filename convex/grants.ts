@@ -340,6 +340,74 @@ export const upsertGrant = mutation({
   },
 });
 
+export const importGcosProjectSnapshot = mutation({
+  args: {
+    societyId: v.id("societies"),
+    normalizedGrant: v.any(),
+    snapshot: v.optional(v.any()),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, { societyId, normalizedGrant, snapshot, actingUserId }) => {
+    await requireRole(ctx, {
+      actingUserId,
+      societyId,
+      required: "Director",
+    });
+
+    const now = isoNow();
+    const sourceExternalIds = Array.isArray(normalizedGrant?.sourceExternalIds)
+      ? normalizedGrant.sourceExternalIds.filter((value: unknown): value is string => typeof value === "string" && value.length > 0)
+      : [];
+    const existing = sourceExternalIds.length
+      ? (await ctx.db
+        .query("grants")
+        .withIndex("by_society", (q) => q.eq("societyId", societyId))
+        .collect())
+        .find((grant) => (grant.sourceExternalIds ?? []).some((id) => sourceExternalIds.includes(id)))
+      : undefined;
+
+    const payload = {
+      societyId,
+      title: String(normalizedGrant?.title ?? "GCOS project"),
+      funder: String(normalizedGrant?.funder ?? "Employment and Social Development Canada"),
+      program: typeof normalizedGrant?.program === "string" ? normalizedGrant.program : undefined,
+      status: String(normalizedGrant?.status ?? "Submitted"),
+      opportunityType: "Government",
+      opportunityUrl: typeof normalizedGrant?.opportunityUrl === "string" ? normalizedGrant.opportunityUrl : undefined,
+      confirmationCode: typeof normalizedGrant?.confirmationCode === "string" ? normalizedGrant.confirmationCode : undefined,
+      amountRequestedCents: typeof normalizedGrant?.amountRequestedCents === "number" ? normalizedGrant.amountRequestedCents : undefined,
+      amountAwardedCents: typeof normalizedGrant?.amountAwardedCents === "number" ? normalizedGrant.amountAwardedCents : undefined,
+      startDate: typeof normalizedGrant?.startDate === "string" ? normalizedGrant.startDate : undefined,
+      endDate: typeof normalizedGrant?.endDate === "string" ? normalizedGrant.endDate : undefined,
+      sourceImportedAtISO: now,
+      sourceFileCount: Number(snapshot?.agreement?.downloadedAgreementPdfs?.downloadedCount ?? 0),
+      sourceExternalIds,
+      confidence: "browser-snapshot",
+      sensitivity: "contains-government-funding-records",
+      riskFlags: ["Review imported GCOS data before relying on deadlines or amounts."],
+      keyFacts: Array.isArray(normalizedGrant?.keyFacts) ? normalizedGrant.keyFacts.filter((value: unknown) => typeof value === "string") : undefined,
+      sourceNotes: typeof normalizedGrant?.sourceNotes === "string" ? normalizedGrant.sourceNotes : undefined,
+      notes: `Imported from GCOS at ${now}. Sensitive employee and banking fields were not imported.`,
+    };
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        ...payload,
+        updatedAtISO: now,
+      });
+      return { grantId: existing._id, created: false, sourceExternalIds };
+    }
+
+    const grantId = await ctx.db.insert("grants", {
+      ...payload,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    return { grantId, created: true, sourceExternalIds };
+  },
+});
+
 export const removeGrant = mutation({
   args: { id: v.id("grants"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),

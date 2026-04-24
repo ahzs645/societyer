@@ -559,6 +559,7 @@ export type MinutesExportStyleId = typeof MINUTES_EXPORT_STYLES[number]["id"];
 export type MinutesExportOptions = {
   includeTranscript?: boolean;
   includeActionItems?: boolean;
+  includeDiscussionSummary?: boolean;
   includeApprovalBlock?: boolean;
   includeSignatures?: boolean;
   includePlaceholders?: boolean;
@@ -637,6 +638,8 @@ type MinutesRenderArgs = {
       votesFor?: number;
       votesAgainst?: number;
       abstentions?: number;
+      sectionIndex?: number;
+      sectionTitle?: string;
     }[];
     decisions: string[];
     actionItems: MinutesActionItem[];
@@ -687,6 +690,7 @@ type MinutesRenderArgs = {
 const DEFAULT_MINUTES_EXPORT_OPTIONS: Required<MinutesExportOptions> = {
   includeTranscript: true,
   includeActionItems: true,
+  includeDiscussionSummary: false,
   includeApprovalBlock: true,
   includeSignatures: true,
   includePlaceholders: false,
@@ -716,7 +720,8 @@ export function getMinutesStyleGaps({
   minutes: MinutesRenderArgs["minutes"];
 }): MinutesDataGap[] {
   const agendaItems = meeting.agendaItems ?? [];
-  const motionHasVoteLanguage = minutes.motions.some(
+  const businessMotions = minutes.motions.filter((motion) => !isAdjournmentMotionForExport(motion));
+  const motionHasVoteLanguage = businessMotions.some(
     (motion) =>
       motion.votesFor != null ||
       motion.votesAgainst != null ||
@@ -727,7 +732,7 @@ export function getMinutesStyleGaps({
   const common: MinutesDataGap[] = [
     gap("Attendance list", minutes.attendees.length > 0, "Present attendees are structured.", "No present attendees are recorded."),
     gap("Agenda items", agendaItems.length > 0, "Agenda headings can drive styled sections.", "Agenda items are not recorded on this meeting."),
-    gap("Motions and outcomes", minutes.motions.length > 0, "Motions can be rendered as resolutions or vote blocks.", "No structured motions are recorded."),
+    gap("Motions and outcomes", businessMotions.length > 0, "Motions can be rendered as resolutions or vote blocks.", "No structured motions are recorded."),
     gap(
       "Chair, secretary, minute-taker",
       hasAny(minutes.chairName, minutes.secretaryName, minutes.recorderName),
@@ -852,6 +857,7 @@ function renderStandardMinutes({
     weekday: "long", year: "numeric", month: "long", day: "numeric",
     hour: "numeric", minute: "2-digit",
   });
+  const businessMotions = minutes.motions.filter((motion) => !isAdjournmentMotionForExport(motion));
 
   const motionRow = (m: typeof minutes.motions[number]) => `
     <div class="motion">
@@ -888,9 +894,9 @@ function renderStandardMinutes({
     }${minutes.quorumSourceLabel ? ` · Rule: ${eh(minutes.quorumSourceLabel)}` : ""}</p>
 
     ${renderMinuteSections(minutes.sections, options)}
-    ${renderOptionalSection("Discussion", renderDiscussion(minutes.discussion, options), hasText(minutes.discussion), options)}
+    ${options.includeDiscussionSummary ? renderOptionalSection("Discussion", renderDiscussion(minutes.discussion, options), hasText(minutes.discussion), options) : ""}
 
-    ${renderOptionalSection("Motions", minutes.motions.map(motionRow).join(""), minutes.motions.length > 0, options)}
+    ${renderOptionalSection("Motions", businessMotions.map(motionRow).join(""), businessMotions.length > 0, options)}
 
     ${renderOptionalSection("Decisions", renderDecisionsList(minutes.decisions, options), minutes.decisions.length > 0, options)}
 
@@ -992,7 +998,7 @@ function renderExecutiveAgendaMinutes({
     ${sections.map((section, index) => renderExecutiveSection(index + 1, section, minutes, sections.length === 0 && index > 0)).join("")}
     ${renderMinuteSections((minutes.sections ?? []).filter((section) => !sections.includes(section.title)), options)}
 
-    ${renderOptionalSection("Discussion Summary", renderDiscussion(minutes.discussion, options), hasText(minutes.discussion), options)}
+    ${options.includeDiscussionSummary ? renderOptionalSection("Discussion Summary", renderDiscussion(minutes.discussion, options), hasText(minutes.discussion), options) : ""}
 
     ${renderOptionalSection("Decisions", renderDecisionsList(minutes.decisions, options), minutes.decisions.length > 0, options)}
 
@@ -1049,12 +1055,12 @@ function renderNumberedAgendaMinutes({
     ${sections.map((section, index) => renderNumberedAgendaSection(index + 1, section, minutes, topicMotions, options)).join("")}
     ${extraSections.length ? renderMinuteSections(extraSections, options) : ""}
 
-    ${renderOptionalSection("Discussion Summary", renderDiscussion(minutes.discussion, options), hasText(minutes.discussion), options)}
-    ${renderOptionalSection("Decisions", renderDecisionsList(minutes.decisions, options), minutes.decisions.length > 0, options)}
-
     <h2>Adjournment</h2>
     ${adjournmentMotion ? renderSampleMotion(adjournmentMotion) : ""}
     ${minutes.adjournedAt || options.includePlaceholders ? `<p>The meeting was adjourned at ${eh(minutes.adjournedAt ? formatTime(minutes.adjournedAt) : placeholder("adjournment time", options))}.</p>` : "<p>There being no further business, the meeting was adjourned.</p>"}
+
+    ${options.includeDiscussionSummary ? renderOptionalSection("Discussion Summary", renderDiscussion(minutes.discussion, options), hasText(minutes.discussion), options) : ""}
+    ${renderOptionalSection("Decisions", renderDecisionsList(minutes.decisions, options), minutes.decisions.length > 0, options)}
 
     ${options.includeActionItems ? renderSampleActionItems(minutes.actionItems, options) : ""}
     ${renderSampleNextMeeting(minutes, options)}
@@ -1094,7 +1100,7 @@ function renderActionTableMinutes({
       `).join("")}
     </table>
 
-    ${renderOptionalSection("Discussion Summary", renderDiscussion(minutes.discussion, options), hasText(minutes.discussion), options)}
+    ${options.includeDiscussionSummary ? renderOptionalSection("Discussion Summary", renderDiscussion(minutes.discussion, options), hasText(minutes.discussion), options) : ""}
 
     ${renderOptionalSection("Decisions", renderDecisionsList(minutes.decisions, options), minutes.decisions.length > 0, options)}
 
@@ -1130,9 +1136,9 @@ function renderBoardPublicMinutes({
       ${index === 2 ? renderPreviousMinutesMotions(minutes) : ""}
     `).join("")}
 
-    ${renderOptionalSection("Discussion", renderDiscussion(minutes.discussion, options), hasText(minutes.discussion), options)}
+    ${options.includeDiscussionSummary ? renderOptionalSection("Discussion", renderDiscussion(minutes.discussion, options), hasText(minutes.discussion), options) : ""}
 
-    ${renderOptionalSection("Motions", minutes.motions.map(renderBoardMotion).join(""), minutes.motions.length > 0, options)}
+    ${renderOptionalSection("Motions", minutes.motions.filter((motion) => !isAdjournmentMotionForExport(motion)).map(renderBoardMotion).join(""), minutes.motions.some((motion) => !isAdjournmentMotionForExport(motion)), options)}
 
     ${renderOptionalSection("Decisions", renderDecisionsList(minutes.decisions, options), minutes.decisions.length > 0, options)}
 
@@ -1168,7 +1174,7 @@ function renderExecutiveSection(
   useGenericContent: boolean,
 ) {
   const eh = escapeHtml;
-  const matchingMotions = minutes.motions.filter((motion) => motionMatchesSection(motion.text, section));
+  const matchingMotions = minutes.motions.filter((motion) => !isAdjournmentMotionForExport(motion) && motionMatchesSection(motion.text, section));
   const matchingActions = minutes.actionItems.filter((item) => motionMatchesSection(item.text, section));
   const bullets = [
     ...(useGenericContent && index === 4 && minutes.discussion ? [minutes.discussion] : []),
@@ -1189,7 +1195,8 @@ function renderNumberedAgendaSection(
   options: Required<MinutesExportOptions>,
 ) {
   const eh = escapeHtml;
-  const matchingMotions = motions.filter((motion) => motionMatchesSection(motion.text, section.title));
+  const sectionSearchText = agendaSectionSearchText(section);
+  const matchingMotions = motions.filter((motion) => motionBelongsToAgendaSection(motion, index - 1, section.title, sectionSearchText));
   const matchingActions = "actionItems" in section ? section.actionItems ?? [] : [];
   const discussion = "discussion" in section ? section.discussion : "";
   const decisions = "decisions" in section ? section.decisions ?? [] : [];
@@ -1198,7 +1205,7 @@ function renderNumberedAgendaSection(
   const parts = [
     presenter ? `<p><strong>Presenter:</strong> ${eh(presenter)}</p>` : "",
     reportSubmitted ? "<p>Report submitted in writing.</p>" : "",
-    discussion ? `<p>${eh(discussion).replace(/\n/g, "<br/>")}</p>` : "",
+    discussion ? renderMinutesMarkdownHtml(discussion) : "",
     decisions.length ? `<ul>${decisions.map((decision) => `<li>${eh(decision)}</li>`).join("")}</ul>` : "",
     matchingMotions.map(renderSampleMotion).join(""),
     options.includeActionItems && matchingActions.length ? `<p><strong>Action Items:</strong></p><ul>${matchingActions.map((item) => `<li>${eh(item.assignee ? `${item.assignee}: ${item.text}` : item.text)}${item.dueDate ? ` (${eh(item.dueDate)})` : ""}</li>`).join("")}</ul>` : "",
@@ -1431,13 +1438,80 @@ function renderMinuteSections(sections: MinutesRenderArgs["minutes"]["sections"]
       const bits = [
         section.presenter ? `<p class="meta">Presenter: ${escapeHtml(section.presenter)}</p>` : "",
         section.reportSubmitted ? `<p class="meta">Report submitted in writing.</p>` : "",
-        section.discussion ? `<p>${escapeHtml(section.discussion).replace(/\n/g, "<br/>")}</p>` : "",
+        section.discussion ? renderMinutesMarkdownHtml(section.discussion) : "",
         section.decisions?.length ? renderOptionalSection("Decisions", renderDecisionsList(section.decisions, options), true, options, "h3") : "",
         section.actionItems?.length && options.includeActionItems ? renderOptionalSection("Action Items", renderActionItemsTable(section.actionItems, options), true, options, "h3") : "",
       ].filter(Boolean).join("");
       return renderOptionalSection(section.title, bits, hasText(bits), options);
     })
     .join("");
+}
+
+function renderMinutesMarkdownHtml(value: string | undefined | null) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const hasMarkdownList = lines.some((line) => /^\s*(?:[-*+]|[o○●]|\d+[.)])\s+/.test(line));
+  const nonEmptyLines = lines.map((line) => line.trim()).filter(Boolean);
+  if (!hasMarkdownList && nonEmptyLines.length > 1) {
+    return `<ul>${nonEmptyLines.map((line) => `<li>${renderMarkdownInline(line)}</li>`).join("")}</ul>`;
+  }
+
+  const html: string[] = [];
+  let openTop = false;
+  let openChild = false;
+
+  const closeChild = () => {
+    if (!openChild) return;
+    html.push("</ul>");
+    openChild = false;
+  };
+  const closeTop = () => {
+    closeChild();
+    if (!openTop) return;
+    html.push("</li></ul>");
+    openTop = false;
+  };
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) {
+      closeTop();
+      continue;
+    }
+    const heading = trimmed.match(/^(#{1,4})\s+(.+)$/);
+    if (heading) {
+      closeTop();
+      const level = Math.min(heading[1].length + 2, 4);
+      html.push(`<h${level}>${renderMarkdownInline(heading[2])}</h${level}>`);
+      continue;
+    }
+    const bullet = rawLine.match(/^(\s*)(?:[-*+]|[o○●]|\d+[.)])\s+(.+)$/);
+    if (bullet) {
+      const level = bullet[1].replace(/\t/g, "  ").length >= 2 ? 1 : 0;
+      if (level > 0 && openTop) {
+        if (!openChild) {
+          html.push("<ul>");
+          openChild = true;
+        }
+        html.push(`<li>${renderMarkdownInline(bullet[2].trim())}</li>`);
+      } else {
+        closeChild();
+        if (!openTop) {
+          html.push("<ul>");
+          openTop = true;
+        } else {
+          html.push("</li>");
+        }
+        html.push(`<li>${renderMarkdownInline(bullet[2].trim())}`);
+      }
+      continue;
+    }
+    closeTop();
+    html.push(`<p>${renderMarkdownInline(trimmed)}</p>`);
+  }
+  closeTop();
+  return html.join("");
 }
 
 function renderAppendices(appendices: MinutesRenderArgs["minutes"]["appendices"], options: Required<MinutesExportOptions>) {
@@ -1720,6 +1794,50 @@ function motionMatchesSection(text: string, section: string) {
   const sectionWords = keywordSet(section);
   const textWords = keywordSet(text);
   return [...sectionWords].some((word) => textWords.has(word));
+}
+
+function motionBelongsToAgendaSection(
+  motion: MinutesRenderArgs["minutes"]["motions"][number],
+  sectionIndex: number,
+  sectionTitle: string,
+  sectionSearchText: string,
+) {
+  if (isAdjournmentMotionForExport(motion)) return false;
+  if (motion.sectionIndex != null) return motion.sectionIndex === sectionIndex;
+  if (motion.sectionTitle) {
+    return normalizeExportText(motion.sectionTitle) === normalizeExportText(sectionTitle);
+  }
+
+  const sectionText = sectionSearchText || sectionTitle;
+  const amounts = moneyAmounts(motion.text);
+  if (amounts.length) {
+    const compactSectionText = String(sectionText).replace(/\s+/g, "");
+    if (!amounts.some((amount) => compactSectionText.includes(amount))) return false;
+  }
+  return motionMatchesSection(motion.text, sectionText);
+}
+
+function agendaSectionSearchText(section: NonNullable<MinutesRenderArgs["minutes"]["sections"]>[number] | { title: string }) {
+  const discussion = "discussion" in section ? section.discussion ?? "" : "";
+  const decisions = "decisions" in section ? section.decisions ?? [] : [];
+  return [section.title, discussion, ...decisions].filter(Boolean).join(" ");
+}
+
+function moneyAmounts(text: string) {
+  return String(text ?? "").match(/\$\s?\d[\d,]*(?:\.\d{2})?/g)?.map((amount) => amount.replace(/\s+/g, "")) ?? [];
+}
+
+function isAdjournmentMotionForExport(motion: { text?: string | null; sectionTitle?: string | null; resolutionType?: string | null }) {
+  const text = `${motion.text ?? ""} ${motion.sectionTitle ?? ""} ${motion.resolutionType ?? ""}`.toLowerCase();
+  return /\badjourn(?:ment|ed|s)?\b/.test(text);
+}
+
+function normalizeExportText(text: string | undefined | null) {
+  return String(text ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 function keywordSet(text: string) {

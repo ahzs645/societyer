@@ -3,6 +3,7 @@ import {
   cloneElement,
   Fragment,
   isValidElement,
+  ButtonHTMLAttributes,
   MouseEvent as ReactMouseEvent,
   ReactElement,
   ReactNode,
@@ -207,6 +208,7 @@ export function Chip({
   tone = "neutral",
   size = "md",
   variant = "regular",
+  clickable,
   leftComponent,
   rightComponent,
   onClick,
@@ -215,18 +217,21 @@ export function Chip({
 }: {
   tone?: ToneVariant;
   size?: "sm" | "md";
-  variant?: "regular" | "rounded" | "transparent";
+  variant?: "regular" | "rounded" | "transparent" | "highlighted" | "static";
+  clickable?: boolean;
   leftComponent?: ReactNode;
-  rightComponent?: ReactNode;
+  rightComponent?: ReactNode | (() => ReactNode);
   onClick?: (event: ReactMouseEvent<HTMLElement>) => void;
   children: ReactNode;
   className?: string;
 }) {
   const classes = ["chip", `chip--${variant}`, `chip--${size}`];
   if (tone !== "neutral") classes.push(`chip--tone-${tone}`);
-  if (onClick) classes.push("chip--interactive");
+  if (onClick || clickable) classes.push("chip--interactive");
   if (className) classes.push(className);
   const Tag: "button" | "span" = onClick ? "button" : "span";
+  const renderedRightComponent =
+    typeof rightComponent === "function" ? rightComponent() : rightComponent;
   return (
     <Tag
       type={onClick ? "button" : undefined}
@@ -235,7 +240,7 @@ export function Chip({
     >
       {leftComponent != null && <span className="chip__left">{leftComponent}</span>}
       <span className="chip__label">{children}</span>
-      {rightComponent != null && <span className="chip__right">{rightComponent}</span>}
+      {renderedRightComponent != null && <span className="chip__right">{renderedRightComponent}</span>}
     </Tag>
   );
 }
@@ -275,6 +280,113 @@ export function Button({
       {icon && <span className="btn__icon">{icon}</span>}
       {!iconOnly && children}
     </button>
+  );
+}
+
+export type LightButtonAccent = "secondary" | "tertiary";
+export type LightButtonSize = "sm" | "md";
+
+export function LightButton({
+  accent = "secondary",
+  active = false,
+  focus = false,
+  size = "sm",
+  icon,
+  type = "button",
+  className,
+  children,
+  ...rest
+}: {
+  accent?: LightButtonAccent;
+  active?: boolean;
+  focus?: boolean;
+  size?: LightButtonSize;
+  icon?: ReactNode;
+  children?: ReactNode;
+} & ButtonHTMLAttributes<HTMLButtonElement>) {
+  const classes = ["light-button", `light-button--${accent}`, `light-button--${size}`];
+  if (active) classes.push("is-active");
+  if (focus) classes.push("is-focused");
+  if (className) classes.push(className);
+  return (
+    <button type={type} className={classes.join(" ")} {...rest}>
+      {icon && <span className="light-button__icon">{icon}</span>}
+      {children && <span className="light-button__label">{children}</span>}
+    </button>
+  );
+}
+
+export function LightIconButton({
+  accent = "secondary",
+  active = false,
+  focus = false,
+  size = "sm",
+  icon,
+  type = "button",
+  className,
+  children,
+  ...rest
+}: {
+  accent?: LightButtonAccent;
+  active?: boolean;
+  focus?: boolean;
+  size?: LightButtonSize;
+  icon?: ReactNode;
+  children?: ReactNode;
+} & ButtonHTMLAttributes<HTMLButtonElement>) {
+  const classes = ["light-icon-button", `light-icon-button--${accent}`, `light-icon-button--${size}`];
+  if (active) classes.push("is-active");
+  if (focus) classes.push("is-focused");
+  if (className) classes.push(className);
+  return (
+    <button type={type} className={classes.join(" ")} {...rest}>
+      {icon ?? children}
+    </button>
+  );
+}
+
+export function SettingsShell({
+  title,
+  description,
+  tabs,
+  activeTab,
+  actions,
+  children,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  tabs?: { id: string; label: ReactNode; icon?: ReactNode }[];
+  activeTab?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="settings-shell">
+      <div className="settings-shell__bar">
+        <div className="settings-shell__main">
+          <h1 className="settings-shell__title">{title}</h1>
+          {description && <div className="settings-shell__description">{description}</div>}
+        </div>
+        {tabs && tabs.length > 0 && (
+          <div className="settings-shell__tabs" role="tablist" aria-label="Settings sections">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={tab.id === activeTab}
+                className={`settings-shell__tab${tab.id === activeTab ? " is-active" : ""}`}
+              >
+                {tab.icon && <span className="settings-shell__tab-icon">{tab.icon}</span>}
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {actions && <div className="settings-shell__actions">{actions}</div>}
+      </div>
+      <div className="settings-shell__content">{children}</div>
+    </div>
   );
 }
 

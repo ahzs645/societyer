@@ -1,0 +1,438 @@
+- generic [ref=e3]:
+  - generic [ref=e19]:
+    - generic [ref=e47]:
+      - generic [ref=e48]:
+        - generic [ref=e49]:
+          - img [ref=e51]
+          - generic [ref=e53]:
+            - generic [ref=e54]: Workspace view
+            - heading "Insurance" [level=1] [ref=e55]
+            - paragraph [ref=e56]: Policy records, renewal dates, source references, and restricted import flags.
+        - generic [ref=e58]:
+          - link "Review imports" [ref=e59] [cursor=pointer]:
+            - /url: /app/imports
+            - img [ref=e60]
+            - text: Review imports
+          - button "New policy" [ref=e65] [cursor=pointer]:
+            - img [ref=e66]
+            - text: New policy
+      - generic [ref=e67]:
+        - generic [ref=e68]:
+          - generic [ref=e69]: Policies
+          - generic [ref=e70]: "4"
+          - generic [ref=e71]: records in register
+        - generic [ref=e72]:
+          - generic [ref=e73]: Active
+          - generic [ref=e74]: "2"
+          - generic [ref=e75]: currently marked active
+        - generic [ref=e76]:
+          - generic [ref=e77]: Renewal due
+          - generic [ref=e78]: "2"
+          - generic [ref=e79]: within 60 days or late
+        - generic [ref=e80]:
+          - generic [ref=e81]: Restricted
+          - generic [ref=e82]: "4"
+          - generic [ref=e83]: restricted-risk flagged
+      - generic [ref=e84]:
+        - generic [ref=e85]:
+          - button "Insurance policies 4" [ref=e86] [cursor=pointer]:
+            - img [ref=e88]
+            - generic [ref=e90]: Insurance policies
+            - generic [ref=e91]: "4"
+            - img [ref=e92]
+          - generic [ref=e95]:
+            - button "Filter" [ref=e96] [cursor=pointer]:
+              - img [ref=e97]
+              - text: Filter
+            - button "Advanced" [ref=e99] [cursor=pointer]:
+              - img [ref=e100]
+              - text: Advanced
+            - button "Sort" [ref=e104] [cursor=pointer]:
+              - img [ref=e105]
+              - text: Sort
+            - button "Options" [ref=e108] [cursor=pointer]:
+              - img [ref=e109]
+              - text: Options
+        - generic [ref=e113]:
+          - generic [ref=e114]:
+            - img [ref=e115]
+            - textbox "Insurance policies search" [ref=e118]:
+              - /placeholder: "Search insurer, policy #, source ID..."
+          - generic [ref=e119]:
+            - generic [ref=e120]: Sorted by
+            - generic [ref=e121]: Renewal ↑
+          - generic [ref=e122]: 4 of 4
+        - table "Insurance policies" [ref=e124]:
+          - caption [ref=e125]: Insurance policies
+          - rowgroup [ref=e126]:
+            - 'row "Click to sort ascending Resize column kind Click to sort ascending Resize column insurer Policy # Resize column policyNumber Click to sort ascending Resize column coverage Click to sort ascending Resize column premium Coverage dates Resize column period Sorted ascending — click to sort descending Resize column renewalDate" [ref=e127]':
+              - columnheader "Click to sort ascending Resize column kind" [ref=e128] [cursor=pointer]:
+                - button "Click to sort ascending" [ref=e129]:
+                  - generic [ref=e130]: Kind
+                - separator "Resize column kind" [ref=e131]
+              - columnheader "Click to sort ascending Resize column insurer" [ref=e132] [cursor=pointer]:
+                - button "Click to sort ascending" [ref=e133]:
+                  - generic [ref=e134]: Insurer
+                - separator "Resize column insurer" [ref=e135]
+              - 'columnheader "Policy # Resize column policyNumber" [ref=e136]':
+                - text: "Policy #"
+                - separator "Resize column policyNumber" [ref=e137]
+              - columnheader "Click to sort ascending Resize column coverage" [ref=e138] [cursor=pointer]:
+                - button "Click to sort ascending" [ref=e139]:
+                  - generic [ref=e140]: Coverage
+                - separator "Resize column coverage" [ref=e141]
+              - columnheader "Click to sort ascending Resize column premium" [ref=e142] [cursor=pointer]:
+                - button "Click to sort ascending" [ref=e143]:
+                  - generic [ref=e144]: Premium
+                - separator "Resize column premium" [ref=e145]
+              - columnheader "Coverage dates Resize column period" [ref=e146]:
+                - text: Coverage dates
+                - separator "Resize column period" [ref=e147]
+              - columnheader "Sorted ascending — click to sort descending Resize column renewalDate" [ref=e148] [cursor=pointer]:
+                - button "Sorted ascending — click to sort descending" [ref=e149]:
+                  - generic [ref=e150]: Renewal
+                  - img [ref=e152]
+                - separator "Resize column renewalDate" [ref=e154]
+              - columnheader [ref=e155]
+          - rowgroup [ref=e156]:
+            - row "Open insurance policy 501332671 Intact Insurance Company Lapsed restricted cleanup Brownridge Insurance · 2024-2025 · renewal · 4 sources 501332671 $2,000,000 $1,055 Nov 1, 2024 to Nov 1, 2025 Nov 1, 2025 175d late Edit Delete insurance policy 501332671" [ref=e157] [cursor=pointer]:
+              - cell "Open insurance policy 501332671" [ref=e158]:
+                - button "Open insurance policy 501332671" [ref=e159]:
+                  - generic [ref=e160]: General liability
+              - cell "Intact Insurance Company Lapsed restricted cleanup Brownridge Insurance · 2024-2025 · renewal · 4 sources" [ref=e161]:
+                - generic [ref=e162]:
+                  - strong [ref=e163]: Intact Insurance Company
+                  - generic [ref=e164]:
+                    - generic [ref=e165]: Lapsed
+                    - generic [ref=e166]: restricted
+                    - generic [ref=e167]: cleanup
+                  - generic [ref=e168]: Brownridge Insurance · 2024-2025 · renewal · 4 sources
+              - cell "501332671" [ref=e169]
+              - cell "$2,000,000" [ref=e170]
+              - cell "$1,055" [ref=e171]
+              - cell "Nov 1, 2024 to Nov 1, 2025" [ref=e172]:
+                - generic [ref=e173]: Nov 1, 2024 to Nov 1, 2025
+              - cell "Nov 1, 2025 175d late" [ref=e174]:
+                - text: Nov 1, 2025
+                - generic [ref=e175]: 175d late
+              - cell "Edit Delete insurance policy 501332671" [ref=e176]:
+                - generic [ref=e177]:
+                  - button "Edit" [ref=e178]:
+                    - img [ref=e179]
+                    - text: Edit
+                  - button "Delete insurance policy 501332671" [ref=e182]:
+                    - img [ref=e183]
+            - row "Open insurance policy ONL533338 Markel Canada / Lloyd's Underwriters Lapsed restricted Brownridge Insurance · 2024-2025 · renewal · 1 source ONL533338 $2,000,000 $850 Nov 1, 2024 to Nov 1, 2025 Nov 1, 2025 175d late Edit Delete insurance policy ONL533338" [ref=e186] [cursor=pointer]:
+              - cell "Open insurance policy ONL533338" [ref=e187]:
+                - button "Open insurance policy ONL533338" [ref=e188]:
+                  - generic [ref=e189]: D&O
+              - cell "Markel Canada / Lloyd's Underwriters Lapsed restricted Brownridge Insurance · 2024-2025 · renewal · 1 source" [ref=e190]:
+                - generic [ref=e191]:
+                  - strong [ref=e192]: Markel Canada / Lloyd's Underwriters
+                  - generic [ref=e193]:
+                    - generic [ref=e194]: Lapsed
+                    - generic [ref=e195]: restricted
+                  - generic [ref=e196]: Brownridge Insurance · 2024-2025 · renewal · 1 source
+              - cell "ONL533338" [ref=e197]
+              - cell "$2,000,000" [ref=e198]
+              - cell "$850" [ref=e199]
+              - cell "Nov 1, 2024 to Nov 1, 2025" [ref=e200]:
+                - generic [ref=e201]: Nov 1, 2024 to Nov 1, 2025
+              - cell "Nov 1, 2025 175d late" [ref=e202]:
+                - text: Nov 1, 2025
+                - generic [ref=e203]: 175d late
+              - cell "Edit Delete insurance policy ONL533338" [ref=e204]:
+                - generic [ref=e205]:
+                  - button "Edit" [ref=e206]:
+                    - img [ref=e207]
+                    - text: Edit
+                  - button "Delete insurance policy ONL533338" [ref=e210]:
+                    - img [ref=e211]
+            - row "Open insurance policy 501332671 Intact Insurance Company Active restricted Brownridge Insurance · 2025-2026 · renewal · 2 sources 501332671 $2,000,000 $1,082 Nov 1, 2025 to Nov 1, 2026 Nov 1, 2026 in 190d Edit Delete insurance policy 501332671" [ref=e214] [cursor=pointer]:
+              - cell "Open insurance policy 501332671" [ref=e215]:
+                - button "Open insurance policy 501332671" [ref=e216]:
+                  - generic [ref=e217]: General liability
+              - cell "Intact Insurance Company Active restricted Brownridge Insurance · 2025-2026 · renewal · 2 sources" [ref=e218]:
+                - generic [ref=e219]:
+                  - strong [ref=e220]: Intact Insurance Company
+                  - generic [ref=e221]:
+                    - generic [ref=e222]: Active
+                    - generic [ref=e223]: restricted
+                  - generic [ref=e224]: Brownridge Insurance · 2025-2026 · renewal · 2 sources
+              - cell "501332671" [ref=e225]
+              - cell "$2,000,000" [ref=e226]
+              - cell "$1,082" [ref=e227]
+              - cell "Nov 1, 2025 to Nov 1, 2026" [ref=e228]:
+                - generic [ref=e229]: Nov 1, 2025 to Nov 1, 2026
+              - cell "Nov 1, 2026 in 190d" [ref=e230]:
+                - text: Nov 1, 2026
+                - generic [ref=e231]: in 190d
+              - cell "Edit Delete insurance policy 501332671" [ref=e232]:
+                - generic [ref=e233]:
+                  - button "Edit" [ref=e234]:
+                    - img [ref=e235]
+                    - text: Edit
+                  - button "Delete insurance policy 501332671" [ref=e238]:
+                    - img [ref=e239]
+            - row "Open insurance policy ONLB003489-01 Markel Canada / Lloyd's Underwriters Active restricted Brownridge Insurance · 2025-2026 · renewal · 3 sources ONLB003489-01 $2,000,000 $850 Nov 1, 2025 to Nov 1, 2026 Nov 1, 2026 in 190d Edit Delete insurance policy ONLB003489-01" [ref=e242] [cursor=pointer]:
+              - cell "Open insurance policy ONLB003489-01" [ref=e243]:
+                - button "Open insurance policy ONLB003489-01" [ref=e244]:
+                  - generic [ref=e245]: D&O
+              - cell "Markel Canada / Lloyd's Underwriters Active restricted Brownridge Insurance · 2025-2026 · renewal · 3 sources" [ref=e246]:
+                - generic [ref=e247]:
+                  - strong [ref=e248]: Markel Canada / Lloyd's Underwriters
+                  - generic [ref=e249]:
+                    - generic [ref=e250]: Active
+                    - generic [ref=e251]: restricted
+                  - generic [ref=e252]: Brownridge Insurance · 2025-2026 · renewal · 3 sources
+              - cell "ONLB003489-01" [ref=e253]
+              - cell "$2,000,000" [ref=e254]
+              - cell "$850" [ref=e255]
+              - cell "Nov 1, 2025 to Nov 1, 2026" [ref=e256]:
+                - generic [ref=e257]: Nov 1, 2025 to Nov 1, 2026
+              - cell "Nov 1, 2026 in 190d" [ref=e258]:
+                - text: Nov 1, 2026
+                - generic [ref=e259]: in 190d
+              - cell "Edit Delete insurance policy ONLB003489-01" [ref=e260]:
+                - generic [ref=e261]:
+                  - button "Edit" [ref=e262]:
+                    - img [ref=e263]
+                    - text: Edit
+                  - button "Delete insurance policy ONLB003489-01" [ref=e266]:
+                    - img [ref=e267]
+    - generic [ref=e270]:
+      - button "Close inspector" [ref=e271] [cursor=pointer]
+      - complementary [ref=e272]:
+        - dialog "General liability · 501332671" [ref=e274]:
+          - generic [ref=e275]:
+            - heading "General liability · 501332671" [level=2] [ref=e276]
+            - button "Close drawer" [active] [ref=e277] [cursor=pointer]:
+              - img [ref=e278]
+          - generic [ref=e282]:
+            - generic [ref=e283]:
+              - generic [ref=e284]: General liability coverage
+              - generic [ref=e285]:
+                - heading "Intact Insurance Company" [level=2] [ref=e286]
+                - generic [ref=e287]: Active
+              - generic [ref=e288]: Policy 501332671 · 2025-2026 · Brownridge Insurance
+              - generic [ref=e289]: restricted
+              - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e290]: 2 sources
+            - generic [ref=e291]:
+              - generic [ref=e292]:
+                - generic [ref=e293]: Policy
+                - generic [ref=e294]: "501332671"
+                - generic [ref=e295]: 2025-2026 · renewal
+              - generic [ref=e296]:
+                - generic [ref=e297]: Coverage
+                - generic [ref=e298]: $2,000,000
+                - generic [ref=e299]: Deductible $1,000
+              - generic [ref=e300]:
+                - generic [ref=e301]: Premium
+                - generic [ref=e302]: $1,082
+                - generic [ref=e303]: Brownridge Insurance
+              - generic [ref=e304]:
+                - generic [ref=e305]: Renewal
+                - generic [ref=e306]: Nov 1, 2026
+                - generic [ref=e307]: Nov 1, 2025 to Nov 1, 2026
+            - generic [ref=e308]: Commercial general liability, products-completed operations aggregate, personal injury, and non-owned automobile liability each shown at $2,000,000; medical payments $50,000; tenants legal liability $500,000.
+            - generic [ref=e309]:
+              - heading "Who is covered" [level=3] [ref=e310]
+              - generic [ref=e311]:
+                - generic [ref=e312]:
+                  - generic [ref=e314]:
+                    - strong [ref=e315]: Over The Edge Newspaper Society
+                    - generic [ref=e316]:
+                      - generic [ref=e317]: named insured
+                      - generic [ref=e318]: organization
+                  - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e320]: 2 sources
+                - generic [ref=e321]:
+                  - generic [ref=e323]:
+                    - strong [ref=e324]: University of Northern British Columbia
+                    - generic [ref=e325]:
+                      - generic [ref=e326]: additional insured
+                      - generic [ref=e327]: facility/certificate holder
+                  - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e329]: 2 sources
+                - generic [ref=e330]:
+                  - generic [ref=e332]:
+                    - strong [ref=e333]: UNBC Northern Undergraduate Student Society
+                    - generic [ref=e334]:
+                      - generic [ref=e335]: additional insured
+                      - generic [ref=e336]: certificate holder
+                  - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e338]: 2 sources
+                - generic [ref=e339]:
+                  - generic [ref=e341]:
+                    - strong [ref=e342]: Executive officers, directors, employees, and volunteer workers
+                    - generic [ref=e343]:
+                      - generic [ref=e344]: covered class
+                      - generic [ref=e345]: insured persons
+                  - paragraph [ref=e346]: Captured as a class from CGL wording/OCR; verify before relying on member-specific coverage.
+                  - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e348]: 2 sources
+            - generic [ref=e349]:
+              - heading "Coverage items" [level=3] [ref=e350]
+              - generic [ref=e351]:
+                - generic [ref=e352]:
+                  - generic [ref=e353]:
+                    - generic [ref=e354]:
+                      - strong [ref=e355]: Commercial general liability
+                      - generic [ref=e357]: Commercial general liability
+                    - generic [ref=e358]:
+                      - text: $2,000,000
+                      - generic [ref=e359]: Deductible $1,000
+                  - paragraph [ref=e360]: Policy-level CGL limit shown in renewal/declaration materials.
+                  - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e362]: 2 sources
+                - generic [ref=e363]:
+                  - generic [ref=e364]:
+                    - generic [ref=e365]:
+                      - strong [ref=e366]: Products-completed operations aggregate
+                      - generic [ref=e368]: Aggregate liability
+                    - generic [ref=e369]: $2,000,000
+                  - paragraph [ref=e370]: Products-completed operations aggregate limit.
+                  - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e372]: 2 sources
+                - generic [ref=e373]:
+                  - generic [ref=e374]:
+                    - generic [ref=e375]:
+                      - strong [ref=e376]: Personal injury liability
+                      - generic [ref=e378]: Personal injury
+                    - generic [ref=e379]: $2,000,000
+                  - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e381]: 2 sources
+                - generic [ref=e382]:
+                  - generic [ref=e383]:
+                    - generic [ref=e384]:
+                      - strong [ref=e385]: Non-owned automobile liability
+                      - generic [ref=e387]: Non-owned auto
+                    - generic [ref=e388]: $2,000,000
+                  - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e390]: 2 sources
+                - generic [ref=e391]:
+                  - generic [ref=e392]:
+                    - generic [ref=e393]:
+                      - strong [ref=e394]: Medical payments
+                      - generic [ref=e396]: Medical payments
+                    - generic [ref=e397]: $50,000
+                  - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e399]: 2 sources
+                - generic [ref=e400]:
+                  - generic [ref=e401]:
+                    - generic [ref=e402]:
+                      - strong [ref=e403]: Tenants legal liability
+                      - generic [ref=e405]: Premises / room coverage
+                    - generic [ref=e406]:
+                      - text: $500,000
+                      - generic [ref=e407]: Deductible $1,000
+                  - paragraph [ref=e408]: This is the closest source-backed room/building coverage found; verify exact room or premises schedule against the policy.
+                  - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e410]: 2 sources
+            - generic [ref=e411]:
+              - heading "Rooms / locations" [level=3] [ref=e412]
+              - generic [ref=e414]:
+                - generic [ref=e415]:
+                  - generic [ref=e416]:
+                    - strong [ref=e417]: UNBC campus premises / room use
+                    - generic [ref=e418]:
+                      - generic [ref=e419]: Room Not specified in source
+                      - generic [ref=e420]: "#6-350 3333 University Way, Prince George, BC V2N 4Z9"
+                  - generic [ref=e421]: $500,000
+                - paragraph [ref=e422]: Staged from tenants legal liability; exact room schedule was not found in the import data.
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e424]: 2 sources
+            - generic [ref=e425]:
+              - heading "Definitions" [level=3] [ref=e426]
+              - generic [ref=e427]:
+                - generic [ref=e428]:
+                  - strong [ref=e431]: Tenants legal liability
+                  - paragraph [ref=e432]: Premises-related liability coverage shown with a $500,000 limit in the CGL renewal materials; use this as the room/building coverage reference pending review of the exact premises schedule.
+                  - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e434]: 2 sources
+                - generic [ref=e435]:
+                  - strong [ref=e438]: Volunteer worker
+                  - paragraph [ref=e439]: CGL wording/OCR indicates volunteer workers are included as an insured class. Verify the exact definition in the policy wording before use.
+                  - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e441]: 2 sources
+                - generic [ref=e442]:
+                  - strong [ref=e445]: Occurrence
+                  - paragraph [ref=e446]: CGL occurrence definition should be reviewed in the policy wording for claim intake and incident reporting.
+                  - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e448]: 2 sources
+            - generic [ref=e449]:
+              - heading "Certificates of insurance" [level=3] [ref=e450]
+              - generic [ref=e451]:
+                - generic [ref=e452]:
+                  - generic [ref=e453]:
+                    - generic [ref=e454]:
+                      - strong [ref=e455]: University of Northern British Columbia
+                      - generic [ref=e456]:
+                        - generic [ref=e457]: University of Northern British Columbia
+                        - generic [ref=e458]: Referenced
+                    - generic [ref=e459]: $2,000,000
+                  - paragraph [ref=e460]: Additional insured appears in the CGL source material. Verify whether a certificate was issued for a specific room booking or term.
+                  - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e462]: 2 sources
+                - generic [ref=e463]:
+                  - generic [ref=e464]:
+                    - generic [ref=e465]:
+                      - strong [ref=e466]: UNBC Northern Undergraduate Student Society
+                      - generic [ref=e467]:
+                        - generic [ref=e468]: UNBC Northern Undergraduate Student Society
+                        - generic [ref=e469]: Referenced
+                    - generic [ref=e470]: $2,000,000
+                  - paragraph [ref=e471]: Additional insured appears in the CGL source material. Verify exact certificate wording and issue date.
+                  - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e473]: 2 sources
+            - generic [ref=e474]:
+              - heading "Event / room requirements" [level=3] [ref=e475]
+              - generic [ref=e477]:
+                - generic [ref=e478]:
+                  - generic [ref=e479]:
+                    - strong [ref=e480]: UNBC campus room / premises use
+                    - generic [ref=e481]:
+                      - generic [ref=e482]: event_or_facility
+                      - generic [ref=e483]: Society CGL policy
+                      - generic [ref=e484]: Open
+                  - generic [ref=e485]:
+                    - text: Confirmed $2,000,000
+                    - generic [ref=e486]: Tenants legal liability $500,000
+                - paragraph [ref=e487]: "additional insured: University of Northern British Columbia · triggers: room_booking, premises_use · Source-backed limits exist, but the exact UNBC room booking requirement and certificate issue status need review."
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e489]: 2 sources
+            - generic [ref=e490]:
+              - heading "Annual reviews" [level=3] [ref=e491]
+              - generic [ref=e493]:
+                - generic [ref=e495]:
+                  - strong [ref=e496]: Nov 5, 2025
+                  - generic [ref=e498]: 2025-2026 CGL renewal terms staged for approval
+                - paragraph [ref=e499]: Import review · Next Sep 1, 2026
+                - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e501]: 2 sources
+            - generic [ref=e502]:
+              - heading "Compliance checks" [level=3] [ref=e503]
+              - generic [ref=e504]:
+                - generic [ref=e505]:
+                  - generic [ref=e507]:
+                    - strong [ref=e508]: Confirm WorkSafeBC coverage or exemption if workers are hired
+                    - generic [ref=e509]:
+                      - generic [ref=e510]: Open
+                      - generic [ref=e511]: Due Sep 1, 2026
+                  - paragraph [ref=e512]: Online research added this as a renewal check; no WorkSafeBC number was found in the insurance sources.
+                  - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e514]: 2 sources
+                - generic [ref=e515]:
+                  - generic [ref=e517]:
+                    - strong [ref=e518]: Review event risk triggers before issuing COIs
+                    - generic [ref=e519]:
+                      - generic [ref=e520]: Open
+                      - generic [ref=e521]: Due Sep 1, 2026
+                  - paragraph [ref=e522]: Check alcohol, vendors, fees/donations, non-student attendees, and large setups against UNBC booking requirements.
+                  - generic "local:sha256:1f64604afc642cebd2e4a1a1257e3c78a29313059a6e8b27c394bd4ed4ca974e local:sha256:79e038b2020505be805f4925ffdbdd1f8fe342eb1517a5ba0b7abe8aa5681ff3" [ref=e524]: 2 sources
+          - generic [ref=e525]:
+            - button "Close" [ref=e526] [cursor=pointer]
+            - button "Edit policy" [ref=e527] [cursor=pointer]:
+              - img [ref=e528]
+              - text: Edit policy
+  - navigation "navigation" [ref=e23]:
+    - link "Dashboard" [ref=e24] [cursor=pointer]:
+      - /url: /app
+      - img [ref=e25]
+      - generic [ref=e30]: Dashboard
+    - link "Tasks" [ref=e31] [cursor=pointer]:
+      - /url: /app/tasks
+      - img [ref=e32]
+      - generic [ref=e35]: Tasks
+    - link "Meetings" [ref=e36] [cursor=pointer]:
+      - /url: /app/meetings
+      - img [ref=e37]
+      - generic [ref=e39]: Meetings
+    - link "Documents" [ref=e40] [cursor=pointer]:
+      - /url: /app/documents
+      - img [ref=e41]
+      - generic [ref=e43]: Documents
+    - button "More" [ref=e44] [cursor=pointer]:
+      - img [ref=e45]
+      - generic [ref=e46]: More

@@ -368,6 +368,96 @@
   stroke-width: 2;
 }
 
+.light-button,
+.light-icon-button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-regular);
+  gap: var(--s-1);
+  justify-content: center;
+  min-width: 0;
+  transition: background 0.1s ease, color 0.1s ease, border-color 0.1s ease, box-shadow 0.1s ease;
+  white-space: nowrap;
+}
+.light-button {
+  height: 24px;
+  padding: 0 var(--s-2);
+}
+.light-button--md {
+  height: 28px;
+  padding-inline: var(--s-3);
+}
+.light-icon-button {
+  height: 24px;
+  min-width: 24px;
+  padding: var(--s-1);
+  width: 24px;
+}
+.light-icon-button--md {
+  height: 28px;
+  min-width: 28px;
+  width: 28px;
+}
+.light-button--tertiary,
+.light-icon-button--tertiary {
+  color: var(--text-tertiary);
+}
+.light-button:hover:not(:disabled),
+.light-icon-button:hover:not(:disabled) {
+  background: var(--bg-transparent-light);
+  color: var(--text-primary);
+}
+.light-button:active:not(:disabled),
+.light-icon-button:active:not(:disabled) {
+  background: var(--bg-transparent-medium);
+}
+.light-button.is-active,
+.light-icon-button.is-active,
+.light-button.is-focused,
+.light-icon-button.is-focused {
+  color: var(--accent);
+}
+.light-button.is-focused,
+.light-icon-button.is-focused {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-tertiary);
+}
+.light-button:disabled,
+.light-icon-button:disabled {
+  color: var(--font-color-extra-light);
+  cursor: not-allowed;
+}
+.light-button__icon,
+.light-icon-button > svg {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+}
+.light-button__icon svg,
+.light-button svg,
+.light-icon-button svg {
+  height: 14px;
+  width: 14px;
+}
+.light-button--md .light-button__icon svg,
+.light-button--md svg,
+.light-icon-button--md svg {
+  height: 16px;
+  width: 16px;
+}
+.light-button__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Badges */
 .badge {
   display: inline-flex;
@@ -427,12 +517,17 @@
   background: transparent;
   border-color: transparent;
 }
+.chip--highlighted,
+.chip--static {
+  background: var(--bg-transparent-light);
+  border-color: transparent;
+}
 .chip--interactive {
   cursor: pointer;
 }
 .chip--interactive:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-strong);
+  background: var(--bg-transparent-medium);
+  border-color: transparent;
 }
 .chip__left,
 .chip__right {
@@ -533,6 +628,100 @@
   border-top: 1px solid var(--border);
   font-size: var(--fs-sm);
   color: var(--text-secondary);
+}
+
+.settings-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  margin: 0 auto;
+  max-width: 1120px;
+  min-width: 0;
+  width: 100%;
+}
+.settings-shell__bar {
+  align-items: center;
+  border-bottom: 1px solid var(--border-color-light);
+  display: flex;
+  gap: var(--s-3);
+  min-height: var(--topbar-h);
+  padding: var(--s-2) 0;
+}
+.settings-shell__main {
+  min-width: 0;
+}
+.settings-shell__title {
+  color: var(--text-primary);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+  line-height: 1.2;
+  margin: 0;
+}
+.settings-shell__description {
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+  margin-top: 2px;
+}
+.settings-shell__tabs {
+  align-items: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color-medium);
+  border-radius: var(--r-pill);
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+  margin-left: auto;
+  padding: 3px;
+}
+.settings-shell__tab {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-pill);
+  color: var(--text-tertiary);
+  cursor: default;
+  display: inline-flex;
+  font-size: var(--fs-sm);
+  gap: var(--s-1);
+  height: 22px;
+  padding: 0 var(--s-2);
+}
+.settings-shell__tab.is-active {
+  background: var(--bg-transparent-light);
+  color: var(--text-primary);
+}
+.settings-shell__tab-icon {
+  display: inline-grid;
+  place-items: center;
+}
+.settings-shell__tab-icon svg {
+  height: 14px;
+  width: 14px;
+}
+.settings-shell__actions {
+  align-items: center;
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--s-2);
+}
+.settings-shell__content {
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .settings-shell__bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .settings-shell__tabs,
+  .settings-shell__actions {
+    margin-left: 0;
+  }
+  .settings-shell__tabs {
+    max-width: 100%;
+    overflow-x: auto;
+  }
 }
 
 /* Stat grid */
@@ -678,9 +867,11 @@
  * reading measure) but at 1440px — wide enough for multi-column forms and
  * dense grids without letting content bleed across the entire viewport. */
 .page--wide > * {
+  width: 100%;
   max-width: 1440px;
   margin-left: auto;
   margin-right: auto;
+  box-sizing: border-box;
 }
 
 /* ---- Society profile page ----------------------------------------------
@@ -841,6 +1032,31 @@
   align-items: center;
   margin-top: var(--s-3);
 }
+.org-details-date-list {
+  display: grid;
+  gap: var(--s-3);
+}
+.org-details-date-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s-2);
+  align-items: end;
+}
+.org-details-date-row > .field {
+  min-width: 0;
+}
+.org-details-date-row--draft {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
+}
+.org-details-date-row__actions {
+  display: flex;
+  gap: var(--s-2);
+  align-items: center;
+}
 .org-detail-registers {
   display: grid;
   gap: var(--s-4);
@@ -865,6 +1081,14 @@
 .org-detail-section .table td {
   overflow-wrap: anywhere;
 }
+.org-address-table th:nth-child(1) { width: 150px; }
+.org-address-table th:nth-child(2) { width: 110px; }
+.org-address-table th:nth-child(4) { width: 130px; }
+.org-address-table th:nth-child(5) { width: 116px; }
+.org-address-table__address {
+  display: block;
+  line-height: 1.45;
+}
 @media (max-width: 1100px) {
   .org-details-top,
   .org-detail-registers__pair {
@@ -882,6 +1106,223 @@
   }
   .org-details-field-grid {
     grid-template-columns: 1fr;
+  }
+  .org-details-date-row,
+  .org-details-date-row--draft {
+    grid-template-columns: 1fr;
+  }
+  .org-details-date-row > .btn {
+    justify-self: start;
+  }
+  .org-details-date-row__actions {
+    justify-content: flex-start;
+  }
+  .org-address-table {
+    display: block;
+    min-width: 0;
+  }
+  .org-address-table thead {
+    display: none;
+  }
+  .org-address-table tbody {
+    display: grid;
+    gap: var(--s-2);
+  }
+  .org-address-table tbody tr {
+    display: grid;
+    gap: var(--s-2);
+    padding: var(--s-3);
+    border-bottom: 1px solid var(--border);
+  }
+  .org-address-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .org-address-table tbody td {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: var(--s-2);
+    padding: 0;
+    border-bottom: 0;
+    align-items: start;
+  }
+  .org-address-table tbody td::before {
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+  }
+  .org-address-table tbody td:nth-child(1)::before { content: "Type"; }
+  .org-address-table tbody td:nth-child(2)::before { content: "Status"; }
+  .org-address-table tbody td:nth-child(3)::before { content: "Address"; }
+  .org-address-table tbody td:nth-child(4)::before { content: "Effective"; }
+  .org-address-table tbody td:nth-child(5)::before { content: ""; }
+  .org-address-table tbody td:nth-child(5) {
+    grid-template-columns: 1fr;
+  }
+  .org-address-table tbody td:nth-child(5) .row {
+    justify-content: flex-start !important;
+  }
+}
+
+/* ---- Treasurer dashboard -----------------------------------------------
+ * Desktop dashboard treatment: compact period controls, KPI tiles, balanced
+ * category panels, and constrained register tables for dense finance data. */
+
+.treasurer-page {
+  display: grid;
+  gap: var(--s-4);
+  align-content: start;
+}
+.treasurer-page .page__header {
+  margin-bottom: var(--s-3);
+}
+.treasurer-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(520px, 1.45fr) repeat(3, minmax(180px, 0.65fr));
+  gap: var(--s-3);
+  align-items: stretch;
+}
+.treasurer-overview-grid > * {
+  min-width: 0;
+}
+.treasurer-period-card {
+  align-self: stretch;
+}
+.treasurer-period-card__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  align-items: center;
+  height: 100%;
+}
+.treasurer-period-field {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.treasurer-period-field .input {
+  width: 150px;
+  min-width: 0;
+}
+.treasurer-period-field--fy .input {
+  width: 90px;
+  min-width: 90px;
+}
+.treasurer-summary-card {
+  padding: var(--s-4);
+  min-width: 0;
+}
+.treasurer-summary-card__label {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--fs-sm);
+}
+.treasurer-summary-card__value {
+  margin-top: var(--s-1);
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  line-height: 1.2;
+}
+.treasurer-category-grid,
+.treasurer-register-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+  align-items: start;
+}
+.treasurer-category-card,
+.treasurer-funding-mix-card,
+.treasurer-source-register-card {
+  min-width: 0;
+}
+.treasurer-category-list {
+  display: grid;
+  gap: var(--s-1);
+}
+.treasurer-category-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s-3);
+  align-items: start;
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+.treasurer-category-row > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.treasurer-category-row .mono {
+  text-align: right;
+  white-space: nowrap;
+}
+.treasurer-claim-stats {
+  margin-bottom: var(--s-4);
+}
+.treasurer-claims-table,
+.treasurer-funding-table,
+.treasurer-source-table,
+.treasurer-timeline-table {
+  table-layout: fixed;
+}
+.treasurer-claims-table th:nth-child(1) { width: 26%; }
+.treasurer-claims-table th:nth-child(2) { width: 18%; }
+.treasurer-claims-table th:nth-child(3) { width: 120px; }
+.treasurer-claims-table th:nth-child(4) { width: 120px; }
+.treasurer-claims-table th:nth-child(5) { width: 18%; }
+.treasurer-claims-table th:nth-child(6) { width: 210px; }
+.treasurer-funding-table th:nth-child(1),
+.treasurer-source-table th:nth-child(1) {
+  width: 45%;
+}
+.treasurer-funding-table th:nth-child(2),
+.treasurer-source-table th:nth-child(2) {
+  width: 130px;
+}
+.treasurer-source-table th:nth-child(5) {
+  width: 180px;
+}
+.treasurer-timeline-table th:nth-child(1) { width: 110px; }
+.treasurer-timeline-table th:nth-child(4) { width: 120px; }
+.treasurer-timeline-table th:nth-child(5) { width: 130px; }
+.treasurer-timeline-table th:nth-child(6) { width: 120px; }
+.treasurer-claims-table td,
+.treasurer-funding-table td,
+.treasurer-source-table td,
+.treasurer-timeline-table td {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1100px) {
+  .treasurer-overview-grid,
+  .treasurer-category-grid,
+  .treasurer-register-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .treasurer-period-card {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 760px) {
+  .treasurer-page {
+    gap: var(--s-3);
+  }
+  .treasurer-period-card__body {
+    align-items: stretch;
+  }
+  .treasurer-overview-grid {
+    grid-template-columns: 1fr;
+  }
+  .treasurer-period-card {
+    grid-column: auto;
+  }
+  .treasurer-period-field {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .treasurer-period-field .input,
+  .treasurer-period-field--fy .input {
+    width: min(100%, 190px);
+    min-width: 0;
   }
 }
 

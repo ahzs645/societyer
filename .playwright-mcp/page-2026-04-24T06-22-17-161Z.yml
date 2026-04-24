@@ -1,0 +1,234 @@
+- generic [ref=e3]:
+  - button "Open sidebar":
+    - img
+  - complementary "navigation" [ref=e4]:
+    - generic [ref=e5]:
+      - button "Select workspace" [ref=e6] [cursor=pointer]:
+        - generic [ref=e7]: S
+        - generic [ref=e8]: Select workspace
+        - img [ref=e10]
+      - generic [ref=e12]:
+        - button "Search" [ref=e13] [cursor=pointer]:
+          - img [ref=e14]
+        - button "Collapse sidebar" [ref=e17] [cursor=pointer]:
+          - img [ref=e18]
+    - generic "Sidebar mode" [ref=e21]:
+      - tablist "Navigation mode" [ref=e22]:
+        - tab "Workspace" [selected] [ref=e23] [cursor=pointer]:
+          - img [ref=e24]
+        - tab "Search (⌘K)" [ref=e29] [cursor=pointer]:
+          - img [ref=e30]
+        - tab "Workflows" [ref=e33] [cursor=pointer]:
+          - img [ref=e34]
+    - generic [ref=e39]:
+      - button "Operations desk" [expanded] [ref=e40] [cursor=pointer]:
+        - generic [ref=e41]: Operations desk
+        - img [ref=e42]
+      - generic [ref=e44]:
+        - generic [ref=e45]: Open tasks
+        - generic [ref=e46]: "0"
+      - generic [ref=e47]:
+        - generic [ref=e48]: Upcoming deadlines
+        - generic [ref=e49]: "0"
+    - navigation [ref=e50]:
+      - generic [ref=e52]: Favorites
+      - link "Dashboard" [ref=e53] [cursor=pointer]:
+        - /url: /app
+        - img [ref=e55]
+        - generic [ref=e60]: Dashboard
+      - link "Tasks" [ref=e61] [cursor=pointer]:
+        - /url: /app/tasks
+        - img [ref=e63]
+        - generic [ref=e66]: Tasks
+      - link "Deadlines" [ref=e67] [cursor=pointer]:
+        - /url: /app/deadlines
+        - img [ref=e69]
+        - generic [ref=e71]: Deadlines
+      - link "Commitments" [ref=e72] [cursor=pointer]:
+        - /url: /app/commitments
+        - img [ref=e74]
+        - generic [ref=e77]: Commitments
+      - link "Meetings" [ref=e78] [cursor=pointer]:
+        - /url: /app/meetings
+        - img [ref=e80]
+        - generic [ref=e82]: Meetings
+      - link "Documents" [ref=e83] [cursor=pointer]:
+        - /url: /app/documents
+        - img [ref=e85]
+        - generic [ref=e87]: Documents
+      - generic [ref=e89]: All records
+      - generic [ref=e90]:
+        - button "Workspace 4" [expanded] [ref=e91] [cursor=pointer]:
+          - generic [ref=e92]: Workspace
+          - generic [ref=e93]:
+            - generic [ref=e94]: "4"
+            - img [ref=e95]
+        - generic [ref=e97]:
+          - link "Society" [ref=e98] [cursor=pointer]:
+            - /url: /app/society
+            - img [ref=e100]
+            - generic [ref=e104]: Society
+          - link "Org details" [ref=e105] [cursor=pointer]:
+            - /url: /app/organization-details
+            - img [ref=e107]
+            - generic [ref=e111]: Org details
+          - link "Org history" [ref=e112] [cursor=pointer]:
+            - /url: /app/org-history
+            - img [ref=e114]
+            - generic [ref=e117]: Org history
+          - link "Timeline" [ref=e118] [cursor=pointer]:
+            - /url: /app/timeline
+            - img [ref=e120]
+            - generic [ref=e124]: Timeline
+      - generic [ref=e125]:
+        - button "People 6" [expanded] [ref=e126] [cursor=pointer]:
+          - generic [ref=e127]: People
+          - generic [ref=e128]:
+            - generic [ref=e129]: "6"
+            - img [ref=e130]
+        - generic [ref=e132]:
+          - link "Members" [ref=e133] [cursor=pointer]:
+            - /url: /app/members
+            - img [ref=e135]
+            - generic [ref=e140]: Members
+          - link "Directors" [ref=e141] [cursor=pointer]:
+            - /url: /app/directors
+            - img [ref=e143]
+            - generic [ref=e155]: Directors
+          - link "Role holders" [ref=e156] [cursor=pointer]:
+            - /url: /app/role-holders
+            - img [ref=e158]
+            - generic [ref=e162]: Role holders
+          - link "Committees" [ref=e163] [cursor=pointer]:
+            - /url: /app/committees
+            - img [ref=e165]
+            - generic [ref=e169]: Committees
+          - link "Volunteers" [ref=e170] [cursor=pointer]:
+            - /url: /app/volunteers
+            - img [ref=e172]
+            - generic [ref=e177]: Volunteers
+          - link "Employees" [ref=e178] [cursor=pointer]:
+            - /url: /app/employees
+            - img [ref=e180]
+            - generic [ref=e185]: Employees
+      - generic [ref=e186]:
+        - button "Work 4" [expanded] [ref=e187] [cursor=pointer]:
+          - generic [ref=e188]: Work
+          - generic [ref=e189]:
+            - generic [ref=e190]: "4"
+            - img [ref=e191]
+        - generic [ref=e193]:
+          - link "Goals" [ref=e194] [cursor=pointer]:
+            - /url: /app/goals
+            - img [ref=e196]
+            - generic [ref=e200]: Goals
+          - link "Library" [ref=e201] [cursor=pointer]:
+            - /url: /app/library
+            - img [ref=e203]
+            - generic [ref=e205]: Library
+          - link "Communications" [ref=e206] [cursor=pointer]:
+            - /url: /app/communications
+            - img [ref=e208]
+            - generic [ref=e211]: Communications
+          - link "Outbox" [ref=e212] [cursor=pointer]:
+            - /url: /app/outbox
+            - img [ref=e214]
+            - generic [ref=e217]: Outbox
+      - button "Meetings & votes 9" [ref=e219] [cursor=pointer]:
+        - generic [ref=e220]: Meetings & votes
+        - generic [ref=e221]:
+          - generic [ref=e222]: "9"
+          - img [ref=e223]
+      - button "Governance records 10" [ref=e226] [cursor=pointer]:
+        - generic [ref=e227]: Governance records
+        - generic [ref=e228]:
+          - generic [ref=e229]: "10"
+          - img [ref=e230]
+      - generic [ref=e232]:
+        - button "Compliance 12" [expanded] [ref=e233] [cursor=pointer]:
+          - generic [ref=e234]: Compliance
+          - generic [ref=e235]:
+            - generic [ref=e236]: "12"
+            - img [ref=e237]
+        - generic [ref=e239]:
+          - link "Filings" [ref=e240] [cursor=pointer]:
+            - /url: /app/filings
+            - img [ref=e242]
+            - generic [ref=e245]: Filings
+          - link "Filing pre-fill" [ref=e246] [cursor=pointer]:
+            - /url: /app/filings/prefill
+            - img [ref=e248]
+            - generic [ref=e260]: Filing pre-fill
+          - link "Formation & annual" [ref=e261] [cursor=pointer]:
+            - /url: /app/formation-maintenance
+            - img [ref=e263]
+            - generic [ref=e269]: Formation & annual
+          - link "Policies" [ref=e270] [cursor=pointer]:
+            - /url: /app/policies
+            - img [ref=e272]
+            - generic [ref=e275]: Policies
+          - link "Records retention" [ref=e276] [cursor=pointer]:
+            - /url: /app/retention
+            - img [ref=e278]
+            - generic [ref=e281]: Records retention
+          - link "Records archive" [ref=e282] [cursor=pointer]:
+            - /url: /app/records-archive
+            - img [ref=e284]
+            - generic [ref=e287]: Records archive
+          - link "Records inspections" [ref=e288] [cursor=pointer]:
+            - /url: /app/inspections
+            - img [ref=e290]
+            - generic [ref=e293]: Records inspections
+          - link "Privacy (PIPA)" [ref=e294] [cursor=pointer]:
+            - /url: /app/privacy
+            - img [ref=e296]
+            - generic [ref=e298]: Privacy (PIPA)
+          - link "PIPA training" [ref=e299] [cursor=pointer]:
+            - /url: /app/pipa-training
+            - img [ref=e301]
+            - generic [ref=e304]: PIPA training
+          - link "Insurance" [ref=e305] [cursor=pointer]:
+            - /url: /app/insurance
+            - img [ref=e307]
+            - generic [ref=e309]: Insurance
+          - link "Access custody" [ref=e310] [cursor=pointer]:
+            - /url: /app/access-custody
+            - img [ref=e312]
+            - generic [ref=e315]: Access custody
+          - link "Public transparency" [ref=e316] [cursor=pointer]:
+            - /url: /app/transparency
+            - img [ref=e318]
+            - generic [ref=e321]: Public transparency
+      - button "Finance 7" [ref=e323] [cursor=pointer]:
+        - generic [ref=e324]: Finance
+        - generic [ref=e325]:
+          - generic [ref=e326]: "7"
+          - img [ref=e327]
+      - button "Workflows 5" [ref=e330] [cursor=pointer]:
+        - generic [ref=e331]: Workflows
+        - generic [ref=e332]:
+          - generic [ref=e333]: "5"
+          - img [ref=e334]
+      - button "Administration 8" [ref=e337] [cursor=pointer]:
+        - generic [ref=e338]: Administration
+        - generic [ref=e339]:
+          - generic [ref=e340]: "8"
+          - img [ref=e341]
+      - generic [ref=e344]: Resources
+      - link "Documentation" [ref=e345] [cursor=pointer]:
+        - /url: https://www2.gov.bc.ca/gov/content/employment-business/non-profits-sector/not-for-profit-organizations
+        - img [ref=e347]
+        - generic [ref=e350]: Documentation
+  - generic [ref=e353]:
+    - generic [ref=e354]:
+      - img [ref=e355]
+      - generic [ref=e357]:
+        - strong [ref=e358]: Demo mode.
+        - text: No demo society yet. Click Seed to load Riverside Community Society.
+      - button "Seed demo society" [ref=e360] [cursor=pointer]:
+        - img [ref=e361]
+        - text: Seed demo society
+    - generic [ref=e366]:
+      - generic [ref=e369]: Loading workspace…
+      - generic:
+        - complementary

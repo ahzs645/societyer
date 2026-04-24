@@ -108,7 +108,7 @@ export function Tabs<T extends string>({
           onClick={() => onChange(it.id)}
         >
           {it.icon}
-          {it.label}
+          <span className="tab__label">{it.label}</span>
           {it.count != null && <Pill size="sm" className="tab__count">{it.count}</Pill>}
         </button>
       ))}

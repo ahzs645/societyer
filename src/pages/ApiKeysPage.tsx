@@ -3,8 +3,8 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
-import { SeedPrompt, PageHeader } from "./_helpers";
-import { Drawer, Field, Button, Banner } from "../components/ui";
+import { SeedPrompt } from "./_helpers";
+import { Drawer, Field, Button, Banner, SettingsShell } from "../components/ui";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { KeyRound, Plus, Trash2, Copy, Check } from "lucide-react";
@@ -138,11 +138,14 @@ export function ApiKeysPage() {
 
   return (
     <div className="page">
-      <PageHeader
+      <SettingsShell
         title="API keys"
-        icon={<KeyRound size={16} />}
-        iconColor="gray"
-        subtitle="Programmatic access to Societyer — create clients, then mint tokens with scoped permissions."
+        description="Programmatic access to Societyer — create clients, then mint tokens with scoped permissions."
+        tabs={[
+          { id: "clients", label: "Clients", icon: <KeyRound size={14} /> },
+          { id: "tokens", label: "Tokens", icon: <ShieldCheckIcon /> },
+        ]}
+        activeTab="clients"
         actions={
           <>
             <Button onClick={() => setClientOpen(true)}>
@@ -164,7 +167,7 @@ export function ApiKeysPage() {
             </Button>
           </>
         }
-      />
+      >
 
       {revealedToken && (
         <Banner
@@ -342,6 +345,11 @@ export function ApiKeysPage() {
           <input className="input" value={tokenForm.scopes} onChange={(e) => setTokenForm({ ...tokenForm, scopes: e.target.value })} />
         </Field>
       </Drawer>
+      </SettingsShell>
     </div>
   );
+}
+
+function ShieldCheckIcon() {
+  return <KeyRound size={14} />;
 }

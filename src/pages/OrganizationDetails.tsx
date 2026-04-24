@@ -7,6 +7,7 @@ import { Badge, Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { Toggle } from "../components/Controls";
 import { OptionSelect } from "../components/OptionSelect";
+import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Building2, KeyRound, Landmark, MapPin, Plus, Trash2 } from "lucide-react";
@@ -14,6 +15,15 @@ import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
 
 type DrawerKind = "address" | "registration" | "identifier";
+type LifecycleDateKey = "incorporationDate" | "continuanceDate" | "amalgamationDate" | "archivedAtISO" | "removedAtISO";
+
+const LIFECYCLE_DATE_TYPES: { value: LifecycleDateKey; label: string }[] = [
+  { value: "incorporationDate", label: "Incorporation date" },
+  { value: "continuanceDate", label: "Continuance date" },
+  { value: "amalgamationDate", label: "Amalgamation date" },
+  { value: "archivedAtISO", label: "Archived date" },
+  { value: "removedAtISO", label: "Removed date" },
+];
 
 export function OrganizationDetailsPage() {
   const society = useSociety();
@@ -33,6 +43,9 @@ export function OrganizationDetailsPage() {
   const [drawerKind, setDrawerKind] = useState<DrawerKind | null>(null);
   const [draft, setDraft] = useState<any>(null);
   const [autoBackfilledSocietyId, setAutoBackfilledSocietyId] = useState<string | null>(null);
+  const [addingLifecycleDate, setAddingLifecycleDate] = useState(false);
+  const [lifecycleDateType, setLifecycleDateType] = useState<LifecycleDateKey | "">("");
+  const [lifecycleDateValue, setLifecycleDateValue] = useState("");
 
   useEffect(() => {
     if (society && !profile) setProfile({ ...society });
@@ -51,6 +64,21 @@ export function OrganizationDetailsPage() {
   if (!profile) return null;
 
   const set = (key: string, value: any) => setProfile((current: any) => ({ ...current, [key]: value }));
+  const lifecycleRows = LIFECYCLE_DATE_TYPES.filter((item) => Boolean(profile[item.value]));
+  const missingLifecycleDateOptions = LIFECYCLE_DATE_TYPES.filter((item) => !profile[item.value]);
+  const startAddingLifecycleDate = () => {
+    const nextType = missingLifecycleDateOptions[0]?.value ?? "";
+    setLifecycleDateType(nextType);
+    setLifecycleDateValue("");
+    setAddingLifecycleDate(Boolean(nextType));
+  };
+  const addLifecycleDate = () => {
+    if (!lifecycleDateType || !lifecycleDateValue) return;
+    set(lifecycleDateType, lifecycleDateValue);
+    setLifecycleDateType("");
+    setLifecycleDateValue("");
+    setAddingLifecycleDate(false);
+  };
 
   const saveProfile = async () => {
     await upsertSociety({
@@ -129,14 +157,14 @@ export function OrganizationDetailsPage() {
       setDraft({
         jurisdiction: "british_columbia",
         representativeIds: [],
-        status: "needs_review",
+        status: "active",
       });
     }
     if (kind === "identifier") {
       setDraft({
         kind: "business_number",
         number: "",
-        status: "needs_review",
+        status: "active",
         accessLevel: "restricted",
       });
     }
@@ -174,7 +202,7 @@ export function OrganizationDetailsPage() {
         nuansNumber: draft.nuansNumber || undefined,
         officialEmail: draft.officialEmail || undefined,
         representativeIds: csv(draft.representativeIdsText ?? draft.representativeIds),
-        status: draft.status || "needs_review",
+        status: draft.status || "active",
         notes: draft.notes || undefined,
       });
     }
@@ -187,7 +215,7 @@ export function OrganizationDetailsPage() {
         jurisdiction: draft.jurisdiction || undefined,
         foreignJurisdiction: draft.foreignJurisdiction || undefined,
         registeredAt: draft.registeredAt || undefined,
-        status: draft.status || "needs_review",
+        status: draft.status || "active",
         accessLevel: draft.accessLevel || "restricted",
         notes: draft.notes || undefined,
       });
@@ -247,22 +275,56 @@ export function OrganizationDetailsPage() {
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">Lifecycle dates</h2>
-            <span className="card__subtitle">Registry timeline events.</span>
+            <span className="card__subtitle">Primary incorporation plus registry events.</span>
+            <button
+              className="btn btn--sm"
+              type="button"
+              onClick={startAddingLifecycleDate}
+              disabled={addingLifecycleDate || missingLifecycleDateOptions.length === 0}
+              style={{ marginLeft: "auto" }}
+            >
+              <Plus size={12} />
+              Add date
+            </button>
           </div>
           <div className="card__body">
-            <div className="org-details-field-grid">
-              <Field label="Continuance date">
-                <DatePicker value={profile.continuanceDate ?? ""} onChange={(value) => set("continuanceDate", value)} />
-              </Field>
-              <Field label="Amalgamation date">
-                <DatePicker value={profile.amalgamationDate ?? ""} onChange={(value) => set("amalgamationDate", value)} />
-              </Field>
-              <Field label="Archived date">
-                <DatePicker value={profile.archivedAtISO ?? ""} onChange={(value) => set("archivedAtISO", value)} />
-              </Field>
-              <Field label="Removed date">
-                <DatePicker value={profile.removedAtISO ?? ""} onChange={(value) => set("removedAtISO", value)} />
-              </Field>
+            <div className="org-details-date-list">
+              {lifecycleRows.length === 0 && !addingLifecycleDate && (
+                <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>No lifecycle dates recorded.</div>
+              )}
+              {lifecycleRows.map((item) => (
+                <div className="org-details-date-row" key={item.value}>
+                  <Field label={item.label}>
+                    <DatePicker value={profile[item.value] ?? ""} onChange={(value) => set(item.value, value)} />
+                  </Field>
+                  <button
+                    className="btn btn--ghost btn--sm btn--icon"
+                    type="button"
+                    aria-label={`Clear ${item.label}`}
+                    onClick={() => set(item.value, "")}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+              {addingLifecycleDate && (
+                <div className="org-details-date-row org-details-date-row--draft">
+                  <Field label="Date type">
+                    <Select
+                      value={lifecycleDateType}
+                      onChange={(value) => setLifecycleDateType(value)}
+                      options={missingLifecycleDateOptions}
+                    />
+                  </Field>
+                  <Field label="Date">
+                    <DatePicker value={lifecycleDateValue} onChange={setLifecycleDateValue} />
+                  </Field>
+                  <div className="org-details-date-row__actions">
+                    <button className="btn btn--sm" type="button" onClick={() => setAddingLifecycleDate(false)}>Cancel</button>
+                    <button className="btn btn--sm btn--accent" type="button" onClick={addLifecycleDate} disabled={!lifecycleDateType || !lifecycleDateValue}>Add</button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -300,10 +362,11 @@ export function OrganizationDetailsPage() {
             rows={detail?.addresses ?? []}
             empty="No structured addresses yet."
             columns={["Type", "Status", "Address", "Effective", ""]}
+            tableClassName="org-address-table"
             render={(row: any) => [
               optionLabel("addressTypes", row.type),
               <Badge key="s" tone={row.status === "current" ? "success" : "neutral"}>{optionLabel("addressStatuses", row.status)}</Badge>,
-              addressLine(row),
+              <span key="address" className="org-address-table__address">{addressLine(row)}</span>,
               dateRange(row.effectiveFrom, row.effectiveTo),
               <RowActions key="a" onEdit={() => { setDrawerKind("address"); setDraft(row); }} onRemove={() => removeRow("address", row)} />,
             ]}
@@ -388,10 +451,11 @@ function DetailSection({ icon, title, count, action, children }: any) {
   );
 }
 
-function SimpleTable({ rows, columns, render, empty }: any) {
+function SimpleTable({ rows, columns, render, empty, tableClassName }: any) {
   if (rows.length === 0) return <div className="card__body muted">{empty}</div>;
+  const className = ["table", tableClassName].filter(Boolean).join(" ");
   return (
-    <table className="table">
+    <table className={className}>
       <thead><tr>{columns.map((column: string) => <th key={column}>{column}</th>)}</tr></thead>
       <tbody>
         {rows.map((row: any) => (

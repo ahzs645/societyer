@@ -118,6 +118,162 @@ function compact(value) {
   return out;
 }
 
+const OCT_4_2024_SECTIONS = [
+  {
+    title: "Bank Account Access and Debit/Credit Cards",
+    type: "discussion",
+    discussion:
+      "- Ahmad and Bruce have access to the Vancity bank account.\n- Debit cards from Vancity will be obtained soon.\n- A credit card application with TD Bank is in progress but may not be heavily used if Vancity becomes the primary bank.",
+  },
+  {
+    title: "Payment for Newspaper",
+    type: "motion",
+    discussion:
+      "- Amount: $1,800 per month after taxes.\n- Invoice has been provided to Lina and is available in the office.",
+    decisions: ["Approved the payment of $1,800 per month for the newspaper for the next eight months, until April."],
+  },
+  {
+    title: "Volume 31, Issue 1 Progress",
+    type: "report",
+    discussion: "- The first issue has been submitted and published successfully.",
+    reportSubmitted: true,
+  },
+  {
+    title: "Office Revamp and Costs",
+    type: "motion",
+    discussion:
+      "- Ahmad presented a detailed list of office upgrade purchases.\n- Total Cost: $3,963.43 (after taxes).\n- Items purchased include monitors, Mac Mini, furniture, and office supplies.",
+    decisions: ["Approved reimbursement to Ahmad Jalil for office upgrade purchases totaling $3,963.43."],
+  },
+  {
+    title: "Potential New Hire",
+    type: "discussion",
+    discussion: "- Discussed hiring an additional editor to assist with communication and content management.",
+    decisions: ["Decision to table this discussion for a future meeting."],
+  },
+  {
+    title: "Document Scanning and Digitization",
+    type: "discussion",
+    discussion:
+      "- All office documents have been scanned and are available on Teams.\n- Currently working on digitizing old articles to upload to the website.",
+    actionItems: [
+      { text: "Build the pathway to publish articles online.", assignee: "Ahmad Jalil", done: false },
+      { text: "Review scanned documents on Teams.", assignee: "All Members", done: false },
+    ],
+  },
+  {
+    title: "Publishing Schedule",
+    type: "discussion",
+    discussion:
+      "- Confirmed Publishing Dates:\n  - September 26\n  - October 24\n  - November 14\n  - December 5\n  - January 23\n  - February 13\n  - March 20\n  - April 10\n- Submission Deadline: End of Tuesday, one week prior to the publication date.\n- For the October 24 issue, the submission deadline is October 15.",
+    actionItems: [{ text: "Upload publishing schedule and deadlines to Teams.", assignee: "Ahmad Jalil", done: false }],
+  },
+  {
+    title: "OTE Phone Number Access",
+    type: "discussion",
+    discussion:
+      "- The OTE phone number (250-960-5633) is now accessible via phone and computer.\n- Members can contact Ahmad to gain access.",
+    actionItems: [{ text: "Contact Ahmad if access to the OTE phone number is needed.", assignee: "All Members", done: false }],
+  },
+  {
+    title: "Expenses to be Reimbursed",
+    type: "motion",
+    discussion:
+      "- **Expenses Incurred by Ahmad:**\n  - $80.00 for notary signing\n  - $33.01 for posters\n  - $19.95 for mailing to Vancity Bank\n- Receipts are recorded on Teams under Expenses.",
+    decisions: ["Approved reimbursement of expenses totaling $132.96 to Ahmad."],
+  },
+  {
+    title: "Potential Upcoming Costs",
+    type: "motion",
+    discussion:
+      "- Canva Subscription:\n  - Cost: Approximately $150 per year\n- Adobe Creative Cloud Subscription:\n  - Cost: $25.99/month for the first year, then $45.99/month thereafter\n- Claud AI Subscription:\n  - Cost: $28/month USD plus tax\n- Ahmad explained the benefits of Claud AI for organizational knowledge management.",
+    decisions: ["Approved the purchase of subscriptions for Canva, Adobe Creative Cloud, and Claud AI."],
+    actionItems: [{ text: "Set up subscriptions for Canva, Adobe Creative Cloud, and Cloud AI using the OTE email.", assignee: "Ahmad Jalil", done: false }],
+  },
+  {
+    title: "Multimedia Tools Discussion",
+    type: "discussion",
+    discussion:
+      "- Considering purchases to enhance multimedia capabilities, including:\n  - DJI Mic 2: $479\n  - Phone Gimbal: $200\n  - DJI Osmo Pocket 2: $300",
+    decisions: ["Decided to table the discussion until the next meeting due to budget considerations."],
+  },
+  {
+    title: "Door Lock Replacement",
+    type: "discussion",
+    discussion:
+      "- Considering upgrading the office door lock to a tap system for improved access control.\n- Estimated Cost: $1,500\n- Waiting for an official quote.\n- Possibility of requesting funding assistance from NUGSS.",
+    actionItems: [{ text: "Obtain an official quote for the door lock replacement.", assignee: "Ahmad Jalil", done: false }],
+  },
+  {
+    title: "Obligations for Insurance Renewal",
+    type: "motion",
+    discussion:
+      "- Renewal Costs:\n  - Commercial General Liability Insurance: $1,084.00\n  - Directors & Officers Liability Insurance: $850.00",
+    decisions: ["Approved payment of insurance premiums totaling $1,934.00."],
+    actionItems: [{ text: "Follow up on insurance renewal and payments.", assignee: "Ahmad Jalil", done: false }],
+  },
+  {
+    title: "Accounting System Integration",
+    type: "discussion",
+    discussion:
+      "- Plan to use Wave, a free accounting system, to track expenses and payments to contributors.\n- Ahmad demonstrated Wave to the team.\n- No objections; agreed to proceed with integration.",
+    decisions: ["Agreed to proceed with Wave accounting integration."],
+    actionItems: [{ text: "Proceed with integrating the Wave accounting system.", assignee: "Ahmad Jalil", done: false }],
+  },
+  {
+    title: "Quesnel Contact for Newspaper Shipping",
+    type: "motion",
+    discussion:
+      "- Established contacts with Julie McRae and Anita Baziuk for shipping newspapers to Quesnel campus.\n- Estimated Shipping Cost: $50 to $100 per campus per issue.",
+    decisions: ["Approved up to $100 per campus per issue for shipping newspapers."],
+  },
+  {
+    title: "Team Considerations",
+    type: "discussion",
+    discussion:
+      "- Team Meal Budget: Tabled for future discussion.\n- Decoration and Printing Budget: Tabled for future discussion.",
+    decisions: ["Team meal budget tabled for future discussion.", "Decoration and printing budget tabled for future discussion."],
+  },
+  {
+    title: "Bruce's Practicum Schedule",
+    type: "discussion",
+    discussion:
+      "- Practicum Dates:\n  - November 4 to December 6\n  - February 10 to March 21\n  - March 31 to May 9\n- Bruce will be unavailable during these periods.",
+  },
+  {
+    title: "Editorial and Team Responsibilities",
+    type: "discussion",
+    discussion:
+      "- Need to develop clearer article guidelines to provide better direction to writers.\n- Discussed outlining primary responsibilities of each team member to ensure balanced workloads.",
+    decisions: ["Decision to table this discussion for the next meeting."],
+    actionItems: [
+      { text: "Prepare for discussions on multimedia tools, team meal budget, decoration and printing budget, and editorial responsibilities in the next meeting.", assignee: "All Members", done: false },
+    ],
+  },
+];
+
+const OCT_4_2024_MOTIONS = [
+  { text: "Approve the payment of $1,800 per month for the newspaper for the next eight months (until April)", movedBy: "Bruce", secondedBy: "Lina", outcome: "Carried", sectionIndex: 1, sectionTitle: "Payment for Newspaper" },
+  { text: "Approve reimbursement to Ahmad Jalil for office upgrade purchases totaling $3,963.43", movedBy: "Bruce", secondedBy: "Lina", outcome: "Carried", sectionIndex: 3, sectionTitle: "Office Revamp and Costs" },
+  { text: "Approve reimbursement of expenses totaling $132.96 to Ahmad", movedBy: "Bruce", secondedBy: "Lina", outcome: "Carried", sectionIndex: 8, sectionTitle: "Expenses to be Reimbursed" },
+  { text: "Approve the purchase of subscriptions for Canva, Adobe Creative Cloud, and Claud AI", movedBy: "Bruce", secondedBy: "Lina", outcome: "Carried", sectionIndex: 9, sectionTitle: "Potential Upcoming Costs" },
+  { text: "Approve payment of insurance premiums totaling $1,934.00", movedBy: "Bruce", secondedBy: "Lina", outcome: "Carried", sectionIndex: 12, sectionTitle: "Obligations for Insurance Renewal" },
+  { text: "Approve up to $100 per campus per issue for shipping newspapers", movedBy: "Bruce", secondedBy: "Lina", outcome: "Carried", sectionIndex: 14, sectionTitle: "Quesnel Contact for Newspaper Shipping" },
+  { text: "Adjourn the meeting", movedBy: "Bruce", secondedBy: "Lina", outcome: "Carried", resolutionType: "Procedural", sectionTitle: "Adjournment" },
+];
+
+const OCT_4_2024_ACTION_ITEMS = [
+  { text: "Upload publishing schedule and deadlines to Teams.", assignee: "Ahmad Jalil", done: false },
+  { text: "Work on the pathway to publish articles on the website.", assignee: "Ahmad Jalil", done: false },
+  { text: "Set up subscriptions for Canva, Adobe Creative Cloud, and Cloud AI using the OTE email.", assignee: "Ahmad Jalil", done: false },
+  { text: "Proceed with integrating the Wave accounting system.", assignee: "Ahmad Jalil", done: false },
+  { text: "Obtain an official quote for the door lock replacement.", assignee: "Ahmad Jalil", done: false },
+  { text: "Follow up on insurance renewal and payments.", assignee: "Ahmad Jalil", done: false },
+  { text: "Review scanned documents on Teams.", assignee: "All Members", done: false },
+  { text: "Contact Ahmad if access to the OTE phone number is needed.", assignee: "All Members", done: false },
+  { text: "Prepare for discussions on multimedia tools, team meal budget, decoration and printing budget, and editorial responsibilities in the next meeting.", assignee: "All Members", done: false },
+];
+
 async function importMeeting(spec) {
   console.log(`\n→ ${spec.scheduledAt.slice(0, 10)} | ${spec.title}`);
 
@@ -558,30 +714,17 @@ const MEETINGS = [
     ],
     discussion:
       "Banking: Vancity access in place for Ahmad and Bruce; debit cards arriving; TD credit card application in progress (lower priority if Vancity becomes primary). Newspaper payment of $1,800/mo approved for the next 8 months (through April). Volume 31 Issue 1 published successfully. Office revamp totalling $3,963.43 (monitors, Mac Mini, furniture, supplies) approved for reimbursement to Ahmad. Hiring an additional editor tabled. Document scanning complete; old articles being digitised; Ahmad to build publishing pathway. Publishing dates set: Sep 26, Oct 24, Nov 14, Dec 5, Jan 23, Feb 13, Mar 20, Apr 10 (submission deadline end of Tuesday one week prior; Oct 24 deadline = Oct 15). OTE phone line (250-960-5633) accessible. Reimbursed Ahmad $132.96 ($80 notary, $33.01 posters, $19.95 Vancity mailing). Approved subscriptions: Canva (~$150/yr), Adobe Creative Cloud ($25.99/mo first year then $45.99), Claude AI ($28/mo USD + tax). Multimedia (DJI Mic 2, gimbal, Osmo Pocket 2) tabled. Door-lock tap upgrade ~$1,500 awaiting quote; possible NUGSS funding ask. Insurance renewals approved: CGL $1,084 + D&O $850 = $1,934. Wave accounting integration agreed. Quesnel shipping via Julie McRae and Anita Baziuk approved up to $100/campus/issue. Team meal/decoration budgets tabled. Bruce unavailable Nov 4–Dec 6, Feb 10–Mar 21, Mar 31–May 9 (practicums). Editorial guidelines work tabled. Adjourned 1:51 pm.",
-    motions: [
-      { text: "Approve $1,800/month newspaper payment for the next 8 months (until April)", movedBy: "Bruce", secondedBy: "Lina", outcome: "Carried" },
-      { text: "Approve reimbursement of $3,963.43 to Ahmad Jalil for office upgrade purchases", movedBy: "Bruce", secondedBy: "Lina", outcome: "Carried" },
-      { text: "Approve reimbursement of $132.96 in expenses to Ahmad", movedBy: "Bruce", secondedBy: "Lina", outcome: "Carried" },
-      { text: "Approve purchase of Canva, Adobe Creative Cloud, and Claude AI subscriptions", movedBy: "Bruce", secondedBy: "Lina", outcome: "Carried" },
-      { text: "Approve insurance premium payments totalling $1,934.00 (CGL $1,084 + D&O $850)", movedBy: "Bruce", secondedBy: "Lina", outcome: "Carried" },
-      { text: "Approve up to $100 per campus per issue for newspaper shipping (Quesnel)", movedBy: "Bruce", secondedBy: "Lina", outcome: "Carried" },
-      { text: "Adjourn the meeting", movedBy: "Bruce", secondedBy: "Lina", outcome: "Carried" },
-    ],
+    sections: OCT_4_2024_SECTIONS,
+    motions: OCT_4_2024_MOTIONS,
     decisions: [
       "Use Wave (free) as accounting system; Ahmad to integrate",
       "Tap-system door upgrade pending official quote and possible NUGSS funding",
       "Defer multimedia tools, team meal budget, decoration/printing budget, and editorial-guidelines work to next meeting",
     ],
-    actionItems: [
-      { text: "Upload publishing schedule and deadlines to Teams", assignee: "Ahmad Jalil", done: false },
-      { text: "Build pathway to publish articles on the website", assignee: "Ahmad Jalil", done: false },
-      { text: "Set up Canva, Adobe Creative Cloud, and Claude AI subscriptions on OTE email", assignee: "Ahmad Jalil", done: false },
-      { text: "Integrate Wave accounting", assignee: "Ahmad Jalil", done: false },
-      { text: "Obtain official quote for door-lock tap upgrade", assignee: "Ahmad Jalil", done: false },
-      { text: "Follow up on insurance renewal and payments", assignee: "Ahmad Jalil", done: false },
-      { text: "Review scanned documents on Teams", done: false },
-      { text: "Prepare next-meeting discussion on multimedia tools, team meal budget, decoration/printing budget, and editorial responsibilities", done: false },
-    ],
+    actionItems: OCT_4_2024_ACTION_ITEMS,
+    nextMeetingAt: "To be determined",
+    nextMeetingNotes:
+      "Agenda items for next meeting: Multimedia Tools Purchase Decision; Team Meal Budget Discussion; Decoration and Printing Budget; Editorial Guidelines and Team Responsibilities.",
   },
 
   {

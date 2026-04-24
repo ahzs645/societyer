@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
   LayoutDashboard,
@@ -407,6 +407,7 @@ export function Layout() {
   const { society, societies } = useSocietySelection();
   const { t } = useTranslation();
   const loc = useLocation();
+  const navigate = useNavigate();
   const [isMobileNav, setIsMobileNav] = useState(() =>
     window.matchMedia(mobileSidebarMediaQuery).matches,
   );
@@ -598,6 +599,13 @@ export function Layout() {
   );
   const getNavItemLabel = (item: NavItem) => t(NAV_ITEM_LABEL_KEYS[item.label] ?? item.label, item.label);
   const isSidebarCollapsed = isMobileNav ? !mobileSidebarOpen : collapsed;
+  const activeSidebarMode = loc.pathname.startsWith("/app/workflows") ||
+    loc.pathname.startsWith("/app/workflow-runs") ||
+    loc.pathname.startsWith("/app/workflow-packages") ||
+    loc.pathname.startsWith("/app/browser-connectors") ||
+    loc.pathname.startsWith("/app/template-engine")
+      ? "workflows"
+      : "workspace";
   const shellClassName = useMemo(() => {
     let value = "app-shell";
     if (isSidebarCollapsed) value += " is-collapsed";
@@ -716,6 +724,40 @@ export function Layout() {
                 aria-label={`${isSidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")} ${isMobileNav ? t("sidebar.navigation") : t("sidebar.sidebar")}`}
               >
                 <PanelLeftClose size={14} />
+              </button>
+            </div>
+          </div>
+          <div className="sidebar__mode-row" aria-label="Sidebar mode">
+            <div className="sidebar__mode-pill" role="tablist" aria-label="Navigation mode">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeSidebarMode === "workspace"}
+                className={`sidebar__mode-tab${activeSidebarMode === "workspace" ? " is-active" : ""}`}
+                title="Workspace"
+                onClick={() => navigate("/app")}
+              >
+                <LayoutDashboard size={14} />
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={false}
+                className="sidebar__mode-tab"
+                title={`${t("common.search")} (⌘K)`}
+                onClick={() => window.dispatchEvent(new Event("kbar:open"))}
+              >
+                <Search size={14} />
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeSidebarMode === "workflows"}
+                className={`sidebar__mode-tab${activeSidebarMode === "workflows" ? " is-active" : ""}`}
+                title="Workflows"
+                onClick={() => navigate("/app/workflows")}
+              >
+                <Workflow size={14} />
               </button>
             </div>
           </div>

@@ -15,6 +15,8 @@ export type Motion = {
   votesAgainst?: number;
   abstentions?: number;
   resolutionType?: "Ordinary" | "Special" | "Unanimous" | string;
+  sectionIndex?: number;
+  sectionTitle?: string;
 };
 
 export type MotionPerson = {
@@ -23,6 +25,17 @@ export type MotionPerson = {
   name: string;
   aliases?: string[];
 };
+
+export type MotionAgendaSection = {
+  title: string;
+  discussion?: string;
+  decisions?: string[];
+};
+
+export function isAdjournmentMotion(motion: Pick<Motion, "text" | "sectionTitle" | "resolutionType">) {
+  const text = `${motion.text ?? ""} ${motion.sectionTitle ?? ""} ${motion.resolutionType ?? ""}`.toLowerCase();
+  return /\badjourn(?:ment|ed|s)?\b/.test(text);
+}
 
 /** Required threshold percentage for a resolution type per the Societies Act. */
 export function thresholdFor(kind?: string): number {
@@ -140,6 +153,7 @@ export function MotionEditor({
   onChange,
   directorNames,
   people = [],
+  agendaSections = [],
   onAddToBacklog,
 }: {
   motions: Motion[];
@@ -147,6 +161,7 @@ export function MotionEditor({
   /** Director full names used to autofill movedBy/secondedBy. */
   directorNames: string[];
   people?: MotionPerson[];
+  agendaSections?: Array<string | MotionAgendaSection>;
   onAddToBacklog?: (motion: Motion, index: number) => void | Promise<void>;
 }) {
   const [adding, setAdding] = useState(false);
@@ -157,6 +172,9 @@ export function MotionEditor({
     () => Array.from(new Set([...directorNames, ...people.flatMap((person) => [person.name, ...(person.aliases ?? [])])])).filter(Boolean).sort(),
     [directorNames, people],
   );
+  const motionRows = motions.map((motion, index) => ({ motion, index }));
+  const businessMotionRows = motionRows.filter(({ motion }) => !isAdjournmentMotion(motion));
+  const adjournmentRows = motionRows.filter(({ motion }) => isAdjournmentMotion(motion));
 
   const saveDraft = () => {
     if (!draft.text.trim()) return;
@@ -175,27 +193,68 @@ export function MotionEditor({
     patch(idx, { [key]: Math.max(0, current + delta) } as Partial<Motion>);
   };
 
+  const addAdjournmentRecord = () => {
+    onChange([
+      ...motions,
+      {
+        text: "Adjourn the meeting",
+        outcome: "Carried",
+        resolutionType: "Procedural",
+        sectionTitle: "Adjournment",
+      },
+    ]);
+  };
+
   return (
     <div>
       <datalist id={listId}>
         {nameOptions.map((n) => <option key={n} value={n} />)}
       </datalist>
 
-      {motions.length === 0 && !adding && <div className="muted">No motions recorded yet.</div>}
+      {businessMotionRows.length === 0 && !adding && <div className="muted">No business motions recorded yet.</div>}
 
-      {motions.map((m, i) => (
+      {businessMotionRows.map(({ motion: m, index: i }) => (
         <MotionRow
           key={i}
           motion={m}
           listId={listId}
           directorNames={directorNames}
           people={people}
+          agendaSections={agendaSections}
           onPatch={(diff) => patch(i, diff)}
           onBumpVote={(k, d) => bumpVote(i, k, d)}
           onDelete={() => onChange(motions.filter((_, j) => j !== i))}
           onAddToBacklog={onAddToBacklog ? () => onAddToBacklog(m, i) : undefined}
         />
       ))}
+
+      <div className="motion-adjournment">
+        <div className="motion-adjournment__head">
+          <div>
+            <strong>Adjournment</strong>
+            <div className="muted">Procedural close of the meeting.</div>
+          </div>
+          {!adjournmentRows.length && (
+            <button className="btn-action" type="button" onClick={addAdjournmentRecord}>
+              <Plus size={12} /> Add adjournment record
+            </button>
+          )}
+        </div>
+        {adjournmentRows.map(({ motion: m, index: i }) => (
+          <MotionRow
+            key={`adjournment-${i}`}
+            motion={m}
+            listId={listId}
+            directorNames={directorNames}
+            people={people}
+            agendaSections={agendaSections}
+            procedural
+            onPatch={(diff) => patch(i, diff)}
+            onBumpVote={(k, d) => bumpVote(i, k, d)}
+            onDelete={() => onChange(motions.filter((_, j) => j !== i))}
+          />
+        ))}
+      </div>
 
       {adding ? (
         <div className="motion" style={{ borderColor: "var(--accent)" }}>
@@ -256,6 +315,22 @@ export function MotionEditor({
               <OutcomePicker value={draft.outcome} onChange={(v) => setDraft({ ...draft, outcome: v })} />
             </Field>
           </div>
+          {agendaSections.length > 0 && (
+            <Field label="Agenda item">
+              <select
+                className="input"
+                value={draft.sectionIndex == null ? "" : String(draft.sectionIndex)}
+                onChange={(event) => setDraft((current) => ({ ...current, ...motionSectionPatch(event.target.value, agendaSections) }))}
+              >
+                <option value="">Unassigned</option>
+                {agendaSections.map((section, index) => (
+                  <option key={index} value={index}>
+                    {index + 1}. {agendaSectionTitle(section) || "Untitled section"}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           <div className="row" style={{ gap: 12 }}>
             <Field label="Votes for">
               <input className="input" type="number" min={0} value={draft.votesFor ?? ""} onChange={(e) => setDraft({ ...draft, votesFor: e.target.value === "" ? undefined : Number(e.target.value) })} />
@@ -292,6 +367,8 @@ function MotionRow({
   listId,
   directorNames,
   people,
+  agendaSections,
+  procedural = false,
   onPatch,
   onBumpVote,
   onDelete,
@@ -301,6 +378,8 @@ function MotionRow({
   listId: string;
   directorNames: string[];
   people: MotionPerson[];
+  agendaSections: Array<string | MotionAgendaSection>;
+  procedural?: boolean;
   onPatch: (diff: Partial<Motion>) => void;
   onBumpVote: (k: "votesFor" | "votesAgainst" | "abstentions", d: number) => void;
   onDelete: () => void;
@@ -328,6 +407,8 @@ function MotionRow({
       : motion.resolutionType === "Unanimous"
         ? "Unanimous"
         : "Ordinary · majority";
+  const assignedAgendaLabel = agendaLabelForMotion(motion, agendaSections);
+  const selectedAgendaIndex = assignedSectionIndexForMotion(motion, agendaSections);
 
   return (
     <div
@@ -341,7 +422,8 @@ function MotionRow({
             {motion.movedBy && <MotionPersonMeta label="Moved by" value={motion.movedBy} person={movedByLink} />}
             {motion.secondedBy && <MotionPersonMeta label="Seconded by" value={motion.secondedBy} person={secondedByLink} />}
             <Badge tone={tone as any}>{motion.outcome}</Badge>
-            <Badge tone="neutral">{kindLabel}</Badge>
+            <Badge tone="neutral">{procedural ? "Procedural" : kindLabel}</Badge>
+            {assignedAgendaLabel && <Badge tone="neutral">{assignedAgendaLabel}</Badge>}
             {thresholdMet != null && (
               <Badge tone={thresholdMet ? "success" : "danger"}>
                 {thresholdMet ? "Threshold met" : "Below threshold"}
@@ -421,6 +503,22 @@ function MotionRow({
           <Field label="Outcome">
             <OutcomePicker value={motion.outcome} onChange={(v) => onPatch({ outcome: v })} />
           </Field>
+          {agendaSections.length > 0 && (
+            <Field label="Agenda item">
+              <select
+                className="input"
+                value={selectedAgendaIndex == null ? "" : String(selectedAgendaIndex)}
+                onChange={(event) => onPatch(motionSectionPatch(event.target.value, agendaSections))}
+              >
+                <option value="">Unassigned</option>
+                {agendaSections.map((section, index) => (
+                  <option key={index} value={index}>
+                    {index + 1}. {agendaSectionTitle(section) || "Untitled section"}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           <div className="row" style={{ gap: 12, alignItems: "flex-end" }}>
             <VoteStepper label="For" value={motion.votesFor ?? 0} onBump={(d) => onBumpVote("votesFor", d)} tone="success" />
             <VoteStepper label="Against" value={motion.votesAgainst ?? 0} onBump={(d) => onBumpVote("votesAgainst", d)} tone="danger" />
@@ -443,10 +541,17 @@ function MotionPersonMeta({
 }) {
   return (
     <span>
-      {label} <strong>{value}</strong>
-      {person && <Badge tone="success">Linked: {person.name}</Badge>}
+      {label} <strong>{person?.name ?? value}</strong>
     </span>
   );
+}
+
+export function motionPersonDisplayName(
+  value: string | undefined,
+  people: MotionPerson[],
+  ids: { memberId?: string; directorId?: string } = {},
+) {
+  return resolveMotionPerson(value, people, ids)?.name ?? value ?? "";
 }
 
 function motionPersonPatch(prefix: "movedBy" | "secondedBy", person: MotionPerson | null): Partial<Motion> {
@@ -454,6 +559,78 @@ function motionPersonPatch(prefix: "movedBy" | "secondedBy", person: MotionPerso
     [`${prefix}MemberId`]: person?.kind === "member" ? person.id : undefined,
     [`${prefix}DirectorId`]: person?.kind === "director" ? person.id : undefined,
   } as Partial<Motion>;
+}
+
+function motionSectionPatch(value: string, agendaSections: Array<string | MotionAgendaSection>): Partial<Motion> {
+  if (value === "") {
+    return { sectionIndex: undefined, sectionTitle: undefined };
+  }
+  const sectionIndex = Number(value);
+  if (!Number.isInteger(sectionIndex) || sectionIndex < 0 || sectionIndex >= agendaSections.length) {
+    return {};
+  }
+  return {
+    sectionIndex,
+    sectionTitle: agendaSectionTitle(agendaSections[sectionIndex]) || undefined,
+  };
+}
+
+function agendaLabelForMotion(motion: Motion, agendaSections: Array<string | MotionAgendaSection>) {
+  const sectionIndex = assignedSectionIndexForMotion(motion, agendaSections);
+  if (sectionIndex != null && agendaSections[sectionIndex]) {
+    return `${sectionIndex + 1}. ${agendaSectionTitle(agendaSections[sectionIndex])}`;
+  }
+  return motion.sectionTitle ? `Agenda: ${motion.sectionTitle}` : "";
+}
+
+function assignedSectionIndexForMotion(motion: Motion, agendaSections: Array<string | MotionAgendaSection>) {
+  if (motion.sectionIndex != null && agendaSections[motion.sectionIndex]) return motion.sectionIndex;
+  if (motion.sectionTitle) {
+    const titleMatch = agendaSections.findIndex((section) => normalizeMotionText(agendaSectionTitle(section)) === normalizeMotionText(motion.sectionTitle));
+    if (titleMatch >= 0) return titleMatch;
+  }
+  const inferred = agendaSections.findIndex((section) => motionBelongsToAgendaSection(motion, section));
+  return inferred >= 0 ? inferred : null;
+}
+
+function motionBelongsToAgendaSection(motion: Motion, section: string | MotionAgendaSection) {
+  if (isAdjournmentMotion(motion)) return false;
+  const haystackRaw = agendaSectionSearchText(section);
+  const haystack = normalizeMotionText(haystackRaw);
+  const motionText = normalizeMotionText(motion.text);
+  if (!haystack || !motionText) return false;
+
+  const amounts = moneyAmounts(motion.text);
+  if (amounts.length && !amounts.some((amount) => haystackRaw.replace(/\s+/g, "").includes(amount))) return false;
+  if (haystack.includes(motionText.slice(0, 32))) return true;
+
+  const words = motionText.split(" ").filter((word) => word.length > 3 && !["motion", "approve", "approved", "purchase", "payment", "payments"].includes(word));
+  if (!words.length) return false;
+  const hits = words.filter((word) => haystack.includes(word)).length;
+  return hits >= Math.min(2, words.length);
+}
+
+function agendaSectionTitle(section: string | MotionAgendaSection | undefined) {
+  return typeof section === "string" ? section : section?.title ?? "";
+}
+
+function agendaSectionSearchText(section: string | MotionAgendaSection) {
+  if (typeof section === "string") return section;
+  return [section.title, section.discussion ?? "", ...(section.decisions ?? [])].filter(Boolean).join(" ");
+}
+
+function moneyAmounts(text: string) {
+  return String(text ?? "").match(/\$\s?\d[\d,]*(?:\.\d{2})?/g)?.map((amount) => amount.replace(/\s+/g, "")) ?? [];
+}
+
+function normalizeMotionText(value: string | undefined | null) {
+  return String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 function resolveMotionPerson(

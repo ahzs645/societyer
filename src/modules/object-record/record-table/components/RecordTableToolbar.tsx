@@ -41,6 +41,7 @@ export function RecordTableToolbar({
 }) {
   const searchTerm = useRecordTableState((s) => s.searchTerm);
   const columns = useRecordTableState((s) => s.columns);
+  const density = useRecordTableState((s) => s.density);
   const filters = useRecordTableState((s) => s.filters);
   const handle = useRecordTableStoreHandle();
   const isDirty = useRecordTableIsDirty();
@@ -190,6 +191,15 @@ export function RecordTableToolbar({
             <span>Filter{filters.length > 0 ? ` · ${filters.length}` : ""}</span>
           </button>
         )}
+
+        <button
+          type="button"
+          className="record-table__toolbar-button"
+          onClick={() => handle.get().setDensity(density === "compact" ? "comfortable" : "compact")}
+          title="Toggle row density"
+        >
+          <span>{density === "compact" ? "Compact" : "Comfort"}</span>
+        </button>
 
         <div className="record-table__view-switcher" ref={columnMenuRef}>
           <button

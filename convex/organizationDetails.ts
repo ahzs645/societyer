@@ -2,6 +2,19 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { assertAllowedOption } from "./lib/orgHubOptions";
 
+const BACKFILL_DOCUMENT_CATEGORIES = [
+  "Constitution",
+  "Bylaws",
+  "Minutes",
+  "FinancialStatement",
+  "Policy",
+  "Filing",
+  "WorkflowGenerated",
+];
+const BACKFILL_DOCUMENT_SCAN_LIMIT_PER_CATEGORY = 80;
+const BACKFILL_MINUTE_BOOK_SCAN_LIMIT = 500;
+const BACKFILL_INSERT_LIMIT = 100;
+
 export const overview = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
@@ -103,15 +116,27 @@ export const backfillFromExistingRecords = mutation({
     await insertLegacyAddress("registered_office", society.registeredOfficeAddress);
     await insertLegacyAddress("mailing", society.mailingAddress);
 
-    const [documents, minuteBookItems] = await Promise.all([
-      ctx.db.query("documents").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-      ctx.db.query("minuteBookItems").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    const [documentGroups, minuteBookItems] = await Promise.all([
+      Promise.all(
+        BACKFILL_DOCUMENT_CATEGORIES.map((category) =>
+          ctx.db
+            .query("documents")
+            .withIndex("by_society_category", (q) => q.eq("societyId", societyId).eq("category", category))
+            .take(BACKFILL_DOCUMENT_SCAN_LIMIT_PER_CATEGORY),
+        ),
+      ),
+      ctx.db
+        .query("minuteBookItems")
+        .withIndex("by_society", (q) => q.eq("societyId", societyId))
+        .take(BACKFILL_MINUTE_BOOK_SCAN_LIMIT),
     ]);
+    const documents = documentGroups.flat();
     const existingDocIds = new Set(minuteBookItems.flatMap((item) => (item.documentIds ?? []).map(String)));
     for (const doc of documents) {
       if (existingDocIds.has(String(doc._id))) continue;
       const recordType = minuteBookRecordTypeForDocument(doc);
       if (!recordType) continue;
+      if (minuteBookItemsCreated >= BACKFILL_INSERT_LIMIT) break;
       await ctx.db.insert("minuteBookItems", {
         societyId,
         title: doc.title,
@@ -129,7 +154,13 @@ export const backfillFromExistingRecords = mutation({
       minuteBookItemsCreated += 1;
     }
 
-    return { addressesCreated, minuteBookItemsCreated };
+    return {
+      addressesCreated,
+      minuteBookItemsCreated,
+      scannedDocuments: documents.length,
+      scannedMinuteBookItems: minuteBookItems.length,
+      capped: minuteBookItemsCreated >= BACKFILL_INSERT_LIMIT,
+    };
   },
 });
 

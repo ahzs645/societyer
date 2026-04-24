@@ -18,6 +18,8 @@ const motion = v.object({
   votesAgainst: v.optional(v.number()),
   abstentions: v.optional(v.number()),
   resolutionType: v.optional(v.string()),
+  sectionIndex: v.optional(v.number()),
+  sectionTitle: v.optional(v.string()),
 });
 
 const actionItem = v.object({

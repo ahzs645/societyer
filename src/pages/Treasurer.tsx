@@ -325,7 +325,7 @@ export function TreasurerPage() {
   );
 
   return (
-    <div className="page">
+    <div className="page page--wide treasurer-page">
       <PageHeader
         title="Treasurer dashboard"
         icon={<PiggyBank size={16} />}
@@ -346,56 +346,54 @@ export function TreasurerPage() {
         }
       />
 
-      {/* date range */}
-      <div className="card">
-        <div className="card__body row" style={{ gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-          <label className="row" style={{ gap: 6 }}>
-            <span className="muted">From</span>
-            <input type="date" className="input" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </label>
-          <label className="row" style={{ gap: 6 }}>
-            <span className="muted">To</span>
-            <input type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} />
-          </label>
-          <label className="row" style={{ gap: 6 }}>
-            <span className="muted">FY</span>
-            <input
-              className="input"
-              value={fy}
-              onChange={(e) => setFy(e.target.value)}
-              inputMode="numeric"
-              style={{ width: 90, maxWidth: "100%" }}
-            />
-          </label>
+      <div className="treasurer-overview-grid">
+        <div className="card treasurer-period-card">
+          <div className="card__body treasurer-period-card__body">
+            <label className="treasurer-period-field">
+              <span className="muted">From</span>
+              <input type="date" className="input" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </label>
+            <label className="treasurer-period-field">
+              <span className="muted">To</span>
+              <input type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} />
+            </label>
+            <label className="treasurer-period-field treasurer-period-field--fy">
+              <span className="muted">FY</span>
+              <input
+                className="input"
+                value={fy}
+                onChange={(e) => setFy(e.target.value)}
+                inputMode="numeric"
+                style={{ width: 90, maxWidth: "100%" }}
+              />
+            </label>
+          </div>
         </div>
-      </div>
 
-      {/* P&L */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))", gap: 12 }}>
         <SummaryCard label="Income" value={pnl?.totalIncomeCents ?? 0} icon={<TrendingUp size={14} />} color="green" />
         <SummaryCard label="Expenses" value={-(pnl?.totalExpenseCents ?? 0)} icon={<TrendingDown size={14} />} color="red" />
         <SummaryCard label="Net" value={pnl?.netCents ?? 0} icon={<DollarSign size={14} />} color={pnl && pnl.netCents < 0 ? "red" : "green"} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: 12 }}>
-        <div className="card">
+      <div className="treasurer-category-grid">
+        <div className="card treasurer-category-card">
           <div className="card__head"><h2 className="card__title">Income by category</h2></div>
-          <div className="card__body col" style={{ gap: 4 }}>
+          <div className="card__body treasurer-category-list">
             {incomeEntries.length === 0 && <div className="muted">No income transactions in this period.</div>}
             {incomeEntries.map(([cat, amt]) => (
-              <div key={cat} className="row" style={{ justifyContent: "space-between" }}>
+              <div key={cat} className="treasurer-category-row">
                 <span>{cat}</span>
                 <span className="mono">{cents(amt)}</span>
               </div>
             ))}
           </div>
         </div>
-        <div className="card">
+        <div className="card treasurer-category-card">
           <div className="card__head"><h2 className="card__title">Expenses by category</h2></div>
-          <div className="card__body col" style={{ gap: 4 }}>
+          <div className="card__body treasurer-category-list">
             {expenseEntries.length === 0 && <div className="muted">No expense transactions in this period.</div>}
             {expenseEntries.map(([cat, amt]) => (
-              <div key={cat} className="row" style={{ justifyContent: "space-between" }}>
+              <div key={cat} className="treasurer-category-row">
                 <span>{cat}</span>
                 <span className="mono">{cents(amt)}</span>
               </div>
@@ -404,7 +402,7 @@ export function TreasurerPage() {
         </div>
       </div>
 
-      <div className="card">
+      <div className="card treasurer-expense-card">
         <div className="card__head">
           <div>
             <h2 className="card__title">Expense reports</h2>
@@ -417,7 +415,7 @@ export function TreasurerPage() {
           </button>
         </div>
         <div className="card__body">
-          <div className="stat-grid" style={{ marginBottom: 16 }}>
+          <div className="stat-grid treasurer-claim-stats">
             <div className="stat">
               <div className="stat__label">Total claims</div>
               <div className="stat__value">{cents(expenseTotals.total)}</div>
@@ -439,7 +437,7 @@ export function TreasurerPage() {
               <div className="stat__sub">closed reimbursements</div>
             </div>
           </div>
-          <table className="table">
+          <table className="table treasurer-claims-table">
             <thead>
               <tr>
                 <th>Claim</th>
@@ -507,8 +505,8 @@ export function TreasurerPage() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: 12 }}>
-        <div className="card">
+      <div className="treasurer-register-grid">
+        <div className="card treasurer-funding-mix-card">
           <div className="card__head">
             <div>
               <h2 className="card__title">Funding mix</h2>
@@ -518,7 +516,7 @@ export function TreasurerPage() {
             </div>
           </div>
           <div className="card__body">
-            <table className="table">
+            <table className="table treasurer-funding-table">
               <thead>
                 <tr>
                   <th>Source</th>
@@ -557,7 +555,7 @@ export function TreasurerPage() {
           </div>
         </div>
 
-        <div className="card">
+        <div className="card treasurer-source-register-card">
           <div className="card__head">
             <div>
               <h2 className="card__title">Source register</h2>
@@ -568,7 +566,7 @@ export function TreasurerPage() {
             </button>
           </div>
           <div className="card__body">
-            <table className="table">
+            <table className="table treasurer-source-table">
               <thead>
                 <tr>
                   <th>Name</th>
@@ -625,12 +623,12 @@ export function TreasurerPage() {
         </div>
       </div>
 
-      <div className="card">
+      <div className="card treasurer-timeline-card">
         <div className="card__head">
           <h2 className="card__title">Funding source timeline</h2>
           <span className="card__subtitle">Manual funding events, including aggregate third-party remittances.</span>
         </div>
-        <table className="table">
+        <table className="table treasurer-timeline-table">
           <thead>
             <tr>
               <th>Date</th>
@@ -688,7 +686,7 @@ export function TreasurerPage() {
       </div>
 
       {/* Budget variance */}
-      <div className="card">
+      <div className="card treasurer-budget-card">
         <div className="card__head">
           <h2 className="card__title">Budget variance — FY {fy}</h2>
           <span className="card__subtitle">Budget line vs. actual spend</span>
@@ -755,7 +753,7 @@ export function TreasurerPage() {
       </div>
 
       {/* Restricted funds */}
-      <div className="card">
+      <div className="card treasurer-restricted-card">
         <div className="card__head">
           <h2 className="card__title">Restricted funds</h2>
           <span className="card__subtitle">Active grants with earmarked funds</span>
@@ -1151,12 +1149,12 @@ function SummaryCard({
   color: string;
 }) {
   return (
-    <div className="card" style={{ padding: 16 }}>
-      <div className="row" style={{ gap: 8, alignItems: "center" }}>
+    <div className="card treasurer-summary-card">
+      <div className="treasurer-summary-card__label">
         <span style={{ color: `var(--${color}, inherit)` }}>{icon}</span>
         <span className="muted">{label}</span>
       </div>
-      <div className="mono" style={{ fontSize: "var(--fs-xl, 24px)", marginTop: 4, fontWeight: 600 }}>
+      <div className="mono treasurer-summary-card__value">
         {cents(value)}
       </div>
     </div>

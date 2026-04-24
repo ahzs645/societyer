@@ -4,8 +4,8 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
-import { SeedPrompt, PageHeader } from "./_helpers";
-import { Drawer, Field } from "../components/ui";
+import { SeedPrompt } from "./_helpers";
+import { Button, Drawer, Field, SettingsShell } from "../components/ui";
 import { Sliders, Plus, Trash2 } from "lucide-react";
 import {
   RecordTable,
@@ -138,17 +138,20 @@ export function CustomFieldsPage() {
 
   return (
     <div className="page custom-fields-page">
-      <PageHeader
+      <SettingsShell
         title="Custom fields"
-        icon={<Sliders size={16} />}
-        iconColor="purple"
-        subtitle="Add extra fields to any person category (members, directors, volunteers, employees). Saved values appear on each person's detail and can be pulled into PDF mapping."
+        description="Add extra fields to any person category (members, directors, volunteers, employees). Saved values appear on each person's detail and can be pulled into PDF mapping."
+        tabs={[
+          { id: "definitions", label: "Definitions", icon: <Sliders size={14} /> },
+          { id: "mapping", label: "Mapping" },
+        ]}
+        activeTab="definitions"
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <Button variant="accent" onClick={openNew}>
             <Plus size={12} /> New field
-          </button>
+          </Button>
         }
-      />
+      >
 
       <div className="custom-fields-mobile-list" aria-label="Custom field definitions">
         {definitions === undefined ? (
@@ -353,6 +356,7 @@ export function CustomFieldsPage() {
           </div>
         )}
       </Drawer>
+      </SettingsShell>
     </div>
   );
 }

@@ -31,6 +31,8 @@ export function MeetingSidebarColumn({
   setIncludeTranscriptInExport,
   includeActionItemsInExport,
   setIncludeActionItemsInExport,
+  includeDiscussionSummaryInExport,
+  setIncludeDiscussionSummaryInExport,
   includeApprovalInExport,
   setIncludeApprovalInExport,
   includeSignaturesInExport,
@@ -76,6 +78,8 @@ export function MeetingSidebarColumn({
   setIncludeTranscriptInExport: (value: boolean) => void;
   includeActionItemsInExport: boolean;
   setIncludeActionItemsInExport: (value: boolean) => void;
+  includeDiscussionSummaryInExport: boolean;
+  setIncludeDiscussionSummaryInExport: (value: boolean) => void;
   includeApprovalInExport: boolean;
   setIncludeApprovalInExport: (value: boolean) => void;
   includeSignaturesInExport: boolean;
@@ -182,6 +186,11 @@ export function MeetingSidebarColumn({
                     checked={includeActionItemsInExport}
                     onChange={setIncludeActionItemsInExport}
                     label="Include action items"
+                  />
+                  <Checkbox
+                    checked={includeDiscussionSummaryInExport}
+                    onChange={setIncludeDiscussionSummaryInExport}
+                    label="Include discussion summary"
                   />
                   <Checkbox
                     checked={includeApprovalInExport}

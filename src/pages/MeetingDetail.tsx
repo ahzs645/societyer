@@ -8,10 +8,11 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Tabs } from "../components/primitives";
+import { Menu } from "../components/Menu";
 import { formatDate, formatDateTime } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ClipboardCheck, Download, ExternalLink, Eye, EyeOff, FileDown, FileText, Gavel, PackageCheck, Printer, Settings2 } from "lucide-react";
-import { MotionEditor, type Motion } from "../components/MotionEditor";
+import { ArrowLeft, ClipboardCheck, Download, ExternalLink, Eye, EyeOff, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Printer, Settings2 } from "lucide-react";
+import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion } from "../components/MotionEditor";
 import {
   MINUTES_EXPORT_STYLES,
   MinutesExportStyleId,
@@ -48,12 +49,6 @@ import {
   personLinkCandidates,
   sourceExternalIdsForMinutes,
 } from "../features/meetings/components/MeetingDetailSupport";
-import {
-  type StructuredMinutesEdit,
-  structuredEditFromMinutes,
-  structuredPatchFromEdit,
-} from "../features/meetings/lib/structuredMinutes";
-
 const MINUTES_EXPORT_PREF_PREFIX = "societyer.minutesExport.";
 type MeetingDetailTab = "overview" | "minutes" | "motions" | "package" | "export" | "sources";
 
@@ -141,10 +136,10 @@ export function MeetingDetailPage() {
   } | null>(null);
   const [savingTranscript, setSavingTranscript] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
-  const [structuredEdit, setStructuredEdit] = useState<StructuredMinutesEdit | null>(null);
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
   const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", true));
   const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
+  const [includeDiscussionSummaryInExport, setIncludeDiscussionSummaryInExport] = useState(() => readStoredExportBool("includeDiscussionSummary", false));
   const [includeApprovalInExport, setIncludeApprovalInExport] = useState(() => readStoredExportBool("includeApproval", true));
   const [includeSignaturesInExport, setIncludeSignaturesInExport] = useState(() => readStoredExportBool("includeSignatures", true));
   const [includePlaceholdersInExport, setIncludePlaceholdersInExport] = useState(() => readStoredExportBool("includePlaceholders", false));
@@ -168,12 +163,14 @@ export function MeetingDetailPage() {
   useEffect(() => {
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeTranscript`, String(includeTranscriptInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeActionItems`, String(includeActionItemsInExport));
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeDiscussionSummary`, String(includeDiscussionSummaryInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeApproval`, String(includeApprovalInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeSignatures`, String(includeSignaturesInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includePlaceholders`, String(includePlaceholdersInExport));
   }, [
     includeActionItemsInExport,
     includeApprovalInExport,
+    includeDiscussionSummaryInExport,
     includePlaceholdersInExport,
     includeSignaturesInExport,
     includeTranscriptInExport,
@@ -190,6 +187,7 @@ export function MeetingDetailPage() {
   if (!meeting) return <div className="page">Loading…</div>;
 
   const agenda = parseAgenda(meeting.agendaJson);
+  const businessMotions = ((minutes?.motions ?? []) as Motion[]).filter((motion) => !isAdjournmentMotion(motion));
   const minutesSourceExternalIds = sourceExternalIdsForMinutes(minutes);
   const linkedSourceCount = (sourceDocuments ?? []).length || minutesSourceExternalIds.length;
   const minutesDraftTranscript = minutes?.draftTranscript ?? "";
@@ -403,8 +401,8 @@ export function MeetingDetailPage() {
       motions: (minutes.motions as any[]).map((m) => ({
         ...m,
         text: tx(m.text) ?? "",
-        movedBy: tx(m.movedBy),
-        secondedBy: tx(m.secondedBy),
+        movedBy: tx(motionPersonDisplayName(m.movedBy, motionPeople, { memberId: m.movedByMemberId, directorId: m.movedByDirectorId })),
+        secondedBy: tx(motionPersonDisplayName(m.secondedBy, motionPeople, { memberId: m.secondedByMemberId, directorId: m.secondedByDirectorId })),
       })),
       decisions: redact ? minutes.decisions.map(redact) : minutes.decisions,
       actionItems: (minutes.actionItems as any[]).map((a) => ({
@@ -471,6 +469,7 @@ export function MeetingDetailPage() {
       options: {
         includeTranscript: redact ? false : includeTranscriptInExport,
         includeActionItems: includeActionItemsInExport,
+        includeDiscussionSummary: includeDiscussionSummaryInExport,
         includeApprovalBlock: includeApprovalInExport,
         includeSignatures: includeSignaturesInExport,
         includePlaceholders: includePlaceholdersInExport,
@@ -611,21 +610,6 @@ export function MeetingDetailPage() {
     });
     setAttendanceEdit(null);
     toast.success("Attendance saved");
-  };
-
-  const startStructuredEdit = () => {
-    if (!minutes) return;
-    setStructuredEdit(structuredEditFromMinutes(minutes));
-  };
-
-  const saveStructuredDetails = async () => {
-    if (!minutes || !structuredEdit) return;
-    await updateMinutes({
-      id: minutes._id,
-      patch: structuredPatchFromEdit(structuredEdit),
-    });
-    setStructuredEdit(null);
-    toast.success("Structured minutes details saved");
   };
 
   const openMaterialDrawer = (agendaLabel?: string, material?: any) => {
@@ -818,38 +802,67 @@ export function MeetingDetailPage() {
                 <ExternalLink size={12} /> Join
               </a>
             )}
-            <button className="btn-action" onClick={downloadMeetingPack}>
-              <Download size={12} /> Meeting pack
-            </button>
             {minutes && (
-              <button className="btn-action" onClick={openMinutesPreview} title="Preview the selected Word/PDF export layout">
+              <button className="btn-action btn-action--primary" onClick={openMinutesPreview} title="Preview the selected Word/PDF export layout">
                 <Eye size={12} /> Preview
               </button>
             )}
-            {minutes && (
-              <button className="btn-action" onClick={openMinutesPreviewPage} title="Open the Word preview as a separate page">
-                <ExternalLink size={12} /> Open preview
-              </button>
-            )}
-            {minutes && (
-              <button className="btn-action" onClick={exportToWord} title="Download as .docx (opens in Word, Pages, or Google Docs)">
-                <FileDown size={12} /> Export to Word
-              </button>
-            )}
-            {minutes && (
-              <button className="btn-action" onClick={exportToPdf} title="Open a printable copy you can save as PDF">
-                <Printer size={12} /> Print / PDF
-              </button>
-            )}
-            {minutes && (
-              <button
-                className="btn-action"
-                onClick={exportPublicMinutes}
-                title="Same export with PII (emails, phones, addresses, names) auto-redacted for public posting"
-              >
-                <EyeOff size={12} /> Export public copy
-              </button>
-            )}
+            <Menu
+              align="right"
+              minWidth={220}
+              trigger={
+                <button className="btn-action" type="button" title="Meeting actions">
+                  <MoreHorizontal size={12} /> Actions
+                </button>
+              }
+              sections={[
+                {
+                  id: "package",
+                  items: [
+                    {
+                      id: "meeting-pack",
+                      label: "Download meeting pack",
+                      icon: <Download size={12} />,
+                      onSelect: downloadMeetingPack,
+                    },
+                  ],
+                },
+                {
+                  id: "minutes-export",
+                  label: "Minutes export",
+                  items: [
+                    {
+                      id: "preview-page",
+                      label: "Open preview page",
+                      icon: <ExternalLink size={12} />,
+                      disabled: !minutes,
+                      onSelect: openMinutesPreviewPage,
+                    },
+                    {
+                      id: "word",
+                      label: "Export to Word",
+                      icon: <FileDown size={12} />,
+                      disabled: !minutes,
+                      onSelect: exportToWord,
+                    },
+                    {
+                      id: "pdf",
+                      label: "Print / PDF",
+                      icon: <Printer size={12} />,
+                      disabled: !minutes,
+                      onSelect: exportToPdf,
+                    },
+                    {
+                      id: "public",
+                      label: "Export public copy",
+                      icon: <EyeOff size={12} />,
+                      disabled: !minutes,
+                      onSelect: exportPublicMinutes,
+                    },
+                  ],
+                },
+              ]}
+            />
           </>
         }
       />
@@ -865,7 +878,7 @@ export function MeetingDetailPage() {
         </div>
         <div>
           <span>Motions</span>
-          <strong>{minutes?.motions.length ?? 0}</strong>
+          <strong>{businessMotions.length}</strong>
         </div>
       <div>
         <span>Materials</span>
@@ -879,7 +892,7 @@ export function MeetingDetailPage() {
         items={[
           { id: "overview", label: "Overview", icon: <ClipboardCheck size={12} /> },
           { id: "minutes", label: "Minutes", icon: <FileText size={12} /> },
-          { id: "motions", label: "Motions", count: minutes?.motions.length ?? 0, icon: <Gavel size={12} /> },
+          { id: "motions", label: "Motions", count: businessMotions.length, icon: <Gavel size={12} /> },
           { id: "package", label: "Package", count: packageMaterials.length, icon: <PackageCheck size={12} /> },
           { id: "export", label: "Export", icon: <Settings2 size={12} /> },
           { id: "sources", label: "Sources", count: linkedSourceCount, icon: <Download size={12} /> },
@@ -901,6 +914,8 @@ export function MeetingDetailPage() {
               setIncludeTranscriptInExport={setIncludeTranscriptInExport}
               includeActionItemsInExport={includeActionItemsInExport}
               setIncludeActionItemsInExport={setIncludeActionItemsInExport}
+              includeDiscussionSummaryInExport={includeDiscussionSummaryInExport}
+              setIncludeDiscussionSummaryInExport={setIncludeDiscussionSummaryInExport}
               includeApprovalInExport={includeApprovalInExport}
               setIncludeApprovalInExport={setIncludeApprovalInExport}
               includeSignaturesInExport={includeSignaturesInExport}
@@ -947,6 +962,8 @@ export function MeetingDetailPage() {
               setIncludeTranscriptInExport={setIncludeTranscriptInExport}
               includeActionItemsInExport={includeActionItemsInExport}
               setIncludeActionItemsInExport={setIncludeActionItemsInExport}
+              includeDiscussionSummaryInExport={includeDiscussionSummaryInExport}
+              setIncludeDiscussionSummaryInExport={setIncludeDiscussionSummaryInExport}
               includeApprovalInExport={includeApprovalInExport}
               setIncludeApprovalInExport={setIncludeApprovalInExport}
               includeSignaturesInExport={includeSignaturesInExport}
@@ -986,7 +1003,6 @@ export function MeetingDetailPage() {
 
         {activeTab === "minutes" && (
           <MeetingMinutesColumn
-            meeting={meeting}
             minutes={minutes}
             agenda={agenda}
             agendaEdit={agendaEdit}
@@ -996,16 +1012,14 @@ export function MeetingDetailPage() {
             setAttendanceEdit={setAttendanceEdit}
             startAttendanceEdit={startAttendanceEdit}
             saveAttendance={saveAttendance}
-            structuredEdit={structuredEdit}
-            setStructuredEdit={setStructuredEdit}
-            startStructuredEdit={startStructuredEdit}
-            saveStructuredDetails={saveStructuredDetails}
             quorumSnapshot={quorumSnapshot}
             quorumLegalGuides={quorumLegalGuides}
             members={members}
             directors={directors}
             saveMinuteSections={saveMinuteSections}
+            saveMinuteMotions={saveMotions}
             addSectionToBacklog={addSectionToBacklog}
+            onOpenMotions={() => setActiveTab("motions")}
             transcript={transcript}
             setTranscript={setTranscript}
             transcriptOnFile={transcriptOnFile}
@@ -1021,13 +1035,13 @@ export function MeetingDetailPage() {
                 <Gavel size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
                 Motions
               </h2>
-              {minutes?.motions?.length ? (
+              {businessMotions.length ? (
                 <span className="card__subtitle">
-                  {minutes.motions.filter((motion: any) => motion.outcome === "Carried").length} carried
+                  {businessMotions.filter((motion: any) => motion.outcome === "Carried").length} carried
                   {" / "}
-                  {minutes.motions.filter((motion: any) => motion.outcome === "Defeated").length} defeated
+                  {businessMotions.filter((motion: any) => motion.outcome === "Defeated").length} defeated
                   {" / "}
-                  {minutes.motions.filter((motion: any) => motion.outcome === "Tabled").length} tabled
+                  {businessMotions.filter((motion: any) => motion.outcome === "Tabled").length} tabled
                 </span>
               ) : null}
             </div>
@@ -1037,6 +1051,11 @@ export function MeetingDetailPage() {
                   motions={minutes.motions as Motion[]}
                   directorNames={directorNames}
                   people={motionPeople}
+                  agendaSections={(minutes.sections ?? []).map((section: any) => ({
+                    title: section.title || "Untitled section",
+                    discussion: section.discussion ?? "",
+                    decisions: section.decisions ?? [],
+                  }))}
                   onChange={saveMotions}
                   onAddToBacklog={addMotionToBacklog}
                 />
@@ -1088,6 +1107,8 @@ export function MeetingDetailPage() {
               setIncludeTranscriptInExport={setIncludeTranscriptInExport}
               includeActionItemsInExport={includeActionItemsInExport}
               setIncludeActionItemsInExport={setIncludeActionItemsInExport}
+              includeDiscussionSummaryInExport={includeDiscussionSummaryInExport}
+              setIncludeDiscussionSummaryInExport={setIncludeDiscussionSummaryInExport}
               includeApprovalInExport={includeApprovalInExport}
               setIncludeApprovalInExport={setIncludeApprovalInExport}
               includeSignaturesInExport={includeSignaturesInExport}
@@ -1150,6 +1171,8 @@ export function MeetingDetailPage() {
             setIncludeTranscriptInExport={setIncludeTranscriptInExport}
             includeActionItemsInExport={includeActionItemsInExport}
             setIncludeActionItemsInExport={setIncludeActionItemsInExport}
+            includeDiscussionSummaryInExport={includeDiscussionSummaryInExport}
+            setIncludeDiscussionSummaryInExport={setIncludeDiscussionSummaryInExport}
             includeApprovalInExport={includeApprovalInExport}
             setIncludeApprovalInExport={setIncludeApprovalInExport}
             includeSignaturesInExport={includeSignaturesInExport}
@@ -1281,6 +1304,7 @@ export function MeetingMinutesPreviewPage() {
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
   const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", true));
   const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
+  const [includeDiscussionSummaryInExport, setIncludeDiscussionSummaryInExport] = useState(() => readStoredExportBool("includeDiscussionSummary", false));
   const [includeApprovalInExport, setIncludeApprovalInExport] = useState(() => readStoredExportBool("includeApproval", true));
   const [includeSignaturesInExport, setIncludeSignaturesInExport] = useState(() => readStoredExportBool("includeSignatures", true));
   const [includePlaceholdersInExport, setIncludePlaceholdersInExport] = useState(() => readStoredExportBool("includePlaceholders", false));
@@ -1292,12 +1316,14 @@ export function MeetingMinutesPreviewPage() {
   useEffect(() => {
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeTranscript`, String(includeTranscriptInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeActionItems`, String(includeActionItemsInExport));
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeDiscussionSummary`, String(includeDiscussionSummaryInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeApproval`, String(includeApprovalInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeSignatures`, String(includeSignaturesInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includePlaceholders`, String(includePlaceholdersInExport));
   }, [
     includeActionItemsInExport,
     includeApprovalInExport,
+    includeDiscussionSummaryInExport,
     includePlaceholdersInExport,
     includeSignaturesInExport,
     includeTranscriptInExport,
@@ -1356,6 +1382,7 @@ export function MeetingMinutesPreviewPage() {
     options: {
       includeTranscript: includeTranscriptInExport,
       includeActionItems: includeActionItemsInExport,
+      includeDiscussionSummary: includeDiscussionSummaryInExport,
       includeApprovalBlock: includeApprovalInExport,
       includeSignatures: includeSignaturesInExport,
       includePlaceholders: includePlaceholdersInExport,
@@ -1411,6 +1438,7 @@ export function MeetingMinutesPreviewPage() {
           <div className="col" style={{ gap: 6 }}>
             <label><input type="checkbox" checked={includeTranscriptInExport} onChange={(event) => setIncludeTranscriptInExport(event.target.checked)} /> Include transcript</label>
             <label><input type="checkbox" checked={includeActionItemsInExport} onChange={(event) => setIncludeActionItemsInExport(event.target.checked)} /> Include action items</label>
+            <label><input type="checkbox" checked={includeDiscussionSummaryInExport} onChange={(event) => setIncludeDiscussionSummaryInExport(event.target.checked)} /> Include discussion summary</label>
             <label><input type="checkbox" checked={includeApprovalInExport} onChange={(event) => setIncludeApprovalInExport(event.target.checked)} /> Include approval block</label>
             <label><input type="checkbox" checked={includeSignaturesInExport} onChange={(event) => setIncludeSignaturesInExport(event.target.checked)} /> Include signature lines</label>
             <label><input type="checkbox" checked={includePlaceholdersInExport} onChange={(event) => setIncludePlaceholdersInExport(event.target.checked)} /> Show placeholders</label>

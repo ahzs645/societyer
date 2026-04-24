@@ -1441,7 +1441,7 @@ function hasSocietyGovernanceSignal(doc: any) {
 function transposedInsurancePolicy(doc: any) {
   const text = paperlessText(doc);
   const title = paperlessDocumentTitle(doc);
-  if (!/\b(insurance|liability|policy number|certificate of insurance|coverage|premium|insurer|broker)\b/i.test(text)) {
+  if (!isLikelyInsurancePolicyDocument(text, title)) {
     return null;
   }
   const policyNumber = text.match(/\b(?:policy\s*(?:number|no\.?)[:\s]*)([A-Z0-9-]{4,})/i)?.[1];
@@ -1449,16 +1449,47 @@ function transposedInsurancePolicy(doc: any) {
   const endDate = dateNear(text, /\b(expires?|expiry|expiration|to)\b/i);
   const renewalDate = dateNear(text, /\b(renewal|expires?|expiry|to)\b/i) ?? endDate ?? addOneYear(startDate);
   const coverageCents = moneyNear(text, /\b(coverage|limit|liability)\b/i);
+  const sourceExternalId = `paperless:${doc.id}`;
+  const isDno = /\bdirector|d&o|officer\b/i.test(text);
+  const isCgl = /\bgeneral liability|commercial general\b/i.test(text);
   return {
     title,
-    kind: /\bdirector|d&o|officer\b/i.test(text) ? "DirectorsOfficers" : /\bcyber\b/i.test(text) ? "CyberLiability" : /\bgeneral liability|commercial general\b/i.test(text) ? "GeneralLiability" : "Other",
+    kind: isDno ? "DirectorsOfficers" : /\bcyber\b/i.test(text) ? "CyberLiability" : isCgl ? "GeneralLiability" : "Other",
     insurer: text.match(/\b(?:insurer|insurance company|underwritten by)[:\s-]+([A-Z][A-Za-z& .'-]{2,80})/i)?.[1] ?? "Needs review",
     broker: text.match(/\b(?:broker|agent|producer)[:\s-]+([A-Z][A-Za-z& .'-]{2,80})/i)?.[1],
     policyNumber: policyNumber || "Needs review",
+    policySeriesKey: insuranceSeriesKeyFromText(text, policyNumber, isDno, isCgl),
+    policyTermLabel: startDate && (endDate || renewalDate) ? `${startDate.slice(0, 4)}-${String(endDate ?? renewalDate).slice(0, 4)}` : undefined,
+    versionType: /\brenewal\b/i.test(text) ? "renewal" : undefined,
     coverageCents,
     premiumCents: moneyNear(text, /\b(premium|amount due|balance due)\b/i),
     deductibleCents: moneyNear(text, /\b(deductible|retention)\b/i),
     coverageSummary: coverageCents ? `OCR detected policy limit ${formatMoneyFromCents(coverageCents)}. Verify against source declarations.` : undefined,
+    coveredParties: insuranceCoveredParties(text, sourceExternalId),
+    coverageItems: coverageCents ? [{
+      label: "Policy limit detected by OCR",
+      coverageType: isDno ? "Directors and officers liability" : isCgl ? "Commercial general liability" : "Insurance coverage",
+      limitCents: coverageCents,
+      summary: "OCR-derived limit. Verify against declarations before approval.",
+      sourceExternalIds: [sourceExternalId],
+    }] : [],
+    insuranceRequirements: insuranceRequirementsFromText(text, sourceExternalId, coverageCents),
+    claimsMadeTerms: isDno ? {
+      retroactiveDate: dateNear(text, /\b(retroactive|prior acts)\b/i),
+      reportingDeadline: dateNear(text, /\b(report|notice|claim)\b/i),
+      defenseCostsInsideLimit: /\b(defen[cs]e costs?.{0,40}(inside|inclusive|erode)|limit.{0,40}defen[cs]e costs?)\b/i.test(text) ? true : undefined,
+      retentionCents: moneyNear(text, /\b(retention|deductible)\b/i),
+      territory: text.match(/\b(worldwide|canada|united states|north america)\b/i)?.[1],
+      sourceExternalIds: [sourceExternalId],
+      notes: "OCR-derived claims-made terms. Verify reporting deadline and defence-cost wording against the policy.",
+    } : undefined,
+    claimIncidents: /\b(claim|incident|injury|loss)\b/i.test(text) ? [{
+      status: "Needs review",
+      privacyFlag: true,
+      sourceExternalIds: [sourceExternalId],
+      notes: "Insurance source mentions claim/incident/loss language. Review before creating a final claim record.",
+    }] : [],
+    complianceChecks: complianceChecksFromInsuranceText(text, sourceExternalId, renewalDate),
     startDate,
     endDate,
     renewalDate,
@@ -1469,6 +1500,100 @@ function transposedInsurancePolicy(doc: any) {
     sourceDate: inferredPaperlessDate(doc),
     sourceExternalIds: [`paperless:${doc.id}`],
   };
+}
+
+function isLikelyInsurancePolicyDocument(text: string, title: string) {
+  const haystack = `${title}\n${text}`;
+  if (/\b(payment options?|statement of account|tax credit|td1|resume|curriculum vitae|service plan|easy care|cra|information return)\b/i.test(title)) {
+    return false;
+  }
+  const hasPolicyNumber = /\bpolicy\s*(?:number|no\.?)[:\s]*[A-Z0-9-]{4,}\b/i.test(haystack);
+  const hasPolicyDocumentTitle = /\b(policy declaration|policy declarations|renewal terms|certificate of insurance|commercial general liability|directors?[& ]+officers?|management liability|d&o)\b/i.test(haystack);
+  const hasInsurerOrBroker = /\b(insurer|insurance company|underwritten by|broker|brownridge|intact|markel|lloyd'?s)\b/i.test(haystack);
+  const hasCoverageTerms = /\b(commercial general liability|tenant'?s legal liability|non-owned auto|policy limit|premium|deductible|retention|additional insured|claims-made|coverage summary)\b/i.test(haystack);
+  return hasPolicyNumber || (hasPolicyDocumentTitle && hasInsurerOrBroker) || (hasInsurerOrBroker && hasCoverageTerms && /\b(insurance|liability|policy)\b/i.test(haystack));
+}
+
+function insuranceSeriesKeyFromText(text: string, policyNumber: string | undefined, isDno: boolean, isCgl: boolean) {
+  const insurer = text.match(/\b(?:insurer|insurance company|underwritten by)[:\s-]+([A-Z][A-Za-z& .'-]{2,80})/i)?.[1];
+  const broker = text.match(/\b(?:broker|agent|producer)[:\s-]+([A-Z][A-Za-z& .'-]{2,80})/i)?.[1];
+  return [isCgl ? "cgl" : isDno ? "dno" : "insurance", insurer, broker, isCgl ? policyNumber : isDno ? "management-liability" : policyNumber]
+    .map((value) => String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim())
+    .filter(Boolean)
+    .join("|") || undefined;
+}
+
+function insuranceRequirementsFromText(text: string, sourceExternalId: string, coverageCents?: number) {
+  const requirements: any[] = [];
+  if (/\b(certificate of insurance|additional insured|room booking|space booking|facility|tenant'?s legal liability|vendor|exhibitor|alcohol|liquor|special occasion permit)\b/i.test(text)) {
+    requirements.push({
+      context: /\b(room booking|space booking|facility)\b/i.test(text) ? "Facility or room booking" : /\bvendor|exhibitor\b/i.test(text) ? "Vendor or exhibitor requirement" : "Insurance requirement",
+      requirementType: /\balcohol|liquor|special occasion permit\b/i.test(text) ? "alcohol_event" : /\bvendor|exhibitor\b/i.test(text) ? "vendor" : "event_or_facility",
+      coverageSource: "Needs review",
+      cglLimitRequiredCents: coverageCents,
+      additionalInsuredRequired: /\badditional insured\b/i.test(text) ? true : undefined,
+      coiStatus: /\bcertificate of insurance\b/i.test(text) ? "Referenced" : "Needs review",
+      tenantLegalLiabilityLimitCents: moneyNear(text, /\btenant'?s legal liability\b/i),
+      hostLiquorLiability: /\balcohol|liquor|special occasion permit\b/i.test(text) ? "Needs review" : undefined,
+      vendorCoiRequired: /\bvendor|exhibitor\b/i.test(text) ? true : undefined,
+      studentEventChecklistRequired: /\bstudent event checklist\b/i.test(text) ? true : undefined,
+      riskTriggers: [
+        /\balcohol|liquor|special occasion permit\b/i.test(text) ? "alcohol" : undefined,
+        /\bvendor|exhibitor\b/i.test(text) ? "vendor" : undefined,
+        /\bfood|catering\b/i.test(text) ? "food" : undefined,
+        /\bfee|admission|donation\b/i.test(text) ? "fees_or_donations" : undefined,
+      ].filter(Boolean),
+      sourceExternalIds: [sourceExternalId],
+      notes: "OCR-derived requirement cue. Confirm against booking, lease, or vendor source before approval.",
+    });
+  }
+  return requirements;
+}
+
+function complianceChecksFromInsuranceText(text: string, sourceExternalId: string, renewalDate?: string) {
+  const checks: any[] = [];
+  if (/\bworksafe|worker|employee|staff|payroll\b/i.test(text)) {
+    checks.push({
+      label: "Confirm WorkSafeBC coverage or exemption",
+      status: "Needs review",
+      dueDate: renewalDate,
+      sourceExternalIds: [sourceExternalId],
+      notes: "Created because the insurance source mentions workers, employees, staff, or payroll.",
+    });
+  }
+  if (/\bannual review|board review|renewal|risk assessment\b/i.test(text)) {
+    checks.push({
+      label: "Board insurance review before renewal",
+      status: "Needs review",
+      dueDate: renewalDate,
+      sourceExternalIds: [sourceExternalId],
+      notes: "Confirm current operations, certificates, claims, declined coverages, and renewal recommendation.",
+    });
+  }
+  return checks;
+}
+
+function insuranceCoveredParties(text: string, sourceExternalId: string) {
+  const parties: any[] = [];
+  if (/\bdirector|d&o|officer\b/i.test(text)) {
+    parties.push({
+      name: "Board of directors and officers",
+      partyType: "covered class",
+      coveredClass: "directors_officers",
+      sourceExternalIds: [sourceExternalId],
+      notes: "Inferred from D&O/management liability source text; verify named insured wording.",
+    });
+  }
+  if (/\bvolunteer worker|volunteers?\b/i.test(text)) {
+    parties.push({
+      name: "Volunteer workers",
+      partyType: "covered class",
+      coveredClass: "volunteers",
+      sourceExternalIds: [sourceExternalId],
+      notes: "Inferred from insurance wording; verify source definition before use.",
+    });
+  }
+  return parties;
 }
 
 function transposedFinancialStatement(doc: any) {

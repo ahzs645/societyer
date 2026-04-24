@@ -18,6 +18,11 @@ const VISIBLE_DOCUMENT_CATEGORIES = [
   "Library",
 ];
 
+const DOCUMENT_QUEUE_LIMIT = 8;
+const DOCUMENT_QUEUE_CATEGORY_SCAN_LIMIT = 80;
+const DOCUMENT_QUEUE_RELATED_SCAN_LIMIT = 250;
+const DOCUMENT_QUEUE_RELATED_DOC_LIMIT = 64;
+
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
@@ -129,15 +134,42 @@ export const reviewQueues = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, { societyId }) => {
-    const [documents, tasks, comments, signatures, materials] = await Promise.all([
-      ctx.db.query("documents").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-      ctx.db.query("tasks").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-      ctx.db.query("documentComments").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-      ctx.db.query("signatures").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-      ctx.db.query("meetingMaterials").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    const [documentGroups, recentlyOpened, tasks, comments, signatures, materials] = await Promise.all([
+      Promise.all(
+        VISIBLE_DOCUMENT_CATEGORIES.map((category) =>
+          ctx.db
+            .query("documents")
+            .withIndex("by_society_category", (q) => q.eq("societyId", societyId).eq("category", category))
+            .take(DOCUMENT_QUEUE_CATEGORY_SCAN_LIMIT),
+        ),
+      ),
+      ctx.db
+        .query("documents")
+        .withIndex("by_last_opened", (q) => q.eq("societyId", societyId))
+        .order("desc")
+        .take(DOCUMENT_QUEUE_LIMIT),
+      ctx.db
+        .query("tasks")
+        .withIndex("by_society", (q) => q.eq("societyId", societyId))
+        .take(DOCUMENT_QUEUE_RELATED_SCAN_LIMIT),
+      ctx.db
+        .query("documentComments")
+        .withIndex("by_society", (q) => q.eq("societyId", societyId))
+        .take(DOCUMENT_QUEUE_RELATED_SCAN_LIMIT),
+      ctx.db
+        .query("signatures")
+        .withIndex("by_society", (q) => q.eq("societyId", societyId))
+        .take(DOCUMENT_QUEUE_RELATED_SCAN_LIMIT),
+      ctx.db
+        .query("meetingMaterials")
+        .withIndex("by_society", (q) => q.eq("societyId", societyId))
+        .take(DOCUMENT_QUEUE_RELATED_SCAN_LIMIT),
     ]);
 
-    const docs = documents.filter((doc) => !isInternalDocumentRecord(doc));
+    const documentsById = new Map<string, any>();
+    for (const doc of [...documentGroups.flat(), ...recentlyOpened]) {
+      if (!isInternalDocumentRecord(doc)) documentsById.set(String(doc._id), doc);
+    }
     const taskCounts = countByDocument(tasks.filter((task) => task.status !== "Done"));
     const openCommentCounts = countByDocument(comments.filter((comment) => comment.status !== "resolved"));
     const signatureCounts = new Map<string, number>();
@@ -146,8 +178,25 @@ export const reviewQueues = query({
       signatureCounts.set(signature.entityId, (signatureCounts.get(signature.entityId) ?? 0) + 1);
     }
     const materialDocIds = new Set(materials.map((row) => String(row.documentId)));
+
+    const relatedDocIds = topDocumentIds([taskCounts, openCommentCounts, signatureCounts], materialDocIds)
+      .filter((id) => !documentsById.has(id))
+      .slice(0, DOCUMENT_QUEUE_RELATED_DOC_LIMIT);
+    const relatedDocuments = await Promise.all(relatedDocIds.map((id) => ctx.db.get(id as any)));
+    for (const doc of relatedDocuments) {
+      if (doc && !isInternalDocumentRecord(doc)) documentsById.set(String(doc._id), doc);
+    }
+
+    const docs = [...documentsById.values()];
     const annotate = (doc: any) => ({
-      ...doc,
+      _id: doc._id,
+      title: doc.title,
+      category: doc.category,
+      createdAtISO: doc.createdAtISO,
+      lastOpenedAtISO: doc.lastOpenedAtISO,
+      reviewStatus: doc.reviewStatus,
+      tags: Array.isArray(doc.tags) ? doc.tags : [],
+      meetingId: doc.meetingId,
       openTaskCount: taskCounts.get(String(doc._id)) ?? 0,
       openCommentCount: openCommentCounts.get(String(doc._id)) ?? 0,
       signatureCount: signatureCounts.get(String(doc._id)) ?? 0,
@@ -158,7 +207,7 @@ export const reviewQueues = query({
     const recent = annotated
       .filter((doc) => doc.lastOpenedAtISO || doc.createdAtISO)
       .sort((a, b) => String(b.lastOpenedAtISO ?? b.createdAtISO).localeCompare(String(a.lastOpenedAtISO ?? a.createdAtISO)))
-      .slice(0, 8);
+      .slice(0, DOCUMENT_QUEUE_LIMIT);
     const actionRequired = annotated
       .filter((doc) =>
         doc.reviewStatus === "needs_signature" ||
@@ -169,7 +218,7 @@ export const reviewQueues = query({
         (doc.tags ?? []).includes("action-required"),
       )
       .sort((a, b) => Number(b.openTaskCount + b.openCommentCount) - Number(a.openTaskCount + a.openCommentCount))
-      .slice(0, 8);
+      .slice(0, DOCUMENT_QUEUE_LIMIT);
     const workInProgress = annotated
       .filter((doc) =>
         doc.reviewStatus === "in_review" ||
@@ -178,7 +227,7 @@ export const reviewQueues = query({
         doc.openCommentCount > 0,
       )
       .sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO)))
-      .slice(0, 8);
+      .slice(0, DOCUMENT_QUEUE_LIMIT);
 
     return {
       recent,
@@ -720,6 +769,21 @@ function countByDocument(rows: Array<{ documentId?: unknown }>) {
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;
+}
+
+function topDocumentIds(countMaps: Map<string, number>[], materialDocIds: Set<string>) {
+  const scores = new Map<string, number>();
+  for (const counts of countMaps) {
+    for (const [id, count] of counts) {
+      scores.set(id, (scores.get(id) ?? 0) + count);
+    }
+  }
+  for (const id of materialDocIds) {
+    scores.set(id, (scores.get(id) ?? 0) + 1);
+  }
+  return [...scores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => id);
 }
 
 function isInternalDocumentRecord(doc: any) {
