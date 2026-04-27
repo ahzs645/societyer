@@ -833,6 +833,7 @@ export function GrantDetailPage() {
         committee={committee}
         owner={owner}
         account={account}
+        viewMode="page"
         onLinkEmployee={async (employeeId, patch = {}) => {
           await upsertEmployeeLink({
             societyId: society._id,

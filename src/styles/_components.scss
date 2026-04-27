@@ -531,7 +531,7 @@
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-left: 3px solid var(--border-strong);
-  border-radius: var(--r-md);
+  border-radius: 0;
   box-shadow: var(--shadow-md);
   animation: toastIn 0.18s ease-out;
 }

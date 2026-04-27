@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:k8s": "VITE_CONVEX_URL=${VITE_CONVEX_URL:-http://societyer.k8s.home:3220} VITE_AUTH_MODE=${VITE_AUTH_MODE:-none} vite --host 127.0.0.1",
     "dev:full": "concurrently -k \"npm run auth:server\" \"npm run dev\"",
     "build": "npm run convex:typecheck && tsc -b && vite build",
     "build:pages": "npm run convex:typecheck && tsc -b && VITE_STABLE_ASSET_NAMES=1 vite build && node scripts/prepare-pages.mjs",

@@ -43,6 +43,7 @@ export function GrantReadPanel({
   onCreateEmployee,
   onQueueEmployeeOrientationEmail,
   onCreateSinVaultRecord,
+  viewMode = "drawer",
 }: {
   grant: any;
   documents: any[];
@@ -58,6 +59,7 @@ export function GrantReadPanel({
   onCreateEmployee?: (draft: Record<string, unknown>) => Promise<string | void>;
   onQueueEmployeeOrientationEmail?: (employee: any, grant: any) => void | Promise<void>;
   onCreateSinVaultRecord?: (draft: Record<string, unknown>) => Promise<string | void>;
+  viewMode?: "drawer" | "page";
 }) {
   return (
     <div style={{ display: "grid", gap: 12 }}>
@@ -73,6 +75,7 @@ export function GrantReadPanel({
         onCreateEmployee={onCreateEmployee}
         onQueueEmployeeOrientationEmail={onQueueEmployeeOrientationEmail}
         onCreateSinVaultRecord={onCreateSinVaultRecord}
+        layout={viewMode === "page" ? "tabs" : "stack"}
       />
       <DossierSection title="Administrative Details">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 8 }}>
@@ -514,6 +517,7 @@ function GrantEditorPageLayout({
             grant={grantDraft}
             documents={documents}
             reports={reports}
+            layout="compact"
           />
         </div>
       </aside>
@@ -533,6 +537,7 @@ export function GrantDossierStack({
   onCreateEmployee,
   onQueueEmployeeOrientationEmail,
   onCreateSinVaultRecord,
+  layout = "stack",
 }: {
   grant: any;
   documents: any[];
@@ -545,7 +550,9 @@ export function GrantDossierStack({
   onCreateEmployee?: (draft: Record<string, unknown>) => Promise<string | void>;
   onQueueEmployeeOrientationEmail?: (employee: any, grant: any) => void | Promise<void>;
   onCreateSinVaultRecord?: (draft: Record<string, unknown>) => Promise<string | void>;
+  layout?: "stack" | "tabs" | "compact";
 }) {
+  const [activeTab, setActiveTab] = useState<GrantDossierTabId>("overview");
   const hasDossierData =
     !!(grant.id ?? grant._id) ||
     !!grant.confirmationCode ||
@@ -561,34 +568,115 @@ export function GrantDossierStack({
 
   if (!hasDossierData) return null;
 
-  return (
-    <div style={{ display: "grid", gap: 12, margin: "0 0 16px" }}>
+  const fundedEmployeesPanel = (
+    <GrantFundedEmployeesPanel
+      grant={grant}
+      employees={employees}
+      employeeLinks={employeeLinks}
+      secretVaultItems={secretVaultItems}
+      onLinkEmployee={onLinkEmployee}
+      onUnlinkEmployee={onUnlinkEmployee}
+      onCreateEmployee={onCreateEmployee}
+      onQueueEmployeeOrientationEmail={onQueueEmployeeOrientationEmail}
+      onCreateSinVaultRecord={onCreateSinVaultRecord}
+    />
+  );
+  const overviewPanels = (
+    <>
       <GrantDossierSummary grant={grant} />
       <GrantNextStepsPanel grant={grant} />
       <GrantRequiredFormsPanel grant={grant} />
       <GrantOperationalWorkflowsPanel grant={grant} />
-      <GrantFundedEmployeesPanel
-        grant={grant}
-        employees={employees}
-        employeeLinks={employeeLinks}
-        secretVaultItems={secretVaultItems}
-        onLinkEmployee={onLinkEmployee}
-        onUnlinkEmployee={onUnlinkEmployee}
-        onCreateEmployee={onCreateEmployee}
-        onQueueEmployeeOrientationEmail={onQueueEmployeeOrientationEmail}
-        onCreateSinVaultRecord={onCreateSinVaultRecord}
-      />
-      <GrantFundingDeltaPanel grant={grant} />
-      <GrantEvidencePacketMap grant={grant} documents={documents} />
+    </>
+  );
+  const timelinePanels = (
+    <>
+      <GrantProjectLifecyclePanel grant={grant} reports={reports} />
       <GrantDeadlineTimeline grant={grant} reports={reports} />
+    </>
+  );
+  const financialPanels = (
+    <>
+      <GrantFundingDeltaPanel grant={grant} />
       <GrantUseOfFundsPanel grant={grant} />
+    </>
+  );
+  const evidencePanels = (
+    <>
+      <GrantEvidencePacketMap grant={grant} documents={documents} />
       <GrantComplianceFlagsPanel grant={grant} />
       <GrantContactsPanel grant={grant} />
       <GrantAnswerLibraryPanel grant={grant} />
-      <GrantSourceNotesPanel grant={grant} />
+    </>
+  );
+  const sourcePanels = <GrantSourceNotesPanel grant={grant} />;
+
+  if (layout === "compact") {
+    return (
+      <div className="grant-dossier-stack grant-dossier-stack--compact">
+        <GrantDossierSummary grant={grant} />
+        <GrantNextStepsPanel grant={grant} />
+        <GrantProjectLifecyclePanel grant={grant} reports={reports} compact />
+        <GrantFundingDeltaPanel grant={grant} />
+        <GrantOperationalWorkflowsPanel grant={grant} />
+        <GrantSourceNotesPanel grant={grant} />
+      </div>
+    );
+  }
+
+  if (layout === "tabs") {
+    const tabs: Array<{ id: GrantDossierTabId; label: string; count?: number }> = [
+      { id: "overview", label: "Overview", count: asNextSteps(grant.nextSteps).length },
+      { id: "timeline", label: "Timeline", count: buildGrantTimeline(grant, reports).length },
+      { id: "people", label: "People", count: employeeLinks.filter((link) => String(link.grantId) === String(grant._id ?? grant.id)).length },
+      { id: "evidence", label: "Evidence", count: grantRelatedDocuments(grant, documents).length },
+      { id: "financials", label: "Financials", count: asUseOfFunds(grant.useOfFunds).length },
+      { id: "source", label: "Source", count: cleanSourceKeyFacts(grant.keyFacts).length },
+    ];
+    const renderTab = () => {
+      if (activeTab === "timeline") return timelinePanels;
+      if (activeTab === "people") return fundedEmployeesPanel;
+      if (activeTab === "evidence") return evidencePanels;
+      if (activeTab === "financials") return financialPanels;
+      if (activeTab === "source") return sourcePanels;
+      return overviewPanels;
+    };
+
+    return (
+      <div className="grant-dossier-tabs">
+        <div className="tabs grant-dossier-tabs__nav" role="tablist" aria-label="Grant sections">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              className={activeTab === tab.id ? "tab is-active" : "tab"}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              <span className="tab__label">{tab.label}</span>
+              {tab.count ? <Badge tone="neutral">{tab.count}</Badge> : null}
+            </button>
+          ))}
+        </div>
+        <div className="grant-dossier-stack">{renderTab()}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grant-dossier-stack">
+      {overviewPanels}
+      {fundedEmployeesPanel}
+      {financialPanels}
+      {evidencePanels}
+      {timelinePanels}
+      {sourcePanels}
     </div>
   );
 }
+
+type GrantDossierTabId = "overview" | "timeline" | "people" | "evidence" | "financials" | "source";
 
 function GrantDossierSummary({ grant }: { grant: any }) {
   const readiness = requirementSummary(grant.requirements);
@@ -1374,6 +1462,63 @@ function GrantDeadlineTimeline({ grant, reports }: { grant: any; reports: any[] 
   );
 }
 
+function GrantProjectLifecyclePanel({
+  grant,
+  reports,
+  compact = false,
+}: {
+  grant: any;
+  reports: any[];
+  compact?: boolean;
+}) {
+  const items = buildGrantTimeline(grant, reports);
+  if (items.length === 0) return null;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const completeStatuses = /(submitted|complete|attached|ready|saved|done)/i;
+  const overdueStatuses = /(overdue|missing|not|needed)/i;
+  const stages = items.map((item) => {
+    const status = String(item.status ?? "");
+    const isComplete = completeStatuses.test(status);
+    const isOverdue = !isComplete && item.date < today && (overdueStatuses.test(status) || /(due|scheduled|expected)/i.test(status));
+    const isCurrent = !isComplete && !isOverdue && item.date >= today;
+    return { ...item, isComplete, isOverdue, isCurrent };
+  });
+  const currentIndex = stages.findIndex((item) => item.isOverdue || item.isCurrent);
+  const visibleStages = compact ? stages.slice(0, 4) : stages;
+
+  return (
+    <DossierSection title="Project Timeline">
+      <div className="grant-project-timeline">
+        {visibleStages.map((item, index) => {
+          const absoluteIndex = index;
+          const tone = item.isComplete ? "success" : item.isOverdue ? "danger" : absoluteIndex === currentIndex ? "warn" : "info";
+          return (
+            <div key={`${item.date}-${item.label}`} className="grant-project-timeline__item">
+              <div className="grant-project-timeline__rail" aria-hidden="true">
+                <span className={`grant-project-timeline__dot grant-project-timeline__dot--${tone}`} />
+              </div>
+              <div className="grant-project-timeline__body">
+                <div className="grant-project-timeline__date">{formatDate(item.date)}</div>
+                <div className="grant-project-timeline__title-row">
+                  <strong>{item.label}</strong>
+                  {item.status && <Badge tone={timelineTone(item.status, item.date)}>{item.status}</Badge>}
+                </div>
+                {item.notes && <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>{item.notes}</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {compact && stages.length > visibleStages.length && (
+        <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+          {stages.length - visibleStages.length} more timeline item{stages.length - visibleStages.length === 1 ? "" : "s"} in the grant view.
+        </div>
+      )}
+    </DossierSection>
+  );
+}
+
 function GrantUseOfFundsPanel({ grant }: { grant: any }) {
   const lines = asUseOfFunds(grant.useOfFunds).filter((line) => line.label.trim());
   if (lines.length === 0) return null;
@@ -1839,6 +1984,7 @@ function GrantRequirementsEditor({
 }) {
   const requirements = asRequirements(draft.requirements);
   const summary = requirementSummary(requirements);
+  const [openDocumentPickers, setOpenDocumentPickers] = useState<Record<string, boolean>>({});
 
   const setRequirements = (next: GrantRequirement[]) => {
     onChange({ ...draft, requirements: next });
@@ -1893,92 +2039,108 @@ function GrantRequirementsEditor({
 
       {requirements.length > 0 && (
         <div style={{ display: "grid", gap: 10 }}>
-          {requirements.map((item, index) => (
-            <div
-              key={item.id}
-              style={{
-                border: "1px solid var(--border)",
-                borderRadius: "var(--r-sm)",
-                padding: 12,
-                background: "var(--bg-base)",
-              }}
-            >
-              <div className="row" style={{ justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-                <Badge tone={requirementStatusTone(item.status)}>{item.status}</Badge>
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--sm btn--icon"
-                  aria-label={`Remove requirement ${item.label}`}
-                  onClick={() => setRequirements(requirements.filter((_, itemIndex) => itemIndex !== index))}
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-              <div className="row" style={{ gap: 12 }}>
-                <Field label="Status">
-                  <select
-                    className="input"
-                    value={item.status}
-                    onChange={(event) =>
-                      updateRequirement(index, {
-                        status: event.target.value as GrantRequirementStatus,
-                      })
-                    }
+          {requirements.map((item, index) => {
+            const selectedDocument = documents.find((document) => String(document._id) === String(item.documentId));
+            const pickerOpen = Boolean(openDocumentPickers[item.id]);
+            return (
+              <div key={item.id} className="grant-requirement-card">
+                <div className="row" style={{ justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                  <Badge tone={requirementStatusTone(item.status)}>{item.status}</Badge>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm btn--icon"
+                    aria-label={`Remove requirement ${item.label}`}
+                    onClick={() => setRequirements(requirements.filter((_, itemIndex) => itemIndex !== index))}
                   >
-                    {REQUIREMENT_STATUSES.map((status) => (
-                      <option key={status}>{status}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Category">
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+                <div className="grant-edit-grid grant-edit-grid--2">
+                  <Field label="Status">
+                    <select
+                      className="input"
+                      value={item.status}
+                      onChange={(event) =>
+                        updateRequirement(index, {
+                          status: event.target.value as GrantRequirementStatus,
+                        })
+                      }
+                    >
+                      {REQUIREMENT_STATUSES.map((status) => (
+                        <option key={status}>{status}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Category">
+                    <input
+                      className="input"
+                      value={item.category}
+                      onChange={(event) => updateRequirement(index, { category: event.target.value })}
+                    />
+                  </Field>
+                </div>
+                <Field label="Requirement">
                   <input
                     className="input"
-                    value={item.category}
-                    onChange={(event) => updateRequirement(index, { category: event.target.value })}
+                    value={item.label}
+                    onChange={(event) => updateRequirement(index, { label: event.target.value })}
+                  />
+                </Field>
+                <div className="grant-edit-grid grant-edit-grid--2">
+                  <Field label="Due">
+                    <input
+                      className="input"
+                      type="date"
+                      value={item.dueDate ?? ""}
+                      onChange={(event) => updateRequirement(index, { dueDate: event.target.value || undefined })}
+                    />
+                  </Field>
+                  <div className="grant-requirement-evidence">
+                    <div className="field__label">Evidence document</div>
+                    <div className="grant-requirement-evidence__summary">
+                      <span title={selectedDocument?.title} className={selectedDocument ? "" : "muted"}>
+                        {selectedDocument ? cleanDocumentTitle(selectedDocument) : "No document linked"}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        onClick={() =>
+                          setOpenDocumentPickers({
+                            ...openDocumentPickers,
+                            [item.id]: !openDocumentPickers[item.id],
+                          })
+                        }
+                      >
+                        {pickerOpen ? "Hide picker" : "Link evidence"}
+                      </button>
+                    </div>
+                    {pickerOpen && (
+                      <select
+                        className="input"
+                        value={item.documentId ?? ""}
+                        onChange={(event) => updateRequirement(index, { documentId: event.target.value || undefined })}
+                      >
+                        <option value="">None</option>
+                        {documents.map((document) => (
+                          <option key={document._id} value={document._id}>
+                            {document.title}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+                <Field label="Notes">
+                  <textarea
+                    className="textarea"
+                    rows={2}
+                    value={item.notes ?? ""}
+                    onChange={(event) => updateRequirement(index, { notes: event.target.value })}
                   />
                 </Field>
               </div>
-              <Field label="Requirement">
-                <input
-                  className="input"
-                  value={item.label}
-                  onChange={(event) => updateRequirement(index, { label: event.target.value })}
-                />
-              </Field>
-              <div className="row" style={{ gap: 12 }}>
-                <Field label="Due">
-                  <input
-                    className="input"
-                    type="date"
-                    value={item.dueDate ?? ""}
-                    onChange={(event) => updateRequirement(index, { dueDate: event.target.value || undefined })}
-                  />
-                </Field>
-                <Field label="Document">
-                  <select
-                    className="input"
-                    value={item.documentId ?? ""}
-                    onChange={(event) => updateRequirement(index, { documentId: event.target.value || undefined })}
-                  >
-                    <option value="">None</option>
-                    {documents.map((document) => (
-                      <option key={document._id} value={document._id}>
-                        {document.title}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-              <Field label="Notes">
-                <textarea
-                  className="textarea"
-                  rows={2}
-                  value={item.notes ?? ""}
-                  onChange={(event) => updateRequirement(index, { notes: event.target.value })}
-                />
-              </Field>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

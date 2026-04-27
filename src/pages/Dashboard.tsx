@@ -24,8 +24,25 @@ import {
   UserRoundCheck,
   Users,
   UserCog,
+  X,
 } from "lucide-react";
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
+
+const HIDDEN_ONBOARDING_FLOW_KEY = "societyer.dashboard.hiddenOnboardingFlowSocietyIds";
+
+function readHiddenOnboardingFlowSocietyIds(): string[] {
+  try {
+    const raw = window.localStorage.getItem(HIDDEN_ONBOARDING_FLOW_KEY);
+    const value = raw ? JSON.parse(raw) : [];
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeHiddenOnboardingFlowSocietyIds(ids: string[]) {
+  window.localStorage.setItem(HIDDEN_ONBOARDING_FLOW_KEY, JSON.stringify(ids));
+}
 
 export function Dashboard() {
   const society = useSociety();
@@ -41,6 +58,7 @@ export function Dashboard() {
   const markMemberDataAccessReviewed = useMutation(api.dashboardRemediation.markMemberDataAccessReviewed);
   const [showComplianceDetails, setShowComplianceDetails] = useState(false);
   const [busyRemediationAction, setBusyRemediationAction] = useState<string | null>(null);
+  const [hiddenOnboardingFlowSocietyIds, setHiddenOnboardingFlowSocietyIds] = useState(readHiddenOnboardingFlowSocietyIds);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -51,6 +69,26 @@ export function Dashboard() {
   const completedOnboardingSteps = onboardingSteps.filter((step) => step.complete).length;
   const nextOnboardingStep = onboardingSteps.find((step) => !step.complete) ?? onboardingSteps[onboardingSteps.length - 1];
   const onboardingProgress = Math.round((completedOnboardingSteps / onboardingSteps.length) * 100);
+  const onboardingFlowHidden = hiddenOnboardingFlowSocietyIds.includes(society._id);
+
+  const setOnboardingFlowHidden = (hidden: boolean) => {
+    const nextIds = hidden
+      ? Array.from(new Set([...hiddenOnboardingFlowSocietyIds, society._id]))
+      : hiddenOnboardingFlowSocietyIds.filter((id) => id !== society._id);
+
+    setHiddenOnboardingFlowSocietyIds(nextIds);
+    writeHiddenOnboardingFlowSocietyIds(nextIds);
+  };
+
+  const hideOnboardingFlow = () => {
+    setOnboardingFlowHidden(true);
+    toast.info("Setup guide hidden", {
+      action: {
+        label: "Undo",
+        onClick: () => setOnboardingFlowHidden(false),
+      },
+    });
+  };
 
   const runRemediationAction = async (flag: any, action: any) => {
     if (action.intent === "navigate") {
@@ -116,59 +154,72 @@ export function Dashboard() {
         subtitle="Compliance posture, upcoming obligations, and governance snapshot."
       />
 
-      <section className="onboarding-flow" aria-labelledby="onboarding-flow-title">
-        <div className="onboarding-flow__story">
-          <div>
-            <h2 id="onboarding-flow-title">Keep your BC society in good standing.</h2>
-            <p>
-              Societyer tells you what is due, gathers the evidence, prepares the records,
-              and keeps an audit trail.
-            </p>
-          </div>
-          <div className="onboarding-flow__status">
-            <span className="mono">{completedOnboardingSteps}/{onboardingSteps.length}</span>
-            <span>setup checks complete</span>
-          </div>
-        </div>
-
-        <div className="onboarding-flow__bar" aria-hidden="true">
-          <span style={{ width: `${onboardingProgress}%` }} />
-        </div>
-
-        <div className="onboarding-flow__next">
-          <div>
-            <span className="onboarding-flow__eyebrow">Next action</span>
-            <strong>{nextOnboardingStep.title}</strong>
-            <span>{nextOnboardingStep.description}</span>
-          </div>
-          <Link to={nextOnboardingStep.to} className="btn-action btn-action--primary">
-            Open <ArrowRight size={12} />
-          </Link>
-        </div>
-
-        <div className="onboarding-flow__grid">
-          {onboardingSteps.map((step, index) => {
-            const Icon = step.icon;
-            return (
-              <Link
-                key={step.id}
-                to={step.to}
-                className={`onboarding-step${step.complete ? " is-complete" : ""}${step.id === nextOnboardingStep.id ? " is-next" : ""}`}
+      {!onboardingFlowHidden && (
+        <section className="onboarding-flow" aria-labelledby="onboarding-flow-title">
+          <div className="onboarding-flow__story">
+            <div>
+              <h2 id="onboarding-flow-title">Keep your BC society in good standing.</h2>
+              <p>
+                Societyer tells you what is due, gathers the evidence, prepares the records,
+                and keeps an audit trail.
+              </p>
+            </div>
+            <div className="onboarding-flow__actions">
+              <div className="onboarding-flow__status">
+                <span className="mono">{completedOnboardingSteps}/{onboardingSteps.length}</span>
+                <span>setup checks complete</span>
+              </div>
+              <button
+                type="button"
+                className="onboarding-flow__dismiss"
+                onClick={hideOnboardingFlow}
+                title="Hide setup guide"
+                aria-label="Hide setup guide"
               >
-                <span className="onboarding-step__index">{String(index + 1).padStart(2, "0")}</span>
-                <span className="onboarding-step__icon"><Icon size={16} /></span>
-                <span className="onboarding-step__main">
-                  <strong>{step.title}</strong>
-                  <span>{step.description}</span>
-                </span>
-                <span className="onboarding-step__state">
-                  {step.complete ? <CheckCircle2 size={16} /> : <ArrowRight size={14} />}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+
+          <div className="onboarding-flow__bar" aria-hidden="true">
+            <span style={{ width: `${onboardingProgress}%` }} />
+          </div>
+
+          <div className="onboarding-flow__next">
+            <div>
+              <span className="onboarding-flow__eyebrow">Next action</span>
+              <strong>{nextOnboardingStep.title}</strong>
+              <span>{nextOnboardingStep.description}</span>
+            </div>
+            <Link to={nextOnboardingStep.to} className="btn-action btn-action--primary">
+              Open <ArrowRight size={12} />
+            </Link>
+          </div>
+
+          <div className="onboarding-flow__grid">
+            {onboardingSteps.map((step, index) => {
+              const Icon = step.icon;
+              return (
+                <Link
+                  key={step.id}
+                  to={step.to}
+                  className={`onboarding-step${step.complete ? " is-complete" : ""}${step.id === nextOnboardingStep.id ? " is-next" : ""}`}
+                >
+                  <span className="onboarding-step__index">{String(index + 1).padStart(2, "0")}</span>
+                  <span className="onboarding-step__icon"><Icon size={16} /></span>
+                  <span className="onboarding-step__main">
+                    <strong>{step.title}</strong>
+                    <span>{step.description}</span>
+                  </span>
+                  <span className="onboarding-step__state">
+                    {step.complete ? <CheckCircle2 size={16} /> : <ArrowRight size={14} />}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <div className="stat-grid">
         <Stat

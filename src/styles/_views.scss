@@ -271,6 +271,33 @@
   text-align: right;
 }
 
+.onboarding-flow__actions {
+  align-items: flex-start;
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--s-2);
+}
+
+.onboarding-flow__dismiss {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  padding: 0;
+  width: 28px;
+}
+
+.onboarding-flow__dismiss:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
 .onboarding-flow__status .mono {
   color: var(--text-primary);
   font-size: var(--fs-lg);
@@ -553,6 +580,11 @@
   .onboarding-flow__status {
     align-items: flex-start;
     text-align: left;
+  }
+
+  .onboarding-flow__actions {
+    justify-content: space-between;
+    width: 100%;
   }
 
   .onboarding-flow__grid {
@@ -3567,9 +3599,10 @@
 
 .grant-edit-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
   gap: var(--s-4);
   align-items: start;
+  min-width: 0;
 }
 
 .grant-edit-layout__main {
@@ -3607,6 +3640,7 @@
   padding: var(--s-4);
   display: grid;
   gap: var(--s-3);
+  min-width: 0;
 }
 
 .grant-edit-section__head {
@@ -3639,6 +3673,144 @@
   min-width: 0;
 }
 
+.grant-edit-layout .field,
+.grant-edit-layout .input,
+.grant-edit-layout .textarea {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.grant-dossier-stack {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 16px;
+  min-width: 0;
+}
+
+.grant-dossier-stack--compact {
+  gap: 10px;
+}
+
+.grant-dossier-stack--compact section {
+  padding: 10px;
+}
+
+.grant-dossier-tabs {
+  min-width: 0;
+}
+
+.grant-dossier-tabs__nav {
+  margin-bottom: var(--s-3);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.grant-dossier-tabs__nav .tab {
+  background: transparent;
+}
+
+.grant-project-timeline {
+  display: grid;
+  gap: 0;
+}
+
+.grant-project-timeline__item {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.grant-project-timeline__rail {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.grant-project-timeline__rail::after {
+  content: "";
+  position: absolute;
+  top: 18px;
+  bottom: -12px;
+  width: 1px;
+  background: var(--border);
+}
+
+.grant-project-timeline__item:last-child .grant-project-timeline__rail::after {
+  display: none;
+}
+
+.grant-project-timeline__dot {
+  position: relative;
+  z-index: 1;
+  width: 11px;
+  height: 11px;
+  margin-top: 4px;
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel);
+}
+
+.grant-project-timeline__dot--success { border-color: var(--success); }
+.grant-project-timeline__dot--warn { border-color: var(--warn); }
+.grant-project-timeline__dot--danger { border-color: var(--danger); }
+.grant-project-timeline__dot--info { border-color: var(--info); }
+
+.grant-project-timeline__body {
+  min-width: 0;
+  padding-bottom: 12px;
+}
+
+.grant-project-timeline__date {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-bottom: 3px;
+}
+
+.grant-project-timeline__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.grant-requirement-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 12px;
+  background: var(--bg-base);
+  min-width: 0;
+}
+
+.grant-requirement-evidence {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.grant-requirement-evidence__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
+  padding: 6px 8px;
+}
+
+.grant-requirement-evidence__summary > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .grant-edit-grid--2 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -3667,6 +3839,15 @@
 }
 
 @media (max-width: 760px) {
+  .grant-dossier-tabs__nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .grant-dossier-tabs__nav .tab {
+    flex: 0 0 auto;
+  }
+
   .grant-edit-grid--2,
   .grant-edit-grid--3,
   .grant-edit-grid--4,

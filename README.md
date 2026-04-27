@@ -93,6 +93,34 @@ npx convex dev           # will prompt you to log in; creates a free cloud deplo
 npm run dev
 ```
 
+## Quick start — frontend against Kubernetes
+
+Use this when the Kubernetes stack is already running and you only want a local
+Vite frontend pointed at the shared K8s Convex data:
+
+```bash
+npm install
+npm run dev:k8s
+```
+
+The command starts Vite at http://127.0.0.1:5173 with:
+
+```
+VITE_CONVEX_URL=http://societyer.k8s.home:3220
+VITE_AUTH_MODE=none
+```
+
+Override the backend URL if DNS is unavailable or you are working against a
+different cluster:
+
+```bash
+VITE_CONVEX_URL=http://192.168.1.50:3220 npm run dev:k8s
+```
+
+This is for frontend work against existing deployed data. Convex function,
+schema, or server/API changes still need to be deployed to the target K8s
+runtime with a valid `CONVEX_SELF_HOSTED_ADMIN_KEY`.
+
 ---
 
 ## Demo mode
@@ -104,10 +132,11 @@ npm run dev
 
 ## Public site vs full app
 
-- `/` is now the marketing page for the public custom domain.
+- `/` opens the backend-backed workspace app. In auth-enabled deployments it
+  gates into login; in no-auth deployments it opens the dashboard directly.
 - `/demo` boots the same React app shell and `/app/...` routes in a browser-only in-memory fixture mode. It does not require Convex, auth, localStorage app state, IndexedDB, SQLite, or seeded backend data.
 - Inside demo mode, app links are automatically scoped under `/demo`, so `/app/filings` becomes `/demo/app/filings`.
-- `/app` remains the real workspace route for the backend-backed application.
+- `/app` remains supported as a workspace route alias for existing links.
 - `/public/:slug` and other operational routes still expect the live app stack.
 
 ## Auth modes
@@ -176,7 +205,7 @@ For the public site:
 
 | Area | Page | Notes |
 |---|---|---|
-| Public | `/` Marketing page | Product positioning, feature overview, and CTA into the static walkthrough |
+| Workspace | `/` | Backend-backed app entry point; opens the dashboard after auth/no-auth resolution |
 | Public | `/demo` Browser-only demo | The real app frontend using an in-memory Convex-compatible fixture client |
 | Public | `/public/:slug` | Transparency center with optional volunteer and grant intake pages |
 | Workspace | `/app`, `/app/society`, `/app/organization-details`, `/app/org-history` | Compliance dashboard, legal profile, organization identifiers/addresses/registrations, and source-backed history |
@@ -210,6 +239,7 @@ The meeting detail UI already uploads audio, tracks transcription jobs, stores t
 
 - `npm run build` — Convex typecheck, TypeScript build, and Vite production build.
 - `npm run build:pages` — GitHub Pages build with stable asset names and `/demo` fallback files.
+- `npm run dev:k8s` — run a local Vite frontend against the Kubernetes Convex backend at `societyer.k8s.home:3220`.
 - `npm run lint` / `npm run lint:convex` — ESLint for the app or Convex functions.
 - `npm run test:smoke` — Playwright smoke tests.
 - `npm run test:api-contract` — API gateway contract check.
