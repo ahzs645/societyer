@@ -35,7 +35,8 @@
     "test:org-details": "tsx scripts/check-org-detail-smoke.ts",
     "test:pdf-ingestion": "tsx scripts/check-pdf-table-normalization.ts",
     "test:exports": "tsx scripts/check-export-coverage.ts",
-    "test:exports:db": "tsx scripts/validate-export-database.ts"
+    "test:exports:db": "tsx scripts/validate-export-database.ts",
+    "export:workspace:files": "tsx scripts/export-workspace-with-files.ts"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.5.0",

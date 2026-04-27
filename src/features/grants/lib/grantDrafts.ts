@@ -10,6 +10,9 @@ export type GrantRequirement = {
   dueDate?: string;
   documentId?: string;
   notes?: string;
+  sourceUrl?: string;
+  documentUrl?: string;
+  formNumber?: string;
 };
 
 type GrantUseOfFundsLine = {
@@ -39,7 +42,9 @@ type GrantNextStep = {
   priority: string;
   dueHint?: string;
   source?: string;
+  sourceUrl?: string;
   actionLabel?: string;
+  actionUrl?: string;
   reason?: string;
 };
 
@@ -195,7 +200,9 @@ export function asNextSteps(value: unknown): GrantNextStep[] {
     priority: String(item?.priority ?? "Medium"),
     dueHint: optionalString(item?.dueHint),
     source: optionalString(item?.source),
+    sourceUrl: optionalString(item?.sourceUrl),
     actionLabel: optionalString(item?.actionLabel),
+    actionUrl: optionalString(item?.actionUrl),
     reason: optionalString(item?.reason),
   }));
 }
@@ -247,6 +254,9 @@ export function asRequirements(value: unknown): GrantRequirement[] {
       dueDate: optionalString(item?.dueDate),
       documentId: optionalString(item?.documentId),
       notes: optionalString(item?.notes),
+      sourceUrl: optionalString(item?.sourceUrl),
+      documentUrl: optionalString(item?.documentUrl),
+      formNumber: optionalString(item?.formNumber),
     }));
 }
 

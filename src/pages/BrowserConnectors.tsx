@@ -267,18 +267,28 @@ export function BrowserConnectorsPage() {
   if (society === null) return <SeedPrompt />;
 
   async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(`/api/v1/browser-connectors${path}`, {
-      ...init,
-      headers: {
-        "content-type": "application/json",
-        ...(init?.headers ?? {}),
-      },
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(payload?.message ?? payload?.error ?? `Request failed with ${response.status}`);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10_000);
+    try {
+      const response = await fetch(`/api/v1/browser-connectors${path}`, {
+        ...init,
+        signal: init?.signal ?? controller.signal,
+        headers: {
+          "content-type": "application/json",
+          ...(init?.headers ?? {}),
+        },
+      }).catch((error) => {
+        if (error?.name === "AbortError") throw new Error("Societyer API did not respond. Make sure the local API server is running for this app URL.");
+        throw error;
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message ?? payload?.error ?? `Request failed with ${response.status}`);
+      }
+      return payload;
+    } finally {
+      window.clearTimeout(timeout);
     }
-    return payload;
   }
 
   async function refresh() {

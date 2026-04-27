@@ -15,6 +15,9 @@ const grantRequirement = v.object({
   dueDate: v.optional(v.string()),
   documentId: v.optional(v.id("documents")),
   notes: v.optional(v.string()),
+  sourceUrl: v.optional(v.string()),
+  documentUrl: v.optional(v.string()),
+  formNumber: v.optional(v.string()),
 });
 
 const grantUseOfFundsLine = v.object({
@@ -44,7 +47,9 @@ const grantNextStep = v.object({
   priority: v.string(),
   dueHint: v.optional(v.string()),
   source: v.optional(v.string()),
+  sourceUrl: v.optional(v.string()),
   actionLabel: v.optional(v.string()),
+  actionUrl: v.optional(v.string()),
   reason: v.optional(v.string()),
 });
 

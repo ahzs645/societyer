@@ -71,8 +71,9 @@ export function normalizeGcosExportedSnapshot(snapshot: any) {
   const approved = snapshot.approvedJobs ?? {};
   const structured = snapshot.structured ?? {};
   const projectNumber = structured.projectInformation?.projectNumber ?? gcosTextValue(summary, "Project Number", ["Project Title"]) ?? gcosFieldValue(summary, [/project number/i, /tracking number/i]);
-  const title = structured.projectInformation?.projectTitle ?? gcosTextValue(summary, "Project Title", ["Start Date"]) ?? gcosFieldValue(summary, [/project title/i]) ?? snapshot.project?.title ?? "GCOS project";
+  const projectTitle = structured.projectInformation?.projectTitle ?? gcosTextValue(summary, "Project Title", ["Start Date"]) ?? gcosFieldValue(summary, [/project title/i]) ?? snapshot.project?.title;
   const cfpTitle = structured.callForProposal?.title ?? gcosFieldValue(summary, [/cfp title/i, /call for proposal/i]) ?? "ESDC GCOS";
+  const title = gcosGrantTitle(snapshot, projectTitle, cfpTitle);
   const requested = gcosMoneyCents(
     structured.appliedFunding?.contributionEsdcRequested
     ?? gcosLandingContribution(snapshot.landing)
@@ -97,8 +98,8 @@ export function normalizeGcosExportedSnapshot(snapshot: any) {
     keyFacts: [
       projectNumber ? `Project number: ${projectNumber}` : undefined,
       snapshot.projectId ? `GCOS project ID: ${snapshot.projectId}` : undefined,
+      projectTitle && projectTitle !== title ? `GCOS project title: ${projectTitle}` : undefined,
       snapshot.programCode ? `Program code: ${snapshot.programCode}` : undefined,
-      awarded != null && requested != null ? `Approved/requested delta: $${((awarded - requested) / 100).toFixed(2)}` : undefined,
     ].filter(Boolean),
     sourceNotes: "Imported from a read-only GCOS Chrome extension snapshot. Sensitive employee and banking fields are intentionally excluded.",
   };
@@ -106,6 +107,16 @@ export function normalizeGcosExportedSnapshot(snapshot: any) {
     ...base,
     ...deriveGcosProjectIntelligence(snapshot, base),
   };
+}
+
+function gcosGrantTitle(snapshot: any, projectTitle: unknown, cfpTitle: unknown) {
+  const project = String(projectTitle ?? "").trim();
+  const cfp = String(cfpTitle ?? "").trim();
+  const legalName = String(snapshot?.account?.orgInfo?.hidden?.LegalName ?? snapshot?.structured?.organization?.legalName ?? "").trim();
+  const operatingName = String(snapshot?.account?.orgInfo?.hidden?.Name ?? snapshot?.structured?.organization?.operatingName ?? "").trim();
+  const looksLikeOrganizationName = Boolean(project && [legalName, operatingName].some((name) => name && name.toLowerCase() === project.toLowerCase()));
+  if (cfp && cfp !== "ESDC GCOS" && (!project || looksLikeOrganizationName || /canada summer jobs/i.test(cfp))) return cfp;
+  return project || cfp || "GCOS project";
 }
 
 function stringValue(value: unknown) {
@@ -118,15 +129,20 @@ function arrayValue(value: unknown, fallback: unknown[]) {
 }
 
 function mergeStringLists(...values: unknown[]) {
-  const merged = new Set<string>();
+  const merged = new Map<string, string>();
   for (const value of values) {
     if (!Array.isArray(value)) continue;
     for (const item of value) {
       const text = String(item ?? "").trim();
-      if (text) merged.add(text);
+      if (text) merged.set(keyFactIdentity(text), text);
     }
   }
-  return merged.size ? Array.from(merged) : undefined;
+  return merged.size ? Array.from(merged.values()) : undefined;
+}
+
+function keyFactIdentity(text: string) {
+  if (/^approved\/requested delta:/i.test(text)) return "approved-requested-delta";
+  return text.toLowerCase();
 }
 
 function gcosFieldValue(pageData: any, patterns: RegExp[]) {

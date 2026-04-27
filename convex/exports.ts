@@ -1,6 +1,7 @@
 import { query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
+import { createDownloadUrl } from "./providers/storage";
 
 const EXPORT_VERSION = 2;
 
@@ -211,6 +212,66 @@ export const countTablePage = query({
   },
 });
 
+export const exportAttachmentPage = query({
+  args: {
+    societyId: v.id("societies"),
+    source: v.union(v.literal("documents"), v.literal("documentVersions")),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: v.any(),
+  handler: async (ctx, { societyId, source, paginationOpts }) => {
+    const society = await ctx.db.get(societyId);
+    if (!society) throw new Error("Society not found.");
+
+    if (source === "documentVersions") {
+      const page = await ctx.db
+        .query("documentVersions")
+        .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+        .paginate(paginationOpts);
+      const attachments = await Promise.all(
+        page.page.map(async (row: any) => ({
+          source: "documentVersions",
+          id: row._id,
+          documentId: row.documentId,
+          version: row.version,
+          storageProvider: row.storageProvider,
+          storageKey: row.storageKey,
+          fileName: row.fileName,
+          mimeType: row.mimeType,
+          fileSizeBytes: row.fileSizeBytes,
+          sha256: row.sha256,
+          downloadUrl: await downloadUrlForVersion(row),
+        })),
+      );
+      return { ...page, page: attachments };
+    }
+
+    const page = await ctx.db
+      .query("documents")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .paginate(paginationOpts);
+    const attachments = await Promise.all(
+      page.page
+        .filter((row: any) => row.storageId || row.url)
+        .map(async (row: any) => ({
+          source: "documents",
+          id: row._id,
+          documentId: row._id,
+          title: row.title,
+          category: row.category,
+          storageProvider: row.storageId ? "convex" : "externalUrl",
+          storageId: row.storageId ? String(row.storageId) : undefined,
+          fileName: row.fileName,
+          mimeType: row.mimeType,
+          fileSizeBytes: row.fileSizeBytes,
+          externalUrl: row.url,
+          downloadUrl: row.storageId ? await ctx.storage.getUrl(row.storageId) : row.url,
+        })),
+    );
+    return { ...page, page: attachments };
+  },
+});
+
 export const exportWorkspace = query({
   args: {
     societyId: v.id("societies"),
@@ -244,6 +305,23 @@ export const exportWorkspace = query({
     };
   },
 });
+
+async function downloadUrlForVersion(row: any) {
+  if (row.storageProvider === "local") {
+    const base =
+      (globalThis as any)?.process?.env?.SOCIETYER_API_PUBLIC_URL ??
+      (globalThis as any)?.process?.env?.BETTER_AUTH_BASE_URL?.replace(/\/$/, "").replace(/:5173$/, ":8787") ??
+      "http://127.0.0.1:8787";
+    return `${base.replace(/\/$/, "")}/api/v1/workflow-generated-documents/${encodeURIComponent(row.storageKey)}`;
+  }
+  if (row.storageProvider === "rustfs" || row.storageProvider === "demo") {
+    return await createDownloadUrl({
+      provider: row.storageProvider,
+      key: row.storageKey,
+    });
+  }
+  return null;
+}
 
 export const validateCurrentDatabase = query({
   args: { societyId: v.id("societies") },

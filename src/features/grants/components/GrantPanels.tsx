@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { ExternalLink, ListChecks, Plus, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Badge, Field, InspectorNote } from "../../../components/ui";
 import { formatDate, money } from "../../../lib/format";
 import {
@@ -21,6 +22,11 @@ import {
   requirementStatusTone,
   requirementSummary,
 } from "../lib/grantDrafts";
+
+const EMP5616_DETAIL_URL = "https://catalogue.servicecanada.gc.ca/content/EForms/en/Detail.html?Form=EMP5616";
+const EMP5616_FORM_URL = "https://catalogue.servicecanada.gc.ca/content/EForms/en/CallForm.html?Lang=en&PDF=ESDC-EMP5616.pdf";
+const GCOS_EED_ADD_URL = "https://srv136.services.gc.ca/OSR/pro/EED/EED/Add";
+const GCOS_EED_MANAGE_URL = "https://srv136.services.gc.ca/OSR/pro/EED";
 
 export function GrantReadPanel({
   grant,
@@ -539,6 +545,7 @@ export function GrantDossierStack({
     <div style={{ display: "grid", gap: 12, margin: "0 0 16px" }}>
       <GrantDossierSummary grant={grant} />
       <GrantNextStepsPanel grant={grant} />
+      <GrantRequiredFormsPanel grant={grant} />
       <GrantFundedEmployeesPanel
         grant={grant}
         employees={employees}
@@ -633,7 +640,7 @@ function GrantFundedEmployeesPanel({
   };
 
   return (
-    <DossierSection title="Funded Employees">
+    <DossierSection title="Funded Employees" id="funded-employees">
       <div style={{ display: "grid", gap: 8 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Badge tone={links.length ? "success" : "warn"}>{links.length} linked</Badge>
@@ -691,22 +698,141 @@ function GrantNextStepsPanel({ grant }: { grant: any }) {
   return (
     <DossierSection title="Recommended Next Steps">
       <div style={{ display: "grid", gap: 8 }}>
-        {steps.map((step) => (
-          <div key={step.id} style={nextStepStyle}>
+        {steps.map((step) => {
+          const actions = workflowActionsForStep(grant, step);
+          return (
+            <div key={step.id} style={nextStepStyle}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0 }}>
+                  <strong>{step.label}</strong>
+                  {step.reason && <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>{step.reason}</div>}
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <Badge tone={nextStepTone(step.status)}>{step.status}</Badge>
+                  <Badge tone={priorityTone(step.priority)}>{step.priority}</Badge>
+                </div>
+              </div>
+              {actions.length > 0 && (
+                <div style={workflowActionBarStyle}>
+                  {actions.map((action) => action.external ? (
+                    <a
+                      key={action.label}
+                      className={action.primary ? "btn btn--accent btn--sm" : "btn btn--ghost btn--sm"}
+                      href={action.href}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {action.label}
+                      <ExternalLink size={11} />
+                    </a>
+                  ) : action.href.startsWith("#") ? (
+                    <a key={action.label} className={action.primary ? "btn btn--accent btn--sm" : "btn btn--ghost btn--sm"} href={action.href}>
+                      {action.label}
+                    </a>
+                  ) : (
+                    <Link key={action.label} className={action.primary ? "btn btn--accent btn--sm" : "btn btn--ghost btn--sm"} to={action.href}>
+                      {action.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, fontSize: 12 }}>
+                {step.dueHint && <span className="muted">{step.dueHint}</span>}
+                {step.sourceUrl ? (
+                  <a className="muted" href={step.sourceUrl} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    Source: {step.source ?? "source"}
+                    <ExternalLink size={11} />
+                  </a>
+                ) : step.source ? (
+                  <span className="muted">Source: {step.source}</span>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </DossierSection>
+  );
+}
+
+function workflowActionsForStep(grant: any, step: ReturnType<typeof asNextSteps>[number]) {
+  const grantId = String(grant.id ?? grant._id ?? "");
+  const editHref = grantId ? `/app/grants/${grantId}/edit` : "/app/grants";
+  const actions: Array<{ label: string; href: string; external?: boolean; primary?: boolean }> = [];
+
+  if (step.id === "gcos-prepare-eed") {
+    const emp5616 = findRequirementById(grant.requirements, "gcos-emp5616-consent");
+    actions.push(
+      { label: "Link employees", href: "#funded-employees", primary: true },
+      { label: "Open EMP5616", href: emp5616?.documentUrl ?? EMP5616_FORM_URL, external: true },
+      { label: "Add EED in GCOS", href: step.actionUrl ?? GCOS_EED_ADD_URL, external: true },
+      { label: "Track checklist", href: editHref },
+    );
+    actions.push({ label: "View EED list", href: GCOS_EED_MANAGE_URL, external: true });
+  } else if (step.id === "gcos-complete-emp5616") {
+    actions.push({ label: step.actionLabel ?? "Open EMP5616", href: step.actionUrl ?? EMP5616_FORM_URL, external: true, primary: true });
+    actions.push(
+      { label: "Link employee record", href: "#funded-employees" },
+      { label: "Mark consent retained", href: editHref },
+    );
+  } else if (step.id === "gcos-review-award-delta") {
+    actions.push(
+      { label: "Review funding delta", href: editHref, primary: true },
+      { label: "Update budget notes", href: editHref },
+    );
+  } else if (step.id === "gcos-plan-payment-claim") {
+    actions.push(
+      { label: "Create reporting plan", href: editHref, primary: true },
+      { label: "Review evidence checklist", href: editHref },
+    );
+  } else if (step.actionUrl) {
+    actions.push({ label: step.actionLabel ?? "Open action", href: step.actionUrl, external: true, primary: true });
+  } else if (step.actionLabel) {
+    actions.push({ label: step.actionLabel, href: editHref, primary: true });
+  }
+
+  return actions;
+}
+
+function findRequirementById(value: unknown, id: string) {
+  return asRequirements(value).find((requirement) => requirement.id === id);
+}
+
+function GrantRequiredFormsPanel({ grant }: { grant: any }) {
+  const forms = asRequirements(grant.requirements).filter((requirement) =>
+    requirement.documentUrl || requirement.sourceUrl || /form|consent|EMP\d+/i.test(`${requirement.label} ${requirement.formNumber ?? ""}`),
+  );
+  if (forms.length === 0) return null;
+
+  return (
+    <DossierSection title="Required Forms / Documents">
+      <div style={{ display: "grid", gap: 8 }}>
+        {forms.map((requirement) => (
+          <div key={requirement.id} style={nextStepStyle}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
               <div style={{ minWidth: 0 }}>
-                <strong>{step.label}</strong>
-                {step.reason && <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>{step.reason}</div>}
+                <strong>{requirement.label}</strong>
+                {requirement.notes && <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>{requirement.notes}</div>}
               </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                <Badge tone={nextStepTone(step.status)}>{step.status}</Badge>
-                <Badge tone={priorityTone(step.priority)}>{step.priority}</Badge>
+                <Badge tone={requirementStatusTone(requirement.status)}>{requirement.status}</Badge>
+                {requirement.formNumber && <Badge tone="info">{requirement.formNumber}</Badge>}
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, fontSize: 12 }}>
-              {step.actionLabel && <span className="cell-tag">{step.actionLabel}</span>}
-              {step.dueHint && <span className="muted">{step.dueHint}</span>}
-              {step.source && <span className="muted">Source: {step.source}</span>}
+              {requirement.documentUrl && (
+                <a className="cell-tag" href={requirement.documentUrl} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  Open form
+                  <ExternalLink size={11} />
+                </a>
+              )}
+              {requirement.sourceUrl && (
+                <a className="muted" href={requirement.sourceUrl} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  Service Canada details
+                  <ExternalLink size={11} />
+                </a>
+              )}
+              {requirement.dueDate && <span className="muted">Target: {formatDate(requirement.dueDate)}</span>}
             </div>
           </div>
         ))}
@@ -800,9 +926,6 @@ function GrantUseOfFundsPanel({ grant }: { grant: any }) {
   const lines = asUseOfFunds(grant.useOfFunds).filter((line) => line.label.trim());
   if (lines.length === 0) return null;
 
-  const knownTotal = lines.reduce((sum, line) => sum + (line.amountCents ?? 0), 0);
-  const hasAmounts = lines.some((line) => typeof line.amountCents === "number");
-
   return (
     <DossierSection title="Use of Funds / Budget Breakdown">
       <div style={{ display: "grid", gap: 8 }}>
@@ -815,12 +938,6 @@ function GrantUseOfFundsPanel({ grant }: { grant: any }) {
             <span className="mono">{line.amountCents === undefined ? "—" : money(line.amountCents)}</span>
           </div>
         ))}
-        {hasAmounts && (
-          <div style={{ ...fundLineStyle, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
-            <strong>Seeded total</strong>
-            <span className="mono">{money(knownTotal)}</span>
-          </div>
-        )}
       </div>
     </DossierSection>
   );
@@ -897,29 +1014,30 @@ function GrantAnswerLibraryPanel({ grant }: { grant: any }) {
 }
 
 function GrantSourceNotesPanel({ grant }: { grant: any }) {
-  const keyFacts = cleanStringList(grant.keyFacts);
+  const keyFacts = cleanSourceKeyFacts(grant.keyFacts);
   const sourceExternalIds = cleanStringList(grant.sourceExternalIds);
+  const sourceFacts = [
+    grant.sourcePath ? { label: "Imported from", value: grant.sourcePath } : undefined,
+    grant.sourceImportedAtISO ? { label: "Import date", value: formatDate(grant.sourceImportedAtISO) } : undefined,
+    grant.sourceFileCount ? { label: "Linked files", value: String(grant.sourceFileCount) } : undefined,
+    grant.confidence ? { label: "Confidence", value: grant.confidence } : undefined,
+    grant.sensitivity ? { label: "Sensitivity", value: grant.sensitivity } : undefined,
+  ].filter(Boolean) as Array<{ label: string; value: string }>;
   const hasSource =
-    grant.sourcePath ||
-    grant.sourceImportedAtISO ||
-    grant.sourceFileCount ||
+    sourceFacts.length > 0 ||
     grant.sourceNotes ||
     sourceExternalIds.length > 0 ||
-    grant.confidence ||
-    grant.sensitivity ||
     keyFacts.length > 0;
   if (!hasSource) return null;
 
   return (
     <DossierSection title="Imported Source Notes">
       <div style={{ display: "grid", gap: 8 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 8 }}>
-          <DossierFact label="Imported from" value={grant.sourcePath} />
-          <DossierFact label="Import date" value={grant.sourceImportedAtISO ? formatDate(grant.sourceImportedAtISO) : undefined} />
-          <DossierFact label="Linked files" value={grant.sourceFileCount ? String(grant.sourceFileCount) : undefined} />
-          <DossierFact label="Confidence" value={grant.confidence} />
-          <DossierFact label="Sensitivity" value={grant.sensitivity} />
-        </div>
+        {sourceFacts.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 8 }}>
+            {sourceFacts.map((fact) => <DossierFact key={fact.label} label={fact.label} value={fact.value} />)}
+          </div>
+        )}
         {sourceExternalIds.length > 0 && (
           <div className="muted mono" style={{ fontSize: 12, overflowWrap: "anywhere" }}>
             Sources: {sourceExternalIds.join(", ")}
@@ -938,15 +1056,26 @@ function GrantSourceNotesPanel({ grant }: { grant: any }) {
   );
 }
 
+function cleanSourceKeyFacts(value: unknown) {
+  const byKey = new Map<string, string>();
+  for (const fact of cleanStringList(value)) {
+    const key = /^approved\/requested delta:/i.test(fact) ? "approved-requested-delta" : fact.toLowerCase();
+    byKey.set(key, fact);
+  }
+  return Array.from(byKey.values());
+}
+
 function DossierSection({
+  id,
   title,
   children,
 }: {
+  id?: string;
   title: string;
   children: ReactNode;
 }) {
   return (
-    <section style={dossierSectionStyle}>
+    <section id={id} style={dossierSectionStyle}>
       <div className="stat__label" style={{ marginBottom: 10 }}>{title}</div>
       {children}
     </section>
@@ -1162,6 +1291,13 @@ const nextStepStyle = {
   borderRadius: "var(--r-sm)",
   background: "var(--bg-base)",
   padding: 10,
+};
+
+const workflowActionBarStyle = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap" as const,
+  marginTop: 10,
 };
 
 const employeeLinkStyle = {

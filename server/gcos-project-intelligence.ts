@@ -5,7 +5,9 @@ type GcosNextStep = {
   priority: string;
   dueHint?: string;
   source?: string;
+  sourceUrl?: string;
   actionLabel?: string;
+  actionUrl?: string;
   reason?: string;
 };
 
@@ -16,6 +18,9 @@ type GcosRequirement = {
   status: string;
   dueDate?: string;
   notes?: string;
+  sourceUrl?: string;
+  documentUrl?: string;
+  formNumber?: string;
 };
 
 type GcosTimelineEvent = {
@@ -37,6 +42,10 @@ type GcosUseOfFundsLine = {
   amountCents?: number;
   notes?: string;
 };
+
+const EMP5616_DETAIL_URL = "https://catalogue.servicecanada.gc.ca/content/EForms/en/Detail.html?Form=EMP5616";
+const EMP5616_FORM_URL = "https://catalogue.servicecanada.gc.ca/content/EForms/en/CallForm.html?Lang=en&PDF=ESDC-EMP5616.pdf";
+const GCOS_EED_ADD_URL = "https://srv136.services.gc.ca/OSR/pro/EED/EED/Add";
 
 export type GcosProjectIntelligence = {
   nextAction?: string;
@@ -106,6 +115,17 @@ export function deriveGcosProjectIntelligence(snapshot: any, normalizedGrant: an
         : undefined,
     },
     {
+      id: "gcos-emp5616-consent",
+      category: "Post-award",
+      label: "Employee Consent Form (EMP5616) completed and retained",
+      status: eedHasEntries ? "Ready" : "Needed",
+      dueDate: startDate && !eedHasEntries ? addDays(startDate, 7) : undefined,
+      formNumber: "EMP5616",
+      sourceUrl: EMP5616_DETAIL_URL,
+      documentUrl: EMP5616_FORM_URL,
+      notes: "Required before submitting each online Employer and Employee Declaration. Keep signed consent on file; do not import SIN or other sensitive participant identifiers into Societyer.",
+    },
+    {
       id: "gcos-payment-claim-activity-report",
       category: "Post-award",
       label: "Payment Claim and Activity Report tracked",
@@ -130,8 +150,22 @@ export function deriveGcosProjectIntelligence(snapshot: any, normalizedGrant: an
       priority: "High",
       dueHint: "Within 7 days of the beginning of CSJ-funded employment.",
       source: "GCOS Employer and Employee Declaration",
+      sourceUrl: EMP5616_DETAIL_URL,
       actionLabel: "Add EED records in GCOS",
+      actionUrl: GCOS_EED_ADD_URL,
       reason: `GCOS shows 0 EED records and the approved job has ${approvedParticipants} participant${approvedParticipants === 1 ? "" : "s"}.`,
+    });
+    nextSteps.push({
+      id: "gcos-complete-emp5616",
+      label: "Collect signed Employee Consent Form (EMP5616)",
+      status: "Needs action",
+      priority: "High",
+      dueHint: "Before each employee declaration is submitted in GCOS.",
+      source: "Service Canada Forms Catalogue",
+      sourceUrl: EMP5616_DETAIL_URL,
+      actionLabel: "Open EMP5616 form",
+      actionUrl: EMP5616_FORM_URL,
+      reason: "The youth participant must complete the consent form before their information is submitted to ESDC. Link the Societyer employee first, then use their non-sensitive profile details to prepare the package.",
     });
   }
   if (awarded != null && requested != null && awarded !== requested) {
@@ -199,11 +233,6 @@ export function deriveGcosProjectIntelligence(snapshot: any, normalizedGrant: an
       label: structured.approvedJob?.title ? `Approved ESDC contribution: ${structured.approvedJob.title}` : "Approved ESDC contribution",
       amountCents: awarded,
       notes: approvedWeeks ? `${approvedWeeks} approved week${approvedWeeks === 1 ? "" : "s"}` : undefined,
-    } : undefined,
-    requested != null ? {
-      label: "Original ESDC contribution requested",
-      amountCents: requested,
-      notes: appliedWeeks ? `${appliedWeeks} requested week${appliedWeeks === 1 ? "" : "s"}` : undefined,
     } : undefined,
   ].filter(Boolean) as GcosUseOfFundsLine[];
 

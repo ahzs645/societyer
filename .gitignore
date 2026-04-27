@@ -20,4 +20,5 @@ scripts/paperless-*.py
 # project compiles before the user has run convex dev.
 # convex/_generated
 /test-results
+tmp/
 .claude/worktrees/
