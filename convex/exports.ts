@@ -147,7 +147,8 @@ export const EXPORTABLE_TABLES = [
 ] as const;
 
 const EXPORTABLE_SET = new Set<string>(EXPORTABLE_TABLES);
-const REDACTED_FIELDS = new Set(["secretEncrypted", "tokenHash", "storageId"]);
+const DEFAULT_REDACTED_FIELDS = ["secretEncrypted", "tokenHash", "storageId"] as const;
+const RECOVERY_REDACTED_FIELDS = ["storageId"] as const;
 const GLOBAL_TABLES = new Set(["jurisdictionMetadata"]);
 const OPTIONAL_SOCIETY_TABLES = new Set(["legalTemplateDataFields", "legalTemplates", "legalPrecedents"]);
 const NO_BY_SOCIETY_INDEX = new Set(["transcriptionJobs", "electionEligibleVoters", "electionBallots", "viewFields"]);
@@ -172,10 +173,17 @@ export const exportTable = query({
   args: {
     societyId: v.id("societies"),
     table: v.string(),
+    includeRecoverySecrets: v.optional(v.boolean()),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, table }) => {
-    const result = await paginateForSociety(ctx, table, societyId, { cursor: null, numItems: 100 });
+  handler: async (ctx, { societyId, table, includeRecoverySecrets }) => {
+    const result = await paginateForSociety(
+      ctx,
+      table,
+      societyId,
+      { cursor: null, numItems: 100 },
+      { includeRecoverySecrets: includeRecoverySecrets === true },
+    );
     if (!result.isDone) {
       throw new Error("Table is too large for a single export query. Use exportTablePage.");
     }
@@ -188,10 +196,13 @@ export const exportTablePage = query({
     societyId: v.id("societies"),
     table: v.string(),
     paginationOpts: paginationOptsValidator,
+    includeRecoverySecrets: v.optional(v.boolean()),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, table, paginationOpts }) => {
-    return await paginateForSociety(ctx, table, societyId, paginationOpts);
+  handler: async (ctx, { societyId, table, paginationOpts, includeRecoverySecrets }) => {
+    return await paginateForSociety(ctx, table, societyId, paginationOpts, {
+      includeRecoverySecrets: includeRecoverySecrets === true,
+    });
   },
 });
 
@@ -276,9 +287,10 @@ export const exportWorkspace = query({
   args: {
     societyId: v.id("societies"),
     includeEmptyTables: v.optional(v.boolean()),
+    includeRecoverySecrets: v.optional(v.boolean()),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, includeEmptyTables }) => {
+  handler: async (ctx, { societyId, includeEmptyTables, includeRecoverySecrets }) => {
     const society = await ctx.db.get(societyId);
     if (!society) throw new Error("Society not found.");
 
@@ -289,18 +301,19 @@ export const exportWorkspace = query({
       kind: "societyer.workspaceExport",
       version: EXPORT_VERSION,
       generatedAtISO,
-      society: sanitizeRow(society),
+      society: sanitizeRow(society, { includeRecoverySecrets: includeRecoverySecrets === true }),
       manifest: {
         societyId,
         societyName: society.name,
         tableCount: EXPORTABLE_TABLES.length,
         exportedTableCount: includeEmptyTables ? EXPORTABLE_TABLES.length : 0,
         totalRows: null,
-        redactedFields: Array.from(REDACTED_FIELDS),
+        redactedFields: redactedFieldsFor({ includeRecoverySecrets: includeRecoverySecrets === true }),
+        recoverySecretsIncluded: includeRecoverySecrets === true,
         binaryFilesIncluded: false,
         tables: summaries,
       },
-      validation: validationFromSummaries(summaries),
+      validation: validationFromSummaries(summaries, { includeRecoverySecrets: includeRecoverySecrets === true }),
       tables: {},
     };
   },
@@ -348,7 +361,13 @@ export const validateCurrentDatabase = query({
   },
 });
 
-async function paginateForSociety(ctx: any, table: string, societyId: string, paginationOpts: any) {
+async function paginateForSociety(
+  ctx: any,
+  table: string,
+  societyId: string,
+  paginationOpts: any,
+  options?: { includeRecoverySecrets?: boolean },
+) {
   assertExportable(table);
   const societyKey = String(societyId);
 
@@ -356,7 +375,7 @@ async function paginateForSociety(ctx: any, table: string, societyId: string, pa
     const society = await ctx.db.get(societyId);
     const include = society && (!paginationOpts.cursor || paginationOpts.cursor === "0");
     return {
-      page: include ? [sanitizeRow(society)] : [],
+      page: include ? [sanitizeRow(society, options)] : [],
       isDone: true,
       continueCursor: "",
     };
@@ -364,7 +383,7 @@ async function paginateForSociety(ctx: any, table: string, societyId: string, pa
 
   if (GLOBAL_TABLES.has(table)) {
     const page = await ctx.db.query(table).paginate(paginationOpts);
-    return { ...page, page: page.page.map(sanitizeRow) };
+    return { ...page, page: page.page.map((row: any) => sanitizeRow(row, options)) };
   }
 
   if (table === "notificationPrefs") {
@@ -381,7 +400,7 @@ async function paginateForSociety(ctx: any, table: string, societyId: string, pa
       .query("notificationPrefs")
       .filter((q: any) => q.or(...Array.from(userIds).map((id) => q.eq(q.field("userId"), id))))
       .paginate(paginationOpts);
-    return { ...page, page: page.page.map(sanitizeRow) };
+    return { ...page, page: page.page.map((row: any) => sanitizeRow(row, options)) };
   }
 
   if (OPTIONAL_SOCIETY_TABLES.has(table)) {
@@ -391,7 +410,7 @@ async function paginateForSociety(ctx: any, table: string, societyId: string, pa
         q.or(q.eq(q.field("societyId"), societyId), q.eq(q.field("societyId"), undefined)),
       )
       .paginate(paginationOpts);
-    return { ...page, page: page.page.map(sanitizeRow) };
+    return { ...page, page: page.page.map((row: any) => sanitizeRow(row, options)) };
   }
 
   const indexName = SOCIETY_INDEX_BY_TABLE[table] ?? "by_society";
@@ -399,7 +418,7 @@ async function paginateForSociety(ctx: any, table: string, societyId: string, pa
     ? ctx.db.query(table).filter((q: any) => q.eq(q.field("societyId"), societyId))
     : ctx.db.query(table).withIndex(indexName, (q: any) => q.eq("societyId", societyId));
   const page = await query.paginate(paginationOpts);
-  return { ...page, page: page.page.map(sanitizeRow) };
+  return { ...page, page: page.page.map((row: any) => sanitizeRow(row, options)) };
 }
 
 function assertExportable(table: string) {
@@ -408,7 +427,10 @@ function assertExportable(table: string) {
   }
 }
 
-function validationFromSummaries(tables: Array<{ name: string; rowCount: number | null }>) {
+function validationFromSummaries(
+  tables: Array<{ name: string; rowCount: number | null }>,
+  options?: { includeRecoverySecrets?: boolean },
+) {
   const issues: string[] = [];
   const names = new Set(tables.map((table) => table.name));
   for (const table of EXPORTABLE_TABLES) {
@@ -424,14 +446,20 @@ function validationFromSummaries(tables: Array<{ name: string; rowCount: number 
     tableCount: EXPORTABLE_TABLES.length,
     nonEmptyTableCount: countedTables.filter((table) => Number(table.rowCount) > 0).length,
     totalRows,
+    redactedFields: redactedFieldsFor(options),
+    recoverySecretsIncluded: options?.includeRecoverySecrets === true,
     issues,
   };
 }
 
-function sanitizeRow<T extends Record<string, unknown>>(row: T): T {
+function sanitizeRow<T extends Record<string, unknown>>(row: T, options?: { includeRecoverySecrets?: boolean }): T {
   const copy: Record<string, unknown> = { ...row };
-  for (const field of REDACTED_FIELDS) {
+  for (const field of redactedFieldsFor(options)) {
     if (field in copy) copy[field] = "[redacted]";
   }
   return copy as T;
+}
+
+function redactedFieldsFor(options?: { includeRecoverySecrets?: boolean }) {
+  return Array.from(options?.includeRecoverySecrets ? RECOVERY_REDACTED_FIELDS : DEFAULT_REDACTED_FIELDS);
 }

@@ -75,10 +75,24 @@ export const create = mutation({
   handler: async (ctx, args) =>
     ctx.db.insert("documents", {
       ...args,
+      tags: uniqueStrings(args.tags),
       createdAtISO: new Date().toISOString(),
       flaggedForDeletion: false,
     }),
 });
+
+function uniqueStrings(values: string[]) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const trimmed = value.trim();
+    const key = trimmed.toLowerCase();
+    if (!trimmed || seen.has(key)) continue;
+    seen.add(key);
+    out.push(trimmed);
+  }
+  return out;
+}
 
 export const markOpened = mutation({
   args: {

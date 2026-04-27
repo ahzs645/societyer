@@ -805,13 +805,13 @@ export const applyApprovedDocuments = mutation({
         reviewStatus: "in_review",
         librarySection: importedLibrarySection(record.targetModule, sections),
         flaggedForDeletion: false,
-        tags: [
+        tags: unique([
           `${sourceSystemTag(externalSystem)}-import`,
           "import-candidate",
           externalId,
           ...sections.map(tagValue),
           ...sourceTags.map(tagValue).slice(0, 8),
-        ].filter(Boolean),
+        ]),
       });
       await patchRecordImportTarget(ctx, record, "documents", docId);
       documents += 1;

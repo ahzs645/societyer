@@ -45,6 +45,7 @@ if (!url) {
 const client = new ConvexHttpClient(url);
 const society = await findSociety();
 const tables = exportTables();
+const includeRecoverySecrets = process.argv.includes("--include-secrets");
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const outputRoot = path.resolve(argValue("--out-dir") ?? "tmp/exports", `${slug(society.name)}-${stamp}`);
 const attachmentsRoot = path.join(outputRoot, "attachments");
@@ -127,7 +128,8 @@ async function exportWorkspace() {
       tableCount: tables.length,
       exportedTableCount: Object.keys(exportedTables).length,
       totalRows,
-      redactedFields: ["secretEncrypted", "tokenHash", "storageId"],
+      redactedFields: includeRecoverySecrets ? ["storageId"] : ["secretEncrypted", "tokenHash", "storageId"],
+      recoverySecretsIncluded: includeRecoverySecrets,
       binaryFilesIncluded: true,
       attachmentManifest: "attachment-manifest.json",
       attachmentDirectory: "attachments/",
@@ -139,6 +141,8 @@ async function exportWorkspace() {
       tableCount: tables.length,
       nonEmptyTableCount: summaries.filter((table) => table.rowCount > 0).length,
       totalRows,
+      redactedFields: includeRecoverySecrets ? ["storageId"] : ["secretEncrypted", "tokenHash", "storageId"],
+      recoverySecretsIncluded: includeRecoverySecrets,
       issues: [],
     },
     tables: exportedTables,
@@ -157,6 +161,7 @@ async function fetchTableRows(table: string) {
     const result = await client.query(api.exports.exportTablePage, {
       societyId: society._id,
       table,
+      includeRecoverySecrets,
       paginationOpts: { cursor, numItems: pageSizeFor(table) },
     });
     rows.push(...((result.page ?? []) as Array<Record<string, unknown>>));

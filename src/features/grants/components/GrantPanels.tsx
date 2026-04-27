@@ -42,6 +42,7 @@ export function GrantReadPanel({
   onUnlinkEmployee,
   onCreateEmployee,
   onQueueEmployeeOrientationEmail,
+  onCreateSinVaultRecord,
 }: {
   grant: any;
   documents: any[];
@@ -56,6 +57,7 @@ export function GrantReadPanel({
   onUnlinkEmployee?: (linkId: string) => void | Promise<void>;
   onCreateEmployee?: (draft: Record<string, unknown>) => Promise<string | void>;
   onQueueEmployeeOrientationEmail?: (employee: any, grant: any) => void | Promise<void>;
+  onCreateSinVaultRecord?: (draft: Record<string, unknown>) => Promise<string | void>;
 }) {
   return (
     <div style={{ display: "grid", gap: 12 }}>
@@ -70,6 +72,7 @@ export function GrantReadPanel({
         onUnlinkEmployee={onUnlinkEmployee}
         onCreateEmployee={onCreateEmployee}
         onQueueEmployeeOrientationEmail={onQueueEmployeeOrientationEmail}
+        onCreateSinVaultRecord={onCreateSinVaultRecord}
       />
       <DossierSection title="Administrative Details">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 8 }}>
@@ -529,6 +532,7 @@ export function GrantDossierStack({
   onUnlinkEmployee,
   onCreateEmployee,
   onQueueEmployeeOrientationEmail,
+  onCreateSinVaultRecord,
 }: {
   grant: any;
   documents: any[];
@@ -540,6 +544,7 @@ export function GrantDossierStack({
   onUnlinkEmployee?: (linkId: string) => void | Promise<void>;
   onCreateEmployee?: (draft: Record<string, unknown>) => Promise<string | void>;
   onQueueEmployeeOrientationEmail?: (employee: any, grant: any) => void | Promise<void>;
+  onCreateSinVaultRecord?: (draft: Record<string, unknown>) => Promise<string | void>;
 }) {
   const hasDossierData =
     !!(grant.id ?? grant._id) ||
@@ -571,6 +576,7 @@ export function GrantDossierStack({
         onUnlinkEmployee={onUnlinkEmployee}
         onCreateEmployee={onCreateEmployee}
         onQueueEmployeeOrientationEmail={onQueueEmployeeOrientationEmail}
+        onCreateSinVaultRecord={onCreateSinVaultRecord}
       />
       <GrantFundingDeltaPanel grant={grant} />
       <GrantEvidencePacketMap grant={grant} documents={documents} />
@@ -638,6 +644,7 @@ function GrantFundedEmployeesPanel({
   onUnlinkEmployee,
   onCreateEmployee,
   onQueueEmployeeOrientationEmail,
+  onCreateSinVaultRecord,
 }: {
   grant: any;
   employees: any[];
@@ -647,10 +654,14 @@ function GrantFundedEmployeesPanel({
   onUnlinkEmployee?: (linkId: string) => void | Promise<void>;
   onCreateEmployee?: (draft: Record<string, unknown>) => Promise<string | void>;
   onQueueEmployeeOrientationEmail?: (employee: any, grant: any) => void | Promise<void>;
+  onCreateSinVaultRecord?: (draft: Record<string, unknown>) => Promise<string | void>;
 }) {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [showNewEmployee, setShowNewEmployee] = useState(false);
   const [employeeDraft, setEmployeeDraft] = useState(() => defaultGrantEmployeeDraft(grant));
+  const [showSinVaultForm, setShowSinVaultForm] = useState(false);
+  const [sinVaultDraft, setSinVaultDraft] = useState(() => defaultSinVaultDraft());
+  const [endDateOverridden, setEndDateOverridden] = useState(false);
   const grantId = String(grant._id ?? grant.id ?? "");
   const grantAssignmentKey = grantFundedAssignmentKey(grant);
   const links = employeeLinks.filter((link) => String(link.grantId) === grantId);
@@ -667,8 +678,9 @@ function GrantFundedEmployeesPanel({
       employmentType: lockedAssignment.employmentType ?? current.employmentType,
       hoursPerWeek: lockedAssignment.hoursPerWeek ?? current.hoursPerWeek,
       hourlyWageDollars: lockedAssignment.hourlyWageDollars ?? current.hourlyWageDollars,
+      endDate: !endDateOverridden ? calculatedGrantEndDate(current.startDate, lockedAssignment.weeks) ?? current.endDate : current.endDate,
     }));
-  }, [grantAssignmentKey]);
+  }, [grantAssignmentKey, endDateOverridden]);
 
   if (!links.length && !onLinkEmployee) return null;
 
@@ -715,7 +727,32 @@ function GrantFundedEmployeesPanel({
         notes: "Created from GCOS EED prep. Confirm participant-only sensitive fields in GCOS before submission.",
       });
       setEmployeeDraft(defaultGrantEmployeeDraft(grant));
+      setEndDateOverridden(false);
       setShowNewEmployee(false);
+    }
+  };
+
+  const createSinVaultRecord = async () => {
+    if (!onCreateSinVaultRecord || !canCreateSinVaultRecord(sinVaultDraft)) return;
+    const firstName = employeeDraft.firstName.trim();
+    const lastName = employeeDraft.lastName.trim();
+    const employeeName = [firstName, lastName].filter(Boolean).join(" ");
+    const id = await onCreateSinVaultRecord({
+      name: sinVaultDraft.name.trim() || `SIN - ${employeeName || "funded employee"}`,
+      custodianPersonName: sinVaultDraft.custodianPersonName.trim() || undefined,
+      custodianEmail: sinVaultDraft.custodianEmail.trim() || undefined,
+      externalLocation: sinVaultDraft.externalLocation.trim() || undefined,
+      secretValue: sinVaultDraft.secretValue.trim() || undefined,
+      notes: [
+        `Created from grant ${grant.title ?? "GCOS grant"} funded-employee workflow.`,
+        employeeName ? `Employee: ${employeeName}.` : undefined,
+        "Raw SIN is retained only in the Secrets vault record.",
+      ].filter(Boolean).join(" "),
+    });
+    if (id) {
+      setEmployeeDraft({ ...employeeDraft, sinSecretVaultItemId: String(id) });
+      setSinVaultDraft(defaultSinVaultDraft());
+      setShowSinVaultForm(false);
     }
   };
 
@@ -820,9 +857,33 @@ function GrantFundedEmployeesPanel({
                     ))}
                   </select>
                 </Field>
-                <div className="muted" style={{ fontSize: 12 }}>
-                  Need a SIN vault record? Add it in <Link to="/app/secrets">Secrets</Link>, then return here and select it.
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  {onCreateSinVaultRecord && (
+                    <button className="btn btn--ghost btn--sm" type="button" onClick={() => setShowSinVaultForm((value) => !value)}>
+                      {showSinVaultForm ? "Cancel SIN vault record" : "Add SIN vault record"}
+                    </button>
+                  )}
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    You can also manage access records in <Link to="/app/secrets">Secrets</Link>.
+                  </span>
                 </div>
+                {showSinVaultForm && (
+                  <div style={{ ...detailPanelStyle, display: "grid", gap: 8 }}>
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      This creates a restricted Secrets record. Do not put SIN in employee notes, grant notes, or documents unless the document is intentionally access-controlled.
+                    </div>
+                    <Field label="Record name"><input className="input" value={sinVaultDraft.name} onChange={(event) => setSinVaultDraft({ ...sinVaultDraft, name: event.target.value })} /></Field>
+                    <Field label="SIN" hint="Stored encrypted in Secrets only. Leave blank if the SIN is held externally."><input className="input" type="password" inputMode="numeric" autoComplete="off" value={sinVaultDraft.secretValue} onChange={(event) => setSinVaultDraft({ ...sinVaultDraft, secretValue: event.target.value })} /></Field>
+                    <Field label="External custody location" hint="Use when the SIN is stored outside Societyer."><input className="input" value={sinVaultDraft.externalLocation} onChange={(event) => setSinVaultDraft({ ...sinVaultDraft, externalLocation: event.target.value })} /></Field>
+                    <div className="row" style={{ gap: 8 }}>
+                      <Field label="Custodian name"><input className="input" value={sinVaultDraft.custodianPersonName} onChange={(event) => setSinVaultDraft({ ...sinVaultDraft, custodianPersonName: event.target.value })} /></Field>
+                      <Field label="Custodian email"><input className="input" type="email" value={sinVaultDraft.custodianEmail} onChange={(event) => setSinVaultDraft({ ...sinVaultDraft, custodianEmail: event.target.value })} /></Field>
+                    </div>
+                    <button className="btn btn--accent btn--sm" type="button" disabled={!canCreateSinVaultRecord(sinVaultDraft)} onClick={createSinVaultRecord}>
+                      Create and link SIN vault record
+                    </button>
+                  </div>
+                )}
                 <div className="row" style={{ gap: 8 }}>
                   <Field label="Job / role" hint={lockedAssignment.role ? "From approved GCOS job" : undefined}>
                     <input className="input" readOnly={Boolean(lockedAssignment.role)} value={employeeDraft.role} onChange={(event) => setEmployeeDraft({ ...employeeDraft, role: event.target.value })} />
@@ -837,9 +898,48 @@ function GrantFundedEmployeesPanel({
                   </Field>
                 </div>
                 <div className="row" style={{ gap: 8 }}>
-                  <Field label="Start"><input className="input" type="date" value={employeeDraft.startDate} onChange={(event) => setEmployeeDraft({ ...employeeDraft, startDate: event.target.value })} /></Field>
-                  <Field label="End"><input className="input" type="date" value={employeeDraft.endDate} onChange={(event) => setEmployeeDraft({ ...employeeDraft, endDate: event.target.value })} /></Field>
+                  <Field label="Start">
+                    <input
+                      className="input"
+                      type="date"
+                      value={employeeDraft.startDate}
+                      onChange={(event) => {
+                        const startDate = event.target.value;
+                        setEmployeeDraft({
+                          ...employeeDraft,
+                          startDate,
+                          endDate: !endDateOverridden ? calculatedGrantEndDate(startDate, lockedAssignment.weeks) ?? employeeDraft.endDate : employeeDraft.endDate,
+                        });
+                      }}
+                    />
+                  </Field>
+                  <Field label="End" hint={endDateOverridden ? "Manual override" : lockedAssignment.weeks ? `${lockedAssignment.weeks} approved weeks from start` : undefined}>
+                    <input
+                      className="input"
+                      type="date"
+                      value={employeeDraft.endDate}
+                      onChange={(event) => {
+                        setEndDateOverridden(true);
+                        setEmployeeDraft({ ...employeeDraft, endDate: event.target.value });
+                      }}
+                    />
+                  </Field>
                 </div>
+                {endDateOverridden && (
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    type="button"
+                    onClick={() => {
+                      setEndDateOverridden(false);
+                      setEmployeeDraft({
+                        ...employeeDraft,
+                        endDate: calculatedGrantEndDate(employeeDraft.startDate, lockedAssignment.weeks) ?? employeeDraft.endDate,
+                      });
+                    }}
+                  >
+                    Use calculated end date
+                  </button>
+                )}
                 <div className="row" style={{ gap: 8 }}>
                   <Field label="Hours/week" hint={lockedAssignment.hoursPerWeek ? "From approved GCOS job" : undefined}>
                     <input className="input" readOnly={Boolean(lockedAssignment.hoursPerWeek)} type="number" inputMode="decimal" min="0" step="0.25" value={employeeDraft.hoursPerWeek} onChange={(event) => setEmployeeDraft({ ...employeeDraft, hoursPerWeek: event.target.value })} />
@@ -1022,10 +1122,24 @@ function defaultGrantEmployeeDraft(grant: any) {
     role: assignment.role ?? "",
     employmentType: assignment.employmentType ?? "FullTime",
     startDate: grant.startDate ?? new Date().toISOString().slice(0, 10),
-    endDate: grant.endDate ?? "",
+    endDate: calculatedGrantEndDate(grant.startDate ?? new Date().toISOString().slice(0, 10), assignment.weeks) ?? grant.endDate ?? "",
     hoursPerWeek: assignment.hoursPerWeek ?? "35",
     hourlyWageDollars: assignment.hourlyWageDollars ?? "",
   };
+}
+
+function defaultSinVaultDraft() {
+  return {
+    name: "",
+    secretValue: "",
+    externalLocation: "",
+    custodianPersonName: "",
+    custodianEmail: "",
+  };
+}
+
+function canCreateSinVaultRecord(draft: ReturnType<typeof defaultSinVaultDraft>) {
+  return Boolean(draft.name.trim() || draft.secretValue.trim() || draft.externalLocation.trim());
 }
 
 function grantFundedAssignment(grant: any) {
@@ -1036,6 +1150,7 @@ function grantFundedAssignment(grant: any) {
     employmentType: isCanadaSummerJobs ? "FullTime" : undefined,
     hoursPerWeek: grantHoursPerWeek(grant) ?? (isCanadaSummerJobs ? "35" : undefined),
     hourlyWageDollars: grantHourlyWageDollars(grant),
+    weeks: grantApprovedWeeks(grant),
   };
 }
 
@@ -1063,6 +1178,20 @@ function grantHoursPerWeek(grant: any) {
 function grantHourlyWageDollars(grant: any) {
   const match = cleanStringList(grant.keyFacts).join(" ").match(/(?:approved )?hourly wage:\s*\$?(\d+(?:\.\d{1,2})?)/i);
   return match?.[1];
+}
+
+function grantApprovedWeeks(grant: any) {
+  return findKeyFactNumber(grant.keyFacts, /approved weeks:\s*(\d+(?:\.\d+)?)/i);
+}
+
+function calculatedGrantEndDate(startDate: unknown, weeks: unknown) {
+  const start = String(startDate ?? "").trim();
+  const parsedWeeks = typeof weeks === "number" ? weeks : Number(weeks);
+  if (!start || !Number.isFinite(parsedWeeks) || parsedWeeks <= 0) return undefined;
+  const date = new Date(`${start}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return undefined;
+  date.setUTCDate(date.getUTCDate() + Math.round(parsedWeeks * 7) - 1);
+  return date.toISOString().slice(0, 10);
 }
 
 function canCreateGrantEmployee(draft: ReturnType<typeof defaultGrantEmployeeDraft>) {

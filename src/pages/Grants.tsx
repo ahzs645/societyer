@@ -81,6 +81,7 @@ export function GrantsPage() {
   const removeEmployeeLink = useMutation(api.grants.removeEmployeeLink);
   const createEmployee = useMutation(api.employees.create);
   const createPendingEmail = useMutation(api.pendingEmails.create);
+  const createSecret = useMutation(api.secrets.create);
   const reviewApplication = useMutation(api.grants.reviewApplication);
   const convertApplication = useMutation(api.grants.convertApplication);
   const upsertReport = useMutation(api.grants.upsertReport);
@@ -571,6 +572,29 @@ export function GrantsPage() {
               });
               toast.success("Orientation email queued in Outbox");
             }}
+            onCreateSinVaultRecord={async (draft) => {
+              const id = await createSecret({
+                societyId: society._id,
+                actingUserId,
+                name: String(draft.name ?? "SIN - funded employee"),
+                service: "Employee SIN",
+                credentialType: "Social Insurance Number",
+                ownerRole: "Employer",
+                custodianPersonName: draft.custodianPersonName ? String(draft.custodianPersonName) : undefined,
+                custodianEmail: draft.custodianEmail ? String(draft.custodianEmail) : undefined,
+                storageMode: draft.secretValue ? "stored_encrypted" : "external_reference",
+                externalLocation: draft.externalLocation ? String(draft.externalLocation) : undefined,
+                secretValue: draft.secretValue ? String(draft.secretValue) : undefined,
+                revealPolicy: "owner_admin_custodian",
+                status: "Active",
+                sensitivity: "high",
+                accessLevel: "restricted",
+                sourceExternalIds: [`grant:${String(selectedGrant._id)}`],
+                notes: draft.notes ? String(draft.notes) : undefined,
+              });
+              toast.success("SIN vault record created");
+              return id;
+            }}
           />
         )}
       </Drawer>
@@ -757,6 +781,7 @@ export function GrantDetailPage() {
   const removeEmployeeLink = useMutation(api.grants.removeEmployeeLink);
   const createEmployee = useMutation(api.employees.create);
   const createPendingEmail = useMutation(api.pendingEmails.create);
+  const createSecret = useMutation(api.secrets.create);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -859,6 +884,27 @@ export function GrantDetailPage() {
             status: "ready",
             notes: `System workflow: CSJ remote worker orientation. Grant: ${currentGrant.title}. Evidence for GCOS Young Workers/EED attestation.`,
             actingUserId,
+          });
+        }}
+        onCreateSinVaultRecord={async (draft) => {
+          return createSecret({
+            societyId: society._id,
+            actingUserId,
+            name: String(draft.name ?? "SIN - funded employee"),
+            service: "Employee SIN",
+            credentialType: "Social Insurance Number",
+            ownerRole: "Employer",
+            custodianPersonName: draft.custodianPersonName ? String(draft.custodianPersonName) : undefined,
+            custodianEmail: draft.custodianEmail ? String(draft.custodianEmail) : undefined,
+            storageMode: draft.secretValue ? "stored_encrypted" : "external_reference",
+            externalLocation: draft.externalLocation ? String(draft.externalLocation) : undefined,
+            secretValue: draft.secretValue ? String(draft.secretValue) : undefined,
+            revealPolicy: "owner_admin_custodian",
+            status: "Active",
+            sensitivity: "high",
+            accessLevel: "restricted",
+            sourceExternalIds: [`grant:${String(grant._id)}`],
+            notes: draft.notes ? String(draft.notes) : undefined,
           });
         }}
       />

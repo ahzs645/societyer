@@ -259,7 +259,7 @@ export function DocumentsPage() {
             id: "tags", header: "Tags",
             render: (r) => (
               <div className="tag-list">
-                {r.tags.map((t: string) => <Badge key={t}>{t}</Badge>)}
+                {uniqueTags(r.tags).map((t: string) => <Badge key={t}>{t}</Badge>)}
               </div>
             ),
           },
@@ -477,8 +477,22 @@ function documentPayload(form: any) {
   void storageId;
   return {
     ...rest,
-    tags: rest.tags ?? [],
+    tags: uniqueTags(rest.tags),
   };
+}
+
+function uniqueTags(tags: unknown) {
+  if (!Array.isArray(tags)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const tag of tags) {
+    const value = String(tag ?? "").trim();
+    const key = value.toLowerCase();
+    if (!value || seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+  }
+  return out;
 }
 
 function catTone(cat: string) {

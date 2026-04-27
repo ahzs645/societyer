@@ -14,6 +14,20 @@ type TableSummary = {
 
 type Format = "csv" | "json";
 
+type ImportPreview = {
+  fileName: string;
+  kind: string;
+  societyName: string;
+  tableCount: number;
+  exportedTableCount: number;
+  totalRows: number;
+  nonEmptyTables: number;
+  binaryFilesIncluded: boolean;
+  recoverySecretsIncluded: boolean;
+  redactedFields: string[];
+  issues: string[];
+};
+
 export function ExportsPage() {
   const society = useSociety();
   const convex = useConvex();
@@ -24,6 +38,9 @@ export function ExportsPage() {
   const [tableCounts, setTableCounts] = useState<Record<string, number>>({});
   const [searchText, setSearchText] = useState("");
   const [hideEmpty, setHideEmpty] = useState(false);
+  const [includeRecoverySecrets, setIncludeRecoverySecrets] = useState(false);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [importError, setImportError] = useState("");
 
   const tableSummaries = useQuery(
     api.exports.listExportableTables,
@@ -85,7 +102,8 @@ export function ExportsPage() {
           tableCount: tableSummaries?.length ?? 0,
           exportedTableCount: Object.keys(tables).length,
           totalRows,
-          redactedFields: ["secretEncrypted", "tokenHash", "storageId"],
+          redactedFields: includeRecoverySecrets ? ["storageId"] : ["secretEncrypted", "tokenHash", "storageId"],
+          recoverySecretsIncluded: includeRecoverySecrets,
           binaryFilesIncluded: false,
           tables: summaries,
         },
@@ -95,6 +113,8 @@ export function ExportsPage() {
           tableCount: tableSummaries?.length ?? 0,
           nonEmptyTableCount: summaries.filter((table) => Number(table.rowCount) > 0).length,
           totalRows,
+          redactedFields: includeRecoverySecrets ? ["storageId"] : ["secretEncrypted", "tokenHash", "storageId"],
+          recoverySecretsIncluded: includeRecoverySecrets,
           issues: [],
         },
         tables,
@@ -131,6 +151,7 @@ export function ExportsPage() {
       const result = await convex.query(api.exports.exportTablePage, {
         societyId: society._id,
         table,
+        includeRecoverySecrets,
         paginationOpts: { cursor, numItems: pageSizeFor(table) },
       });
       rows.push(...((result.page ?? []) as Array<Record<string, unknown>>));
@@ -160,6 +181,19 @@ export function ExportsPage() {
   const tablesReady = Boolean(tableSummaries?.length);
   const allTablesCounted = Boolean(tableSummaries?.length) && tableSummaries!.every((table) => tableCounts[table.name] != null);
   const totalRows = validation?.totalRows ?? (allTablesCounted ? countedRows : null);
+  const redactedFields = includeRecoverySecrets ? ["storageId"] : ["secretEncrypted", "tokenHash", "storageId"];
+
+  const inspectImportFile = async (file: File | undefined) => {
+    setImportError("");
+    setImportPreview(null);
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      setImportPreview(inspectWorkspaceExport(parsed, file.name));
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Could not read export file.");
+    }
+  };
 
   return (
     <div className="page page--wide">
@@ -167,7 +201,7 @@ export function ExportsPage() {
         title="Data export"
         icon={<Database size={16} />}
         iconColor="blue"
-        subtitle="Download the current workspace as one JSON bundle, or export individual tables as CSV or JSON. Document binaries and secret material are not included."
+        subtitle="Download workspace records, choose recovery redaction, and inspect export files before restore."
         actions={
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <label className="row" style={{ gap: 6, alignItems: "center" }}>
@@ -210,10 +244,38 @@ export function ExportsPage() {
         />
         <Stat
           label="Redaction"
-          value="On"
+          value={includeRecoverySecrets ? "Recovery" : "On"}
           icon={<ShieldAlert size={14} />}
-          sub="storage IDs, token hashes, and encrypted secrets"
+          sub={includeRecoverySecrets ? "encrypted secrets and token hashes included" : "storage IDs, token hashes, and encrypted secrets"}
         />
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <div>
+            <h2 className="card__title">Export options</h2>
+            <span className="card__subtitle">Recovery exports include encrypted secret ciphertext and API token hashes. Store them like credentials.</span>
+          </div>
+        </div>
+        <div className="card__body">
+          <label className="row" style={{ gap: 8, alignItems: "flex-start" }}>
+            <input
+              type="checkbox"
+              checked={includeRecoverySecrets}
+              onChange={(event) => setIncludeRecoverySecrets(event.target.checked)}
+              style={{ marginTop: 3 }}
+            />
+            <span>
+              <strong>Include recovery secrets</strong>
+              <span className="muted" style={{ display: "block", fontSize: "var(--fs-sm)" }}>
+                Keeps encrypted vault values, webhook encrypted secrets, and API token hashes in JSON exports. Storage IDs remain redacted.
+              </span>
+            </span>
+          </label>
+          <div className="muted" style={{ marginTop: 10, fontSize: "var(--fs-sm)" }}>
+            Current redaction: {redactedFields.join(", ") || "none"}
+          </div>
+        </div>
       </div>
 
       {validation && !validation.ok && (
@@ -231,6 +293,46 @@ export function ExportsPage() {
           </div>
         </div>
       )}
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <div>
+            <h2 className="card__title">Import preview</h2>
+            <span className="card__subtitle">Choose a workspace export JSON to inspect tables, rows, file manifest flags, and recovery-secret status before restore.</span>
+          </div>
+        </div>
+        <div className="card__body">
+          <input
+            className="input"
+            type="file"
+            accept="application/json,.json"
+            onChange={(event) => void inspectImportFile(event.target.files?.[0])}
+            style={{ maxWidth: 420 }}
+          />
+          {importError && (
+            <div className="notice notice--danger" style={{ marginTop: 12 }}>
+              {importError}
+            </div>
+          )}
+          {importPreview && (
+            <div className="stat-grid stat-grid--3" style={{ marginTop: 14 }}>
+              <Stat label="Source" value={importPreview.societyName} icon={<FileJson size={14} />} sub={importPreview.fileName} />
+              <Stat label="Rows" value={formatNumber(importPreview.totalRows)} icon={<Database size={14} />} sub={`${formatNumber(importPreview.exportedTableCount)} tables, ${formatNumber(importPreview.nonEmptyTables)} non-empty`} />
+              <Stat
+                label="Recovery"
+                value={importPreview.recoverySecretsIncluded ? "Secrets" : "Redacted"}
+                icon={<ShieldAlert size={14} />}
+                sub={importPreview.binaryFilesIncluded ? "file manifest expected" : "JSON records only"}
+              />
+              {importPreview.issues.length > 0 && (
+                <div className="notice notice--warning" style={{ gridColumn: "1 / -1" }}>
+                  {importPreview.issues.join(" ")}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="card">
         <div className="card__head">
@@ -366,4 +468,57 @@ function formatNumber(value: number) {
 
 function pageSizeFor(table: string) {
   return table === "documents" || table === "sourceEvidence" ? 25 : 100;
+}
+
+function inspectWorkspaceExport(value: any, fileName: string): ImportPreview {
+  if (!value || typeof value !== "object") {
+    throw new Error("The selected file is not a workspace export JSON object.");
+  }
+  if (value.kind !== "societyer.workspaceExport") {
+    throw new Error("The selected file is not a Societyer workspace export.");
+  }
+
+  const manifest = value.manifest ?? {};
+  const validation = value.validation ?? {};
+  const tables = value.tables && typeof value.tables === "object" ? value.tables : {};
+  const exportedTableCount = Number(manifest.exportedTableCount ?? Object.keys(tables).length ?? 0);
+  const totalRows =
+    Number(manifest.totalRows) ||
+    Object.values(tables).reduce((sum: number, rows: any) => sum + (Array.isArray(rows) ? rows.length : 0), 0);
+  const nonEmptyTables =
+    Number(validation.nonEmptyTableCount) ||
+    Object.values(tables).filter((rows: any) => Array.isArray(rows) && rows.length > 0).length;
+  const redactedFields = Array.isArray(manifest.redactedFields)
+    ? manifest.redactedFields.map(String)
+    : Array.isArray(validation.redactedFields)
+      ? validation.redactedFields.map(String)
+      : [];
+  const issues: string[] = [];
+
+  if (!manifest.binaryFilesIncluded) {
+    issues.push("This JSON does not include document binaries.");
+  }
+  if (!manifest.recoverySecretsIncluded) {
+    issues.push("Encrypted secret values and API token hashes are redacted.");
+  }
+  if (redactedFields.includes("secretEncrypted") || redactedFields.includes("tokenHash")) {
+    issues.push("This export cannot fully restore stored secrets or API tokens.");
+  }
+  if (!value.tables || typeof value.tables !== "object") {
+    issues.push("No table payloads were found.");
+  }
+
+  return {
+    fileName,
+    kind: value.kind,
+    societyName: String(manifest.societyName ?? value.society?.name ?? "Unknown society"),
+    tableCount: Number(manifest.tableCount ?? validation.tableCount ?? exportedTableCount),
+    exportedTableCount,
+    totalRows,
+    nonEmptyTables,
+    binaryFilesIncluded: manifest.binaryFilesIncluded === true,
+    recoverySecretsIncluded: manifest.recoverySecretsIncluded === true,
+    redactedFields,
+    issues,
+  };
 }
