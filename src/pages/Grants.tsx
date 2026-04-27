@@ -22,7 +22,7 @@ import {
   GrantEditorForm,
   GrantReadPanel,
 } from "../features/grants/components/GrantPanels";
-import { readGcosExportFile } from "../lib/gcosExportImport";
+import { enrichGcosNormalizedGrant, readGcosExportFile } from "../lib/gcosExportImport";
 
 export function GrantsPage() {
   const society = useSociety();
@@ -71,10 +71,16 @@ export function GrantsPage() {
     api.grants.employeeLinks,
     society ? { societyId: society._id } : "skip",
   );
+  const secretVaultItems = useQuery(
+    api.secrets.list,
+    society ? { societyId: society._id } : "skip",
+  );
   const upsertGrant = useMutation(api.grants.upsertGrant);
   const removeGrant = useMutation(api.grants.removeGrant);
   const upsertEmployeeLink = useMutation(api.grants.upsertEmployeeLink);
   const removeEmployeeLink = useMutation(api.grants.removeEmployeeLink);
+  const createEmployee = useMutation(api.employees.create);
+  const createPendingEmail = useMutation(api.pendingEmails.create);
   const reviewApplication = useMutation(api.grants.reviewApplication);
   const convertApplication = useMutation(api.grants.convertApplication);
   const upsertReport = useMutation(api.grants.upsertReport);
@@ -99,11 +105,11 @@ export function GrantsPage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         signal: controller.signal,
-        body: JSON.stringify({
-          societyId: society?._id,
-          snapshot,
-          normalizedGrant: parsed?.normalizedGrant,
-        }),
+      body: JSON.stringify({
+        societyId: society?._id,
+        snapshot,
+        normalizedGrant: enrichGcosNormalizedGrant(snapshot, parsed?.normalizedGrant),
+      }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload?.message ?? payload?.error ?? `Import failed with ${response.status}`);
@@ -503,15 +509,16 @@ export function GrantsPage() {
             reports={reports ?? []}
             employees={employees ?? []}
             employeeLinks={employeeLinks ?? []}
+            secretVaultItems={secretVaultItems ?? []}
             committee={committeeById.get(String(selectedGrant.committeeId))}
             owner={(users ?? []).find((user) => String(user._id) === String(selectedGrant.boardOwnerUserId))}
             account={accountById.get(String(selectedGrant.linkedFinancialAccountId))}
-            onLinkEmployee={async (employeeId) => {
+            onLinkEmployee={async (employeeId, patch = {}) => {
               await upsertEmployeeLink({
                 societyId: society._id,
                 grantId: selectedGrant._id,
                 employeeId,
-                patch: { status: "hired", source: "manual" },
+                patch: { status: "eed_pending", source: "manual", ...patch },
                 actingUserId,
               });
               toast.success("Employee linked to grant");
@@ -519,6 +526,50 @@ export function GrantsPage() {
             onUnlinkEmployee={async (linkId) => {
               await removeEmployeeLink({ id: linkId, actingUserId });
               toast.success("Employee unlinked from grant");
+            }}
+            onCreateEmployee={async (draft) => {
+              const employeeId = await createEmployee({
+                societyId: society._id,
+                firstName: String(draft.firstName ?? ""),
+                lastName: String(draft.lastName ?? ""),
+                email: draft.email ? String(draft.email) : undefined,
+                phone: draft.phone ? String(draft.phone) : undefined,
+                birthDate: draft.birthDate ? String(draft.birthDate) : undefined,
+                addressLine1: draft.addressLine1 ? String(draft.addressLine1) : undefined,
+                addressLine2: draft.addressLine2 ? String(draft.addressLine2) : undefined,
+                city: draft.city ? String(draft.city) : undefined,
+                province: draft.province ? String(draft.province) : undefined,
+                postalCode: draft.postalCode ? String(draft.postalCode) : undefined,
+                country: draft.country ? String(draft.country) : undefined,
+                sinSecretVaultItemId: draft.sinSecretVaultItemId ? (draft.sinSecretVaultItemId as any) : undefined,
+                role: String(draft.role ?? ""),
+                startDate: String(draft.startDate ?? ""),
+                endDate: draft.endDate ? String(draft.endDate) : undefined,
+                employmentType: String(draft.employmentType ?? "FullTime"),
+                hourlyWageCents: typeof draft.hourlyWageCents === "number" ? draft.hourlyWageCents : undefined,
+                annualSalaryCents: typeof draft.annualSalaryCents === "number" ? draft.annualSalaryCents : undefined,
+                worksafeBCNumber: draft.worksafeBCNumber ? String(draft.worksafeBCNumber) : undefined,
+                cppExempt: Boolean(draft.cppExempt),
+                eiExempt: Boolean(draft.eiExempt),
+                notes: draft.notes ? String(draft.notes) : undefined,
+              });
+              toast.success("Employee created");
+              return employeeId;
+            }}
+            onQueueEmployeeOrientationEmail={async (employee, grant) => {
+              await createPendingEmail({
+                societyId: society._id,
+                nodeKey: "csj_remote_worker_orientation.queue_orientation_email",
+                fromName: "Over the Edge",
+                fromEmail: "ote@unbc.ca",
+                to: String(employee.email ?? ""),
+                subject: "Canada Summer Jobs remote work orientation resources",
+                body: buildCsjOrientationEmailBody(employee),
+                status: "ready",
+                notes: `System workflow: CSJ remote worker orientation. Grant: ${grant.title}. Evidence for GCOS Young Workers/EED attestation.`,
+                actingUserId,
+              });
+              toast.success("Orientation email queued in Outbox");
             }}
           />
         )}
@@ -698,8 +749,14 @@ export function GrantDetailPage() {
     api.grants.employeeLinks,
     society ? { societyId: society._id, grantId: id } : "skip",
   );
+  const secretVaultItems = useQuery(
+    api.secrets.list,
+    society ? { societyId: society._id } : "skip",
+  );
   const upsertEmployeeLink = useMutation(api.grants.upsertEmployeeLink);
   const removeEmployeeLink = useMutation(api.grants.removeEmployeeLink);
+  const createEmployee = useMutation(api.employees.create);
+  const createPendingEmail = useMutation(api.pendingEmails.create);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -747,20 +804,62 @@ export function GrantDetailPage() {
         reports={reports ?? []}
         employees={employees ?? []}
         employeeLinks={employeeLinks ?? []}
+        secretVaultItems={secretVaultItems ?? []}
         committee={committee}
         owner={owner}
         account={account}
-        onLinkEmployee={async (employeeId) => {
+        onLinkEmployee={async (employeeId, patch = {}) => {
           await upsertEmployeeLink({
             societyId: society._id,
             grantId: grant._id,
             employeeId,
-            patch: { status: "hired", source: "manual" },
+            patch: { status: "eed_pending", source: "manual", ...patch },
             actingUserId,
           });
         }}
         onUnlinkEmployee={async (linkId) => {
           await removeEmployeeLink({ id: linkId, actingUserId });
+        }}
+        onCreateEmployee={async (draft) => {
+          return createEmployee({
+            societyId: society._id,
+            firstName: String(draft.firstName ?? ""),
+            lastName: String(draft.lastName ?? ""),
+            email: draft.email ? String(draft.email) : undefined,
+            phone: draft.phone ? String(draft.phone) : undefined,
+            birthDate: draft.birthDate ? String(draft.birthDate) : undefined,
+            addressLine1: draft.addressLine1 ? String(draft.addressLine1) : undefined,
+            addressLine2: draft.addressLine2 ? String(draft.addressLine2) : undefined,
+            city: draft.city ? String(draft.city) : undefined,
+            province: draft.province ? String(draft.province) : undefined,
+            postalCode: draft.postalCode ? String(draft.postalCode) : undefined,
+            country: draft.country ? String(draft.country) : undefined,
+            sinSecretVaultItemId: draft.sinSecretVaultItemId ? (draft.sinSecretVaultItemId as any) : undefined,
+            role: String(draft.role ?? ""),
+            startDate: String(draft.startDate ?? ""),
+            endDate: draft.endDate ? String(draft.endDate) : undefined,
+            employmentType: String(draft.employmentType ?? "FullTime"),
+            hourlyWageCents: typeof draft.hourlyWageCents === "number" ? draft.hourlyWageCents : undefined,
+            annualSalaryCents: typeof draft.annualSalaryCents === "number" ? draft.annualSalaryCents : undefined,
+            worksafeBCNumber: draft.worksafeBCNumber ? String(draft.worksafeBCNumber) : undefined,
+            cppExempt: Boolean(draft.cppExempt),
+            eiExempt: Boolean(draft.eiExempt),
+            notes: draft.notes ? String(draft.notes) : undefined,
+          });
+        }}
+        onQueueEmployeeOrientationEmail={async (employee, currentGrant) => {
+          await createPendingEmail({
+            societyId: society._id,
+            nodeKey: "csj_remote_worker_orientation.queue_orientation_email",
+            fromName: "Over the Edge",
+            fromEmail: "ote@unbc.ca",
+            to: String(employee.email ?? ""),
+            subject: "Canada Summer Jobs remote work orientation resources",
+            body: buildCsjOrientationEmailBody(employee),
+            status: "ready",
+            notes: `System workflow: CSJ remote worker orientation. Grant: ${currentGrant.title}. Evidence for GCOS Young Workers/EED attestation.`,
+            actingUserId,
+          });
         }}
       />
     </div>
@@ -872,6 +971,49 @@ export function GrantEditPage() {
       )}
     </div>
   );
+}
+
+function buildCsjOrientationEmailBody(employee: any) {
+  const firstName = String(employee?.firstName ?? "").trim() || "there";
+  return [
+    `Hi ${firstName},`,
+    "",
+    "Thanks for completing the required documentation, no need to worry about the employee number, we will do that on our end. Since you'll be working primarily remotely, I've gathered some resources that we'll review during your virtual orientation in your first week.",
+    "",
+    "Young Workers Website",
+    "Please review: https://www.ccohs.ca/youngworkers",
+    "This covers your rights, health and safety basics, and workplace responsibilities.",
+    "",
+    "Virtual Health and Safety Orientation",
+    "We'll conduct a video call orientation covering remote work safety:",
+    "- Home Office Ergonomics: https://www.ccohs.ca/oshanswers/ergonomics/office",
+    "- Digital Equipment Safety: We'll review proper setup for your computer, software access, and digital security.",
+    "- Remote Emergency Procedures: Contact information, reporting protocols, and what to do in case of power/internet outages.",
+    "- Remote Work Safety Checks: Tips for maintaining a safe home workspace.",
+    "",
+    "Remote Work and Employment Policies",
+    "While we don't have formal written policies, we'll discuss expectations for remote work including:",
+    "- Harassment Prevention: BC Human Rights Code basics: https://www2.gov.bc.ca/gov/content/justice/human-rights",
+    "- Digital Communication Guidelines: Professional expectations for email, messaging, and video calls.",
+    "- Conflict Resolution: Virtual open-door policy and how to raise concerns remotely.",
+    "- Privacy and Confidentiality: Protecting organizational data when working from home.",
+    "- Work Hours and Boundaries: Setting healthy remote work practices.",
+    "",
+    "BC Employment Standards for Remote Workers",
+    "Review your rights: https://www2.gov.bc.ca/gov/content/employment-business/employment-standards-advice/employment-standards",
+    "",
+    "Additional Remote Work Resources",
+    "- Health tips for remote workers: https://www.ccohs.ca/oshanswers/hsprograms/telework.html",
+    "- WorkSafeBC remote work guidelines: https://www.worksafebc.com/en/resources/health-safety/information-sheets/working-from-home-guide-keeping-workers-healthy-safe?lang=en",
+    "",
+    "Please review these resources before our virtual orientation meeting.",
+    "",
+    "Looking forward to having you join our team!",
+    "",
+    "Best regards,",
+    "",
+    "Ahmad Jalil",
+  ].join("\n");
 }
 
 function Stat({

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ExternalLink, ListChecks, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge, Field, InspectorNote } from "../../../components/ui";
@@ -37,8 +37,11 @@ export function GrantReadPanel({
   account,
   employees = [],
   employeeLinks = [],
+  secretVaultItems = [],
   onLinkEmployee,
   onUnlinkEmployee,
+  onCreateEmployee,
+  onQueueEmployeeOrientationEmail,
 }: {
   grant: any;
   documents: any[];
@@ -48,8 +51,11 @@ export function GrantReadPanel({
   account?: any;
   employees?: any[];
   employeeLinks?: any[];
-  onLinkEmployee?: (employeeId: string) => void | Promise<void>;
+  secretVaultItems?: any[];
+  onLinkEmployee?: (employeeId: string, patch?: Record<string, unknown>) => void | Promise<void>;
   onUnlinkEmployee?: (linkId: string) => void | Promise<void>;
+  onCreateEmployee?: (draft: Record<string, unknown>) => Promise<string | void>;
+  onQueueEmployeeOrientationEmail?: (employee: any, grant: any) => void | Promise<void>;
 }) {
   return (
     <div style={{ display: "grid", gap: 12 }}>
@@ -59,8 +65,11 @@ export function GrantReadPanel({
         reports={reports}
         employees={employees}
         employeeLinks={employeeLinks}
+        secretVaultItems={secretVaultItems}
         onLinkEmployee={onLinkEmployee}
         onUnlinkEmployee={onUnlinkEmployee}
+        onCreateEmployee={onCreateEmployee}
+        onQueueEmployeeOrientationEmail={onQueueEmployeeOrientationEmail}
       />
       <DossierSection title="Administrative Details">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 8 }}>
@@ -515,16 +524,22 @@ export function GrantDossierStack({
   reports,
   employees = [],
   employeeLinks = [],
+  secretVaultItems = [],
   onLinkEmployee,
   onUnlinkEmployee,
+  onCreateEmployee,
+  onQueueEmployeeOrientationEmail,
 }: {
   grant: any;
   documents: any[];
   reports: any[];
   employees?: any[];
   employeeLinks?: any[];
-  onLinkEmployee?: (employeeId: string) => void | Promise<void>;
+  secretVaultItems?: any[];
+  onLinkEmployee?: (employeeId: string, patch?: Record<string, unknown>) => void | Promise<void>;
   onUnlinkEmployee?: (linkId: string) => void | Promise<void>;
+  onCreateEmployee?: (draft: Record<string, unknown>) => Promise<string | void>;
+  onQueueEmployeeOrientationEmail?: (employee: any, grant: any) => void | Promise<void>;
 }) {
   const hasDossierData =
     !!(grant.id ?? grant._id) ||
@@ -546,12 +561,16 @@ export function GrantDossierStack({
       <GrantDossierSummary grant={grant} />
       <GrantNextStepsPanel grant={grant} />
       <GrantRequiredFormsPanel grant={grant} />
+      <GrantOperationalWorkflowsPanel grant={grant} />
       <GrantFundedEmployeesPanel
         grant={grant}
         employees={employees}
         employeeLinks={employeeLinks}
+        secretVaultItems={secretVaultItems}
         onLinkEmployee={onLinkEmployee}
         onUnlinkEmployee={onUnlinkEmployee}
+        onCreateEmployee={onCreateEmployee}
+        onQueueEmployeeOrientationEmail={onQueueEmployeeOrientationEmail}
       />
       <GrantFundingDeltaPanel grant={grant} />
       <GrantEvidencePacketMap grant={grant} documents={documents} />
@@ -614,29 +633,90 @@ function GrantFundedEmployeesPanel({
   grant,
   employees,
   employeeLinks,
+  secretVaultItems = [],
   onLinkEmployee,
   onUnlinkEmployee,
+  onCreateEmployee,
+  onQueueEmployeeOrientationEmail,
 }: {
   grant: any;
   employees: any[];
   employeeLinks: any[];
-  onLinkEmployee?: (employeeId: string) => void | Promise<void>;
+  secretVaultItems?: any[];
+  onLinkEmployee?: (employeeId: string, patch?: Record<string, unknown>) => void | Promise<void>;
   onUnlinkEmployee?: (linkId: string) => void | Promise<void>;
+  onCreateEmployee?: (draft: Record<string, unknown>) => Promise<string | void>;
+  onQueueEmployeeOrientationEmail?: (employee: any, grant: any) => void | Promise<void>;
 }) {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const [showNewEmployee, setShowNewEmployee] = useState(false);
+  const [employeeDraft, setEmployeeDraft] = useState(() => defaultGrantEmployeeDraft(grant));
   const grantId = String(grant._id ?? grant.id ?? "");
+  const grantAssignmentKey = grantFundedAssignmentKey(grant);
   const links = employeeLinks.filter((link) => String(link.grantId) === grantId);
   const linkedEmployeeIds = new Set(links.map((link) => String(link.employeeId)));
   const availableEmployees = employees.filter((employee) => !linkedEmployeeIds.has(String(employee._id)));
   const approvedParticipants = findKeyFactNumber(grant.keyFacts, /approved participants:\s*(\d+(?:\.\d+)?)/i);
   const remaining = approvedParticipants === undefined ? undefined : Math.max(0, approvedParticipants - links.length);
+  const lockedAssignment = grantFundedAssignment(grant);
+
+  useEffect(() => {
+    setEmployeeDraft((current) => ({
+      ...current,
+      role: lockedAssignment.role ?? current.role,
+      employmentType: lockedAssignment.employmentType ?? current.employmentType,
+      hoursPerWeek: lockedAssignment.hoursPerWeek ?? current.hoursPerWeek,
+      hourlyWageDollars: lockedAssignment.hourlyWageDollars ?? current.hourlyWageDollars,
+    }));
+  }, [grantAssignmentKey]);
 
   if (!links.length && !onLinkEmployee) return null;
 
   const linkSelected = async () => {
     if (!selectedEmployeeId || !onLinkEmployee) return;
-    await onLinkEmployee(selectedEmployeeId);
+    const employee = employees.find((item) => String(item._id) === selectedEmployeeId);
+    await onLinkEmployee(selectedEmployeeId, patchFromEmployee(employee));
     setSelectedEmployeeId("");
+  };
+
+  const createAndLink = async () => {
+    if (!onCreateEmployee || !onLinkEmployee || !canCreateGrantEmployee(employeeDraft)) return;
+    const employeeId = await onCreateEmployee({
+      firstName: employeeDraft.firstName.trim(),
+      lastName: employeeDraft.lastName.trim(),
+      email: employeeDraft.email.trim() || undefined,
+      phone: employeeDraft.phone.trim() || undefined,
+      birthDate: employeeDraft.birthDate || undefined,
+      addressLine1: employeeDraft.addressLine1.trim() || undefined,
+      addressLine2: employeeDraft.addressLine2.trim() || undefined,
+      city: employeeDraft.city.trim() || undefined,
+      province: employeeDraft.province.trim() || undefined,
+      postalCode: employeeDraft.postalCode.trim() || undefined,
+      country: employeeDraft.country.trim() || undefined,
+      sinSecretVaultItemId: employeeDraft.sinSecretVaultItemId || undefined,
+      role: employeeDraft.role.trim(),
+      startDate: employeeDraft.startDate,
+      endDate: employeeDraft.endDate || undefined,
+      employmentType: employeeDraft.employmentType,
+      hourlyWageCents: dollarsToCents(employeeDraft.hourlyWageDollars),
+      cppExempt: false,
+      eiExempt: false,
+      notes: "Created from the GCOS grant EED preparation workflow. SIN is stored only through the Secrets vault link; do not place raw SIN in notes.",
+    });
+    if (employeeId) {
+      await onLinkEmployee(String(employeeId), {
+        status: "eed_pending",
+        source: "gcos",
+        role: employeeDraft.role.trim(),
+        startDate: employeeDraft.startDate,
+        endDate: employeeDraft.endDate || undefined,
+        fundedHoursPerWeek: Number(employeeDraft.hoursPerWeek) || undefined,
+        fundedHourlyWageCents: dollarsToCents(employeeDraft.hourlyWageDollars),
+        notes: "Created from GCOS EED prep. Confirm participant-only sensitive fields in GCOS before submission.",
+      });
+      setEmployeeDraft(defaultGrantEmployeeDraft(grant));
+      setShowNewEmployee(false);
+    }
   };
 
   return (
@@ -651,19 +731,34 @@ function GrantFundedEmployeesPanel({
             {links.map((link) => {
               const employee = employees.find((item) => String(item._id) === String(link.employeeId));
               const name = employee ? `${employee.firstName} ${employee.lastName}` : "Linked employee";
+              const readiness = eedPrepReadiness(employee, link);
               return (
-                <div key={String(link._id)} style={employeeLinkStyle}>
-                  <div>
-                    <strong>{name}</strong>
-                    <div className="muted" style={{ fontSize: 12 }}>
-                      {[link.role ?? employee?.role, link.status, employee?.startDate ? `Starts ${formatDate(employee.startDate)}` : undefined].filter(Boolean).join(" · ")}
+                <div key={String(link._id)} style={{ ...employeeLinkStyle, alignItems: "flex-start" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <strong>{name}</strong>
+                      <Badge tone={readiness.ready ? "success" : "warn"}>{readiness.ready ? "Ready to prepare" : "Missing EED prep fields"}</Badge>
+                    </div>
+                    <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
+                      {[link.role ?? employee?.role, link.status, employee?.startDate ? `Starts ${formatDate(link.startDate ?? employee.startDate)}` : undefined].filter(Boolean).join(" · ")}
+                    </div>
+                    {!readiness.ready && <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>Add: {readiness.missing.join(", ")}</div>}
+                    <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
+                      SIN must stay in Secrets. GCOS-only fields still required before submission: citizenship/eligibility and demographic declarations.
                     </div>
                   </div>
-                  {onUnlinkEmployee && (
-                    <button className="btn btn--ghost btn--sm" type="button" onClick={() => onUnlinkEmployee(String(link._id))}>
-                      Unlink
-                    </button>
-                  )}
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    {employee && onQueueEmployeeOrientationEmail && (
+                      <button className="btn btn--accent btn--sm" type="button" disabled={!employee.email} onClick={() => onQueueEmployeeOrientationEmail(employee, grant)}>
+                        Queue orientation email
+                      </button>
+                    )}
+                    {onUnlinkEmployee && (
+                      <button className="btn btn--ghost btn--sm" type="button" onClick={() => onUnlinkEmployee(String(link._id))}>
+                        Unlink
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -684,6 +779,83 @@ function GrantFundedEmployeesPanel({
             <button className="btn btn--accent" type="button" disabled={!selectedEmployeeId} onClick={linkSelected}>
               Link employee
             </button>
+          </div>
+        )}
+        {onCreateEmployee && onLinkEmployee && (
+          <div style={{ display: "grid", gap: 8, borderTop: "1px dashed var(--border)", paddingTop: 10 }}>
+            <button className="btn btn--ghost btn--sm" type="button" onClick={() => setShowNewEmployee((value) => !value)}>
+              {showNewEmployee ? "Cancel new employee" : "Add and link new employee"}
+            </button>
+            {showNewEmployee && (
+              <div style={{ display: "grid", gap: 8 }}>
+                <div className="muted" style={{ fontSize: 12 }}>
+                  Societyer collects EED prep fields here, including birth date and home address. Store SIN only in Access custody, then link the vault record below.
+                </div>
+                <div className="row" style={{ gap: 8 }}>
+                  <Field label="First name"><input className="input" value={employeeDraft.firstName} onChange={(event) => setEmployeeDraft({ ...employeeDraft, firstName: event.target.value })} /></Field>
+                  <Field label="Last name"><input className="input" value={employeeDraft.lastName} onChange={(event) => setEmployeeDraft({ ...employeeDraft, lastName: event.target.value })} /></Field>
+                </div>
+                <Field label="Email"><input className="input" type="email" value={employeeDraft.email} onChange={(event) => setEmployeeDraft({ ...employeeDraft, email: event.target.value })} /></Field>
+                <div className="row" style={{ gap: 8 }}>
+                  <Field label="Phone"><input className="input" inputMode="tel" value={employeeDraft.phone} onChange={(event) => setEmployeeDraft({ ...employeeDraft, phone: event.target.value })} /></Field>
+                  <Field label="Birth date"><input className="input" type="date" value={employeeDraft.birthDate} onChange={(event) => setEmployeeDraft({ ...employeeDraft, birthDate: event.target.value })} /></Field>
+                </div>
+                <Field label="Home address line 1"><input className="input" value={employeeDraft.addressLine1} onChange={(event) => setEmployeeDraft({ ...employeeDraft, addressLine1: event.target.value })} /></Field>
+                <Field label="Home address line 2"><input className="input" value={employeeDraft.addressLine2} onChange={(event) => setEmployeeDraft({ ...employeeDraft, addressLine2: event.target.value })} /></Field>
+                <div className="row" style={{ gap: 8 }}>
+                  <Field label="City"><input className="input" value={employeeDraft.city} onChange={(event) => setEmployeeDraft({ ...employeeDraft, city: event.target.value })} /></Field>
+                  <Field label="Province"><input className="input" value={employeeDraft.province} onChange={(event) => setEmployeeDraft({ ...employeeDraft, province: event.target.value })} /></Field>
+                </div>
+                <div className="row" style={{ gap: 8 }}>
+                  <Field label="Postal code"><input className="input" value={employeeDraft.postalCode} onChange={(event) => setEmployeeDraft({ ...employeeDraft, postalCode: event.target.value })} /></Field>
+                  <Field label="Country"><input className="input" value={employeeDraft.country} onChange={(event) => setEmployeeDraft({ ...employeeDraft, country: event.target.value })} /></Field>
+                </div>
+                <Field label="SIN vault record" hint="Raw SIN stays in Secrets; this links only the vault metadata record.">
+                  <select className="input" value={employeeDraft.sinSecretVaultItemId} onChange={(event) => setEmployeeDraft({ ...employeeDraft, sinSecretVaultItemId: event.target.value })}>
+                    <option value="">No SIN vault record linked</option>
+                    {secretVaultItems.map((secret) => (
+                      <option key={String(secret._id)} value={String(secret._id)}>
+                        {[secret.name, secret.service, secret.secretPreview].filter(Boolean).join(" · ")}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <div className="muted" style={{ fontSize: 12 }}>
+                  Need a SIN vault record? Add it in <Link to="/app/secrets">Secrets</Link>, then return here and select it.
+                </div>
+                <div className="row" style={{ gap: 8 }}>
+                  <Field label="Job / role" hint={lockedAssignment.role ? "From approved GCOS job" : undefined}>
+                    <input className="input" readOnly={Boolean(lockedAssignment.role)} value={employeeDraft.role} onChange={(event) => setEmployeeDraft({ ...employeeDraft, role: event.target.value })} />
+                  </Field>
+                  <Field label="Type" hint={lockedAssignment.employmentType ? "From grant-funded role" : undefined}>
+                    <select className="input" disabled={Boolean(lockedAssignment.employmentType)} value={employeeDraft.employmentType} onChange={(event) => setEmployeeDraft({ ...employeeDraft, employmentType: event.target.value })}>
+                      <option>FullTime</option>
+                      <option>PartTime</option>
+                      <option>Casual</option>
+                      <option>Contractor</option>
+                    </select>
+                  </Field>
+                </div>
+                <div className="row" style={{ gap: 8 }}>
+                  <Field label="Start"><input className="input" type="date" value={employeeDraft.startDate} onChange={(event) => setEmployeeDraft({ ...employeeDraft, startDate: event.target.value })} /></Field>
+                  <Field label="End"><input className="input" type="date" value={employeeDraft.endDate} onChange={(event) => setEmployeeDraft({ ...employeeDraft, endDate: event.target.value })} /></Field>
+                </div>
+                <div className="row" style={{ gap: 8 }}>
+                  <Field label="Hours/week" hint={lockedAssignment.hoursPerWeek ? "From approved GCOS job" : undefined}>
+                    <input className="input" readOnly={Boolean(lockedAssignment.hoursPerWeek)} type="number" inputMode="decimal" min="0" step="0.25" value={employeeDraft.hoursPerWeek} onChange={(event) => setEmployeeDraft({ ...employeeDraft, hoursPerWeek: event.target.value })} />
+                  </Field>
+                  <Field label="Hourly wage" hint={lockedAssignment.hourlyWageDollars ? "From approved GCOS job" : "Dollars"}>
+                    <input className="input" readOnly={Boolean(lockedAssignment.hourlyWageDollars)} type="number" inputMode="decimal" min="0" step="0.01" value={employeeDraft.hourlyWageDollars} onChange={(event) => setEmployeeDraft({ ...employeeDraft, hourlyWageDollars: event.target.value })} />
+                  </Field>
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <button className="btn btn--accent btn--sm" type="button" disabled={!canCreateGrantEmployee(employeeDraft)} onClick={createAndLink}>
+                    Create and link employee
+                  </button>
+                  {!canCreateGrantEmployee(employeeDraft) && <span className="muted" style={{ fontSize: 12 }}>First name, last name, role, start, hourly wage, birth date, home address, phone, and SIN vault record are required.</span>}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -755,6 +927,40 @@ function GrantNextStepsPanel({ grant }: { grant: any }) {
   );
 }
 
+function GrantOperationalWorkflowsPanel({ grant }: { grant: any }) {
+  const isCsj = /canada summer jobs|csj/i.test(`${grant.program ?? ""} ${cleanStringList(grant.keyFacts).join(" ")}`);
+  if (!isCsj) return null;
+
+  return (
+    <DossierSection title="Grant Workflows">
+      <div style={{ display: "grid", gap: 8 }}>
+        <div style={nextStepStyle}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ minWidth: 0 }}>
+              <strong>CSJ remote worker orientation</strong>
+              <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
+                System workflow for the Young Workers attestation: queue the resource email, review it during orientation, then retain evidence before submitting EED.
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <Badge tone="info">System workflow</Badge>
+              <Badge tone="warn">EED evidence</Badge>
+            </div>
+          </div>
+          <div style={workflowActionBarStyle}>
+            <a className="btn btn--accent btn--sm" href="#funded-employees">Queue for employee</a>
+            <Link className="btn btn--ghost btn--sm" to="/app/outbox">Open Outbox</Link>
+            <Link className="btn btn--ghost btn--sm" to="/app/workflows">Workflow catalog</Link>
+          </div>
+          <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+            Supports the GCOS checkbox: “I confirm that I have read the information on the Young Workers website and I have provided the link to the employee.”
+          </div>
+        </div>
+      </div>
+    </DossierSection>
+  );
+}
+
 function workflowActionsForStep(grant: any, step: ReturnType<typeof asNextSteps>[number]) {
   const grantId = String(grant.id ?? grant._id ?? "");
   const editHref = grantId ? `/app/grants/${grantId}/edit` : "/app/grants";
@@ -796,6 +1002,123 @@ function workflowActionsForStep(grant: any, step: ReturnType<typeof asNextSteps>
 
 function findRequirementById(value: unknown, id: string) {
   return asRequirements(value).find((requirement) => requirement.id === id);
+}
+
+function defaultGrantEmployeeDraft(grant: any) {
+  const assignment = grantFundedAssignment(grant);
+  return {
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    birthDate: "",
+    addressLine1: "",
+    addressLine2: "",
+    city: "",
+    province: "British Columbia",
+    postalCode: "",
+    country: "Canada",
+    sinSecretVaultItemId: "",
+    role: assignment.role ?? "",
+    employmentType: assignment.employmentType ?? "FullTime",
+    startDate: grant.startDate ?? new Date().toISOString().slice(0, 10),
+    endDate: grant.endDate ?? "",
+    hoursPerWeek: assignment.hoursPerWeek ?? "35",
+    hourlyWageDollars: assignment.hourlyWageDollars ?? "",
+  };
+}
+
+function grantFundedAssignment(grant: any) {
+  const role = approvedJobTitle(grant);
+  const isCanadaSummerJobs = /canada summer jobs|csj/i.test(`${grant.program ?? ""} ${cleanStringList(grant.keyFacts).join(" ")}`);
+  return {
+    role,
+    employmentType: isCanadaSummerJobs ? "FullTime" : undefined,
+    hoursPerWeek: grantHoursPerWeek(grant) ?? (isCanadaSummerJobs ? "35" : undefined),
+    hourlyWageDollars: grantHourlyWageDollars(grant),
+  };
+}
+
+function grantFundedAssignmentKey(grant: any) {
+  const assignment = grantFundedAssignment(grant);
+  return [
+    grant._id ?? grant.id ?? "",
+    assignment.role ?? "",
+    assignment.employmentType ?? "",
+    assignment.hoursPerWeek ?? "",
+    assignment.hourlyWageDollars ?? "",
+  ].join("|");
+}
+
+function approvedJobTitle(grant: any) {
+  const line = asUseOfFunds(grant.useOfFunds).find((item) => /approved esdc contribution:/i.test(item.label));
+  return line?.label.split(":").slice(1).join(":").trim() || undefined;
+}
+
+function grantHoursPerWeek(grant: any) {
+  const text = cleanStringList(grant.keyFacts).join(" ");
+  return text.match(/approved hours\/week:\s*(\d+(?:\.\d+)?)/i)?.[1];
+}
+
+function grantHourlyWageDollars(grant: any) {
+  const match = cleanStringList(grant.keyFacts).join(" ").match(/(?:approved )?hourly wage:\s*\$?(\d+(?:\.\d{1,2})?)/i);
+  return match?.[1];
+}
+
+function canCreateGrantEmployee(draft: ReturnType<typeof defaultGrantEmployeeDraft>) {
+  return Boolean(
+    draft.firstName.trim() &&
+    draft.lastName.trim() &&
+    draft.role.trim() &&
+    draft.startDate &&
+    draft.phone.trim() &&
+    draft.birthDate &&
+    draft.addressLine1.trim() &&
+    draft.city.trim() &&
+    draft.province.trim() &&
+    draft.postalCode.trim() &&
+    draft.sinSecretVaultItemId &&
+    dollarsToCents(draft.hourlyWageDollars) !== undefined,
+  );
+}
+
+function dollarsToCents(value: unknown) {
+  const parsed = Number(String(value ?? "").replace(/,/g, ""));
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 100) : undefined;
+}
+
+function patchFromEmployee(employee: any) {
+  return {
+    status: "eed_pending",
+    source: "manual",
+    role: employee?.role,
+    startDate: employee?.startDate,
+    endDate: employee?.endDate,
+    fundedHourlyWageCents: employee?.hourlyWageCents,
+  };
+}
+
+function eedPrepReadiness(employee: any, link: any) {
+  const checks = [
+    ["first name", employee?.firstName],
+    ["last name", employee?.lastName],
+    ["email", employee?.email],
+    ["phone", employee?.phone],
+    ["birth date", employee?.birthDate],
+    ["home address", employee?.addressLine1],
+    ["city", employee?.city],
+    ["province", employee?.province],
+    ["postal code", employee?.postalCode],
+    ["SIN vault record", employee?.sinSecretVaultItemId],
+    ["job/role", link?.role ?? employee?.role],
+    ["start date", link?.startDate ?? employee?.startDate],
+    ["end date", link?.endDate ?? employee?.endDate],
+    ["hourly wage", link?.fundedHourlyWageCents ?? employee?.hourlyWageCents],
+  ] as const;
+  const missing = checks
+    .filter(([, value]) => value === undefined || value === null || String(value).trim() === "")
+    .map(([label]) => label);
+  return { ready: missing.length === 0, missing };
 }
 
 function GrantRequiredFormsPanel({ grant }: { grant: any }) {

@@ -164,6 +164,9 @@ export function WorkflowsPage() {
             <button className="btn-action" onClick={() => openNew("ote_keycard_access_request")}>
               <WorkflowIcon size={12} /> OTE access
             </button>
+            <button className="btn-action" onClick={() => openNew("csj_remote_worker_orientation")}>
+              <WorkflowIcon size={12} /> CSJ orientation
+            </button>
             <button className="btn-action" onClick={() => openNew("agm_date_deadlines")}>
               <WorkflowIcon size={12} /> AGM deadlines
             </button>

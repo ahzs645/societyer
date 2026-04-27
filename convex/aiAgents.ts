@@ -11,6 +11,8 @@ type AgentDefinition = {
   allowedTools: string[];
   requiredInputHints: string[];
   guidanceTemplate: string;
+  workflowModes?: string[];
+  outputContract?: string[];
 };
 
 const AGENTS: AgentDefinition[] = [
@@ -27,14 +29,26 @@ const AGENTS: AgentDefinition[] = [
   },
   {
     key: "minute_drafter",
-    name: "Minute drafter",
-    summary: "Turns meeting notes or transcript excerpts into structured draft minutes for secretary review.",
-    scope: "Drafting support only. May transform provided meeting material; cannot approve minutes or record board decisions.",
-    allowedActions: ["draft_minutes", "extract_motions", "extract_action_items", "flag_quorum_gaps"],
-    allowedTools: ["meetings.read", "minutes.read", "transcripts.read", "documents.read"],
-    requiredInputHints: ["Meeting date or title", "Transcript, notes, or agenda source", "Desired minute style"],
+    name: "Meeting minutes copilot",
+    summary: "Drafts agendas, revises draft minutes, and turns uploaded content or spoken notes into structured minutes.",
+    scope: "Meeting drafting support only. May draft agenda or minutes content for secretary review; cannot approve minutes, record final decisions, or overwrite source evidence.",
+    allowedActions: ["draft_agenda", "revise_draft_minutes", "draft_minutes", "extract_motions", "extract_action_items", "flag_quorum_gaps", "flag_source_gaps"],
+    allowedTools: ["meetings.read", "minutes.read", "transcripts.read", "documents.read", "members.read", "directors.read", "bylawRules.read"],
+    requiredInputHints: ["Meeting date or title", "Uploaded content, transcript, rough notes, or spoken instructions", "Agenda/minutes style", "Known chair, secretary, attendance, quorum, or approval constraints"],
     guidanceTemplate:
-      "Prepare a secretary-review draft with attendance, motions, decisions, action items, and gaps that need confirmation.",
+      "Select agenda drafting, draft editing, or minutes generation; map supplied content into the existing meeting agendaJson and minutes sections/motions/decisions/actionItems fields; preserve uncertainty as review gaps.",
+    workflowModes: [
+      "Agenda from upload or spoken instructions",
+      "Edit existing draft minutes without changing approval status",
+      "Generate structured minutes from prompt, transcript, agenda, and meeting metadata",
+    ],
+    outputContract: [
+      "agendaItems: ordered strings suitable for meeting.agendaJson",
+      "sections: title/type/presenter/discussion/decisions/actionItems records suitable for minutes.sections",
+      "motions: text/movedBy/secondedBy/outcome/vote fields suitable for minutes.motions",
+      "decisions and actionItems: top-level arrays for summary export",
+      "reviewGaps: quorum, attendance, source, approval, or ambiguous-speaker items requiring human confirmation",
+    ],
   },
   {
     key: "filing_assistant",
@@ -204,7 +218,7 @@ export const runAgent = mutation({
 function deterministicOutput(agent: AgentDefinition, input: string): string {
   const trimmed = input.trim();
   const subject = trimmed.length > 0 ? trimmed : "No input supplied";
-  return [
+  const lines = [
     `${agent.name} guidance`,
     "",
     `Scope: ${agent.scope}`,
@@ -217,7 +231,26 @@ function deterministicOutput(agent: AgentDefinition, input: string): string {
     "",
     `Required input hints checked: ${agent.requiredInputHints.join("; ")}.`,
     "Provider status: no live AI provider is configured for this tool, so this deterministic stub logged the planned request.",
-  ].join("\n");
+  ];
+  if (agent.workflowModes?.length) {
+    lines.splice(
+      lines.length - 2,
+      0,
+      "",
+      "Supported workflow modes:",
+      ...agent.workflowModes.map((mode) => `- ${mode}`),
+    );
+  }
+  if (agent.outputContract?.length) {
+    lines.splice(
+      lines.length - 2,
+      0,
+      "",
+      "Expected output contract:",
+      ...agent.outputContract.map((field) => `- ${field}`),
+    );
+  }
+  return lines.join("\n");
 }
 
 function purposeForTool(toolName: string): string {

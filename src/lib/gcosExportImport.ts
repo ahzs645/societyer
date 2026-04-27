@@ -10,6 +10,48 @@ export async function readGcosExportFile(file: File) {
   return await file.text();
 }
 
+export function enrichGcosNormalizedGrant(snapshot: any, normalizedGrant: any = {}) {
+  const approvedJob = snapshot?.structured?.approvedJob ?? {};
+  const keyFacts = mergeStringLists(
+    normalizedGrant?.keyFacts,
+    approvedJob.participantsApproved ? [`Approved participants: ${numberText(approvedJob.participantsApproved)}`] : [],
+    approvedJob.weeksApproved ? [`Approved weeks: ${numberText(approvedJob.weeksApproved)}`] : [],
+    (approvedJob.hoursPerWeekApproved ?? approvedJob.hoursPerWeek) ? [`Approved hours/week: ${numberText(approvedJob.hoursPerWeekApproved ?? approvedJob.hoursPerWeek)}`] : [],
+    approvedJob.hourlyWage ? [`Approved hourly wage: ${moneyText(approvedJob.hourlyWage)}`] : [],
+  );
+  return {
+    ...normalizedGrant,
+    keyFacts,
+  };
+}
+
+function mergeStringLists(...lists: unknown[]) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const item of list) {
+      const text = String(item ?? "").trim();
+      const key = text.toLowerCase();
+      if (!text || seen.has(key)) continue;
+      seen.add(key);
+      result.push(text);
+    }
+  }
+  return result;
+}
+
+function numberText(value: unknown) {
+  const match = String(value ?? "").replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  return match?.[0] ?? String(value ?? "").trim();
+}
+
+function moneyText(value: unknown) {
+  const parsed = Number(numberText(value));
+  if (!Number.isFinite(parsed)) return String(value ?? "").trim();
+  return `$${parsed.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 function readStoredZip(bytes: Uint8Array) {
   const entries: Array<{ name: string; data: Uint8Array }> = [];
   let offset = 0;

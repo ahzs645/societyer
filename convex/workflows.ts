@@ -47,7 +47,8 @@ type RecipeKey =
   | "conflict_disclosed_agenda_item"
   | "unbc_affiliate_id_request"
   | "unbc_key_access_request"
-  | "ote_keycard_access_request";
+  | "ote_keycard_access_request"
+  | "csj_remote_worker_orientation";
 
 const UNBC_AFFILIATE_FIELDS = [
   "Legal First Name of Affiliate",
@@ -149,6 +150,7 @@ const RECIPE_LABELS: Record<RecipeKey, string> = {
   unbc_affiliate_id_request: "UNBC Affiliate ID Request",
   unbc_key_access_request: "UNBC Key & Access Request",
   ote_keycard_access_request: "OTE Individual Access Request",
+  csj_remote_worker_orientation: "CSJ Remote Worker Orientation",
 };
 
 const RECIPE_DESCRIPTIONS: Record<RecipeKey, string> = {
@@ -170,6 +172,8 @@ const RECIPE_DESCRIPTIONS: Record<RecipeKey, string> = {
     "Collects key/access request intake, fills the UNBC Facilities PDF, and stages the generated request for review.",
   ote_keycard_access_request:
     "Sends an Over the Edge individual access request through n8n, then queues the Facilities email draft.",
+  csj_remote_worker_orientation:
+    "Grant-specific system workflow for Canada Summer Jobs onboarding: send Young Workers resources, remote safety orientation links, and retain evidence for the EED attestation.",
 };
 
 const RECIPE_PROVIDERS: Record<RecipeKey, WorkflowProvider> = {
@@ -182,6 +186,7 @@ const RECIPE_PROVIDERS: Record<RecipeKey, WorkflowProvider> = {
   unbc_affiliate_id_request: "n8n",
   unbc_key_access_request: "n8n",
   ote_keycard_access_request: "n8n",
+  csj_remote_worker_orientation: "internal",
 };
 
 const RECIPE_STEPS: Record<RecipeKey, RecipeStep[]> = {
@@ -238,6 +243,12 @@ const RECIPE_STEPS: Record<RecipeKey, RecipeStep[]> = {
     { key: "manual", label: "Launch manually" },
     { key: "access_change", label: "Select individual for access" },
     { key: "facilities_email", label: "Queue Facilities email draft" },
+  ],
+  csj_remote_worker_orientation: [
+    { key: "select_employee", label: "Select funded employee" },
+    { key: "queue_orientation_email", label: "Queue Young Workers orientation email" },
+    { key: "orientation_meeting", label: "Schedule/review virtual safety orientation" },
+    { key: "retain_evidence", label: "Retain evidence for GCOS EED attestation" },
   ],
 };
 
@@ -323,6 +334,51 @@ const OTE_KEYCARD_INTAKE_FIELDS = [
   { key: "request_subject", label: "Subject", type: "text", required: true },
   { key: "source_sent_at_iso", label: "Original sent timestamp", type: "text", required: false, isHidden: true },
 ];
+
+const CSJ_ORIENTATION_EMAIL_DEFAULTS = {
+  fromName: "Over the Edge",
+  fromEmail: "ote@unbc.ca",
+  subject: "Canada Summer Jobs remote work orientation resources",
+  body: [
+    "Hi {{employee.firstName}},",
+    "",
+    "Thanks for completing the required documentation, no need to worry about the employee number, we will do that on our end. Since you'll be working primarily remotely, I've gathered some resources that we'll review during your virtual orientation in your first week.",
+    "",
+    "Young Workers Website",
+    "Please review: https://www.ccohs.ca/youngworkers",
+    "This covers your rights, health and safety basics, and workplace responsibilities.",
+    "",
+    "Virtual Health and Safety Orientation",
+    "We'll conduct a video call orientation covering remote work safety:",
+    "- Home Office Ergonomics: https://www.ccohs.ca/oshanswers/ergonomics/office",
+    "- Digital Equipment Safety: We'll review proper setup for your computer, software access, and digital security.",
+    "- Remote Emergency Procedures: Contact information, reporting protocols, and what to do in case of power/internet outages.",
+    "- Remote Work Safety Checks: Tips for maintaining a safe home workspace.",
+    "",
+    "Remote Work and Employment Policies",
+    "While we don't have formal written policies, we'll discuss expectations for remote work including:",
+    "- Harassment Prevention: BC Human Rights Code basics: https://www2.gov.bc.ca/gov/content/justice/human-rights",
+    "- Digital Communication Guidelines: Professional expectations for email, messaging, and video calls.",
+    "- Conflict Resolution: Virtual open-door policy and how to raise concerns remotely.",
+    "- Privacy and Confidentiality: Protecting organizational data when working from home.",
+    "- Work Hours and Boundaries: Setting healthy remote work practices.",
+    "",
+    "BC Employment Standards for Remote Workers",
+    "Review your rights: https://www2.gov.bc.ca/gov/content/employment-business/employment-standards-advice/employment-standards",
+    "",
+    "Additional Remote Work Resources",
+    "- Health tips for remote workers: https://www.ccohs.ca/oshanswers/hsprograms/telework.html",
+    "- WorkSafeBC remote work guidelines: https://www.worksafebc.com/en/resources/health-safety/information-sheets/working-from-home-guide-keeping-workers-healthy-safe?lang=en",
+    "",
+    "Please review these resources before our virtual orientation meeting.",
+    "",
+    "Looking forward to having you join our team!",
+    "",
+    "Best regards,",
+    "",
+    "Ahmad Jalil",
+  ].join("\n"),
+};
 
 const RECIPE_NODE_PREVIEWS: Partial<Record<RecipeKey, NodePreview[]>> = {
   agm_date_deadlines: [
@@ -537,6 +593,42 @@ const RECIPE_NODE_PREVIEWS: Partial<Record<RecipeKey, NodePreview[]>> = {
         subject: OTE_KEYCARD_EMAIL_DEFAULTS.subject,
         body: OTE_KEYCARD_EMAIL_DEFAULTS.body,
       },
+    },
+  ],
+  csj_remote_worker_orientation: [
+    {
+      key: "select_employee",
+      type: "manual_trigger",
+      label: "Select funded employee",
+      description: "Start from a linked Canada Summer Jobs funded employee on the grant page.",
+      status: "ready",
+    },
+    {
+      key: "queue_orientation_email",
+      type: "email",
+      label: "Queue orientation email",
+      description: "Creates an Outbox draft with Young Workers, remote work safety, Employment Standards, and WorkSafeBC links.",
+      status: "ready",
+      config: {
+        fromName: CSJ_ORIENTATION_EMAIL_DEFAULTS.fromName,
+        fromEmail: CSJ_ORIENTATION_EMAIL_DEFAULTS.fromEmail,
+        subject: CSJ_ORIENTATION_EMAIL_DEFAULTS.subject,
+        body: CSJ_ORIENTATION_EMAIL_DEFAULTS.body,
+      },
+    },
+    {
+      key: "orientation_meeting",
+      type: "form",
+      label: "Review during orientation",
+      description: "Use the email and meeting notes as evidence that the Young Workers information was shared.",
+      status: "ready",
+    },
+    {
+      key: "retain_evidence",
+      type: "document_create",
+      label: "Retain EED evidence",
+      description: "Keep the sent email or orientation note with the grant evidence packet before confirming the GCOS EED attestation.",
+      status: "ready",
     },
   ],
 };
@@ -2435,6 +2527,19 @@ function configForRecipe(recipe: RecipeKey) {
       emailSubject: OTE_KEYCARD_EMAIL_DEFAULTS.subject,
       emailBody: OTE_KEYCARD_EMAIL_DEFAULTS.body,
       sampleInput: OTE_SAMPLE_KEYCARD_REQUEST,
+    };
+  }
+  if (recipe === "csj_remote_worker_orientation") {
+    return {
+      workflowTemplateKey: "csj_remote_worker_orientation",
+      defaultTriggerKind: "manual",
+      systemWorkflow: true,
+      appliesTo: ["grants", "employees"],
+      emailFromName: CSJ_ORIENTATION_EMAIL_DEFAULTS.fromName,
+      emailFromEmail: CSJ_ORIENTATION_EMAIL_DEFAULTS.fromEmail,
+      emailSubject: CSJ_ORIENTATION_EMAIL_DEFAULTS.subject,
+      emailBody: CSJ_ORIENTATION_EMAIL_DEFAULTS.body,
+      evidencePurpose: "GCOS EED Young Workers attestation",
     };
   }
   return {};

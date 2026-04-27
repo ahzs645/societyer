@@ -6,7 +6,7 @@ import { LiveBrowserView } from "../components/LiveBrowserView";
 import { useSociety } from "../hooks/useSociety";
 import { useToast } from "../components/Toast";
 import { formatDateTime } from "../lib/format";
-import { readGcosExportFile } from "../lib/gcosExportImport";
+import { enrichGcosNormalizedGrant, readGcosExportFile } from "../lib/gcosExportImport";
 
 type RunnerHealth = {
   ok?: boolean;
@@ -684,7 +684,7 @@ export function BrowserConnectorsPage() {
         body: JSON.stringify({
           societyId: society._id,
           snapshot,
-          normalizedGrant: parsed?.normalizedGrant,
+          normalizedGrant: enrichGcosNormalizedGrant(snapshot, parsed?.normalizedGrant),
         }),
       });
       setLastRun(payload.data);

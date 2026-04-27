@@ -16,6 +16,8 @@ type AgentDefinition = {
   allowedActions: string[];
   allowedTools: string[];
   requiredInputHints: string[];
+  workflowModes?: string[];
+  outputContract?: string[];
 };
 
 export function AiAgentsPage() {
@@ -121,6 +123,26 @@ export function AiAgentsPage() {
                     ))}
                   </div>
                 </div>
+                {selectedAgent.workflowModes?.length ? (
+                  <div className="col" style={{ gap: 6 }}>
+                    <strong style={{ fontSize: "var(--fs-sm)" }}>Workflow modes</strong>
+                    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                      {selectedAgent.workflowModes.map((mode) => (
+                        <Badge key={mode} tone="success">{mode}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {selectedAgent.outputContract?.length ? (
+                  <div className="col" style={{ gap: 6 }}>
+                    <strong style={{ fontSize: "var(--fs-sm)" }}>Output contract</strong>
+                    <ul className="muted" style={{ margin: 0, paddingLeft: 18, fontSize: "var(--fs-sm)" }}>
+                      {selectedAgent.outputContract.map((field) => (
+                        <li key={field}>{field}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 <Field label="Run request">
                   <textarea
                     className="textarea"

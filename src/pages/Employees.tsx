@@ -119,6 +119,20 @@ export function EmployeesPage() {
               <Field label="Last name"><input className="input" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></Field>
             </div>
             <Field label="Email"><input className="input" value={form.email ?? ""} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Phone"><input className="input" inputMode="tel" value={form.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+              <Field label="Birth date"><input className="input" type="date" value={form.birthDate ?? ""} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} /></Field>
+            </div>
+            <Field label="Home address line 1"><input className="input" value={form.addressLine1 ?? ""} onChange={(e) => setForm({ ...form, addressLine1: e.target.value })} /></Field>
+            <Field label="Home address line 2"><input className="input" value={form.addressLine2 ?? ""} onChange={(e) => setForm({ ...form, addressLine2: e.target.value })} /></Field>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="City"><input className="input" value={form.city ?? ""} onChange={(e) => setForm({ ...form, city: e.target.value })} /></Field>
+              <Field label="Province"><input className="input" value={form.province ?? ""} onChange={(e) => setForm({ ...form, province: e.target.value })} /></Field>
+            </div>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Postal code"><input className="input" value={form.postalCode ?? ""} onChange={(e) => setForm({ ...form, postalCode: e.target.value })} /></Field>
+              <Field label="Country"><input className="input" value={form.country ?? ""} onChange={(e) => setForm({ ...form, country: e.target.value })} /></Field>
+            </div>
             <Field label="Role"><input className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Type">

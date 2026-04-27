@@ -1640,12 +1640,24 @@ const aiAgentDefinitions = [
   },
   {
     key: "minute_drafter",
-    name: "Minute drafter",
-    summary: "Turns meeting notes or transcript excerpts into structured draft minutes for secretary review.",
-    scope: "Drafting support only. May transform provided meeting material; cannot approve minutes or record board decisions.",
-    allowedActions: ["draft_minutes", "extract_motions", "extract_action_items", "flag_quorum_gaps"],
-    allowedTools: ["meetings.read", "minutes.read", "transcripts.read", "documents.read"],
-    requiredInputHints: ["Meeting date or title", "Transcript, notes, or agenda source", "Desired minute style"],
+    name: "Meeting minutes copilot",
+    summary: "Drafts agendas, revises draft minutes, and turns uploaded content or spoken notes into structured minutes.",
+    scope: "Meeting drafting support only. May draft agenda or minutes content for secretary review; cannot approve minutes, record final decisions, or overwrite source evidence.",
+    allowedActions: ["draft_agenda", "revise_draft_minutes", "draft_minutes", "extract_motions", "extract_action_items", "flag_quorum_gaps", "flag_source_gaps"],
+    allowedTools: ["meetings.read", "minutes.read", "transcripts.read", "documents.read", "members.read", "directors.read", "bylawRules.read"],
+    requiredInputHints: ["Meeting date or title", "Uploaded content, transcript, rough notes, or spoken instructions", "Agenda/minutes style", "Known chair, secretary, attendance, quorum, or approval constraints"],
+    workflowModes: [
+      "Agenda from upload or spoken instructions",
+      "Edit existing draft minutes without changing approval status",
+      "Generate structured minutes from prompt, transcript, agenda, and meeting metadata",
+    ],
+    outputContract: [
+      "agendaItems: ordered strings suitable for meeting.agendaJson",
+      "sections: title/type/presenter/discussion/decisions/actionItems records suitable for minutes.sections",
+      "motions: text/movedBy/secondedBy/outcome/vote fields suitable for minutes.motions",
+      "decisions and actionItems: top-level arrays for summary export",
+      "reviewGaps: quorum, attendance, source, approval, or ambiguous-speaker items requiring human confirmation",
+    ],
   },
   {
     key: "filing_assistant",
@@ -3549,7 +3561,7 @@ function mutationResult(name: string, args: StaticArgs) {
         purpose: `Read ${toolName.split(".")[0]} records within the agent scope.`,
         status: "planned",
       })),
-      output: `${agent.name} guidance\n\nScope: ${agent.scope}\nRequest: ${args?.input ?? ""}\n\nProvider status: static demo deterministic stub.`,
+      output: staticAgentOutput(agent, args?.input ?? ""),
       provider: "deterministic_stub",
       createdAtISO: now,
       completedAtISO: now,
@@ -3771,6 +3783,19 @@ function mutationResult(name: string, args: StaticArgs) {
     return args?.id ?? `static_${Date.now()}`;
   }
   return null;
+}
+
+function staticAgentOutput(agent: any, input: string) {
+  return [
+    `${agent.name} guidance`,
+    "",
+    `Scope: ${agent.scope}`,
+    `Request: ${input}`,
+    "",
+    ...(agent.workflowModes?.length ? ["Supported workflow modes:", ...agent.workflowModes.map((mode: string) => `- ${mode}`), ""] : []),
+    ...(agent.outputContract?.length ? ["Expected output contract:", ...agent.outputContract.map((field: string) => `- ${field}`), ""] : []),
+    "Provider status: static demo deterministic stub.",
+  ].join("\n");
 }
 
 export class StaticConvexClient {

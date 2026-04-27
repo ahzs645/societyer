@@ -70,6 +70,8 @@ export function deriveGcosProjectIntelligence(snapshot: any, normalizedGrant: an
   const appliedWeeks = numberFromText(structured.appliedJob?.weeksRequested);
   const approvedWeeks = numberFromText(structured.approvedJob?.weeksApproved);
   const approvedParticipants = numberFromText(structured.approvedJob?.participantsApproved);
+  const approvedHoursPerWeek = numberFromText(structured.approvedJob?.hoursPerWeekApproved ?? structured.approvedJob?.hoursPerWeek);
+  const approvedHourlyWage = moneyTextFromUnknown(structured.approvedJob?.hourlyWage);
   const hasAgreement = /final agreement|signed/i.test(String(structured.agreement?.status ?? snapshot?.agreement?.text ?? ""));
   const directDepositSubmitted = /Direct Deposit[^]*?Submitted on/i.test(String(snapshot?.manage?.text ?? ""));
   const eedHasEntries = Boolean(structured.eed?.hasEntries);
@@ -243,6 +245,8 @@ export function deriveGcosProjectIntelligence(snapshot: any, normalizedGrant: an
     awarded != null && requested != null ? `Approved/requested delta: ${moneyText(awarded - requested)}` : undefined,
     approvedParticipants ? `Approved participants: ${approvedParticipants}` : undefined,
     approvedWeeks ? `Approved weeks: ${approvedWeeks}` : undefined,
+    approvedHoursPerWeek ? `Approved hours/week: ${approvedHoursPerWeek}` : undefined,
+    approvedHourlyWage ? `Approved hourly wage: ${approvedHourlyWage}` : undefined,
     appliedWeeks && approvedWeeks && appliedWeeks !== approvedWeeks ? `Requested weeks changed from ${appliedWeeks} to ${approvedWeeks}` : undefined,
   ].filter(Boolean) as string[];
 
@@ -292,4 +296,18 @@ function moneyText(cents: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+function moneyTextFromUnknown(value: unknown) {
+  const text = stringValue(value);
+  if (!text) return undefined;
+  const cents = moneyCents(value);
+  return cents == null ? text : moneyText(cents);
+}
+
+function moneyCents(value: unknown) {
+  const match = String(value ?? "").replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  if (!match) return undefined;
+  const parsed = Number(match[0]);
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) : undefined;
 }
