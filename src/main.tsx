@@ -82,7 +82,6 @@ const FilingPreFillPage = React.lazy(() => import("./pages/FilingPreFill").then(
 const BylawDiffPage = React.lazy(() => import("./pages/BylawDiff").then((m) => ({ default: m.BylawDiffPage })));
 const BylawsHistoryPage = React.lazy(() => import("./pages/BylawsHistory").then((m) => ({ default: m.BylawsHistoryPage })));
 const ReconciliationPage = React.lazy(() => import("./pages/Reconciliation").then((m) => ({ default: m.ReconciliationPage })));
-const LandingPage = React.lazy(() => import("./pages/Landing").then((m) => ({ default: m.LandingPage })));
 const LoginPage = React.lazy(() => import("./pages/Login").then((m) => ({ default: m.LoginPage })));
 const BylawRulesPage = React.lazy(() => import("./pages/BylawRules").then((m) => ({ default: m.BylawRulesPage })));
 const ElectionsPage = React.lazy(() => import("./pages/Elections").then((m) => ({ default: m.ElectionsPage })));
@@ -190,20 +189,17 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       >
         <Suspense fallback={<PageLoader />}>
         <Routes>
-          {!staticDemoRuntime && <Route path="/" element={<LandingPage />} />}
           <Route element={<AppProviders client={convexClient} />}>
-            {staticDemoRuntime && (
-              <Route
-                path="/"
-                element={
-                  <AuthGate>
-                    <Layout />
-                  </AuthGate>
-                }
-              >
-                <Route index element={<Dashboard />} />
-              </Route>
-            )}
+            <Route
+              path="/"
+              element={
+                <AuthGate>
+                  <Layout />
+                </AuthGate>
+              }
+            >
+              <Route index element={<Dashboard />} />
+            </Route>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/public" element={<PublicTransparencyPage />} />
             <Route path="/public/:slug" element={<PublicTransparencyPage />} />
