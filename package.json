@@ -25,6 +25,8 @@
     "docker:connectors": "docker compose --profile connectors up -d connector-runner blitzbrowser blitzbrowser-dashboard",
     "docker:connectors:logs": "docker compose logs -f connector-runner blitzbrowser",
     "docker:admin-key": "./scripts/convex-admin-key.sh",
+    "docker:prod:up": "docker compose -f docker-compose.prod.yml up -d --build",
+    "docker:prod:down": "docker compose -f docker-compose.prod.yml down",
     "rustfs:setup": "./scripts/setup-rustfs.sh",
     "connector-runner:typecheck": "npm --prefix services/connector-runner run typecheck",
     "auth:server": "tsx server/auth-server.ts",
@@ -36,7 +38,8 @@
     "test:pdf-ingestion": "tsx scripts/check-pdf-table-normalization.ts",
     "test:exports": "tsx scripts/check-export-coverage.ts",
     "test:exports:db": "tsx scripts/validate-export-database.ts",
-    "export:workspace:files": "tsx scripts/export-workspace-with-files.ts"
+    "export:workspace:files": "tsx scripts/export-workspace-with-files.ts",
+    "backup:runtime": "./scripts/backup-runtime-data.sh"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.5.0",
