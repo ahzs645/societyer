@@ -6,6 +6,7 @@ import { LiveBrowserView } from "../components/LiveBrowserView";
 import { useSociety } from "../hooks/useSociety";
 import { useToast } from "../components/Toast";
 import { formatDateTime } from "../lib/format";
+import { readGcosExportFile } from "../lib/gcosExportImport";
 
 type RunnerHealth = {
   ok?: boolean;
@@ -693,7 +694,7 @@ export function BrowserConnectorsPage() {
   async function importGcosExportFile(file: File | undefined) {
     if (!file) return;
     try {
-      const text = await file.text();
+      const text = await readGcosExportFile(file);
       setGcosExportJson(text);
       await importGcosExportedSnapshot(text);
     } catch (error: any) {
@@ -938,7 +939,7 @@ export function BrowserConnectorsPage() {
                 Load the unpacked extension from <code className="mono">extensions/gcos-exporter</code>, export JSON from your normal logged-in GCOS tab, then import it here.
               </div>
             </div>
-            <Field label="GCOS export JSON" hint="Paste the Chrome extension output or choose its downloaded JSON file.">
+            <Field label="GCOS export JSON" hint="Paste the Chrome extension output, or choose its downloaded JSON/ZIP file.">
               <textarea
                 className="input"
                 value={gcosExportJson}
@@ -950,10 +951,10 @@ export function BrowserConnectorsPage() {
             </Field>
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
               <label className="btn btn--sm" style={{ cursor: busy ? "not-allowed" : "pointer" }}>
-                <Upload size={12} /> Choose JSON
+                <Upload size={12} /> Choose JSON/ZIP
                 <input
                   type="file"
-                  accept="application/json,.json"
+                  accept="application/json,application/zip,.json,.zip"
                   disabled={busy}
                   onChange={(event) => {
                     void importGcosExportFile(event.target.files?.[0]);

@@ -213,16 +213,25 @@ Workflow:
    `https://srv136.services.gc.ca/OSR/pro`.
 3. Click the extension. The popup fetches `/OSR/pro/Project?pagesize=0` and
    renders the user's projects.
-4. Choose **Export JSON** on a project card, or use the manual project
-   ID/program code export controls.
-5. Import the JSON in Societyer from **Browser apps → GCOS → Local Chrome
-   extension fallback**, or let the extension POST to
+4. Select a project card, or use the manual project ID/program code controls.
+5. Choose **Export & download JSON**. The extension stores export progress in
+   extension storage and runs the export from the background service worker, so
+   the popup can be closed and reopened during a long pull.
+6. Use **Export ZIP + PDFs** when the local evidence bundle should also include
+   agreement PDFs. The zip contains `snapshot.json`, `manifest.json`, and
+   agreement PDFs only; banking/direct-deposit documents are skipped.
+7. Import the JSON or ZIP in Societyer from **Browser apps → GCOS → Local Chrome
+   extension fallback**, **Grants → Import GCOS**, or let the extension POST to
    `/api/v1/browser-connectors/connectors/gcos/import-exported-snapshot`.
 
 The extension exports the same high-level snapshot shape as the browser runner:
 `summary`, `approvedJobs`, `agreement`, `correspondence`, `eed`, `documents`,
-and `normalizedGrant`. It skips sensitive SIN, banking, account number, and
-direct-deposit fields and does not submit GCOS forms.
+and `normalizedGrant`. It also emits `schemaVersion: 3` data for more reliable
+imports: `projects[]`, per-page `_meta`, page `formState`, requested/approved
+job arrays, per-job deltas, manage lifecycle state, agreement versions, and
+correspondence rows with GCOS `data-date` timestamps where available. It skips
+sensitive SIN, banking, account number, and direct-deposit fields and does not
+submit GCOS forms.
 
 ## Wave connector
 

@@ -1,4 +1,4 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation } from "./lib/untypedServer";
 import { v, ConvexError } from "convex/values";
 import { requireRole, canActAs } from "./users";
 

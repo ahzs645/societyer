@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, internalMutation, mutation, action } from "./_generated/server";
+import { query, internalMutation, mutation, action } from "./lib/untypedServer";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { requireRole } from "./users";
@@ -96,7 +96,7 @@ export const transactionsForCounterpartyExternalId = query({
           .withIndex("by_society_counterparty_external", (q) =>
             q.eq("societyId", societyId).eq("counterpartyExternalId", externalId),
           );
-    const [accounts, transactionRows, snapshots] = await Promise.all([
+    const [accounts, transactionRows, snapshots] = (await Promise.all([
       ctx.db
         .query("financialAccounts")
         .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -107,12 +107,12 @@ export const transactionsForCounterpartyExternalId = query({
         .withIndex("by_society_provider", (q) => q.eq("societyId", societyId).eq("provider", "wave"))
         .order("desc")
         .take(1),
-    ]);
-    const accountById = new Map(accounts.map((account) => [account._id, account]));
+    ])) as [any[], any[], any[]];
+    const accountById = new Map<string, any>(accounts.map((account) => [String(account._id), account]));
     const accountResourceByExternalId = new Map<string, any>();
     const latestSnapshot = snapshots[0];
     if (latestSnapshot) {
-      const waveResources = await ctx.db
+      const waveResources: any[] = await ctx.db
         .query("waveCacheResources")
         .withIndex("by_snapshot", (q) => q.eq("snapshotId", latestSnapshot._id))
         .collect();
@@ -131,9 +131,9 @@ export const transactionsForCounterpartyExternalId = query({
     return {
       transactions: rows.slice(0, limit ?? 500).map((row) => ({
         ...row,
-        account: accountById.get(row.accountId) ?? null,
-        accountResource: accountById.get(row.accountId)?.externalId
-          ? accountResourceByExternalId.get(accountById.get(row.accountId)!.externalId) ?? null
+        account: accountById.get(String(row.accountId)) ?? null,
+        accountResource: accountById.get(String(row.accountId))?.externalId
+          ? accountResourceByExternalId.get(accountById.get(String(row.accountId))!.externalId) ?? null
           : null,
       })),
       total: rows.length,
@@ -153,7 +153,7 @@ export const transactionsForCategoryAccountExternalId = query({
   handler: async (ctx, { societyId, externalId, label, limit }) => {
     const labelText = label?.trim();
     const normalizedLabel = normalizeCategoryLabel(labelText);
-    const [accounts, rowsByExternalId, rowsByLabel, snapshots] = await Promise.all([
+    const [accounts, rowsByExternalId, rowsByLabel, snapshots] = (await Promise.all([
       ctx.db
         .query("financialAccounts")
         .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -175,12 +175,12 @@ export const transactionsForCategoryAccountExternalId = query({
         .withIndex("by_society_provider", (q) => q.eq("societyId", societyId).eq("provider", "wave"))
         .order("desc")
         .take(1),
-    ]);
-    const accountById = new Map(accounts.map((account) => [account._id, account]));
+    ])) as [any[], any[], any[], any[]];
+    const accountById = new Map<string, any>(accounts.map((account) => [String(account._id), account]));
     const accountResourceByExternalId = new Map<string, any>();
     const latestSnapshot = snapshots[0];
     if (latestSnapshot) {
-      const waveResources = await ctx.db
+      const waveResources: any[] = await ctx.db
         .query("waveCacheResources")
         .withIndex("by_snapshot", (q) => q.eq("snapshotId", latestSnapshot._id))
         .collect();
@@ -194,7 +194,7 @@ export const transactionsForCategoryAccountExternalId = query({
         }
       }
     }
-    const rowById = new Map(rowsByExternalId.map((row) => [String(row._id), row]));
+    const rowById = new Map<string, any>(rowsByExternalId.map((row) => [String(row._id), row]));
     for (const row of rowsByLabel) {
       if (!row.categoryAccountExternalId && normalizedLabel && normalizeCategoryLabel(row.category) === normalizedLabel) {
         rowById.set(String(row._id), row);
@@ -204,7 +204,7 @@ export const transactionsForCategoryAccountExternalId = query({
     const linkedTotalCents = rows.reduce((sum, row) => sum + row.amountCents, 0);
     return {
       transactions: rows.slice(0, limit ?? 500).map((row) => {
-        const account = accountById.get(row.accountId) ?? null;
+        const account = accountById.get(String(row.accountId)) ?? null;
         return {
           ...row,
           account,
@@ -425,7 +425,7 @@ export const removeDemoData = mutation({
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
       .collect();
     const demoConnections = connections.filter(isDemoFinancialConnection);
-    const demoConnectionIds = new Set(demoConnections.map((row) => row._id));
+    const demoConnectionIds = new Set<string>((demoConnections as any[]).map((row) => String(row._id)));
 
     const counts = {
       connections: 0,
@@ -447,7 +447,7 @@ export const removeDemoData = mutation({
       counts.transactions += 1;
     }
 
-    const accounts = await ctx.db
+    const accounts: any[] = await ctx.db
       .query("financialAccounts")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
       .collect();
@@ -658,14 +658,14 @@ export const importBrowserWaveTransactions = mutation({
       ? (await ctx.db.patch(connection._id, connectionPayload), connection._id)
       : await ctx.db.insert("financialConnections", connectionPayload);
 
-    const existingAccounts = await ctx.db
+    const existingAccounts: any[] = await ctx.db
       .query("financialAccounts")
       .withIndex("by_connection", (q) => q.eq("connectionId", connectionId))
       .collect();
     const existingByExternal = new Map(existingAccounts.map((account) => [account.externalId, account]));
     const accountIdByExternal = new Map(existingAccounts.map((account) => [account.externalId, account._id]));
 
-    const uniqueAccounts = new Map(args.accounts.map((account) => [account.externalId, account]));
+    const uniqueAccounts = new Map<string, any>(args.accounts.map((account: any) => [account.externalId, account]));
     for (const account of uniqueAccounts.values()) {
       const existing = existingByExternal.get(account.externalId);
       const payload = {

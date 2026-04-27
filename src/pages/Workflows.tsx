@@ -47,6 +47,7 @@ export function WorkflowsPage() {
   const catalog = useQuery(api.workflows.listCatalog, {});
   const rows = useQuery(api.workflows.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.workflows.create);
+  const setupGovernanceN8nRecipes = useMutation(api.workflows.setupGovernanceN8nRecipes);
   const update = useMutation(api.workflows.update);
   const setStatus = useMutation(api.workflows.setStatus);
   const remove = useMutation(api.workflows.remove);
@@ -66,6 +67,7 @@ export function WorkflowsPage() {
     provider?: string;
   } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [setupBusy, setSetupBusy] = useState(false);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
 
@@ -170,6 +172,26 @@ export function WorkflowsPage() {
             </button>
             <button className="btn-action" onClick={() => openNew("conflict_disclosed_agenda_item")}>
               <WorkflowIcon size={12} /> Conflict agenda
+            </button>
+            <button
+              className="btn-action"
+              disabled={setupBusy}
+              onClick={async () => {
+                setSetupBusy(true);
+                try {
+                  const result = await setupGovernanceN8nRecipes({
+                    societyId: society._id,
+                    actingUserId,
+                  });
+                  toast.success("n8n governance recipes linked", `${result.created.length} created, ${result.updated.length} updated`);
+                } catch (error: any) {
+                  toast.error("Could not link n8n recipes", error?.message);
+                } finally {
+                  setSetupBusy(false);
+                }
+              }}
+            >
+              <WorkflowIcon size={12} /> {setupBusy ? "Linking..." : "Link n8n recipes"}
             </button>
             <button className="btn-action btn-action--primary" onClick={() => openNew()}>
               <Plus size={12} /> New workflow

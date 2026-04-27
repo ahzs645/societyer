@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useMutation } from "convex/react";
 import { useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -6,6 +7,7 @@ import {
   Users,
   UserCog,
   Calendar,
+  CalendarCheck,
   FileText,
   FileJson,
   ClipboardList,
@@ -44,6 +46,7 @@ import {
   Inbox,
   Workflow,
 } from "lucide-react";
+import { api } from "../lib/convexApi";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
 import { useToast } from "./Toast";
 import { maintenanceErrorMessage, seedDemoSociety } from "../lib/maintenanceApi";
@@ -128,6 +131,7 @@ const NAV_ITEMS: CommandItem[] = [
   { id: "fin-membership", label: "Membership & billing", to: "/app/membership", icon: CreditCard, category: "Finance", module: "membershipBilling" },
 
   // Compliance
+  { id: "comp-annual-cycle", label: "Annual cycle", to: "/app/annual-cycle", icon: CalendarCheck, category: "Compliance" },
   { id: "comp-filings", label: "Filings", to: "/app/filings", icon: ClipboardList, category: "Compliance" },
   { id: "comp-filings-prefill", label: "Filing pre-fill", to: "/app/filings/prefill", icon: FileCog, category: "Compliance", module: "filingPrefill" },
   { id: "comp-formation-maintenance", label: "Formation & annual", to: "/app/formation-maintenance", icon: Gavel, category: "Compliance" },
@@ -196,6 +200,7 @@ export function CommandPalette() {
   const navigate = useNavigate();
   const society = useSociety();
   const toast = useToast();
+  const seedSharedViews = useMutation(api.views.seedGovernanceDataTableViews);
 
   const actions = useMemo<CommandItem[]>(
     () => [
@@ -265,8 +270,22 @@ export function CommandPalette() {
           }
         },
       },
+      ...(society
+        ? [
+            {
+              id: "action-seed-shared-views",
+              label: "Seed governance shared views",
+              icon: Settings,
+              category: "Actions" as const,
+              run: async () => {
+                const result = await seedSharedViews({ societyId: society._id });
+                toast.success("Shared views seeded", `${result.created.length} created, ${result.skipped.length} skipped`);
+              },
+            },
+          ]
+        : []),
     ],
-    [navigate, toast],
+    [navigate, seedSharedViews, society, toast],
   );
 
   useEffect(() => {

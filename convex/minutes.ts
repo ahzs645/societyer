@@ -1,4 +1,4 @@
-import { query, mutation, action } from "./_generated/server";
+import { query, mutation, action } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 import { summarizeMinutes } from "./providers/llm";

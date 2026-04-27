@@ -1169,6 +1169,16 @@ export default defineSchema({
     .index("by_run", ["runId"])
     .index("by_society_agent", ["societyId", "agentKey"]),
 
+  recordLayouts: defineTable({
+    societyId: v.id("societies"),
+    scopeKey: v.string(),
+    layoutJson: v.string(),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_scope", ["societyId", "scopeKey"]),
+
   workflows: defineTable({
     societyId: v.id("societies"),
     recipe: v.string(), // agm_prep | insurance_renewal | annual_report_filing | unbc_affiliate_id_request
@@ -2009,6 +2019,20 @@ export default defineSchema({
         }),
       ),
     ),
+    nextSteps: v.optional(
+      v.array(
+        v.object({
+          id: v.string(),
+          label: v.string(),
+          status: v.string(),
+          priority: v.string(),
+          dueHint: v.optional(v.string()),
+          source: v.optional(v.string()),
+          actionLabel: v.optional(v.string()),
+          reason: v.optional(v.string()),
+        }),
+      ),
+    ),
     contacts: v.optional(
       v.array(
         v.object({
@@ -2104,6 +2128,26 @@ export default defineSchema({
   })
     .index("by_society", ["societyId"])
     .index("by_grant", ["grantId"]),
+
+  grantEmployeeLinks: defineTable({
+    societyId: v.id("societies"),
+    grantId: v.id("grants"),
+    employeeId: v.id("employees"),
+    role: v.optional(v.string()),
+    status: v.string(), // planned | hired | eed_pending | eed_submitted | completed
+    source: v.optional(v.string()), // manual | gcos | payroll
+    fundedHoursPerWeek: v.optional(v.number()),
+    fundedHourlyWageCents: v.optional(v.number()),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_grant", ["grantId"])
+    .index("by_employee", ["employeeId"])
+    .index("by_grant_employee", ["grantId", "employeeId"]),
 
   deadlines: defineTable({
     societyId: v.id("societies"),
@@ -2342,6 +2386,7 @@ export default defineSchema({
     proxyLimitPerGrantorPerMeeting: v.number(),
     quorumType: v.string(), // fixed | percentage
     quorumValue: v.number(),
+    quorumMinimumCount: v.optional(v.number()),
     memberProposalThresholdPct: v.number(),
     memberProposalMinSignatures: v.number(),
     memberProposalLeadDays: v.number(),

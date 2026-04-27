@@ -37,8 +37,7 @@ export function loadRecordLayout(storageKey: string): RecordLayoutState | null {
     const raw = window.localStorage.getItem(storageKey);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed?.version !== 1 || typeof parsed.sections !== "object") return null;
-    return parsed as RecordLayoutState;
+    return normalizeRecordLayout(parsed);
   } catch {
     return null;
   }
@@ -56,6 +55,22 @@ export function clearRecordLayout(storageKey: string) {
 
 export function sectionState(layout: RecordLayoutState | null, section: RecordLayoutSection): RecordLayoutSectionState {
   return layout?.sections[section] ?? { order: [], hidden: [] };
+}
+
+export function normalizeRecordLayout(value: unknown): RecordLayoutState | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<RecordLayoutState>;
+  if (candidate.version !== 1 || !candidate.sections || typeof candidate.sections !== "object") return null;
+  const sections: RecordLayoutState["sections"] = {};
+  for (const section of ["summary", "tabs", "inspector"] as const) {
+    const state = candidate.sections[section];
+    if (!state || typeof state !== "object") continue;
+    sections[section] = normalizeSectionState({
+      order: Array.isArray(state.order) ? state.order.filter((id): id is string => typeof id === "string") : [],
+      hidden: Array.isArray(state.hidden) ? state.hidden.filter((id): id is string => typeof id === "string") : [],
+    });
+  }
+  return { version: 1, sections };
 }
 
 export function orderWidgets<T extends { id: string }>(

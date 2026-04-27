@@ -7,6 +7,10 @@
     "default_popup": "popup.html",
     "default_title": "Export GCOS to Societyer"
   },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
   "permissions": ["activeTab", "downloads", "scripting", "storage"],
   "host_permissions": [
     "https://www.canada.ca/*",

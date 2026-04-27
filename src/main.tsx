@@ -32,6 +32,7 @@ const MeetingMinutesPreviewPage = React.lazy(() => import("./pages/MeetingDetail
 const MinutesPage = React.lazy(() => import("./pages/Minutes").then((m) => ({ default: m.MinutesPage })));
 const FilingsPage = React.lazy(() => import("./pages/Filings").then((m) => ({ default: m.FilingsPage })));
 const DeadlinesPage = React.lazy(() => import("./pages/Deadlines").then((m) => ({ default: m.DeadlinesPage })));
+const AnnualCyclePage = React.lazy(() => import("./pages/AnnualCycle").then((m) => ({ default: m.AnnualCyclePage })));
 const DocumentsPage = React.lazy(() => import("./pages/Documents").then((m) => ({ default: m.DocumentsPage })));
 const DocumentWorkbenchPage = React.lazy(() => import("./pages/DocumentWorkbench").then((m) => ({ default: m.DocumentWorkbenchPage })));
 const LibraryPage = React.lazy(() => import("./pages/Library").then((m) => ({ default: m.LibraryPage })));
@@ -252,6 +253,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="minutes" element={<MinutesPage />} />
             <Route path="filings" element={<FilingsPage />} />
             <Route path="deadlines" element={<DeadlinesPage />} />
+            <Route path="annual-cycle" element={<AnnualCyclePage />} />
             <Route path="documents" element={<DocumentsPage />} />
             <Route path="documents/:id" element={<DocumentWorkbenchPage />} />
             <Route path="library" element={<LibraryPage />} />

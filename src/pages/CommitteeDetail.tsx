@@ -278,6 +278,7 @@ export function CommitteeDetailPage() {
         <ArrowLeft size={12} /> All committees
       </Link>
       <RecordShowPage
+        layout={{ societyId: society._id, pageId: "committee-detail", objectId: String(committee._id) }}
         title={
           <span className="row" style={{ gap: 10 }}>
             <span className="color-chip" style={{ background: committee.color, width: 14, height: 14 }} />

@@ -1,4 +1,4 @@
-import { mutation } from "./_generated/server";
+import { mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { assertMaintenanceToken, serviceTokenValidator } from "./lib/serviceAuth";
 
@@ -1588,6 +1588,7 @@ async function wipe(ctx: any) {
     "filingBotRuns",
     "aiAgentAuditEvents",
     "aiAgentRuns",
+    "recordLayouts",
     "workflowRuns",
     "workflows",
     "minutes",

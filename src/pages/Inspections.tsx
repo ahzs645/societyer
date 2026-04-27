@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -23,9 +24,7 @@ export function InspectionsPage() {
   const remove = useMutation(api.inspections.remove);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
-
-  if (society === undefined) return <div className="page">Loading…</div>;
-  if (society === null) return <SeedPrompt />;
+  const [params, setParams] = useSearchParams();
 
   const openNew = () => {
     setForm({
@@ -51,6 +50,20 @@ export function InspectionsPage() {
     setOpen(false);
   };
 
+  useEffect(() => {
+    if (!society || open) return;
+    if (params.get("intent") !== "start-response") return;
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("intent");
+      return next;
+    }, { replace: true });
+    openNew();
+  }, [open, params, setParams, society]);
+
+  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === null) return <SeedPrompt />;
+
   return (
     <div className="page">
       <PageHeader
@@ -73,6 +86,8 @@ export function InspectionsPage() {
         filterFields={FIELDS}
         searchPlaceholder="Search inspector, records…"
         defaultSort={{ columnId: "inspectedAtISO", dir: "desc" }}
+        viewsKey="inspections"
+        sharedViewsContext={{ societyId: society._id, nameSingular: "inspection" }}
         columns={[
           { id: "inspectedAtISO", header: "Date", sortable: true, accessor: (r) => r.inspectedAtISO, render: (r) => <span className="mono">{formatDate(r.inspectedAtISO)}</span> },
           { id: "inspectorName", header: "Inspector", sortable: true, accessor: (r) => r.inspectorName, render: (r) => <strong>{r.inspectorName}</strong> },

@@ -1,11 +1,15 @@
 import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { ArrowDown, ArrowUp, Eye, EyeOff, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { useLocation, useSearchParams } from "react-router-dom";
+import { api } from "../lib/convexApi";
+import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader as TitleHeader } from "../pages/_helpers";
 import {
   clearRecordLayout,
   loadRecordLayout,
   makeRecordLayoutStorageKey,
+  normalizeRecordLayout,
   orderWidgets,
   RecordLayoutScope,
   RecordLayoutSection,
@@ -35,6 +39,7 @@ export type RecordSummaryItem = {
 export type RecordShowLayoutOptions =
   | false
   | (RecordLayoutScope & {
+      societyId?: string;
       enableControls?: boolean;
       inspectorId?: string;
       inspectorLabel?: string;
@@ -78,6 +83,27 @@ export function RecordShowPage({
   const layoutEnabled = layout !== false;
   const layoutOptions = typeof layout === "object" && layout ? layout : {};
   const layoutControlsEnabled = layoutEnabled && layoutOptions.enableControls !== false;
+  const actingUserId = useCurrentUserId() ?? undefined;
+  const sharedLayoutScopeKey =
+    layoutEnabled && layoutOptions.societyId && actingUserId
+      ? makeRecordLayoutStorageKey({
+          storageKey: layoutOptions.storageKey,
+          pageId: layoutOptions.pageId ?? location.pathname,
+          objectId: layoutOptions.objectId,
+        })
+      : null;
+  const sharedLayout = useQuery(
+    api.recordLayouts.get,
+    sharedLayoutScopeKey && layoutOptions.societyId && actingUserId
+      ? {
+          societyId: layoutOptions.societyId as any,
+          scopeKey: sharedLayoutScopeKey,
+          actingUserId,
+        }
+      : "skip",
+  );
+  const upsertSharedLayout = useMutation(api.recordLayouts.upsert);
+  const removeSharedLayout = useMutation(api.recordLayouts.remove);
   const storageKey = useMemo(
     () =>
       makeRecordLayoutStorageKey({
@@ -88,12 +114,17 @@ export function RecordShowPage({
     [layoutOptions.objectId, layoutOptions.pageId, layoutOptions.storageKey, location.pathname],
   );
   const [recordLayout, setRecordLayout] = useState<RecordLayoutState | null>(() =>
-    layoutEnabled ? loadRecordLayout(storageKey) : null,
+    layoutEnabled && !sharedLayoutScopeKey ? loadRecordLayout(storageKey) : null,
   );
 
   useEffect(() => {
-    setRecordLayout(layoutEnabled ? loadRecordLayout(storageKey) : null);
-  }, [layoutEnabled, storageKey]);
+    setRecordLayout(layoutEnabled && !sharedLayoutScopeKey ? loadRecordLayout(storageKey) : null);
+  }, [layoutEnabled, sharedLayoutScopeKey, storageKey]);
+
+  useEffect(() => {
+    if (!layoutEnabled || !sharedLayoutScopeKey || sharedLayout === undefined) return;
+    setRecordLayout(normalizeRecordLayout((sharedLayout as any)?.layout));
+  }, [layoutEnabled, sharedLayout, sharedLayoutScopeKey]);
 
   const summaryWidgets = useMemo(
     () =>
@@ -155,10 +186,27 @@ export function RecordShowPage({
   const commitLayout = useCallback(
     (next: RecordLayoutState | null) => {
       setRecordLayout(next);
+      if (layoutOptions.societyId && sharedLayoutScopeKey && actingUserId) {
+        if (next) {
+          void upsertSharedLayout({
+            societyId: layoutOptions.societyId as any,
+            scopeKey: sharedLayoutScopeKey,
+            layoutJson: JSON.stringify(next),
+            actingUserId,
+          }).catch((error) => console.error("Shared record layout save failed", error));
+        } else {
+          void removeSharedLayout({
+            societyId: layoutOptions.societyId as any,
+            scopeKey: sharedLayoutScopeKey,
+            actingUserId,
+          }).catch((error) => console.error("Shared record layout reset failed", error));
+        }
+        return;
+      }
       if (next) saveRecordLayout(storageKey, next);
       else clearRecordLayout(storageKey);
     },
-    [storageKey],
+    [actingUserId, layoutOptions.societyId, removeSharedLayout, sharedLayoutScopeKey, storageKey, upsertSharedLayout],
   );
 
   const moveWidget = useCallback(

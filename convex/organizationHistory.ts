@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 
 const HISTORY_TAG = "org-history";

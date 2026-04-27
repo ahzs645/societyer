@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, internalMutation, mutation, action } from "./_generated/server";
+import { query, internalMutation, mutation, action } from "./lib/untypedServer";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { requireRole } from "./users";
@@ -166,7 +166,7 @@ export const feeTimeline = query({
         .withIndex("by_society_effective_from", (q) => q.eq("societyId", societyId))
         .collect(),
     ]);
-    const planById = new Map(plans.map((plan: any) => [String(plan._id), plan]));
+    const planById = new Map<string, any>((plans as any[]).map((plan) => [String(plan._id), plan]));
     const periodsByPlanId = new Map<string, number>();
     for (const period of periods) {
       if (period.planId) {

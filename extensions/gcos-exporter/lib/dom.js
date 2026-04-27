@@ -29,31 +29,63 @@ export function clearSnapshotOutput() {
 }
 
 export function setBusy(busy, hasSnapshot) {
-  for (const id of ["exportJson", "copyJson", "downloadJson", "importJson"]) {
+  for (const id of ["exportJson", "exportZip", "copyJson", "importJson"]) {
     const button = $(id);
     if (!button) continue;
-    if (id === "exportJson") button.disabled = busy;
+    if (id === "exportJson" || id === "exportZip") button.disabled = busy;
     else button.disabled = busy || !hasSnapshot;
   }
 }
 
-export function renderProjectList(projects, handlers) {
+export function renderExportJob(job) {
+  const wrap = $("progressWrap");
+  const progress = $("exportProgress");
+  const text = $("progressText");
+  if (!job) {
+    wrap.className = "progress-wrap";
+    progress.value = 0;
+    text.textContent = "Waiting.";
+    return;
+  }
+  wrap.className = "progress-wrap active";
+  progress.value = Math.max(0, Math.min(100, Number(job.progress ?? 0)));
+  const suffix = job.status === "error" && job.error ? `: ${job.error}` : "";
+  text.textContent = `${job.phase || job.status || "Working"} (${progress.value}%)${suffix}`;
+}
+
+export function renderProjectList(projects, handlers, selectedProjectId = "") {
   const container = $("projectList");
   if (!projects.length) {
     container.innerHTML = '<p class="muted">No projects found.</p>';
     return;
   }
-  container.replaceChildren(...projects.map((project) => projectCard(project, handlers)));
+  container.replaceChildren(...projects.map((project) => projectCard(project, handlers, selectedProjectId)));
 }
 
 export function renderProjectListMessage(message, tone = "muted") {
   $("projectList").innerHTML = `<p class="${tone}">${escapeHtml(message)}</p>`;
 }
 
-function projectCard(project, handlers) {
+export function setSelectedProjectSummary(project) {
+  const node = $("selectedProjectSummary");
+  if (!project?.projectId) {
+    node.textContent = "No project selected. You can enter the project ID manually.";
+    return;
+  }
+  const pieces = [
+    project.title || `GCOS project ${project.projectId}`,
+    project.status,
+    project.projectNumber ? `#${project.projectNumber}` : "",
+    project.trackingNumber,
+  ].filter(Boolean);
+  node.textContent = `Selected: ${pieces.join(" · ")}`;
+}
+
+function projectCard(project, handlers, selectedProjectId) {
   const card = document.createElement("div");
   const statusClass = /active|agreement|approved/i.test(project.status || "") ? "active" : "closed";
-  card.className = `project-card ${statusClass}`;
+  const selectedClass = project.projectId && project.projectId === selectedProjectId ? "selected" : "";
+  card.className = `project-card ${statusClass} ${selectedClass}`.trim();
 
   const title = document.createElement("div");
   title.className = "project-title";
@@ -84,12 +116,12 @@ function projectCard(project, handlers) {
 
   const actions = document.createElement("div");
   actions.className = "project-actions";
-  const exportButton = document.createElement("button");
-  exportButton.type = "button";
-  exportButton.className = "btn-export";
-  exportButton.textContent = "Export JSON";
-  exportButton.addEventListener("click", () => handlers.onExport(project));
-  actions.append(exportButton);
+  const selectButton = document.createElement("button");
+  selectButton.type = "button";
+  selectButton.className = "btn-select";
+  selectButton.textContent = selectedClass ? "Selected" : "Select";
+  selectButton.addEventListener("click", () => handlers.onSelect(project));
+  actions.append(selectButton);
 
   const displayUrl = project.links?.Display || project.links?.display;
   if (displayUrl) {

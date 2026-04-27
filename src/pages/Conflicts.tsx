@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -32,15 +33,13 @@ export function ConflictsPage() {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const [params, setParams] = useSearchParams();
 
   const dirMap = useMemo(() => new Map<string, any>((directors ?? []).map((d: any) => [d._id, d])), [directors]);
   const augmented: Augmented[] = useMemo(() => (conflicts ?? []).map((c: any) => {
     const d = dirMap.get(c.directorId);
     return { ...c, _directorName: d ? `${d.firstName} ${d.lastName}` : "Unknown" };
   }), [conflicts, dirMap]);
-
-  if (society === undefined) return <div className="page">Loading…</div>;
-  if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
     if (!directors || directors.length === 0) {
@@ -58,6 +57,20 @@ export function ConflictsPage() {
     setOpen(true);
   };
   const save = async () => { await create({ societyId: society._id, ...form }); setOpen(false); };
+
+  useEffect(() => {
+    if (!society || open || directors === undefined) return;
+    if (params.get("intent") !== "disclose") return;
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("intent");
+      return next;
+    }, { replace: true });
+    openNew();
+  }, [directors, open, params, setParams, society]);
+
+  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === null) return <SeedPrompt />;
 
   return (
     <div className="page">
@@ -82,6 +95,8 @@ export function ConflictsPage() {
         searchPlaceholder="Search director, contract, nature…"
         searchExtraFields={[(r) => r.natureOfInterest]}
         defaultSort={{ columnId: "declaredAt", dir: "desc" }}
+        viewsKey="conflicts"
+        sharedViewsContext={{ societyId: society._id, nameSingular: "conflict" }}
         columns={[
           { id: "director", header: "Director", sortable: true, accessor: (r) => r._directorName, render: (r) => <strong>{r._directorName}</strong> },
           { id: "declaredAt", header: "Declared", sortable: true, accessor: (r) => r.declaredAt, render: (r) => <span className="mono">{formatDate(r.declaredAt)}</span> },

@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { query } from "./_generated/server";
+import { query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 
@@ -10,6 +9,21 @@ export const EXPORTABLE_TABLES = [
   "organizationAddresses",
   "organizationRegistrations",
   "organizationIdentifiers",
+  "roleHolders",
+  "rightsClasses",
+  "rightsholdingTransfers",
+  "legalTemplateDataFields",
+  "legalTemplates",
+  "legalPrecedents",
+  "legalPrecedentRuns",
+  "generatedLegalDocuments",
+  "legalSigners",
+  "formationRecords",
+  "nameSearchItems",
+  "entityAmendments",
+  "annualMaintenanceRecords",
+  "jurisdictionMetadata",
+  "supportLogs",
   "users",
   "apiClients",
   "apiTokens",
@@ -44,6 +58,7 @@ export const EXPORTABLE_TABLES = [
   "filingBotRuns",
   "aiAgentRuns",
   "aiAgentAuditEvents",
+  "recordLayouts",
   "workflows",
   "workflowPackages",
   "pendingEmails",
@@ -73,6 +88,8 @@ export const EXPORTABLE_TABLES = [
   "volunteerScreenings",
   "meetings",
   "minutes",
+  "meetingMaterials",
+  "documentComments",
   "meetingAttendanceRecords",
   "motionEvidence",
   "filings",
@@ -80,6 +97,7 @@ export const EXPORTABLE_TABLES = [
   "grantApplications",
   "grantReports",
   "grantTransactions",
+  "grantEmployeeLinks",
   "deadlines",
   "commitments",
   "commitmentEvents",
@@ -97,6 +115,8 @@ export const EXPORTABLE_TABLES = [
   "invitations",
   "inspections",
   "directorAttestations",
+  "complianceRemediations",
+  "expenseReports",
   "writtenResolutions",
   "agmRuns",
   "noticeDeliveries",
@@ -127,6 +147,8 @@ export const EXPORTABLE_TABLES = [
 
 const EXPORTABLE_SET = new Set<string>(EXPORTABLE_TABLES);
 const REDACTED_FIELDS = new Set(["secretEncrypted", "tokenHash", "storageId"]);
+const GLOBAL_TABLES = new Set(["jurisdictionMetadata"]);
+const OPTIONAL_SOCIETY_TABLES = new Set(["legalTemplateDataFields", "legalTemplates", "legalPrecedents"]);
 const NO_BY_SOCIETY_INDEX = new Set(["transcriptionJobs", "electionEligibleVoters", "electionBallots", "viewFields"]);
 const SOCIETY_INDEX_BY_TABLE: Record<string, string> = {
   budgets: "by_society_fy",
@@ -262,6 +284,11 @@ async function paginateForSociety(ctx: any, table: string, societyId: string, pa
     };
   }
 
+  if (GLOBAL_TABLES.has(table)) {
+    const page = await ctx.db.query(table).paginate(paginationOpts);
+    return { ...page, page: page.page.map(sanitizeRow) };
+  }
+
   if (table === "notificationPrefs") {
     const users = await ctx.db.query("users").collect();
     const userIds = new Set(
@@ -275,6 +302,16 @@ async function paginateForSociety(ctx: any, table: string, societyId: string, pa
     const page = await ctx.db
       .query("notificationPrefs")
       .filter((q: any) => q.or(...Array.from(userIds).map((id) => q.eq(q.field("userId"), id))))
+      .paginate(paginationOpts);
+    return { ...page, page: page.page.map(sanitizeRow) };
+  }
+
+  if (OPTIONAL_SOCIETY_TABLES.has(table)) {
+    const page = await ctx.db
+      .query(table)
+      .filter((q: any) =>
+        q.or(q.eq(q.field("societyId"), societyId), q.eq(q.field("societyId"), undefined)),
+      )
       .paginate(paginationOpts);
     return { ...page, page: page.page.map(sanitizeRow) };
   }

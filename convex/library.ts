@@ -1,4 +1,4 @@
-import { query } from "./_generated/server";
+import { query } from "./lib/untypedServer";
 import { v } from "convex/values";
 
 export const overview = query({
@@ -16,10 +16,10 @@ export const overview = query({
         .collect(),
     ]);
 
-    const meetingIds = Array.from(new Set(materials.map((row) => String(row.meetingId))));
+    const meetingIds = Array.from(new Set<string>((materials as any[]).map((row) => String(row.meetingId))));
     const meetings = await Promise.all(meetingIds.map((id) => ctx.db.get(id as any)));
     const meetingById = new Map(meetings.filter(Boolean).map((meeting: any) => [String(meeting._id), meeting]));
-    const documentById = new Map(documents.map((document) => [String(document._id), document]));
+    const documentById = new Map<string, any>((documents as any[]).map((document) => [String(document._id), document]));
 
     const referenceDocuments = documents
       .filter((document) => isLibraryDocument(document, materials))

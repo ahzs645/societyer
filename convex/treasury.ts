@@ -1,4 +1,4 @@
-import { query } from "./_generated/server";
+import { query } from "./lib/untypedServer";
 import { v } from "convex/values";
 
 export const profitAndLoss = query({
@@ -21,7 +21,7 @@ export const profitAndLoss = query({
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
       .collect();
 
-    const accountMap = new Map(accounts.map((a) => [a._id, a]));
+    const accountMap = new Map<string, any>((accounts as any[]).map((a) => [String(a._id), a]));
 
     const incomeByCategory = new Map<string, number>();
     const expenseByCategory = new Map<string, number>();
@@ -29,7 +29,7 @@ export const profitAndLoss = query({
     let totalExpense = 0;
 
     for (const txn of txns) {
-      const account = accountMap.get(txn.accountId);
+      const account = accountMap.get(String(txn.accountId));
       const type = account?.accountType ?? "Other";
       const cat = txn.category ?? type;
       const cents = txn.amountCents;

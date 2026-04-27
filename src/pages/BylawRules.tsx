@@ -78,6 +78,10 @@ export function BylawRulesPage() {
       ),
       quorumType: form.quorumType,
       quorumValue: Number(form.quorumValue),
+      quorumMinimumCount:
+        form.quorumType === "percentage" && form.quorumMinimumCount !== ""
+          ? Number(form.quorumMinimumCount ?? 0)
+          : undefined,
       memberProposalThresholdPct: Number(form.memberProposalThresholdPct),
       memberProposalMinSignatures: Number(form.memberProposalMinSignatures),
       memberProposalLeadDays: Number(form.memberProposalLeadDays),
@@ -122,7 +126,7 @@ export function BylawRulesPage() {
               onClick={async () => {
                 await reset({ societyId: society._id });
                 setForm(null);
-                toast.info("Reverted to BC default rules");
+                toast.info("Reverted to BC Model Bylaw baseline");
               }}
             >
               <RefreshCw size={12} /> Reset to defaults
@@ -138,8 +142,9 @@ export function BylawRulesPage() {
         <div className="bylaw-rules__notice" role="status">
           <Info size={14} aria-hidden="true" />
           <div>
-            No active custom rule set exists yet. The app is using BC default
-            assumptions until you save a bylaw-specific configuration.
+            No active custom rule set exists yet. The app is using BC Model
+            Bylaw baseline assumptions until you save a bylaw-specific
+            configuration.
           </div>
         </div>
       )}
@@ -291,6 +296,22 @@ export function BylawRulesPage() {
                     }
                   />
                 </Field>
+                {form.quorumType === "percentage" && (
+                  <Field label="Minimum quorum count">
+                    <input
+                      className="input"
+                      type="number"
+                      value={form.quorumMinimumCount ?? ""}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          quorumMinimumCount:
+                            e.target.value === "" ? "" : Number(e.target.value),
+                        })
+                      }
+                    />
+                  </Field>
+                )}
               </div>
               <div className="bylaw-rules__switches">
                 <Toggle

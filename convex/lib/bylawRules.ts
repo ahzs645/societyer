@@ -32,8 +32,9 @@ export const DEFAULT_BYLAW_RULES: BylawRuleSetLike = {
   allowProxyVoting: false,
   proxyHolderMustBeMember: false,
   proxyLimitPerGrantorPerMeeting: 1,
-  quorumType: "fixed",
+  quorumType: "percentage",
   quorumValue: 10,
+  quorumMinimumCount: 3,
   memberProposalThresholdPct: 5,
   memberProposalMinSignatures: 1,
   memberProposalLeadDays: 7,
@@ -156,7 +157,8 @@ async function computeRequiredQuorum(
     const eligible = members.filter(
       (member) => member.status === "Active" && member.votingRights,
     ).length;
-    return Math.max(1, Math.ceil(eligible * (rules.quorumValue / 100)));
+    const percentageQuorum = Math.ceil(eligible * (rules.quorumValue / 100));
+    return Math.max(rules.quorumMinimumCount ?? 1, percentageQuorum);
   }
   return undefined;
 }
@@ -167,7 +169,7 @@ function quorumSourceLabel(
 ) {
   const prefix = hasManualOverride ? "Manual quorum override; " : "";
   if (rules.isFallback || !rules._id) {
-    return `${prefix}BC default bylaw rules`;
+    return `${prefix}BC Model Bylaw baseline assumptions`;
   }
   const effective = rules.effectiveFromISO
     ? `, effective ${rules.effectiveFromISO.slice(0, 10)}`

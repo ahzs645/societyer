@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { v } from "convex/values";
 import {
   query,
@@ -7,7 +6,7 @@ import {
   internalMutation,
   internalAction,
   internalQuery,
-} from "./_generated/server";
+} from "./lib/untypedServer";
 import { api, internal } from "./_generated/api";
 import { requireRole } from "./users";
 import { PDFDocument } from "pdf-lib";
@@ -679,7 +678,7 @@ function effectiveDocumentConfig(
       ? UNBC_DOCUMENT_DEFAULTS
       : workflowConfig?.pdfTemplateKey === "unbc_key_access_request"
         ? UNBC_KEY_DOCUMENT_DEFAULTS
-        : {};
+        : {} as any;
   return {
     category: cfg.category ?? workflowConfig?.documentCategory ?? defaults.category,
     tags: Array.isArray(cfg.tags)
@@ -1059,6 +1058,76 @@ export const create = mutation({
       nextRunAtISO: computeNextRunAt(args.trigger),
       createdByUserId: args.actingUserId,
     });
+  },
+});
+
+export const setupGovernanceN8nRecipes = mutation({
+  args: {
+    societyId: v.id("societies"),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, { societyId, actingUserId }) => {
+    await requireRole(ctx, {
+      actingUserId,
+      societyId,
+      required: "Director",
+    });
+    const recipes: RecipeKey[] = [
+      "agm_date_deadlines",
+      "filing_due_notify_officer",
+      "conflict_disclosed_agenda_item",
+    ];
+    const existing = await ctx.db
+      .query("workflows")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+    const created: string[] = [];
+    const updated: string[] = [];
+    for (const recipe of recipes) {
+      const providerConfig = providerConfigForRecipe(recipe);
+      const config = configForRecipe(recipe);
+      const match = existing.find((workflow) => workflow.recipe === recipe);
+      if (match) {
+        await ctx.db.patch(match._id, {
+          provider: "n8n",
+          providerConfig: {
+            ...(match.providerConfig ?? {}),
+            ...(providerConfig ?? {}),
+          },
+          config: {
+            ...(match.config ?? {}),
+            ...config,
+          },
+          nodePreview: computeEffectiveNodePreview(
+            match.nodePreview ?? nodePreviewForRecipe(recipe),
+            providerConfig,
+            config,
+          ),
+          status: match.status === "archived" ? "active" : match.status,
+        });
+        updated.push(RECIPE_LABELS[recipe]);
+        continue;
+      }
+      await ctx.db.insert("workflows", {
+        societyId,
+        recipe,
+        name: RECIPE_LABELS[recipe],
+        status: "active",
+        provider: "n8n",
+        providerConfig,
+        nodePreview: nodePreviewForRecipe(recipe),
+        trigger:
+          recipe === "filing_due_notify_officer"
+            ? { kind: "date_offset", offset: { anchor: "filings.dueDate", daysBefore: 14 } }
+            : { kind: "manual" },
+        config,
+        nextRunAtISO: undefined,
+        createdByUserId: actingUserId,
+      });
+      created.push(RECIPE_LABELS[recipe]);
+    }
+    return { created, updated };
   },
 });
 
@@ -2394,10 +2463,10 @@ function providerConfigForRecipe(recipe: RecipeKey) {
       env("N8N_AGM_DATE_DEADLINES_WEBHOOK_PATH") ??
       "societyer-agm-date-deadlines/societyer%2520webhook/societyer/governance/agm-date-deadlines",
     filing_due_notify_officer:
-      env("N8N_FILING_DUE_NOTIFY_OFFICER_WEBHOOK_PATH") ??
+      env("N8N_FILING_DUE_WEBHOOK_PATH") ??
       "societyer-filing-due-notify-officer/societyer%2520webhook/societyer/governance/filing-due-notify-officer",
     conflict_disclosed_agenda_item:
-      env("N8N_CONFLICT_DISCLOSED_AGENDA_ITEM_WEBHOOK_PATH") ??
+      env("N8N_CONFLICT_AGENDA_WEBHOOK_PATH") ??
       "societyer-conflict-disclosed-agenda-item/societyer%2520webhook/societyer/governance/conflict-disclosed-agenda-item",
     unbc_key_access_request:
       env("N8N_UNBC_KEY_REQUEST_WEBHOOK_PATH") ??

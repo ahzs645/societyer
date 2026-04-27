@@ -6,6 +6,7 @@ import {
   Users,
   UserCog,
   Calendar,
+  CalendarCheck,
   FileText,
   FileJson,
   ClipboardList,
@@ -215,6 +216,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/app/filings", label: "Filings", icon: ClipboardList, color: "orange" },
       { to: "/app/filings/prefill", label: "Filing pre-fill", icon: FileCog, color: "orange", module: "filingPrefill" },
+      { to: "/app/annual-cycle", label: "Annual cycle", icon: CalendarCheck, color: "orange" },
       { to: "/app/formation-maintenance", label: "Formation & annual", icon: Gavel, color: "orange" },
       { to: "/app/policies", label: "Policies", icon: FileText, color: "green" },
       { to: "/app/retention", label: "Records retention", icon: Archive, color: "gray", module: "recordsInspection" },

@@ -7,7 +7,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
-import { ArrowLeft, BadgeDollarSign, ExternalLink, FileText, Pencil, Plus, Save, Trash2, Inbox } from "lucide-react";
+import { ArrowLeft, BadgeDollarSign, ExternalLink, FileText, Pencil, Plus, Save, Trash2, Inbox, Upload } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { centsToDollarInput, formatDate, money } from "../lib/format";
 import {
@@ -22,6 +22,7 @@ import {
   GrantEditorForm,
   GrantReadPanel,
 } from "../features/grants/components/GrantPanels";
+import { readGcosExportFile } from "../lib/gcosExportImport";
 
 export function GrantsPage() {
   const society = useSociety();
@@ -62,8 +63,18 @@ export function GrantsPage() {
     api.documents.list,
     society ? { societyId: society._id } : "skip",
   );
+  const employees = useQuery(
+    api.employees.list,
+    society ? { societyId: society._id } : "skip",
+  );
+  const employeeLinks = useQuery(
+    api.grants.employeeLinks,
+    society ? { societyId: society._id } : "skip",
+  );
   const upsertGrant = useMutation(api.grants.upsertGrant);
   const removeGrant = useMutation(api.grants.removeGrant);
+  const upsertEmployeeLink = useMutation(api.grants.upsertEmployeeLink);
+  const removeEmployeeLink = useMutation(api.grants.removeEmployeeLink);
   const reviewApplication = useMutation(api.grants.reviewApplication);
   const convertApplication = useMutation(api.grants.convertApplication);
   const upsertReport = useMutation(api.grants.upsertReport);
@@ -75,6 +86,36 @@ export function GrantsPage() {
   const [grantDraft, setGrantDraft] = useState<any | null>(null);
   const [reportDraft, setReportDraft] = useState<any | null>(null);
   const [txnDraft, setTxnDraft] = useState<any | null>(null);
+
+  const importGcosGrantFile = async (file: File | undefined) => {
+    if (!file) return;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10_000);
+    try {
+      const text = await readGcosExportFile(file);
+      const parsed = JSON.parse(text);
+      const snapshot = parsed?.snapshot ?? parsed;
+      const response = await fetch("/api/v1/browser-connectors/connectors/gcos/import-exported-snapshot", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          societyId: society?._id,
+          snapshot,
+          normalizedGrant: parsed?.normalizedGrant,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.message ?? payload?.error ?? `Import failed with ${response.status}`);
+      const imported = payload.data?.import;
+      toast.success(imported?.created ? "GCOS grant imported" : "GCOS grant updated", payload.data?.normalizedGrant?.title ?? imported?.grantId);
+    } catch (error: any) {
+      const aborted = error?.name === "AbortError";
+      toast.error(aborted ? "Societyer API did not respond. Make sure the local API server is running for this app URL." : error?.message ?? "Could not import GCOS export");
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  };
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -100,6 +141,18 @@ export function GrantsPage() {
             <Link className="btn-action" to="/app/imports">
               <FileText size={12} /> Review imports
             </Link>
+            <label className="btn-action" style={{ cursor: "pointer" }}>
+              <Upload size={12} /> Import GCOS
+              <input
+                type="file"
+                accept="application/json,application/zip,.json,.zip"
+                onChange={(event) => {
+                  void importGcosGrantFile(event.target.files?.[0]);
+                  event.currentTarget.value = "";
+                }}
+                style={{ display: "none" }}
+              />
+            </label>
             <button
               className="btn-action"
               onClick={() =>
@@ -228,6 +281,8 @@ export function GrantsPage() {
         searchExtraFields={[
           (row) => (row.sourceExternalIds ?? []).join(" "),
           (row) => (row.riskFlags ?? []).join(" "),
+          (row) => (row.nextSteps ?? []).map((step: any) => [step.label, step.status, step.reason].filter(Boolean).join(" ")).join(" "),
+          (row) => row.nextAction,
           (row) => row.sourceNotes,
         ]}
         defaultSort={{ columnId: "createdAtISO", dir: "desc" }}
@@ -281,6 +336,13 @@ export function GrantsPage() {
             align: "right",
             accessor: (row) => row.amountAwardedCents ?? 0,
             render: (row) => <span className="mono">{money(row.amountAwardedCents)}</span>,
+          },
+          {
+            id: "nextAction",
+            header: "Next action",
+            sortable: true,
+            accessor: (row) => row.nextAction ?? "",
+            render: (row) => row.nextAction ? <span>{row.nextAction}</span> : <span className="muted">—</span>,
           },
           {
             id: "applicationDueDate",
@@ -379,6 +441,8 @@ export function GrantsPage() {
         rowKey={(row) => String(row._id)}
         searchPlaceholder="Search grant reports…"
         defaultSort={{ columnId: "dueAtISO", dir: "asc" }}
+        viewsKey="grant-reports"
+        sharedViewsContext={{ societyId: society._id, nameSingular: "grant" }}
         columns={[
           { id: "grantTitle", header: "Grant", sortable: true, accessor: (row) => row.grantTitle, render: (row) => <strong>{row.grantTitle}</strong> },
           { id: "title", header: "Report", sortable: true, accessor: (row) => row.title },
@@ -437,9 +501,25 @@ export function GrantsPage() {
             grant={selectedGrant}
             documents={documents ?? []}
             reports={reports ?? []}
+            employees={employees ?? []}
+            employeeLinks={employeeLinks ?? []}
             committee={committeeById.get(String(selectedGrant.committeeId))}
             owner={(users ?? []).find((user) => String(user._id) === String(selectedGrant.boardOwnerUserId))}
             account={accountById.get(String(selectedGrant.linkedFinancialAccountId))}
+            onLinkEmployee={async (employeeId) => {
+              await upsertEmployeeLink({
+                societyId: society._id,
+                grantId: selectedGrant._id,
+                employeeId,
+                patch: { status: "hired", source: "manual" },
+                actingUserId,
+              });
+              toast.success("Employee linked to grant");
+            }}
+            onUnlinkEmployee={async (linkId) => {
+              await removeEmployeeLink({ id: linkId, actingUserId });
+              toast.success("Employee unlinked from grant");
+            }}
           />
         )}
       </Drawer>
@@ -588,6 +668,7 @@ export function GrantsPage() {
 export function GrantDetailPage() {
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
+  const actingUserId = useCurrentUserId() ?? undefined;
   const grant = useQuery(api.grants.get, id ? { id } : "skip");
   const reports = useQuery(
     api.grants.reports,
@@ -609,6 +690,16 @@ export function GrantDetailPage() {
     api.documents.list,
     society ? { societyId: society._id } : "skip",
   );
+  const employees = useQuery(
+    api.employees.list,
+    society ? { societyId: society._id } : "skip",
+  );
+  const employeeLinks = useQuery(
+    api.grants.employeeLinks,
+    society ? { societyId: society._id, grantId: id } : "skip",
+  );
+  const upsertEmployeeLink = useMutation(api.grants.upsertEmployeeLink);
+  const removeEmployeeLink = useMutation(api.grants.removeEmployeeLink);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -654,9 +745,23 @@ export function GrantDetailPage() {
         grant={grant}
         documents={documents ?? []}
         reports={reports ?? []}
+        employees={employees ?? []}
+        employeeLinks={employeeLinks ?? []}
         committee={committee}
         owner={owner}
         account={account}
+        onLinkEmployee={async (employeeId) => {
+          await upsertEmployeeLink({
+            societyId: society._id,
+            grantId: grant._id,
+            employeeId,
+            patch: { status: "hired", source: "manual" },
+            actingUserId,
+          });
+        }}
+        onUnlinkEmployee={async (linkId) => {
+          await removeEmployeeLink({ id: linkId, actingUserId });
+        }}
       />
     </div>
   );

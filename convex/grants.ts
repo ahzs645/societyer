@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query } from "./lib/untypedServer";
 import { requireRole } from "./users";
 import { requireEnabledModule } from "./lib/moduleSettings";
 
@@ -35,6 +35,28 @@ const grantComplianceFlag = v.object({
   status: v.string(),
   notes: v.optional(v.string()),
   requirementId: v.optional(v.string()),
+});
+
+const grantNextStep = v.object({
+  id: v.string(),
+  label: v.string(),
+  status: v.string(),
+  priority: v.string(),
+  dueHint: v.optional(v.string()),
+  source: v.optional(v.string()),
+  actionLabel: v.optional(v.string()),
+  reason: v.optional(v.string()),
+});
+
+const grantEmployeeLinkPatch = v.object({
+  role: v.optional(v.string()),
+  status: v.optional(v.string()),
+  source: v.optional(v.string()),
+  fundedHoursPerWeek: v.optional(v.number()),
+  fundedHourlyWageCents: v.optional(v.number()),
+  startDate: v.optional(v.string()),
+  endDate: v.optional(v.string()),
+  notes: v.optional(v.string()),
 });
 
 const grantContact = v.object({
@@ -108,6 +130,77 @@ export const reports = query({
       .query("grantReports")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
       .collect(),
+});
+
+export const employeeLinks = query({
+  args: { societyId: v.id("societies"), grantId: v.optional(v.id("grants")) },
+  returns: v.any(),
+  handler: async (ctx, { societyId, grantId }) => {
+    if (grantId) {
+      return await ctx.db
+        .query("grantEmployeeLinks")
+        .withIndex("by_grant", (q) => q.eq("grantId", grantId))
+        .collect();
+    }
+    return await ctx.db
+      .query("grantEmployeeLinks")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+  },
+});
+
+export const upsertEmployeeLink = mutation({
+  args: {
+    id: v.optional(v.id("grantEmployeeLinks")),
+    societyId: v.id("societies"),
+    grantId: v.id("grants"),
+    employeeId: v.id("employees"),
+    patch: v.optional(grantEmployeeLinkPatch),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, { id, societyId, grantId, employeeId, patch, actingUserId }) => {
+    await requireRole(ctx, { actingUserId, societyId, required: "Director" });
+    const now = isoNow();
+    if (id) {
+      await ctx.db.patch(id, { ...(patch ?? {}), updatedAtISO: now });
+      return id;
+    }
+    const existing = await ctx.db
+      .query("grantEmployeeLinks")
+      .withIndex("by_grant_employee", (q) => q.eq("grantId", grantId).eq("employeeId", employeeId))
+      .first();
+    if (existing) {
+      await ctx.db.patch(existing._id, { ...(patch ?? {}), updatedAtISO: now });
+      return existing._id;
+    }
+    return await ctx.db.insert("grantEmployeeLinks", {
+      societyId,
+      grantId,
+      employeeId,
+      status: patch?.status ?? "hired",
+      source: patch?.source ?? "manual",
+      role: patch?.role,
+      fundedHoursPerWeek: patch?.fundedHoursPerWeek,
+      fundedHourlyWageCents: patch?.fundedHourlyWageCents,
+      startDate: patch?.startDate,
+      endDate: patch?.endDate,
+      notes: patch?.notes,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+  },
+});
+
+export const removeEmployeeLink = mutation({
+  args: { id: v.id("grantEmployeeLinks"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
+  handler: async (ctx, { id, actingUserId }) => {
+    const link = await ctx.db.get(id);
+    if (!link) return;
+    await requireRole(ctx, { actingUserId, societyId: link.societyId, required: "Director" });
+    await ctx.db.delete(id);
+  },
 });
 
 export const summary = query({
@@ -301,6 +394,7 @@ export const upsertGrant = mutation({
     useOfFunds: v.optional(v.array(grantUseOfFundsLine)),
     timelineEvents: v.optional(v.array(grantTimelineEvent)),
     complianceFlags: v.optional(v.array(grantComplianceFlag)),
+    nextSteps: v.optional(v.array(grantNextStep)),
     contacts: v.optional(v.array(grantContact)),
     answerLibrary: v.optional(v.array(grantAnswerLibraryItem)),
     title: v.string(),
@@ -387,6 +481,13 @@ export const importGcosProjectSnapshot = mutation({
       sensitivity: "contains-government-funding-records",
       riskFlags: ["Review imported GCOS data before relying on deadlines or amounts."],
       keyFacts: Array.isArray(normalizedGrant?.keyFacts) ? normalizedGrant.keyFacts.filter((value: unknown) => typeof value === "string") : undefined,
+      requirements: Array.isArray(normalizedGrant?.requirements) ? normalizedGrant.requirements : undefined,
+      timelineEvents: Array.isArray(normalizedGrant?.timelineEvents) ? normalizedGrant.timelineEvents : undefined,
+      complianceFlags: Array.isArray(normalizedGrant?.complianceFlags) ? normalizedGrant.complianceFlags : undefined,
+      useOfFunds: Array.isArray(normalizedGrant?.useOfFunds) ? normalizedGrant.useOfFunds : undefined,
+      nextSteps: Array.isArray(normalizedGrant?.nextSteps) ? normalizedGrant.nextSteps : undefined,
+      nextAction: typeof normalizedGrant?.nextAction === "string" ? normalizedGrant.nextAction : undefined,
+      nextReportDueAtISO: typeof normalizedGrant?.nextReportDueAtISO === "string" ? normalizedGrant.nextReportDueAtISO : undefined,
       sourceNotes: typeof normalizedGrant?.sourceNotes === "string" ? normalizedGrant.sourceNotes : undefined,
       notes: `Imported from GCOS at ${now}. Sensitive employee and banking fields were not imported.`,
     };

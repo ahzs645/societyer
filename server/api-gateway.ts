@@ -937,7 +937,11 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     asyncHandler(async (req, res) => {
       const body = stripActor(req.body ?? {});
       const snapshot = body.snapshot ?? body;
-      const normalizedGrant = body.normalizedGrant ?? (snapshot as any)?.normalizedGrant ?? normalizeGcosExportedSnapshot(snapshot);
+      const normalizedGrant = dropUndefined({
+        ...(normalizeGcosExportedSnapshot(snapshot) ?? {}),
+        ...((snapshot as any)?.normalizedGrant ?? {}),
+        ...(body.normalizedGrant ?? {}),
+      });
       if (!normalizedGrant) {
         throw httpError(400, "gcos_export_invalid", "GCOS export JSON must include a snapshot or normalizedGrant.");
       }

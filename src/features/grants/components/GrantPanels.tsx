@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ExternalLink, ListChecks, Plus, Trash2 } from "lucide-react";
 import { Badge, Field, InspectorNote } from "../../../components/ui";
 import { formatDate, money } from "../../../lib/format";
@@ -11,6 +11,7 @@ import {
   asAnswerLibrary,
   asComplianceFlags,
   asContacts,
+  asNextSteps,
   asRequirements,
   asTimelineEvents,
   asUseOfFunds,
@@ -28,6 +29,10 @@ export function GrantReadPanel({
   committee,
   owner,
   account,
+  employees = [],
+  employeeLinks = [],
+  onLinkEmployee,
+  onUnlinkEmployee,
 }: {
   grant: any;
   documents: any[];
@@ -35,6 +40,10 @@ export function GrantReadPanel({
   committee?: any;
   owner?: any;
   account?: any;
+  employees?: any[];
+  employeeLinks?: any[];
+  onLinkEmployee?: (employeeId: string) => void | Promise<void>;
+  onUnlinkEmployee?: (linkId: string) => void | Promise<void>;
 }) {
   return (
     <div style={{ display: "grid", gap: 12 }}>
@@ -42,6 +51,10 @@ export function GrantReadPanel({
         grant={grant}
         documents={documents}
         reports={reports}
+        employees={employees}
+        employeeLinks={employeeLinks}
+        onLinkEmployee={onLinkEmployee}
+        onUnlinkEmployee={onUnlinkEmployee}
       />
       <DossierSection title="Administrative Details">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 8 }}>
@@ -494,10 +507,18 @@ export function GrantDossierStack({
   grant,
   documents,
   reports,
+  employees = [],
+  employeeLinks = [],
+  onLinkEmployee,
+  onUnlinkEmployee,
 }: {
   grant: any;
   documents: any[];
   reports: any[];
+  employees?: any[];
+  employeeLinks?: any[];
+  onLinkEmployee?: (employeeId: string) => void | Promise<void>;
+  onUnlinkEmployee?: (linkId: string) => void | Promise<void>;
 }) {
   const hasDossierData =
     !!(grant.id ?? grant._id) ||
@@ -505,6 +526,8 @@ export function GrantDossierStack({
     asUseOfFunds(grant.useOfFunds).length > 0 ||
     asTimelineEvents(grant.timelineEvents).length > 0 ||
     asComplianceFlags(grant.complianceFlags).length > 0 ||
+    asNextSteps(grant.nextSteps).length > 0 ||
+    employeeLinks.some((link) => String(link.grantId) === String(grant._id ?? grant.id)) ||
     asContacts(grant.contacts).length > 0 ||
     asAnswerLibrary(grant.answerLibrary).length > 0 ||
     cleanStringList(grant.keyFacts).length > 0 ||
@@ -515,6 +538,15 @@ export function GrantDossierStack({
   return (
     <div style={{ display: "grid", gap: 12, margin: "0 0 16px" }}>
       <GrantDossierSummary grant={grant} />
+      <GrantNextStepsPanel grant={grant} />
+      <GrantFundedEmployeesPanel
+        grant={grant}
+        employees={employees}
+        employeeLinks={employeeLinks}
+        onLinkEmployee={onLinkEmployee}
+        onUnlinkEmployee={onUnlinkEmployee}
+      />
+      <GrantFundingDeltaPanel grant={grant} />
       <GrantEvidencePacketMap grant={grant} documents={documents} />
       <GrantDeadlineTimeline grant={grant} reports={reports} />
       <GrantUseOfFundsPanel grant={grant} />
@@ -567,6 +599,145 @@ function GrantDossierSummary({ grant }: { grant: any }) {
           <div>{grant.nextAction}</div>
         </div>
       )}
+    </DossierSection>
+  );
+}
+
+function GrantFundedEmployeesPanel({
+  grant,
+  employees,
+  employeeLinks,
+  onLinkEmployee,
+  onUnlinkEmployee,
+}: {
+  grant: any;
+  employees: any[];
+  employeeLinks: any[];
+  onLinkEmployee?: (employeeId: string) => void | Promise<void>;
+  onUnlinkEmployee?: (linkId: string) => void | Promise<void>;
+}) {
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const grantId = String(grant._id ?? grant.id ?? "");
+  const links = employeeLinks.filter((link) => String(link.grantId) === grantId);
+  const linkedEmployeeIds = new Set(links.map((link) => String(link.employeeId)));
+  const availableEmployees = employees.filter((employee) => !linkedEmployeeIds.has(String(employee._id)));
+  const approvedParticipants = findKeyFactNumber(grant.keyFacts, /approved participants:\s*(\d+(?:\.\d+)?)/i);
+  const remaining = approvedParticipants === undefined ? undefined : Math.max(0, approvedParticipants - links.length);
+
+  if (!links.length && !onLinkEmployee) return null;
+
+  const linkSelected = async () => {
+    if (!selectedEmployeeId || !onLinkEmployee) return;
+    await onLinkEmployee(selectedEmployeeId);
+    setSelectedEmployeeId("");
+  };
+
+  return (
+    <DossierSection title="Funded Employees">
+      <div style={{ display: "grid", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Badge tone={links.length ? "success" : "warn"}>{links.length} linked</Badge>
+          {approvedParticipants !== undefined && <Badge tone={remaining === 0 ? "success" : "warn"}>{remaining} participant slot{remaining === 1 ? "" : "s"} open</Badge>}
+        </div>
+        {links.length > 0 ? (
+          <div style={{ display: "grid", gap: 8 }}>
+            {links.map((link) => {
+              const employee = employees.find((item) => String(item._id) === String(link.employeeId));
+              const name = employee ? `${employee.firstName} ${employee.lastName}` : "Linked employee";
+              return (
+                <div key={String(link._id)} style={employeeLinkStyle}>
+                  <div>
+                    <strong>{name}</strong>
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {[link.role ?? employee?.role, link.status, employee?.startDate ? `Starts ${formatDate(employee.startDate)}` : undefined].filter(Boolean).join(" · ")}
+                    </div>
+                  </div>
+                  {onUnlinkEmployee && (
+                    <button className="btn btn--ghost btn--sm" type="button" onClick={() => onUnlinkEmployee(String(link._id))}>
+                      Unlink
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="muted" style={{ fontSize: 12 }}>No Societyer employees are linked to this grant yet.</div>
+        )}
+        {onLinkEmployee && availableEmployees.length > 0 && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <select className="input" style={{ flex: "1 1 220px" }} value={selectedEmployeeId} onChange={(event) => setSelectedEmployeeId(event.target.value)}>
+              <option value="">Select an employee to link</option>
+              {availableEmployees.map((employee) => (
+                <option key={String(employee._id)} value={String(employee._id)}>
+                  {employee.firstName} {employee.lastName} · {employee.role}
+                </option>
+              ))}
+            </select>
+            <button className="btn btn--accent" type="button" disabled={!selectedEmployeeId} onClick={linkSelected}>
+              Link employee
+            </button>
+          </div>
+        )}
+      </div>
+    </DossierSection>
+  );
+}
+
+function GrantNextStepsPanel({ grant }: { grant: any }) {
+  const steps = asNextSteps(grant.nextSteps).filter((step) => step.label.trim());
+  if (steps.length === 0) return null;
+
+  return (
+    <DossierSection title="Recommended Next Steps">
+      <div style={{ display: "grid", gap: 8 }}>
+        {steps.map((step) => (
+          <div key={step.id} style={nextStepStyle}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ minWidth: 0 }}>
+                <strong>{step.label}</strong>
+                {step.reason && <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>{step.reason}</div>}
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <Badge tone={nextStepTone(step.status)}>{step.status}</Badge>
+                <Badge tone={priorityTone(step.priority)}>{step.priority}</Badge>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, fontSize: 12 }}>
+              {step.actionLabel && <span className="cell-tag">{step.actionLabel}</span>}
+              {step.dueHint && <span className="muted">{step.dueHint}</span>}
+              {step.source && <span className="muted">Source: {step.source}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </DossierSection>
+  );
+}
+
+function GrantFundingDeltaPanel({ grant }: { grant: any }) {
+  const requested = typeof grant.amountRequestedCents === "number" ? grant.amountRequestedCents : undefined;
+  const awarded = typeof grant.amountAwardedCents === "number" ? grant.amountAwardedCents : undefined;
+  if (requested === undefined || awarded === undefined) return null;
+
+  const delta = awarded - requested;
+  const requestedWeeks = findKeyFactNumber(grant.keyFacts, /requested weeks changed from\s+(\d+(?:\.\d+)?)\s+to/i);
+  const approvedWeeks = findKeyFactNumber(grant.keyFacts, /requested weeks changed from\s+\d+(?:\.\d+)?\s+to\s+(\d+(?:\.\d+)?)/i);
+
+  return (
+    <DossierSection title="Funding Delta">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))", gap: 8 }}>
+        <DossierFact label="Requested" value={money(requested)} />
+        <DossierFact label="Approved" value={money(awarded)} />
+        <DossierFact label="Difference">
+          <span className="mono" style={{ color: delta < 0 ? "var(--danger)" : "var(--success)" }}>
+            {money(delta)}
+          </span>
+        </DossierFact>
+        {requestedWeeks !== undefined && approvedWeeks !== undefined && (
+          <DossierFact label="Approved duration" value={`${requestedWeeks} weeks requested -> ${approvedWeeks} weeks approved`} />
+        )}
+      </div>
     </DossierSection>
   );
 }
@@ -824,6 +995,29 @@ function timelineTone(status: unknown, date: string) {
   return "info";
 }
 
+function nextStepTone(status: unknown) {
+  const text = String(status ?? "").toLowerCase();
+  if (/(done|complete|ready)/.test(text)) return "success";
+  if (/(need|missing|overdue)/.test(text)) return "danger";
+  if (/(review|upcoming|scheduled)/.test(text)) return "warn";
+  return "info";
+}
+
+function priorityTone(priority: unknown) {
+  const text = String(priority ?? "").toLowerCase();
+  if (text === "high") return "danger";
+  if (text === "medium") return "warn";
+  return "info";
+}
+
+function findKeyFactNumber(value: unknown, pattern: RegExp) {
+  for (const fact of cleanStringList(value)) {
+    const match = fact.match(pattern);
+    if (match?.[1]) return Number(match[1]);
+  }
+  return undefined;
+}
+
 function grantPacketKey(grant: any) {
   const title = String(grant.title ?? "").toLowerCase();
   if (title.includes("canada summer jobs")) return "canada summer jobs";
@@ -961,6 +1155,24 @@ const factBoxStyle = {
   background: "var(--bg-base)",
   padding: 10,
   minWidth: 0,
+};
+
+const nextStepStyle = {
+  border: "1px solid var(--border)",
+  borderRadius: "var(--r-sm)",
+  background: "var(--bg-base)",
+  padding: 10,
+};
+
+const employeeLinkStyle = {
+  border: "1px solid var(--border)",
+  borderRadius: "var(--r-sm)",
+  background: "var(--bg-base)",
+  padding: 10,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
 };
 
 const detailPanelStyle = {

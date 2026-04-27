@@ -56,6 +56,7 @@ export function FinancialYearDetailPage() {
 
   return (
     <RecordShowPage
+      layout={{ societyId: society._id, pageId: "financial-year-detail", objectId: fiscalYear }}
       title={`FY ${fiscalYear} financials`}
       subtitle={financial ? `Period end ${formatDate(financial.periodEnd)}` : "Import evidence without an approved financial row."}
       icon={<PiggyBank size={16} />}

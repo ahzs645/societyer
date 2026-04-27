@@ -32,6 +32,17 @@ type GrantComplianceFlag = {
   requirementId?: string;
 };
 
+type GrantNextStep = {
+  id: string;
+  label: string;
+  status: string;
+  priority: string;
+  dueHint?: string;
+  source?: string;
+  actionLabel?: string;
+  reason?: string;
+};
+
 type GrantContact = {
   role: string;
   name?: string;
@@ -175,6 +186,24 @@ function sanitizeComplianceFlags(value: unknown) {
   return asComplianceFlags(value).filter((item) => item.label.trim());
 }
 
+export function asNextSteps(value: unknown): GrantNextStep[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item: any, index) => ({
+    id: optionalString(item?.id) ?? `next-step-${index + 1}`,
+    label: String(item?.label ?? ""),
+    status: String(item?.status ?? "Open"),
+    priority: String(item?.priority ?? "Medium"),
+    dueHint: optionalString(item?.dueHint),
+    source: optionalString(item?.source),
+    actionLabel: optionalString(item?.actionLabel),
+    reason: optionalString(item?.reason),
+  }));
+}
+
+function sanitizeNextSteps(value: unknown) {
+  return asNextSteps(value).filter((item) => item.label.trim());
+}
+
 export function asContacts(value: unknown): GrantContact[] {
   if (!Array.isArray(value)) return [];
   return value.map((item: any) => ({
@@ -296,6 +325,7 @@ export function buildGrantPayload(draft: any, societyId: any, actingUserId: any)
     useOfFunds: sanitizeUseOfFunds(draft.useOfFunds),
     timelineEvents: sanitizeTimelineEvents(draft.timelineEvents),
     complianceFlags: sanitizeComplianceFlags(draft.complianceFlags),
+    nextSteps: sanitizeNextSteps(draft.nextSteps),
     contacts: sanitizeContacts(draft.contacts),
     answerLibrary: sanitizeAnswerLibrary(draft.answerLibrary),
     title: draft.title,
@@ -340,6 +370,7 @@ export function newGrantDraft(societyId: any) {
     useOfFunds: [],
     timelineEvents: [],
     complianceFlags: [],
+    nextSteps: [],
     contacts: [],
     answerLibrary: [],
   };
@@ -362,6 +393,7 @@ export function grantToDraft(row: any) {
     useOfFunds: asUseOfFunds(row.useOfFunds),
     timelineEvents: asTimelineEvents(row.timelineEvents),
     complianceFlags: asComplianceFlags(row.complianceFlags),
+    nextSteps: asNextSteps(row.nextSteps),
     contacts: asContacts(row.contacts),
     answerLibrary: asAnswerLibrary(row.answerLibrary),
   };

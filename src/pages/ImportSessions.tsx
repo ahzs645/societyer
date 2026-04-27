@@ -181,71 +181,107 @@ export function ImportSessionsPage() {
   };
 
   const setRecordStatus = async (record: any, status: "Pending" | "Approved" | "Rejected") => {
-    await updateRecord({ recordId: record._id, status });
-    toast.success(`Record ${status.toLowerCase()}`, record.title);
+    try {
+      await updateRecord({ recordId: record._id, status });
+      toast.success(`Record ${status.toLowerCase()}`, record.title);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not update import record");
+    }
   };
 
   const bulkStatus = async (status: "Approved" | "Rejected" | "Pending") => {
     if (!session) return;
-    const result = await bulkSetStatus({
-      sessionId: session._id,
-      status,
-      recordIds: filteredRecords.map((record: any) => record._id),
-    });
-    toast.success(`${result.updated} records updated`, status);
+    try {
+      const result = await bulkSetStatus({
+        sessionId: session._id,
+        status,
+        recordIds: filteredRecords.map((record: any) => record._id),
+      });
+      toast.success(`${result.updated} records updated`, status);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not bulk-update import records");
+    }
   };
 
   const approveImportReadyInsurance = async () => {
     if (!session) return;
     const insuranceRecords = records.filter(isImportReadyInsuranceRecord);
-    const result = await bulkSetStatus({
-      sessionId: session._id,
-      status: "Approved",
-      recordIds: insuranceRecords.map((record: any) => record._id),
-    });
-    setKindFilter("insurancePolicy");
-    setStatusFilter("Approved");
-    toast.success(`${result.updated} insurance records approved`, "Apply sections when ready to publish them to Insurance");
+    try {
+      const result = await bulkSetStatus({
+        sessionId: session._id,
+        status: "Approved",
+        recordIds: insuranceRecords.map((record: any) => record._id),
+      });
+      setKindFilter("insurancePolicy");
+      setStatusFilter("Approved");
+      toast.success(`${result.updated} insurance records approved`, "Apply sections when ready to publish them to Insurance");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not approve insurance records");
+    }
   };
 
   const runOrgHistoryApply = async () => {
     if (!session) return;
-    const result = await applyToOrgHistory({ sessionId: session._id });
-    toast.success("Approved records applied", `${result.sources} source records, ${result.items} history records`);
+    try {
+      const result = await applyToOrgHistory({ sessionId: session._id });
+      toast.success("Approved records applied", `${result.sources} source records, ${result.items} history records`);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not apply org history imports");
+    }
   };
 
   const runMeetingApply = async () => {
     if (!session) return;
-    const result = await applyMeetings({ sessionId: session._id });
-    toast.success("Meeting drafts created", `${result.meetings} meetings, ${result.motions} motions${result.existing ? `, ${result.existing} already existed` : ""}`);
+    try {
+      const result = await applyMeetings({ sessionId: session._id });
+      toast.success("Meeting drafts created", `${result.meetings} meetings, ${result.motions} motions${result.existing ? `, ${result.existing} already existed` : ""}`);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not create meeting drafts");
+    }
   };
 
   const runMeetingBackfill = async () => {
     if (!session) return;
-    const result = await backfillMeetings({ sessionId: session._id });
-    toast.success("Meeting references refreshed", `${result.meetings} meetings, ${result.minutes} minutes, ${result.documents} source links`);
+    try {
+      const result = await backfillMeetings({ sessionId: session._id });
+      toast.success("Meeting references refreshed", `${result.meetings} meetings, ${result.minutes} minutes, ${result.documents} source links`);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not refresh meeting references");
+    }
   };
 
   const runDocumentApply = async () => {
     if (!session) return;
-    const result = await applyDocuments({ sessionId: session._id });
-    toast.success("Document candidates created", `${result.documents} metadata records`);
+    try {
+      const result = await applyDocuments({ sessionId: session._id });
+      toast.success("Document candidates created", `${result.documents} metadata records`);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not create document candidates");
+    }
   };
 
   const runSectionApply = async () => {
     if (!session) return;
-    const result = await applySections({ sessionId: session._id });
-    const byKind = Object.entries(result.byKind ?? {})
-      .map(([kind, count]) => `${count} ${kind}`)
-      .join(", ");
-    toast.success("Section records applied", byKind || `${result.total} records`);
+    try {
+      const result = await applySections({ sessionId: session._id });
+      const byKind = Object.entries(result.byKind ?? {})
+        .map(([kind, count]) => `${count} ${kind}`)
+        .join(", ");
+      toast.success("Section records applied", byKind || `${result.total} records`);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not apply section imports");
+    }
   };
 
   const deleteSession = async () => {
     if (!session) return;
-    await removeSession({ sessionId: session._id });
-    setSelectedId(null);
-    toast.success("Import session removed", session.name);
+    try {
+      await removeSession({ sessionId: session._id });
+      setSelectedId(null);
+      toast.success("Import session removed", session.name);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not remove import session");
+    }
   };
 
   const runPaperlessMeetingScan = async () => {
@@ -637,16 +673,20 @@ export function ImportSessionsPage() {
         onClose={() => setRecordForm(null)}
         onChange={setRecordForm}
         onSave={async () => {
-          const next = recordPayloadFromForm(recordForm);
-          await updateRecord({
-            recordId: recordForm._id,
-            status: recordForm.status,
-            reviewNotes: recordForm.reviewNotes,
-            payload: next.payload,
-            sourceExternalIds: next.sourceExternalIds,
-          });
-          setRecordForm(null);
-          toast.success("Import record updated");
+          try {
+            const next = recordPayloadFromForm(recordForm);
+            await updateRecord({
+              recordId: recordForm._id,
+              status: recordForm.status,
+              reviewNotes: recordForm.reviewNotes,
+              payload: next.payload,
+              sourceExternalIds: next.sourceExternalIds,
+            });
+            setRecordForm(null);
+            toast.success("Import record updated");
+          } catch (error: any) {
+            toast.error(error?.message ?? "Could not save import record");
+          }
         }}
       />
     </div>
@@ -1004,18 +1044,20 @@ function updatePayload(form: any, onChange: (form: any) => void, patch: any) {
 function parseJsonArray(value: string) {
   try {
     const parsed = JSON.parse(value || "[]");
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) throw new Error("Expected a JSON array.");
+    return parsed;
   } catch {
-    return [];
+    throw new Error("Budget lines must be valid JSON array.");
   }
 }
 
 function parseJsonObject(value: string) {
   try {
     const parsed = JSON.parse(value || "{}");
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Expected a JSON object.");
+    return parsed;
   } catch {
-    return {};
+    throw new Error("Payload must be a valid JSON object.");
   }
 }
 

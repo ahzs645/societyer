@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query } from "./lib/untypedServer";
 import { requireRole } from "./users";
 import { requireEnabledModule } from "./lib/moduleSettings";
 

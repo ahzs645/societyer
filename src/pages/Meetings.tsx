@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -51,6 +51,7 @@ export function MeetingsPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
+  const [params, setParams] = useSearchParams();
   const formRules = useQuery(
     api.bylawRules.getForDate,
     society && form?.scheduledAt ? { societyId: society._id, dateISO: form.scheduledAt } : "skip",
@@ -61,12 +62,9 @@ export function MeetingsPage() {
   const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
   const noticeMaxDays = rules?.generalNoticeMaxDays ?? 60;
 
-  if (society === undefined) return <div className="page">Loading…</div>;
-  if (society === null) return <SeedPrompt />;
-
   const conflicts = computeConflicts(meetings ?? []);
 
-  const openNew = () => {
+  const openNew = (overrides: Record<string, any> = {}) => {
     setForm({
       type: "Board", title: "",
       scheduledAt: toDateTimeLocalValue(new Date(Date.now() + noticeMinDays * 864e5)),
@@ -75,9 +73,34 @@ export function MeetingsPage() {
       quorumRequired: "",
       status: "Scheduled",
       attendeeIds: [],
+      ...overrides,
     });
     setOpen(true);
   };
+
+  useEffect(() => {
+    if (!society || open) return;
+    const intent = params.get("intent");
+    if (intent !== "create" && intent !== "generate-agm-package") return;
+    const type = params.get("type") === "AGM" ? "AGM" : "Board";
+    openNew({
+      type,
+      title: intent === "generate-agm-package" ? "Annual general meeting" : "",
+      notes:
+        intent === "generate-agm-package"
+          ? "AGM package requested from command palette. Add agenda, notice, financial statements, and voting materials."
+          : "",
+    });
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("intent");
+      next.delete("type");
+      return next;
+    }, { replace: true });
+  }, [open, params, setParams, society]);
+
+  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === null) return <SeedPrompt />;
   const save = async () => {
     if (!form) return;
     const effectiveRules = formRules ?? rules;
@@ -156,6 +179,8 @@ export function MeetingsPage() {
           filterFields={MEETING_FIELDS}
           searchPlaceholder="Search meetings…"
           defaultSort={{ columnId: "scheduledAt", dir: "desc" }}
+          viewsKey="meetings"
+          sharedViewsContext={{ societyId: society._id, nameSingular: "meeting" }}
           onRowClick={(row) => navigate(`/app/meetings/${row._id}`)}
           columns={[
             { id: "title", header: "Title", sortable: true, accessor: (r) => r.title, render: (r) => <strong>{r.title}</strong> },

@@ -2952,6 +2952,7 @@ const STATIC_EXPORT_TABLES = [
   "transactionCandidates",
   "signatures",
   "filingBotRuns",
+  "recordLayouts",
   "workflows",
   "workflowPackages",
   "pendingEmails",
@@ -3165,6 +3166,8 @@ function queryResult(name: string, args: StaticArgs) {
       return aiAgentRuns.slice(0, args?.limit ?? aiAgentRuns.length);
     case "aiAgents:auditForRun":
       return aiAgentAuditEvents.filter((event) => event.runId === args?.runId);
+    case "recordLayouts:get":
+      return null;
     case "agm:noticeDeliveries":
       return [];
     case "agm:runForMeeting":
@@ -3554,6 +3557,20 @@ function mutationResult(name: string, args: StaticArgs) {
     };
     aiAgentRuns.unshift(run);
     return { runId: run._id, output: run.output, plannedToolCalls: run.plannedToolCalls };
+  }
+  if (name === "recordLayouts:upsert") return "static_record_layout";
+  if (name === "recordLayouts:remove") return null;
+  if (name === "views:seedGovernanceDataTableViews") {
+    return {
+      created: ["Open AGM tasks", "Missing filing evidence", "Directors needing attestation", "Unresolved conflicts", "Grant reports due"],
+      skipped: [],
+    };
+  }
+  if (name === "workflows:setupGovernanceN8nRecipes") {
+    return {
+      created: ["AGM date set -> generate deadlines", "Filing due in 14 days -> notify officer", "Conflict disclosed -> add board agenda item"],
+      updated: [],
+    };
   }
   if (name === "seed:run") return { societyId: SOCIETY_ID };
   if (name === "seed:reset") return { ok: true };

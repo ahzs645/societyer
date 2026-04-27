@@ -7,7 +7,7 @@
  * Or per-society: `npx convex run seedRecordTableMetadata:runForSociety '{"societyId":"...","serviceToken":"..."}'`
  */
 
-import { mutation } from "./_generated/server";
+import { mutation } from "./lib/untypedServer";
 import type { Doc } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { assertMaintenanceToken, serviceTokenValidator } from "./lib/serviceAuth";

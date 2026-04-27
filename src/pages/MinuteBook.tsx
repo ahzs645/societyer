@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -22,6 +22,7 @@ export function MinuteBookPage() {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<any>(null);
+  const [params, setParams] = useSearchParams();
 
   const maps = useMemo(() => {
     const d = detail ?? {};
@@ -35,6 +36,16 @@ export function MinuteBookPage() {
       writtenResolutions: new Map<string, any>((d.writtenResolutions ?? []).map((row: any) => [row._id, row])),
     };
   }, [detail]);
+
+  useEffect(() => {
+    if (!society || params.get("intent") !== "export") return;
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("intent");
+      return next;
+    }, { replace: true });
+    toast.info("Minute book export", "Use Data export for now; the minute-book spine is ready for export packaging.");
+  }, [params, setParams, society, toast]);
 
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;

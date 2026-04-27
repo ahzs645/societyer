@@ -1,4 +1,5 @@
 import type { ConvexHttpClient } from "convex/browser";
+import { deriveGcosProjectIntelligence } from "./gcos-project-intelligence";
 
 type ConvexCall = { kind: "query" | "mutation" | "action"; name: string };
 type ConvexCaller = (client: ConvexHttpClient, call: ConvexCall, args: Record<string, unknown>) => Promise<any>;
@@ -27,6 +28,7 @@ export async function importGcosProjectSnapshotViaConvex(
   const existing = sourceExternalIds.length
     ? existingGrants.find((grant) => (grant.sourceExternalIds ?? []).some((id: string) => sourceExternalIds.includes(id)))
     : undefined;
+  const projectIntelligence = deriveGcosProjectIntelligence(args.snapshot, args.normalizedGrant);
   const payload = dropUndefined({
     id: existing?._id,
     societyId: args.societyId,
@@ -41,13 +43,20 @@ export async function importGcosProjectSnapshotViaConvex(
     amountAwardedCents: typeof args.normalizedGrant?.amountAwardedCents === "number" ? args.normalizedGrant.amountAwardedCents : undefined,
     startDate: typeof args.normalizedGrant?.startDate === "string" ? args.normalizedGrant.startDate : undefined,
     endDate: typeof args.normalizedGrant?.endDate === "string" ? args.normalizedGrant.endDate : undefined,
+    nextReportDueAtISO: stringValue(args.normalizedGrant?.nextReportDueAtISO ?? projectIntelligence.nextReportDueAtISO),
+    nextAction: stringValue(args.normalizedGrant?.nextAction ?? projectIntelligence.nextAction),
     sourceImportedAtISO: new Date().toISOString(),
     sourceFileCount: Number(args.snapshot?.agreement?.downloadedAgreementPdfs?.downloadedCount ?? 0),
     sourceExternalIds,
     confidence: "browser-snapshot",
     sensitivity: "contains-government-funding-records",
     riskFlags: ["Review imported GCOS data before relying on deadlines or amounts."],
-    keyFacts: Array.isArray(args.normalizedGrant?.keyFacts) ? args.normalizedGrant.keyFacts.filter((value: unknown) => typeof value === "string") : undefined,
+    requirements: arrayValue(args.normalizedGrant?.requirements, projectIntelligence.requirements),
+    timelineEvents: arrayValue(args.normalizedGrant?.timelineEvents, projectIntelligence.timelineEvents),
+    complianceFlags: arrayValue(args.normalizedGrant?.complianceFlags, projectIntelligence.complianceFlags),
+    useOfFunds: arrayValue(args.normalizedGrant?.useOfFunds, projectIntelligence.useOfFunds),
+    nextSteps: arrayValue(args.normalizedGrant?.nextSteps, projectIntelligence.nextSteps),
+    keyFacts: mergeStringLists(args.normalizedGrant?.keyFacts, projectIntelligence.keyFacts),
     sourceNotes: typeof args.normalizedGrant?.sourceNotes === "string" ? args.normalizedGrant.sourceNotes : undefined,
     notes: "Imported from GCOS. Review against the original GCOS record before reporting or signing.",
     actingUserId: args.actingUserId,
@@ -60,20 +69,25 @@ export function normalizeGcosExportedSnapshot(snapshot: any) {
   if (!snapshot || typeof snapshot !== "object") return null;
   const summary = snapshot.summary ?? {};
   const approved = snapshot.approvedJobs ?? {};
-  const projectNumber = gcosFieldValue(summary, [/project number/i, /tracking number/i]);
-  const title = gcosFieldValue(summary, [/project title/i]) ?? snapshot.project?.title ?? "GCOS project";
-  const cfpTitle = gcosFieldValue(summary, [/cfp title/i, /call for proposal/i]) ?? "ESDC GCOS";
-  const requested = gcosMoneyCents(gcosFieldValue(summary, [/total contribution.*esdc/i, /amount requested/i, /requested/i]));
-  const awarded = gcosMoneyCents(gcosFieldValue(approved, [/total contribution.*esdc/i, /approved/i, /contribution.*esdc/i]));
-  return {
+  const structured = snapshot.structured ?? {};
+  const projectNumber = structured.projectInformation?.projectNumber ?? gcosTextValue(summary, "Project Number", ["Project Title"]) ?? gcosFieldValue(summary, [/project number/i, /tracking number/i]);
+  const title = structured.projectInformation?.projectTitle ?? gcosTextValue(summary, "Project Title", ["Start Date"]) ?? gcosFieldValue(summary, [/project title/i]) ?? snapshot.project?.title ?? "GCOS project";
+  const cfpTitle = structured.callForProposal?.title ?? gcosFieldValue(summary, [/cfp title/i, /call for proposal/i]) ?? "ESDC GCOS";
+  const requested = gcosMoneyCents(
+    structured.appliedFunding?.contributionEsdcRequested
+    ?? gcosLandingContribution(snapshot.landing)
+    ?? gcosFieldValue(summary, [/total contribution.*esdc/i, /amount requested/i, /requested/i]),
+  );
+  const awarded = gcosMoneyCents(structured.approvedJob?.contributionEsdcApproved ?? gcosFieldValue(approved, [/total contribution.*esdc/i, /approved/i, /contribution.*esdc/i]));
+  const base = {
     title,
     funder: "Employment and Social Development Canada",
     program: cfpTitle,
-    status: /closed/i.test(String(snapshot.project?.status ?? "")) ? "Closed" : /active|agreement|approved/i.test(String(snapshot.project?.status ?? "")) ? "Active" : "Submitted",
+    status: /closed/i.test(String(snapshot.project?.status ?? "")) ? "Closed" : /active|agreement|approved|final agreement/i.test(String(snapshot.project?.status ?? structured.agreement?.status ?? "")) ? "Active" : "Submitted",
     amountRequestedCents: requested,
     amountAwardedCents: awarded,
-    startDate: gcosDate(gcosFieldValue(summary, [/start date/i])),
-    endDate: gcosDate(gcosFieldValue(summary, [/end date/i])),
+    startDate: gcosDate(structured.projectInformation?.startDate ?? gcosFieldValue(summary, [/start date/i])),
+    endDate: gcosDate(structured.projectInformation?.endDate ?? gcosFieldValue(summary, [/end date/i])),
     confirmationCode: projectNumber,
     sourceExternalIds: [
       snapshot.projectId ? `gcos:project:${snapshot.projectId}` : undefined,
@@ -88,6 +102,31 @@ export function normalizeGcosExportedSnapshot(snapshot: any) {
     ].filter(Boolean),
     sourceNotes: "Imported from a read-only GCOS Chrome extension snapshot. Sensitive employee and banking fields are intentionally excluded.",
   };
+  return {
+    ...base,
+    ...deriveGcosProjectIntelligence(snapshot, base),
+  };
+}
+
+function stringValue(value: unknown) {
+  const text = String(value ?? "").trim();
+  return text || undefined;
+}
+
+function arrayValue(value: unknown, fallback: unknown[]) {
+  return Array.isArray(value) && value.length > 0 ? value : fallback.length > 0 ? fallback : undefined;
+}
+
+function mergeStringLists(...values: unknown[]) {
+  const merged = new Set<string>();
+  for (const value of values) {
+    if (!Array.isArray(value)) continue;
+    for (const item of value) {
+      const text = String(item ?? "").trim();
+      if (text) merged.add(text);
+    }
+  }
+  return merged.size ? Array.from(merged) : undefined;
 }
 
 function gcosFieldValue(pageData: any, patterns: RegExp[]) {
@@ -96,9 +135,25 @@ function gcosFieldValue(pageData: any, patterns: RegExp[]) {
   return found?.value;
 }
 
+function gcosTextValue(pageData: any, label: string, nextLabels: string[] = []) {
+  const text = String(pageData?.text ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return undefined;
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const stops = nextLabels.length
+    ? nextLabels.map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")
+    : "[A-Z][A-Za-z /&()\\-]{2,80}";
+  const match = text.match(new RegExp(`${escaped}:?\\s+(.+?)(?=\\s+(?:${stops})\\b|$)`, "i"));
+  return match?.[1]?.trim();
+}
+
 function gcosMoneyCents(value: unknown) {
   const match = String(value ?? "").replace(/,/g, "").match(/-?\$?\s*(\d+(?:\.\d{1,2})?)/);
   return match ? Math.round(Number(match[1]) * 100) : undefined;
+}
+
+function gcosLandingContribution(pageData: any) {
+  const text = String(pageData?.text ?? "");
+  return text.match(/Total Contribution \(ESDC\):\s*\$?([\d,.]+)/i)?.[1];
 }
 
 function gcosDate(value: unknown) {

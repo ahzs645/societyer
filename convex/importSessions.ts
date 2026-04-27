@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { invalidOptionIssue, invalidOptionListIssues } from "./lib/orgHubOptions";
 
@@ -70,11 +70,9 @@ export const list = query({
     const rows: any[] = [];
     for (const doc of sessions.filter(isImportSession)) {
       const session = hydrateSession(doc);
-      const recordDocs = await recordsForSession(ctx, doc._id);
-      const records = recordDocs.map(hydrateRecord);
       rows.push({
         ...session,
-        summary: records.length ? summarizeRecords(records) : summarizeFromSessionMetadata(session),
+        summary: summaryForSession(session),
       });
     }
 
@@ -117,6 +115,9 @@ export const createFromBundle = mutation({
   handler: async (ctx, { societyId, name, bundle }) => {
     const now = new Date().toISOString();
     const records = recordsFromBundle(bundle);
+    if (records.length === 0) {
+      throw new Error("Import bundle did not contain any supported records.");
+    }
     const sessionPayload = {
       kind: "importSession",
       name: cleanText(name) || sessionName(bundle),
@@ -126,6 +127,11 @@ export const createFromBundle = mutation({
       updatedAtISO: now,
       status: "Reviewing",
       qualitySummary: bundle?.specialistReports?.qualityDuplicates?.summary ?? null,
+      summary: summarizeRecords(records.map((record) => ({
+        ...record,
+        status: "Pending",
+        importedTargets: {},
+      }))),
     };
 
     const sessionId = await ctx.db.insert("documents", {
@@ -197,6 +203,7 @@ export const updateRecord = mutation({
       content: JSON.stringify({ ...next, title }),
       tags: compactStrings([SESSION_TAG, RECORD_TAG, tagValue(next.recordKind), tagValue(next.targetModule)]),
     });
+    if (next.sessionId) await patchSessionUpdatedAt(ctx, next.sessionId);
     return recordId;
   },
 });
@@ -224,6 +231,7 @@ export const bulkSetStatus = mutation({
       });
       updated += 1;
     }
+    await patchSessionUpdatedAt(ctx, sessionId);
     return { updated };
   },
 });
@@ -257,7 +265,62 @@ export const bulkSetStatusByKind = mutation({
       });
       updated += 1;
     }
+    await patchSessionUpdatedAt(ctx, sessionId);
     return { updated };
+  },
+});
+
+export const bulkSetStatusByFilter = mutation({
+  args: {
+    sessionId: v.id("documents"),
+    status: v.string(),
+    currentStatus: v.optional(v.string()),
+    recordKinds: v.optional(v.array(v.string())),
+    targetModules: v.optional(v.array(v.string())),
+  },
+  returns: v.any(),
+  handler: async (ctx, { sessionId, status, currentStatus, recordKinds, targetModules }) => {
+    const session = await ctx.db.get(sessionId);
+    if (!isImportSession(session)) return { updated: 0 };
+    const wanted = normalizeReviewStatus(status);
+    const current = currentStatus ? normalizeReviewStatus(currentStatus) : null;
+    const kinds = recordKinds ? new Set(recordKinds.map((kind) => cleanText(kind)).filter(Boolean)) : null;
+    const targets = targetModules ? new Set(targetModules.map((target) => cleanText(target)).filter(Boolean)) : null;
+    const docs = await recordsForSession(ctx, sessionId);
+    let updated = 0;
+    for (const doc of docs.filter(isImportRecord)) {
+      const record = hydrateRecord(doc);
+      if (record.sessionId !== sessionId) continue;
+      if (current && record.status !== current) continue;
+      if (kinds && !kinds.has(record.recordKind)) continue;
+      if (targets && !targets.has(record.targetModule)) continue;
+      await ctx.db.patch(doc._id, {
+        content: JSON.stringify({ ...record, status: wanted, updatedAtISO: new Date().toISOString() }),
+      });
+      updated += 1;
+    }
+    await patchSessionUpdatedAt(ctx, sessionId);
+    return { updated };
+  },
+});
+
+export const refreshSessionSummaries = mutation({
+  args: {
+    societyId: v.id("societies"),
+    sessionIds: v.optional(v.array(v.id("documents"))),
+  },
+  returns: v.any(),
+  handler: async (ctx, { societyId, sessionIds }) => {
+    const sessions = sessionIds
+      ? (await Promise.all(sessionIds.map((id) => ctx.db.get(id)))).filter(isImportSession)
+      : (await docsByCategory(ctx, societyId, SESSION_CATEGORY)).filter(isImportSession);
+    const results: any[] = [];
+    for (const session of sessions) {
+      if (String(session.societyId) !== String(societyId)) continue;
+      const summary = await patchSessionUpdatedAt(ctx, session._id);
+      results.push({ sessionId: session._id, summary });
+    }
+    return { updated: results.length, sessions: results };
   },
 });
 
@@ -2549,9 +2612,15 @@ async function patchSessionUpdatedAt(ctx: any, sessionId: string) {
   const doc = await ctx.db.get(sessionId);
   if (!isImportSession(doc)) return;
   const payload = hydrateSession(doc);
+  const records = (await recordsForSession(ctx, sessionId))
+    .filter(isImportRecord)
+    .map(hydrateRecord)
+    .filter((record) => record.sessionId === sessionId);
+  const summary = summarizeRecords(records);
   await ctx.db.patch(sessionId, {
-    content: JSON.stringify({ ...payload, updatedAtISO: new Date().toISOString() }),
+    content: JSON.stringify({ ...payload, summary, updatedAtISO: new Date().toISOString() }),
   });
+  return summary;
 }
 
 function recordsFromBundle(bundle: any) {
@@ -2698,7 +2767,7 @@ function normalizeMeetingMinutesPayload(minutes: any) {
     sections: normalizeMinuteSectionsPayload(minutes?.sections),
     motions: arrayOf(minutes?.motions).map(normalizeMotionPayload),
     decisions: compactStrings(arrayOf(minutes?.decisions)),
-    actionItems: arrayOf(minutes?.actionItems),
+    actionItems: arrayOf(minutes?.actionItems).map(normalizeMinutesActionItem).filter(Boolean),
     nextMeetingAt: cleanText(minutes?.nextMeetingAt),
     nextMeetingLocation: cleanText(minutes?.nextMeetingLocation),
     nextMeetingNotes: cleanText(minutes?.nextMeetingNotes),
@@ -2777,14 +2846,20 @@ function normalizeMinuteSectionsPayload(value: any) {
 
 function normalizeActionItemsPayload(value: any) {
   const rows = arrayOf(value)
-    .map((row: any) => compactRecord({
-      text: cleanText(row?.text),
-      assignee: cleanText(row?.assignee),
-      dueDate: cleanText(row?.dueDate),
-      done: Boolean(row?.done),
-    }))
+    .map(normalizeMinutesActionItem)
     .filter((row: any) => row?.text);
   return rows.length ? rows : undefined;
+}
+
+function normalizeMinutesActionItem(row: any) {
+  const text = typeof row === "string" ? cleanText(row) : cleanText(row?.text);
+  if (!text) return null;
+  return compactRecord({
+    text,
+    assignee: cleanText(row?.assignee),
+    dueDate: cleanText(row?.dueDate),
+    done: Boolean(row?.done),
+  });
 }
 
 function normalizeSessionSegmentsPayload(value: any) {
@@ -3384,6 +3459,28 @@ function summarizeRecords(records: any[]) {
     documentsApplied,
     sectionsApplied,
   };
+}
+
+function summaryForSession(session: any) {
+  const summary = session?.summary;
+  if (summary && typeof summary === "object" && Number.isFinite(Number(summary.total))) {
+    return {
+      total: Number(summary.total) || 0,
+      byKind: isPlainObject(summary.byKind) ? summary.byKind : {},
+      byStatus: isPlainObject(summary.byStatus) ? summary.byStatus : {},
+      byTarget: isPlainObject(summary.byTarget) ? summary.byTarget : {},
+      riskCount: Number(summary.riskCount) || 0,
+      orgHistoryApplied: Number(summary.orgHistoryApplied) || 0,
+      meetingsApplied: Number(summary.meetingsApplied) || 0,
+      documentsApplied: Number(summary.documentsApplied) || 0,
+      sectionsApplied: Number(summary.sectionsApplied) || 0,
+    };
+  }
+  return summarizeFromSessionMetadata(session);
+}
+
+function isPlainObject(value: unknown) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function summarizeFromSessionMetadata(session: any) {

@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -30,6 +30,7 @@ export function MinutesPage() {
   const minutes = useQuery(api.minutes.list, society ? { societyId: society._id } : "skip");
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
 
   const byId = useMemo(() => new Map<string, any>((meetings ?? []).map((m: any) => [m._id, m])), [meetings]);
   const augmented: AugmentedMinutes[] = useMemo(() => {
@@ -43,6 +44,19 @@ export function MinutesPage() {
       };
     });
   }, [minutes, byId]);
+
+  useEffect(() => {
+    if (!society || minutes === undefined || meetings === undefined) return;
+    if (params.get("intent") !== "draft") return;
+    const minuteMeetingIds = new Set((minutes ?? []).map((m: any) => String(m.meetingId)));
+    const target = (meetings ?? []).find((meeting: any) => !minuteMeetingIds.has(String(meeting._id))) ?? meetings?.[0];
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("intent");
+      return next;
+    }, { replace: true });
+    if (target) navigate(`/app/meetings/${target._id}?tab=minutes&intent=draft-minutes`);
+  }, [meetings, minutes, navigate, params, setParams, society]);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -65,6 +79,8 @@ export function MinutesPage() {
         searchPlaceholder="Search meeting, discussion, decisions…"
         searchExtraFields={[(r) => r.discussion, (r) => r.decisions.join(" ")]}
         defaultSort={{ columnId: "heldAt", dir: "desc" }}
+        viewsKey="minutes"
+        sharedViewsContext={{ societyId: society._id, nameSingular: "minute" }}
         onRowClick={(row) => navigate(`/app/meetings/${row.meetingId}`)}
         columns={[
           {

@@ -64,6 +64,7 @@ export const upsertActive = mutation({
     proxyLimitPerGrantorPerMeeting: v.number(),
     quorumType: v.string(),
     quorumValue: v.number(),
+    quorumMinimumCount: v.optional(v.number()),
     memberProposalThresholdPct: v.number(),
     memberProposalMinSignatures: v.number(),
     memberProposalLeadDays: v.number(),

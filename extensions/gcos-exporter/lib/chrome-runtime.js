@@ -1,4 +1,3 @@
-import { exportGcosSnapshotInPage } from "./page-exporter.js";
 import { fetchGcosProjectsInPage } from "./project-list.js";
 
 export async function activeTab() {
@@ -7,16 +6,21 @@ export async function activeTab() {
   return tab;
 }
 
-export async function exportActiveGcosTab(input) {
-  const tab = await activeTab();
-  const [{ result }] = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: exportGcosSnapshotInPage,
-    args: [input],
-    world: "MAIN",
-  });
-  if (!result?.ok) throw new Error(result?.error || "GCOS export failed.");
-  return result.snapshot;
+export async function startBackgroundGcosExport(input) {
+  const response = await chrome.runtime.sendMessage({ action: "gcos:startExport", input });
+  if (!response?.ok) throw new Error(response?.error || "Could not start GCOS export.");
+  return response.job;
+}
+
+export async function getBackgroundGcosExportJob() {
+  const response = await chrome.runtime.sendMessage({ action: "gcos:getExportJob" });
+  if (!response?.ok) throw new Error(response?.error || "Could not read GCOS export progress.");
+  return response.job;
+}
+
+export async function clearBackgroundGcosExportJob() {
+  const response = await chrome.runtime.sendMessage({ action: "gcos:clearExportJob" });
+  if (!response?.ok) throw new Error(response?.error || "Could not clear GCOS export progress.");
 }
 
 export async function fetchActiveGcosProjects() {

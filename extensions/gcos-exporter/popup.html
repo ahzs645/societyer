@@ -111,6 +111,19 @@
         color: #354052;
         font-size: 12px;
       }
+      .progress-wrap {
+        display: none;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .progress-wrap.active {
+        display: flex;
+      }
+      progress {
+        width: 100%;
+        height: 10px;
+        accent-color: #1957d2;
+      }
       .muted {
         color: #6f7786;
       }
@@ -139,6 +152,10 @@
       }
       .project-card.closed {
         opacity: 0.86;
+      }
+      .project-card.selected {
+        border-color: #1957d2;
+        box-shadow: 0 0 0 2px rgba(25, 87, 210, 0.14);
       }
       .project-title {
         font-size: 12px;
@@ -174,7 +191,7 @@
         gap: 8px;
         margin-top: 7px;
       }
-      .btn-export {
+      .btn-select {
         padding: 5px 8px;
         font-size: 11px;
       }
@@ -195,7 +212,7 @@
 
       <section class="panel">
         <div class="section-header">
-          <h2>Your GCOS projects</h2>
+          <h2>1. Choose a project</h2>
           <button id="refreshProjects" class="mini" type="button" title="Refresh projects">Refresh</button>
         </div>
         <label class="row" style="align-items: center; font-weight: 500;">
@@ -208,18 +225,22 @@
       </section>
 
       <section class="panel">
+        <div class="section-header">
+          <h2>2. Confirm export target</h2>
+        </div>
         <label>
           Project ID
-          <input id="projectId" placeholder="Optional if current tab is already inside a project" />
+          <input id="projectId" placeholder="Select a project above or enter a GCOS project ID" />
         </label>
         <label>
           Program code
           <input id="programCode" placeholder="CSJ" />
         </label>
+        <p id="selectedProjectSummary" class="muted">No project selected. You can enter the project ID manually.</p>
         <div class="row">
-          <button id="exportJson" class="primary">Export JSON</button>
+          <button id="exportJson" class="primary">Export & download JSON</button>
+          <button id="exportZip" type="button">Export ZIP + PDFs</button>
           <button id="copyJson" disabled>Copy</button>
-          <button id="downloadJson" disabled>Download</button>
         </div>
       </section>
 
@@ -237,6 +258,10 @@
       </section>
 
       <textarea id="output" readonly placeholder="Exported JSON appears here"></textarea>
+      <div id="progressWrap" class="progress-wrap">
+        <progress id="exportProgress" max="100" value="0"></progress>
+        <div id="progressText" class="status">Waiting.</div>
+      </div>
       <div id="status" class="status">Open a GCOS tab, then export.</div>
     </main>
     <script type="module" src="popup.js"></script>

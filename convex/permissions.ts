@@ -1,4 +1,4 @@
-import { query } from "./_generated/server";
+import { query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { hasPermission, listPermissionsForRole, PERMISSIONS, type Permission } from "./lib/permissions";
 

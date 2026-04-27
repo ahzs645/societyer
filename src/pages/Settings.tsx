@@ -29,12 +29,14 @@ export function SettingsPage() {
   const [demo, setDemo] = useState(isDemoMode());
   const authMode = getAuthMode();
   const updateModules = useMutation(api.society.updateModules);
+  const seedSharedViews = useMutation(api.views.seedGovernanceDataTableViews);
   const confirm = useConfirm();
   const toast = useToast();
   const { preference: theme, resolvedTheme, setPreference: setTheme } = useThemePreference();
   const [moduleSettings, setModuleSettings] = useState(() => normalizeModuleSettings(undefined));
   const [savingModule, setSavingModule] = useState<ModuleKey | null>(null);
   const [maintenanceBusy, setMaintenanceBusy] = useState<"seed" | "reset" | null>(null);
+  const [sharedViewsBusy, setSharedViewsBusy] = useState(false);
 
   useEffect(() => {
     if (!society) return;
@@ -175,6 +177,34 @@ export function SettingsPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head"><h2 className="card__title">Workspace shared views</h2></div>
+        <div className="card__body col">
+          <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+            Seed shared governance views for board work, filings, attestations, conflicts, and grants.
+          </div>
+          <div className="row">
+            <button
+              className="btn btn--accent"
+              disabled={sharedViewsBusy}
+              onClick={async () => {
+                setSharedViewsBusy(true);
+                try {
+                  const result = await seedSharedViews({ societyId: society._id });
+                  toast.success("Shared views seeded", `${result.created.length} created, ${result.skipped.length} skipped`);
+                } catch (error: any) {
+                  toast.error("Could not seed shared views", error?.message);
+                } finally {
+                  setSharedViewsBusy(false);
+                }
+              }}
+            >
+              {sharedViewsBusy ? "Seeding..." : "Seed governance shared views"}
+            </button>
           </div>
         </div>
       </div>

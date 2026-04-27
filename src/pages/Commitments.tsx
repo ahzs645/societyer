@@ -319,6 +319,7 @@ export function CommitmentsPage() {
         onRowClick={openEdit}
         rowActionLabel={(row) => `Edit ${row.title}`}
         viewsKey="commitments"
+        sharedViewsContext={{ societyId: society._id, nameSingular: "commitment" }}
         columns={[
           {
             id: "title",

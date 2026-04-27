@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { action, mutation, query } from "./_generated/server";
+import { action, mutation, query } from "./lib/untypedServer";
 import { api } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { transcribeAudio } from "./providers/transcription";

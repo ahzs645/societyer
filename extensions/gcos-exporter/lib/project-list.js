@@ -17,6 +17,10 @@ export async function fetchGcosProjectsInPage() {
   }
 
   const doc = new DOMParser().parseFromString(html, "text/html");
+  const luxonDate = (element) => {
+    const node = element.querySelector?.(".luxon, .luxon-format");
+    return node?.dataset?.date?.replace(/T(\d{2})_(\d{2})_(\d{2})Z$/, "T$1:$2:$3Z") || "";
+  };
   const cards = [...doc.querySelectorAll(".card.card-default, #containerResult .card, #containerResult article, article, .panel")];
   const projects = [];
   const seen = new Set();
@@ -58,7 +62,7 @@ export async function fetchGcosProjectsInPage() {
       projectNumber: fields["Project Number"] || fields["Project number"] || "",
       program: fields.Program || fields["Program Name"] || "",
       programGroup: fields["Program Group"] || "",
-      dateUpdated: fields["Date Updated"] || fields["Date updated"] || "",
+      dateUpdated: luxonDate(card) || fields["Date Updated"] || fields["Date updated"] || "",
       cfpIdentifier: fields["Call For Proposal Identifier"] || fields["CFP Identifier"] || "",
       fields,
       links,

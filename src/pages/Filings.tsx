@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -31,6 +32,7 @@ export function FilingsPage() {
   const [form, setForm] = useState<any>(null);
   const [botFor, setBotFor] = useState<{ id: any; label: string } | null>(null);
   const [completeDraft, setCompleteDraft] = useState<any | null>(null);
+  const [params, setParams] = useSearchParams();
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
   const [importingRegistry, setImportingRegistry] = useState(false);
@@ -50,6 +52,34 @@ export function FilingsPage() {
     nameSingular: "filing",
     viewId: currentViewId,
   });
+
+  useEffect(() => {
+    if (!society || filings === undefined || completeDraft) return;
+    if (params.get("intent") !== "mark-filed") return;
+    const target = (filings ?? []).find((filing: any) => filing.status !== "Filed");
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("intent");
+      return next;
+    }, { replace: true });
+    if (!target) {
+      toast.info("No open filing found");
+      return;
+    }
+    setCompleteDraft({
+      id: target._id,
+      kind: target.kind,
+      filedAt: new Date().toISOString().slice(0, 10),
+      submissionMethod: target.submissionMethod ?? "ManualPortal",
+      confirmationNumber: target.confirmationNumber ?? "",
+      feePaidDollars: centsToDollarInput(target.feePaidCents),
+      receiptDocumentId: target.receiptDocumentId ?? "",
+      stagedPacketDocumentId: target.stagedPacketDocumentId ?? "",
+      evidenceNotes: target.evidenceNotes ?? "",
+      submissionChecklist: target.submissionChecklist ?? [],
+      registryUrl: target.registryUrl ?? "",
+    });
+  }, [completeDraft, filings, params, setParams, society, toast]);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;

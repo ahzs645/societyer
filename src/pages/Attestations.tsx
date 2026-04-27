@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -36,6 +37,7 @@ export function AttestationsPage() {
   const sign = useMutation(api.attestations.sign);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const [params, setParams] = useSearchParams();
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
 
@@ -72,9 +74,6 @@ export function AttestationsPage() {
       });
   }, [directors, attestations, year]);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
-  if (society === null) return <SeedPrompt />;
-
   const openSign = (directorId: string) => {
     setForm({
       directorId,
@@ -91,6 +90,21 @@ export function AttestationsPage() {
     await sign({ societyId: society._id, ...form });
     setOpen(false);
   };
+
+  useEffect(() => {
+    if (!society || open || missing === undefined) return;
+    if (params.get("intent") !== "request") return;
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("intent");
+      return next;
+    }, { replace: true });
+    const firstMissing = missing?.[0];
+    if (firstMissing?.directorId) openSign(String(firstMissing.directorId));
+  }, [missing, open, params, setParams, society]);
+
+  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === null) return <SeedPrompt />;
 
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 

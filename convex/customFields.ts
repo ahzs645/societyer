@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query } from "./lib/untypedServer";
 
 const ENTITY_TYPES = ["members", "directors", "volunteers", "employees"] as const;
 
