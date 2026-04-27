@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: societyer-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: societyer-frontend
+  template:
+    metadata:
+      labels:
+        app: societyer-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/ahzs645/societyer-frontend:main # {"$imagepolicy": "flux-system:societyer-frontend"}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: societyer-frontend
+spec:
+  selector:
+    app: societyer-frontend
+  ports:
+    - port: 3000
+      targetPort: 3000

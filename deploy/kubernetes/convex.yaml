@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: societyer-convex
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: societyer-convex
+  template:
+    metadata:
+      labels:
+        app: societyer-convex
+    spec:
+      containers:
+        - name: convex
+          image: ghcr.io/get-convex/convex-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: convex-api
+              containerPort: 3210
+              hostPort: 3220
+            - name: convex-site
+              containerPort: 3211
+              hostPort: 3221
+          env:
+            - name: INSTANCE_NAME
+              value: societyer-prod
+            - name: INSTANCE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: societyer-app-secret
+                  key: CONVEX_INSTANCE_SECRET
+            - name: CONVEX_CLOUD_ORIGIN
+              value: http://societyer.k8s.home:3220
+            - name: CONVEX_SITE_ORIGIN
+              value: http://societyer.k8s.home:3221
+            - name: DISABLE_BEACON
+              value: "true"
+            - name: REDACT_LOGS_TO_CLIENT
+              value: "true"
+          volumeMounts:
+            - name: convex-data
+              mountPath: /convex/data
+          readinessProbe:
+            httpGet:
+              path: /version
+              port: 3210
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 12
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 4Gi
+      volumes:
+        - name: convex-data
+          persistentVolumeClaim:
+            claimName: societyer-convex-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: societyer-convex
+spec:
+  selector:
+    app: societyer-convex
+  ports:
+    - name: convex-api
+      port: 3210
+      targetPort: 3210
+    - name: convex-site
+      port: 3211
+      targetPort: 3211

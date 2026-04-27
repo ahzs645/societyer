@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: societyer-api
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: societyer-api
+  template:
+    metadata:
+      labels:
+        app: societyer-api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/ahzs645/societyer-api:main # {"$imagepolicy": "flux-system:societyer-api"}
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-lc"]
+          args:
+            - |
+              if [ -n "${CONVEX_SELF_HOSTED_ADMIN_KEY:-}" ]; then
+                npx convex dev --once
+              else
+                echo "CONVEX_SELF_HOSTED_ADMIN_KEY is not set; skipping Convex function deploy."
+              fi
+              exec npx tsx server/auth-server.ts
+          ports:
+            - containerPort: 8787
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: AUTH_MODE
+              value: "none"
+            - name: AUTH_SERVER_PORT
+              value: "8787"
+            - name: CONVEX_SELF_HOSTED_URL
+              value: http://societyer-convex:3210
+            - name: VITE_CONVEX_URL
+              value: http://societyer-convex:3210
+            - name: SOCIETYER_API_PUBLIC_URL
+              value: http://societyer.k8s.home
+            - name: BETTER_AUTH_BASE_URL
+              value: http://societyer.k8s.home
+            - name: AUTH_DB_PATH
+              value: /data/auth.sqlite
+            - name: CONNECTOR_RUNNER_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: societyer-app-secret
+                  key: CONNECTOR_RUNNER_SECRET
+          envFrom:
+            - secretRef:
+                name: societyer-app-secret
+          volumeMounts:
+            - name: api-data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8787
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 12
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+      volumes:
+        - name: api-data
+          persistentVolumeClaim:
+            claimName: societyer-api-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: societyer-api
+spec:
+  selector:
+    app: societyer-api
+  ports:
+    - port: 8787
+      targetPort: 8787
