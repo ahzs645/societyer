@@ -37,7 +37,7 @@ Use this as a page-by-page map for document intake. "Native import" means the `/
 |---|---|---|---|
 | Society profile | `/app/society` | Registered office, mailing address, privacy officer, privacy officer email, board cadence, day, time, notes. | Can be filled from governing documents or annual reports, but no import bundle applies it today. Stage as `sourceEvidence` plus manual task. |
 | Members | `/app/members` | First name, last name, email, phone, address, class, status, joined date, notes. | Manual/API only. Do not infer legal member register from arbitrary docs unless explicitly reviewed. |
-| Directors | `/app/directors` | First name, last name, email, position, term start/end, status, BC residency, consent on file, notes. | Use `boardRoleAssignment` and `boardRoleChange` for evidence; promote to legal register manually after review. |
+| Directors | `/app/directors` | First name, last name, email, position, term start/end, status, BC residency, consent evidence, notes. | Use `boardRoleAssignment` and `boardRoleChange` for evidence; promote to legal register manually after review. |
 | Committees | `/app/committees`, `/app/committees/:id` | Name, mission, description, cadence, cadence notes, color, member name/email/role, linked director/member, committee tasks. | Manual/API only. Committee facts can be staged as org history evidence. |
 | Conflicts of interest | `/app/conflicts` | Director, declared date, contract/matter, nature of interest, abstained, left room, notes. | Manual/API only. Motions/minutes can provide source evidence but the import pipeline does not create conflict records. |
 | Communications | `/app/communications` | Templates, segments, member preferences, campaign fields. | Manual/API only. Do not transpose notices into campaigns without human approval. |
@@ -85,7 +85,7 @@ This is the one-by-one page pass. Routes with no writable fields are still liste
 | `/app/records-archive` | Records archive | Native import display | Records locations, archive accessions, source evidence. |
 | `/app/imports` | Import sessions | Native import hub | Session name, import JSON, review status, confidence, source IDs, review notes, payload JSON. |
 | `/app/members` | Members | Manual/API only | First name, last name, email, phone, address, class, status, joined date, notes. |
-| `/app/directors` | Directors | Manual/API only | First name, last name, email, position, BC resident, term start/end, consent on file, resigned date, status, notes. |
+| `/app/directors` | Directors | Manual/API only | First name, last name, email, position, BC resident, term start/end, consent evidence, resigned date, status, notes. |
 | `/app/meetings` | Meetings | Native import plus manual | Title, type, scheduled date/time, location, electronic, notice sent, quorum, status, agenda, notes. |
 | `/app/meetings/:id` | Meeting detail | Native import plus manual | Agenda items, present, absent/regrets, raw transcript/notes, minutes payload. |
 | `/app/minutes` | Minutes index | Report only | No direct fields; minutes are created from meetings/import sessions. |

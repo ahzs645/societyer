@@ -66,6 +66,7 @@ export const create = mutation({
     filtersJson: v.optional(v.string()),
     sortsJson: v.optional(v.string()),
     searchTerm: v.optional(v.string()),
+    columnStateJson: v.optional(v.string()),
     density: v.optional(v.string()),
     isShared: v.optional(v.boolean()),
     isSystem: v.optional(v.boolean()),
@@ -88,6 +89,7 @@ export const create = mutation({
       filtersJson: args.filtersJson,
       sortsJson: args.sortsJson,
       searchTerm: args.searchTerm,
+      columnStateJson: args.columnStateJson,
       density: args.density ?? "compact",
       isShared: args.isShared ?? false,
       isSystem: args.isSystem ?? false,
@@ -110,6 +112,7 @@ export const update = mutation({
       filtersJson: v.optional(v.string()),
       sortsJson: v.optional(v.string()),
       searchTerm: v.optional(v.string()),
+      columnStateJson: v.optional(v.string()),
       density: v.optional(v.string()),
       isShared: v.optional(v.boolean()),
       position: v.optional(v.number()),
@@ -118,6 +121,200 @@ export const update = mutation({
   returns: v.any(),
   handler: async (ctx, { id, patch }) => {
     await ctx.db.patch(id, { ...patch, updatedAtISO: new Date().toISOString() });
+  },
+});
+
+async function resolveObjectMetadata(
+  ctx: any,
+  args: {
+    societyId: any;
+    objectMetadataId?: any;
+    nameSingular?: string;
+  },
+) {
+  if (args.objectMetadataId) {
+    const object = await ctx.db.get(args.objectMetadataId);
+    if (!object || object.societyId !== args.societyId) return null;
+    return object;
+  }
+  if (!args.nameSingular) return null;
+  return ctx.db
+    .query("objectMetadata")
+    .withIndex("by_society_name", (q: any) =>
+      q.eq("societyId", args.societyId).eq("nameSingular", args.nameSingular),
+    )
+    .unique();
+}
+
+export const listSharedForDataTable = query({
+  args: {
+    societyId: v.id("societies"),
+    objectMetadataId: v.optional(v.id("objectMetadata")),
+    nameSingular: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const object = await resolveObjectMetadata(ctx, args);
+    if (!object) return [];
+    const rows = await ctx.db
+      .query("views")
+      .withIndex("by_object_position", (q) => q.eq("objectMetadataId", object._id))
+      .collect();
+    return rows
+      .filter((row) => row.isShared || row.isSystem)
+      .sort((a, b) => a.position - b.position);
+  },
+});
+
+export const createSharedDataTableView = mutation({
+  args: {
+    societyId: v.id("societies"),
+    objectMetadataId: v.optional(v.id("objectMetadata")),
+    nameSingular: v.optional(v.string()),
+    name: v.string(),
+    filtersJson: v.optional(v.string()),
+    sortsJson: v.optional(v.string()),
+    searchTerm: v.optional(v.string()),
+    columnStateJson: v.optional(v.string()),
+    density: v.optional(v.string()),
+    createdByUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const object = await resolveObjectMetadata(ctx, args);
+    if (!object) {
+      throw new Error("Object metadata not found for shared saved view.");
+    }
+    const now = new Date().toISOString();
+    const existing = await ctx.db
+      .query("views")
+      .withIndex("by_object", (q) => q.eq("objectMetadataId", object._id))
+      .collect();
+    return ctx.db.insert("views", {
+      societyId: args.societyId,
+      objectMetadataId: object._id,
+      name: args.name,
+      type: "table",
+      filtersJson: args.filtersJson,
+      sortsJson: args.sortsJson,
+      searchTerm: args.searchTerm,
+      columnStateJson: args.columnStateJson,
+      density: args.density ?? "compact",
+      isShared: true,
+      isSystem: false,
+      createdByUserId: args.createdByUserId,
+      position: existing.length,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+  },
+});
+
+export const deleteSharedDataTableView = mutation({
+  args: {
+    societyId: v.id("societies"),
+    id: v.id("views"),
+  },
+  returns: v.any(),
+  handler: async (ctx, { societyId, id }) => {
+    const view = await ctx.db.get(id);
+    if (!view || view.societyId !== societyId) return;
+    if (view.isSystem) {
+      throw new Error("Cannot delete a system view.");
+    }
+    const vfs = await ctx.db
+      .query("viewFields")
+      .withIndex("by_view", (q) => q.eq("viewId", id))
+      .collect();
+    for (const vf of vfs) await ctx.db.delete(vf._id);
+    await ctx.db.delete(id);
+  },
+});
+
+const GOVERNANCE_VIEW_SEEDS = [
+  {
+    object: "task",
+    name: "Open AGM tasks",
+    filters: [
+      { fieldId: "status", operator: "is_not", value: "Done" },
+      { fieldId: "__any__", operator: "contains", value: "AGM" },
+    ],
+    sort: { columnId: "dueDate", dir: "asc" },
+  },
+  {
+    object: "filing",
+    name: "Missing filing evidence",
+    filters: [
+      { fieldId: "status", operator: "is_not", value: "Filed" },
+      { fieldId: "__any__", operator: "contains", value: "evidence" },
+    ],
+    sort: { columnId: "dueDate", dir: "asc" },
+  },
+  {
+    object: "directorAttestation",
+    name: "Directors needing attestation",
+    filters: [{ fieldId: "signed", operator: "is_not", value: "true" }],
+    sort: { columnId: "name", dir: "asc" },
+  },
+  {
+    object: "conflict",
+    name: "Unresolved conflicts",
+    filters: [{ fieldId: "status", operator: "is_not", value: "Resolved" }],
+    sort: { columnId: "updatedAtISO", dir: "desc" },
+  },
+  {
+    object: "grant",
+    name: "Grant reports due",
+    filters: [
+      { fieldId: "reportStatus", operator: "is_not", value: "Submitted" },
+      { fieldId: "__any__", operator: "contains", value: "report" },
+    ],
+    sort: { columnId: "reportDueDate", dir: "asc" },
+  },
+];
+
+export const seedGovernanceDataTableViews = mutation({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, { societyId }) => {
+    const now = new Date().toISOString();
+    const created: string[] = [];
+    const skipped: string[] = [];
+    for (const seed of GOVERNANCE_VIEW_SEEDS) {
+      const object = await resolveObjectMetadata(ctx, {
+        societyId,
+        nameSingular: seed.object,
+      });
+      if (!object) {
+        skipped.push(seed.name);
+        continue;
+      }
+      const existing = await ctx.db
+        .query("views")
+        .withIndex("by_object", (q) => q.eq("objectMetadataId", object._id))
+        .collect();
+      if (existing.some((view) => view.name === seed.name)) {
+        skipped.push(seed.name);
+        continue;
+      }
+      await ctx.db.insert("views", {
+        societyId,
+        objectMetadataId: object._id,
+        name: seed.name,
+        type: "table",
+        filtersJson: JSON.stringify(seed.filters),
+        sortsJson: JSON.stringify([seed.sort]),
+        columnStateJson: JSON.stringify({ hiddenColumns: [], columnWidths: {}, columnOrder: [] }),
+        density: "compact",
+        isShared: true,
+        isSystem: true,
+        position: existing.length,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      created.push(seed.name);
+    }
+    return { created, skipped };
   },
 });
 

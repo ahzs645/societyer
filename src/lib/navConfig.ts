@@ -10,4 +10,6 @@ export const DEFAULT_PINNED_ROUTES: readonly string[] = [
   "/app/commitments",
   "/app/meetings",
   "/app/documents",
+  "/app/ai-agents",
+  "/app/transparency",
 ];

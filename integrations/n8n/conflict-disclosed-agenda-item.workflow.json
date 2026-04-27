@@ -1,0 +1,91 @@
+{
+  "id": "societyer-conflict-disclosed-agenda-item",
+  "name": "Societyer - Conflict Disclosed Agenda Item",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "societyer/governance/conflict-disclosed-agenda-item",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Societyer Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-560, 0]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "agenda-summary",
+              "name": "summary",
+              "type": "string",
+              "value": "={{`Conflict agenda item staged for ${$json.body.input?.intake?.directorName || 'the disclosed conflict'}`}}"
+            },
+            {
+              "id": "agenda-item",
+              "name": "agendaItem",
+              "type": "object",
+              "value": "={{({ title: 'Conflict of interest acknowledgement', matter: $json.body.input?.intake?.matter || '', conflictId: $json.body.input?.intake?.conflictId || '' })}}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "prepare-agenda-item",
+      "name": "Prepare Agenda Item",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-320, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Societyer Webhook').item.json.body.callbackUrl}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-societyer-workflow-secret",
+              "value": "={{$('Societyer Webhook').item.json.body.callbackSecret}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({ workflowId: $('Societyer Webhook').item.json.body.workflowId, runId: $('Societyer Webhook').item.json.body.runId, event: 'run.completed', stepKey: 'notify_secretary', note: $json.summary || 'n8n prepared conflict agenda item metadata.', output: { engine: 'n8n', agendaItem: $json.agendaItem } })}}",
+        "options": {}
+      },
+      "id": "callback-run-complete",
+      "name": "Callback Run Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-80, 0]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Societyer Webhook": {
+      "main": [[{ "node": "Prepare Agenda Item", "type": "main", "index": 0 }]]
+    },
+    "Prepare Agenda Item": {
+      "main": [[{ "node": "Callback Run Complete", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "societyer-conflict-disclosed-agenda-item-v1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": ["societyer", "governance", "conflicts"]
+}

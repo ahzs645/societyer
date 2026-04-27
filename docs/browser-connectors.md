@@ -199,6 +199,31 @@ strategy:
 - Confirm each response is `application/pdf`; treat redirects or HTML responses
   as session-expired failures.
 
+## GCOS local Chrome extension fallback
+
+GCKey can reject Docker/VNC browser sessions. The GCOS fallback is an unpacked
+Chrome extension at `extensions/gcos-exporter` that runs inside the user's
+normal logged-in Chrome session.
+
+Workflow:
+
+1. Load `extensions/gcos-exporter` from `chrome://extensions` using **Load
+   unpacked**.
+2. Sign into GCOS normally and open any authenticated GCOS page under
+   `https://srv136.services.gc.ca/OSR/pro`.
+3. Click the extension. The popup fetches `/OSR/pro/Project?pagesize=0` and
+   renders the user's projects.
+4. Choose **Export JSON** on a project card, or use the manual project
+   ID/program code export controls.
+5. Import the JSON in Societyer from **Browser apps → GCOS → Local Chrome
+   extension fallback**, or let the extension POST to
+   `/api/v1/browser-connectors/connectors/gcos/import-exported-snapshot`.
+
+The extension exports the same high-level snapshot shape as the browser runner:
+`summary`, `approvedJobs`, `agreement`, `correspondence`, `eed`, `documents`,
+and `normalizedGrant`. It skips sensitive SIN, banking, account number, and
+direct-deposit fields and does not submit GCOS forms.
+
 ## Wave connector
 
 Wave is the first named connector on top of the generic browser runner. The

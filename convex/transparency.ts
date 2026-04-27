@@ -77,9 +77,11 @@ export const publicCenter = query({
   returns: v.any(),
   handler: async (ctx, { slug }): Promise<any> => {
     if (!slug) return null;
-    const societies: any[] = await ctx.db.query("societies").collect();
-    const matching = societies.find((society) => society.publicSlug === slug);
-    const society = matching ?? null;
+    const society =
+      (await ctx.db
+        .query("societies")
+        .withIndex("by_public_slug", (q) => q.eq("publicSlug", slug))
+        .first()) ?? null;
     if (
       !society ||
       !society.publicTransparencyEnabled ||
@@ -119,7 +121,10 @@ export const publicCenter = query({
           if (!society.publicShowBylaws && publication.category === "Bylaws") {
             return false;
           }
-          if (!society.publicShowFinancials && publication.category === "AnnualReport") {
+          if (
+            !society.publicShowFinancials &&
+            ["AnnualReport", "FinancialSummary"].includes(publication.category)
+          ) {
             return false;
           }
           return true;

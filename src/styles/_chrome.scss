@@ -1044,6 +1044,11 @@
 }
 .org-details-date-row > .field {
   min-width: 0;
+  margin-bottom: 0;
+}
+.org-details-date-row > .btn {
+  align-self: end;
+  margin-bottom: 3px;
 }
 .org-details-date-row--draft {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;

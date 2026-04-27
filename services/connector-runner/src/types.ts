@@ -6,6 +6,11 @@ export type BrowserSessionRequest = {
   liveView: boolean;
   readOnly?: boolean;
   timezone?: string;
+  locale?: string;
+  viewport?: {
+    width: number;
+    height: number;
+  };
   browserVersion?: string;
   proxyUrl?: string;
 };

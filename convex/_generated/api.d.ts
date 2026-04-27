@@ -11,6 +11,7 @@
 import type * as activity from "../activity.js";
 import type * as agendas from "../agendas.js";
 import type * as agm from "../agm.js";
+import type * as aiAgents from "../aiAgents.js";
 import type * as apiPlatform from "../apiPlatform.js";
 import type * as attestations from "../attestations.js";
 import type * as auditors from "../auditors.js";
@@ -24,6 +25,7 @@ import type * as courtOrders from "../courtOrders.js";
 import type * as crons from "../crons.js";
 import type * as customFields from "../customFields.js";
 import type * as dashboard from "../dashboard.js";
+import type * as dashboardRemediation from "../dashboardRemediation.js";
 import type * as deadlines from "../deadlines.js";
 import type * as directors from "../directors.js";
 import type * as documentComments from "../documentComments.js";
@@ -53,6 +55,7 @@ import type * as legalOperations from "../legalOperations.js";
 import type * as lib_access_documentAccess from "../lib/access/documentAccess.js";
 import type * as lib_access_materialAccess from "../lib/access/materialAccess.js";
 import type * as lib_bylawRules from "../lib/bylawRules.js";
+import type * as lib_dashboardComplianceRules from "../lib/dashboardComplianceRules.js";
 import type * as lib_moduleSettings from "../lib/moduleSettings.js";
 import type * as lib_orgHubOptions from "../lib/orgHubOptions.js";
 import type * as lib_pdfTableNormalization from "../lib/pdfTableNormalization.js";
@@ -126,6 +129,7 @@ declare const fullApi: ApiFromModules<{
   activity: typeof activity;
   agendas: typeof agendas;
   agm: typeof agm;
+  aiAgents: typeof aiAgents;
   apiPlatform: typeof apiPlatform;
   attestations: typeof attestations;
   auditors: typeof auditors;
@@ -139,6 +143,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   customFields: typeof customFields;
   dashboard: typeof dashboard;
+  dashboardRemediation: typeof dashboardRemediation;
   deadlines: typeof deadlines;
   directors: typeof directors;
   documentComments: typeof documentComments;
@@ -168,6 +173,7 @@ declare const fullApi: ApiFromModules<{
   "lib/access/documentAccess": typeof lib_access_documentAccess;
   "lib/access/materialAccess": typeof lib_access_materialAccess;
   "lib/bylawRules": typeof lib_bylawRules;
+  "lib/dashboardComplianceRules": typeof lib_dashboardComplianceRules;
   "lib/moduleSettings": typeof lib_moduleSettings;
   "lib/orgHubOptions": typeof lib_orgHubOptions;
   "lib/pdfTableNormalization": typeof lib_pdfTableNormalization;

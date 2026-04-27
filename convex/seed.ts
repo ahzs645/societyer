@@ -1586,6 +1586,8 @@ async function wipe(ctx: any) {
     "deadlines",
     "filings",
     "filingBotRuns",
+    "aiAgentAuditEvents",
+    "aiAgentRuns",
     "workflowRuns",
     "workflows",
     "minutes",

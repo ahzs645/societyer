@@ -2,6 +2,7 @@ import { ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, us
 import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Pin, PinOff, Search, X } from "lucide-react";
 import { useLocation } from "react-router-dom";
+import { useMutation, useQuery } from "convex/react";
 import { ViewBar } from "./primitives";
 import {
   AppliedFilter,
@@ -18,12 +19,16 @@ import { mobileCardMediaQuery } from "../lib/breakpoints";
 import {
   makeViewId,
   readSavedViews,
+  savedViewFromWorkspaceView,
+  savedViewToWorkspacePayload,
   writeSavedViews,
   type SavedView,
+  type SharedSavedViewsContext,
 } from "../lib/savedViews";
 import { useUIStore } from "../lib/store";
 import { cellToText, copyAsTsv } from "../lib/clipboard";
 import { useToast } from "./Toast";
+import { api } from "../lib/convexApi";
 
 const EMPTY_ARR: string[] = [];
 
@@ -86,6 +91,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   pageSizeOptions = [10, 25, 50],
   bulkActions,
   viewsKey,
+  sharedViewsContext,
   loading = false,
 }: {
   label: string;
@@ -114,8 +120,10 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   /** When provided, enables row selection with a sticky bulk-action toolbar. */
   bulkActions?: BulkAction<T>[];
   /** Enables "saved views" (filter + sort + columns + density) keyed by this
-   * stable string. Persisted to localStorage. */
+   * stable string. Persisted to localStorage unless sharedViewsContext is
+   * provided, in which case Convex workspace metadata is used. */
   viewsKey?: string;
+  sharedViewsContext?: SharedSavedViewsContext;
 }) {
   const [q, setQ] = useState("");
   const [filters, setFilters] = useState<AppliedFilter[]>([]);
@@ -151,6 +159,41 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   );
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const location = useLocation();
+  const sharedViewsEnabled = Boolean(
+    viewsKey &&
+      sharedViewsContext?.societyId &&
+      (sharedViewsContext.objectMetadataId || sharedViewsContext.nameSingular),
+  );
+  const workspaceViews = useQuery(
+    api.views.listSharedForDataTable,
+    sharedViewsEnabled
+      ? {
+          societyId: sharedViewsContext!.societyId as any,
+          ...(sharedViewsContext!.objectMetadataId
+            ? { objectMetadataId: sharedViewsContext!.objectMetadataId as any }
+            : {}),
+          ...(sharedViewsContext!.nameSingular
+            ? { nameSingular: sharedViewsContext!.nameSingular }
+            : {}),
+        }
+      : "skip",
+  );
+  const createWorkspaceView = useMutation(api.views.createSharedDataTableView);
+  const deleteWorkspaceView = useMutation(api.views.deleteSharedDataTableView);
+
+  useEffect(() => {
+    if (!viewsKey) {
+      setSavedViews([]);
+      return;
+    }
+    if (sharedViewsEnabled) return;
+    setSavedViews(readSavedViews(viewsKey));
+  }, [viewsKey, sharedViewsEnabled]);
+
+  useEffect(() => {
+    if (!sharedViewsEnabled || workspaceViews === undefined) return;
+    setSavedViews((workspaceViews ?? []).map(savedViewFromWorkspaceView));
+  }, [sharedViewsEnabled, workspaceViews]);
 
   useEffect(() => {
     if (!viewsKey) return;
@@ -165,14 +208,13 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
     if (match) {
       setFilters(match.filters);
       setSort(match.sort);
+      setQ(match.searchTerm ?? "");
       setHiddenColumns(new Set(match.hiddenColumns));
       setColumnWidths(match.columnWidths ?? {});
       setDensity(match.density);
       setActiveViewId(match.id);
     }
-    // one-shot on mount per route
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewsKey, location.pathname, location.search]);
+  }, [viewsKey, location.pathname, location.search, savedViews]);
   const filterBtnRef = useRef<HTMLButtonElement>(null);
   const sortBtnRef = useRef<HTMLButtonElement>(null);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
@@ -401,7 +443,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
     if (!action.keepSelection) clearSelection();
   };
 
-  const saveView = (name: string) => {
+  const saveView = async (name: string) => {
     if (!viewsKey) return;
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -410,11 +452,40 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
       name: trimmed,
       filters,
       sort,
+      searchTerm: q.trim() || undefined,
       hiddenColumns: [...hiddenColumns],
       columnWidths,
       density,
       createdAtISO: new Date().toISOString(),
     };
+    if (sharedViewsEnabled && sharedViewsContext) {
+      const optimistic = { ...view, isShared: true };
+      setSavedViews((current) => [...current, optimistic]);
+      setActiveViewId(optimistic.id);
+      try {
+        const id = await createWorkspaceView({
+          societyId: sharedViewsContext.societyId as any,
+          ...(sharedViewsContext.objectMetadataId
+            ? { objectMetadataId: sharedViewsContext.objectMetadataId as any }
+            : {}),
+          ...(sharedViewsContext.nameSingular
+            ? { nameSingular: sharedViewsContext.nameSingular }
+            : {}),
+          ...(sharedViewsContext.createdByUserId
+            ? { createdByUserId: sharedViewsContext.createdByUserId as any }
+            : {}),
+          ...savedViewToWorkspacePayload(view),
+        });
+        setActiveViewId(String(id));
+      } catch (error) {
+        setSavedViews((current) => current.filter((candidate) => candidate.id !== optimistic.id));
+        toast.error("Saved locally", error instanceof Error ? error.message : "Shared view could not be saved.");
+        const localNext = [...readSavedViews(viewsKey), view];
+        writeSavedViews(viewsKey, localNext);
+        setSavedViews(localNext);
+      }
+      return;
+    }
     const next = [...savedViews, view];
     setSavedViews(next);
     writeSavedViews(viewsKey, next);
@@ -423,6 +494,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   const applyView = (view: SavedView) => {
     setFilters(view.filters);
     setSort(view.sort);
+    setQ(view.searchTerm ?? "");
     setHiddenColumns(new Set(view.hiddenColumns));
     setColumnWidths(view.columnWidths ?? {});
     setDensity(view.density);
@@ -443,8 +515,23 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
       });
     }
   };
-  const deleteView = (id: string) => {
+  const deleteView = async (id: string) => {
     if (!viewsKey) return;
+    if (sharedViewsEnabled && sharedViewsContext) {
+      const target = savedViews.find((view) => view.id === id);
+      if (target?.isSystem) return;
+      setSavedViews((current) => current.filter((v) => v.id !== id));
+      if (activeViewId === id) setActiveViewId(null);
+      try {
+        await deleteWorkspaceView({
+          societyId: sharedViewsContext.societyId as any,
+          id: id as any,
+        });
+      } catch (error) {
+        toast.error("Could not delete shared view", error instanceof Error ? error.message : undefined);
+      }
+      return;
+    }
     const next = savedViews.filter((v) => v.id !== id);
     setSavedViews(next);
     writeSavedViews(viewsKey, next);
@@ -1080,14 +1167,16 @@ function OptionsPopover<T>({
                   {pinned ? <PinOff size={10} /> : <Pin size={10} />}
                 </button>
               )}
-              <button
-                type="button"
-                className="options-popover__view-del"
-                onClick={() => onDeleteView?.(view.id)}
-                aria-label={`Delete view ${view.name}`}
-              >
-                <X size={10} />
-              </button>
+              {!view.isSystem && (
+                <button
+                  type="button"
+                  className="options-popover__view-del"
+                  onClick={() => onDeleteView?.(view.id)}
+                  aria-label={`Delete view ${view.name}`}
+                >
+                  <X size={10} />
+                </button>
+              )}
             </div>
             );
           })}

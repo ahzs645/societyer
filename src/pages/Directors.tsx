@@ -95,7 +95,7 @@ export function DirectorsPage() {
         title="Directors"
         icon={<UserCog size={16} />}
         iconColor="blue"
-        subtitle="Register of directors under s.20. Act requires ≥ 3 directors, ≥ 1 BC resident (regular societies)."
+        subtitle="Register of directors under s.20. Section 40 requires >= 3 directors and >= 1 BC resident unless the s.197 member-funded exception applies."
         actions={
           <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <div className="segmented" role="tablist" aria-label="Director screen view">
@@ -133,13 +133,13 @@ export function DirectorsPage() {
         </div>
         <div className="stat">
           <div className="stat__label">BC residents</div>
-          <div className="stat__value" style={{ color: bcResidents < 1 ? "var(--danger)" : undefined }}>{bcResidents}</div>
-          <div className="stat__sub">At least one BC resident required.</div>
+          <div className="stat__value" style={{ color: bcResidents < 1 && !society.isMemberFunded ? "var(--danger)" : undefined }}>{bcResidents}</div>
+          <div className="stat__sub">{society.isMemberFunded ? "No s.40 residency requirement." : "At least one BC resident required."}</div>
         </div>
         <div className="stat">
-          <div className="stat__label">Consent on file</div>
+          <div className="stat__label">Consent evidence</div>
           <div className="stat__value" style={{ color: missingConsent.length ? "var(--warn)" : undefined }}>{active.length - missingConsent.length}/{active.length}</div>
-          <div className="stat__sub">Written consent required to act.</div>
+          <div className="stat__sub">Written consent or meeting record.</div>
         </div>
         <div className="stat">
           <div className="stat__label">Change of directors</div>
@@ -148,11 +148,11 @@ export function DirectorsPage() {
         </div>
       </div>
 
-      {directorMode === "register" && (active.length < 3 || bcResidents < 1 || missingConsent.length > 0) && (
+      {directorMode === "register" && (active.length < 3 || (bcResidents < 1 && !society.isMemberFunded) || missingConsent.length > 0) && (
         <div className="col" style={{ marginBottom: 16, gap: 6 }}>
           {active.length < 3 && !society.isMemberFunded && <Flag level="err">Fewer than 3 active directors — regular societies must have at least 3.</Flag>}
-          {bcResidents < 1 && <Flag level="err">No BC-resident director. At least one is required.</Flag>}
-          {missingConsent.length > 0 && <Flag level="warn">{missingConsent.length} director(s) without consent on file.</Flag>}
+          {bcResidents < 1 && !society.isMemberFunded && <Flag level="err">No BC-resident director. At least one is required for non-member-funded societies.</Flag>}
+          {missingConsent.length > 0 && <Flag level="warn">{missingConsent.length} director(s) without consent evidence on file.</Flag>}
         </div>
       )}
 
@@ -309,7 +309,7 @@ export function DirectorsPage() {
             <Checkbox
               checked={!!selected.consentOnFile}
               onChange={(v) => setSelected({ ...selected, consentOnFile: v })}
-              label="Written consent to act on file"
+              label="Director consent evidence on file"
             />
             <Field label="Notes"><textarea className="textarea" value={selected.notes ?? ""} onChange={(e) => setSelected({ ...selected, notes: e.target.value })} /></Field>
             {selected._id && (

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CheckCircle2, ClipboardPaste, ExternalLink, MonitorPlay, Play, RefreshCw, ShieldCheck, Square, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardPaste, ExternalLink, MonitorPlay, Play, RefreshCw, ShieldCheck, Square, Upload, XCircle } from "lucide-react";
 import { SeedPrompt } from "./_helpers";
 import { Badge, Button, Field, SettingsShell } from "../components/ui";
 import { LiveBrowserView } from "../components/LiveBrowserView";
@@ -40,6 +40,12 @@ type ConnectorManifest = {
     allowedOrigins: string[];
     profileKeyPrefix?: string;
     confirmMode?: "verified" | "profile";
+  };
+  browserDefaults?: {
+    timezone?: string;
+    locale?: string;
+    viewport?: { width: number; height: number };
+    browserVersion?: string;
   };
   actions: Array<{
     id: string;
@@ -134,6 +140,11 @@ const FALLBACK_CONNECTORS: ConnectorManifest[] = [
       profileKeyPrefix: "gcos",
       confirmMode: "profile",
     },
+    browserDefaults: {
+      timezone: "America/Vancouver",
+      locale: "en-CA",
+      viewport: { width: 1440, height: 900 },
+    },
     actions: [
       {
         id: "exportProjects",
@@ -213,6 +224,7 @@ export function BrowserConnectorsPage() {
   const [gcosProjectId, setGcosProjectId] = useState("");
   const [gcosProgramCode, setGcosProgramCode] = useState("");
   const [gcosIncludeAgreementPdfs, setGcosIncludeAgreementPdfs] = useState(true);
+  const [gcosExportJson, setGcosExportJson] = useState("");
   const [pasteText, setPasteText] = useState("");
   const [workspaceConnectorId, setWorkspaceConnectorId] = useState<string | null>(null);
 
@@ -358,6 +370,10 @@ export function BrowserConnectorsPage() {
           profileKey: nextProfileKey,
           startUrl: nextStartUrl,
           liveView: true,
+          timezone: connector?.browserDefaults?.timezone,
+          locale: connector?.browserDefaults?.locale,
+          viewport: connector?.browserDefaults?.viewport,
+          browserVersion: connector?.browserDefaults?.browserVersion,
         }),
       });
       if (payload.data.dashboardUrl) setActiveDashboardUrl(payload.data.dashboardUrl);
@@ -643,6 +659,48 @@ export function BrowserConnectorsPage() {
     }
   }
 
+  async function importGcosExportedSnapshot(jsonText = gcosExportJson) {
+    if (!jsonText.trim()) {
+      toast.error("Paste GCOS export JSON first");
+      return;
+    }
+    setBusy(true);
+    try {
+      const parsed = JSON.parse(jsonText);
+      const snapshot = parsed?.snapshot ?? parsed;
+      const payload = await apiFetch<{ data: any }>("/connectors/gcos/import-exported-snapshot", {
+        method: "POST",
+        body: JSON.stringify({
+          societyId: society._id,
+          snapshot,
+          normalizedGrant: parsed?.normalizedGrant,
+        }),
+      });
+      setLastRun(payload.data);
+      const imported = payload.data?.import;
+      toast.success(
+        imported?.created ? "GCOS grant imported" : "GCOS grant updated",
+        payload.data?.normalizedGrant?.title ?? imported?.grantId,
+      );
+      await refresh();
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not import GCOS export JSON");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importGcosExportFile(file: File | undefined) {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setGcosExportJson(text);
+      await importGcosExportedSnapshot(text);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not read GCOS export file");
+    }
+  }
+
   async function finishSession(sessionId: string) {
     setBusy(true);
     try {
@@ -872,6 +930,42 @@ export function BrowserConnectorsPage() {
             <button className="btn btn--accent" disabled={busy || !runnerReady || gcosNeedsLogin} onClick={importGcosProjectSnapshot}>
               <Play size={14} /> Import grant
             </button>
+          </div>
+          <div className="panel col" style={{ gap: 10, padding: 12 }}>
+            <div>
+              <strong>Local Chrome extension fallback</strong>
+              <div className="muted" style={{ marginTop: 4 }}>
+                Load the unpacked extension from <code className="mono">extensions/gcos-exporter</code>, export JSON from your normal logged-in GCOS tab, then import it here.
+              </div>
+            </div>
+            <Field label="GCOS export JSON" hint="Paste the Chrome extension output or choose its downloaded JSON file.">
+              <textarea
+                className="input"
+                value={gcosExportJson}
+                onChange={(event) => setGcosExportJson(event.target.value)}
+                placeholder='{"source":"societyer-gcos-chrome-extension", ...}'
+                rows={5}
+                style={{ resize: "vertical", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", fontSize: 12 }}
+              />
+            </Field>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <label className="btn btn--sm" style={{ cursor: busy ? "not-allowed" : "pointer" }}>
+                <Upload size={12} /> Choose JSON
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  disabled={busy}
+                  onChange={(event) => {
+                    void importGcosExportFile(event.target.files?.[0]);
+                    event.currentTarget.value = "";
+                  }}
+                  style={{ display: "none" }}
+                />
+              </label>
+              <button className="btn btn--accent btn--sm" disabled={busy || !gcosExportJson.trim()} onClick={() => importGcosExportedSnapshot()}>
+                <Upload size={12} /> Import extension JSON
+              </button>
+            </div>
           </div>
         </div>
       </div>

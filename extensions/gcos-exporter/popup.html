@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Societyer GCOS Exporter</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      body {
+        width: 420px;
+        margin: 0;
+        color: #172033;
+        background: #f7f8fb;
+      }
+      main {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 14px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.2;
+      }
+      p {
+        margin: 0;
+        color: #5b6475;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        font-size: 12px;
+        font-weight: 650;
+      }
+      input {
+        box-sizing: border-box;
+        width: 100%;
+        border: 1px solid #cad0dc;
+        border-radius: 7px;
+        padding: 8px 9px;
+        font: inherit;
+        background: #fff;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .section-header h2 {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.2;
+      }
+      .mini {
+        padding: 5px 8px;
+      }
+      button {
+        border: 1px solid #c6ccda;
+        border-radius: 7px;
+        padding: 8px 10px;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 650;
+        background: #fff;
+        color: #172033;
+        cursor: pointer;
+      }
+      button.primary {
+        border-color: #1957d2;
+        background: #1957d2;
+        color: #fff;
+      }
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      textarea {
+        min-height: 124px;
+        resize: vertical;
+        border: 1px solid #cad0dc;
+        border-radius: 7px;
+        padding: 8px;
+        font: 11px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        background: #fff;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        border: 1px solid #dde2eb;
+        border-radius: 8px;
+        padding: 10px;
+        background: #fff;
+      }
+      .status {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        color: #354052;
+        font-size: 12px;
+      }
+      .muted {
+        color: #6f7786;
+      }
+      .ok {
+        color: #086f3d;
+      }
+      .error {
+        color: #9a1b1b;
+      }
+      .project-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 310px;
+        overflow: auto;
+      }
+      .project-card {
+        border: 1px solid #d8dee9;
+        border-left: 3px solid #8a94a6;
+        border-radius: 7px;
+        padding: 9px;
+        background: #fff;
+      }
+      .project-card.active {
+        border-left-color: #147a45;
+      }
+      .project-card.closed {
+        opacity: 0.86;
+      }
+      .project-title {
+        font-size: 12px;
+        font-weight: 750;
+        margin-bottom: 4px;
+      }
+      .project-meta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 16px;
+        color: #354052;
+        font-size: 11px;
+        line-height: 1.35;
+      }
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 4px;
+        padding: 1px 5px;
+        background: #ddf4e7;
+        color: #0b6b3d;
+        font-size: 10px;
+        font-weight: 750;
+      }
+      .project-card.closed .status-badge {
+        background: #e9ecf1;
+        color: #505a6a;
+      }
+      .project-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 7px;
+      }
+      .btn-export {
+        padding: 5px 8px;
+        font-size: 11px;
+      }
+      .btn-link {
+        color: #1957d2;
+        font-size: 11px;
+        font-weight: 650;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section>
+        <h1>Societyer GCOS Exporter</h1>
+        <p>Use this from a normal logged-in GCOS tab. Sensitive SIN, banking, and direct deposit fields are skipped.</p>
+      </section>
+
+      <section class="panel">
+        <div class="section-header">
+          <h2>Your GCOS projects</h2>
+          <button id="refreshProjects" class="mini" type="button" title="Refresh projects">Refresh</button>
+        </div>
+        <label class="row" style="align-items: center; font-weight: 500;">
+          <input id="autoLoadProjects" type="checkbox" style="width: auto;" />
+          Auto-load projects on open
+        </label>
+        <div id="projectList" class="project-list">
+          <p class="muted">Open any logged-in GCOS page, then refresh projects.</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <label>
+          Project ID
+          <input id="projectId" placeholder="Optional if current tab is already inside a project" />
+        </label>
+        <label>
+          Program code
+          <input id="programCode" placeholder="CSJ" />
+        </label>
+        <div class="row">
+          <button id="exportJson" class="primary">Export JSON</button>
+          <button id="copyJson" disabled>Copy</button>
+          <button id="downloadJson" disabled>Download</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <label>
+          Societyer API base
+          <input id="apiBase" placeholder="http://127.0.0.1:5180/api/v1/browser-connectors" />
+        </label>
+        <label>
+          Society ID
+          <input id="societyId" placeholder="Optional in local-dev mode if Societyer can infer it" />
+        </label>
+        <button id="importJson" disabled>Import into Societyer</button>
+        <p>Direct import works when your local Societyer API accepts local-dev or your browser session cookies. You can always paste the JSON into Societyer instead.</p>
+      </section>
+
+      <textarea id="output" readonly placeholder="Exported JSON appears here"></textarea>
+      <div id="status" class="status">Open a GCOS tab, then export.</div>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

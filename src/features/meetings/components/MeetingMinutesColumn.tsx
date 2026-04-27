@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, FileText, Plus, Save, Sparkles, Trash2 } from "lucide-react";
+import { ChevronDown, ClipboardList, FileText, Plus, Save, Sparkles, Trash2 } from "lucide-react";
 import { Badge, Field } from "../../../components/ui";
 import { Checkbox } from "../../../components/Controls";
 import { LegalGuideInline } from "../../../components/LegalGuide";
@@ -27,6 +27,7 @@ export function MeetingMinutesColumn({
   directors,
   saveMinuteSections,
   saveMinuteMotions,
+  createMinutesFromAgenda,
   addSectionToBacklog,
   onOpenMotions,
   transcript,
@@ -50,6 +51,7 @@ export function MeetingMinutesColumn({
   directors: any;
   saveMinuteSections: (next: any[]) => void | Promise<void> | undefined;
   saveMinuteMotions: (next: Motion[]) => void | Promise<void> | undefined;
+  createMinutesFromAgenda: () => void | Promise<void>;
   addSectionToBacklog: (section: any) => void | Promise<void>;
   onOpenMotions?: () => void;
   transcript: string;
@@ -360,6 +362,11 @@ export function MeetingMinutesColumn({
                     <span className="card__subtitle">
                       {sections.length ? `${sectionsWithDetailCount}/${sections.length} detailed` : "No sections"}
                     </span>
+                    {!sections.length && agenda.length > 0 && (
+                      <button className="btn-action btn-action--primary" type="button" onClick={createMinutesFromAgenda}>
+                        <ClipboardList size={12} /> Create from agenda
+                      </button>
+                    )}
                   </div>
                   <div className="card__body">
                     {sections.length ? (
@@ -630,8 +637,16 @@ export function MeetingMinutesColumn({
                         ))}
                       </div>
                     ) : (
-                      <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                        No per-agenda record is saved yet.
+                      <div className="meeting-package-empty">
+                        <ClipboardList size={14} />
+                        <div>
+                          <strong>No per-agenda record is saved yet.</strong>
+                          <p>
+                            {agenda.length
+                              ? "Copy the agenda into minute sections, then add notes, motions, decisions, and actions under each item."
+                              : "Add agenda items first, then copy them into minute sections."}
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -698,7 +713,22 @@ export function MeetingMinutesColumn({
                   : "Paste a rough transcript or notes — the AI helper will structure them."}
               </span>
             </div>
-            <div className="card__body">
+            <div className="card__body col" style={{ gap: 16 }}>
+              {agenda.length > 0 && (
+                <div className="panel" style={{ padding: 12, borderRadius: 8 }}>
+                  <div className="row" style={{ justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                    <div>
+                      <strong>Start from agenda</strong>
+                      <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>
+                        Create a minutes draft with {agenda.length} agenda section{agenda.length === 1 ? "" : "s"} ready for notes, motions, decisions, and actions.
+                      </div>
+                    </div>
+                    <button className="btn-action btn-action--primary" type="button" onClick={createMinutesFromAgenda}>
+                      <ClipboardList size={12} /> Create minutes from agenda
+                    </button>
+                  </div>
+                </div>
+              )}
               <Field label="Raw transcript / rough notes">
                 <textarea
                   className="textarea"

@@ -2,7 +2,7 @@
 
 A React + Convex app for tracking **BC Societies Act** compliance — registers, meetings & minutes, filings, deadlines, documents, conflicts of interest, financial statements, and PIPA privacy.
 
-> Not legal advice. Statutory references (s.11, s.20, s.42, s.56, s.36 etc.) are based on the BC Societies Act as summarised in the accompanying compliance notes — verify against the current Act and your bylaws before acting.
+> Not legal advice. Statutory references (s.11, s.20, s.40, s.42, s.56, s.36 etc.) are based on the BC Societies Act as summarised in the accompanying compliance notes — verify against the current Act and your bylaws before acting.
 
 ---
 
@@ -10,7 +10,10 @@ A React + Convex app for tracking **BC Societies Act** compliance — registers,
 
 - **Vite + React 18 + TypeScript**
 - **Convex** for live-reactive data (works against hosted Convex *or* a self-hosted `convex-backend`)
-- **react-router-dom**, **lucide-react**, **date-fns**
+- **Express** auth/API sidecar for Better Auth, OpenAPI docs, API keys, webhooks, and local maintenance routes
+- **Better Auth** for optional real login/session handling
+- **react-router-dom**, **lucide-react**, **date-fns**, **i18next**, **zustand**
+- Optional local services: RustFS object storage, n8n workflows, and BlitzBrowser-backed browser connectors
 
 No CSS framework — a small set of hand-rolled tokens in `src/theme/tokens.css` mimic Twenty's design language.
 
@@ -18,13 +21,14 @@ No CSS framework — a small set of hand-rolled tokens in `src/theme/tokens.css`
 
 ## Quick start — self-hosted Convex (local, Docker)
 
-The repo ships a `docker-compose.yml` that runs the official `convex-backend` and `convex-dashboard` images locally. No need to clone anything else.
+The repo ships a `docker-compose.yml` that runs the official Convex backend/dashboard plus local support services. No need to clone anything else.
 
 ### 1. Bring up the Convex backend
 
 ```bash
 cd /Users/ahmadjalil/github/societyer
 npm install
+cp .env.local.example .env.local
 npm run docker:up        # (= docker compose up -d)
 ```
 
@@ -34,13 +38,15 @@ This starts:
 - **Dashboard** → http://127.0.0.1:6792
 - **RustFS S3 API** → http://127.0.0.1:9790
 - **RustFS console** → http://127.0.0.1:9791
+- **n8n workflow runtime** → http://127.0.0.1:5678
+- **Auth/API gateway** → http://127.0.0.1:8787
+- **API docs** → http://127.0.0.1:8787/api/docs
 
 Tail logs: `npm run docker:logs`. Stop everything: `npm run docker:down`. Wipe the database: `docker compose down -v`.
 
 ### 2. Generate an admin key & configure env
 
 ```bash
-cp .env.local.example .env.local
 npm run docker:admin-key    # prints the admin key — paste into .env.local
 ```
 
@@ -64,8 +70,10 @@ If the helper script can't find the binary in your image version, open the dashb
 
 ```bash
 npx convex dev           # terminal 1 — pushes ./convex to localhost:3210
-npm run dev:full         # terminal 2 — API gateway + Vite at http://localhost:5173
+npm run dev              # terminal 2 — Vite at http://localhost:5173
 ```
+
+`docker:up` already starts the auth/API gateway container. If you stop that container and want to run the gateway directly on the host instead, use `npm run dev:full`.
 
 ### 4. Seed the demo society
 
@@ -113,23 +121,43 @@ Societyer now supports two identity modes:
 npm run dev:full
 ```
 
-## New operating modules
+Running the auth sidecar directly requires Node 22.5+ because Better Auth uses `node:sqlite`. The Docker auth-server service already uses Node 22.
 
-- **Communications**: `/app/communications` adds reusable templates, campaign history, member contact preferences, AGM notice delivery proofs, and live email sending when Resend is configured.
-- **Volunteers**: `/app/volunteers` adds volunteer intake, committee alignment, screening expiry tracking, and annual renewal dates.
-- **Grants**: `/app/grants` adds grant pipeline stages, report deadlines, linked restricted-purpose tracking, and board-facing summaries.
-- **Public transparency**: `/app/transparency` manages what is published; `/public/:slug` renders the public-facing transparency page without exposing the private app.
+## Configurable modules
+
+Settings → Modules can enable or hide optional surfaces by society. Current module groups include:
+
+- **Engagement**: Communications, volunteer management, and grant management.
+- **Governance**: voting and resolutions, elections, proxies, auditors, director attestations, and court orders.
+- **Compliance**: filing pre-fill, records retention/inspection, PIPA training, insurance, access custody, and public transparency.
+- **Finance**: reconciliation, donation receipts, membership billing, employee records, and grant finance workflows.
+- **Integrations**: Paperless-ngx, browser connectors, and workflow automation.
 
 ## Live integrations
 
 - **Resend**: set `RESEND_API_KEY` plus `RESEND_FROM_EMAIL` to turn digest emails and communications into real outbound email.
+- **Twilio**: set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and either `TWILIO_FROM_NUMBER` or `TWILIO_MESSAGING_SERVICE_SID` for SMS delivery and callback tracking.
 - **Stripe**: set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` to enable real hosted checkout. Point Stripe webhooks at Convex HTTP route `/stripe/webhook`.
 - **Wave**: set `WAVE_ACCESS_TOKEN` and `WAVE_BUSINESS_ID` to switch the accounting sync from demo data to live GraphQL fetches. `WAVE_CLIENT_ID` and `WAVE_CLIENT_SECRET` are reserved for OAuth setup and are reported only as present/missing in diagnostics; `WAVE_GRAPHQL_ENDPOINT` is an optional override for the default Wave GraphQL endpoint. The Financials page includes a Wave health check that reports only present/missing env status plus redacted provider diagnostics. See [docs/wave-accounting-api-findings.md](/Users/ahmadjalil/github/societyer/docs/wave-accounting-api-findings.md) for the current read/write limits, including Wave's lack of a public bank/credit-card ledger transaction read API.
 - **Paperless-ngx**: set `PAPERLESS_NGX_URL` and `PAPERLESS_NGX_TOKEN`, then enable the Paperless-ngx module at `/app/paperless`. Documents can be sent to Paperless from `/app/documents`; Societyer creates contextual tags such as document category, filing kind, grant report, PIPA training, election evidence, and volunteer screening.
+- **RustFS / S3-compatible storage**: set `RUSTFS_ENDPOINT`, `RUSTFS_BUCKET`, `RUSTFS_ACCESS_KEY`, and `RUSTFS_SECRET_KEY` for storage-backed document versions. The bundled Docker stack includes RustFS for local development.
+- **OpenAI / Anthropic / Whisper-compatible transcription**: set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `WHISPER_API_KEY`, or `WHISPER_ENDPOINT` to move meeting transcription and minute drafting out of deterministic demo mode.
+- **n8n**: set the `N8N_*` and `SOCIETYER_WORKFLOW_*` values to run workflow bridge recipes, including the committed UNBC and Over the Edge examples in [integrations/n8n](/Users/ahmadjalil/github/societyer/integrations/n8n).
+- **Browser connectors**: run `npm run docker:connectors` and set `CONNECTOR_RUNNER_SECRET` to enable saved browser sessions, connector actions, and exports through BlitzBrowser.
 - **Access custody vault**: set `SECRET_VAULT_ENCRYPTION_KEY` before storing client credentials in production. `/app/access-custody` encrypts stored values, keeps them hidden by default, and logs explicit reveals to the activity trail.
 - **Filing evidence**: BC still has no public Societies Online filing API. This build improves the manual path by storing submission method, confirmation number, fee paid, and linked receipt/evidence documents when a filing is marked filed.
 
 Auth mode uses a small SQLite auth database configured by `AUTH_DB_PATH`, and maps signed-in identities into the existing Convex `users` / `members` records.
+
+## API gateway
+
+The auth sidecar also mounts Societyer's REST API gateway:
+
+- **OpenAPI JSON**: `/api/openapi.json`
+- **Swagger UI**: `/api/docs`
+- **Versioned API**: `/api/v1`
+
+The gateway exposes society, people, governance, filings, documents, finance, volunteer, grant, workflow, plugin, webhook, API-client, and API-token resources backed by Convex. Local development can use trusted localhost requests; production should configure `SOCIETYER_API_PLATFORM_TOKEN`, `SOCIETYER_MAINTENANCE_TOKEN`, `API_TOKEN_PEPPER`, and `API_SECRET_ENCRYPTION_KEY`.
 
 ## GitHub Pages deployment
 
@@ -150,44 +178,84 @@ For the public site:
 |---|---|---|
 | Public | `/` Marketing page | Product positioning, feature overview, and CTA into the static walkthrough |
 | Public | `/demo` Browser-only demo | The real app frontend using an in-memory Convex-compatible fixture client |
-| Overview | `/app` Dashboard | Compliance flags (≥3 directors, ≥1 BC resident, consents on file, PIPA policy, constitution & bylaws uploaded), stat tiles, upcoming meetings and filings |
-| Overview | `/app/society` | Edit legal name, incorporation #, fiscal year end, addresses, purposes, charity / member-funded flags, privacy officer |
-| People | `/app/members` | Register of members (s.20), class, voting rights, join date, status |
-| People | `/app/directors` | Register of directors with BC-resident & consent-on-file checks, warnings when Act thresholds aren't met |
-| Governance | `/app/meetings` | Board / Committee / AGM / SGM scheduling; AGM reminder about 14–60 day notice |
-| Governance | `/app/meetings/:id` | Agenda, minutes (discussion, motions with vote counts, decisions, action items), AGM checklist, **mock AI minute generator** from raw transcript |
-| Governance | `/app/elections` | Verified member elections with anonymous ballot storage, voter snapshots, and tallies |
-| Governance | `/app/minutes` | All minutes across meetings, quorum and action status |
-| Governance | `/app/conflicts` | s.56 disclosures with "left room" / "abstained" tracking |
-| Compliance | `/app/filings` | Societies Online + CRA: AnnualReport, ChangeOfDirectors, ChangeOfAddress, BylawAmendment, T2, T1044, T3010, T4, GST/HST — mark filed with confirmation # and fee |
-| Compliance | `/app/deadlines` | Rolling calendar; recurrence (Monthly/Quarterly/Annual); categories (Governance / Tax / Payroll / Privacy / Other) |
-| Compliance | `/app/documents` | Constitution, bylaws, minutes, policies, financial statements; retention years; "flag for deletion" after 10-year threshold |
-| Compliance | `/app/bylaw-rules` | Active bylaw rule set that drives notice windows, proxies, voting, proposal thresholds, quorum, and inspection defaults |
-| Compliance | `/app/privacy` | PIPA checklist and records-inspection rules; see [PIPA privacy policy help](docs/pipa-privacy-policy-help.md) |
-| Finance | `/app/financials` | Annual statements with revenue / expenses / net assets / restricted funds / audit status / board approval; remuneration disclosure ≥ $75k |
-| System | `/app/settings` | Theme (light/dark), demo mode, seed/reset, Convex deployment info |
+| Public | `/public/:slug` | Transparency center with optional volunteer and grant intake pages |
+| Workspace | `/app`, `/app/society`, `/app/organization-details`, `/app/org-history` | Compliance dashboard, legal profile, organization identifiers/addresses/registrations, and source-backed history |
+| People | `/app/members`, `/app/directors`, `/app/role-holders`, `/app/committees` | Member and director registers, role holders, committees, goals, tasks, and committee-linked work |
+| Work | `/app/tasks`, `/app/deadlines`, `/app/commitments`, `/app/documents`, `/app/library` | Work tracking, recurring deadlines, obligation extraction, document workbench, document versions, and board/library packets |
+| Meetings & votes | `/app/meetings`, `/app/agendas`, `/app/minutes`, `/app/elections`, `/app/proposals`, `/app/proxies` | Meeting packages, AGM workflow, motions, minutes, member proposals, anonymous ballots, written resolutions, and proxies |
+| Governance records | `/app/conflicts`, `/app/attestations`, `/app/auditors`, `/app/governance-registers`, `/app/minute-book` | Conflict disclosures, annual director attestations, auditors, evidence registers, minute-book assembly, and bylaw-driven rules |
+| Compliance | `/app/filings`, `/app/filings/prefill`, `/app/privacy`, `/app/retention`, `/app/inspections`, `/app/access-custody` | Registry/CRA filing tracker, filing pre-fill, PIPA program, records inspection, retention, insurance, and credential custody |
+| Finance | `/app/financials`, `/app/finance-imports`, `/app/treasurer`, `/app/reconciliation`, `/app/receipts`, `/app/membership` | Financial years, Wave cache views, treasurer workflows, imports, reconciliation, donation receipts, and Stripe-backed billing |
+| Engagement | `/app/communications`, `/app/volunteers`, `/app/grants`, `/app/transparency` | Campaigns, AGM notice proofs, volunteer screening/intake, grant pipeline/intake, and public transparency publishing |
+| Workflows | `/app/workflows`, `/app/workflow-runs`, `/app/workflow-packages`, `/app/browser-connectors`, `/app/template-engine` | Workflow canvas, n8n bridge runs, generated document packages, browser-backed connectors, and template field mapping |
+| Administration | `/app/users`, `/app/custom-fields`, `/app/imports`, `/app/paperless`, `/app/audit`, `/app/exports`, `/app/settings` | Users/roles, custom fields, import sessions, Paperless sync, audit log, redacted data export, modules, auth mode, and runtime settings |
 
 Press `⌘K` (or `Ctrl+K`) anywhere for the command palette.
 
 ---
 
-## Swapping the mock AI minute generator for a real LLM
+## Meeting transcription and minute drafting
 
-`convex/minutes.ts` exports `generateDraft` — a mutation that parses a transcript heuristically. To use a real model:
+`convex/minutes.ts` exports `generateDraft` as a Convex action. In demo mode it returns deterministic draft minutes; with provider env vars it can call the live LLM/transcription adapters:
 
-1. Convert it to a Convex **action** (so it can do `fetch`).
-2. Call your LLM of choice (Anthropic / OpenAI / local Ollama).
-3. Write the structured result via `ctx.runMutation(api.minutes.create, ...)`.
-4. The UI (`MeetingDetail.tsx`) needs no change — it already pipes the transcript into `generateDraft`.
+- `OPENAI_API_KEY`, `OPENAI_MODEL`, or `OPENAI_MINUTES_MODEL` for OpenAI chat completions.
+- `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, or `ANTHROPIC_MINUTES_MODEL` for Anthropic messages.
+- `WHISPER_API_KEY`, `WHISPER_ENDPOINT`, or `OPENAI_API_KEY` for audio transcription.
+
+The meeting detail UI already uploads audio, tracks transcription jobs, stores the transcript, and pipes text into `generateDraft`.
 
 ---
 
-## Roadmap / not in v1
+## Useful scripts
 
-- File uploads to Convex storage for Documents (right now they're metadata-only)
-- Authentication & multi-society workspaces
-- Societies Online filing export (pre-filled PDFs)
-- Real LLM minute generation + speaker diarization
-- Email/Slack reminders for upcoming deadlines
-- Audit log of every mutation
-- CRA T3010 / T2 line-item tracking
+- `npm run build` — Convex typecheck, TypeScript build, and Vite production build.
+- `npm run build:pages` — GitHub Pages build with stable asset names and `/demo` fallback files.
+- `npm run lint` / `npm run lint:convex` — ESLint for the app or Convex functions.
+- `npm run test:smoke` — Playwright smoke tests.
+- `npm run test:api-contract` — API gateway contract check.
+- `npm run test:dashboard-compliance` — dashboard compliance rule check.
+- `npm run test:org-details` — organization detail smoke check.
+- `npm run test:pdf-ingestion` — PDF table normalization check.
+- `npm run test:exports` / `npm run test:exports:db` — export coverage and database export validation.
+- `npm run docker:connectors` — start the optional connector-runner, BlitzBrowser, and connector dashboard profile.
+- `npm run connector-runner:typecheck` — typecheck the browser connector service.
+- `npm run templates:json` / `npm run templates:exports` — regenerate starter policy template JSON and rendered documents.
+
+---
+
+## Project status
+
+### Current
+
+- BC society workspace records: society profile, members, directors, meetings, minutes, conflicts, filings, deadlines, documents, bylaws, privacy, financials, elections, grants, volunteers, transparency, and module settings.
+- Public/static demo and backend-backed app modes: `/demo` runs without Convex or auth; `/app` runs against hosted or self-hosted Convex.
+- Identity modes: `none` keeps the local/demo user picker; `better-auth` enables real login/session handling through the auth sidecar.
+- Multi-society data model and workspace selection: the app can list society records and persists the selected society locally.
+- Document files and versions: Convex storage uploads plus RustFS-backed document version uploads are wired into the document workflows.
+- Filing support: Societies Online and CRA pre-fill payloads can be reviewed, copied, and exported for manual filing; filed records store submission method, confirmation number, fee, and evidence.
+- Audit surfaces: the audit log page, election audit trail, exports with redaction, and access-custody reveal logging are available.
+- Live integrations behind environment flags: Resend email, Twilio SMS, Stripe checkout/webhooks, Wave accounting sync, Paperless-ngx document sync/import, RustFS storage, LLM/transcription adapters, n8n workflows, and browser connectors.
+
+### Beta
+
+- Better Auth production rollout: login/session handling is implemented, but production deployments still need env hardening, domain/cookie review, and operational migration testing.
+- Payment and email operations: Stripe and Resend paths exist, but should be tested against real provider accounts before depending on them for a society's live workflows.
+- SMS operations: Twilio delivery and callbacks exist, but phone-number registration and consent workflows need provider-specific production review.
+- Wave accounting: account, balance, vendor, product, invoice, and provider diagnostics are supported within Wave's public API limits; bank and credit-card ledger reads still require CSV/import or another data source.
+- Paperless-ngx automation: document sync, tags, and source-document import flows exist and should be validated against each organization's Paperless taxonomy before broad use.
+- Multi-society operations: multiple records and selection work, but account-level permissions, membership scoping, and admin controls need more production review.
+- Workflow and browser automation: n8n bridge recipes and BlitzBrowser connector sessions are available for local/operator-driven workflows, but should be treated as controlled automation rather than unattended filing authority.
+
+### Planned
+
+- Direct Societies Online submission or browser-assisted filing beyond pre-fill review, subject to BC Registry access constraints.
+- More robust speaker diarization and transcript review tooling for meeting minutes.
+- Slack or other non-email deadline reminders.
+- Deeper CRA T3010 / T2 line-item schedules and validation.
+- Production-grade role/permission boundaries across societies, modules, and sensitive records.
+
+### Deprecated
+
+- Metadata-only document tracking as the expected document workflow. New document work should use storage-backed uploads, document versions, and Paperless sync where configured.
+- Treating authentication and multi-society support as out of v1 scope. Both now exist in working form, with production hardening tracked under beta/planned.
+- Describing Societies Online filing as unavailable wholesale. Direct API filing is still unavailable, but pre-fill review/export and evidence capture are current features.

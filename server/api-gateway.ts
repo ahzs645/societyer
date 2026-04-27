@@ -20,6 +20,10 @@ import {
   normalizePdfTableStructures,
 } from "../convex/lib/pdfTableNormalization";
 import { auth, getAuthMode } from "./auth-config";
+import {
+  importGcosProjectSnapshotViaConvex,
+  normalizeGcosExportedSnapshot,
+} from "./gcos-import";
 
 extendZodWithOpenApi(z);
 
@@ -894,7 +898,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       if (!runnerOutput?.normalizedGrant) {
         throw httpError(502, "connector_import_invalid", "GCOS connector did not return a normalized grant snapshot.");
       }
-      const importResult = await convexCall(client, mutation("grants.importGcosProjectSnapshot"), {
+      const importResult = await importGcosProjectSnapshotViaConvex(client, convexCall, {
         societyId: societyIdFrom(req, req.actor!),
         normalizedGrant: runnerOutput.normalizedGrant,
         snapshot: runnerOutput,
@@ -917,13 +921,33 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       if (!runnerOutput?.normalizedGrant) {
         throw httpError(502, "connector_import_invalid", "GCOS connector did not return a normalized grant snapshot.");
       }
-      const importResult = await convexCall(client, mutation("grants.importGcosProjectSnapshot"), {
+      const importResult = await importGcosProjectSnapshotViaConvex(client, convexCall, {
         societyId: societyIdFrom(req, req.actor!),
         normalizedGrant: runnerOutput.normalizedGrant,
         snapshot: runnerOutput,
         actingUserId: req.actor?.userId,
       });
       res.json(singleResponse({ ...runnerOutput, import: importResult }));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/connectors/gcos/import-exported-snapshot",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      const body = stripActor(req.body ?? {});
+      const snapshot = body.snapshot ?? body;
+      const normalizedGrant = body.normalizedGrant ?? (snapshot as any)?.normalizedGrant ?? normalizeGcosExportedSnapshot(snapshot);
+      if (!normalizedGrant) {
+        throw httpError(400, "gcos_export_invalid", "GCOS export JSON must include a snapshot or normalizedGrant.");
+      }
+      const importResult = await importGcosProjectSnapshotViaConvex(client, convexCall, {
+        societyId: societyIdFrom(req, req.actor!),
+        normalizedGrant,
+        snapshot,
+        actingUserId: req.actor?.userId,
+      });
+      res.json(singleResponse({ snapshot, normalizedGrant, import: importResult }));
     }),
   );
 

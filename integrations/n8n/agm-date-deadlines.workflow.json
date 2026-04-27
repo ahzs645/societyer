@@ -1,0 +1,91 @@
+{
+  "id": "societyer-agm-date-deadlines",
+  "name": "Societyer - AGM Date Deadlines",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "societyer/governance/agm-date-deadlines",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Societyer Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-560, 0]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "recipe-summary",
+              "name": "summary",
+              "type": "string",
+              "value": "={{`AGM deadline recipe received for ${$json.body.input?.intake?.agmDateISO || 'the supplied AGM date'}`}}"
+            },
+            {
+              "id": "deadline-plan",
+              "name": "deadlinePlan",
+              "type": "array",
+              "value": "={{$json.body.input?.setup?.deadlinePlan || []}}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "prepare-deadlines",
+      "name": "Prepare Deadline Plan",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-320, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Societyer Webhook').item.json.body.callbackUrl}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-societyer-workflow-secret",
+              "value": "={{$('Societyer Webhook').item.json.body.callbackSecret}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({ workflowId: $('Societyer Webhook').item.json.body.workflowId, runId: $('Societyer Webhook').item.json.body.runId, event: 'run.completed', stepKey: 'notify_officers', note: $json.summary || 'n8n prepared AGM deadline metadata.', output: { engine: 'n8n', deadlinePlan: $json.deadlinePlan } })}}",
+        "options": {}
+      },
+      "id": "callback-run-complete",
+      "name": "Callback Run Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-80, 0]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Societyer Webhook": {
+      "main": [[{ "node": "Prepare Deadline Plan", "type": "main", "index": 0 }]]
+    },
+    "Prepare Deadline Plan": {
+      "main": [[{ "node": "Callback Run Complete", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "societyer-agm-date-deadlines-v1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": ["societyer", "governance", "agm"]
+}

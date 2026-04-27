@@ -97,14 +97,20 @@ export function WorkflowsPage() {
   const openNew = (recipeKey?: string) => {
     const first = recipeKey ?? catalog?.[0]?.key ?? "agm_prep";
     const selected = catalog?.find((c: any) => c.key === first);
-    const manualByDefault = selected?.provider === "n8n" || selected?.config?.defaultTriggerKind === "manual";
+    const defaultTriggerKind = selected?.config?.defaultTriggerKind;
+    const triggerKind =
+      defaultTriggerKind === "date_offset" || defaultTriggerKind === "cron" || defaultTriggerKind === "manual"
+        ? defaultTriggerKind
+        : selected?.provider === "n8n"
+          ? "manual"
+          : "cron";
     setForm({
       recipe: first,
       name: selected?.label ?? "New workflow",
-      triggerKind: manualByDefault ? "manual" : "cron",
-      cron: manualByDefault ? "" : "0 8 * * 1",
-      daysBefore: "30",
-      anchor: "insurancePolicies.renewalDate",
+      triggerKind,
+      cron: triggerKind === "cron" ? "0 8 * * 1" : "",
+      daysBefore: selected?.config?.daysBefore ? String(selected.config.daysBefore) : "30",
+      anchor: selected?.config?.anchor ?? "insurancePolicies.renewalDate",
       provider: selected?.provider ?? "internal",
     });
     setOpen(true);
@@ -155,6 +161,15 @@ export function WorkflowsPage() {
             </button>
             <button className="btn-action" onClick={() => openNew("ote_keycard_access_request")}>
               <WorkflowIcon size={12} /> OTE access
+            </button>
+            <button className="btn-action" onClick={() => openNew("agm_date_deadlines")}>
+              <WorkflowIcon size={12} /> AGM deadlines
+            </button>
+            <button className="btn-action" onClick={() => openNew("filing_due_notify_officer")}>
+              <WorkflowIcon size={12} /> Filing notice
+            </button>
+            <button className="btn-action" onClick={() => openNew("conflict_disclosed_agenda_item")}>
+              <WorkflowIcon size={12} /> Conflict agenda
             </button>
             <button className="btn-action btn-action--primary" onClick={() => openNew()}>
               <Plus size={12} /> New workflow
@@ -299,14 +314,22 @@ export function WorkflowsPage() {
                 value={form.recipe}
                 onChange={(e) => {
                   const next = catalog?.find((c: any) => c.key === e.target.value);
-                  const manualByDefault = next?.provider === "n8n" || next?.config?.defaultTriggerKind === "manual";
+                  const defaultTriggerKind = next?.config?.defaultTriggerKind;
+                  const triggerKind =
+                    defaultTriggerKind === "date_offset" || defaultTriggerKind === "cron" || defaultTriggerKind === "manual"
+                      ? defaultTriggerKind
+                      : next?.provider === "n8n"
+                        ? "manual"
+                        : form.triggerKind;
                   setForm({
                     ...form,
                     recipe: e.target.value,
                     name: next?.label ?? form.name,
                     provider: next?.provider ?? "internal",
-                    triggerKind: manualByDefault ? "manual" : form.triggerKind,
-                    cron: manualByDefault ? "" : form.cron,
+                    triggerKind,
+                    cron: triggerKind === "cron" ? (form.cron || "0 8 * * 1") : "",
+                    daysBefore: next?.config?.daysBefore ? String(next.config.daysBefore) : form.daysBefore,
+                    anchor: next?.config?.anchor ?? form.anchor,
                   });
                 }}
               >
@@ -318,6 +341,15 @@ export function WorkflowsPage() {
             {catalog?.find((c) => c.key === form.recipe)?.description && (
               <div className="muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
                 {catalog.find((c) => c.key === form.recipe)?.description}
+              </div>
+            )}
+            {catalog?.find((c) => c.key === form.recipe)?.config?.n8nOnly && (
+              <div className="flag flag--info" style={{ marginBottom: 12 }}>
+                <WorkflowIcon size={14} />
+                <div>
+                  This governance recipe is n8n-only. Societyer stores setup metadata, links the webhook,
+                  and records callbacks; execution logic belongs in the imported n8n template.
+                </div>
               </div>
             )}
             <Field label="Name">

@@ -14,6 +14,12 @@ export type ConnectorManifest = {
     profileKeyPrefix?: string;
     confirmMode?: "verified" | "profile";
   };
+  browserDefaults?: {
+    timezone?: string;
+    locale?: string;
+    viewport?: { width: number; height: number };
+    browserVersion?: string;
+  };
   actions: Array<{
     id: string;
     name: string;
@@ -141,6 +147,11 @@ export const connectors: ConnectorManifest[] = [
       allowedOrigins: ["https://www.canada.ca", "https://srv136.services.gc.ca"],
       profileKeyPrefix: "gcos",
       confirmMode: "profile",
+    },
+    browserDefaults: {
+      timezone: "America/Vancouver",
+      locale: "en-CA",
+      viewport: { width: 1440, height: 900 },
     },
     actions: [
       {

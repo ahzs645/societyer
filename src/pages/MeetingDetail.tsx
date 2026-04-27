@@ -110,6 +110,7 @@ export function MeetingDetailPage() {
   const removeMeetingMaterial = useMutation(api.meetingMaterials.remove);
   const backfillMeetingQuorum = useMutation(api.meetings.backfillQuorumSnapshot);
   const updateMinutes = useMutation(api.minutes.update);
+  const createMinutes = useMutation(api.minutes.create);
   const backfillMinutesQuorum = useMutation(api.minutes.backfillQuorumSnapshot);
   const createBacklogFromMinutesMotion = useMutation(api.motionBacklog.createFromMinutesMotion);
   const createBacklogFromMinutesSection = useMutation(api.motionBacklog.createFromMinutesSection);
@@ -554,6 +555,50 @@ export function MeetingDetailPage() {
 
   const saveMinuteSections = (next: any[]) =>
     minutes ? updateMinutes({ id: minutes._id, patch: { sections: next } }) : undefined;
+
+  const sectionsFromAgenda = () =>
+    agenda.map((title) => ({
+      title,
+      type: inferAgendaSectionType(title),
+      discussion: "",
+      decisions: [],
+      actionItems: [],
+    }));
+
+  const createMinutesFromAgenda = async () => {
+    if (!agenda.length) {
+      toast.error("Add agenda items first.");
+      return;
+    }
+    const sections = sectionsFromAgenda();
+    if (minutes) {
+      if ((minutes.sections ?? []).length > 0) {
+        toast.info("Minutes already have agenda sections.");
+        return;
+      }
+      await updateMinutes({ id: minutes._id, patch: { sections } });
+      toast.success("Agenda copied into minutes.");
+      return;
+    }
+
+    const attendees = Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds.map(String) : [];
+    const quorumRequired = quorumSnapshot.required ?? meeting.quorumRequired;
+    await createMinutes({
+      societyId: meeting.societyId,
+      meetingId: meeting._id,
+      heldAt: meeting.scheduledAt,
+      attendees,
+      absent: [],
+      quorumMet: quorumRequired == null ? false : attendees.length >= quorumRequired,
+      quorumRequired: quorumRequired ?? undefined,
+      discussion: "",
+      sections,
+      motions: [],
+      decisions: [],
+      actionItems: [],
+    });
+    toast.success("Minutes created from agenda.");
+  };
 
   const addMotionToBacklog = async (_motion: Motion, motionIndex: number) => {
     if (!minutes) return;
@@ -1018,6 +1063,7 @@ export function MeetingDetailPage() {
             directors={directors}
             saveMinuteSections={saveMinuteSections}
             saveMinuteMotions={saveMotions}
+            createMinutesFromAgenda={createMinutesFromAgenda}
             addSectionToBacklog={addSectionToBacklog}
             onOpenMotions={() => setActiveTab("motions")}
             transcript={transcript}
@@ -1294,6 +1340,16 @@ export function MeetingDetailPage() {
       </Drawer>
     </div>
   );
+}
+
+function inferAgendaSectionType(title: string) {
+  const normalized = title.toLowerCase();
+  if (/\bmotion|resolution|approve|approval|vote\b/.test(normalized)) return "motion";
+  if (/\breport|financial|treasurer|chair|committee\b/.test(normalized)) return "report";
+  if (/\bbreak|recess\b/.test(normalized)) return "break";
+  if (/\bin[ -]?camera|executive session|closed session\b/.test(normalized)) return "executive_session";
+  if (/\badjourn\b/.test(normalized)) return "other";
+  return "discussion";
 }
 
 export function MeetingMinutesPreviewPage() {

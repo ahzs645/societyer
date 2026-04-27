@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Societyer GCOS Exporter",
+  "version": "0.1.0",
+  "description": "Export sanitized GCOS project snapshots from your normal logged-in Chrome session for Societyer import.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Export GCOS to Societyer"
+  },
+  "permissions": ["activeTab", "downloads", "scripting", "storage"],
+  "host_permissions": [
+    "https://www.canada.ca/*",
+    "https://srv136.services.gc.ca/*",
+    "http://127.0.0.1:*/*",
+    "http://localhost:*/*"
+  ]
+}

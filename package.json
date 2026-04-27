@@ -31,6 +31,7 @@
     "setup:ote-keycard": "node scripts/setup-ote-keycard-workflow.mjs",
     "test:smoke": "npx playwright test",
     "test:api-contract": "tsx scripts/check-api-contract.ts",
+    "test:dashboard-compliance": "tsx scripts/check-dashboard-compliance-rules.ts",
     "test:org-details": "tsx scripts/check-org-detail-smoke.ts",
     "test:pdf-ingestion": "tsx scripts/check-pdf-table-normalization.ts",
     "test:exports": "tsx scripts/check-export-coverage.ts",

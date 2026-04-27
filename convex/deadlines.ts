@@ -34,6 +34,25 @@ export const toggleDone = mutation({
   },
 });
 
+export const update = mutation({
+  args: {
+    id: v.id("deadlines"),
+    patch: v.object({
+      title: v.optional(v.string()),
+      description: v.optional(v.string()),
+      dueDate: v.optional(v.string()),
+      category: v.optional(v.string()),
+      done: v.optional(v.boolean()),
+      recurrence: v.optional(v.string()),
+      linkedFilingId: v.optional(v.id("filings")),
+    }),
+  },
+  returns: v.any(),
+  handler: async (ctx, { id, patch }) => {
+    await ctx.db.patch(id, patch);
+  },
+});
+
 export const remove = mutation({
   args: { id: v.id("deadlines") },
   returns: v.any(),

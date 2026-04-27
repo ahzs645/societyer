@@ -19,6 +19,14 @@ import {
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
 
+const PUBLICATION_PRESETS = [
+  { category: "AnnualReport", title: "Annual report", summary: "Publish the filed annual report package or registry confirmation." },
+  { category: "FinancialSummary", title: "Financial summary", summary: "Publish approved financial statements, reviewer notes, or a plain-language annual summary." },
+  { category: "Policy", title: "Public policy", summary: "Publish privacy, conflict, records inspection, code of conduct, or grant policies." },
+  { category: "Notice", title: "AGM notice", summary: "Publish an AGM notice, member inspection instructions, or other public notice." },
+  { category: "Grant", title: "Grant disclosure", summary: "Publish grant recipients, funding priorities, eligibility rules, or application instructions." },
+];
+
 /**
  * Public transparency page. The top card keeps the existing public-
  * settings summary + edit flow; the publications list is now a
@@ -70,6 +78,13 @@ export function TransparencyPage() {
   const records = (publications ?? []) as any[];
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
   const publicPageLive = Boolean(society.publicTransparencyEnabled && society.publicSlug);
+  const builderChecks = [
+    { label: "Public URL", complete: Boolean(society.publicSlug), detail: society.publicSlug ? publicHref : "Add a slug" },
+    { label: "Page enabled", complete: Boolean(society.publicTransparencyEnabled), detail: society.publicTransparencyEnabled ? "Live when published" : "Draft only" },
+    { label: "Contact", complete: Boolean(society.publicContactEmail), detail: society.publicContactEmail ?? "Add a public email" },
+    { label: "Directors", complete: Boolean(society.publicShowBoard), detail: society.publicShowBoard ? "Board roster visible" : "Hidden" },
+    { label: "Published records", complete: publishedCount > 0, detail: `${publishedCount} published` },
+  ];
 
   return (
     <div className="page">
@@ -187,6 +202,55 @@ export function TransparencyPage() {
         </div>
       </div>
 
+      <div className="transparency-builder">
+        <div className="transparency-builder__panel">
+          <div className="card__head">
+            <h2 className="card__title">Public transparency builder</h2>
+            <span className="card__subtitle">Choose what the public page should disclose, then publish only reviewed records.</span>
+          </div>
+          <div className="transparency-builder__checks">
+            {builderChecks.map((check) => (
+              <div className={`transparency-builder__check${check.complete ? " is-complete" : ""}`} key={check.label}>
+                <span>{check.complete ? "Ready" : "Needed"}</span>
+                <strong>{check.label}</strong>
+                <small>{check.detail}</small>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="transparency-builder__panel">
+          <div className="card__head">
+            <h2 className="card__title">Disclosure presets</h2>
+            <span className="card__subtitle">Directors are controlled by settings; documents publish as reviewed records.</span>
+          </div>
+          <div className="transparency-builder__presets">
+            {PUBLICATION_PRESETS.map((preset) => (
+              <button
+                type="button"
+                className="transparency-builder__preset"
+                key={preset.category}
+                onClick={() =>
+                  setPublicationDraft({
+                    societyId: society._id,
+                    title: preset.title,
+                    summary: preset.summary,
+                    category: preset.category,
+                    documentId: "",
+                    url: "",
+                    status: "Draft",
+                    reviewStatus: "Draft",
+                    publishedAtISO: "",
+                  })
+                }
+              >
+                <strong>{preset.title}</strong>
+                <span>{preset.summary}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {showMetadataWarning ? (
         <div className="record-table__empty">
           <div className="record-table__empty-title">Metadata not seeded</div>
@@ -215,6 +279,12 @@ export function TransparencyPage() {
               ...existing,
               [fieldName]: value,
             };
+            if (merged.status === "Published") {
+              merged.reviewStatus = "Approved";
+              merged.approvedByUserId = merged.approvedByUserId ?? actingUserId;
+              merged.approvedAtISO = merged.approvedAtISO ?? new Date().toISOString();
+              merged.publishedAtISO = merged.publishedAtISO || new Date().toISOString().slice(0, 10);
+            }
             await upsertPublication({
               id: recordId as Id<"publications">,
               societyId: society._id,
@@ -304,7 +374,7 @@ export function TransparencyPage() {
               onClick={async () => {
                 await upsertSociety({
                   ...settingsDraft,
-                  publicSlug: settingsDraft.publicSlug || undefined,
+                  publicSlug: normalizePublicSlug(settingsDraft.publicSlug) || undefined,
                   publicSummary: settingsDraft.publicSummary || undefined,
                   publicContactEmail: settingsDraft.publicContactEmail || undefined,
                 });
@@ -393,6 +463,9 @@ export function TransparencyPage() {
                 <option>AnnualReport</option>
                 <option>Bylaws</option>
                 <option>AGM</option>
+                <option>FinancialSummary</option>
+                <option>Grant</option>
+                <option>InspectionInstructions</option>
                 <option>Policy</option>
                 <option>Notice</option>
                 <option>Resource</option>
@@ -420,4 +493,12 @@ export function TransparencyPage() {
       </Drawer>
     </div>
   );
+}
+
+function normalizePublicSlug(value?: string) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }

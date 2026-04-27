@@ -3,28 +3,23 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
-import { DataTable } from "../components/DataTable";
+import { Drawer, Field } from "../components/ui";
 import { CalendarView } from "../components/CalendarView";
 import { Segmented } from "../components/primitives";
-import { FilterField } from "../components/FilterBar";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
-import { Plus, Trash2, Calendar, Tag, CheckCircle2 } from "lucide-react";
-import { formatDate, relative } from "../lib/format";
+import { Plus, Trash2, Calendar } from "lucide-react";
 import { patchInList } from "../lib/optimistic";
-
-const DEADLINE_FIELDS: FilterField<any>[] = [
-  { id: "title", label: "Title", icon: <Tag size={14} />, match: (d, q) => d.title.toLowerCase().includes(q.toLowerCase()) },
-  { id: "category", label: "Category", icon: <Tag size={14} />, options: ["Governance", "Tax", "Payroll", "Privacy", "Other"], match: (d, q) => d.category === q },
-  { id: "recurrence", label: "Recurrence", icon: <Tag size={14} />, options: ["None", "Monthly", "Quarterly", "Annual"], match: (d, q) => (d.recurrence ?? "None") === q },
-  { id: "done", label: "Status", icon: <CheckCircle2 size={14} />, options: ["Open", "Done"], match: (d, q) => (d.done ? "Done" : "Open") === q },
-  { id: "overdue", label: "Overdue", icon: <Calendar size={14} />, options: ["Yes", "No"], match: (d, q) => {
-    const isOver = !d.done && new Date(d.dueDate).getTime() < Date.now();
-    return q === (isOver ? "Yes" : "No");
-  } },
-];
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 export function DeadlinesPage() {
   const society = useSociety();
@@ -35,10 +30,19 @@ export function DeadlinesPage() {
       patchInList(store, api.deadlines.list, String(args.id), { done: args.done });
     },
   );
+  const update = useMutation(api.deadlines.update);
   const remove = useMutation(api.deadlines.remove);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [view, setView] = useState<"list" | "calendar">("list");
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "deadline",
+    viewId: currentViewId,
+  });
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -50,6 +54,8 @@ export function DeadlinesPage() {
   const save = async () => { await create({ societyId: society._id, ...form }); setOpen(false); };
 
   const now = Date.now();
+  const records = (items ?? []) as any[];
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   return (
     <div className="page">
@@ -90,70 +96,79 @@ export function DeadlinesPage() {
       )}
 
       {view === "list" && (
-      <DataTable
-        label="All deadlines"
-        icon={<Calendar size={14} />}
-        data={(items ?? []) as any[]}
-        loading={items === undefined}
-        rowKey={(r) => r._id}
-        filterFields={DEADLINE_FIELDS}
-        searchPlaceholder="Search deadlines…"
-        defaultSort={{ columnId: "dueDate", dir: "asc" }}
-        columns={[
-          {
-            id: "done", header: "", width: 36,
-            render: (r) => (
-              <span onClick={(e) => e.stopPropagation()}>
-                <Checkbox
-                  checked={!!r.done}
-                  onChange={() => toggle({ id: r._id, done: !r.done })}
-                  bare
-                />
-              </span>
-            ),
-          },
-          {
-            id: "title", header: "Task", sortable: true,
-            accessor: (r) => r.title,
-            render: (r) => (
-              <div>
-                <strong style={{ textDecoration: r.done ? "line-through" : "none", color: r.done ? "var(--text-tertiary)" : undefined }}>
-                  {r.title}
-                </strong>
-                {r.description && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{r.description}</div>}
-              </div>
-            ),
-          },
-          {
-            id: "category", header: "Category", sortable: true,
-            accessor: (r) => r.category,
-            render: (r) => <Badge tone={catTone(r.category)}>{r.category}</Badge>,
-          },
-          {
-            id: "dueDate", header: "Due", sortable: true,
-            accessor: (r) => r.dueDate,
-            render: (r) => <span className="mono">{formatDate(r.dueDate)}</span>,
-          },
-          {
-            id: "when", header: "When",
-            render: (r) => {
-              if (r.done) return <Badge tone="success">Done</Badge>;
-              const overdue = new Date(r.dueDate).getTime() < now;
-              return <Badge tone={overdue ? "danger" : "info"}>{relative(r.dueDate)}</Badge>;
-            },
-          },
-          {
-            id: "recurrence", header: "Recurrence", sortable: true,
-            accessor: (r) => r.recurrence ?? "None",
-            render: (r) => <span className="muted">{r.recurrence ?? "None"}</span>,
-          },
-        ]}
-        renderRowActions={(r) => (
-          <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete deadline ${r.title}`} onClick={() => remove({ id: r._id })}>
-            <Trash2 size={12} />
-          </button>
-        )}
-      />
+        showMetadataWarning ? (
+          <div className="record-table__empty">
+            <div className="record-table__empty-title">Metadata not seeded</div>
+            <div className="record-table__empty-desc">
+              Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
+              deadline object metadata + default view.
+            </div>
+          </div>
+        ) : tableData.objectMetadata ? (
+          <RecordTableScope
+            tableId="deadlines"
+            objectMetadata={tableData.objectMetadata}
+            hydratedView={tableData.hydratedView}
+            records={records}
+            onUpdate={async ({ recordId, fieldName, value }) => {
+              await update({
+                id: recordId as Id<"deadlines">,
+                patch: { [fieldName]: value } as any,
+              });
+            }}
+          >
+            <RecordTableViewToolbar
+              societyId={society._id}
+              objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+              icon={<Calendar size={14} />}
+              label="All deadlines"
+              views={tableData.views}
+              currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+              onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+              onOpenFilter={() => setFilterOpen((x) => !x)}
+            />
+            <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+            <RecordTableFilterChips />
+            <RecordTable
+              loading={tableData.loading || items === undefined}
+              renderCell={({ record, field }) => {
+                if (field.name === "done") {
+                  return (
+                    <span onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={!!record.done}
+                        onChange={() => toggle({ id: record._id, done: !record.done })}
+                        bare
+                      />
+                    </span>
+                  );
+                }
+                if (field.name === "title") {
+                  return (
+                    <div>
+                      <strong style={{ textDecoration: record.done ? "line-through" : "none", color: record.done ? "var(--text-tertiary)" : undefined }}>
+                        {record.title}
+                      </strong>
+                      {record.description && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{record.description}</div>}
+                    </div>
+                  );
+                }
+                return undefined;
+              }}
+              renderRowActions={(r) => (
+                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete deadline ${r.title}`} onClick={() => remove({ id: r._id })}>
+                  <Trash2 size={12} />
+                </button>
+              )}
+            />
+          </RecordTableScope>
+        ) : (
+          <div className="record-table__loading">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="record-table__loading-row" />
+            ))}
+          </div>
+        )
       )}
 
       <Drawer
@@ -188,8 +203,4 @@ export function DeadlinesPage() {
       </Drawer>
     </div>
   );
-}
-
-function catTone(cat: string) {
-  return cat === "Tax" ? "warn" : cat === "Privacy" ? "info" : cat === "Payroll" ? "accent" : "neutral";
 }

@@ -48,7 +48,7 @@ const FEATURE_GROUPS = [
     icon: <ShieldCheck size={16} />,
     evidence: "§ 11, 44, 76",
     items: [
-      "Auto-checked Act flags: ≥3 directors, BC residency, consents on file",
+      "Auto-checked Act flags: s.40 directors, BC residency, consent evidence",
       "CRA + BC Societies Online filing tracker with status and pre-fill helper",
       "Statutory deadline calendar, retention policy and bylaw redlines",
     ],
@@ -77,8 +77,8 @@ const FEATURE_GROUPS = [
 
 const FLAG_EXAMPLES = [
   { label: "≥3 directors on the board", state: "ok" as const },
-  { label: "At least one BC-resident director", state: "ok" as const },
-  { label: "All director consents on file", state: "warn" as const, note: "1 missing" },
+  { label: "At least one BC-resident director unless exempt", state: "ok" as const },
+  { label: "All director consent evidence on file", state: "warn" as const, note: "1 missing" },
   { label: "Annual report filed with BC Registries", state: "err" as const, note: "Overdue 14 days" },
   { label: "PIPA privacy policy published", state: "ok" as const },
   { label: "Bylaws filed match adopted version", state: "ok" as const },
@@ -347,7 +347,7 @@ export function LandingPage() {
               align="left"
             />
             <ul className="landing__bullets">
-              <li><Scale size={14} /> Director composition, residency and consents continuously verified</li>
+              <li><Scale size={14} /> Director composition, residency exceptions and consent evidence continuously verified</li>
               <li><CalendarClock size={14} /> Annual report and CRA T3010 surfaced before they slip</li>
               <li><Vote size={14} /> Conflict of interest disclosures linked to the votes they affect</li>
               <li><History size={14} /> Bylaw redlines and version history so you can prove what was adopted</li>

@@ -42,6 +42,8 @@ export const EXPORTABLE_TABLES = [
   "transactionCandidates",
   "signatures",
   "filingBotRuns",
+  "aiAgentRuns",
+  "aiAgentAuditEvents",
   "workflows",
   "workflowPackages",
   "pendingEmails",

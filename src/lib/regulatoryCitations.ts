@@ -259,7 +259,41 @@ export const regulatoryCitations: Record<string, RegulatoryCitation> = {
   // ---------------------------------------------------------------
   "BC-SOC-DIRECTORS-MIN": {
     id: "BC-SOC-DIRECTORS-MIN",
-    source: "BC Societies Act s.42 — Minimum number of directors",
+    source: "BC Societies Act ss.40, 197 — Number and residency of directors",
+    fullCitation:
+      "Societies Act, SBC 2015, c.18, ss.40, 197. BC Laws, current to " +
+      BC_CURRENT_TO_ISO +
+      ".",
+    jurisdiction: "CA-BC",
+    instrument: "Societies Act",
+    section: "ss.40, 197",
+    url: BC_LAWS_SOCIETIES_ACT,
+    pointInTimeUrl: BC_LAWS_SOCIETIES_ACT_PIT,
+    sourceCurrentToISO: BC_CURRENT_TO_ISO,
+    quote:
+      "A society must have at least 3 directors; despite s.40, a member-funded society need have only one director.",
+    caveat:
+      "The society's filed bylaws can set a higher minimum.",
+  },
+  "BC-SOC-DIRECTORS-BC-RESIDENT": {
+    id: "BC-SOC-DIRECTORS-BC-RESIDENT",
+    source: "BC Societies Act ss.40, 197 — Residency requirement",
+    fullCitation:
+      "Societies Act, SBC 2015, c.18, ss.40, 197. BC Laws, current to " +
+      BC_CURRENT_TO_ISO +
+      ".",
+    jurisdiction: "CA-BC",
+    instrument: "Societies Act",
+    section: "ss.40, 197",
+    url: BC_LAWS_SOCIETIES_ACT,
+    pointInTimeUrl: BC_LAWS_SOCIETIES_ACT_PIT,
+    sourceCurrentToISO: BC_CURRENT_TO_ISO,
+    quote:
+      "At least one director must be ordinarily resident in British Columbia; despite s.40, a member-funded society need not have a BC-resident director.",
+  },
+  "BC-SOC-DIRECTOR-CONSENT": {
+    id: "BC-SOC-DIRECTOR-CONSENT",
+    source: "BC Societies Act s.42 — Consent to be a director",
     fullCitation:
       "Societies Act, SBC 2015, c.18, s.42. BC Laws, current to " +
       BC_CURRENT_TO_ISO +
@@ -271,43 +305,9 @@ export const regulatoryCitations: Record<string, RegulatoryCitation> = {
     pointInTimeUrl: BC_LAWS_SOCIETIES_ACT_PIT,
     sourceCurrentToISO: BC_CURRENT_TO_ISO,
     quote:
-      "A society must have at least 3 directors, but a member-funded society is only required to have one director.",
+      "A director designation, election or appointment is invalid unless the individual consents in writing or attends the meeting where it is made and does not refuse.",
     caveat:
-      "The society's filed bylaws can set a higher minimum.",
-  },
-  "BC-SOC-DIRECTORS-BC-RESIDENT": {
-    id: "BC-SOC-DIRECTORS-BC-RESIDENT",
-    source: "BC Societies Act s.44(1) — Residency requirement",
-    fullCitation:
-      "Societies Act, SBC 2015, c.18, s.44. BC Laws, current to " +
-      BC_CURRENT_TO_ISO +
-      ".",
-    jurisdiction: "CA-BC",
-    instrument: "Societies Act",
-    section: "s.44(1)",
-    url: BC_LAWS_SOCIETIES_ACT,
-    pointInTimeUrl: BC_LAWS_SOCIETIES_ACT_PIT,
-    sourceCurrentToISO: BC_CURRENT_TO_ISO,
-    quote:
-      "At least one director of a society must be ordinarily resident in British Columbia.",
-  },
-  "BC-SOC-DIRECTOR-CONSENT": {
-    id: "BC-SOC-DIRECTOR-CONSENT",
-    source: "BC Societies Act s.45 — Consent to be a director",
-    fullCitation:
-      "Societies Act, SBC 2015, c.18, s.45. BC Laws, current to " +
-      BC_CURRENT_TO_ISO +
-      ".",
-    jurisdiction: "CA-BC",
-    instrument: "Societies Act",
-    section: "s.45",
-    url: BC_LAWS_SOCIETIES_ACT,
-    pointInTimeUrl: BC_LAWS_SOCIETIES_ACT_PIT,
-    sourceCurrentToISO: BC_CURRENT_TO_ISO,
-    quote:
-      "An individual must not be elected or appointed as a director of a society unless the individual has, before the election or appointment, consented in writing to be a director, or consents at the meeting at which the individual is elected or appointed and the consent is recorded in the minutes.",
-    caveat:
-      "Keep the signed consent (or minuted consent) in the society's records alongside the director register.",
+      "Keep signed consent or meeting minutes showing attendance and no refusal alongside the director register.",
   },
   "BC-SOC-DIRECTOR-QUALIFICATIONS": {
     id: "BC-SOC-DIRECTOR-QUALIFICATIONS",

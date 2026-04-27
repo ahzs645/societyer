@@ -94,8 +94,7 @@ export default defineSchema({
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })
-    .index("by_society", ["societyId"])
-    .index("by_society_status", ["societyId", "status"]),
+    .index("by_society", ["societyId"]),
 
   organizationIdentifiers: defineTable({
     societyId: v.id("societies"),
@@ -197,8 +196,7 @@ export default defineSchema({
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })
-    .index("by_society", ["societyId"])
-    .index("by_society_status", ["societyId", "status"]),
+    .index("by_society", ["societyId"]),
 
   rightsholdingTransfers: defineTable({
     societyId: v.id("societies"),
@@ -307,9 +305,7 @@ export default defineSchema({
     sourceExternalIds: v.array(v.string()),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
-  })
-    .index("by_society", ["societyId"])
-    .index("by_society_status", ["societyId", "status"]),
+  }).index("by_society", ["societyId"]),
 
   legalPrecedentRuns: defineTable({
     societyId: v.id("societies"),
@@ -421,9 +417,7 @@ export default defineSchema({
     notes: v.optional(v.string()),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
-  })
-    .index("by_society", ["societyId"])
-    .index("by_society_status", ["societyId", "status"]),
+  }).index("by_society", ["societyId"]),
 
   nameSearchItems: defineTable({
     societyId: v.id("societies"),
@@ -674,7 +668,9 @@ export default defineSchema({
     lastSyncAtISO: v.optional(v.string()),
     lastError: v.optional(v.string()),
     demo: v.boolean(),
-  }).index("by_society", ["societyId"]),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
 
   paperlessDocumentSyncs: defineTable({
     societyId: v.id("societies"),
@@ -833,7 +829,9 @@ export default defineSchema({
     lastSyncAtISO: v.optional(v.string()),
     lastError: v.optional(v.string()),
     demo: v.boolean(),
-  }).index("by_society", ["societyId"]),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
 
   waveCacheSnapshots: defineTable({
     societyId: v.id("societies"),
@@ -1129,6 +1127,47 @@ export default defineSchema({
   })
     .index("by_society", ["societyId"])
     .index("by_filing", ["filingId"]),
+
+  aiAgentRuns: defineTable({
+    societyId: v.id("societies"),
+    agentKey: v.string(),
+    agentName: v.string(),
+    status: v.string(), // planned | completed | failed
+    input: v.string(),
+    inputHints: v.array(v.string()),
+    scope: v.string(),
+    allowedActions: v.array(v.string()),
+    allowedTools: v.array(v.string()),
+    plannedToolCalls: v.array(
+      v.object({
+        toolName: v.string(),
+        purpose: v.string(),
+        status: v.string(), // planned | skipped | completed
+      }),
+    ),
+    output: v.string(),
+    provider: v.string(), // deterministic_stub | configured_llm
+    createdAtISO: v.string(),
+    completedAtISO: v.optional(v.string()),
+    triggeredByUserId: v.optional(v.id("users")),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_agent", ["societyId", "agentKey"]),
+
+  aiAgentAuditEvents: defineTable({
+    societyId: v.id("societies"),
+    runId: v.optional(v.id("aiAgentRuns")),
+    agentKey: v.string(),
+    eventType: v.string(), // run_requested | tool_planned | run_completed | run_failed
+    toolName: v.optional(v.string()),
+    summary: v.string(),
+    metadata: v.optional(v.any()),
+    createdAtISO: v.string(),
+    actorUserId: v.optional(v.id("users")),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_run", ["runId"])
+    .index("by_society_agent", ["societyId", "agentKey"]),
 
   workflows: defineTable({
     societyId: v.id("societies"),
@@ -1448,7 +1487,9 @@ export default defineSchema({
     leftAt: v.optional(v.string()),
     votingRights: v.boolean(),
     notes: v.optional(v.string()),
-  }).index("by_society", ["societyId"]),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
 
   directors: defineTable({
     societyId: v.id("societies"),
@@ -1465,7 +1506,9 @@ export default defineSchema({
     resignedAt: v.optional(v.string()),
     status: v.string(),
     notes: v.optional(v.string()),
-  }).index("by_society", ["societyId"]),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
 
   boardRoleAssignments: defineTable({
     societyId: v.id("societies"),
@@ -1545,7 +1588,9 @@ export default defineSchema({
     color: v.string(),
     status: v.string(),
     createdAtISO: v.string(),
-  }).index("by_society", ["societyId"]),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
 
   committeeMembers: defineTable({
     committeeId: v.id("committees"),
@@ -2071,7 +2116,8 @@ export default defineSchema({
     linkedFilingId: v.optional(v.id("filings")),
   })
     .index("by_society", ["societyId"])
-    .index("by_society_due", ["societyId", "dueDate"]),
+    .index("by_society_due", ["societyId", "dueDate"])
+    .index("by_society_done", ["societyId", "done"]),
 
   commitments: defineTable({
     societyId: v.id("societies"),
@@ -2258,6 +2304,7 @@ export default defineSchema({
     notes: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
+    .index("by_society_resolved", ["societyId", "resolvedAt"])
     .index("by_director", ["directorId"]),
 
   financials: defineTable({
@@ -2345,6 +2392,7 @@ export default defineSchema({
     createdAtISO: v.string(),
   })
     .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"])
     .index("by_committee", ["committeeId"]),
 
   tasks: defineTable({
@@ -2371,6 +2419,7 @@ export default defineSchema({
     completionNote: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"])
     .index("by_committee", ["committeeId"])
     .index("by_goal", ["goalId"])
     .index("by_meeting", ["meetingId"])
@@ -2378,6 +2427,31 @@ export default defineSchema({
     .index("by_workflow", ["workflowId"])
     .index("by_document", ["documentId"])
     .index("by_commitment", ["commitmentId"]),
+
+  complianceRemediations: defineTable({
+    societyId: v.id("societies"),
+    ruleId: v.string(),
+    flagLevel: v.string(),
+    flagText: v.string(),
+    evidenceRequired: v.array(v.string()),
+    status: v.string(), // open | resolved | dismissed
+    assignedTo: v.optional(v.string()),
+    taskId: v.optional(v.id("tasks")),
+    sourceEvidenceIds: v.optional(v.array(v.id("sourceEvidence"))),
+    targetTable: v.optional(v.string()),
+    targetId: v.optional(v.string()),
+    resolvedAtISO: v.optional(v.string()),
+    resolvedByUserId: v.optional(v.id("users")),
+    dismissedAtISO: v.optional(v.string()),
+    snoozedUntilISO: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_rule", ["societyId", "ruleId"])
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_task", ["taskId"]),
 
   expenseReports: defineTable({
     societyId: v.id("societies"),
@@ -3216,6 +3290,8 @@ export default defineSchema({
     sortsJson: v.optional(v.string()),
     // Search term pre-applied to the view.
     searchTerm: v.optional(v.string()),
+    // DataTable-specific column state (hidden ids, widths, ordering).
+    columnStateJson: v.optional(v.string()),
     // Compact vs comfortable.
     density: v.optional(v.string()),
     // "Shared" views are visible to the whole society; personal views only

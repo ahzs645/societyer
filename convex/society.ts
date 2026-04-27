@@ -81,6 +81,15 @@ export const upsert = mutation({
     assertAllowedOption("entityTypes", rest.entityType, "Entity type");
     assertAllowedOption("actsFormedUnder", rest.actFormedUnder, "Act formed under");
     assertAllowedOption("organizationStatuses", rest.organizationStatus, "Organization status");
+    if (rest.publicSlug) {
+      const existing = await ctx.db
+        .query("societies")
+        .withIndex("by_public_slug", (q) => q.eq("publicSlug", rest.publicSlug))
+        .first();
+      if (existing && (!id || String(existing._id) !== String(id))) {
+        throw new Error("Public slug is already in use by another society.");
+      }
+    }
     const payload = { ...rest, updatedAt: Date.now() };
     if (id) {
       await ctx.db.patch(id, payload);

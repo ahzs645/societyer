@@ -153,6 +153,12 @@ export const getFullTableSetup = query({
         name: v.name,
         position: v.position,
         isSystem: v.isSystem,
+        isShared: v.isShared,
+        density: v.density,
+        filtersJson: v.filtersJson,
+        sortsJson: v.sortsJson,
+        searchTerm: v.searchTerm,
+        columnStateJson: v.columnStateJson,
       })),
       activeView,
     };

@@ -43,6 +43,9 @@ type RecipeKey =
   | "agm_prep"
   | "insurance_renewal"
   | "annual_report_filing"
+  | "agm_date_deadlines"
+  | "filing_due_notify_officer"
+  | "conflict_disclosed_agenda_item"
   | "unbc_affiliate_id_request"
   | "unbc_key_access_request"
   | "ote_keycard_access_request";
@@ -141,6 +144,9 @@ const RECIPE_LABELS: Record<RecipeKey, string> = {
   agm_prep: "AGM prep",
   insurance_renewal: "Insurance renewal reminder",
   annual_report_filing: "Annual report filing",
+  agm_date_deadlines: "AGM date set -> generate deadlines",
+  filing_due_notify_officer: "Filing due in 14 days -> notify officer",
+  conflict_disclosed_agenda_item: "Conflict disclosed -> add board agenda item",
   unbc_affiliate_id_request: "UNBC Affiliate ID Request",
   unbc_key_access_request: "UNBC Key & Access Request",
   ote_keycard_access_request: "OTE Individual Access Request",
@@ -153,6 +159,12 @@ const RECIPE_DESCRIPTIONS: Record<RecipeKey, string> = {
     "Watches insurancePolicies.renewalDate and pings the board 60/30/7 days before each policy lapses.",
   annual_report_filing:
     "When the annual-report filing is due, runs the Societies Online filing bot and records the confirmation.",
+  agm_date_deadlines:
+    "n8n recipe metadata for turning a newly set AGM date into notice, package, minutes, and annual-report deadlines.",
+  filing_due_notify_officer:
+    "n8n recipe metadata for notifying the responsible officer when an unfiled governance filing reaches its 14-day window.",
+  conflict_disclosed_agenda_item:
+    "n8n recipe metadata for adding a disclosed conflict to the next board agenda for acknowledgement and management.",
   unbc_affiliate_id_request:
     "Collects affiliate intake, hands execution to n8n, fills the UNBC PDF, and saves the generated document.",
   unbc_key_access_request:
@@ -165,6 +177,9 @@ const RECIPE_PROVIDERS: Record<RecipeKey, WorkflowProvider> = {
   agm_prep: "internal",
   insurance_renewal: "internal",
   annual_report_filing: "internal",
+  agm_date_deadlines: "n8n",
+  filing_due_notify_officer: "n8n",
+  conflict_disclosed_agenda_item: "n8n",
   unbc_affiliate_id_request: "n8n",
   unbc_key_access_request: "n8n",
   ote_keycard_access_request: "n8n",
@@ -188,6 +203,23 @@ const RECIPE_STEPS: Record<RecipeKey, RecipeStep[]> = {
     { key: "locate_filing", label: "Locate the open AnnualReport filing" },
     { key: "run_bot", label: "Hand off to the Societies Online filing bot" },
     { key: "record_confirmation", label: "Record confirmation number on the filing" },
+  ],
+  agm_date_deadlines: [
+    { key: "agm_date_set", label: "Receive AGM date set event" },
+    { key: "calculate_deadlines", label: "Calculate governance deadlines in n8n" },
+    { key: "create_deadline_records", label: "Create Societyer deadline records" },
+    { key: "notify_officers", label: "Notify chair and secretary" },
+  ],
+  filing_due_notify_officer: [
+    { key: "scan_due_filings", label: "Find unfiled filings due in 14 days" },
+    { key: "prepare_notice", label: "Prepare officer notification in n8n" },
+    { key: "send_notice", label: "Send notification and link filing record" },
+  ],
+  conflict_disclosed_agenda_item: [
+    { key: "conflict_disclosed", label: "Receive conflict disclosure event" },
+    { key: "find_board_meeting", label: "Find next board meeting" },
+    { key: "add_agenda_item", label: "Add conflict acknowledgement agenda item" },
+    { key: "notify_secretary", label: "Notify secretary for review" },
   ],
   unbc_affiliate_id_request: [
     { key: "manual", label: "Launch manually" },
@@ -294,6 +326,89 @@ const OTE_KEYCARD_INTAKE_FIELDS = [
 ];
 
 const RECIPE_NODE_PREVIEWS: Partial<Record<RecipeKey, NodePreview[]>> = {
+  agm_date_deadlines: [
+    {
+      key: "agm_date_set",
+      type: "external_n8n",
+      label: "AGM date set webhook",
+      description: "n8n receives the AGM meeting id and scheduled date from Societyer or another governance source.",
+      status: "needs_setup",
+    },
+    {
+      key: "calculate_deadlines",
+      type: "external_n8n",
+      label: "Calculate statutory and bylaw deadlines",
+      description: "Template metadata covers notice window, board package target, minutes approval, and annual-report filing due date.",
+      status: "draft",
+    },
+    {
+      key: "create_deadline_records",
+      type: "external_n8n",
+      label: "Create deadline records",
+      description: "n8n calls Societyer APIs to create or update governance deadline rows; Societyer does not run this recipe internally.",
+      status: "draft",
+    },
+    {
+      key: "notify_officers",
+      type: "email",
+      label: "Notify chair and secretary",
+      description: "n8n sends the setup summary and links the AGM workspace.",
+      status: "draft",
+    },
+  ],
+  filing_due_notify_officer: [
+    {
+      key: "scan_due_filings",
+      type: "external_n8n",
+      label: "14-day filing scan",
+      description: "n8n owns the schedule and queries Societyer for unfiled governance filings due in 14 days.",
+      status: "needs_setup",
+    },
+    {
+      key: "prepare_notice",
+      type: "external_n8n",
+      label: "Prepare officer notice",
+      description: "Builds a notification with filing type, deadline, portal link, and evidence requirements.",
+      status: "draft",
+    },
+    {
+      key: "send_notice",
+      type: "email",
+      label: "Notify responsible officer",
+      description: "n8n sends the reminder and records a callback on the workflow run.",
+      status: "draft",
+    },
+  ],
+  conflict_disclosed_agenda_item: [
+    {
+      key: "conflict_disclosed",
+      type: "external_n8n",
+      label: "Conflict disclosure webhook",
+      description: "n8n receives a disclosed conflict event with director, matter, and disclosure date metadata.",
+      status: "needs_setup",
+    },
+    {
+      key: "find_board_meeting",
+      type: "external_n8n",
+      label: "Find next board meeting",
+      description: "Queries Societyer for the next scheduled board meeting that can receive the agenda item.",
+      status: "draft",
+    },
+    {
+      key: "add_agenda_item",
+      type: "external_n8n",
+      label: "Add agenda item",
+      description: "n8n creates or stages an agenda item for conflict acknowledgement and recusal handling.",
+      status: "draft",
+    },
+    {
+      key: "notify_secretary",
+      type: "email",
+      label: "Notify secretary",
+      description: "Sends a review prompt so the secretary can confirm wording before the agenda is circulated.",
+      status: "draft",
+    },
+  ],
   unbc_affiliate_id_request: [
     {
       key: "manual",
@@ -1752,6 +1867,9 @@ async function runExternalWorkflow(ctx: any, wf: any, runId: any, args: any) {
   if (wf.recipe === "ote_keycard_access_request" || wf.config?.workflowTemplateKey === "ote_keycard_access_request") {
     return await runExternalNotificationWorkflow(ctx, wf, runId, args);
   }
+  if (wf.config?.n8nOnly) {
+    return await runExternalGovernanceRecipe(ctx, wf, runId, args);
+  }
 
   const webhookUrl = wf.providerConfig?.externalWebhookUrl;
   const callbackSecret = env("SOCIETYER_WORKFLOW_CALLBACK_SECRET");
@@ -1852,6 +1970,104 @@ async function runExternalWorkflow(ctx: any, wf: any, runId: any, args: any) {
       severity: "info",
       title: `Workflow queued in n8n: ${wf.name}`,
       body: "Societyer is waiting for n8n callbacks to update the run timeline.",
+      linkHref: "/app/workflow-runs",
+    });
+    return { runId, status: "running", externalRunId };
+  } catch (err: any) {
+    await ctx.runMutation(internal.workflows._completeRun, {
+      id: runId,
+      status: "failed",
+      output: { error: err?.message ?? "unknown" },
+    });
+    await ctx.runMutation(api.notifications.create, {
+      societyId: args.societyId,
+      kind: "bot",
+      severity: "err",
+      title: `Workflow failed: ${wf.name}`,
+      body: err?.message ?? "Unknown error",
+      linkHref: "/app/workflow-runs",
+    });
+    throw err;
+  }
+}
+
+async function runExternalGovernanceRecipe(ctx: any, wf: any, runId: any, args: any) {
+  const webhookUrl = wf.providerConfig?.externalWebhookUrl;
+  const callbackSecret = env("SOCIETYER_WORKFLOW_CALLBACK_SECRET");
+  const callbackUrl =
+    env("SOCIETYER_WORKFLOW_CALLBACK_URL") ??
+    "http://host.docker.internal:8787/api/v1/workflow-callbacks/n8n";
+
+  try {
+    if (!webhookUrl) {
+      throw new Error("n8n webhook URL is missing. Set N8N_WEBHOOK_BASE_URL or add providerConfig.externalWebhookUrl.");
+    }
+    if (!callbackSecret) {
+      throw new Error("SOCIETYER_WORKFLOW_CALLBACK_SECRET is missing.");
+    }
+
+    const steps = stepsForRun(wf.recipe, wf.nodePreview);
+    if (steps.length > 0) {
+      await ctx.runMutation(internal.workflows._updateStep, {
+        id: runId,
+        stepIndex: 0,
+        status: "running",
+        note: "Governance recipe payload queued for n8n.",
+      });
+    }
+
+    const rawIntake = normalizeWorkflowRunInput(wf, args.input);
+    const payload = {
+      workflowId: args.workflowId,
+      runId,
+      societyId: args.societyId,
+      recipe: wf.recipe,
+      callbackUrl,
+      callbackSecret,
+      input: {
+        intake: rawIntake,
+        fieldValues: rawIntake,
+        setup: wf.config,
+      },
+    };
+
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(`n8n webhook returned ${response.status}: ${text.slice(0, 240)}`);
+    }
+    const responseJson = safeJson(text);
+    const externalRunId =
+      responseJson?.executionId ??
+      responseJson?.id ??
+      responseJson?.data?.executionId ??
+      undefined;
+
+    await ctx.runMutation(internal.workflows._markExternalQueued, {
+      id: runId,
+      externalRunId,
+      externalStatus: "webhook.accepted",
+      output: {
+        intake: rawIntake,
+        n8n: {
+          webhookUrl,
+          response: responseJson ?? text.slice(0, 400),
+        },
+      },
+    });
+    await ctx.runMutation(internal.workflows._touchSchedule, {
+      id: args.workflowId,
+    });
+    await ctx.runMutation(api.notifications.create, {
+      societyId: args.societyId,
+      kind: "bot",
+      severity: "info",
+      title: `Governance recipe queued in n8n: ${wf.name}`,
+      body: "This recipe is executed by n8n; Societyer stores setup metadata and run callbacks only.",
       linkHref: "/app/workflow-runs",
     });
     return { runId, status: "running", externalRunId };
@@ -2070,6 +2286,43 @@ function intakeFieldsForRecipe(fields: string[]) {
 }
 
 function configForRecipe(recipe: RecipeKey) {
+  if (recipe === "agm_date_deadlines") {
+    return {
+      workflowTemplateKey: "agm_date_deadlines",
+      defaultTriggerKind: "manual",
+      n8nOnly: true,
+      setupGuide: "integrations/n8n/agm-date-deadlines.workflow.json",
+      eventName: "agm.date_set",
+      requiredInput: ["meetingId", "agmDateISO"],
+      deadlinePlan: [
+        { key: "notice", label: "Notice window", offsetDaysBefore: 14 },
+        { key: "board_package", label: "Board package ready", offsetDaysBefore: 7 },
+        { key: "minutes", label: "Draft minutes", offsetDaysAfter: 3 },
+        { key: "annual_report", label: "Annual report filing", offsetDaysAfter: 30 },
+      ],
+    };
+  }
+  if (recipe === "filing_due_notify_officer") {
+    return {
+      workflowTemplateKey: "filing_due_notify_officer",
+      defaultTriggerKind: "date_offset",
+      n8nOnly: true,
+      setupGuide: "integrations/n8n/filing-due-notify-officer.workflow.json",
+      anchor: "filings.dueDate",
+      daysBefore: 14,
+      requiredInput: ["filingId", "dueDate", "officerEmail"],
+    };
+  }
+  if (recipe === "conflict_disclosed_agenda_item") {
+    return {
+      workflowTemplateKey: "conflict_disclosed_agenda_item",
+      defaultTriggerKind: "manual",
+      n8nOnly: true,
+      setupGuide: "integrations/n8n/conflict-disclosed-agenda-item.workflow.json",
+      eventName: "conflict.disclosed",
+      requiredInput: ["conflictId", "directorName", "matter"],
+    };
+  }
   if (recipe === "unbc_affiliate_id_request") {
     return {
       pdfTemplateKey: "unbc_affiliate_id",
@@ -2120,31 +2373,48 @@ function configForRecipe(recipe: RecipeKey) {
 
 function providerConfigForRecipe(recipe: RecipeKey) {
   if (
+    recipe !== "agm_date_deadlines" &&
+    recipe !== "filing_due_notify_officer" &&
+    recipe !== "conflict_disclosed_agenda_item" &&
     recipe !== "unbc_affiliate_id_request" &&
     recipe !== "unbc_key_access_request" &&
     recipe !== "ote_keycard_access_request"
   ) return undefined;
   const base = env("N8N_WEBHOOK_BASE_URL") ?? "http://127.0.0.1:5678/webhook";
-  const webhookPath =
-    recipe === "unbc_key_access_request"
-      ? env("N8N_UNBC_KEY_REQUEST_WEBHOOK_PATH") ??
-        "societyer-unbc-key-access-request/societyer%2520webhook/societyer/unbc-key-access-request"
-      : recipe === "ote_keycard_access_request"
-        ? env("N8N_OTE_KEYCARD_WEBHOOK_PATH") ??
-          "societyer-ote-individual-access-request/societyer%2520webhook/societyer/ote-individual-access-request"
-      : env("N8N_UNBC_AFFILIATE_WEBHOOK_PATH") ??
-        "societyer-unbc-affiliate-id/societyer%2520webhook/societyer/unbc-affiliate-id";
+  const workflowIds: Partial<Record<RecipeKey, string>> = {
+    agm_date_deadlines: "societyer-agm-date-deadlines",
+    filing_due_notify_officer: "societyer-filing-due-notify-officer",
+    conflict_disclosed_agenda_item: "societyer-conflict-disclosed-agenda-item",
+    unbc_key_access_request: "societyer-unbc-key-access-request",
+    ote_keycard_access_request: "societyer-ote-individual-access-request",
+    unbc_affiliate_id_request: "societyer-unbc-affiliate-id",
+  };
+  const webhookPaths: Partial<Record<RecipeKey, string>> = {
+    agm_date_deadlines:
+      env("N8N_AGM_DATE_DEADLINES_WEBHOOK_PATH") ??
+      "societyer-agm-date-deadlines/societyer%2520webhook/societyer/governance/agm-date-deadlines",
+    filing_due_notify_officer:
+      env("N8N_FILING_DUE_NOTIFY_OFFICER_WEBHOOK_PATH") ??
+      "societyer-filing-due-notify-officer/societyer%2520webhook/societyer/governance/filing-due-notify-officer",
+    conflict_disclosed_agenda_item:
+      env("N8N_CONFLICT_DISCLOSED_AGENDA_ITEM_WEBHOOK_PATH") ??
+      "societyer-conflict-disclosed-agenda-item/societyer%2520webhook/societyer/governance/conflict-disclosed-agenda-item",
+    unbc_key_access_request:
+      env("N8N_UNBC_KEY_REQUEST_WEBHOOK_PATH") ??
+      "societyer-unbc-key-access-request/societyer%2520webhook/societyer/unbc-key-access-request",
+    ote_keycard_access_request:
+      env("N8N_OTE_KEYCARD_WEBHOOK_PATH") ??
+      "societyer-ote-individual-access-request/societyer%2520webhook/societyer/ote-individual-access-request",
+    unbc_affiliate_id_request:
+      env("N8N_UNBC_AFFILIATE_WEBHOOK_PATH") ??
+      "societyer-unbc-affiliate-id/societyer%2520webhook/societyer/unbc-affiliate-id",
+  };
   const externalEditUrl = env("N8N_BASE_URL")
     ? `${env("N8N_BASE_URL")}/workflow`
     : "http://127.0.0.1:5678/workflow";
   return {
-    externalWorkflowId:
-      recipe === "unbc_key_access_request"
-        ? "societyer-unbc-key-access-request"
-        : recipe === "ote_keycard_access_request"
-          ? "societyer-ote-individual-access-request"
-          : "societyer-unbc-affiliate-id",
-    externalWebhookUrl: `${base.replace(/\/$/, "")}/${webhookPath}`,
+    externalWorkflowId: workflowIds[recipe],
+    externalWebhookUrl: `${base.replace(/\/$/, "")}/${webhookPaths[recipe]}`,
     externalEditUrl,
   };
 }

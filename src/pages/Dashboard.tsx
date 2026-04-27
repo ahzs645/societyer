@@ -1,27 +1,113 @@
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useState } from "react";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Flag } from "../components/ui";
 import { formatDate, formatDateTime, relative } from "../lib/format";
-import { Link } from "react-router-dom";
-import { ArrowRight, Users, UserCog, Calendar, AlertTriangle, Activity } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { useToast } from "../components/Toast";
+import {
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  Building2,
+  Calendar,
+  CalendarClock,
+  CheckCircle2,
+  ClipboardCheck,
+  ExternalLink,
+  FileCheck2,
+  Link2,
+  ShieldCheck,
+  UploadCloud,
+  UserRoundCheck,
+  Users,
+  UserCog,
+} from "lucide-react";
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
 
 export function Dashboard() {
   const society = useSociety();
+  const navigate = useNavigate();
+  const toast = useToast();
   const data = useQuery(api.dashboard.summary, society ? { societyId: society._id } : "skip");
   const activity = useQuery(api.activity.list, society ? { societyId: society._id, limit: 10 } : "skip");
-  const goals = useQuery(api.goals.list, society ? { societyId: society._id } : "skip");
-  const tasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
+  const createPipaPolicyDraft = useMutation(api.documents.createPipaPolicyDraft);
+  const createMemberDataGapMemoDraft = useMutation(api.documents.createMemberDataGapMemoDraft);
+  const createPrivacyReviewTask = useMutation(api.dashboardRemediation.createPrivacyReviewTask);
+  const createComplianceReviewTask = useMutation(api.dashboardRemediation.createComplianceReviewTask);
+  const markPrivacyProgramReviewed = useMutation(api.dashboardRemediation.markPrivacyProgramReviewed);
+  const markMemberDataAccessReviewed = useMutation(api.dashboardRemediation.markMemberDataAccessReviewed);
   const [showComplianceDetails, setShowComplianceDetails] = useState(false);
+  const [busyRemediationAction, setBusyRemediationAction] = useState<string | null>(null);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
   if (!data) return <div className="page">Loading…</div>;
 
-  const { counts, upcomingMeetings, upcomingFilings, overdueFilings, complianceFlags } = data;
+  const { counts, upcomingMeetings, upcomingFilings, overdueFilings, goals, complianceFlags, openTasks, evidenceChains } = data;
+  const onboardingSteps = getOnboardingSteps({ society, counts, upcomingMeetings, upcomingFilings, overdueFilings });
+  const completedOnboardingSteps = onboardingSteps.filter((step) => step.complete).length;
+  const nextOnboardingStep = onboardingSteps.find((step) => !step.complete) ?? onboardingSteps[onboardingSteps.length - 1];
+  const onboardingProgress = Math.round((completedOnboardingSteps / onboardingSteps.length) * 100);
+
+  const runRemediationAction = async (flag: any, action: any) => {
+    if (action.intent === "navigate") {
+      navigate(action.to);
+      return;
+    }
+
+    const actionKey = `${flag.ruleId}:${action.id}`;
+    setBusyRemediationAction(actionKey);
+    const payload = {
+      societyId: society._id,
+      ruleId: flag.ruleId,
+      flagLevel: flag.level,
+      flagText: flag.text,
+      evidenceRequired: flag.evidenceRequired ?? [],
+    };
+
+    try {
+      if (action.intent === "createPipaPolicyDraft") {
+        const result = await createPipaPolicyDraft({ societyId: society._id });
+        toast.success(result?.reused ? "Opened existing PIPA policy draft" : "PIPA policy draft created");
+        navigate("/app/privacy");
+        return;
+      }
+      if (action.intent === "createMemberDataGapMemoDraft") {
+        const result = await createMemberDataGapMemoDraft({ societyId: society._id });
+        toast.success(result?.reused ? "Opened existing member-data memo" : "Member-data memo draft created");
+        navigate("/app/privacy");
+        return;
+      }
+      if (action.intent === "createPrivacyReviewTask") {
+        const result = await createPrivacyReviewTask(payload);
+        toast.success(result?.reused ? "Existing PIPA review task reused" : "PIPA review task assigned");
+        return;
+      }
+      if (action.intent === "createComplianceReviewTask") {
+        const result = await createComplianceReviewTask(payload);
+        toast.success(result?.reused ? "Existing review task reused" : "Compliance review task assigned");
+        return;
+      }
+      if (action.intent === "markPrivacyProgramReviewed") {
+        await markPrivacyProgramReviewed(payload);
+        toast.success("Privacy program marked reviewed");
+        return;
+      }
+      if (action.intent === "markMemberDataAccessReviewed") {
+        await markMemberDataAccessReviewed(payload);
+        toast.success("Member-data access marked reviewed");
+        return;
+      }
+      toast.info("Open the linked workflow to continue");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Remediation action failed");
+    } finally {
+      setBusyRemediationAction(null);
+    }
+  };
 
   return (
     <div className="page">
@@ -29,6 +115,60 @@ export function Dashboard() {
         title="Dashboard"
         subtitle="Compliance posture, upcoming obligations, and governance snapshot."
       />
+
+      <section className="onboarding-flow" aria-labelledby="onboarding-flow-title">
+        <div className="onboarding-flow__story">
+          <div>
+            <h2 id="onboarding-flow-title">Keep your BC society in good standing.</h2>
+            <p>
+              Societyer tells you what is due, gathers the evidence, prepares the records,
+              and keeps an audit trail.
+            </p>
+          </div>
+          <div className="onboarding-flow__status">
+            <span className="mono">{completedOnboardingSteps}/{onboardingSteps.length}</span>
+            <span>setup checks complete</span>
+          </div>
+        </div>
+
+        <div className="onboarding-flow__bar" aria-hidden="true">
+          <span style={{ width: `${onboardingProgress}%` }} />
+        </div>
+
+        <div className="onboarding-flow__next">
+          <div>
+            <span className="onboarding-flow__eyebrow">Next action</span>
+            <strong>{nextOnboardingStep.title}</strong>
+            <span>{nextOnboardingStep.description}</span>
+          </div>
+          <Link to={nextOnboardingStep.to} className="btn-action btn-action--primary">
+            Open <ArrowRight size={12} />
+          </Link>
+        </div>
+
+        <div className="onboarding-flow__grid">
+          {onboardingSteps.map((step, index) => {
+            const Icon = step.icon;
+            return (
+              <Link
+                key={step.id}
+                to={step.to}
+                className={`onboarding-step${step.complete ? " is-complete" : ""}${step.id === nextOnboardingStep.id ? " is-next" : ""}`}
+              >
+                <span className="onboarding-step__index">{String(index + 1).padStart(2, "0")}</span>
+                <span className="onboarding-step__icon"><Icon size={16} /></span>
+                <span className="onboarding-step__main">
+                  <strong>{step.title}</strong>
+                  <span>{step.description}</span>
+                </span>
+                <span className="onboarding-step__state">
+                  {step.complete ? <CheckCircle2 size={16} /> : <ArrowRight size={14} />}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
 
       <div className="stat-grid">
         <Stat
@@ -41,7 +181,11 @@ export function Dashboard() {
           label="Active directors"
           value={counts.directors}
           icon={<UserCog size={14} />}
-          sub={`${counts.bcResidents} BC resident${counts.bcResidents === 1 ? "" : "s"} (s.42 requires ≥ 1)`}
+          sub={
+            society.isMemberFunded
+              ? `${counts.bcResidents} BC resident${counts.bcResidents === 1 ? "" : "s"} (s.197 exception)`
+              : `${counts.bcResidents} BC resident${counts.bcResidents === 1 ? "" : "s"} (s.40 requires >= 1)`
+          }
         />
         <Stat
           label="Meetings this year"
@@ -101,16 +245,92 @@ export function Dashboard() {
 
               <div className={`dashboard-compliance__details${showComplianceDetails ? " is-open" : ""}`}>
                 {complianceFlags.map((f: any, i: number) => (
-                  <Flag
-                    key={i}
-                    level={f.level}
-                    citationId={(f as any).citationId}
-                    citationIds={(f as any).citationIds}
-                  >
-                    {f.text}
-                  </Flag>
+                  <div className="dashboard-remediation" key={f.ruleId ?? i}>
+                    <Flag
+                      level={f.level}
+                      citationId={(f as any).citationId}
+                      citationIds={(f as any).citationIds}
+                    >
+                      {f.text}
+                    </Flag>
+                    <div className="dashboard-remediation__meta">
+                      {f.evidenceRequired?.length > 0 && (
+                        <span>Evidence: {f.evidenceRequired.join(", ")}</span>
+                      )}
+                      {f.remediationStatus && (
+                        <Badge tone={f.remediationStatus === "resolved" ? "success" : "info"}>
+                          {f.remediationStatus === "open" ? "Workflow open" : f.remediationStatus}
+                        </Badge>
+                      )}
+                    </div>
+                    {f.remediationActions?.length > 0 && (
+                      <div className="dashboard-remediation__actions">
+                        {f.remediationActions.map((action: any) => {
+                          const disabled = busyRemediationAction === `${f.ruleId}:${action.id}`;
+                          return action.intent === "navigate" ? (
+                            <Link key={action.id} className="btn btn--ghost btn--sm" to={action.to}>
+                              {action.label}
+                            </Link>
+                          ) : (
+                            <button
+                              key={action.id}
+                              type="button"
+                              className="btn btn--ghost btn--sm"
+                              disabled={disabled}
+                              onClick={() => runRemediationAction(f, action)}
+                            >
+                              {disabled ? "Working..." : action.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card__head">
+              <h2 className="card__title">Why this is green</h2>
+              <span className="card__subtitle">Proof chains for completed compliance work</span>
+            </div>
+            <div className="card__body evidence-chains">
+              {(evidenceChains ?? []).map((chain: any) => (
+                <article className="evidence-chain" key={chain.id}>
+                  <div className="evidence-chain__head">
+                    <span className={`evidence-chain__status evidence-chain__status--${chain.status}`}>
+                      {chain.status === "verified" ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                    </span>
+                    <div>
+                      <h3>{chain.title}</h3>
+                      <p>{chain.summary}</p>
+                    </div>
+                    {chain.actionHref && (
+                      <Link to={chain.actionHref} className="btn-action">
+                        Open <ExternalLink size={12} />
+                      </Link>
+                    )}
+                  </div>
+                  <ol className="evidence-chain__nodes">
+                    {chain.nodes.map((node: any, index: number) => (
+                      <li className={`evidence-chain__node evidence-chain__node--${node.status}`} key={`${chain.id}-${node.label}-${index}`}>
+                        <span className="evidence-chain__dot"><Link2 size={12} /></span>
+                        <div>
+                          <span>{node.label}</span>
+                          {node.href ? <Link to={node.href}>{node.value}</Link> : <strong>{node.value}</strong>}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </article>
+              ))}
+              {(!evidenceChains || evidenceChains.length === 0) && (
+                <div className="muted">
+                  No completed filing proof chains yet. Mark a filing as filed with a filed date, confirmation/evidence document, responsible person, and audit entry to light this up.
+                </div>
+              )}
             </div>
           </div>
 
@@ -131,10 +351,10 @@ export function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {overdueFilings.length > 0 && (
+                {counts.overdueFilings > 0 && (
                   <tr>
                     <td colSpan={4} className="table__cell--muted" style={{ background: "var(--danger-soft)", color: "var(--danger)", fontWeight: 700 }}>
-                      Overdue · {overdueFilings.length}
+                      Overdue · {counts.overdueFilings}
                     </td>
                   </tr>
                 )}
@@ -147,7 +367,7 @@ export function Dashboard() {
                   </tr>
                 )}
                 {upcomingFilings.slice(0, overdueFilings.length > 0 ? 4 : 6).map((f: any) => renderFilingRow(f))}
-                {overdueFilings.length + upcomingFilings.length === 0 && (
+                {counts.overdueFilings + upcomingFilings.length === 0 && (
                   <tr>
                     <td colSpan={4} className="table__cell--muted" style={{ textAlign: "center", padding: 24 }}>
                       No overdue or upcoming filings.
@@ -239,7 +459,7 @@ export function Dashboard() {
             </Link>
           </div>
           <div className="card__body col">
-            {(goals ?? []).slice(0, 4).map((g: any) => (
+            {goals.map((g: any) => (
               <Link key={g._id} to={`/app/goals/${g._id}`} className="col" style={{ padding: 10, border: "1px solid var(--border)", borderRadius: 6, gap: 6 }}>
                 <div className="row">
                   <strong>{g.title}</strong>
@@ -255,7 +475,7 @@ export function Dashboard() {
                 </div>
               </Link>
             ))}
-            {(!goals || goals.length === 0) && <div className="muted">No goals yet.</div>}
+            {goals.length === 0 && <div className="muted">No goals yet.</div>}
           </div>
         </div>
 
@@ -268,7 +488,7 @@ export function Dashboard() {
           </div>
           <table className="table">
             <tbody>
-              {(tasks ?? []).filter((t: any) => t.status !== "Done").slice(0, 6).map((t: any) => (
+              {openTasks.map((t: any) => (
                 <tr key={t._id}>
                   <td style={{ width: 12 }}><span className={`priority-dot priority-${t.priority}`} /></td>
                   <td>{t.title}</td>
@@ -276,7 +496,7 @@ export function Dashboard() {
                   <td className="table__cell--mono muted">{t.dueDate ? formatDate(t.dueDate) : ""}</td>
                 </tr>
               ))}
-              {(!tasks || tasks.filter((t: any) => t.status !== "Done").length === 0) && (
+              {openTasks.length === 0 && (
                 <tr><td className="muted" style={{ textAlign: "center", padding: 24 }}>Nothing open.</td></tr>
               )}
             </tbody>
@@ -285,6 +505,100 @@ export function Dashboard() {
       </div>
     </div>
   );
+}
+
+function getOnboardingSteps({
+  society,
+  counts,
+  upcomingMeetings,
+  upcomingFilings,
+  overdueFilings,
+}: {
+  society: any;
+  counts: any;
+  upcomingMeetings: any[];
+  upcomingFilings: any[];
+  overdueFilings: any[];
+}) {
+  const hasSocietyProfile = Boolean(
+    society?.name && society?.incorporationNumber && society?.registeredOfficeAddress,
+  );
+  const hasPeople = counts.members > 0 && counts.directors > 0;
+  const hasCoreDocuments = Boolean(society?.constitutionDocId && society?.bylawsDocId);
+  const hasAgmTiming = Boolean(
+    society?.fiscalYearEnd && upcomingMeetings.some((meeting) => meeting.type === "AGM"),
+  );
+  const hasComplianceCalendar = upcomingFilings.length > 0 || overdueFilings.length > 0 || counts.openDeadlines > 0;
+  const hasMeetings = counts.meetingsThisYear > 0;
+  const hasFilingsEvidence = upcomingFilings.length > 0 || overdueFilings.length > 0;
+  const hasPrivacyRecords = Boolean(society?.privacyPolicyDocId || society?.privacyProgramStatus === "Ready");
+
+  return [
+    {
+      id: "profile",
+      title: "Set up society profile",
+      description: hasSocietyProfile ? "Legal identity and registered office are recorded." : "Add the legal name, incorporation number, and registered office.",
+      to: "/app/society",
+      complete: hasSocietyProfile,
+      icon: Building2,
+    },
+    {
+      id: "people",
+      title: "Import members/directors",
+      description: hasPeople ? "Member and director registers have active records." : "Bring in current member and director registers.",
+      to: "/app/imports",
+      complete: hasPeople,
+      icon: UserRoundCheck,
+    },
+    {
+      id: "documents",
+      title: "Upload constitution/bylaws",
+      description: hasCoreDocuments ? "Core governing documents are attached." : "Attach the filed constitution and current bylaws.",
+      to: "/app/documents",
+      complete: hasCoreDocuments,
+      icon: UploadCloud,
+    },
+    {
+      id: "timing",
+      title: "Confirm fiscal year and AGM timing",
+      description: hasAgmTiming ? "Fiscal year and the next AGM are visible." : "Set the fiscal year end and schedule the next AGM.",
+      to: "/app/meetings",
+      complete: hasAgmTiming,
+      icon: CalendarClock,
+    },
+    {
+      id: "calendar",
+      title: "Create annual compliance calendar",
+      description: hasComplianceCalendar ? "Filing and deadline dates are being tracked." : "Create deadline and filing reminders for the year.",
+      to: "/app/deadlines",
+      complete: hasComplianceCalendar,
+      icon: Calendar,
+    },
+    {
+      id: "meetings",
+      title: "Run meetings and minutes",
+      description: hasMeetings ? "This year's meeting record is underway." : "Schedule meetings and capture minutes, motions, and decisions.",
+      to: "/app/meetings",
+      complete: hasMeetings,
+      icon: ClipboardCheck,
+    },
+    {
+      id: "filings",
+      title: "Track filings and evidence",
+      description: hasFilingsEvidence ? "Filing work is visible on the dashboard." : "Track annual reports, changes, confirmations, and evidence.",
+      to: "/app/filings",
+      complete: hasFilingsEvidence,
+      icon: FileCheck2,
+    },
+    {
+      id: "records",
+      title: "Keep privacy/records inspection-ready",
+      description: hasPrivacyRecords ? "Privacy or inspection readiness is documented." : "Record privacy controls, retention, and inspection readiness.",
+      to: "/app/privacy",
+      complete: hasPrivacyRecords,
+      icon: ShieldCheck,
+    },
+  ];
 }
 
 function relativeShort(iso: string) {

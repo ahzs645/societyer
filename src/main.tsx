@@ -95,6 +95,7 @@ const GrantEditPage = React.lazy(() => import("./pages/Grants").then((m) => ({ d
 const TransparencyPage = React.lazy(() => import("./pages/Transparency").then((m) => ({ default: m.TransparencyPage })));
 const PaperlessPage = React.lazy(() => import("./pages/Paperless").then((m) => ({ default: m.PaperlessPage })));
 const BrowserConnectorsPage = React.lazy(() => import("./pages/BrowserConnectors").then((m) => ({ default: m.BrowserConnectorsPage })));
+const AiAgentsPage = React.lazy(() => import("./pages/AiAgents").then((m) => ({ default: m.AiAgentsPage })));
 const WorkflowsPage = React.lazy(() => import("./pages/Workflows").then((m) => ({ default: m.WorkflowsPage })));
 const WorkflowDetailPage = React.lazy(() => import("./pages/WorkflowDetail").then((m) => ({ default: m.WorkflowDetailPage })));
 const WorkflowRunsPage = React.lazy(() => import("./pages/WorkflowRuns").then((m) => ({ default: m.WorkflowRunsPage })));
@@ -391,6 +392,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               path="browser-connectors"
               element={withModule("browserConnectors", <BrowserConnectorsPage />)}
             />
+            <Route path="ai-agents" element={<AiAgentsPage />} />
             <Route
               path="workflows"
               element={withModule("workflows", <WorkflowsPage />)}

@@ -55,6 +55,7 @@ import {
   History,
   Sliders,
   MonitorPlay,
+  Bot,
 } from "lucide-react";
 import {
   ComponentType,
@@ -244,6 +245,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Workflows",
     items: [
       { to: "/app/browser-connectors", label: "Browser apps", icon: MonitorPlay, color: "orange", module: "browserConnectors" },
+      { to: "/app/ai-agents", label: "AI agents", icon: Bot, color: "turquoise" },
       { to: "/app/workflows", label: "Workflows", icon: Workflow, color: "orange", module: "workflows" },
       { to: "/app/workflow-runs", label: "Workflow runs", icon: History, color: "gray", module: "workflows" },
       { to: "/app/workflow-packages", label: "Workflow packages", icon: FileJson, color: "orange", module: "workflows" },

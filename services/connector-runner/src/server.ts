@@ -44,6 +44,11 @@ const sessionStartSchema = z.object({
   startUrl: z.string().url().optional(),
   liveView: z.boolean().default(true),
   timezone: z.string().optional(),
+  locale: z.string().optional(),
+  viewport: z.object({
+    width: z.number().int().min(800).max(3840),
+    height: z.number().int().min(600).max(2160),
+  }).optional(),
   browserVersion: z.string().optional(),
   proxyUrl: z.string().url().optional(),
 });
@@ -58,6 +63,11 @@ const profilePageSchema = z.object({
   unauthenticatedSelector: z.string().optional(),
   includeBodyText: z.boolean().default(false),
   timezone: z.string().optional(),
+  locale: z.string().optional(),
+  viewport: z.object({
+    width: z.number().int().min(800).max(3840),
+    height: z.number().int().min(600).max(2160),
+  }).optional(),
   browserVersion: z.string().optional(),
   proxyUrl: z.string().url().optional(),
 });
@@ -112,10 +122,78 @@ async function connectSession(cdpUrl: string) {
   return { browser, context, page };
 }
 
+type BrowserSessionDefaults = {
+  timezone?: string;
+  locale?: string;
+  viewport?: { width: number; height: number };
+  browserVersion?: string;
+};
+
+function connectorBrowserDefaults(connectorId?: string): BrowserSessionDefaults {
+  const connectorDefaults = connectorId ? requireKnownConnector(connectorId).browserDefaults ?? {} : {};
+  return {
+    ...connectorDefaults,
+    browserVersion: connectorDefaults.browserVersion
+      ?? (connectorId === "gcos" ? process.env.GCOS_BROWSER_VERSION : undefined)
+      ?? process.env.CONNECTOR_CHROME_VERSION
+      ?? undefined,
+  };
+}
+
+function mergeBrowserDefaults<T extends BrowserSessionDefaults>(input: T, connectorId?: string): T {
+  const defaults = connectorBrowserDefaults(connectorId);
+  return {
+    ...input,
+    timezone: input.timezone ?? defaults.timezone,
+    locale: input.locale ?? defaults.locale,
+    viewport: input.viewport ?? defaults.viewport,
+    browserVersion: input.browserVersion ?? defaults.browserVersion,
+  };
+}
+
+async function applyBrowserSessionDefaults(
+  context: BrowserContext,
+  page: Page,
+  input: BrowserSessionDefaults,
+) {
+  if (input.locale) {
+    await context.setExtraHTTPHeaders({ "Accept-Language": `${input.locale},en;q=0.9` }).catch(() => undefined);
+    const client = await context.newCDPSession(page).catch(() => undefined);
+    await client?.send("Emulation.setLocaleOverride", { locale: input.locale }).catch(() => undefined);
+    await client?.detach().catch(() => undefined);
+  }
+  if (input.viewport) {
+    await page.setViewportSize(input.viewport).catch(() => undefined);
+  }
+}
+
 async function closeActiveSession(session: ActiveSession) {
   await session.browser.close().catch(() => undefined);
   await backend.stopSession(session.providerSessionId).catch(() => undefined);
   activeSessions.delete(session.sessionId);
+}
+
+function isAuthRiskUrl(url: string) {
+  return /gckey|clegc-gckey|interac|sign-?in|signin|login|credential|auth/i.test(url);
+}
+
+function isGcosAuthenticatedArea(url: string) {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === "srv136.services.gc.ca" && parsed.pathname.startsWith("/OSR/pro");
+  } catch {
+    return false;
+  }
+}
+
+function assertGcosActionReady(url: string) {
+  if (!isGcosAuthenticatedArea(url) || isAuthRiskUrl(url)) {
+    throw new ConnectorActionError(
+      409,
+      "gcos_login_in_progress",
+      "GCOS connector actions are disabled until the live browser is signed in and already on srv136.services.gc.ca/OSR/pro. Finish login manually first.",
+    );
+  }
 }
 
 function blitzVncHost() {
@@ -212,22 +290,26 @@ app.get("/sessions", (_req, res) => {
 
 app.post("/sessions/start-login", asyncRoute(async (req, res) => {
   const input = sessionStartSchema.parse(req.body);
+  const browserInput = mergeBrowserDefaults(input);
   const vncHost = blitzVncHost();
-  const beforeVncPorts = input.liveView ? await discoverVncPorts(vncHost) : new Set<number>();
+  const beforeVncPorts = browserInput.liveView ? await discoverVncPorts(vncHost) : new Set<number>();
   const browserSession = await backend.createSession({
-    profileKey: input.profileKey,
+    profileKey: browserInput.profileKey,
     persist: true,
-    liveView: input.liveView,
-    timezone: input.timezone,
-    browserVersion: input.browserVersion,
-    proxyUrl: input.proxyUrl,
+    liveView: browserInput.liveView,
+    timezone: browserInput.timezone,
+    locale: browserInput.locale,
+    viewport: browserInput.viewport,
+    browserVersion: browserInput.browserVersion,
+    proxyUrl: browserInput.proxyUrl,
   });
 
   const { browser, context, page } = await connectSession(browserSession.cdpUrl);
-  if (input.startUrl) {
-    await page.goto(input.startUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await applyBrowserSessionDefaults(context, page, browserInput);
+  if (browserInput.startUrl) {
+    await page.goto(browserInput.startUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
   }
-  const vncPort = input.liveView ? await detectNewVncPort(beforeVncPorts, vncHost) : undefined;
+  const vncPort = browserInput.liveView ? await detectNewVncPort(beforeVncPorts, vncHost) : undefined;
 
   const session: ActiveSession = {
     sessionId: crypto.randomUUID(),
@@ -317,12 +399,12 @@ app.post("/sessions/:sessionId/paste", asyncRoute(async (req, res) => {
       afterLength,
     });
 
-    let element = selector ? document.querySelector(selector) : document.activeElement;
+    const element = selector ? document.querySelector(selector) : document.activeElement;
     if (!isEditable(element)) {
-      element = [...document.querySelectorAll(editableSelector)].find((candidate) => isEditable(candidate) && isVisible(candidate)) ?? null;
+      return { inserted: false, reason: "No focused editable field was found.", target: describe(document.activeElement) };
     }
-    if (!isEditable(element)) {
-      return { inserted: false, reason: "No focused or visible editable field was found.", target: describe(document.activeElement) };
+    if (!selector && !isVisible(element)) {
+      return { inserted: false, reason: "The focused editable field is not visible.", target: describe(element) };
     }
 
     element.focus();
@@ -375,20 +457,24 @@ app.post("/connectors/:connectorId/auth/start", asyncRoute(async (req, res) => {
     ...req.body,
     startUrl: req.body?.startUrl ?? connector.auth.startUrl,
   });
+  const browserInput = mergeBrowserDefaults(input, connector.id);
   const vncHost = blitzVncHost();
-  const beforeVncPorts = input.liveView ? await discoverVncPorts(vncHost) : new Set<number>();
+  const beforeVncPorts = browserInput.liveView ? await discoverVncPorts(vncHost) : new Set<number>();
   const browserSession = await backend.createSession({
-    profileKey: input.profileKey,
+    profileKey: browserInput.profileKey,
     persist: true,
-    liveView: input.liveView,
-    timezone: input.timezone,
-    browserVersion: input.browserVersion,
-    proxyUrl: input.proxyUrl,
+    liveView: browserInput.liveView,
+    timezone: browserInput.timezone,
+    locale: browserInput.locale,
+    viewport: browserInput.viewport,
+    browserVersion: browserInput.browserVersion,
+    proxyUrl: browserInput.proxyUrl,
   });
 
   const { browser, context, page } = await connectSession(browserSession.cdpUrl);
-  await page.goto(input.startUrl!, { waitUntil: "domcontentloaded", timeout: 45_000 });
-  const vncPort = input.liveView ? await detectNewVncPort(beforeVncPorts, vncHost) : undefined;
+  await applyBrowserSessionDefaults(context, page, browserInput);
+  await page.goto(browserInput.startUrl!, { waitUntil: "domcontentloaded", timeout: 45_000 });
+  const vncPort = browserInput.liveView ? await detectNewVncPort(beforeVncPorts, vncHost) : undefined;
 
   const session: ActiveSession = {
     sessionId: crypto.randomUUID(),
@@ -420,19 +506,23 @@ app.post("/connectors/:connectorId/auth/verify", asyncRoute(async (req, res) => 
     readOnly: req.body?.readOnly ?? true,
     liveView: req.body?.liveView ?? false,
   });
+  const browserInput = mergeBrowserDefaults(input, connector.id);
   const browserSession = await backend.createSession({
-    profileKey: input.profileKey,
+    profileKey: browserInput.profileKey,
     persist: true,
-    liveView: input.liveView,
-    readOnly: input.readOnly,
-    timezone: input.timezone,
-    browserVersion: input.browserVersion,
-    proxyUrl: input.proxyUrl,
+    liveView: browserInput.liveView,
+    readOnly: browserInput.readOnly,
+    timezone: browserInput.timezone,
+    locale: browserInput.locale,
+    viewport: browserInput.viewport,
+    browserVersion: browserInput.browserVersion,
+    proxyUrl: browserInput.proxyUrl,
   });
 
-  const { browser, page } = await connectSession(browserSession.cdpUrl);
+  const { browser, context, page } = await connectSession(browserSession.cdpUrl);
   try {
-    res.json(await verifyConnectorAuth(page, connector, input));
+    await applyBrowserSessionDefaults(context, page, browserInput);
+    res.json(await verifyConnectorAuth(page, connector, browserInput));
   } finally {
     await browser.close().catch(() => undefined);
   }
@@ -510,6 +600,8 @@ app.post("/connectors/:connectorId/auth/sessions/:sessionId/actions/:actionId", 
   }
 
   const input = parseConnectorActionInput(connector.id, actionId, "session", req.body);
+  if (connector.id === "gcos") assertGcosActionReady(session.page.url());
+  await applyBrowserSessionDefaults(session.context, session.page, connectorBrowserDefaults(connector.id));
   const startedAtISO = new Date().toISOString();
   const output = await runConnectorAction(session.page, connector.id, actionId, "session", input, session.profileKey);
   res.json({
@@ -531,17 +623,25 @@ app.post("/connectors/:connectorId/actions/:actionId", asyncRoute(async (req, re
   const connector = requireKnownConnector(String(req.params.connectorId));
   const actionId = String(req.params.actionId);
   const input: any = parseConnectorActionInput(connector.id, actionId, "profile", req.body);
+  const browserInput = mergeBrowserDefaults(input, connector.id);
   const browserSession = await backend.createSession({
-    profileKey: input.profileKey,
+    profileKey: browserInput.profileKey,
     persist: true,
     liveView: false,
     readOnly: true,
+    timezone: browserInput.timezone,
+    locale: browserInput.locale,
+    viewport: browserInput.viewport,
+    browserVersion: browserInput.browserVersion,
+    proxyUrl: browserInput.proxyUrl,
   });
 
-  const { browser, page } = await connectSession(browserSession.cdpUrl);
+  const { browser, context, page } = await connectSession(browserSession.cdpUrl);
   const runId = crypto.randomUUID();
   const startedAtISO = new Date().toISOString();
   try {
+    await applyBrowserSessionDefaults(context, page, browserInput);
+    if (connector.id === "gcos") assertGcosActionReady(page.url());
     const output = await runConnectorAction(page, connector.id, actionId, "profile", input, browserSession.profileKey);
     res.json({
       runId,
@@ -562,26 +662,30 @@ app.post("/connectors/:connectorId/actions/:actionId", asyncRoute(async (req, re
 
 app.post("/profiles/validate", asyncRoute(async (req, res) => {
   const input = profilePageSchema.parse(req.body);
+  const browserInput = mergeBrowserDefaults(input);
   const browserSession = await backend.createSession({
-    profileKey: input.profileKey,
+    profileKey: browserInput.profileKey,
     persist: true,
-    liveView: input.liveView,
-    readOnly: input.readOnly,
-    timezone: input.timezone,
-    browserVersion: input.browserVersion,
-    proxyUrl: input.proxyUrl,
+    liveView: browserInput.liveView,
+    readOnly: browserInput.readOnly,
+    timezone: browserInput.timezone,
+    locale: browserInput.locale,
+    viewport: browserInput.viewport,
+    browserVersion: browserInput.browserVersion,
+    proxyUrl: browserInput.proxyUrl,
   });
 
-  const { browser, page } = await connectSession(browserSession.cdpUrl);
+  const { browser, context, page } = await connectSession(browserSession.cdpUrl);
   try {
-    await page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 45_000 });
-    if (input.waitForSelector) {
-      await page.waitForSelector(input.waitForSelector, { timeout: 10_000 });
+    await applyBrowserSessionDefaults(context, page, browserInput);
+    await page.goto(browserInput.url, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    if (browserInput.waitForSelector) {
+      await page.waitForSelector(browserInput.waitForSelector, { timeout: 10_000 });
     }
 
-    const unauthenticated = await selectorVisible(page, input.unauthenticatedSelector);
-    const authenticated = await selectorVisible(page, input.authenticatedSelector);
-    const bodyText = input.includeBodyText
+    const unauthenticated = await selectorVisible(page, browserInput.unauthenticatedSelector);
+    const authenticated = await selectorVisible(page, browserInput.authenticatedSelector);
+    const bodyText = browserInput.includeBodyText
       ? (await page.locator("body").innerText({ timeout: 5_000 }).catch(() => "")).slice(0, 4000)
       : undefined;
 
@@ -604,24 +708,28 @@ app.post("/profiles/validate", asyncRoute(async (req, res) => {
 
 app.post("/runs/open-page", asyncRoute(async (req, res) => {
   const input = profilePageSchema.parse(req.body);
+  const browserInput = mergeBrowserDefaults(input);
   const browserSession = await backend.createSession({
-    profileKey: input.profileKey,
+    profileKey: browserInput.profileKey,
     persist: true,
-    liveView: input.liveView,
-    readOnly: input.readOnly,
-    timezone: input.timezone,
-    browserVersion: input.browserVersion,
-    proxyUrl: input.proxyUrl,
+    liveView: browserInput.liveView,
+    readOnly: browserInput.readOnly,
+    timezone: browserInput.timezone,
+    locale: browserInput.locale,
+    viewport: browserInput.viewport,
+    browserVersion: browserInput.browserVersion,
+    proxyUrl: browserInput.proxyUrl,
   });
 
-  const { browser, page } = await connectSession(browserSession.cdpUrl);
+  const { browser, context, page } = await connectSession(browserSession.cdpUrl);
   const startedAtISO = new Date().toISOString();
   try {
-    await page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 45_000 });
-    if (input.waitForSelector) {
-      await page.waitForSelector(input.waitForSelector, { timeout: 10_000 });
+    await applyBrowserSessionDefaults(context, page, browserInput);
+    await page.goto(browserInput.url, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    if (browserInput.waitForSelector) {
+      await page.waitForSelector(browserInput.waitForSelector, { timeout: 10_000 });
     }
-    const bodyText = input.includeBodyText
+    const bodyText = browserInput.includeBodyText
       ? (await page.locator("body").innerText({ timeout: 5_000 }).catch(() => "")).slice(0, 4000)
       : undefined;
 

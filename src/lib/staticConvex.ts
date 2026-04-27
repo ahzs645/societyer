@@ -16,6 +16,7 @@ const DOCUMENT_POLICY_ID = "static_document_privacy";
 const DOCUMENT_TENANCY_ID = "static_document_tenancy";
 const DOCUMENT_PRESENTATION_ID = "static_document_needs_presentation";
 const DOCUMENT_UNBC_GENERATED_ID = "static_document_unbc_affiliate";
+const DOCUMENT_ANNUAL_REPORT_CONFIRMATION_ID = "static_document_annual_report_confirmation";
 const ELECTION_ID = "static_election";
 const ELECTION_QUESTION_ID = "static_election_question_directors";
 const FINANCIAL_CONNECTION_ID = "static_financial_connection";
@@ -724,8 +725,13 @@ const filings = [
     kind: "AnnualReport",
     title: "2026 BC annual report",
     dueDate: "2026-04-01",
-    status: "Draft",
+    filedAt: "2026-04-14",
+    status: "Filed",
     submissionMethod: "Societies Online",
+    submittedByUserId: USER_OWNER_ID,
+    confirmationNumber: "BC-AR-2026-0414",
+    receiptDocumentId: DOCUMENT_ANNUAL_REPORT_CONFIRMATION_ID,
+    evidenceNotes: "Societies Online confirmation receipt retained in the document library.",
     feeCents: 4000,
   },
   {
@@ -896,6 +902,23 @@ const documents = [
     librarySection: "meeting_material",
     flaggedForDeletion: false,
     tags: ["commitment", "tenancy", "AGM-2025"],
+  },
+  {
+    _id: DOCUMENT_ANNUAL_REPORT_CONFIRMATION_ID,
+    societyId: SOCIETY_ID,
+    title: "2026 annual report filing confirmation",
+    kind: "FilingConfirmation",
+    category: "Filing",
+    status: "Filed",
+    fileName: "2026-annual-report-confirmation.pdf",
+    mimeType: "application/pdf",
+    retentionYears: 10,
+    createdAtISO: "2026-04-14T18:09:00.000Z",
+    lastOpenedAtISO: "2026-04-14T18:10:00.000Z",
+    reviewStatus: "approved",
+    librarySection: "governance",
+    flaggedForDeletion: false,
+    tags: ["annual-report", "filing", "confirmation"],
   },
   {
     _id: DOCUMENT_UNBC_GENERATED_ID,
@@ -1605,6 +1628,57 @@ const workflows = [
 
 const workflowRuns: any[] = [];
 
+const aiAgentDefinitions = [
+  {
+    key: "compliance_analyst",
+    name: "Compliance analyst",
+    summary: "Reviews governance posture against BC society obligations and produces a bounded issue list.",
+    scope: "Compliance review only. May inspect workspace records and suggest next steps; cannot file, approve, or change records.",
+    allowedActions: ["summarize_gaps", "prioritize_findings", "cite_workspace_evidence", "recommend_tasks"],
+    allowedTools: ["society.read", "directors.read", "meetings.read", "filings.read", "policies.read", "activity.read"],
+    requiredInputHints: ["Review period or event", "Compliance concern or obligation", "Records to include"],
+  },
+  {
+    key: "minute_drafter",
+    name: "Minute drafter",
+    summary: "Turns meeting notes or transcript excerpts into structured draft minutes for secretary review.",
+    scope: "Drafting support only. May transform provided meeting material; cannot approve minutes or record board decisions.",
+    allowedActions: ["draft_minutes", "extract_motions", "extract_action_items", "flag_quorum_gaps"],
+    allowedTools: ["meetings.read", "minutes.read", "transcripts.read", "documents.read"],
+    requiredInputHints: ["Meeting date or title", "Transcript, notes, or agenda source", "Desired minute style"],
+  },
+  {
+    key: "filing_assistant",
+    name: "Filing assistant",
+    summary: "Plans registry filing packets and preflight checks without submitting anything externally.",
+    scope: "Filing preparation only. May assemble filing data and checklist; cannot submit, sign, or represent completion.",
+    allowedActions: ["preflight_filing", "prepare_packet_outline", "identify_missing_fields", "draft_operator_checklist"],
+    allowedTools: ["society.read", "directors.read", "filings.read", "documents.read", "activity.read"],
+    requiredInputHints: ["Filing type", "Effective date or filing period", "Known changed information"],
+  },
+  {
+    key: "policy_reviewer",
+    name: "Policy reviewer",
+    summary: "Reviews internal policies for stale dates, missing owners, and implementation evidence.",
+    scope: "Policy review only. May comment and recommend revisions; cannot adopt policies or alter approved text.",
+    allowedActions: ["review_policy", "compare_to_template", "flag_review_dates", "suggest_revision_notes"],
+    allowedTools: ["policies.read", "documents.read", "activity.read", "tasks.read"],
+    requiredInputHints: ["Policy name or area", "Review reason", "Applicable template or requirement"],
+  },
+  {
+    key: "grant_reporting_assistant",
+    name: "Grant reporting assistant",
+    summary: "Plans grant report evidence, restricted-fund summaries, and missing deliverables.",
+    scope: "Grant reporting support only. May summarize evidence and draft report structure; cannot certify, submit, or alter financials.",
+    allowedActions: ["summarize_grant_progress", "map_evidence", "flag_restricted_fund_gaps", "draft_report_outline"],
+    allowedTools: ["grants.read", "financials.read", "documents.read", "tasks.read", "activity.read"],
+    requiredInputHints: ["Grant or funder name", "Reporting period", "Deliverables or budget categories"],
+  },
+];
+
+const aiAgentRuns: any[] = [];
+const aiAgentAuditEvents: any[] = [];
+
 const motionBacklog = [
   {
     _id: "static_motion_backlog_pipa_policy",
@@ -1645,9 +1719,10 @@ const tables: Record<string, any[]> = {
       societyId: SOCIETY_ID,
       actor: "Mina Patel",
       entityType: "filing",
-      action: "prepared",
-      summary: "Prepared annual report package for board review.",
-      createdAtISO: "2026-04-14T18:10:00.000Z",
+      entityId: "static_filing_ar",
+      action: "filed",
+      summary: "Filed the annual report and attached the Societies Online confirmation.",
+      createdAtISO: "2026-04-14T18:12:00.000Z",
     },
     {
       _id: "static_activity_2",
@@ -1661,6 +1736,8 @@ const tables: Record<string, any[]> = {
   ],
   workflows,
   workflowRuns,
+  aiAgentRuns,
+  aiAgentAuditEvents,
   motionBacklog,
   pendingEmails: [
     {
@@ -2051,6 +2128,18 @@ const tables: Record<string, any[]> = {
   tasks,
   transparency: [
     {
+      _id: "static_publication_annual_report",
+      societyId: SOCIETY_ID,
+      title: "2026 annual report filing confirmation",
+      category: "AnnualReport",
+      status: "Published",
+      reviewStatus: "Approved",
+      documentId: DOCUMENT_ANNUAL_REPORT_CONFIRMATION_ID,
+      publishedAtISO: "2026-04-14",
+      summary: "Filed annual report confirmation retained for public transparency.",
+      featured: true,
+    },
+    {
       _id: "static_publication_bylaws",
       societyId: SOCIETY_ID,
       title: "Current bylaws",
@@ -2326,27 +2415,68 @@ function dashboardSummary() {
     },
     upcomingMeetings: meetings.filter((meeting) => meeting.status === "Scheduled").slice(0, 3),
     upcomingFilings,
-    overdueFilings,
+    overdueFilings: overdueFilings.slice(0, 12),
+    goals: goals
+      .filter((goal) => goal.status !== "Completed")
+      .sort((a, b) => a.targetDate.localeCompare(b.targetDate))
+      .slice(0, 4),
+    openTasks: tasks
+      .filter((task) => task.status !== "Done")
+      .sort((a, b) => (a.dueDate ?? "9999-12-31").localeCompare(b.dueDate ?? "9999-12-31"))
+      .slice(0, 6),
     complianceFlags: [
       {
+        ruleId: "BC-SOC-DIRECTORS-MIN",
         level: "ok",
         text: "At least three active directors are on record.",
         citationId: "BC-SOC-DIRECTORS-MIN",
+        evidenceRequired: ["Active director register"],
+        remediationActions: [{ id: "open-directors", label: "Review directors", intent: "navigate", to: "/app/directors" }],
       },
       {
+        ruleId: "BC-SOC-DIRECTORS-BC-RESIDENT",
         level: "ok",
-        text: "At least one BC-resident director is on record.",
+        text: "At least one BC-resident director is on record for this non-member-funded society.",
         citationId: "BC-SOC-DIRECTORS-BC-RESIDENT",
+        evidenceRequired: ["Active director register", "Director residency field"],
+        remediationActions: [{ id: "open-directors", label: "Review directors", intent: "navigate", to: "/app/directors" }],
       },
       {
+        ruleId: "BC-SOC-DIRECTOR-CONSENT",
         level: "warn",
-        text: "1 director is missing written consent.",
+        text: "1 director is missing consent evidence.",
         citationId: "BC-SOC-DIRECTOR-CONSENT",
+        evidenceRequired: ["Active director register", "Written consent evidence"],
+        remediationActions: [
+          { id: "open-directors", label: "Update consent", intent: "navigate", to: "/app/directors" },
+          { id: "upload-evidence", label: "Upload evidence", intent: "navigate", to: "/app/documents" },
+          { id: "assign-review", label: "Assign review", intent: "createComplianceReviewTask" },
+        ],
       },
       {
-        level: "warn",
-        text: "Annual report package is prepared but not filed.",
+        ruleId: "BC-SOC-ANNUAL-REPORT-FILED",
+        level: "ok",
+        text: "Annual report is filed with confirmation evidence.",
         citationId: "BC-SOC-AGM",
+        evidenceRequired: ["Filing record", "Filed date", "Confirmation document", "Audit log"],
+        remediationActions: [{ id: "open-filings", label: "Review filing", intent: "navigate", to: "/app/filings" }],
+      },
+    ],
+    evidenceChains: [
+      {
+        id: "static_filing_ar",
+        title: "Annual report proof chain",
+        status: "verified",
+        summary: "Every link needed to explain why this is complete is present.",
+        actionHref: "/app/filings",
+        nodes: [
+          { label: "Compliance result", value: "Annual report complete", status: "verified" },
+          { label: "Filing record", value: "2026 BC annual report", status: "verified", href: "/app/filings" },
+          { label: "Filing date", value: "2026-04-14", status: "verified" },
+          { label: "Confirmation / evidence", value: "Confirmation BC-AR-2026-0414", status: "verified", href: "/app/documents" },
+          { label: "Responsible person", value: "Mina Patel", status: "verified" },
+          { label: "Audit log", value: "Mina Patel filed 2026-04-14", status: "verified", href: "/app/audit" },
+        ],
       },
     ],
   };
@@ -2766,8 +2896,21 @@ function publicCenter(args?: StaticArgs) {
           ? `/public/${society.publicSlug}/grant-apply`
           : undefined,
     },
-    directors: directors.filter((director) => director.status === "Active"),
-    publications: tables.transparency.filter((row) => row.status === "Published"),
+    directors: society.publicShowBoard
+      ? directors
+          .filter((director) => director.status === "Active")
+          .map((director) => ({
+            _id: director._id,
+            name: `${director.firstName} ${director.lastName}`,
+            position: director.position,
+          }))
+      : [],
+    publications: tables.transparency.filter((row) => {
+      if (row.status !== "Published") return false;
+      if (!society.publicShowBylaws && row.category === "Bylaws") return false;
+      if (!society.publicShowFinancials && ["AnnualReport", "FinancialSummary"].includes(row.category)) return false;
+      return true;
+    }),
     documents: documents.filter((document) => document.public),
   };
 }
@@ -3016,6 +3159,12 @@ function queryResult(name: string, args: StaticArgs) {
   switch (name) {
     case "activity:list":
       return tables.activity.slice(0, args?.limit ?? tables.activity.length);
+    case "aiAgents:listDefinitions":
+      return aiAgentDefinitions;
+    case "aiAgents:listRuns":
+      return aiAgentRuns.slice(0, args?.limit ?? aiAgentRuns.length);
+    case "aiAgents:auditForRun":
+      return aiAgentAuditEvents.filter((event) => event.runId === args?.runId);
     case "agm:noticeDeliveries":
       return [];
     case "agm:runForMeeting":
@@ -3378,6 +3527,34 @@ function queryResult(name: string, args: StaticArgs) {
 }
 
 function mutationResult(name: string, args: StaticArgs) {
+  if (name === "aiAgents:runAgent") {
+    const agent = aiAgentDefinitions.find((item) => item.key === args?.agentKey) ?? aiAgentDefinitions[0];
+    const now = new Date().toISOString();
+    const run = {
+      _id: `static_ai_agent_run_${Date.now()}`,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      agentKey: agent.key,
+      agentName: agent.name,
+      status: "completed",
+      input: args?.input ?? "",
+      inputHints: agent.requiredInputHints,
+      scope: agent.scope,
+      allowedActions: agent.allowedActions,
+      allowedTools: agent.allowedTools,
+      plannedToolCalls: agent.allowedTools.map((toolName: string) => ({
+        toolName,
+        purpose: `Read ${toolName.split(".")[0]} records within the agent scope.`,
+        status: "planned",
+      })),
+      output: `${agent.name} guidance\n\nScope: ${agent.scope}\nRequest: ${args?.input ?? ""}\n\nProvider status: static demo deterministic stub.`,
+      provider: "deterministic_stub",
+      createdAtISO: now,
+      completedAtISO: now,
+      triggeredByUserId: args?.actingUserId,
+    };
+    aiAgentRuns.unshift(run);
+    return { runId: run._id, output: run.output, plannedToolCalls: run.plannedToolCalls };
+  }
   if (name === "seed:run") return { societyId: SOCIETY_ID };
   if (name === "seed:reset") return { ok: true };
   if (name === "users:resolveAuthSession") return { userId: USER_OWNER_ID };
@@ -3487,6 +3664,19 @@ function mutationResult(name: string, args: StaticArgs) {
   }
   if (name === "documents:linkPrivacyPolicyEvidence") {
     return { documentId: args?.documentId ?? DOCUMENT_POLICY_ID };
+  }
+  if (name === "dashboardRemediation:createComplianceReviewTask" || name === "dashboardRemediation:createPrivacyReviewTask") {
+    return {
+      taskId: `static_task_${args?.ruleId ?? "compliance"}`,
+      remediationId: `static_remediation_${args?.ruleId ?? "compliance"}`,
+      reused: false,
+    };
+  }
+  if (name === "dashboardRemediation:markPrivacyProgramReviewed" || name === "dashboardRemediation:markMemberDataAccessReviewed") {
+    return {
+      remediationId: `static_remediation_${args?.ruleId ?? "compliance"}`,
+      reviewedAtISO: new Date().toISOString(),
+    };
   }
   if (name === "commitments:recordEvent") return `static_commitment_event_${Date.now()}`;
   if (name === "commitments:removeEvent") return null;

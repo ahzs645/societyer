@@ -1,0 +1,91 @@
+{
+  "id": "societyer-filing-due-notify-officer",
+  "name": "Societyer - Filing Due Notify Officer",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "societyer/governance/filing-due-notify-officer",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Societyer Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-560, 0]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "notice-summary",
+              "name": "summary",
+              "type": "string",
+              "value": "={{`Filing notice prepared for ${$json.body.input?.intake?.filingId || 'the supplied filing'} due ${$json.body.input?.intake?.dueDate || 'soon'}`}}"
+            },
+            {
+              "id": "officer-email",
+              "name": "officerEmail",
+              "type": "string",
+              "value": "={{$json.body.input?.intake?.officerEmail || ''}}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "prepare-notice",
+      "name": "Prepare Officer Notice",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-320, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$('Societyer Webhook').item.json.body.callbackUrl}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-societyer-workflow-secret",
+              "value": "={{$('Societyer Webhook').item.json.body.callbackSecret}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({ workflowId: $('Societyer Webhook').item.json.body.workflowId, runId: $('Societyer Webhook').item.json.body.runId, event: 'run.completed', stepKey: 'send_notice', note: $json.summary || 'n8n prepared filing officer notification metadata.', output: { engine: 'n8n', officerEmail: $json.officerEmail } })}}",
+        "options": {}
+      },
+      "id": "callback-run-complete",
+      "name": "Callback Run Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-80, 0]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Societyer Webhook": {
+      "main": [[{ "node": "Prepare Officer Notice", "type": "main", "index": 0 }]]
+    },
+    "Prepare Officer Notice": {
+      "main": [[{ "node": "Callback Run Complete", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "societyer-filing-due-notify-officer-v1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": ["societyer", "governance", "filings"]
+}

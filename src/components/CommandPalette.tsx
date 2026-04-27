@@ -31,6 +31,7 @@ import {
   Database,
   Eye,
   FileCog,
+  FileCheck2,
   Gavel,
   PenLine,
   Receipt,
@@ -199,6 +200,57 @@ export function CommandPalette() {
   const actions = useMemo<CommandItem[]>(
     () => [
       {
+        id: "action-create-meeting",
+        label: "Create meeting",
+        icon: Calendar,
+        category: "Actions",
+        run: () => navigate("/app/meetings?intent=create&type=Board"),
+      },
+      {
+        id: "action-mark-filing-filed",
+        label: "Mark filing filed",
+        icon: FileCheck2,
+        category: "Actions",
+        run: () => navigate("/app/filings?intent=mark-filed"),
+      },
+      {
+        id: "action-generate-agm-package",
+        label: "Generate AGM package",
+        icon: FileCog,
+        category: "Actions",
+        run: () => navigate("/app/meetings?intent=generate-agm-package&type=AGM"),
+      },
+      {
+        id: "action-draft-minutes",
+        label: "Draft minutes",
+        icon: PenLine,
+        category: "Actions",
+        run: () => navigate("/app/minutes?intent=draft"),
+      },
+      {
+        id: "action-request-director-attestation",
+        label: "Request director attestation",
+        icon: ShieldCheck,
+        category: "Actions",
+        module: "attestations",
+        run: () => navigate("/app/attestations?intent=request"),
+      },
+      {
+        id: "action-export-minute-book",
+        label: "Export minute book",
+        icon: Download,
+        category: "Actions",
+        run: () => navigate("/app/minute-book?intent=export"),
+      },
+      {
+        id: "action-start-inspection-response",
+        label: "Start inspection response",
+        icon: Eye,
+        category: "Actions",
+        module: "recordsInspection",
+        run: () => navigate("/app/inspections?intent=start-response"),
+      },
+      {
         id: "action-seed-demo",
         label: "Seed demo society",
         icon: Sparkles,
@@ -214,7 +266,7 @@ export function CommandPalette() {
         },
       },
     ],
-    [toast],
+    [navigate, toast],
   );
 
   useEffect(() => {
@@ -254,9 +306,10 @@ export function CommandPalette() {
       run: a.run,
       shortcut: a.shortcut,
     }));
+    const enabledActions = actions.filter((item) => !item.module || isModuleEnabled(society, item.module));
     const all = [
       ...NAV_ITEMS.filter((item) => !item.module || isModuleEnabled(society, item.module)),
-      ...actions,
+      ...enabledActions,
       ...dynamicActions,
     ];
     const recordItems: CommandItem[] = recentRecords.map((r) => ({
