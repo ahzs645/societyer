@@ -14,8 +14,13 @@ import {
   buildPdfTableImportBundle,
   normalizePdfTableStructures,
 } from "./lib/pdfTableNormalization";
-
-type WorkflowProvider = "internal" | "n8n";
+import {
+  parseWorkflowNodes,
+  parseWorkflowStatus,
+  parseWorkflowTrigger,
+  workflowProviderSchema,
+  type WorkflowProvider,
+} from "../shared/workflows/schemas";
 
 type RecipeStep = {
   key: string;
@@ -1131,11 +1136,13 @@ export const create = mutation({
     }
 
     const recipe = args.recipe as RecipeKey;
-    const provider = (args.provider ?? RECIPE_PROVIDERS[recipe] ?? "internal") as WorkflowProvider;
+    const trigger = parseWorkflowTrigger(args.trigger);
+    const provider = workflowProviderSchema.parse(args.provider ?? RECIPE_PROVIDERS[recipe] ?? "internal");
     const providerConfig =
       provider === "n8n"
         ? { ...providerConfigForRecipe(recipe), ...(args.providerConfig ?? {}) }
         : args.providerConfig;
+    const nodePreview = args.nodePreview ? parseWorkflowNodes(args.nodePreview) : nodePreviewForRecipe(recipe);
 
     return await ctx.db.insert("workflows", {
       societyId: args.societyId,
@@ -1144,10 +1151,10 @@ export const create = mutation({
       status: args.status ?? "active",
       provider,
       providerConfig,
-      nodePreview: args.nodePreview ?? nodePreviewForRecipe(recipe),
-      trigger: args.trigger,
+      nodePreview,
+      trigger,
       config: { ...configForRecipe(recipe), ...(args.config ?? {}) },
-      nextRunAtISO: computeNextRunAt(args.trigger),
+      nextRunAtISO: computeNextRunAt(trigger),
       createdByUserId: args.actingUserId,
     });
   },
@@ -1238,7 +1245,7 @@ export const setStatus = mutation({
       societyId: wf.societyId,
       required: "Director",
     });
-    await ctx.db.patch(id, { status });
+    await ctx.db.patch(id, { status: parseWorkflowStatus(status) });
   },
 });
 
@@ -1265,7 +1272,10 @@ export const update = mutation({
       societyId: wf.societyId,
       required: "Director",
     });
-    await ctx.db.patch(id, patch);
+    await ctx.db.patch(id, {
+      ...patch,
+      ...(patch.status ? { status: parseWorkflowStatus(patch.status) } : {}),
+    });
   },
 });
 
@@ -1312,9 +1322,13 @@ export const configure = mutation({
     });
     const next: any = { ...patch };
     if (patch.trigger) {
-      const nextRunAtISO = computeNextRunAt(patch.trigger);
+      next.trigger = parseWorkflowTrigger(patch.trigger);
+      const nextRunAtISO = computeNextRunAt(next.trigger);
       if (nextRunAtISO) next.nextRunAtISO = nextRunAtISO;
     }
+    if (patch.status) next.status = parseWorkflowStatus(patch.status);
+    if (patch.provider) next.provider = workflowProviderSchema.parse(patch.provider);
+    if (patch.nodePreview) next.nodePreview = parseWorkflowNodes(patch.nodePreview);
     await ctx.db.patch(id, next);
   },
 });

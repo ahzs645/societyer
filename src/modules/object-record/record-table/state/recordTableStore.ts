@@ -1,6 +1,17 @@
 import { createContext, useContext } from "react";
 import { createStore, useStore } from "zustand";
-import type { HydratedView, RecordField, ViewFilter, ViewSort } from "../../types";
+import type {
+  HydratedView,
+  RecordField,
+  ViewFilter,
+  ViewFilterGroup,
+  ViewFieldGroup,
+  ViewGroup,
+  ViewType,
+  ViewOpenRecordIn,
+  ViewSort,
+  ViewVisibility,
+} from "../../types";
 
 /**
  * Per-table-instance state. Mirrors Twenty's `createAtomComponentState`
@@ -28,8 +39,17 @@ type SavedViewSnapshot = {
   columns: RecordField[];
   density: "compact" | "comfortable";
   filters: ViewFilter[];
+  filterGroups: ViewFilterGroup[];
   sorts: ViewSort[];
+  type: ViewType;
+  kanbanFieldMetadataId?: string;
+  calendarFieldMetadataId?: string;
+  fieldGroups: ViewFieldGroup[];
   searchTerm: string;
+  anyFieldFilterValue: string;
+  viewGroups: ViewGroup[];
+  visibility: ViewVisibility;
+  openRecordIn: ViewOpenRecordIn;
 };
 
 export type RecordTableState = {
@@ -53,10 +73,28 @@ export type RecordTableState = {
   /* filters + sort + search */
   filters: ViewFilter[];
   setFilters: (filters: ViewFilter[]) => void;
+  filterGroups: ViewFilterGroup[];
+  setFilterGroups: (filterGroups: ViewFilterGroup[]) => void;
   sorts: ViewSort[];
   setSorts: (sorts: ViewSort[]) => void;
+  type: ViewType;
+  setType: (type: ViewType) => void;
+  kanbanFieldMetadataId?: string;
+  setKanbanFieldMetadataId: (fieldMetadataId?: string) => void;
+  calendarFieldMetadataId?: string;
+  setCalendarFieldMetadataId: (fieldMetadataId?: string) => void;
+  fieldGroups: ViewFieldGroup[];
+  setFieldGroups: (fieldGroups: ViewFieldGroup[]) => void;
   searchTerm: string;
   setSearchTerm: (searchTerm: string) => void;
+  anyFieldFilterValue: string;
+  setAnyFieldFilterValue: (anyFieldFilterValue: string) => void;
+  viewGroups: ViewGroup[];
+  setViewGroups: (viewGroups: ViewGroup[]) => void;
+  visibility: ViewVisibility;
+  setVisibility: (visibility: ViewVisibility) => void;
+  openRecordIn: ViewOpenRecordIn;
+  setOpenRecordIn: (openRecordIn: ViewOpenRecordIn) => void;
 
   /* selection */
   selectedRecordIds: Set<string>;
@@ -98,8 +136,17 @@ export function createRecordTableStore(opts: {
     columns: [],
     density: "compact",
     filters: [],
+    filterGroups: [],
     sorts: [],
+    type: "table",
+    kanbanFieldMetadataId: undefined,
+    calendarFieldMetadataId: undefined,
+    fieldGroups: [],
     searchTerm: "",
+    anyFieldFilterValue: "",
+    viewGroups: [],
+    visibility: "personal",
+    openRecordIn: "drawer",
     selectedRecordIds: new Set(),
     hoverPosition: null,
     focusedCell: null,
@@ -137,8 +184,17 @@ export function createRecordTableStore(opts: {
 
     setDensity: (density) => set({ density }),
     setFilters: (filters) => set({ filters }),
+    setFilterGroups: (filterGroups) => set({ filterGroups }),
     setSorts: (sorts) => set({ sorts }),
+    setType: (type) => set({ type }),
+    setKanbanFieldMetadataId: (kanbanFieldMetadataId) => set({ kanbanFieldMetadataId }),
+    setCalendarFieldMetadataId: (calendarFieldMetadataId) => set({ calendarFieldMetadataId }),
+    setFieldGroups: (fieldGroups) => set({ fieldGroups }),
     setSearchTerm: (searchTerm) => set({ searchTerm }),
+    setAnyFieldFilterValue: (anyFieldFilterValue) => set({ anyFieldFilterValue }),
+    setViewGroups: (viewGroups) => set({ viewGroups }),
+    setVisibility: (visibility) => set({ visibility }),
+    setOpenRecordIn: (openRecordIn) => set({ openRecordIn }),
 
     setSelectedRecordIds: (next) =>
       set((state) => {
@@ -162,16 +218,34 @@ export function createRecordTableStore(opts: {
         columns: hydrated.columns,
         density: hydrated.view.density,
         filters: hydrated.view.filters,
+        filterGroups: hydrated.view.filterGroups,
         sorts: hydrated.view.sorts,
+        type: hydrated.view.type,
+        kanbanFieldMetadataId: hydrated.view.kanbanFieldMetadataId,
+        calendarFieldMetadataId: hydrated.view.calendarFieldMetadataId,
+        fieldGroups: hydrated.view.fieldGroups,
         searchTerm: hydrated.view.searchTerm ?? "",
+        anyFieldFilterValue: hydrated.view.anyFieldFilterValue ?? "",
+        viewGroups: hydrated.view.groups,
+        visibility: hydrated.view.visibility,
+        openRecordIn: hydrated.view.openRecordIn,
       };
       set({
         viewId: snapshot.viewId,
         columns: snapshot.columns,
         density: snapshot.density,
         filters: snapshot.filters,
+        filterGroups: snapshot.filterGroups,
         sorts: snapshot.sorts,
+        type: snapshot.type,
+        kanbanFieldMetadataId: snapshot.kanbanFieldMetadataId,
+        calendarFieldMetadataId: snapshot.calendarFieldMetadataId,
+        fieldGroups: snapshot.fieldGroups,
         searchTerm: snapshot.searchTerm,
+        anyFieldFilterValue: snapshot.anyFieldFilterValue,
+        viewGroups: snapshot.viewGroups,
+        visibility: snapshot.visibility,
+        openRecordIn: snapshot.openRecordIn,
         savedView: snapshot,
       });
     },
@@ -184,8 +258,17 @@ export function createRecordTableStore(opts: {
           columns: s.columns,
           density: s.density,
           filters: s.filters,
+          filterGroups: s.filterGroups,
           sorts: s.sorts,
+          type: s.type,
+          kanbanFieldMetadataId: s.kanbanFieldMetadataId,
+          calendarFieldMetadataId: s.calendarFieldMetadataId,
+          fieldGroups: s.fieldGroups,
           searchTerm: s.searchTerm,
+          anyFieldFilterValue: s.anyFieldFilterValue,
+          viewGroups: s.viewGroups,
+          visibility: s.visibility,
+          openRecordIn: s.openRecordIn,
         },
       });
     },
@@ -198,8 +281,17 @@ export function createRecordTableStore(opts: {
         columns: snap.columns,
         density: snap.density,
         filters: snap.filters,
+        filterGroups: snap.filterGroups,
         sorts: snap.sorts,
+        type: snap.type,
+        kanbanFieldMetadataId: snap.kanbanFieldMetadataId,
+        calendarFieldMetadataId: snap.calendarFieldMetadataId,
+        fieldGroups: snap.fieldGroups,
         searchTerm: snap.searchTerm,
+        anyFieldFilterValue: snap.anyFieldFilterValue,
+        viewGroups: snap.viewGroups,
+        visibility: snap.visibility,
+        openRecordIn: snap.openRecordIn,
       });
     },
   }));
@@ -261,6 +353,10 @@ function filtersEqual(a: ViewFilter[], b: ViewFilter[]): boolean {
   return true;
 }
 
+function jsonEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 function sortsEqual(a: ViewSort[], b: ViewSort[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
@@ -296,7 +392,16 @@ export function computeIsDirty(s: RecordTableState): boolean {
     s.viewId !== snap.viewId ||
     s.density !== snap.density ||
     s.searchTerm !== snap.searchTerm ||
+    s.anyFieldFilterValue !== snap.anyFieldFilterValue ||
+    s.type !== snap.type ||
+    s.kanbanFieldMetadataId !== snap.kanbanFieldMetadataId ||
+    s.calendarFieldMetadataId !== snap.calendarFieldMetadataId ||
+    s.visibility !== snap.visibility ||
+    s.openRecordIn !== snap.openRecordIn ||
     !filtersEqual(s.filters, snap.filters) ||
+    !jsonEqual(s.filterGroups, snap.filterGroups) ||
+    !jsonEqual(s.fieldGroups, snap.fieldGroups) ||
+    !jsonEqual(s.viewGroups, snap.viewGroups) ||
     !sortsEqual(s.sorts, snap.sorts) ||
     !columnsEqual(s.columns, snap.columns)
   );

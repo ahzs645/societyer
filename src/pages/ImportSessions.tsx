@@ -10,7 +10,6 @@ import { ImportWizard } from "../components/ImportWizard";
 import {
   Archive,
   Check,
-  CheckCircle2,
   FileJson,
   FileText,
   FolderOpen,
@@ -25,6 +24,7 @@ import {
 } from "lucide-react";
 
 type FilterStatus = "all" | "Pending" | "Approved" | "Rejected" | "risk";
+type SessionTrack = "active" | "completed";
 
 const STATUS_ITEMS: { id: FilterStatus; label: string }[] = [
   { id: "all", label: "All" },
@@ -85,7 +85,12 @@ export function ImportSessionsPage() {
   const toast = useToast();
   const sessions = useQuery(api.importSessions.list, society ? { societyId: society._id } : "skip");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const activeSessionId = selectedId ?? sessions?.[0]?._id ?? null;
+  const [sessionTrack, setSessionTrack] = useState<SessionTrack>("active");
+  const activeSessions = useMemo(() => (sessions ?? []).filter(isActiveImportSession), [sessions]);
+  const completedSessions = useMemo(() => (sessions ?? []).filter((session: any) => !isActiveImportSession(session)), [sessions]);
+  const visibleSessions = sessionTrack === "active" ? activeSessions : completedSessions;
+  const selectedVisible = selectedId ? visibleSessions.some((session: any) => session._id === selectedId) : false;
+  const activeSessionId = selectedVisible ? selectedId : visibleSessions[0]?._id ?? null;
   const detail = useQuery(api.importSessions.get, activeSessionId ? { sessionId: activeSessionId } : "skip");
 
   const createSession = useMutation(api.importSessions.createFromBundle);
@@ -339,7 +344,7 @@ export function ImportSessionsPage() {
   };
 
   return (
-    <div className="page">
+    <div className="page import-sessions-page">
       <PageHeader
         title="Import sessions"
         icon={<FileJson size={16} />}
@@ -388,80 +393,102 @@ export function ImportSessionsPage() {
         }}
       />
 
-      <div className="stat-grid">
-        <Stat label="Sessions" value={String(sessions?.length ?? 0)} icon={<Archive size={14} />} sub="staged conversion batches" />
+      <div className="stat-grid import-sessions-page__stats">
+        <Stat label="Active" value={String(activeSessions.length)} icon={<ListChecks size={14} />} sub="pending or not yet applied" />
+        <Stat label="Completed" value={String(completedSessions.length)} icon={<Archive size={14} />} sub="hidden from active track" />
         <Stat label="Candidates" value={String(session?.summary?.total ?? 0)} icon={<ListChecks size={14} />} sub="records in selected session" />
-        <Stat label="Approved" value={String(session?.summary?.byStatus?.Approved ?? 0)} icon={<CheckCircle2 size={14} />} sub="ready to apply" />
         <Stat label="Review flags" value={String(session?.summary?.riskCount ?? 0)} icon={<ShieldAlert size={14} />} sub="restricted, OCR, or cleanup risks" />
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card__head">
-          <div>
-            <h2 className="card__title">Paperless meeting scan</h2>
-            <p className="card__subtitle">Creates a review session from live Paperless meeting-minute documents.</p>
+      <div className="import-scan-grid">
+        <div className="card import-scan-card">
+          <div className="card__head import-scan-card__head">
+            <div>
+              <h2 className="card__title">Paperless meeting scan</h2>
+              <p className="card__subtitle">Creates a review session from live Paperless meeting-minute documents.</p>
+            </div>
+            <button className="btn-action btn-action--primary" disabled={paperlessBusy} onClick={runPaperlessMeetingScan}>
+              <FileText size={12} /> {paperlessBusy ? "Scanning..." : "Scan minutes"}
+            </button>
           </div>
-          <button className="btn-action btn-action--primary" disabled={paperlessBusy} onClick={runPaperlessMeetingScan}>
-            <FileText size={12} /> {paperlessBusy ? "Scanning..." : "Scan minutes"}
-          </button>
+          <div className="card__body import-scan-card__fields">
+            <Field label="Search query">
+              <input className="input" value={paperlessQuery} onChange={(event) => setPaperlessQuery(event.target.value)} />
+            </Field>
+            <Field label="Max documents">
+              <input className="input" type="number" min={1} max={1179} value={paperlessLimit} onChange={(event) => setPaperlessLimit(Number(event.target.value) || 1)} />
+            </Field>
+          </div>
         </div>
-        <div className="card__body row" style={{ gap: 12, flexWrap: "wrap" }}>
-          <Field label="Search query">
-            <input className="input" value={paperlessQuery} onChange={(event) => setPaperlessQuery(event.target.value)} />
-          </Field>
-          <Field label="Max documents">
-            <input className="input" type="number" min={1} max={1179} value={paperlessLimit} onChange={(event) => setPaperlessLimit(Number(event.target.value) || 1)} />
-          </Field>
-        </div>
-      </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card__head">
-          <div>
-            <h2 className="card__title">Paperless expanded discovery</h2>
-            <p className="card__subtitle">Creates a review session across app sections with source evidence, risk flags, and target modules.</p>
+        <div className="card import-scan-card">
+          <div className="card__head import-scan-card__head">
+            <div>
+              <h2 className="card__title">Paperless expanded discovery</h2>
+              <p className="card__subtitle">Creates a review session across app sections with source evidence, risk flags, and target modules.</p>
+            </div>
+            <button className="btn-action btn-action--primary" disabled={discoveryBusy} onClick={runPaperlessDiscoveryScan}>
+              <Archive size={12} /> {discoveryBusy ? "Scanning..." : "Scan sections"}
+            </button>
           </div>
-          <button className="btn-action btn-action--primary" disabled={discoveryBusy} onClick={runPaperlessDiscoveryScan}>
-            <Archive size={12} /> {discoveryBusy ? "Scanning..." : "Scan sections"}
-          </button>
+          <div className="card__body import-scan-card__fields">
+            <Field label="Search query" hint="Leave blank to scan broadly across Paperless.">
+              <input className="input" value={discoveryQuery} onChange={(event) => setDiscoveryQuery(event.target.value)} placeholder="budget, annual report, policy..." />
+            </Field>
+            <Field label="Max documents">
+              <input className="input" type="number" min={1} max={1179} value={discoveryLimit} onChange={(event) => setDiscoveryLimit(Number(event.target.value) || 1)} />
+            </Field>
+          </div>
         </div>
-        <div className="card__body row" style={{ gap: 12, flexWrap: "wrap" }}>
-          <Field label="Search query" hint="Leave blank to scan broadly across Paperless.">
-            <input className="input" value={discoveryQuery} onChange={(event) => setDiscoveryQuery(event.target.value)} placeholder="budget, annual report, policy..." />
-          </Field>
-          <Field label="Max documents">
-            <input className="input" type="number" min={1} max={1179} value={discoveryLimit} onChange={(event) => setDiscoveryLimit(Number(event.target.value) || 1)} />
-          </Field>
-        </div>
-      </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card__head">
-          <div>
-            <h2 className="card__title">Paperless transposition</h2>
-            <p className="card__subtitle">Reads Paperless OCR into section-native review records for filings, deadlines, publications, insurance, grants, records, HR, volunteers, and privacy training.</p>
+        <div className="card import-scan-card">
+          <div className="card__head import-scan-card__head">
+            <div>
+              <h2 className="card__title">Paperless transposition</h2>
+              <p className="card__subtitle">Reads Paperless OCR into section-native review records for filings, deadlines, publications, insurance, grants, records, HR, volunteers, and privacy training.</p>
+            </div>
+            <button className="btn-action btn-action--primary" disabled={transposeBusy} onClick={runPaperlessTransposeScan}>
+              <Archive size={12} /> {transposeBusy ? "Transposing..." : "Transpose records"}
+            </button>
           </div>
-          <button className="btn-action btn-action--primary" disabled={transposeBusy} onClick={runPaperlessTransposeScan}>
-            <Archive size={12} /> {transposeBusy ? "Transposing..." : "Transpose records"}
-          </button>
-        </div>
-        <div className="card__body row" style={{ gap: 12, flexWrap: "wrap" }}>
-          <Field label="Search query" hint="Leave blank to transpose broadly across Paperless OCR.">
-            <input className="input" value={transposeQuery} onChange={(event) => setTransposeQuery(event.target.value)} placeholder="insurance, filings, issue, grant..." />
-          </Field>
-          <Field label="Max documents">
-            <input className="input" type="number" min={1} max={1179} value={transposeLimit} onChange={(event) => setTransposeLimit(Number(event.target.value) || 1)} />
-          </Field>
+          <div className="card__body import-scan-card__fields">
+            <Field label="Search query" hint="Leave blank to transpose broadly across Paperless OCR.">
+              <input className="input" value={transposeQuery} onChange={(event) => setTransposeQuery(event.target.value)} placeholder="insurance, filings, issue, grant..." />
+            </Field>
+            <Field label="Max documents">
+              <input className="input" type="number" min={1} max={1179} value={transposeLimit} onChange={(event) => setTransposeLimit(Number(event.target.value) || 1)} />
+            </Field>
+          </div>
         </div>
       </div>
 
       <div className="import-review-layout">
         <div className="card">
           <div className="card__head">
-            <h2 className="card__title">Sessions</h2>
+            <div>
+              <h2 className="card__title">Sessions</h2>
+              <p className="card__subtitle">
+                {sessionTrack === "active"
+                  ? "Batches that still need review or apply steps."
+                  : "Finished, rejected, or empty batches kept for audit trail."}
+              </p>
+            </div>
+          </div>
+          <div className="card__body import-session-track">
+            <Segmented<SessionTrack>
+              value={sessionTrack}
+              onChange={(next) => {
+                setSessionTrack(next);
+                setSelectedId(null);
+              }}
+              items={[
+                { id: "active", label: `Active (${activeSessions.length})` },
+                { id: "completed", label: `Completed (${completedSessions.length})` },
+              ]}
+            />
           </div>
           <div className="card__body col" style={{ gap: 8 }}>
-            {(sessions ?? []).map((item: any) => (
+            {visibleSessions.map((item: any) => (
               <button
                 key={item._id}
                 className={`import-session-row${item._id === activeSessionId ? " is-active" : ""}`}
@@ -473,6 +500,8 @@ export function ImportSessionsPage() {
                 </span>
                 <span className="import-session-row__counts">
                   <Badge tone="info">{item.summary.total}</Badge>
+                  {(item.summary.byStatus?.Pending ?? 0) > 0 && <Badge tone="warn">{item.summary.byStatus.Pending} pending</Badge>}
+                  {isCompletedImportSession(item) && <Badge tone="success">Complete</Badge>}
                   {(item.summary.riskCount ?? 0) > 0 && <Badge tone="warn">{item.summary.riskCount} flags</Badge>}
                 </span>
               </button>
@@ -480,6 +509,13 @@ export function ImportSessionsPage() {
             {sessions?.length === 0 && (
               <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
                 No import sessions yet.
+              </div>
+            )}
+            {(sessions?.length ?? 0) > 0 && visibleSessions.length === 0 && (
+              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                {sessionTrack === "active"
+                  ? "No active import sessions. Completed batches are archived in the Completed track."
+                  : "No completed import sessions yet."}
               </div>
             )}
           </div>
@@ -1075,6 +1111,23 @@ function ConfidenceBadge({ confidence }: { confidence?: string }) {
   if (confidence === "High") return <Badge tone="success">High</Badge>;
   if (confidence === "Medium") return <Badge tone="info">Medium</Badge>;
   return <Badge tone="warn">Review</Badge>;
+}
+
+function isActiveImportSession(session: any) {
+  const summary = session?.summary ?? {};
+  const pending = Number(summary.byStatus?.Pending ?? 0);
+  const approved = Number(summary.byStatus?.Approved ?? 0);
+  const applied =
+    Number(summary.documentsApplied ?? 0) +
+    Number(summary.meetingsApplied ?? 0) +
+    Number(summary.orgHistoryApplied ?? 0) +
+    Number(summary.sectionsApplied ?? 0);
+
+  return pending > 0 || (approved > 0 && applied === 0);
+}
+
+function isCompletedImportSession(session: any) {
+  return !isActiveImportSession(session);
 }
 
 function Stat({ label, value, icon, sub }: { label: string; value: string; icon: ReactNode; sub: string }) {

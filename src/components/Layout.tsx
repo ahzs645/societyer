@@ -102,6 +102,14 @@ function UserPickerSafe() {
   );
 }
 
+function CommandPaletteSafe() {
+  return (
+    <ErrorBoundary label="CommandPalette" fallback={null}>
+      <CommandPalette />
+    </ErrorBoundary>
+  );
+}
+
 // Shown when the notifications query fails (usually a backend that hasn't
 // picked up the latest schema, or a stale localStorage userId). Tries to
 // self-heal by clearing the stored userId — but does so in an effect, not in
@@ -673,7 +681,7 @@ export function Layout() {
 
   return (
     <InspectorProvider>
-      <CommandPalette />
+      <CommandPaletteSafe />
       <ShortcutHelp />
       <div className={shellClassName}>
         {isMobileNav && mobileSidebarOpen && (

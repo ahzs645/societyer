@@ -3339,16 +3339,24 @@ export default defineSchema({
     objectMetadataId: v.id("objectMetadata"),
     name: v.string(),              // "All members"
     icon: v.optional(v.string()),
-    type: v.string(),              // "table" | "kanban" | "board"
+    type: v.string(),              // "table" | "kanban" | "board" | "calendar"
     // When kanban, which SELECT/RELATION field splits columns.
     kanbanFieldMetadataId: v.optional(v.id("fieldMetadata")),
+    kanbanAggregateOperation: v.optional(v.string()),
+    kanbanAggregateOperationFieldMetadataId: v.optional(v.id("fieldMetadata")),
+    calendarFieldMetadataId: v.optional(v.id("fieldMetadata")),
+    calendarLayout: v.optional(v.string()),
     // Filter & sort live on the view, not on each load — serialized.
     //   filtersJson: [{ fieldMetadataId, operator, value, operandKind }]
     //   sortsJson:   [{ fieldMetadataId, direction }]
     filtersJson: v.optional(v.string()),
+    viewFilterGroupsJson: v.optional(v.string()),
     sortsJson: v.optional(v.string()),
+    viewGroupsJson: v.optional(v.string()),
+    viewFieldGroupsJson: v.optional(v.string()),
     // Search term pre-applied to the view.
     searchTerm: v.optional(v.string()),
+    anyFieldFilterValue: v.optional(v.string()),
     // DataTable-specific column state (hidden ids, widths, ordering).
     columnStateJson: v.optional(v.string()),
     // Compact vs comfortable.
@@ -3356,6 +3364,8 @@ export default defineSchema({
     // "Shared" views are visible to the whole society; personal views only
     // to the creator.
     isShared: v.boolean(),
+    visibility: v.optional(v.string()), // "personal" | "shared" | "system"
+    openRecordIn: v.optional(v.string()), // "drawer" | "page"
     // System views are seeded (e.g. "All members") — users can't delete them
     // but can clone them.
     isSystem: v.boolean(),
@@ -3372,6 +3382,7 @@ export default defineSchema({
     societyId: v.id("societies"),
     viewId: v.id("views"),
     fieldMetadataId: v.id("fieldMetadata"),
+    viewFieldGroupId: v.optional(v.string()),
     isVisible: v.boolean(),
     position: v.number(),
     size: v.number(), // pixels
@@ -3384,5 +3395,26 @@ export default defineSchema({
     .index("by_view", ["viewId"])
     .index("by_view_position", ["viewId", "position"])
     .index("by_field", ["fieldMetadataId"]),
+
+  commandMenuItems: defineTable({
+    societyId: v.id("societies"),
+    label: v.string(),
+    category: v.string(),
+    iconName: v.optional(v.string()),
+    commandKey: v.string(),
+    scopeType: v.string(), // global | page | object | record | selection
+    pagePath: v.optional(v.string()),
+    objectMetadataId: v.optional(v.id("objectMetadata")),
+    requiredSelection: v.optional(v.string()),
+    payloadJson: v.optional(v.string()),
+    isPinned: v.boolean(),
+    isSystem: v.boolean(),
+    position: v.number(),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_scope", ["societyId", "scopeType"])
+    .index("by_object", ["objectMetadataId"]),
 
 });

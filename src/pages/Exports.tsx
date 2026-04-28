@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { Badge } from "../components/ui";
 import { PageHeader, SeedPrompt } from "./_helpers";
+import { escapeCsvCell } from "../lib/csv";
 
 type TableSummary = {
   name: string;
@@ -425,9 +426,9 @@ function toCsv(rows: Array<Record<string, unknown>>): string {
       return set;
     }, new Set()),
   );
-  const header = columns.map(csvEscape).join(",");
+  const header = columns.map(escapeCsvCell).join(",");
   const body = rows
-    .map((row) => columns.map((col) => csvEscape(serializeCell(row[col]))).join(","))
+    .map((row) => columns.map((col) => escapeCsvCell(serializeCell(row[col]))).join(","))
     .join("\n");
   return `${header}\n${body}`;
 }
@@ -437,11 +438,6 @@ function serializeCell(v: unknown): string {
   if (typeof v === "string") return v;
   if (typeof v === "number" || typeof v === "boolean") return String(v);
   return JSON.stringify(v);
-}
-
-function csvEscape(value: string): string {
-  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
-  return value;
 }
 
 function downloadBlob(body: string, mime: string, filename: string) {

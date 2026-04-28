@@ -8,6 +8,7 @@ export { RecordTableToolbar } from "./components/RecordTableToolbar";
 export { RecordTableViewToolbar } from "./components/RecordTableViewToolbar";
 export { RecordTableFilterChips } from "./components/RecordTableFilterChips";
 export { RecordTableFilterPopover } from "./components/RecordTableFilterPopover";
+export { RecordTableSortPopover } from "./components/RecordTableSortPopover";
 export { RecordTableBulkBar } from "./components/RecordTableBulkBar";
 export type { BulkAction } from "./components/RecordTableBulkBar";
 export { RecordTableEmpty } from "./components/RecordTableEmpty";

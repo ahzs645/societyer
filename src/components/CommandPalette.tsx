@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { useMutation } from "convex/react";
-import { useNavigate } from "react-router-dom";
+import { useMutation, useQuery } from "convex/react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Building2,
@@ -189,6 +189,114 @@ function pushRecent(id: string) {
   }
 }
 
+const COMMAND_ICONS: Record<string, any> = {
+  LayoutDashboard,
+  Building2,
+  Users,
+  UserCog,
+  Calendar,
+  CalendarCheck,
+  FileText,
+  FileJson,
+  ClipboardList,
+  FolderOpen,
+  AlertTriangle,
+  PiggyBank,
+  Shield,
+  Settings,
+  Sparkles,
+  UsersRound,
+  Target,
+  ListTodo,
+  CalendarClock,
+  Mail,
+  HandHeart,
+  BadgeDollarSign,
+  Globe,
+  Archive,
+  BookOpen,
+  Calculator,
+  CreditCard,
+  Download,
+  Database,
+  Eye,
+  FileCog,
+  FileCheck2,
+  Gavel,
+  PenLine,
+  Receipt,
+  ShieldCheck,
+  UserCheck,
+  Vote,
+  Newspaper,
+  KeyRound,
+  Clock,
+  Inbox,
+  Workflow,
+};
+
+function commandFromMetadata(row: any, navigate: ReturnType<typeof useNavigate>): CommandItem | null {
+  const payload = parseCommandPayload(row.payloadJson);
+  const Icon = row.iconName ? COMMAND_ICONS[row.iconName] : undefined;
+  const icon = Icon ?? Settings;
+  const category = normalizeCommandCategory(row.category);
+  const id = `metadata-command:${row._id}`;
+
+  if (row.commandKey === "navigate") {
+    const to = typeof payload.to === "string" ? payload.to : row.pagePath;
+    if (!to) return null;
+    return { id, label: row.label, icon, category, to };
+  }
+
+  if (row.commandKey === "open-url") {
+    const href = typeof payload.href === "string" ? payload.href : "";
+    if (!href) return null;
+    return {
+      id,
+      label: row.label,
+      icon,
+      category,
+      run: () => {
+        window.open(href, "_blank", "noopener,noreferrer");
+      },
+    };
+  }
+
+  if (row.commandKey === "dispatch-event") {
+    const eventName = typeof payload.eventName === "string" ? payload.eventName : "";
+    if (!eventName) return null;
+    return {
+      id,
+      label: row.label,
+      icon,
+      category,
+      run: () => {
+        window.dispatchEvent(new CustomEvent(eventName, { detail: payload.detail }));
+      },
+    };
+  }
+
+  if (row.pagePath) {
+    return { id, label: row.label, icon, category, to: row.pagePath };
+  }
+
+  return null;
+}
+
+function parseCommandPayload(raw: unknown): Record<string, any> {
+  if (!raw || typeof raw !== "string") return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function normalizeCommandCategory(value: unknown): CommandCategory {
+  return CATEGORY_ORDER.includes(value as CommandCategory) ? (value as CommandCategory) : "Actions";
+}
+
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -198,9 +306,20 @@ export function CommandPalette() {
   const titleId = useId();
   const listId = useId();
   const navigate = useNavigate();
+  const location = useLocation();
   const society = useSociety();
   const toast = useToast();
   const seedSharedViews = useMutation(api.views.seedGovernanceDataTableViews);
+  const metadataCommands = useQuery(
+    api.commandMenuItems.listForScope,
+    open && society
+      ? {
+          societyId: society._id,
+          scopeType: "page",
+          pagePath: location.pathname,
+        }
+      : "skip",
+  );
 
   const actions = useMemo<CommandItem[]>(
     () => [
@@ -321,14 +440,18 @@ export function CommandPalette() {
       id: a.id,
       label: a.label,
       icon: a.icon,
-      category: "Actions",
+      category: a.category ?? "Actions",
       run: a.run,
       shortcut: a.shortcut,
     }));
+    const metadataActions: CommandItem[] = (metadataCommands ?? [])
+      .map((row: any) => commandFromMetadata(row, navigate))
+      .filter((item): item is CommandItem => Boolean(item));
     const enabledActions = actions.filter((item) => !item.module || isModuleEnabled(society, item.module));
     const all = [
       ...NAV_ITEMS.filter((item) => !item.module || isModuleEnabled(society, item.module)),
       ...enabledActions,
+      ...metadataActions,
       ...dynamicActions,
     ];
     const recordItems: CommandItem[] = recentRecords.map((r) => ({
@@ -374,7 +497,7 @@ export function CommandPalette() {
       flat.push(...items);
     }
     return { flat, groups };
-  }, [q, society, actions, recents, recentRecords, registeredCommands]);
+  }, [q, society, actions, recents, recentRecords, registeredCommands, metadataCommands, navigate]);
 
   if (!open) return null;
 

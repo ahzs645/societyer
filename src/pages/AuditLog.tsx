@@ -14,6 +14,7 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
+import { rowsToCsv } from "@/lib/csv";
 
 /**
  * Append-only activity log. Migrated to RecordTable so it shares the
@@ -48,20 +49,18 @@ export function AuditLogPage() {
 
   const exportCsv = () => {
     const rows = activity ?? [];
-    const header = ["Timestamp", "Actor", "Entity", "EntityId", "Action", "Summary"].join(",");
-    const body = rows
-      .map((r) =>
-        [
-          r.createdAtISO,
-          csvEscape(r.actor),
-          r.entityType,
-          r.entityId ?? "",
-          r.action,
-          csvEscape(r.summary),
-        ].join(","),
-      )
-      .join("\n");
-    const blob = new Blob([header + "\n" + body], { type: "text/csv" });
+    const body = rowsToCsv([
+      ["Timestamp", "Actor", "Entity", "EntityId", "Action", "Summary"],
+      ...rows.map((r) => [
+        r.createdAtISO,
+        r.actor,
+        r.entityType,
+        r.entityId ?? "",
+        r.action,
+        r.summary,
+      ]),
+    ]);
+    const blob = new Blob([body], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -134,9 +133,4 @@ export function AuditLogPage() {
       )}
     </div>
   );
-}
-
-function csvEscape(s: string): string {
-  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
 }

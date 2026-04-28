@@ -55,11 +55,14 @@ export function RecordTableFilterPopover({
   onClose: () => void;
 }) {
   const columns = useRecordTableState((s) => s.columns);
+  const filters = useRecordTableState((s) => s.filters);
+  const filterGroups = useRecordTableState((s) => s.filterGroups);
   const handle = useRecordTableStoreHandle();
 
   const [fieldId, setFieldId] = useState<string>("");
   const [operator, setOperator] = useState<ViewFilterOperator>("contains");
   const [value, setValue] = useState<string>("");
+  const rootLogicalOperator = filterGroups.find((group) => !group.parentViewFilterGroupId)?.logicalOperator ?? "and";
 
   if (!open) return null;
   const selectedColumn = columns.find((c) => c.fieldMetadataId === fieldId);
@@ -68,7 +71,18 @@ export function RecordTableFilterPopover({
 
   const add = () => {
     if (!selectedColumn) return;
+    const existingRoot = filterGroups.find((group) => !group.parentViewFilterGroupId);
+    const rootGroup = existingRoot ?? {
+      id: `fg_${Date.now()}`,
+      logicalOperator: rootLogicalOperator,
+      parentViewFilterGroupId: null,
+      positionInViewFilterGroup: 0,
+    };
+    const normalizedGroups = existingRoot
+      ? filterGroups
+      : [rootGroup, ...filterGroups];
     const filter = {
+      id: `f_${Date.now()}`,
       fieldMetadataId: selectedColumn.fieldMetadataId,
       operator,
       value: VALUELESS.includes(operator)
@@ -78,8 +92,24 @@ export function RecordTableFilterPopover({
             selectedColumn.field.fieldType === FIELD_TYPES.RATING
           ? Number(value)
           : value,
+      viewFilterGroupId: rootGroup.id,
+      positionInViewFilterGroup: filters.length,
     };
-    handle.set({ filters: [...handle.get().filters, filter] });
+    handle.set({
+      filterGroups: normalizedGroups,
+      filters: [
+        ...filters.map((entry, index) =>
+          entry.viewFilterGroupId
+            ? entry
+            : {
+                ...entry,
+                viewFilterGroupId: rootGroup.id,
+                positionInViewFilterGroup: index,
+              },
+        ),
+        filter,
+      ],
+    });
     setFieldId("");
     setOperator("contains");
     setValue("");
@@ -88,6 +118,40 @@ export function RecordTableFilterPopover({
 
   return (
     <div className="record-table__filter-popover">
+      <div className="record-table__popover-head">
+        <strong>Advanced filters</strong>
+        <select
+          className="record-table__menu-select"
+          style={{ width: 140 }}
+          value={rootLogicalOperator}
+          onChange={(event) => {
+            const logicalOperator = event.target.value as "and" | "or";
+            const root = filterGroups.find((group) => !group.parentViewFilterGroupId);
+            if (root) {
+              handle.get().setFilterGroups(
+                filterGroups.map((group) =>
+                  group.id === root.id ? { ...group, logicalOperator } : group,
+                ),
+              );
+              return;
+            }
+            if (filters.length > 0) {
+              const rootId = `fg_${Date.now()}`;
+              handle.set({
+                filterGroups: [{ id: rootId, logicalOperator, parentViewFilterGroupId: null }],
+                filters: filters.map((entry, index) => ({
+                  ...entry,
+                  viewFilterGroupId: rootId,
+                  positionInViewFilterGroup: index,
+                })),
+              });
+            }
+          }}
+        >
+          <option value="and">Match all</option>
+          <option value="or">Match any</option>
+        </select>
+      </div>
       <div className="record-table__filter-popover-row">
         <Select
           size="sm"

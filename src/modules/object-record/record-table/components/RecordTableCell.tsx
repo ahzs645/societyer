@@ -1,9 +1,9 @@
-import { useState } from "react";
 import type { RecordField } from "../../types";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
 import { FieldInput, isFieldEditable } from "../../record-field/components/FieldInput";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { useRecordTableRowContextOrThrow } from "../contexts/RecordTableRowContext";
+import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import type { RecordTableCellRenderer } from "./RecordTable";
 
 /**
@@ -22,18 +22,27 @@ export function RecordTableCell({
   renderCell?: RecordTableCellRenderer;
 }) {
   const tableCtx = useRecordTableContextOrThrow();
-  const { record, recordId } = useRecordTableRowContextOrThrow();
-  const [editing, setEditing] = useState(false);
+  const { record, recordId, rowIndex } = useRecordTableRowContextOrThrow();
+  const focusedCell = useRecordTableState((state) => state.focusedCell);
+  const editingCell = useRecordTableState((state) => state.editingCell);
+  const handle = useRecordTableStoreHandle();
 
   const value = record[recordField.field.name];
   const canEdit = isFieldEditable(recordField.field) && !!tableCtx.onUpdate;
+  const isFocused = focusedCell?.rowIndex === rowIndex && focusedCell.columnIndex === columnIndex;
+  const isEditing =
+    canEdit &&
+    editingCell?.rowIndex === rowIndex &&
+    editingCell.columnIndex === columnIndex;
 
   const startEdit = () => {
-    if (canEdit) setEditing(true);
+    if (!canEdit) return;
+    handle.get().setFocusedCell({ rowIndex, columnIndex });
+    handle.get().setEditingCell({ rowIndex, columnIndex });
   };
 
   const commit = async (nextValue: unknown) => {
-    setEditing(false);
+    handle.get().setEditingCell(null);
     if (nextValue === value) return;
     await tableCtx.onUpdate?.({
       recordId,
@@ -47,11 +56,13 @@ export function RecordTableCell({
       className={
         "record-table__cell" +
         (isLabelIdentifier ? " record-table__cell--identifier" : "") +
-        (canEdit ? " record-table__cell--editable" : "")
+        (canEdit ? " record-table__cell--editable" : "") +
+        (isFocused ? " record-table__cell--focused" : "")
       }
       style={{ width: recordField.size, minWidth: recordField.size }}
       onDoubleClick={startEdit}
       onClick={(e) => {
+        handle.get().setFocusedCell({ rowIndex, columnIndex });
         if (isLabelIdentifier && tableCtx.onRecordClick) {
           e.stopPropagation();
           tableCtx.onRecordClick(recordId, record);
@@ -60,12 +71,12 @@ export function RecordTableCell({
       data-column-index={columnIndex}
       data-field-name={recordField.field.name}
     >
-      {editing ? (
+      {isEditing ? (
         <FieldInput
           value={value}
           field={recordField.field}
           onCommit={commit}
-          onCancel={() => setEditing(false)}
+          onCancel={() => handle.get().setEditingCell(null)}
         />
       ) : (
         // Custom renderer first; `undefined` falls through to the

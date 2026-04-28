@@ -39,6 +39,8 @@
     "test:pdf-ingestion": "tsx scripts/check-pdf-table-normalization.ts",
     "test:exports": "tsx scripts/check-export-coverage.ts",
     "test:exports:db": "tsx scripts/validate-export-database.ts",
+    "test:record-table-utils": "tsx scripts/check-record-table-utils.ts",
+    "test:csv-import-utils": "tsx scripts/check-csv-and-import-utils.ts",
     "export:workspace:files": "tsx scripts/export-workspace-with-files.ts",
     "backup:runtime": "./scripts/backup-runtime-data.sh"
   },
@@ -53,6 +55,7 @@
     "date-fns": "^3.6.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "fuse.js": "^7.3.0",
     "i18next": "^23.16.5",
     "lucide-react": "^0.469.0",
     "pdf-lib": "^1.17.1",

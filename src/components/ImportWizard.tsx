@@ -2,12 +2,23 @@ import { useMemo, useState } from "react";
 import { Modal } from "./Modal";
 import { Button, Banner, EmptyState } from "./ui";
 import { Upload, FileText, CheckCircle2 } from "lucide-react";
-import { parseCsv } from "../lib/csv";
+import { cleanCsvCell, parseCsv } from "../lib/csv";
+import {
+  suggestImportMappings,
+  validateImportedRows,
+  buildRecordFromImportedRow,
+  type ImportMappingSuggestion,
+} from "../lib/importMapping";
 
 export type ImportTargetField = {
   id: string;
   label: string;
   required?: boolean;
+  aliases?: string[];
+  type?: "text" | "number" | "select" | "multiSelect" | "date" | "boolean";
+  options?: { value: string; label: string }[];
+  targetPath?: string;
+  transform?: (value: string, row: Record<string, string>) => unknown;
   /** Optional per-row validator. Returns an error string if invalid. */
   validate?: (value: string) => string | null;
 };
@@ -16,25 +27,12 @@ export type ImportTarget = {
   id: string;
   label: string;
   fields: ImportTargetField[];
+  maxRows?: number;
   /** Commit one row to the backend. */
-  onImportRow: (row: Record<string, string>) => Promise<void>;
+  onImportRow: (row: Record<string, any>) => Promise<void>;
 };
 
 type Step = "upload" | "map" | "preview";
-
-function suggestMapping(header: string, fields: ImportTargetField[]): string | "" {
-  const normalized = header.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-  for (const f of fields) {
-    const a = f.id.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const b = f.label.toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (normalized === a || normalized === b) return f.id;
-  }
-  for (const f of fields) {
-    const a = f.id.toLowerCase();
-    if (normalized.includes(a) || a.includes(normalized)) return f.id;
-  }
-  return "";
-}
 
 export function ImportWizard({
   open,
@@ -49,6 +47,7 @@ export function ImportWizard({
   const [rows, setRows] = useState<string[][]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<number, string>>({});
+  const [mappingSuggestions, setMappingSuggestions] = useState<Record<number, ImportMappingSuggestion[]>>({});
   const [importing, setImporting] = useState(false);
   const [importedCount, setImportedCount] = useState(0);
   const [errors, setErrors] = useState<{ row: number; message: string }[]>([]);
@@ -58,6 +57,7 @@ export function ImportWizard({
     setRows([]);
     setHeaders([]);
     setMapping({});
+    setMappingSuggestions({});
     setImporting(false);
     setImportedCount(0);
     setErrors([]);
@@ -72,14 +72,22 @@ export function ImportWizard({
     const text = await file.text();
     const parsed = parseCsv(text);
     if (parsed.length === 0) return;
-    const [head, ...body] = parsed;
+    const [head, ...body] = parsed.map((row) => row.map(cleanCsvCell));
     setHeaders(head);
     setRows(body);
-    const initial: Record<number, string> = {};
-    head.forEach((h, i) => {
-      initial[i] = suggestMapping(h, target.fields);
+    const suggested = suggestImportMappings({
+      headers: head,
+      fields: target.fields.map((field) => ({
+        id: field.id,
+        label: field.label,
+        aliases: field.aliases,
+        required: field.required,
+        type: field.type,
+        options: field.options,
+      })),
     });
-    setMapping(initial);
+    setMapping(suggested.mapping);
+    setMappingSuggestions(suggested.suggestionsByColumn);
     setStep("map");
   };
 
@@ -96,6 +104,16 @@ export function ImportWizard({
 
   const validationErrors = useMemo(() => {
     const errs: { row: number; message: string }[] = [];
+    validateImportedRows({
+      rows: mappedRows,
+      fields: target.fields,
+      maxRows: target.maxRows ?? 5000,
+    }).forEach((issue) => {
+      errs.push({
+        row: issue.row,
+        message: `${issue.level === "warn" ? "Warning: " : ""}${issue.message}`,
+      });
+    });
     mappedRows.forEach((r, idx) => {
       for (const f of target.fields) {
         if (f.required && !r[f.id]) {
@@ -110,7 +128,7 @@ export function ImportWizard({
       }
     });
     return errs;
-  }, [mappedRows, target.fields]);
+  }, [mappedRows, target.fields, target.maxRows]);
 
   const requiredUnmapped = target.fields
     .filter((f) => f.required)
@@ -122,7 +140,12 @@ export function ImportWizard({
     const newErrors: { row: number; message: string }[] = [];
     for (let i = 0; i < mappedRows.length; i += 1) {
       try {
-        await target.onImportRow(mappedRows[i]);
+        await target.onImportRow(
+          buildRecordFromImportedRow({
+            row: mappedRows[i],
+            fields: target.fields,
+          }),
+        );
         setImportedCount((c) => c + 1);
       } catch (err) {
         newErrors.push({
@@ -207,6 +230,18 @@ export function ImportWizard({
                           </option>
                         ))}
                       </select>
+                      {mappingSuggestions[i]?.length > 1 && (
+                        <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>
+                          Alternatives:{" "}
+                          {mappingSuggestions[i]
+                            .slice(0, 3)
+                            .map((suggestion) =>
+                              `${target.fields.find((field) => field.id === suggestion.fieldId)?.label} (${suggestion.confidence})`,
+                            )
+                            .filter(Boolean)
+                            .join(", ")}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

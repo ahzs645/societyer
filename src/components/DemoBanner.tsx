@@ -13,7 +13,7 @@ export function DemoBanner() {
   const toast = useToast();
   const [busy, setBusy] = useState<"seed" | "reset" | null>(null);
 
-  if (!demo || (society && !society.demoMode)) return null;
+  if (!demo || society === undefined || (society && !society.demoMode)) return null;
 
   return (
     <div className="demo-banner">

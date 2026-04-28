@@ -33,7 +33,7 @@ export function RecordTableViewToolbar({
   onOpenFilter?: () => void;
   actions?: ReactNode;
 }) {
-  const { saveCurrentView } = usePersistView({ societyId, objectMetadataId });
+  const { saveCurrentView, saveAsNewView } = usePersistView({ societyId, objectMetadataId });
 
   return (
     <RecordTableToolbar
@@ -44,6 +44,7 @@ export function RecordTableViewToolbar({
       onChangeView={onChangeView}
       onOpenFilter={onOpenFilter}
       onSaveView={saveCurrentView}
+      onSaveAsView={saveAsNewView}
       actions={actions}
     />
   );

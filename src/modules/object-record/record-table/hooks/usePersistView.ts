@@ -34,16 +34,31 @@ export function usePersistView({
       id: viewId,
       patch: {
         density: state.density,
+        type: state.type,
+        kanbanFieldMetadataId: state.kanbanFieldMetadataId as Id<"fieldMetadata"> | undefined,
+        calendarFieldMetadataId: state.calendarFieldMetadataId as Id<"fieldMetadata"> | undefined,
         filtersJson: JSON.stringify(state.filters),
+        viewFilterGroupsJson: JSON.stringify(state.filterGroups),
         sortsJson: JSON.stringify(state.sorts),
+        viewGroupsJson: JSON.stringify(state.viewGroups),
+        viewFieldGroupsJson: JSON.stringify(state.fieldGroups),
         searchTerm: state.searchTerm || undefined,
+        anyFieldFilterValue: state.anyFieldFilterValue || undefined,
+        visibility: state.visibility,
+        openRecordIn: state.openRecordIn,
       },
     });
     // Persist column sizing + visibility.
     for (const col of state.columns) {
       await updateField({
         id: col.viewFieldId as Id<"viewFields">,
-        patch: { isVisible: col.isVisible, size: col.size, position: col.position },
+        patch: {
+          isVisible: col.isVisible,
+          size: col.size,
+          position: col.position,
+          aggregateOperation: col.aggregateOperation ?? undefined,
+          viewFieldGroupId: col.viewFieldGroupId ?? undefined,
+        },
       });
     }
     // Commit positional order.
@@ -65,10 +80,19 @@ export function usePersistView({
         societyId,
         objectMetadataId,
         name,
+        type: state.type,
+        kanbanFieldMetadataId: state.kanbanFieldMetadataId as Id<"fieldMetadata"> | undefined,
+        calendarFieldMetadataId: state.calendarFieldMetadataId as Id<"fieldMetadata"> | undefined,
         density: state.density,
         filtersJson: JSON.stringify(state.filters),
+        viewFilterGroupsJson: JSON.stringify(state.filterGroups),
         sortsJson: JSON.stringify(state.sorts),
+        viewGroupsJson: JSON.stringify(state.viewGroups),
+        viewFieldGroupsJson: JSON.stringify(state.fieldGroups),
         searchTerm: state.searchTerm || undefined,
+        anyFieldFilterValue: state.anyFieldFilterValue || undefined,
+        visibility: state.visibility,
+        openRecordIn: state.openRecordIn,
         isShared: false,
       });
       for (let i = 0; i < state.columns.length; i++) {
@@ -80,6 +104,8 @@ export function usePersistView({
           isVisible: col.isVisible,
           position: i,
           size: col.size,
+          aggregateOperation: col.aggregateOperation ?? undefined,
+          viewFieldGroupId: col.viewFieldGroupId ?? undefined,
         });
       }
       // New view is now the saved baseline.

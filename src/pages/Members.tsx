@@ -13,6 +13,7 @@ import { useToast } from "../components/Toast";
 import { Plus, Users, Trash2, Pencil, GitMerge, Download } from "lucide-react";
 import { patchInList } from "../lib/optimistic";
 import { useRegisterCommand } from "../lib/commands";
+import { rowsToCsv } from "../lib/csv";
 import { BulkEditPanel } from "../components/BulkEditPanel";
 import { MergeRecordsModal } from "../components/MergeRecordsModal";
 import {
@@ -94,13 +95,18 @@ export function MembersPage() {
           label: "Export members to CSV",
           icon: Download,
           run: () => {
-            const header = "First,Last,Email,Class,Status,Joined";
-            const lines = (members ?? []).map((m: any) =>
-              [m.firstName, m.lastName, m.email ?? "", m.membershipClass, m.status, m.joinedAt]
-                .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-                .join(","),
-            );
-            const blob = new Blob([[header, ...lines].join("\n")], { type: "text/csv" });
+            const body = rowsToCsv([
+              ["First", "Last", "Email", "Class", "Status", "Joined"],
+              ...(members ?? []).map((m: any) => [
+                m.firstName,
+                m.lastName,
+                m.email ?? "",
+                m.membershipClass,
+                m.status,
+                m.joinedAt,
+              ]),
+            ]);
+            const blob = new Blob([body], { type: "text/csv" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
