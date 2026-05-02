@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, ClipboardPaste, ExternalLink, MonitorPlay, Play, RefreshCw, ShieldCheck, Square, Upload, XCircle } from "lucide-react";
 import { SeedPrompt } from "./_helpers";
 import { Badge, Button, Field, SettingsShell } from "../components/ui";
@@ -207,6 +208,8 @@ function connectorForSession(session: BrowserSession, availableConnectors: Conne
 export function BrowserConnectorsPage() {
   const society = useSociety();
   const toast = useToast();
+  const [searchParams] = useSearchParams();
+  const requestedConnectorId = searchParams.get("connector");
   const [health, setHealth] = useState<RunnerHealth | null>(null);
   const [connectors, setConnectors] = useState<ConnectorManifest[]>([]);
   const [connectorId, setConnectorId] = useState(DEFAULT_CONNECTOR_ID);
@@ -262,6 +265,13 @@ export function BrowserConnectorsPage() {
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [society?._id]);
+
+  useEffect(() => {
+    if (!requestedConnectorId) return;
+    if (!availableConnectors.some((connector) => connector.id === requestedConnectorId)) return;
+    openWorkspace(requestedConnectorId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedConnectorId, connectors.length]);
 
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
@@ -530,8 +540,10 @@ export function BrowserConnectorsPage() {
       setLastRun(payload.data);
       const imported = payload.data?.import;
       toast.success(
-        "Wave data imported",
-        `${imported?.transactions ?? payload.data?.transactionCount ?? 0} transactions across ${imported?.accounts ?? payload.data?.normalized?.accountCount ?? 0} accounts`,
+        imported?.staged ? "Wave data staged" : "Wave data imported",
+        imported?.staged
+          ? `${imported.recordCount ?? 0} review record(s) in import session ${imported.sessionId}`
+          : `${imported?.transactions ?? payload.data?.transactionCount ?? 0} transactions across ${imported?.accounts ?? payload.data?.normalized?.accountCount ?? 0} accounts`,
       );
       await refresh();
     } catch (error: any) {
@@ -659,8 +671,10 @@ export function BrowserConnectorsPage() {
       setLastRun(payload.data);
       const imported = payload.data?.import;
       toast.success(
-        imported?.created ? "GCOS grant imported" : "GCOS grant updated",
-        payload.data?.normalizedGrant?.title ?? imported?.grantId,
+        imported?.staged ? "GCOS grant staged" : imported?.created ? "GCOS grant imported" : "GCOS grant updated",
+        imported?.staged
+          ? `${imported.recordCount ?? 0} review record(s) in import session ${imported.sessionId}`
+          : payload.data?.normalizedGrant?.title ?? imported?.grantId,
       );
       await refresh();
     } catch (error: any) {
@@ -690,8 +704,10 @@ export function BrowserConnectorsPage() {
       setLastRun(payload.data);
       const imported = payload.data?.import;
       toast.success(
-        imported?.created ? "GCOS grant imported" : "GCOS grant updated",
-        payload.data?.normalizedGrant?.title ?? imported?.grantId,
+        imported?.staged ? "GCOS grant staged" : imported?.created ? "GCOS grant imported" : "GCOS grant updated",
+        imported?.staged
+          ? `${imported.recordCount ?? 0} review record(s) in import session ${imported.sessionId}`
+          : payload.data?.normalizedGrant?.title ?? imported?.grantId,
       );
       await refresh();
     } catch (error: any) {
@@ -1323,7 +1339,9 @@ export function BrowserConnectorsPage() {
                     <strong>Last run</strong>
                   </div>
                   <div className="muted">
-                    {lastRun.import
+                    {lastRun.import?.staged
+                      ? `${lastRun.import.recordCount ?? 0} record(s) staged for review`
+                      : lastRun.import
                       ? `${lastRun.import.transactions} imported transactions across ${lastRun.import.accounts} account(s)`
                       : lastRun.filingCount != null
                       ? `${lastRun.filingCount} filings, ${lastRun.documentCount ?? 0} digital document(s), ${lastRun.paperOnlyCount ?? 0} paper-only row(s)`
@@ -1331,6 +1349,20 @@ export function BrowserConnectorsPage() {
                       ? `${lastRun.transactionCount} transactions across ${lastRun.pageCount} page(s)`
                       : lastRun.title ?? lastRun.currentUrl}
                   </div>
+                  {(lastRun.import?.sessionId || lastRun.workflowRunId) && (
+                    <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                      {lastRun.import?.sessionId && (
+                        <Link className="btn btn--accent btn--sm" to={`/app/import-sessions?sessionId=${encodeURIComponent(lastRun.import.sessionId)}`}>
+                          <ExternalLink size={12} /> Review import session
+                        </Link>
+                      )}
+                      {lastRun.workflowRunId && (
+                        <Link className="btn btn--sm" to="/app/workflow-runs?provider=browser-connector&triggeredBy=connector">
+                          <ExternalLink size={12} /> Connector run history
+                        </Link>
+                      )}
+                    </div>
+                  )}
                   {lastRun.pdfProbe && (
                     <div className="muted" style={{ marginTop: 6 }}>
                       Sample PDF check: {lastRun.pdfProbe.startsWithPdf ? "valid PDF" : "not a PDF"} ({lastRun.pdfProbe.contentType ?? "unknown type"})

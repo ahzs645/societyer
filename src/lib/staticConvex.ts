@@ -1,4 +1,5 @@
 import { RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinitions";
+import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 
 const FUNCTION_NAME = Symbol.for("functionName");
 
@@ -3178,6 +3179,22 @@ function queryResult(name: string, args: StaticArgs) {
       return aiAgentRuns.slice(0, args?.limit ?? aiAgentRuns.length);
     case "aiAgents:auditForRun":
       return aiAgentAuditEvents.filter((event) => event.runId === args?.runId);
+    case "apiPlatform:listIntegrationCatalog":
+      return INTEGRATION_CATALOG.map((manifest) => {
+        const installation = tables.pluginInstallations.find((row) => row.slug === manifest.slug);
+        return {
+          ...manifest,
+          installation,
+          installed: installation?.status === "installed",
+          health: {
+            status: installation ? (manifest.status === "planned" ? "planned" : "ready") : "not_installed",
+            checkedAtISO: installation?.updatedAtISO,
+            messages: installation
+              ? ["Static demo integration manifest is installed."]
+              : ["Install this integration to configure credentials, actions, and webhooks."],
+          },
+        };
+      });
     case "recordLayouts:get":
       return null;
     case "agm:noticeDeliveries":
@@ -3569,6 +3586,47 @@ function mutationResult(name: string, args: StaticArgs) {
     };
     aiAgentRuns.unshift(run);
     return { runId: run._id, output: run.output, plannedToolCalls: run.plannedToolCalls };
+  }
+  if (name === "apiPlatform:installIntegration") {
+    const manifest = INTEGRATION_CATALOG.find((item) => item.slug === args?.slug);
+    if (!manifest) return "static_integration_unknown";
+    const now = new Date().toISOString();
+    const existing = tables.pluginInstallations.find((row) => row.slug === manifest.slug);
+    if (existing) {
+      existing.status = "installed";
+      existing.updatedAtISO = now;
+      existing.configJson = JSON.stringify({ manifestVersion: 1, actions: manifest.actions }, null, 2);
+      return existing._id;
+    }
+    const row = {
+      _id: `static_integration_${manifest.slug}`,
+      _creationTime: Date.now(),
+      societyId: args?.societyId ?? SOCIETY_ID,
+      name: manifest.name,
+      slug: manifest.slug,
+      status: "installed",
+      capabilities: manifest.capabilities,
+      configJson: JSON.stringify({ manifestVersion: 1, actions: manifest.actions }, null, 2),
+      installedByUserId: args?.installedByUserId,
+      createdAtISO: now,
+      updatedAtISO: now,
+    };
+    tables.pluginInstallations.push(row);
+    return row._id;
+  }
+  if (name === "apiPlatform:updateIntegrationHealth") return null;
+  if (name === "workflowPackages:createBoardPack") {
+    return {
+      packageId: "static_board_pack_package",
+      taskIds: [
+        "static_board_pack_prepare_agenda",
+        "static_board_pack_attach_materials",
+        "static_board_pack_send_notice",
+        "static_board_pack_record_quorum",
+        "static_board_pack_draft_minutes",
+        "static_board_pack_publish",
+      ],
+    };
   }
   if (name === "recordLayouts:upsert") return "static_record_layout";
   if (name === "recordLayouts:remove") return null;

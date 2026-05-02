@@ -58,6 +58,8 @@ export function WorkflowRunsPage() {
   );
 
   const workflowFilter = searchParams.get("workflowId");
+  const providerFilter = searchParams.get("provider");
+  const triggeredByFilter = searchParams.get("triggeredBy");
 
   // Project the derived fields (`workflowName`, `recipeLabel`) into
   // each record before they're handed to the table. Doing this here —
@@ -66,13 +68,17 @@ export function WorkflowRunsPage() {
   const visibleRuns = useMemo(() => {
     const byKey = new Map<string, any>((catalog ?? []).map((c) => [c.key, c]));
     return (runs ?? [])
-      .filter((run: any) => !workflowFilter || run.workflowId === workflowFilter)
+      .filter((run: any) =>
+        (!workflowFilter || run.workflowId === workflowFilter) &&
+        (!providerFilter || run.provider === providerFilter) &&
+        (!triggeredByFilter || run.triggeredBy === triggeredByFilter)
+      )
       .map((run: any) => ({
         ...run,
         workflowName: workflowsById.get(run.workflowId)?.name ?? "—",
         recipeLabel: byKey.get(run.recipe)?.label ?? run.recipe,
       }));
-  }, [runs, workflowsById, catalog, workflowFilter]);
+  }, [runs, workflowsById, catalog, workflowFilter, providerFilter, triggeredByFilter]);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;

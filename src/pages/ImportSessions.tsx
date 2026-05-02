@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -83,11 +84,28 @@ const KIND_LABELS: Record<string, string> = {
 export function ImportSessionsPage() {
   const society = useSociety();
   const toast = useToast();
+  const [searchParams] = useSearchParams();
+  const requestedSessionId = searchParams.get("sessionId");
+  const sourceFilter = searchParams.get("source");
   const sessions = useQuery(api.importSessions.list, society ? { societyId: society._id } : "skip");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sessionTrack, setSessionTrack] = useState<SessionTrack>("active");
-  const activeSessions = useMemo(() => (sessions ?? []).filter(isActiveImportSession), [sessions]);
-  const completedSessions = useMemo(() => (sessions ?? []).filter((session: any) => !isActiveImportSession(session)), [sessions]);
+  const sourceFilteredSessions = useMemo(() => {
+    const rows = sessions ?? [];
+    const query = sourceFilter?.trim().toLowerCase();
+    if (!query) return rows;
+    return rows.filter((session: any) =>
+      [
+        session.name,
+        session.sourceSystem,
+        session.metadata?.sourceSystem,
+        session.metadata?.importedFrom,
+        session.metadata?.createdFrom,
+      ].join(" ").toLowerCase().includes(query),
+    );
+  }, [sessions, sourceFilter]);
+  const activeSessions = useMemo(() => sourceFilteredSessions.filter(isActiveImportSession), [sourceFilteredSessions]);
+  const completedSessions = useMemo(() => sourceFilteredSessions.filter((session: any) => !isActiveImportSession(session)), [sourceFilteredSessions]);
   const visibleSessions = sessionTrack === "active" ? activeSessions : completedSessions;
   const selectedVisible = selectedId ? visibleSessions.some((session: any) => session._id === selectedId) : false;
   const activeSessionId = selectedVisible ? selectedId : visibleSessions[0]?._id ?? null;
@@ -126,6 +144,20 @@ export function ImportSessionsPage() {
   const [transposeQuery, setTransposeQuery] = useState("");
   const [transposeLimit, setTransposeLimit] = useState(1179);
   const [transposeBusy, setTransposeBusy] = useState(false);
+
+  useEffect(() => {
+    if (!requestedSessionId) return;
+    setSelectedId(requestedSessionId);
+    setSessionTrack("active");
+  }, [requestedSessionId]);
+
+  useEffect(() => {
+    if (!requestedSessionId || sessions === undefined) return;
+    const requested = sessions.find((session: any) => session._id === requestedSessionId);
+    if (requested && !isActiveImportSession(requested)) {
+      setSessionTrack("completed");
+    }
+  }, [requestedSessionId, sessions]);
 
   const records = detail?.records ?? [];
   const session = detail?.session ?? null;
@@ -400,6 +432,12 @@ export function ImportSessionsPage() {
         <Stat label="Review flags" value={String(session?.summary?.riskCount ?? 0)} icon={<ShieldAlert size={14} />} sub="restricted, OCR, or cleanup risks" />
       </div>
 
+      {sourceFilter && (
+        <InspectorNote tone="info" title="Filtered import sessions">
+          Showing sessions matching <span className="mono">{sourceFilter}</span>.
+        </InspectorNote>
+      )}
+
       <div className="import-scan-grid">
         <div className="card import-scan-card">
           <div className="card__head import-scan-card__head">
@@ -513,7 +551,9 @@ export function ImportSessionsPage() {
             )}
             {(sessions?.length ?? 0) > 0 && visibleSessions.length === 0 && (
               <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                {sessionTrack === "active"
+                {sourceFilter
+                  ? `No ${sessionTrack} import sessions match ${sourceFilter}.`
+                  : sessionTrack === "active"
                   ? "No active import sessions. Completed batches are archived in the Completed track."
                   : "No completed import sessions yet."}
               </div>

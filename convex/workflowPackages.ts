@@ -146,6 +146,112 @@ export const markFiled = mutation({
   },
 });
 
+export const createBoardPack = mutation({
+  args: {
+    societyId: v.id("societies"),
+    meetingId: v.id("meetings"),
+    workflowId: v.optional(v.id("workflows")),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.object({
+    packageId: v.id("workflowPackages"),
+    taskIds: v.array(v.id("tasks")),
+  }),
+  handler: async (ctx, { societyId, meetingId, workflowId, actingUserId }) => {
+    const meeting = await ctx.db.get(meetingId);
+    if (!meeting || meeting.societyId !== societyId) throw new Error("Meeting not found.");
+    const [materials, minutes] = await Promise.all([
+      ctx.db.query("meetingMaterials").withIndex("by_meeting", (q) => q.eq("meetingId", meetingId)).collect(),
+      meeting.minutesId ? ctx.db.get(meeting.minutesId) : Promise.resolve(null),
+    ]);
+    const now = new Date().toISOString();
+    const packageName = `Board pack - ${meeting.title}`;
+    const effectiveDate = meeting.scheduledAt.slice(0, 10);
+    const existingPackage = (await ctx.db
+      .query("workflowPackages")
+      .withIndex("by_society_effective", (q) => q.eq("societyId", societyId).eq("effectiveDate", effectiveDate))
+      .collect()).find((row) => row.packageName === packageName);
+    const packagePayload = {
+      societyId,
+      workflowId,
+      eventType: "custom.event",
+      effectiveDate,
+      status: meeting.packageReviewStatus === "released" ? "ready" : "draft",
+      packageName,
+      parts: [
+        "Agenda",
+        "Meeting materials",
+        "Notice of meeting",
+        "Attendance and quorum",
+        "Draft minutes",
+        "Follow-up actions",
+        "Minute-book publication",
+      ],
+      notes: [
+        `Board-pack workflow for ${meeting.title}.`,
+        `Meeting status: ${meeting.status}.`,
+        meeting.noticeSentAt ? `Notice sent: ${meeting.noticeSentAt}.` : "Notice has not been recorded yet.",
+        materials.length ? `${materials.length} meeting material(s) attached.` : "No meeting materials attached yet.",
+        minutes ? "Minutes record exists." : "Minutes record has not been created yet.",
+      ].join("\n"),
+      supportingDocumentIds: materials.map((material) => material.documentId),
+      priceItems: [],
+      transactionId: undefined,
+      signerRoster: [],
+      signerEmails: [],
+      signingPackageIds: [],
+      stripeCheckoutSessionId: undefined,
+      updatedAtISO: now,
+    };
+    const packageId = existingPackage?._id ?? await ctx.db.insert("workflowPackages", {
+      ...packagePayload,
+      createdAtISO: now,
+    });
+    if (existingPackage) {
+      await ctx.db.patch(existingPackage._id, packagePayload);
+    }
+    await ctx.db.patch(meetingId, {
+      packageReviewStatus: "needs_review",
+      packageReviewedAtISO: now,
+      packageReviewedByUserId: actingUserId,
+      packageReviewNotes: appendNote(
+        meeting.packageReviewNotes,
+        `Board pack package ${String(packageId)} created ${now.slice(0, 10)}.`,
+      ),
+    });
+    const taskIds = [] as any[];
+    const existingTasks = await ctx.db.query("tasks").withIndex("by_meeting", (q) => q.eq("meetingId", meetingId)).collect();
+    for (const task of boardPackTasks(meeting, packageId, materials.length, Boolean(minutes))) {
+      const eventId = `boardPack:${String(packageId)}:${task.key}`;
+      const existingTask = existingTasks.find((row) => row.eventId === eventId);
+      if (existingTask) {
+        await ctx.db.patch(existingTask._id, {
+          title: task.title,
+          description: task.description,
+          priority: task.priority,
+          dueDate: task.dueDate,
+        });
+        taskIds.push(existingTask._id);
+        continue;
+      }
+      taskIds.push(await ctx.db.insert("tasks", {
+        societyId,
+        meetingId,
+        workflowId,
+        title: task.title,
+        description: task.description,
+        status: "Todo",
+        priority: task.priority,
+        dueDate: task.dueDate,
+        eventId,
+        tags: ["board-pack", task.key],
+        createdAtISO: now,
+      }));
+    }
+    return { packageId, taskIds };
+  },
+});
+
 function cleanText(value: unknown) {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -202,4 +308,62 @@ function appendNote(current: unknown, note: string) {
 
 function todayDate() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function addDays(date: string, days: number) {
+  const parsed = new Date(`${date.slice(0, 10)}T12:00:00.000Z`);
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function boardPackTasks(meeting: any, packageId: any, materialCount: number, hasMinutes: boolean) {
+  const meetingDate = String(meeting.scheduledAt ?? todayDate()).slice(0, 10);
+  return [
+    {
+      key: "prepare-agenda",
+      title: `Prepare agenda for ${meeting.title}`,
+      description: "Confirm agenda items, bylaw-required business, motions, presenters, and time boxes.",
+      priority: "High",
+      dueDate: addDays(meetingDate, -14),
+    },
+    {
+      key: "attach-materials",
+      title: `Attach board materials for ${meeting.title}`,
+      description: materialCount
+        ? `${materialCount} material(s) are already attached. Review access levels and missing agenda links.`
+        : "Attach reports, motions, financials, policies, and supporting documents to the meeting materials list.",
+      priority: materialCount ? "Medium" : "High",
+      dueDate: addDays(meetingDate, -10),
+    },
+    {
+      key: "send-notice",
+      title: `Send meeting notice for ${meeting.title}`,
+      description: "Queue or record notice delivery, including remote attendance instructions and material access.",
+      priority: meeting.noticeSentAt ? "Low" : "High",
+      dueDate: addDays(meetingDate, -7),
+    },
+    {
+      key: "record-quorum",
+      title: `Record attendance and quorum for ${meeting.title}`,
+      description: "Capture present/absent/proxy attendance, quorum source, remote participation, and conflicts.",
+      priority: "High",
+      dueDate: meetingDate,
+    },
+    {
+      key: "draft-minutes",
+      title: `Draft minutes for ${meeting.title}`,
+      description: hasMinutes
+        ? "Minutes record exists. Review sections, motions, decisions, and action items before approval."
+        : "Create draft minutes from agenda, transcript, notes, and motions without approving the record.",
+      priority: "High",
+      dueDate: addDays(meetingDate, 2),
+    },
+    {
+      key: "publish-minute-book",
+      title: `Publish minute-book entry for ${meeting.title}`,
+      description: `After minutes approval, publish evidence into the minute book and close board pack ${String(packageId)}.`,
+      priority: "Medium",
+      dueDate: addDays(meetingDate, 14),
+    },
+  ];
 }

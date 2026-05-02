@@ -57,6 +57,7 @@ import {
   Sliders,
   MonitorPlay,
   Bot,
+  Plug,
 } from "lucide-react";
 import {
   ComponentType,
@@ -254,6 +255,7 @@ const NAV_GROUPS: NavGroup[] = [
     id: "workflows",
     label: "Workflows",
     items: [
+      { to: "/app/integrations", label: "Integrations", icon: Plug, color: "purple", module: "workflows" },
       { to: "/app/browser-connectors", label: "Browser apps", icon: MonitorPlay, color: "orange", module: "browserConnectors" },
       { to: "/app/ai-agents", label: "AI agents", icon: Bot, color: "turquoise" },
       { to: "/app/workflows", label: "Workflows", icon: Workflow, color: "orange", module: "workflows" },
@@ -614,6 +616,7 @@ export function Layout() {
   const activeSidebarMode = loc.pathname.startsWith("/app/workflows") ||
     loc.pathname.startsWith("/app/workflow-runs") ||
     loc.pathname.startsWith("/app/workflow-packages") ||
+    loc.pathname.startsWith("/app/integrations") ||
     loc.pathname.startsWith("/app/browser-connectors") ||
     loc.pathname.startsWith("/app/template-engine")
       ? "workflows"

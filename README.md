@@ -121,6 +121,17 @@ This is for frontend work against existing deployed data. Convex function,
 schema, or server/API changes still need to be deployed to the target K8s
 runtime with a valid `CONVEX_SELF_HOSTED_ADMIN_KEY`.
 
+Deploy local Convex schema/functions to the K8s runtime with:
+
+```bash
+npm run convex:deploy:k8s
+```
+
+The helper uses `KUBECONFIG` if set, otherwise it falls back to
+`/Users/ahmadjalil/github/personalprox/kubeconfig.yml`, generates a short-lived
+admin key inside the `societyer-convex` pod, and runs `npx convex dev --once`
+against `http://societyer.k8s.home:3220`.
+
 ---
 
 ## Demo mode

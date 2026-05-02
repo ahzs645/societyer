@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { assertApiPlatformServiceToken, serviceTokenValidator } from "./lib/serviceAuth";
 import { requireRole } from "./users";
+import { INTEGRATION_CATALOG, getIntegrationManifest } from "../shared/integrationCatalog";
 
 const idString = v.string();
 
@@ -88,6 +89,63 @@ const webhookDeliveryReturn = v.object({
   deliveredAtISO: v.optional(v.string()),
 });
 
+const integrationSyncStateReturn = v.object({
+  _id: v.id("integrationSyncStates"),
+  _creationTime: v.number(),
+  societyId: v.id("societies"),
+  pluginInstallationId: v.optional(v.id("pluginInstallations")),
+  provider: v.string(),
+  resourceType: v.string(),
+  resourceId: v.optional(v.string()),
+  externalResourceId: v.optional(v.string()),
+  syncToken: v.optional(v.string()),
+  deltaLink: v.optional(v.string()),
+  webhookChannelId: v.optional(v.string()),
+  webhookSubscriptionId: v.optional(v.string()),
+  webhookResourceId: v.optional(v.string()),
+  webhookExpiresAtISO: v.optional(v.string()),
+  lastFullSyncAtISO: v.optional(v.string()),
+  lastIncrementalSyncAtISO: v.optional(v.string()),
+  lastWebhookAtISO: v.optional(v.string()),
+  status: v.string(),
+  lastError: v.optional(v.string()),
+  metadataJson: v.optional(v.string()),
+  createdAtISO: v.string(),
+  updatedAtISO: v.string(),
+});
+
+const integrationManifestReturn = v.object({
+  slug: v.string(),
+  name: v.string(),
+  kind: v.string(),
+  category: v.string(),
+  summary: v.string(),
+  description: v.string(),
+  status: v.string(),
+  capabilities: v.array(v.string()),
+  requiredSecrets: v.array(v.string()),
+  dataMappings: v.array(v.string()),
+  auditEvents: v.array(v.string()),
+  healthChecks: v.array(v.string()),
+  actions: v.array(v.object({
+    id: v.string(),
+    label: v.string(),
+    description: v.string(),
+    kind: v.string(),
+    scope: v.string(),
+  })),
+});
+
+const integrationCatalogItemReturn = integrationManifestReturn.extend({
+  installation: v.optional(pluginInstallationReturn),
+  installed: v.boolean(),
+  health: v.object({
+    status: v.string(),
+    checkedAtISO: v.optional(v.string()),
+    messages: v.array(v.string()),
+  }),
+});
+
 function nowISO() {
   return new Date().toISOString();
 }
@@ -109,6 +167,44 @@ function privateWebhookSubscription(row: any) {
   return {
     ...redactWebhookSubscription(row),
     secretEncrypted: row.secretEncrypted,
+  };
+}
+
+function parseConfigJson(value?: string) {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function healthForInstallation(row: any | undefined, manifest: any) {
+  if (!row) {
+    return {
+      status: "not_installed",
+      messages: ["Install this integration to configure credentials, actions, and webhooks."],
+    };
+  }
+  if (row.status !== "installed") {
+    return {
+      status: row.status,
+      messages: [`Integration is ${row.status}.`],
+      checkedAtISO: parseConfigJson(row.configJson).healthCheckedAtISO,
+    };
+  }
+  const config = parseConfigJson(row.configJson);
+  const missingSecrets = manifest.requiredSecrets.filter(
+    (key: string) => !config.secretStatus?.[key] && !config.envStatus?.[key],
+  );
+  return {
+    status: missingSecrets.length ? "needs_setup" : manifest.status === "planned" ? "planned" : "ready",
+    checkedAtISO: config.healthCheckedAtISO,
+    messages: [
+      missingSecrets.length ? `Missing configured secret status: ${missingSecrets.join(", ")}` : "Required secret statuses are configured.",
+      ...(Array.isArray(config.healthMessages) ? config.healthMessages : []),
+    ],
   };
 }
 
@@ -312,6 +408,107 @@ export const listPluginInstallations = query({
       .collect(),
 });
 
+export const listIntegrationCatalog = query({
+  args: { societyId: v.optional(v.id("societies")) },
+  returns: v.array(integrationCatalogItemReturn),
+  handler: async (ctx, { societyId }) => {
+    const installations = societyId
+      ? await ctx.db
+          .query("pluginInstallations")
+          .withIndex("by_society", (q) => q.eq("societyId", societyId))
+          .collect()
+      : [];
+    const bySlug = new Map(installations.map((row) => [row.slug, row]));
+    return INTEGRATION_CATALOG.map((manifest) => {
+      const installation = bySlug.get(manifest.slug);
+      return {
+        ...manifest,
+        installation,
+        installed: installation?.status === "installed",
+        health: healthForInstallation(installation, manifest),
+      };
+    });
+  },
+});
+
+export const installIntegration = mutation({
+  args: {
+    societyId: v.id("societies"),
+    slug: v.string(),
+    status: v.optional(v.string()),
+    installedByUserId: v.optional(v.id("users")),
+  },
+  returns: v.id("pluginInstallations"),
+  handler: async (ctx, args) => {
+    const manifest = getIntegrationManifest(args.slug);
+    if (!manifest) throw new ConvexError({ code: "UNKNOWN_INTEGRATION", message: "Integration manifest not found." });
+    if (args.installedByUserId) {
+      await requireRole(ctx, { societyId: args.societyId, actingUserId: args.installedByUserId, required: "Admin" });
+    }
+    const existing = (await ctx.db
+      .query("pluginInstallations")
+      .withIndex("by_society_slug", (q) => q.eq("societyId", args.societyId).eq("slug", manifest.slug))
+      .collect())[0];
+    const config = {
+      manifestVersion: 1,
+      kind: manifest.kind,
+      category: manifest.category,
+      requiredSecrets: manifest.requiredSecrets,
+      dataMappings: manifest.dataMappings,
+      auditEvents: manifest.auditEvents,
+      healthChecks: manifest.healthChecks,
+      actions: manifest.actions,
+      healthMessages: [`Installed from integration catalog at ${nowISO()}.`],
+    };
+    const payload = {
+      societyId: args.societyId,
+      name: manifest.name,
+      slug: manifest.slug,
+      status: args.status ?? "installed",
+      capabilities: manifest.capabilities,
+      configJson: JSON.stringify(config, null, 2),
+      installedByUserId: args.installedByUserId,
+      updatedAtISO: nowISO(),
+    };
+    if (existing) {
+      await ctx.db.patch(existing._id, payload);
+      return existing._id;
+    }
+    return await ctx.db.insert("pluginInstallations", {
+      ...payload,
+      createdAtISO: nowISO(),
+    });
+  },
+});
+
+export const updateIntegrationHealth = mutation({
+  args: {
+    id: v.id("pluginInstallations"),
+    secretStatus: v.optional(v.record(v.string(), v.boolean())),
+    envStatus: v.optional(v.record(v.string(), v.boolean())),
+    healthMessages: v.optional(v.array(v.string())),
+    status: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, { id, ...patch }) => {
+    const row = await ctx.db.get(id);
+    if (!row) throw new ConvexError({ code: "NOT_FOUND", message: "Integration installation not found." });
+    const config = parseConfigJson(row.configJson);
+    await ctx.db.patch(id, {
+      status: patch.status ?? row.status,
+      configJson: JSON.stringify({
+        ...config,
+        secretStatus: patch.secretStatus ?? config.secretStatus,
+        envStatus: patch.envStatus ?? config.envStatus,
+        healthMessages: patch.healthMessages ?? config.healthMessages ?? [],
+        healthCheckedAtISO: nowISO(),
+      }, null, 2),
+      updatedAtISO: nowISO(),
+    });
+    return null;
+  },
+});
+
 export const upsertPluginInstallation = mutation({
   args: {
     id: v.optional(v.id("pluginInstallations")),
@@ -502,6 +699,91 @@ export const listWebhookDeliveries = query({
           .order("desc")
           .take(100);
     return rows.filter((row) => row.societyId === societyId);
+  },
+});
+
+export const listIntegrationSyncStates = query({
+  args: {
+    societyId: v.id("societies"),
+    provider: v.optional(v.string()),
+    resourceType: v.optional(v.string()),
+  },
+  returns: v.array(integrationSyncStateReturn),
+  handler: async (ctx, { societyId, provider, resourceType }) => {
+    const rows = provider && resourceType
+      ? await ctx.db
+          .query("integrationSyncStates")
+          .withIndex("by_society_provider_resource", (q) =>
+            q.eq("societyId", societyId).eq("provider", provider).eq("resourceType", resourceType),
+          )
+          .collect()
+      : provider
+        ? await ctx.db
+            .query("integrationSyncStates")
+            .withIndex("by_society_provider", (q) => q.eq("societyId", societyId).eq("provider", provider))
+            .collect()
+        : await ctx.db
+            .query("integrationSyncStates")
+            .withIndex("by_society", (q) => q.eq("societyId", societyId))
+            .collect();
+    return rows.sort((a, b) => String(b.updatedAtISO).localeCompare(String(a.updatedAtISO)));
+  },
+});
+
+export const upsertIntegrationSyncState = mutation({
+  args: {
+    id: v.optional(v.id("integrationSyncStates")),
+    societyId: v.id("societies"),
+    pluginInstallationId: v.optional(v.id("pluginInstallations")),
+    provider: v.string(),
+    resourceType: v.string(),
+    resourceId: v.optional(v.string()),
+    externalResourceId: v.optional(v.string()),
+    syncToken: v.optional(v.string()),
+    deltaLink: v.optional(v.string()),
+    webhookChannelId: v.optional(v.string()),
+    webhookSubscriptionId: v.optional(v.string()),
+    webhookResourceId: v.optional(v.string()),
+    webhookExpiresAtISO: v.optional(v.string()),
+    lastFullSyncAtISO: v.optional(v.string()),
+    lastIncrementalSyncAtISO: v.optional(v.string()),
+    lastWebhookAtISO: v.optional(v.string()),
+    status: v.optional(v.string()),
+    lastError: v.optional(v.string()),
+    metadataJson: v.optional(v.string()),
+    actingUserId: v.optional(v.id("users")),
+    serviceToken: serviceTokenValidator,
+  },
+  returns: v.id("integrationSyncStates"),
+  handler: async (ctx, { id, actingUserId, serviceToken, ...args }) => {
+    await assertCanManageApiPlatform(ctx, args.societyId, actingUserId, serviceToken);
+    const now = nowISO();
+    const payload = {
+      ...args,
+      status: args.status ?? "active",
+      updatedAtISO: now,
+    };
+    if (id) {
+      await ctx.db.patch(id, payload);
+      return id;
+    }
+    const existing = (await ctx.db
+      .query("integrationSyncStates")
+      .withIndex("by_society_provider_resource", (q) =>
+        q.eq("societyId", args.societyId).eq("provider", args.provider).eq("resourceType", args.resourceType),
+      )
+      .collect()).find((row) =>
+        (row.resourceId ?? "") === (args.resourceId ?? "") &&
+        (row.externalResourceId ?? "") === (args.externalResourceId ?? ""),
+      );
+    if (existing) {
+      await ctx.db.patch(existing._id, payload);
+      return existing._id;
+    }
+    return await ctx.db.insert("integrationSyncStates", {
+      ...payload,
+      createdAtISO: now,
+    });
   },
 });
 

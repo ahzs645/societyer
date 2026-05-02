@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useConvex, useMutation } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -45,6 +45,7 @@ import {
   Clock,
   Inbox,
   Workflow,
+  Plug,
 } from "lucide-react";
 import { api } from "../lib/convexApi";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
@@ -150,6 +151,7 @@ const NAV_ITEMS: CommandItem[] = [
   { id: "sys-custom-fields", label: "Custom fields", to: "/app/custom-fields", icon: Settings, category: "System" },
   { id: "sys-imports", label: "Import sessions", to: "/app/imports", icon: FileJson, category: "System" },
   { id: "sys-paperless", label: "Paperless-ngx", to: "/app/paperless", icon: Database, category: "System", module: "paperless" },
+  { id: "sys-integrations", label: "Integration marketplace", to: "/app/integrations", icon: Plug, category: "System", module: "workflows" },
   { id: "sys-workflow-packages", label: "Workflow packages", to: "/app/workflow-packages", icon: Workflow, category: "System", module: "workflows" },
   { id: "sys-template-engine", label: "Template engine", to: "/app/template-engine", icon: FileCog, category: "System" },
   { id: "sys-audit", label: "Audit log", to: "/app/audit", icon: ShieldCheck, category: "System" },
@@ -167,6 +169,7 @@ const CATEGORY_ORDER: CommandCategory[] = [
   "System",
 ];
 
+const ENABLE_METADATA_COMMANDS = import.meta.env.VITE_ENABLE_METADATA_COMMANDS === "true";
 const RECENTS_KEY = "societyer.kbar.recents";
 const RECENTS_MAX = 5;
 
@@ -297,11 +300,48 @@ function normalizeCommandCategory(value: unknown): CommandCategory {
   return CATEGORY_ORDER.includes(value as CommandCategory) ? (value as CommandCategory) : "Actions";
 }
 
+function MetadataCommandsLoader({
+  societyId,
+  pagePath,
+  onLoad,
+}: {
+  societyId: string;
+  pagePath: string;
+  onLoad: (rows: any[]) => void;
+}) {
+  const convex = useConvex();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const rows = await convex.query(api.commandMenuItems.listForScope, {
+          societyId,
+          scopeType: "page",
+          pagePath,
+        });
+        if (!cancelled) onLoad(Array.isArray(rows) ? rows : []);
+      } catch {
+        if (!cancelled) onLoad([]);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [convex, onLoad, pagePath, societyId]);
+
+  return null;
+}
+
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
   const [recents, setRecents] = useState<string[]>(() => readRecents());
+  const [metadataCommands, setMetadataCommands] = useState<any[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const listId = useId();
@@ -310,16 +350,6 @@ export function CommandPalette() {
   const society = useSociety();
   const toast = useToast();
   const seedSharedViews = useMutation(api.views.seedGovernanceDataTableViews);
-  const metadataCommands = useQuery(
-    api.commandMenuItems.listForScope,
-    open && society
-      ? {
-          societyId: society._id,
-          scopeType: "page",
-          pagePath: location.pathname,
-        }
-      : "skip",
-  );
 
   const actions = useMemo<CommandItem[]>(
     () => [
@@ -427,6 +457,7 @@ export function CommandPalette() {
     if (open) {
       setQ("");
       setActive(0);
+      setMetadataCommands([]);
       setRecents(readRecents());
       setTimeout(() => inputRef.current?.focus(), 0);
     }
@@ -516,6 +547,13 @@ export function CommandPalette() {
 
   return (
     <div className="kbar-backdrop" onClick={() => setOpen(false)}>
+      {ENABLE_METADATA_COMMANDS && society && (
+        <MetadataCommandsLoader
+          societyId={society._id}
+          pagePath={location.pathname}
+          onLoad={setMetadataCommands}
+        />
+      )}
       <div
         className="kbar"
         role="dialog"

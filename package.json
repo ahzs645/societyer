@@ -15,6 +15,7 @@
     "convex:reset": "node scripts/convex-maintenance.mjs seed:reset",
     "convex:metadata": "node scripts/convex-maintenance.mjs seedRecordTableMetadata:run",
     "convex:codegen": "npx convex codegen",
+    "convex:deploy:k8s": "./scripts/deploy-convex-to-k8s.sh",
     "convex:typecheck": "tsc -p convex/tsconfig.json --noEmit",
     "lint": "eslint .",
     "lint:convex": "eslint convex",
@@ -41,6 +42,7 @@
     "test:exports:db": "tsx scripts/validate-export-database.ts",
     "test:record-table-utils": "tsx scripts/check-record-table-utils.ts",
     "test:csv-import-utils": "tsx scripts/check-csv-and-import-utils.ts",
+    "test:integration-staging": "tsx scripts/check-integration-staging-bundles.ts",
     "export:workspace:files": "tsx scripts/export-workspace-with-files.ts",
     "backup:runtime": "./scripts/backup-runtime-data.sh"
   },

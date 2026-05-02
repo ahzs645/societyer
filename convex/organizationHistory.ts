@@ -6,6 +6,7 @@ const SOURCE_TAG = "org-history-source";
 const ITEM_TAG = "org-history-item";
 const SOURCE_CATEGORY = "Org History Source";
 const ITEM_CATEGORY = "Org History Item";
+const LARGE_SOURCE_CONTENT_PARSE_LIMIT = 100_000;
 
 export const list = query({
   args: { societyId: v.id("societies") },
@@ -471,7 +472,11 @@ async function docsByCategory(ctx: any, societyId: string, category: string) {
 }
 
 function hydrateSource(doc: any, includeRestrictedContent = false) {
-  const payload = parseContent(doc.content);
+  const content = String(doc.content ?? "");
+  const payload =
+    !includeRestrictedContent && content.length > LARGE_SOURCE_CONTENT_PARSE_LIMIT
+      ? {}
+      : parseContent(doc.content);
   const safePayload = { ...payload };
   if (!includeRestrictedContent && safePayload.paperlessMetadata) {
     safePayload.paperlessMetadata = { ...safePayload.paperlessMetadata };
@@ -487,6 +492,8 @@ function hydrateSource(doc: any, includeRestrictedContent = false) {
     fileName: doc.fileName,
     mimeType: doc.mimeType,
     fileSizeBytes: doc.fileSizeBytes,
+    category: safePayload.category ?? doc.category ?? "Other",
+    confidence: safePayload.confidence ?? "Review",
     tags: doc.tags ?? [],
   };
 }

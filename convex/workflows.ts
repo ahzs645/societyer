@@ -1895,6 +1895,130 @@ export const _touchSchedule = internalMutation({
   },
 });
 
+export const recordConnectorRun = mutation({
+  args: {
+    societyId: v.id("societies"),
+    connectorId: v.string(),
+    connectorName: v.optional(v.string()),
+    actionId: v.string(),
+    actionName: v.optional(v.string()),
+    status: v.string(),
+    externalRunId: v.optional(v.string()),
+    profileKey: v.optional(v.string()),
+    sessionId: v.optional(v.string()),
+    startedAtISO: v.optional(v.string()),
+    completedAtISO: v.optional(v.string()),
+    output: v.optional(v.any()),
+    error: v.optional(v.string()),
+    triggeredByUserId: v.optional(v.id("users")),
+  },
+  returns: v.id("workflowRuns"),
+  handler: async (ctx, args) => {
+    const now = new Date().toISOString();
+    const recipe = `connector_${cleanConnectorKey(args.connectorId)}`;
+    const connectorLabel = args.connectorName ?? labelizeConnector(args.connectorId);
+    const actionLabel = args.actionName ?? labelizeConnector(args.actionId);
+    const workflows = await ctx.db
+      .query("workflows")
+      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+      .collect();
+    const existing = workflows.find((workflow) => workflow.recipe === recipe);
+    const nodePreview = [
+      {
+        key: "authenticate",
+        type: "connector",
+        label: `${connectorLabel} authentication`,
+        description: args.sessionId ? `Browser session ${args.sessionId}` : "Saved browser profile or live session.",
+        status: "ok",
+      },
+      {
+        key: "run_action",
+        type: "connector",
+        label: actionLabel,
+        description: `Connector action ${args.actionId}.`,
+        status: args.status === "failed" ? "fail" : "ok",
+      },
+      {
+        key: "record_result",
+        type: "audit",
+        label: "Record connector result",
+        description: "Persist connector output into workflow-run history.",
+        status: args.status === "failed" ? "fail" : "ok",
+      },
+    ];
+    const workflowId = existing?._id ?? await ctx.db.insert("workflows", {
+      societyId: args.societyId,
+      recipe,
+      name: `${connectorLabel} connector`,
+      status: "active",
+      provider: "browser-connector",
+      providerConfig: {
+        externalWorkflowId: args.connectorId,
+      },
+      nodePreview,
+      trigger: { kind: "manual" },
+      config: {
+        connectorId: args.connectorId,
+        connectorName: connectorLabel,
+      },
+      lastRunAtISO: now,
+      createdByUserId: args.triggeredByUserId,
+    });
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        name: existing.name || `${connectorLabel} connector`,
+        provider: existing.provider ?? "browser-connector",
+        nodePreview,
+        lastRunAtISO: now,
+      });
+    }
+    const status = normalizeConnectorRunStatus(args.status);
+    const completedAtISO = args.completedAtISO ?? (status === "running" || status === "queued" ? undefined : now);
+    const steps = nodePreview.map((node) => ({
+      key: node.key,
+      label: node.label,
+      status: node.status === "fail" ? "fail" : status === "running" ? "running" : "ok",
+      atISO: completedAtISO ?? now,
+      note: node.description,
+    }));
+    const runId = await ctx.db.insert("workflowRuns", {
+      societyId: args.societyId,
+      workflowId,
+      recipe,
+      status,
+      startedAtISO: args.startedAtISO ?? now,
+      completedAtISO,
+      steps,
+      provider: "browser-connector",
+      externalRunId: args.externalRunId,
+      externalStatus: args.status,
+      output: {
+        connectorId: args.connectorId,
+        connectorName: connectorLabel,
+        actionId: args.actionId,
+        actionName: actionLabel,
+        profileKey: args.profileKey,
+        sessionId: args.sessionId,
+        error: args.error,
+        ...(args.output ?? {}),
+      },
+      demo: false,
+      triggeredBy: "connector",
+      triggeredByUserId: args.triggeredByUserId,
+    });
+    await ctx.db.insert("activity", {
+      societyId: args.societyId,
+      actor: args.triggeredByUserId ? "User" : "Browser connector",
+      entityType: "workflowRun",
+      entityId: String(runId),
+      action: "connector-run-recorded",
+      summary: `${connectorLabel} ${actionLabel} ${status}.`,
+      createdAtISO: now,
+    });
+    return runId;
+  },
+});
+
 // ---- triggers / scheduler ---------------------------------------------
 
 function computeNextRunAt(
@@ -2617,6 +2741,31 @@ function stepsForRun(recipe: string, nodePreview?: NodePreview[]) {
     status: "pending",
     note: node.description,
   }));
+}
+
+function cleanConnectorKey(value: string) {
+  return String(value || "browser")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "browser";
+}
+
+function labelizeConnector(value: string) {
+  return String(value || "connector")
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function normalizeConnectorRunStatus(status: string) {
+  const value = String(status || "").toLowerCase();
+  if (["success", "succeeded", "ok", "complete", "completed"].includes(value)) return "success";
+  if (["running", "queued"].includes(value)) return value;
+  if (["manual_required", "needs_review"].includes(value)) return "manual_required";
+  if (["failed", "error", "fail"].includes(value)) return "failed";
+  return "success";
 }
 
 function normalizeIntakeInput(input: any) {

@@ -24,6 +24,16 @@ import {
   importGcosProjectSnapshotViaConvex,
   normalizeGcosExportedSnapshot,
 } from "./gcos-import";
+import { recordConnectorRun as recordConnectorRunHistory } from "./integrations/connector-run-recorder";
+import { stageConnectorImportSession } from "./integrations/staged-imports";
+import { waveTransactionsImportBundle } from "./integrations/wave-staging";
+import { gcosProjectSnapshotImportBundle } from "./integrations/gcos-staging";
+import {
+  bcRegistryFilingHistoryBundle,
+  bcRegistryGovernanceDocumentsBundle,
+  type BcRegistryCsvRecord,
+  type GovernanceImportCandidate,
+} from "./integrations/bc-registry-staging";
 
 extendZodWithOpenApi(z);
 
@@ -824,10 +834,20 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     "/browser-connectors/connectors/:connectorId/auth/sessions/:sessionId/actions/:actionId",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
-      const connectorId = encodeURIComponent(String(req.params.connectorId));
-      const sessionId = encodeURIComponent(String(req.params.sessionId));
-      const actionId = encodeURIComponent(String(req.params.actionId));
-      res.json(singleResponse(await connectorRunnerRequest("POST", `/connectors/${connectorId}/auth/sessions/${sessionId}/actions/${actionId}`, stripActor(req.body ?? {}))));
+      const connectorIdRaw = String(req.params.connectorId);
+      const sessionIdRaw = String(req.params.sessionId);
+      const actionIdRaw = String(req.params.actionId);
+      const connectorId = encodeURIComponent(connectorIdRaw);
+      const sessionId = encodeURIComponent(sessionIdRaw);
+      const actionId = encodeURIComponent(actionIdRaw);
+      const runnerOutput: any = await connectorRunnerRequest("POST", `/connectors/${connectorId}/auth/sessions/${sessionId}/actions/${actionId}`, stripActor(req.body ?? {}));
+      const workflowRunId = await recordConnectorRun(client, req, {
+        connectorId: connectorIdRaw,
+        actionId: actionIdRaw,
+        sessionId: sessionIdRaw,
+        output: runnerOutput,
+      });
+      res.json(singleResponse({ ...runnerOutput, workflowRunId }));
     }),
   );
 
@@ -846,15 +866,28 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       if (!runnerOutput?.businessId || !normalized?.accounts || !normalized?.transactions) {
         throw httpError(502, "connector_import_invalid", "Wave connector did not return normalized transaction data.");
       }
-      const importResult = await convexCall(client, mutation("financialHub.importBrowserWaveTransactions"), dropUndefined({
-        societyId: societyIdFrom(req, req.actor!),
-        businessId: runnerOutput.businessId,
-        profileKey: runnerOutput.profileKey ?? body.profileKey,
-        accounts: normalized.accounts,
-        transactions: normalized.transactions,
-        actingUserId: req.actor?.userId,
-      }));
-      res.json(singleResponse({ ...runnerOutput, import: importResult }));
+      const societyId = societyIdFrom(req, req.actor!);
+      const importResult = body.applyDirect === true
+        ? await convexCall(client, mutation("financialHub.importBrowserWaveTransactions"), dropUndefined({
+            societyId,
+            businessId: runnerOutput.businessId,
+            profileKey: runnerOutput.profileKey ?? body.profileKey,
+            accounts: normalized.accounts,
+            transactions: normalized.transactions,
+            actingUserId: req.actor?.userId,
+          }))
+        : await stageConnectorImportSession(client, convexCall, {
+            societyId,
+            name: `Wave transactions - ${new Date().toISOString().slice(0, 10)}`,
+            bundle: waveTransactionsImportBundle(runnerOutput, normalized),
+          });
+      const workflowRunId = await recordConnectorRun(client, req, {
+        connectorId: "wave",
+        actionId: "importTransactions",
+        sessionId: String(req.params.sessionId),
+        output: { ...runnerOutput, import: importResult },
+      });
+      res.json(singleResponse({ ...runnerOutput, import: importResult, workflowRunId }));
     }),
   );
 
@@ -872,15 +905,27 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       if (!runnerOutput?.businessId || !normalized?.accounts || !normalized?.transactions) {
         throw httpError(502, "connector_import_invalid", "Wave connector did not return normalized transaction data.");
       }
-      const importResult = await convexCall(client, mutation("financialHub.importBrowserWaveTransactions"), dropUndefined({
-        societyId: societyIdFrom(req, req.actor!),
-        businessId: runnerOutput.businessId,
-        profileKey: runnerOutput.profileKey ?? body.profileKey,
-        accounts: normalized.accounts,
-        transactions: normalized.transactions,
-        actingUserId: req.actor?.userId,
-      }));
-      res.json(singleResponse({ ...runnerOutput, import: importResult }));
+      const societyId = societyIdFrom(req, req.actor!);
+      const importResult = body.applyDirect === true
+        ? await convexCall(client, mutation("financialHub.importBrowserWaveTransactions"), dropUndefined({
+            societyId,
+            businessId: runnerOutput.businessId,
+            profileKey: runnerOutput.profileKey ?? body.profileKey,
+            accounts: normalized.accounts,
+            transactions: normalized.transactions,
+            actingUserId: req.actor?.userId,
+          }))
+        : await stageConnectorImportSession(client, convexCall, {
+            societyId,
+            name: `Wave transactions - ${new Date().toISOString().slice(0, 10)}`,
+            bundle: waveTransactionsImportBundle(runnerOutput, normalized),
+          });
+      const workflowRunId = await recordConnectorRun(client, req, {
+        connectorId: "wave",
+        actionId: "importTransactions",
+        output: { ...runnerOutput, import: importResult },
+      });
+      res.json(singleResponse({ ...runnerOutput, import: importResult, workflowRunId }));
     }),
   );
 
@@ -898,13 +943,26 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       if (!runnerOutput?.normalizedGrant) {
         throw httpError(502, "connector_import_invalid", "GCOS connector did not return a normalized grant snapshot.");
       }
-      const importResult = await importGcosProjectSnapshotViaConvex(client, convexCall, {
-        societyId: societyIdFrom(req, req.actor!),
-        normalizedGrant: runnerOutput.normalizedGrant,
-        snapshot: runnerOutput,
-        actingUserId: req.actor?.userId,
+      const societyId = societyIdFrom(req, req.actor!);
+      const importResult = body.applyDirect === true
+        ? await importGcosProjectSnapshotViaConvex(client, convexCall, {
+            societyId,
+            normalizedGrant: runnerOutput.normalizedGrant,
+            snapshot: runnerOutput,
+            actingUserId: req.actor?.userId,
+          })
+        : await stageConnectorImportSession(client, convexCall, {
+            societyId,
+            name: `GCOS project snapshot - ${new Date().toISOString().slice(0, 10)}`,
+            bundle: gcosProjectSnapshotImportBundle(runnerOutput.normalizedGrant, runnerOutput),
+          });
+      const workflowRunId = await recordConnectorRun(client, req, {
+        connectorId: "gcos",
+        actionId: "exportProjectSnapshot",
+        sessionId: String(req.params.sessionId),
+        output: { ...runnerOutput, import: importResult },
       });
-      res.json(singleResponse({ ...runnerOutput, import: importResult }));
+      res.json(singleResponse({ ...runnerOutput, import: importResult, workflowRunId }));
     }),
   );
 
@@ -921,13 +979,25 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       if (!runnerOutput?.normalizedGrant) {
         throw httpError(502, "connector_import_invalid", "GCOS connector did not return a normalized grant snapshot.");
       }
-      const importResult = await importGcosProjectSnapshotViaConvex(client, convexCall, {
-        societyId: societyIdFrom(req, req.actor!),
-        normalizedGrant: runnerOutput.normalizedGrant,
-        snapshot: runnerOutput,
-        actingUserId: req.actor?.userId,
+      const societyId = societyIdFrom(req, req.actor!);
+      const importResult = body.applyDirect === true
+        ? await importGcosProjectSnapshotViaConvex(client, convexCall, {
+            societyId,
+            normalizedGrant: runnerOutput.normalizedGrant,
+            snapshot: runnerOutput,
+            actingUserId: req.actor?.userId,
+          })
+        : await stageConnectorImportSession(client, convexCall, {
+            societyId,
+            name: `GCOS project snapshot - ${new Date().toISOString().slice(0, 10)}`,
+            bundle: gcosProjectSnapshotImportBundle(runnerOutput.normalizedGrant, runnerOutput),
+          });
+      const workflowRunId = await recordConnectorRun(client, req, {
+        connectorId: "gcos",
+        actionId: "exportProjectSnapshot",
+        output: { ...runnerOutput, import: importResult },
       });
-      res.json(singleResponse({ ...runnerOutput, import: importResult }));
+      res.json(singleResponse({ ...runnerOutput, import: importResult, workflowRunId }));
     }),
   );
 
@@ -946,13 +1016,25 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       if (!normalizedGrant) {
         throw httpError(400, "gcos_export_invalid", "GCOS export JSON must include a snapshot or normalizedGrant.");
       }
-      const importResult = await importGcosProjectSnapshotViaConvex(client, convexCall, {
-        societyId: societyIdFrom(req, req.actor!),
-        normalizedGrant,
-        snapshot,
-        actingUserId: req.actor?.userId,
+      const societyId = societyIdFrom(req, req.actor!);
+      const importResult = body.applyDirect === true
+        ? await importGcosProjectSnapshotViaConvex(client, convexCall, {
+            societyId,
+            normalizedGrant,
+            snapshot,
+            actingUserId: req.actor?.userId,
+          })
+        : await stageConnectorImportSession(client, convexCall, {
+            societyId,
+            name: `GCOS exported snapshot - ${new Date().toISOString().slice(0, 10)}`,
+            bundle: gcosProjectSnapshotImportBundle(normalizedGrant, snapshot),
+          });
+      const workflowRunId = await recordConnectorRun(client, req, {
+        connectorId: "gcos",
+        actionId: "importExportedSnapshot",
+        output: { snapshot, normalizedGrant, import: importResult },
       });
-      res.json(singleResponse({ snapshot, normalizedGrant, import: importResult }));
+      res.json(singleResponse({ snapshot, normalizedGrant, import: importResult, workflowRunId }));
     }),
   );
 
@@ -960,9 +1042,17 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     "/browser-connectors/connectors/:connectorId/actions/:actionId",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
-      const connectorId = encodeURIComponent(String(req.params.connectorId));
-      const actionId = encodeURIComponent(String(req.params.actionId));
-      res.json(singleResponse(await connectorRunnerRequest("POST", `/connectors/${connectorId}/actions/${actionId}`, stripActor(req.body ?? {}))));
+      const connectorIdRaw = String(req.params.connectorId);
+      const actionIdRaw = String(req.params.actionId);
+      const connectorId = encodeURIComponent(connectorIdRaw);
+      const actionId = encodeURIComponent(actionIdRaw);
+      const runnerOutput: any = await connectorRunnerRequest("POST", `/connectors/${connectorId}/actions/${actionId}`, stripActor(req.body ?? {}));
+      const workflowRunId = await recordConnectorRun(client, req, {
+        connectorId: connectorIdRaw,
+        actionId: actionIdRaw,
+        output: runnerOutput,
+      });
+      res.json(singleResponse({ ...runnerOutput, workflowRunId }));
     }),
   );
 
@@ -976,8 +1066,14 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
         actingUserId: req.actor?.userId,
         corpNum: typeof req.body?.corpNum === "string" ? req.body.corpNum : undefined,
         refresh: req.body?.refresh === true,
+        stageOnly: req.body?.stageOnly === true,
       });
-      res.json(singleResponse(result));
+      const workflowRunId = await recordConnectorRun(client, req, {
+        connectorId: "bc-registry",
+        actionId: req.body?.stageOnly === true ? "stageGovernanceDocuments" : "importGovernanceDocuments",
+        output: result,
+      });
+      res.json(singleResponse({ ...result, workflowRunId }));
     }),
   );
 
@@ -992,8 +1088,14 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
         corpNum: typeof req.body?.corpNum === "string" ? req.body.corpNum : undefined,
         refresh: req.body?.refresh === true,
         importDocuments: req.body?.importDocuments !== false,
+        stageOnly: req.body?.stageOnly !== false,
       });
-      res.json(singleResponse(result));
+      const workflowRunId = await recordConnectorRun(client, req, {
+        connectorId: "bc-registry",
+        actionId: req.body?.stageOnly === false ? "importFilingHistory" : "stageFilingHistory",
+        output: result,
+      });
+      res.json(singleResponse({ ...result, workflowRunId }));
     }),
   );
 
@@ -1008,7 +1110,12 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
         corpNum: typeof req.body?.corpNum === "string" ? req.body.corpNum : undefined,
         refresh: req.body?.refresh === true,
       });
-      res.json(singleResponse(result));
+      const workflowRunId = await recordConnectorRun(client, req, {
+        connectorId: "bc-registry",
+        actionId: "stageBylawsHistory",
+        output: result,
+      });
+      res.json(singleResponse({ ...result, workflowRunId }));
     }),
   );
 }
@@ -1423,22 +1530,41 @@ function safeJson(text: string) {
   }
 }
 
-type BcRegistryCsvRecord = Record<string, string>;
+async function recordConnectorRun(
+  client: ConvexHttpClient,
+  req: Request,
+  input: {
+    connectorId: string;
+    actionId: string;
+    sessionId?: string;
+    output?: any;
+    error?: string;
+  },
+) {
+  return await recordConnectorRunHistory(client, convexCall, {
+    societyId: societyIdFrom(req, req.actor!),
+    connectorId: input.connectorId,
+    actionId: input.actionId,
+    profileKey: stringValue(input.output?.profileKey ?? req.body?.profileKey),
+    sessionId: input.sessionId,
+    output: input.output,
+    error: input.error,
+    triggeredByUserId: req.actor?.userId,
+  });
+}
 
-type GovernanceImportCandidate = {
-  kind: "constitution" | "bylaws" | "constitutionAndBylaws" | "privacyPolicy";
-  title: string;
-  category: string;
-  fileName: string;
-  sourcePath: string;
-  sourceUrl?: string;
-  filing?: string;
-  dateFiled?: string;
-  documentName?: string;
-  reportName?: string;
-  eventId?: string;
-  combined?: boolean;
-};
+function arrayOf(value: any): any[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function stringValue(value: unknown) {
+  const text = String(value ?? "").trim();
+  return text || undefined;
+}
+
+function compactStrings(values: unknown[]) {
+  return values.map(stringValue).filter((value): value is string => Boolean(value));
+}
 
 async function importGovernanceDocumentsFromBcRegistry(
   client: ConvexHttpClient,
@@ -1447,6 +1573,7 @@ async function importGovernanceDocumentsFromBcRegistry(
     actingUserId?: string;
     corpNum?: string;
     refresh?: boolean;
+    stageOnly?: boolean;
   },
 ) {
   const society: any = await convexCall(client, query("society.getById"), { id: input.societyId });
@@ -1524,6 +1651,26 @@ async function importGovernanceDocumentsFromBcRegistry(
     );
   }
 
+  if (input.stageOnly) {
+    const session = await stageConnectorImportSession(client, convexCall, {
+      societyId: input.societyId,
+      name: `BC Registry governance documents - ${new Date().toISOString().slice(0, 10)}`,
+      bundle: bcRegistryGovernanceDocumentsBundle(corpNum, importQueue, exportInfo),
+    });
+    return {
+      ok: true,
+      staged: true,
+      corpNum,
+      source: exportInfo.source,
+      exportDirectory: exportInfo.publicDirectory ?? path.relative(process.cwd(), exportInfo.directory),
+      import: session,
+      candidateDocuments: importQueue.length,
+      imported,
+      skipped,
+      missing,
+    };
+  }
+
   for (const candidate of importQueue) {
     const copied = await copyGovernanceCandidateToDocumentStorage(candidate);
     const created: any = await convexCall(client, mutation("documents.createGovernanceDocumentFromLocalFile"), dropUndefined({
@@ -1589,6 +1736,7 @@ async function importBcRegistryFilingHistory(
     corpNum?: string;
     refresh?: boolean;
     importDocuments?: boolean;
+    stageOnly?: boolean;
   },
 ) {
   const society: any = await convexCall(client, query("society.getById"), { id: input.societyId });
@@ -1615,6 +1763,34 @@ async function importBcRegistryFilingHistory(
     records,
     documentIdsByFilename: documentImport.byFilename,
   });
+  if (input.stageOnly) {
+    const session = await stageConnectorImportSession(client, convexCall, {
+      societyId: input.societyId,
+      name: `BC Registry filing history - ${new Date().toISOString().slice(0, 10)}`,
+      bundle: bcRegistryFilingHistoryBundle(corpNum, filingRecords, records, exportInfo),
+    });
+    return {
+      ok: true,
+      staged: true,
+      corpNum,
+      source: exportInfo.source,
+      exportDirectory: exportInfo.publicDirectory ?? path.relative(process.cwd(), exportInfo.directory),
+      filingCount: filingRecords.length,
+      import: session,
+      documents: {
+        created: documentImport.created,
+        reused: documentImport.reused,
+        skipped: documentImport.skipped,
+        linkedFilingDocumentCount: filingRecords.reduce((sum, row: any) => sum + (row.sourceDocumentIds?.length ?? 0), 0),
+      },
+      latestFiling: records[0]
+        ? {
+            filing: records[0].Filing,
+            dateFiled: records[0]["Date Filed"],
+          }
+        : undefined,
+    };
+  }
   const imported: any = await convexCall(client, mutation("filings.importBcRegistryHistory"), {
     societyId: input.societyId,
     records: filingRecords,

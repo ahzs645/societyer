@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { FIELD_TYPES, type ViewFilterOperator } from "../../types";
 import { Select } from "@/components/Select";
@@ -58,11 +58,26 @@ export function RecordTableFilterPopover({
   const filters = useRecordTableState((s) => s.filters);
   const filterGroups = useRecordTableState((s) => s.filterGroups);
   const handle = useRecordTableStoreHandle();
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   const [fieldId, setFieldId] = useState<string>("");
   const [operator, setOperator] = useState<ViewFilterOperator>("contains");
   const [value, setValue] = useState<string>("");
   const rootLogicalOperator = filterGroups.find((group) => !group.parentViewFilterGroupId)?.logicalOperator ?? "and";
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (popoverRef.current?.contains(target)) return;
+      onClose();
+    };
+
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [onClose, open]);
 
   if (!open) return null;
   const selectedColumn = columns.find((c) => c.fieldMetadataId === fieldId);
@@ -117,7 +132,7 @@ export function RecordTableFilterPopover({
   };
 
   return (
-    <div className="record-table__filter-popover">
+    <div ref={popoverRef} className="record-table__filter-popover">
       <div className="record-table__popover-head">
         <strong>Advanced filters</strong>
         <select

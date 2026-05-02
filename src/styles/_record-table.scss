@@ -360,16 +360,15 @@
 /* ------------------------- Filter popover ------------------------- */
 
 .record-table__filter-popover {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
+  align-self: flex-end;
+  width: min(720px, 100%);
+  margin: 0 0 4px auto;
   padding: 12px;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-strong);
   z-index: var(--z-dropdown);
-  width: 460px;
 }
 
 .record-table__sort-popover {

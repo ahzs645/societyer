@@ -635,6 +635,34 @@ export default defineSchema({
     .index("by_event", ["eventId"])
     .index("by_status_next", ["status", "nextAttemptAtISO"]),
 
+  integrationSyncStates: defineTable({
+    societyId: v.id("societies"),
+    pluginInstallationId: v.optional(v.id("pluginInstallations")),
+    provider: v.string(),
+    resourceType: v.string(), // calendar_events | deadline_events | drive_files | connector_actions
+    resourceId: v.optional(v.string()),
+    externalResourceId: v.optional(v.string()),
+    syncToken: v.optional(v.string()),
+    deltaLink: v.optional(v.string()),
+    webhookChannelId: v.optional(v.string()),
+    webhookSubscriptionId: v.optional(v.string()),
+    webhookResourceId: v.optional(v.string()),
+    webhookExpiresAtISO: v.optional(v.string()),
+    lastFullSyncAtISO: v.optional(v.string()),
+    lastIncrementalSyncAtISO: v.optional(v.string()),
+    lastWebhookAtISO: v.optional(v.string()),
+    status: v.string(), // active | needs_renewal | error | disabled
+    lastError: v.optional(v.string()),
+    metadataJson: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_provider", ["societyId", "provider"])
+    .index("by_society_provider_resource", ["societyId", "provider", "resourceType"])
+    .index("by_webhook_channel", ["webhookChannelId"])
+    .index("by_webhook_subscription", ["webhookSubscriptionId"]),
+
   documentVersions: defineTable({
     societyId: v.id("societies"),
     documentId: v.id("documents"),

@@ -10,10 +10,23 @@ export const listForScope = query({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    const rows = await ctx.db
-      .query("commandMenuItems")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect();
+    let rows: any[] = [];
+    try {
+      rows = await ctx.db
+        .query("commandMenuItems")
+        .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+        .collect();
+    } catch (error: any) {
+      const message = String(error?.message ?? error ?? "");
+      if (
+        message.includes("commandMenuItems") ||
+        message.includes("by_society") ||
+        message.includes("does not exist")
+      ) {
+        return [];
+      }
+      throw error;
+    }
     return rows
       .filter((row) => {
         if (row.scopeType === "global") return true;
