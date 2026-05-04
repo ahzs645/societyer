@@ -67,6 +67,7 @@ import {
   useMemo,
   useRef,
   useState,
+  Suspense,
 } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -108,6 +109,33 @@ function CommandPaletteSafe() {
     <ErrorBoundary label="CommandPalette" fallback={null}>
       <CommandPalette />
     </ErrorBoundary>
+  );
+}
+
+function WorkbenchPageLoader() {
+  return (
+    <div className="page" aria-busy="true">
+      <div className="page-header">
+        <div>
+          <div className="skeleton skeleton--line" style={{ width: 180, height: 20, marginBottom: 10 }} />
+          <div className="skeleton skeleton--line" style={{ width: 360, maxWidth: "70vw" }} />
+        </div>
+      </div>
+      <div className="stat-grid" style={{ marginBottom: 16 }}>
+        {[0, 1, 2, 3].map((index) => (
+          <div className="stat-card" key={index}>
+            <div className="skeleton skeleton--line" style={{ width: 88, marginBottom: 12 }} />
+            <div className="skeleton skeleton--line" style={{ width: 56, height: 18 }} />
+          </div>
+        ))}
+      </div>
+      <div className="table-card">
+        <div className="skeleton skeleton--line" style={{ width: 160, height: 18, marginBottom: 16 }} />
+        <div className="skeleton skeleton--line" style={{ width: "100%", marginBottom: 10 }} />
+        <div className="skeleton skeleton--line" style={{ width: "94%", marginBottom: 10 }} />
+        <div className="skeleton skeleton--line" style={{ width: "88%" }} />
+      </div>
+    </div>
   );
 }
 
@@ -594,7 +622,7 @@ export function Layout() {
     };
   }, [navContextMenu]);
 
-  const counts = useQuery(api.dashboard.summary, society ? { societyId: society._id } : "skip");
+  const counts = useQuery(api.dashboard.navCounts, society ? { societyId: society._id } : "skip");
   const pinnedRouteSet = useMemo(() => new Set(pinnedRoutes), [pinnedRoutes]);
   const pinnedNav = useMemo(() => getPinnedNav(pinnedRoutes), [pinnedRoutes]);
   const pinnedViews = useUIStore((s) => s.pinnedViews);
@@ -793,11 +821,11 @@ export function Layout() {
               <>
                 <div className="sidebar__spotlight-meta">
                   <span>{t("sidebar.openTasks")}</span>
-                  <Pill size="sm">{counts?.counts.openTasks ?? 0}</Pill>
+                  <Pill size="sm">{counts?.openTasks ?? 0}</Pill>
                 </div>
                 <div className="sidebar__spotlight-meta">
                   <span>{t("sidebar.upcomingDeadlines")}</span>
-                  <Pill size="sm">{counts?.counts.openDeadlines ?? 0}</Pill>
+                  <Pill size="sm">{counts?.openDeadlines ?? 0}</Pill>
                 </div>
               </>
             )}
@@ -1009,7 +1037,9 @@ export function Layout() {
               <DemoBanner />
               <div className="workbench__body">
                 <div className="workbench__content">
-                  <Outlet />
+                  <Suspense fallback={<WorkbenchPageLoader />}>
+                    <Outlet />
+                  </Suspense>
                 </div>
                 <InspectorHost />
               </div>
@@ -1093,15 +1123,15 @@ function renderNavItem(
 function getCount(to: string, counts: any): number | null {
   if (!counts) return null;
   switch (to) {
-    case "/app/members": return counts.counts.members;
-    case "/app/directors": return counts.counts.directors;
-    case "/app/meetings": return counts.counts.meetingsThisYear;
-    case "/app/filings": return counts.counts.overdueFilings || null;
-    case "/app/deadlines": return counts.counts.openDeadlines;
-    case "/app/conflicts": return counts.counts.openConflicts || null;
-    case "/app/committees": return counts.counts.committees || null;
-    case "/app/goals": return counts.counts.openGoals || null;
-    case "/app/tasks": return counts.counts.openTasks || null;
+    case "/app/members": return counts.members;
+    case "/app/directors": return counts.directors;
+    case "/app/meetings": return counts.meetingsThisYear;
+    case "/app/filings": return counts.overdueFilings || null;
+    case "/app/deadlines": return counts.openDeadlines;
+    case "/app/conflicts": return counts.openConflicts || null;
+    case "/app/committees": return counts.committees || null;
+    case "/app/goals": return counts.openGoals || null;
+    case "/app/tasks": return counts.openTasks || null;
     default: return null;
   }
 }

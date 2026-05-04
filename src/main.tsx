@@ -83,6 +83,7 @@ const BylawDiffPage = React.lazy(() => import("./pages/BylawDiff").then((m) => (
 const BylawsHistoryPage = React.lazy(() => import("./pages/BylawsHistory").then((m) => ({ default: m.BylawsHistoryPage })));
 const ReconciliationPage = React.lazy(() => import("./pages/Reconciliation").then((m) => ({ default: m.ReconciliationPage })));
 const LoginPage = React.lazy(() => import("./pages/Login").then((m) => ({ default: m.LoginPage })));
+const LandingPage = React.lazy(() => import("./pages/Landing").then((m) => ({ default: m.LandingPage })));
 const BylawRulesPage = React.lazy(() => import("./pages/BylawRules").then((m) => ({ default: m.BylawRulesPage })));
 const ElectionsPage = React.lazy(() => import("./pages/Elections").then((m) => ({ default: m.ElectionsPage })));
 const ElectionDetailPage = React.lazy(() => import("./pages/ElectionDetail").then((m) => ({ default: m.ElectionDetailPage })));
@@ -190,17 +191,20 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       >
         <Suspense fallback={<PageLoader />}>
         <Routes>
+          {!staticDemoRuntime && <Route path="/" element={<LandingPage />} />}
           <Route element={<AppProviders client={convexClient} />}>
-            <Route
-              path="/"
-              element={
-                <AuthGate>
-                  <Layout />
-                </AuthGate>
-              }
-            >
-              <Route index element={<Dashboard />} />
-            </Route>
+            {staticDemoRuntime && (
+              <Route
+                path="/"
+                element={
+                  <AuthGate>
+                    <Layout />
+                  </AuthGate>
+                }
+              >
+                <Route index element={<Dashboard />} />
+              </Route>
+            )}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/public" element={<PublicTransparencyPage />} />
             <Route path="/public/:slug" element={<PublicTransparencyPage />} />

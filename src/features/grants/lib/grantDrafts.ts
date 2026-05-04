@@ -75,10 +75,12 @@ export const REQUIREMENT_STATUSES: GrantRequirementStatus[] = [
 
 export const GRANT_REQUIREMENT_TEMPLATES: Record<
   RequirementTemplateKey,
-  { label: string; items: Omit<GrantRequirement, "status">[] }
+  { label: string; description: string; aliases: string[]; items: Omit<GrantRequirement, "status">[] }
 > = {
   core: {
-    label: "Core",
+    label: "Generic grant file",
+    description: "A reusable baseline for one-off, foundation, corporate, and unknown grant formats.",
+    aliases: ["generic", "core", "grant"],
     items: [
       { id: "core-opportunity-fit", category: "Prospect", label: "Eligibility and fit confirmed" },
       { id: "core-owner", category: "Ownership", label: "Board owner and internal reviewer assigned" },
@@ -90,6 +92,8 @@ export const GRANT_REQUIREMENT_TEMPLATES: Record<
   },
   bcGaming: {
     label: "BC Gaming",
+    description: "British Columbia Community Gaming Grant application and post-award evidence.",
+    aliases: ["bc gaming", "community gaming", "gaming grant"],
     items: [
       { id: "bc-bylaws", category: "Organization", label: "Certified constitution and bylaws attached" },
       { id: "bc-board-list", category: "Governance", label: "Board list and officer details ready" },
@@ -107,6 +111,8 @@ export const GRANT_REQUIREMENT_TEMPLATES: Record<
   },
   canadaSummerJobs: {
     label: "Canada Summer Jobs",
+    description: "GCOS, EED, consent, wage, and reporting requirements for Canada Summer Jobs.",
+    aliases: ["canada summer jobs", "csj", "gcos", "employment and social development canada", "esdc"],
     items: [
       { id: "csj-gcos-authority", category: "Access", label: "GCOS access and primary officer authority confirmed" },
       { id: "csj-org-profile", category: "Organization", label: "Legal name, CRA/business number, mandate, and address ready" },
@@ -119,6 +125,41 @@ export const GRANT_REQUIREMENT_TEMPLATES: Record<
     ],
   },
 };
+
+export function detectRequirementTemplateKey(grant: any): RequirementTemplateKey {
+  const text = [
+    grant?.title,
+    grant?.funder,
+    grant?.funderName,
+    grant?.program,
+    grant?.opportunityType,
+    ...(Array.isArray(grant?.sourceExternalIds) ? grant.sourceExternalIds : []),
+    ...(Array.isArray(grant?.keyFacts) ? grant.keyFacts : []),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const detected = (Object.keys(GRANT_REQUIREMENT_TEMPLATES) as RequirementTemplateKey[])
+    .filter((key) => key !== "core")
+    .find((key) => GRANT_REQUIREMENT_TEMPLATES[key].aliases.some((alias) => text.includes(alias)));
+
+  return detected ?? "core";
+}
+
+export function requirementTemplateCoverage(
+  current: GrantRequirement[] | undefined,
+  templateKey: RequirementTemplateKey,
+) {
+  const existingIds = new Set(asRequirements(current).map((item) => item.id));
+  const templateItems = GRANT_REQUIREMENT_TEMPLATES[templateKey].items;
+  const matched = templateItems.filter((item) => existingIds.has(item.id)).length;
+  return {
+    matched,
+    total: templateItems.length,
+    missing: Math.max(0, templateItems.length - matched),
+  };
+}
 
 export function optionalString(value: unknown) {
   const text = String(value ?? "").trim();

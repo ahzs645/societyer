@@ -273,6 +273,62 @@ const OPEN_GOAL_STATUSES = ["AtRisk", "OffTrack", "OnTrack", "NotStarted"];
 const OPEN_TASK_STATUSES = ["Todo", "InProgress", "Blocked"];
 const PREVIEW_SCAN_LIMIT = 100;
 
+export const navCounts = query({
+  args: { societyId: v.id("societies") },
+  returns: v.object({
+    members: v.number(),
+    directors: v.number(),
+    meetingsThisYear: v.number(),
+    overdueFilings: v.number(),
+    openDeadlines: v.number(),
+    openConflicts: v.number(),
+    committees: v.number(),
+    openGoals: v.number(),
+    openTasks: v.number(),
+  }),
+  handler: async (ctx, { societyId }) => {
+    const nowDate = new Date();
+    const nowISO = nowDate.toISOString();
+    const year = nowDate.getFullYear();
+    const yearStartISO = `${year}-01-01T00:00:00.000Z`;
+    const nextYearStartISO = `${year + 1}-01-01T00:00:00.000Z`;
+
+    const [
+      activeMembers,
+      activeDirectors,
+      meetingsThisYear,
+      overdueFilingRows,
+      openDeadlines,
+      openConflicts,
+      activeCommittees,
+      goals,
+      tasks,
+    ] = await Promise.all([
+      ctx.db.query("members").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect(),
+      ctx.db.query("directors").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect(),
+      ctx.db.query("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId).gte("scheduledAt", yearStartISO).lt("scheduledAt", nextYearStartISO)).collect(),
+      ctx.db.query("filings").withIndex("by_society_due", (q) => q.eq("societyId", societyId).lt("dueDate", nowISO)).collect(),
+      ctx.db.query("deadlines").withIndex("by_society_done", (q) => q.eq("societyId", societyId).eq("done", false)).collect(),
+      ctx.db.query("conflicts").withIndex("by_society_resolved", (q) => q.eq("societyId", societyId).eq("resolvedAt", undefined)).collect(),
+      ctx.db.query("committees").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect(),
+      collectStatuses(ctx as never, "goals", societyId as never, OPEN_GOAL_STATUSES),
+      collectStatuses(ctx as never, "tasks", societyId as never, OPEN_TASK_STATUSES),
+    ]);
+
+    return {
+      members: activeMembers.length,
+      directors: activeDirectors.length,
+      meetingsThisYear: meetingsThisYear.length,
+      overdueFilings: overdueFilingRows.filter((filing) => filing.status !== "Filed").length,
+      openDeadlines: openDeadlines.length,
+      openConflicts: openConflicts.length,
+      committees: activeCommittees.length,
+      openGoals: goals.length,
+      openTasks: tasks.length,
+    };
+  },
+});
+
 type DashboardQueryCtx = {
   db: {
     get: (id: DashboardId) => Promise<any | null>;

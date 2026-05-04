@@ -17,10 +17,12 @@ import {
   asTimelineEvents,
   asUseOfFunds,
   cleanStringList,
+  detectRequirementTemplateKey,
   mergeTemplateRequirements,
   optionalString,
   requirementStatusTone,
   requirementSummary,
+  requirementTemplateCoverage,
 } from "../lib/grantDrafts";
 
 const EMP5616_DETAIL_URL = "https://catalogue.servicecanada.gc.ca/content/EForms/en/Detail.html?Form=EMP5616";
@@ -43,6 +45,8 @@ export function GrantReadPanel({
   onCreateEmployee,
   onQueueEmployeeOrientationEmail,
   onCreateSinVaultRecord,
+  editorPanel,
+  editable = false,
   viewMode = "drawer",
 }: {
   grant: any;
@@ -59,6 +63,8 @@ export function GrantReadPanel({
   onCreateEmployee?: (draft: Record<string, unknown>) => Promise<string | void>;
   onQueueEmployeeOrientationEmail?: (employee: any, grant: any) => void | Promise<void>;
   onCreateSinVaultRecord?: (draft: Record<string, unknown>) => Promise<string | void>;
+  editorPanel?: ReactNode;
+  editable?: boolean;
   viewMode?: "drawer" | "page";
 }) {
   return (
@@ -67,49 +73,20 @@ export function GrantReadPanel({
         grant={grant}
         documents={documents}
         reports={reports}
+        committee={committee}
+        owner={owner}
+        account={account}
         employees={employees}
         employeeLinks={employeeLinks}
         secretVaultItems={secretVaultItems}
-        onLinkEmployee={onLinkEmployee}
-        onUnlinkEmployee={onUnlinkEmployee}
-        onCreateEmployee={onCreateEmployee}
-        onQueueEmployeeOrientationEmail={onQueueEmployeeOrientationEmail}
-        onCreateSinVaultRecord={onCreateSinVaultRecord}
-        layout={viewMode === "page" ? "tabs" : "stack"}
+        onLinkEmployee={editable ? onLinkEmployee : undefined}
+        onUnlinkEmployee={editable ? onUnlinkEmployee : undefined}
+        onCreateEmployee={editable ? onCreateEmployee : undefined}
+        onQueueEmployeeOrientationEmail={editable ? onQueueEmployeeOrientationEmail : undefined}
+        onCreateSinVaultRecord={editable ? onCreateSinVaultRecord : undefined}
+        editorPanel={editorPanel}
+        layout="tabs"
       />
-      <DossierSection title="Administrative Details">
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 8 }}>
-          <DossierFact label="Status">
-            <Badge tone={grantStatusTone(grant.status)}>{grant.status ?? "Not set"}</Badge>
-          </DossierFact>
-          <DossierFact label="Opportunity type" value={grant.opportunityType} />
-          <DossierFact label="Priority" value={grant.priority} />
-          <DossierFact label="Fit score" value={grant.fitScore == null ? undefined : `${grant.fitScore}/100`} />
-          <DossierFact label="Committee" value={committee?.name} />
-          <DossierFact label="Board owner" value={owner?.displayName} />
-          <DossierFact label="Requested" value={grant.amountRequestedCents == null ? undefined : money(grant.amountRequestedCents)} />
-          <DossierFact label="Awarded" value={grant.amountAwardedCents == null ? undefined : money(grant.amountAwardedCents)} />
-          <DossierFact label="Application due" value={grant.applicationDueDate ? formatDate(grant.applicationDueDate) : undefined} />
-          <DossierFact label="Submitted" value={grant.submittedAtISO ? formatDate(grant.submittedAtISO) : undefined} />
-          <DossierFact label="Decision" value={grant.decisionAtISO ? formatDate(grant.decisionAtISO) : undefined} />
-          <DossierFact label="Next report" value={grant.nextReportDueAtISO ? formatDate(grant.nextReportDueAtISO) : undefined} />
-          <DossierFact label="Project start" value={grant.startDate ? formatDate(grant.startDate) : undefined} />
-          <DossierFact label="Project end" value={grant.endDate ? formatDate(grant.endDate) : undefined} />
-          <DossierFact label="Public intake">
-            <Badge tone={grant.allowPublicApplications ? "success" : "info"}>{grant.allowPublicApplications ? "Open" : "Internal"}</Badge>
-          </DossierFact>
-          <DossierFact label="Linked account" value={account ? `${account.name} · ${money(account.balanceCents ?? 0)}` : undefined} />
-        </div>
-        {grant.opportunityUrl && (
-          <div style={{ marginTop: 10 }}>
-            <div className="stat__label">Opportunity URL</div>
-            <a href={grant.opportunityUrl} target="_blank" rel="noreferrer" className="row" style={{ gap: 6, overflowWrap: "anywhere" }}>
-              {grant.opportunityUrl}
-              <ExternalLink size={12} />
-            </a>
-          </div>
-        )}
-      </DossierSection>
       {grant.restrictedPurpose && (
         <DossierSection title="Restricted Purpose">
           <div style={{ whiteSpace: "pre-wrap" }}>{grant.restrictedPurpose}</div>
@@ -129,11 +106,6 @@ export function GrantReadPanel({
               <div style={{ whiteSpace: "pre-wrap" }}>{grant.applicationInstructions}</div>
             </div>
           )}
-        </DossierSection>
-      )}
-      {grant.notes && (
-        <DossierSection title="Notes">
-          <div style={{ whiteSpace: "pre-wrap" }}>{grant.notes}</div>
         </DossierSection>
       )}
     </div>
@@ -272,9 +244,10 @@ export function GrantEditorForm({
           Current linked balance: {money(accountById.get(String(grantDraft.linkedFinancialAccountId))?.balanceCents ?? 0)}
         </div>
       )}
-      <Field label="Source external IDs" hint="Comma-separated Paperless, local, or external IDs used for provenance.">
-        <input className="input" value={grantDraft.sourceExternalIdsInput ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, sourceExternalIdsInput: e.target.value })} />
-      </Field>
+      <SourceExternalIdsField
+        value={grantDraft.sourceExternalIdsInput ?? ""}
+        onChange={(sourceExternalIdsInput) => setGrantDraft({ ...grantDraft, sourceExternalIdsInput })}
+      />
       <div className="row" style={{ gap: 12 }}>
         <Field label="Confidence">
           <select className="input" value={grantDraft.confidence ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, confidence: e.target.value })}>
@@ -303,16 +276,18 @@ export function GrantEditorForm({
 }
 
 function EditSection({
+  id,
   title,
   description,
   children,
 }: {
+  id?: string;
   title: string;
   description?: string;
   children: ReactNode;
 }) {
   return (
-    <section className="grant-edit-section">
+    <section className="grant-edit-section" id={id}>
       <header className="grant-edit-section__head">
         <h3 className="grant-edit-section__title">{title}</h3>
         {description && <p className="grant-edit-section__desc">{description}</p>}
@@ -346,7 +321,7 @@ function GrantEditorPageLayout({
   return (
     <div className="grant-edit-layout">
       <div className="grant-edit-layout__main">
-        <EditSection title="Overview" description="Funder, program, and high-level positioning.">
+        <EditSection id="grant-edit-overview" title="Overview" description="Funder, program, and high-level positioning.">
           <Field label="Title">
             <input className="input" value={grantDraft.title} onChange={(e) => update({ title: e.target.value })} />
           </Field>
@@ -386,7 +361,7 @@ function GrantEditorPageLayout({
           </Field>
         </EditSection>
 
-        <EditSection title="Status & amounts" description="Pipeline stage, committee, and the money that goes with it.">
+        <EditSection id="grant-edit-status" title="Status & amounts" description="Pipeline stage, committee, and the money that goes with it.">
           <div className="grant-edit-grid grant-edit-grid--2">
             <Field label="Status">
               <select className="input" value={grantDraft.status} onChange={(e) => update({ status: e.target.value })}>
@@ -422,7 +397,7 @@ function GrantEditorPageLayout({
           </Field>
         </EditSection>
 
-        <EditSection title="Readiness checklist" description="Documents, financials, confirmations, and post-award obligations.">
+        <EditSection id="grant-edit-readiness" title="Readiness checklist" description="Documents, financials, confirmations, and post-award obligations.">
           <GrantRequirementsEditor
             draft={grantDraft}
             documents={documents}
@@ -430,7 +405,7 @@ function GrantEditorPageLayout({
           />
         </EditSection>
 
-        <EditSection title="Public intake" description="Only enable when the opportunity is open to outside applicants.">
+        <EditSection id="grant-edit-public-intake" title="Public intake" description="Only enable when the opportunity is open to outside applicants.">
           <label className="checkbox">
             <input type="checkbox" checked={!!grantDraft.allowPublicApplications} onChange={(e) => update({ allowPublicApplications: e.target.checked })} /> Accept public applications
           </label>
@@ -442,7 +417,7 @@ function GrantEditorPageLayout({
           </Field>
         </EditSection>
 
-        <EditSection title="Timeline & ownership" description="Deadlines, project window, and who's accountable.">
+        <EditSection id="grant-edit-timeline" title="Timeline & ownership" description="Deadlines, project window, and who's accountable.">
           <div className="grant-edit-grid grant-edit-grid--4">
             <Field label="Application due">
               <input className="input" type="date" value={grantDraft.applicationDueDate ?? ""} onChange={(e) => update({ applicationDueDate: e.target.value })} />
@@ -478,10 +453,11 @@ function GrantEditorPageLayout({
           )}
         </EditSection>
 
-        <EditSection title="Provenance & notes" description="Import IDs, review markers, and free-form notes.">
-          <Field label="Source external IDs" hint="Comma-separated Paperless, local, or external IDs used for provenance.">
-            <input className="input" value={grantDraft.sourceExternalIdsInput ?? ""} onChange={(e) => update({ sourceExternalIdsInput: e.target.value })} />
-          </Field>
+        <EditSection id="grant-edit-provenance" title="Provenance & notes" description="Import IDs, review markers, and free-form notes.">
+          <SourceExternalIdsField
+            value={grantDraft.sourceExternalIdsInput ?? ""}
+            onChange={(sourceExternalIdsInput) => update({ sourceExternalIdsInput })}
+          />
           <div className="grant-edit-grid grant-edit-grid--2">
             <Field label="Confidence">
               <select className="input" value={grantDraft.confidence ?? ""} onChange={(e) => update({ confidence: e.target.value })}>
@@ -512,23 +488,298 @@ function GrantEditorPageLayout({
 
       <aside className="grant-edit-layout__aside">
         <div className="grant-edit-layout__aside-inner">
-          <div className="grant-edit-aside__label">Reference dossier</div>
-          <GrantDossierStack
-            grant={grantDraft}
-            documents={documents}
-            reports={reports}
-            layout="compact"
-          />
+          <GrantEditWorkbench grantDraft={grantDraft} documents={documents} reports={reports} />
         </div>
       </aside>
     </div>
   );
 }
 
+function GrantEditWorkbench({
+  grantDraft,
+  documents,
+  reports,
+}: {
+  grantDraft: any;
+  documents: any[];
+  reports: any[];
+}) {
+  const readiness = requirementSummary(grantDraft.requirements);
+  const relatedDocuments = grantRelatedDocuments(grantDraft, documents);
+  const timelineItems = buildGrantTimeline(grantDraft, reports);
+  const requested = draftAmountCents(grantDraft, "amountRequestedCents", "amountRequestedDollars");
+  const awarded = draftAmountCents(grantDraft, "amountAwardedCents", "amountAwardedDollars");
+  const delta = requested !== undefined && awarded !== undefined ? awarded - requested : undefined;
+  const sourceFacts = cleanSourceKeyFacts(grantDraft.keyFacts).slice(0, 4);
+
+  return (
+    <div className="grant-edit-workbench">
+      <div className="grant-edit-aside__label">Editing workbench</div>
+
+      <section className="grant-edit-workbench__panel">
+        <div className="grant-edit-workbench__heading">File status</div>
+        <div className="grant-edit-workbench__badges">
+          <Badge tone={grantStatusTone(grantDraft.status)}>{grantDraft.status ?? "Not set"}</Badge>
+          {readiness.total > 0 && (
+            <Badge tone={readiness.percent === 100 ? "success" : readiness.percent >= 50 ? "warn" : "info"}>
+              {readiness.percent}% ready
+            </Badge>
+          )}
+          <Badge tone={relatedDocuments.length ? "success" : "info"}>{relatedDocuments.length} docs</Badge>
+        </div>
+        {grantDraft.nextAction && (
+          <div className="grant-edit-workbench__note">
+            <span>Next action</span>
+            <strong>{grantDraft.nextAction}</strong>
+          </div>
+        )}
+        <div className="grant-edit-workbench__links">
+          <a href="#grant-edit-overview">Overview</a>
+          <a href="#grant-edit-status">Status & amounts</a>
+          <a href="#grant-edit-readiness">Readiness</a>
+          <a href="#grant-edit-timeline">Timeline</a>
+          <a href="#grant-edit-provenance">Source notes</a>
+        </div>
+      </section>
+
+      {(requested !== undefined || awarded !== undefined) && (
+        <section className="grant-edit-workbench__panel">
+          <div className="grant-edit-workbench__heading">Funding check</div>
+          <div className="grant-edit-workbench__metrics">
+            <div><span>Requested</span><strong>{requested === undefined ? "—" : money(requested)}</strong></div>
+            <div><span>Awarded</span><strong>{awarded === undefined ? "—" : money(awarded)}</strong></div>
+            {delta !== undefined && (
+              <div><span>Difference</span><strong className={delta < 0 ? "is-danger" : "is-success"}>{money(delta)}</strong></div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {(timelineItems.length > 0 || sourceFacts.length > 0) && (
+        <section className="grant-edit-workbench__panel">
+          <div className="grant-edit-workbench__heading">Reference</div>
+          <div className="grant-edit-workbench__metrics">
+            <div><span>Timeline</span><strong>{timelineItems.length} items</strong></div>
+            <div><span>Source facts</span><strong>{sourceFacts.length}</strong></div>
+          </div>
+          {sourceFacts.length > 0 && (
+            <ul className="grant-edit-workbench__facts">
+              {sourceFacts.map((fact) => <li key={fact}>{fact}</li>)}
+            </ul>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+function SourceExternalIdsField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [rows, setRows] = useState<SourceExternalIdRow[]>(() => parseExternalIdRows(value));
+
+  useEffect(() => {
+    const incoming = parseExternalIdRows(value);
+    setRows((current) => (joinExternalIdRows(current) === joinExternalIdRows(incoming) ? current : incoming));
+  }, [value]);
+
+  const visibleRows = rows.length > 0 ? rows : [emptySourceExternalIdRow()];
+  const commit = (next: SourceExternalIdRow[]) => {
+    setRows(next);
+    onChange(joinExternalIdRows(next));
+  };
+
+  return (
+    <Field label="Source IDs" hint="Track each provenance ID as source, ID type, and number.">
+      <div className="source-external-ids-field">
+        {visibleRows.map((row, index) => (
+          <div className="source-external-ids-field__row" key={`${index}-${rows.length}`}>
+            <select
+              className="input"
+              aria-label={`Source ${index + 1}`}
+              value={row.source}
+              onChange={(event) => {
+                const next = [...visibleRows];
+                next[index] = { ...row, source: event.target.value };
+                commit(next);
+              }}
+            >
+              <option value="gcos">GCOS</option>
+              <option value="paperless">Paperless</option>
+              <option value="local">Local</option>
+              <option value="custom">Other</option>
+            </select>
+            {row.source === "custom" && (
+              <input
+                className="input"
+                aria-label={`Custom source ${index + 1}`}
+                placeholder="source"
+                value={row.customSource}
+                onChange={(event) => {
+                  const next = [...visibleRows];
+                  next[index] = { ...row, customSource: event.target.value };
+                  commit(next);
+                }}
+              />
+            )}
+            <select
+              className="input"
+              aria-label={`Source ID type ${index + 1}`}
+              value={row.idType}
+              onChange={(event) => {
+                const next = [...visibleRows];
+                next[index] = { ...row, idType: event.target.value };
+                commit(next);
+              }}
+            >
+              <option value="project">Project ID</option>
+              <option value="project-number">Project number</option>
+              <option value="document">Document ID</option>
+              <option value="record">Record ID</option>
+              <option value="file">File ID</option>
+              <option value="custom">Other ID</option>
+            </select>
+            {row.idType === "custom" && (
+              <input
+                className="input"
+                aria-label={`Custom source ID type ${index + 1}`}
+                placeholder="ID type"
+                value={row.customIdType}
+                onChange={(event) => {
+                  const next = [...visibleRows];
+                  next[index] = { ...row, customIdType: event.target.value };
+                  commit(next);
+                }}
+              />
+            )}
+            <input
+              className="input"
+              aria-label={`Source ID number ${index + 1}`}
+              placeholder="1539280"
+              value={row.idNumber}
+              onChange={(event) => {
+                const next = [...visibleRows];
+                next[index] = { ...row, idNumber: event.target.value };
+                commit(next);
+              }}
+            />
+            <button
+              className="btn btn--ghost btn--sm btn--icon"
+              type="button"
+              aria-label={`Remove source ID ${index + 1}`}
+              disabled={visibleRows.length === 1 && !serializeExternalIdRow(row)}
+              onClick={() => commit(visibleRows.filter((_, rowIndex) => rowIndex !== index))}
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        ))}
+        <button
+          className="btn btn--ghost btn--sm source-external-ids-field__add"
+          type="button"
+          onClick={() => commit([...visibleRows, emptySourceExternalIdRow()])}
+        >
+          <Plus size={12} /> Add source ID
+        </button>
+      </div>
+    </Field>
+  );
+}
+
+type SourceExternalIdRow = {
+  source: string;
+  customSource: string;
+  idType: string;
+  customIdType: string;
+  idNumber: string;
+};
+
+function emptySourceExternalIdRow(): SourceExternalIdRow {
+  return {
+    source: "gcos",
+    customSource: "",
+    idType: "project",
+    customIdType: "",
+    idNumber: "",
+  };
+}
+
+function parseExternalIdRows(value: unknown): SourceExternalIdRow[] {
+  return parseExternalIdInput(value).map(parseExternalIdRow);
+}
+
+function parseExternalIdInput(value: unknown) {
+  if (Array.isArray(value)) return cleanStringList(value);
+  return String(value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseExternalIdRow(value: string): SourceExternalIdRow {
+  const parts = value.split(":").map((part) => part.trim()).filter(Boolean);
+  if (parts.length >= 3) {
+    const source = parts[0];
+    const idType = parts.slice(1, -1).join(":");
+    const idNumber = parts[parts.length - 1];
+    return {
+      source: sourceOptionValue(source),
+      customSource: sourceOptionValue(source) === "custom" ? source : "",
+      idType: idTypeOptionValue(idType),
+      customIdType: idTypeOptionValue(idType) === "custom" ? idType : "",
+      idNumber,
+    };
+  }
+  if (parts.length === 2) {
+    const source = parts[0];
+    return {
+      source: sourceOptionValue(source),
+      customSource: sourceOptionValue(source) === "custom" ? source : "",
+      idType: "record",
+      customIdType: "",
+      idNumber: parts[1],
+    };
+  }
+  return {
+    source: "custom",
+    customSource: "",
+    idType: "record",
+    customIdType: "",
+    idNumber: value,
+  };
+}
+
+function sourceOptionValue(value: string) {
+  return ["gcos", "paperless", "local"].includes(value) ? value : "custom";
+}
+
+function idTypeOptionValue(value: string) {
+  return ["project", "project-number", "document", "record", "file"].includes(value) ? value : "custom";
+}
+
+function serializeExternalIdRow(row: SourceExternalIdRow) {
+  const source = row.source === "custom" ? row.customSource.trim() : row.source;
+  const idType = row.idType === "custom" ? row.customIdType.trim() : row.idType;
+  const idNumber = row.idNumber.trim();
+  if (!source || !idType || !idNumber) return "";
+  return `${source}:${idType}:${idNumber}`;
+}
+
+function joinExternalIdRows(rows: SourceExternalIdRow[]) {
+  return Array.from(new Set(rows.map(serializeExternalIdRow).filter(Boolean))).join(", ");
+}
+
 export function GrantDossierStack({
   grant,
   documents,
   reports,
+  committee,
+  owner,
+  account,
   employees = [],
   employeeLinks = [],
   secretVaultItems = [],
@@ -537,11 +788,15 @@ export function GrantDossierStack({
   onCreateEmployee,
   onQueueEmployeeOrientationEmail,
   onCreateSinVaultRecord,
+  editorPanel,
   layout = "stack",
 }: {
   grant: any;
   documents: any[];
   reports: any[];
+  committee?: any;
+  owner?: any;
+  account?: any;
   employees?: any[];
   employeeLinks?: any[];
   secretVaultItems?: any[];
@@ -550,9 +805,19 @@ export function GrantDossierStack({
   onCreateEmployee?: (draft: Record<string, unknown>) => Promise<string | void>;
   onQueueEmployeeOrientationEmail?: (employee: any, grant: any) => void | Promise<void>;
   onCreateSinVaultRecord?: (draft: Record<string, unknown>) => Promise<string | void>;
+  editorPanel?: ReactNode;
   layout?: "stack" | "tabs" | "compact";
 }) {
   const [activeTab, setActiveTab] = useState<GrantDossierTabId>("overview");
+  useEffect(() => {
+    const syncHashToTab = () => {
+      if (window.location.hash === "#funded-employees") setActiveTab("people");
+      if (editorPanel && window.location.hash.startsWith("#grant-edit-")) setActiveTab("edit");
+    };
+    syncHashToTab();
+    window.addEventListener("hashchange", syncHashToTab);
+    return () => window.removeEventListener("hashchange", syncHashToTab);
+  }, [editorPanel]);
   const hasDossierData =
     !!(grant.id ?? grant._id) ||
     !!grant.confirmationCode ||
@@ -583,7 +848,7 @@ export function GrantDossierStack({
   );
   const overviewPanels = (
     <>
-      <GrantDossierSummary grant={grant} />
+      <GrantDossierSummary grant={grant} committee={committee} owner={owner} account={account} />
       <GrantNextStepsPanel grant={grant} />
       <GrantRequiredFormsPanel grant={grant} />
       <GrantOperationalWorkflowsPanel grant={grant} />
@@ -614,7 +879,7 @@ export function GrantDossierStack({
   if (layout === "compact") {
     return (
       <div className="grant-dossier-stack grant-dossier-stack--compact">
-        <GrantDossierSummary grant={grant} />
+        <GrantDossierSummary grant={grant} committee={committee} owner={owner} account={account} />
         <GrantNextStepsPanel grant={grant} />
         <GrantProjectLifecyclePanel grant={grant} reports={reports} compact />
         <GrantFundingDeltaPanel grant={grant} />
@@ -632,6 +897,7 @@ export function GrantDossierStack({
       { id: "evidence", label: "Evidence", count: grantRelatedDocuments(grant, documents).length },
       { id: "financials", label: "Financials", count: asUseOfFunds(grant.useOfFunds).length },
       { id: "source", label: "Source", count: cleanSourceKeyFacts(grant.keyFacts).length },
+      ...(editorPanel ? [{ id: "edit" as const, label: "Edit" }] : []),
     ];
     const renderTab = () => {
       if (activeTab === "timeline") return timelinePanels;
@@ -639,6 +905,7 @@ export function GrantDossierStack({
       if (activeTab === "evidence") return evidencePanels;
       if (activeTab === "financials") return financialPanels;
       if (activeTab === "source") return sourcePanels;
+      if (activeTab === "edit" && editorPanel) return editorPanel;
       return overviewPanels;
     };
 
@@ -676,29 +943,37 @@ export function GrantDossierStack({
   );
 }
 
-type GrantDossierTabId = "overview" | "timeline" | "people" | "evidence" | "financials" | "source";
+type GrantDossierTabId = "overview" | "timeline" | "people" | "evidence" | "financials" | "source" | "edit";
 
-function GrantDossierSummary({ grant }: { grant: any }) {
+function GrantDossierSummary({
+  grant,
+  committee,
+  owner,
+  account,
+}: {
+  grant: any;
+  committee?: any;
+  owner?: any;
+  account?: any;
+}) {
   const readiness = requirementSummary(grant.requirements);
-  const keyDates = [
-    grant.applicationDueDate ? `Due ${formatDate(grant.applicationDueDate)}` : undefined,
-    grant.submittedAtISO ? `Submitted ${formatDate(grant.submittedAtISO)}` : undefined,
-    grant.startDate ? `Starts ${formatDate(grant.startDate)}` : undefined,
-    grant.endDate ? `Ends ${formatDate(grant.endDate)}` : undefined,
-    grant.nextReportDueAtISO ? `Report ${formatDate(grant.nextReportDueAtISO)}` : undefined,
-  ].filter(Boolean);
+  const fitScore = grant.fitScore === "" || grant.fitScore == null ? undefined : `${grant.fitScore}/100`;
 
   return (
-    <DossierSection title="Grant Dossier Summary">
+    <DossierSection title="Grant Overview">
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 8 }}>
         <DossierFact label="Funder" value={grant.funder ?? grant.funderName} />
         <DossierFact label="Program" value={grant.program} />
-        <DossierFact label="Requested" value={grant.amountRequestedCents ? money(grant.amountRequestedCents) : undefined} />
-        <DossierFact label="Submitted" value={grant.submittedAtISO ? formatDate(grant.submittedAtISO) : undefined} />
-        <DossierFact label="Confirmation" value={grant.confirmationCode} />
         <DossierFact label="Status">
           <Badge tone={grantStatusTone(grant.status)}>{grant.status ?? "Not set"}</Badge>
         </DossierFact>
+        <DossierFact label="Opportunity type" value={grant.opportunityType} />
+        <DossierFact label="Priority" value={grant.priority} />
+        <DossierFact label="Fit score" value={fitScore} />
+        <DossierFact label="Requested" value={grant.amountRequestedCents == null ? undefined : money(grant.amountRequestedCents)} />
+        <DossierFact label="Awarded" value={grant.amountAwardedCents == null ? undefined : money(grant.amountAwardedCents)} />
+        <DossierFact label="Submitted" value={grant.submittedAtISO ? formatDate(grant.submittedAtISO) : undefined} />
+        <DossierFact label="Confirmation" value={grant.confirmationCode} />
         <DossierFact label="Readiness">
           {readiness.total > 0 ? (
             <span>
@@ -711,12 +986,31 @@ function GrantDossierSummary({ grant }: { grant: any }) {
             "—"
           )}
         </DossierFact>
-        <DossierFact label="Key dates" value={keyDates.length ? keyDates.join(" · ") : undefined} />
+        <DossierFact label="Application due" value={grant.applicationDueDate ? formatDate(grant.applicationDueDate) : undefined} />
+        <DossierFact label="Decision" value={grant.decisionAtISO ? formatDate(grant.decisionAtISO) : undefined} />
+        <DossierFact label="Project start" value={grant.startDate ? formatDate(grant.startDate) : undefined} />
+        <DossierFact label="Project end" value={grant.endDate ? formatDate(grant.endDate) : undefined} />
+        <DossierFact label="Next report" value={grant.nextReportDueAtISO ? formatDate(grant.nextReportDueAtISO) : undefined} />
+        <DossierFact label="Committee" value={committee?.name} />
+        <DossierFact label="Board owner" value={owner?.displayName} />
+        <DossierFact label="Public intake">
+          <Badge tone={grant.allowPublicApplications ? "success" : "info"}>{grant.allowPublicApplications ? "Open" : "Internal"}</Badge>
+        </DossierFact>
+        <DossierFact label="Linked account" value={account ? `${account.name} · ${money(account.balanceCents ?? 0)}` : undefined} />
       </div>
       {grant.nextAction && (
         <div style={{ marginTop: 10 }}>
           <div className="stat__label">Next action</div>
           <div>{grant.nextAction}</div>
+        </div>
+      )}
+      {grant.opportunityUrl && (
+        <div style={{ marginTop: 10 }}>
+          <div className="stat__label">Opportunity URL</div>
+          <a href={grant.opportunityUrl} target="_blank" rel="noreferrer" className="row" style={{ gap: 6, overflowWrap: "anywhere" }}>
+            {grant.opportunityUrl}
+            <ExternalLink size={12} />
+          </a>
         </div>
       )}
     </DossierSection>
@@ -757,6 +1051,7 @@ function GrantFundedEmployeesPanel({
   const availableEmployees = employees.filter((employee) => !linkedEmployeeIds.has(String(employee._id)));
   const approvedParticipants = findKeyFactNumber(grant.keyFacts, /approved participants:\s*(\d+(?:\.\d+)?)/i);
   const remaining = approvedParticipants === undefined ? undefined : Math.max(0, approvedParticipants - links.length);
+  const canLinkMoreEmployees = remaining === undefined || remaining > 0;
   const lockedAssignment = grantFundedAssignment(grant);
 
   useEffect(() => {
@@ -769,6 +1064,13 @@ function GrantFundedEmployeesPanel({
       endDate: !endDateOverridden ? calculatedGrantEndDate(current.startDate, lockedAssignment.weeks) ?? current.endDate : current.endDate,
     }));
   }, [grantAssignmentKey, endDateOverridden]);
+
+  useEffect(() => {
+    if (!canLinkMoreEmployees) {
+      setSelectedEmployeeId("");
+      setShowNewEmployee(false);
+    }
+  }, [canLinkMoreEmployees]);
 
   if (!links.length && !onLinkEmployee) return null;
 
@@ -891,7 +1193,7 @@ function GrantFundedEmployeesPanel({
         ) : (
           <div className="muted" style={{ fontSize: 12 }}>No Societyer employees are linked to this grant yet.</div>
         )}
-        {onLinkEmployee && availableEmployees.length > 0 && (
+        {onLinkEmployee && availableEmployees.length > 0 && canLinkMoreEmployees && (
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <select className="input" style={{ flex: "1 1 220px" }} value={selectedEmployeeId} onChange={(event) => setSelectedEmployeeId(event.target.value)}>
               <option value="">Select an employee to link</option>
@@ -906,7 +1208,7 @@ function GrantFundedEmployeesPanel({
             </button>
           </div>
         )}
-        {onCreateEmployee && onLinkEmployee && (
+        {onCreateEmployee && onLinkEmployee && canLinkMoreEmployees && (
           <div style={{ display: "grid", gap: 8, borderTop: "1px dashed var(--border)", paddingTop: 10 }}>
             <button className="btn btn--ghost btn--sm" type="button" onClick={() => setShowNewEmployee((value) => !value)}>
               {showNewEmployee ? "Cancel new employee" : "Add and link new employee"}
@@ -1136,7 +1438,7 @@ function GrantOperationalWorkflowsPanel({ grant }: { grant: any }) {
             </div>
           </div>
           <div style={workflowActionBarStyle}>
-            <a className="btn btn--accent btn--sm" href="#funded-employees">Queue for employee</a>
+            <Link className="btn btn--accent btn--sm" to={String(grant.id ?? grant._id ?? "") ? `/app/grants/${String(grant.id ?? grant._id)}#funded-employees` : "#funded-employees"}>Queue for employee</Link>
             <Link className="btn btn--ghost btn--sm" to="/app/outbox">Open Outbox</Link>
             <Link className="btn btn--ghost btn--sm" to="/app/workflows">Workflow catalog</Link>
           </div>
@@ -1152,32 +1454,35 @@ function GrantOperationalWorkflowsPanel({ grant }: { grant: any }) {
 function workflowActionsForStep(grant: any, step: ReturnType<typeof asNextSteps>[number]) {
   const grantId = String(grant.id ?? grant._id ?? "");
   const editHref = grantId ? `/app/grants/${grantId}/edit` : "/app/grants";
+  const checklistHref = grantId ? `/app/grants/${grantId}/edit#grant-edit-readiness` : "#grant-edit-readiness";
+  const fundingHref = grantId ? `/app/grants/${grantId}/edit#grant-edit-status` : "#grant-edit-status";
+  const reportingHref = grantId ? `/app/grants/${grantId}/edit#grant-edit-timeline` : "#grant-edit-timeline";
   const actions: Array<{ label: string; href: string; external?: boolean; primary?: boolean }> = [];
 
   if (step.id === "gcos-prepare-eed") {
     const emp5616 = findRequirementById(grant.requirements, "gcos-emp5616-consent");
     actions.push(
-      { label: "Link employees", href: "#funded-employees", primary: true },
+      { label: "Link employees", href: grantId ? `/app/grants/${grantId}#funded-employees` : "#funded-employees", primary: true },
       { label: "Open EMP5616", href: emp5616?.documentUrl ?? EMP5616_FORM_URL, external: true },
       { label: "Add EED in GCOS", href: step.actionUrl ?? GCOS_EED_ADD_URL, external: true },
-      { label: "Track checklist", href: editHref },
+      { label: "Track checklist", href: checklistHref },
     );
     actions.push({ label: "View EED list", href: GCOS_EED_MANAGE_URL, external: true });
   } else if (step.id === "gcos-complete-emp5616") {
     actions.push({ label: step.actionLabel ?? "Open EMP5616", href: step.actionUrl ?? EMP5616_FORM_URL, external: true, primary: true });
     actions.push(
-      { label: "Link employee record", href: "#funded-employees" },
-      { label: "Mark consent retained", href: editHref },
+      { label: "Link employee record", href: grantId ? `/app/grants/${grantId}#funded-employees` : "#funded-employees" },
+      { label: "Mark consent retained", href: checklistHref },
     );
   } else if (step.id === "gcos-review-award-delta") {
     actions.push(
-      { label: "Review funding delta", href: editHref, primary: true },
-      { label: "Update budget notes", href: editHref },
+      { label: "Review funding delta", href: fundingHref, primary: true },
+      { label: "Update budget notes", href: fundingHref },
     );
   } else if (step.id === "gcos-plan-payment-claim") {
     actions.push(
-      { label: "Create reporting plan", href: editHref, primary: true },
-      { label: "Review evidence checklist", href: editHref },
+      { label: "Create reporting plan", href: reportingHref, primary: true },
+      { label: "Review evidence checklist", href: checklistHref },
     );
   } else if (step.actionUrl) {
     actions.push({ label: step.actionLabel ?? "Open action", href: step.actionUrl, external: true, primary: true });
@@ -1302,6 +1607,11 @@ function canCreateGrantEmployee(draft: ReturnType<typeof defaultGrantEmployeeDra
 function dollarsToCents(value: unknown) {
   const parsed = Number(String(value ?? "").replace(/,/g, ""));
   return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 100) : undefined;
+}
+
+function draftAmountCents(draft: any, centsKey: string, dollarsKey: string) {
+  if (typeof draft[centsKey] === "number") return draft[centsKey];
+  return draft[dollarsKey] === "" || draft[dollarsKey] === undefined ? undefined : dollarsToCents(draft[dollarsKey]);
 }
 
 function patchFromEmployee(employee: any) {
@@ -1688,10 +1998,11 @@ function DossierFact({
   value?: ReactNode;
   children?: ReactNode;
 }) {
+  const displayValue = children ?? (value === "" ? undefined : value) ?? "—";
   return (
     <div style={factBoxStyle}>
       <div className="stat__label">{label}</div>
-      <div style={{ fontWeight: 600, overflowWrap: "anywhere" }}>{children ?? value ?? "—"}</div>
+      <div style={{ fontWeight: 600, overflowWrap: "anywhere" }}>{displayValue}</div>
     </div>
   );
 }
@@ -1984,7 +2295,9 @@ function GrantRequirementsEditor({
 }) {
   const requirements = asRequirements(draft.requirements);
   const summary = requirementSummary(requirements);
+  const detectedTemplateKey = detectRequirementTemplateKey(draft);
   const [openDocumentPickers, setOpenDocumentPickers] = useState<Record<string, boolean>>({});
+  const [expandedRequirements, setExpandedRequirements] = useState<Record<string, boolean>>({});
 
   const setRequirements = (next: GrantRequirement[]) => {
     onChange({ ...draft, requirements: next });
@@ -1999,53 +2312,115 @@ function GrantRequirementsEditor({
   };
 
   return (
-    <div style={{ display: "grid", gap: 12, margin: "12px 0" }}>
-      <InspectorNote title="Readiness checklist">
-        Track the documents, financials, confirmations, and post-award obligations that make a grant file auditable.
-      </InspectorNote>
-      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-        <Badge tone={summary.percent === 100 && summary.total > 0 ? "success" : "info"}>
-          {summary.total > 0 ? `${summary.percent}% ready` : "No checklist"}
-        </Badge>
-        <Badge tone="info">{summary.attached} docs linked</Badge>
-        {(Object.keys(GRANT_REQUIREMENT_TEMPLATES) as RequirementTemplateKey[]).map((key) => (
+    <div className="grant-requirements-editor">
+      <div className="grant-format-library">
+        <div className="grant-format-library__head">
+          <div>
+            <div className="grant-format-library__label">Format library</div>
+            <strong>{GRANT_REQUIREMENT_TEMPLATES[detectedTemplateKey].label}</strong>
+            <p>{GRANT_REQUIREMENT_TEMPLATES[detectedTemplateKey].description}</p>
+          </div>
+          <div className="grant-format-library__badges">
+            <Badge tone={detectedTemplateKey === "core" ? "info" : "success"}>
+              {detectedTemplateKey === "core" ? "Generic" : "Auto-detected"}
+            </Badge>
+            <Badge tone={summary.percent === 100 && summary.total > 0 ? "success" : "info"}>
+              {summary.total > 0 ? `${summary.percent}% ready` : "No checklist"}
+            </Badge>
+            <Badge tone="info">{summary.attached} docs linked</Badge>
+          </div>
+        </div>
+        <div className="grant-format-library__grid">
+          {(Object.keys(GRANT_REQUIREMENT_TEMPLATES) as RequirementTemplateKey[]).map((key) => {
+            const template = GRANT_REQUIREMENT_TEMPLATES[key];
+            const coverage = requirementTemplateCoverage(requirements, key);
+            const active = key === detectedTemplateKey;
+            return (
+              <button
+                key={key}
+                type="button"
+                className={active ? "grant-format-card is-active" : "grant-format-card"}
+                onClick={() => setRequirements(mergeTemplateRequirements(requirements, key))}
+              >
+                <span>
+                  <ListChecks size={13} />
+                  <strong>{template.label}</strong>
+                </span>
+                <small>{coverage.matched}/{coverage.total} in file</small>
+              </button>
+            );
+          })}
           <button
-            key={key}
             type="button"
-            className="btn btn--ghost btn--sm"
-            onClick={() => setRequirements(mergeTemplateRequirements(requirements, key))}
+            className="grant-format-card grant-format-card--custom"
+            onClick={() =>
+              setRequirements([
+                ...requirements,
+                {
+                  id: `custom-${Date.now()}`,
+                  category: "Custom",
+                  label: "New requirement",
+                  status: "Needed",
+                },
+              ])
+            }
           >
-            <ListChecks size={12} /> {GRANT_REQUIREMENT_TEMPLATES[key].label}
+            <span>
+              <Plus size={13} />
+              <strong>Custom item</strong>
+            </span>
+            <small>Add one-off evidence</small>
           </button>
-        ))}
-        <button
-          type="button"
-          className="btn btn--ghost btn--sm"
-          onClick={() =>
-            setRequirements([
-              ...requirements,
-              {
-                id: `custom-${Date.now()}`,
-                category: "Custom",
-                label: "New requirement",
-                status: "Needed",
-              },
-            ])
-          }
-        >
-          <Plus size={12} /> Add item
-        </button>
+        </div>
       </div>
 
       {requirements.length > 0 && (
-        <div style={{ display: "grid", gap: 10 }}>
+        <div className="grant-requirement-list">
           {requirements.map((item, index) => {
             const selectedDocument = documents.find((document) => String(document._id) === String(item.documentId));
             const pickerOpen = Boolean(openDocumentPickers[item.id]);
+            const expanded = Boolean(expandedRequirements[item.id]);
             return (
               <div key={item.id} className="grant-requirement-card">
-                <div className="row" style={{ justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-                  <Badge tone={requirementStatusTone(item.status)}>{item.status}</Badge>
+                <div className="grant-requirement-card__summary">
+                  <select
+                    className="input grant-requirement-card__status"
+                    aria-label={`Status for ${item.label}`}
+                    value={item.status}
+                    onChange={(event) =>
+                      updateRequirement(index, {
+                        status: event.target.value as GrantRequirementStatus,
+                      })
+                    }
+                  >
+                    {REQUIREMENT_STATUSES.map((status) => (
+                      <option key={status}>{status}</option>
+                    ))}
+                  </select>
+                  <input
+                    className="input grant-requirement-card__title"
+                    aria-label="Requirement"
+                    value={item.label}
+                    onChange={(event) => updateRequirement(index, { label: event.target.value })}
+                  />
+                  <input
+                    className="input grant-requirement-card__category"
+                    aria-label="Category"
+                    value={item.category}
+                    onChange={(event) => updateRequirement(index, { category: event.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    onClick={() =>
+                      setExpandedRequirements({
+                        ...expandedRequirements,
+                        [item.id]: !expandedRequirements[item.id],
+                      })
+                    }
+                  >
+                    {expanded ? "Less" : "Details"}
+                  </button>
                   <button
                     type="button"
                     className="btn btn--ghost btn--sm btn--icon"
@@ -2055,38 +2430,17 @@ function GrantRequirementsEditor({
                     <Trash2 size={12} />
                   </button>
                 </div>
-                <div className="grant-edit-grid grant-edit-grid--2">
-                  <Field label="Status">
-                    <select
-                      className="input"
-                      value={item.status}
-                      onChange={(event) =>
-                        updateRequirement(index, {
-                          status: event.target.value as GrantRequirementStatus,
-                        })
-                      }
-                    >
-                      {REQUIREMENT_STATUSES.map((status) => (
-                        <option key={status}>{status}</option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="Category">
-                    <input
-                      className="input"
-                      value={item.category}
-                      onChange={(event) => updateRequirement(index, { category: event.target.value })}
-                    />
-                  </Field>
+
+                <div className="grant-requirement-card__meta">
+                  <Badge tone={requirementStatusTone(item.status)}>{item.status}</Badge>
+                  {item.dueDate && <span>Due {formatDate(item.dueDate)}</span>}
+                  <span className={selectedDocument ? "" : "muted"}>
+                    {selectedDocument ? cleanDocumentTitle(selectedDocument) : "No evidence linked"}
+                  </span>
                 </div>
-                <Field label="Requirement">
-                  <input
-                    className="input"
-                    value={item.label}
-                    onChange={(event) => updateRequirement(index, { label: event.target.value })}
-                  />
-                </Field>
-                <div className="grant-edit-grid grant-edit-grid--2">
+
+                {expanded && (
+                  <div className="grant-requirement-card__details">
                   <Field label="Due">
                     <input
                       className="input"
@@ -2129,15 +2483,33 @@ function GrantRequirementsEditor({
                       </select>
                     )}
                   </div>
+                  <Field label="Notes">
+                    <textarea
+                      className="textarea"
+                      rows={2}
+                      value={item.notes ?? ""}
+                      onChange={(event) => updateRequirement(index, { notes: event.target.value })}
+                    />
+                  </Field>
+                  {(item.sourceUrl || item.documentUrl || item.formNumber) && (
+                    <div className="grant-requirement-card__links">
+                      {item.formNumber && <Badge tone="info">{item.formNumber}</Badge>}
+                      {item.documentUrl && (
+                        <a className="cell-tag" href={item.documentUrl} target="_blank" rel="noreferrer">
+                          Open form
+                          <ExternalLink size={11} />
+                        </a>
+                      )}
+                      {item.sourceUrl && (
+                        <a className="muted" href={item.sourceUrl} target="_blank" rel="noreferrer">
+                          Source
+                          <ExternalLink size={11} />
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <Field label="Notes">
-                  <textarea
-                    className="textarea"
-                    rows={2}
-                    value={item.notes ?? ""}
-                    onChange={(event) => updateRequirement(index, { notes: event.target.value })}
-                  />
-                </Field>
+                )}
               </div>
             );
           })}

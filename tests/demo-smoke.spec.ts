@@ -1,5 +1,26 @@
 import { test, expect } from "@playwright/test";
 
+test.describe("Public marketing route", () => {
+  test("root loads the marketing page without starting local Convex sync", async ({
+    page,
+  }) => {
+    const localConvexSockets: string[] = [];
+    page.on("websocket", (webSocket) => {
+      if (webSocket.url().includes("127.0.0.1:3210")) {
+        localConvexSockets.push(webSocket.url());
+      }
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    await expect(
+      page.getByRole("heading", { name: /run your society/i }),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: /open demo/i }).first()).toBeVisible();
+    expect(localConvexSockets).toEqual([]);
+  });
+});
+
 // Core demo routes that should load without crashing.
 // These use in-memory fixture data, so no backend is needed.
 const DEMO_ROUTES = [

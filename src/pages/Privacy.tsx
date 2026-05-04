@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import {
@@ -29,6 +29,9 @@ import { useToast } from "../components/Toast";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { useModuleEnabled } from "../hooks/useModules";
 import { CitationBadge } from "../components/CitationTooltip";
+import { Select } from "../components/Select";
+import { DatePicker } from "../components/DatePicker";
+import { Toggle } from "../components/Controls";
 import { formatDate } from "../lib/format";
 import {
   LEGAL_COPY_REVIEWED,
@@ -48,6 +51,21 @@ type DraftEditorState = {
   content: string;
   tags: string[];
 };
+
+const PRIVACY_PROGRAM_STATUS_OPTIONS = [
+  "Unknown",
+  "Documented",
+  "Needs review",
+  "Not started",
+].map((value) => ({ value, label: value }));
+
+const MEMBER_DATA_ACCESS_STATUS_OPTIONS = [
+  "Unknown",
+  "Society-controlled",
+  "Partially available",
+  "Institution-held",
+  "Not applicable",
+].map((value) => ({ value, label: value }));
 
 export function PrivacyPage() {
   const society = useSociety();
@@ -72,12 +90,26 @@ export function PrivacyPage() {
   const updateDraftContent = useMutation(api.documents.updateDraftContent);
   const linkPrivacyPolicyEvidence = useMutation(api.documents.linkPrivacyPolicyEvidence);
   const seedPipaSetupMotions = useMutation(api.motionBacklog.seedPipaSetup);
+  const upsertSociety = useMutation(api.society.upsert);
   const [draftEditor, setDraftEditor] = useState<DraftEditorState | null>(null);
   const [draftViewMode, setDraftViewMode] = useState<DraftViewMode>("edit");
   const [draftBusy, setDraftBusy] = useState(false);
+  const [privacyForm, setPrivacyForm] = useState<any>(null);
+  const [privacySaving, setPrivacySaving] = useState(false);
+
+  useEffect(() => {
+    if (society && (!privacyForm || String(privacyForm._id) !== String(society._id))) {
+      setPrivacyForm({ ...society });
+    }
+  }, [privacyForm, society]);
+
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
 
+  const privacyOpsForm = privacyForm ?? society;
+  const setPrivacyField = (key: string, value: any) => {
+    setPrivacyForm((current: any) => ({ ...(current ?? society), [key]: value }));
+  };
   const hasPolicyEvidence = !!society.privacyPolicyDocId;
   const hasOfficer = !!society.privacyOfficerName && !!society.privacyOfficerEmail;
   const documentRows = documents ?? [];
@@ -263,6 +295,43 @@ export function PrivacyPage() {
     );
   };
 
+  const savePrivacyOperations = async () => {
+    setPrivacySaving(true);
+    try {
+      await upsertSociety({
+        id: society._id,
+        name: society.name,
+        incorporationNumber: society.incorporationNumber,
+        incorporationDate: society.incorporationDate,
+        fiscalYearEnd: society.fiscalYearEnd,
+        jurisdictionCode: society.jurisdictionCode ?? "CA-BC",
+        isCharity: !!society.isCharity,
+        isMemberFunded: !!society.isMemberFunded,
+        registeredOfficeAddress: society.registeredOfficeAddress,
+        mailingAddress: society.mailingAddress,
+        purposes: society.purposes,
+        privacyOfficerName: society.privacyOfficerName,
+        privacyOfficerEmail: society.privacyOfficerEmail,
+        privacyProgramStatus: privacyOpsForm.privacyProgramStatus,
+        privacyProgramReviewedAtISO: privacyOpsForm.privacyProgramReviewedAtISO,
+        privacyProgramNotes: privacyOpsForm.privacyProgramNotes,
+        memberDataAccessStatus: privacyOpsForm.memberDataAccessStatus,
+        memberDataGapDocumented: !!privacyOpsForm.memberDataGapDocumented,
+        memberDataAccessReviewedAtISO: privacyOpsForm.memberDataAccessReviewedAtISO,
+        memberDataAccessNotes: privacyOpsForm.memberDataAccessNotes,
+        boardCadence: society.boardCadence,
+        boardCadenceDayOfWeek: society.boardCadenceDayOfWeek,
+        boardCadenceTime: society.boardCadenceTime,
+        boardCadenceNotes: society.boardCadenceNotes,
+      });
+      toast.success("Privacy operations saved");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not save privacy operations");
+    } finally {
+      setPrivacySaving(false);
+    }
+  };
+
   return (
     <div className="page">
       <PageHeader
@@ -365,6 +434,84 @@ export function PrivacyPage() {
             </div>
           </div>
 
+          <div className="card" id="privacy-operations">
+            <div className="card__head">
+              <div>
+                <h2 className="card__title">
+                  <Shield size={14} />
+                  Privacy operations record
+                </h2>
+                <p className="card__subtitle">
+                  Internal PIPA setup state, including student-newspaper member-data custody notes.
+                </p>
+              </div>
+              <button className="btn btn--accent btn--sm" disabled={privacySaving} onClick={savePrivacyOperations}>
+                {privacySaving ? "Saving..." : "Save record"}
+              </button>
+            </div>
+            <div className="card__body">
+              <div className="society-split">
+                <section>
+                  <span className="society-split__eyebrow">Privacy program</span>
+                  <div className="society-field-grid">
+                    <Field label="Status" hint="Use Documented after the policy, practices, access/correction process, and complaint process are adopted.">
+                      <Select
+                        value={privacyOpsForm.privacyProgramStatus ?? ""}
+                        onChange={(value) => setPrivacyField("privacyProgramStatus", value)}
+                        clearable
+                        options={PRIVACY_PROGRAM_STATUS_OPTIONS}
+                      />
+                    </Field>
+                    <Field label="Reviewed">
+                      <DatePicker
+                        value={privacyOpsForm.privacyProgramReviewedAtISO ?? ""}
+                        onChange={(value) => setPrivacyField("privacyProgramReviewedAtISO", value)}
+                      />
+                    </Field>
+                  </div>
+                  <Field label="Notes" hint="Examples: complaint process location, access-request procedure, retention schedule, training owner.">
+                    <textarea
+                      className="textarea"
+                      value={privacyOpsForm.privacyProgramNotes ?? ""}
+                      onChange={(event) => setPrivacyField("privacyProgramNotes", event.target.value)}
+                    />
+                  </Field>
+                </section>
+                <section>
+                  <span className="society-split__eyebrow">Member data access</span>
+                  <div className="society-field-grid">
+                    <Field label="Status" hint="Use Institution-held when a university or parent body holds the full member list outside society control.">
+                      <Select
+                        value={privacyOpsForm.memberDataAccessStatus ?? ""}
+                        onChange={(value) => setPrivacyField("memberDataAccessStatus", value)}
+                        clearable
+                        options={MEMBER_DATA_ACCESS_STATUS_OPTIONS}
+                      />
+                    </Field>
+                    <Field label="Reviewed">
+                      <DatePicker
+                        value={privacyOpsForm.memberDataAccessReviewedAtISO ?? ""}
+                        onChange={(value) => setPrivacyField("memberDataAccessReviewedAtISO", value)}
+                      />
+                    </Field>
+                  </div>
+                  <Toggle
+                    checked={!!privacyOpsForm.memberDataGapDocumented}
+                    onChange={(value) => setPrivacyField("memberDataGapDocumented", value)}
+                    label="Member data-access gap documented"
+                  />
+                  <Field label="Notes" hint="Record source requests, refusal/limits, aggregate remittances, direct collection paths, and next review.">
+                    <textarea
+                      className="textarea"
+                      value={privacyOpsForm.memberDataAccessNotes ?? ""}
+                      onChange={(event) => setPrivacyField("memberDataAccessNotes", event.target.value)}
+                    />
+                  </Field>
+                </section>
+              </div>
+            </div>
+          </div>
+
           <div className="card privacy-setup-card">
             <div className="card__head">
               <div>
@@ -407,7 +554,7 @@ export function PrivacyPage() {
                     {policyDraft ? <PenLine size={12} /> : <Plus size={12} />}
                     {policyDraft ? "Edit draft" : "Create draft"}
                   </button>
-                  <Link className="btn btn--ghost btn--sm" to="/app/society"><FileText size={12} /> Program status</Link>
+                  <a className="btn btn--ghost btn--sm" href="#privacy-operations"><FileText size={12} /> Program status</a>
                 </>
               )}
             >
@@ -455,7 +602,7 @@ export function PrivacyPage() {
                     {memberDataMemoDraft ? <PenLine size={12} /> : <Plus size={12} />}
                     {memberDataMemoDraft ? "Edit memo" : "Create memo"}
                   </button>
-                  <Link className="btn btn--ghost btn--sm" to="/app/society"><UsersRound size={12} /> Data access</Link>
+                  <a className="btn btn--ghost btn--sm" href="#privacy-operations"><UsersRound size={12} /> Data access</a>
                 </>
               )}
             >

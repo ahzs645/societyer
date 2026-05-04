@@ -14,21 +14,6 @@ import { formatDate } from "../lib/format";
 import { JURISDICTION_OPTIONS } from "../lib/jurisdictionGuideTracks";
 import { optionLabel } from "../lib/orgHubOptions";
 
-const PRIVACY_PROGRAM_STATUS_OPTIONS = [
-  "Unknown",
-  "Documented",
-  "Needs review",
-  "Not started",
-].map((value) => ({ value, label: value }));
-
-const MEMBER_DATA_ACCESS_STATUS_OPTIONS = [
-  "Unknown",
-  "Society-controlled",
-  "Partially available",
-  "Institution-held",
-  "Not applicable",
-].map((value) => ({ value, label: value }));
-
 export function SocietyPage() {
   const society = useSociety();
   const detail = useQuery(api.organizationDetails.overview, society ? { societyId: society._id } : "skip");
@@ -96,13 +81,6 @@ export function SocietyPage() {
         purposes: form.purposes,
         privacyOfficerName: form.privacyOfficerName,
         privacyOfficerEmail: form.privacyOfficerEmail,
-        privacyProgramStatus: form.privacyProgramStatus,
-        privacyProgramReviewedAtISO: form.privacyProgramReviewedAtISO,
-        privacyProgramNotes: form.privacyProgramNotes,
-        memberDataAccessStatus: form.memberDataAccessStatus,
-        memberDataGapDocumented: !!form.memberDataGapDocumented,
-        memberDataAccessReviewedAtISO: form.memberDataAccessReviewedAtISO,
-        memberDataAccessNotes: form.memberDataAccessNotes,
         boardCadence: form.boardCadence,
         boardCadenceDayOfWeek: form.boardCadenceDayOfWeek,
         boardCadenceTime: form.boardCadenceTime,
@@ -275,74 +253,6 @@ export function SocietyPage() {
                     </div>
                   )}
                 </LockedField>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card__head">
-              <h2 className="card__title">Privacy operations</h2>
-              <span className="card__subtitle">Compliance state separate from uploaded evidence.</span>
-            </div>
-            <div className="card__body">
-              <div className="society-split">
-                <section>
-                  <span className="society-split__eyebrow">Privacy program</span>
-                  <div className="society-field-grid">
-                    <Field label="Status" hint="Use Documented when PIPA policies/practices and complaint process have been adopted.">
-                      <Select
-                        value={form.privacyProgramStatus ?? ""}
-                        onChange={(value) => set("privacyProgramStatus", value)}
-                        clearable
-                        options={PRIVACY_PROGRAM_STATUS_OPTIONS}
-                      />
-                    </Field>
-                    <Field label="Reviewed">
-                      <DatePicker
-                        value={form.privacyProgramReviewedAtISO ?? ""}
-                        onChange={(value) => set("privacyProgramReviewedAtISO", value)}
-                      />
-                    </Field>
-                  </div>
-                  <Field label="Notes" hint="Examples: complaint process location, access-request procedure, retention schedule, training owner.">
-                    <textarea
-                      className="textarea"
-                      value={form.privacyProgramNotes ?? ""}
-                      onChange={(e) => set("privacyProgramNotes", e.target.value)}
-                    />
-                  </Field>
-                </section>
-                <section>
-                  <span className="society-split__eyebrow">Member data access</span>
-                  <div className="society-field-grid">
-                    <Field label="Status" hint="Use Institution-held when a university or parent body holds the full member list outside society control.">
-                      <Select
-                        value={form.memberDataAccessStatus ?? ""}
-                        onChange={(value) => set("memberDataAccessStatus", value)}
-                        clearable
-                        options={MEMBER_DATA_ACCESS_STATUS_OPTIONS}
-                      />
-                    </Field>
-                    <Field label="Reviewed">
-                      <DatePicker
-                        value={form.memberDataAccessReviewedAtISO ?? ""}
-                        onChange={(value) => set("memberDataAccessReviewedAtISO", value)}
-                      />
-                    </Field>
-                  </div>
-                  <Toggle
-                    checked={!!form.memberDataGapDocumented}
-                    onChange={(value) => set("memberDataGapDocumented", value)}
-                    label="Member data-access gap documented"
-                  />
-                  <Field label="Notes" hint="Record source requests, refusal/limits, aggregate remittances, direct collection paths, and next review.">
-                    <textarea
-                      className="textarea"
-                      value={form.memberDataAccessNotes ?? ""}
-                      onChange={(e) => set("memberDataAccessNotes", e.target.value)}
-                    />
-                  </Field>
-                </section>
               </div>
             </div>
           </div>
