@@ -18,6 +18,7 @@
   gap: 8px;
   padding: 6px 0;
   border-bottom: 1px solid var(--border-color-light);
+  min-width: 0;
 }
 
 .record-table__toolbar-left {
@@ -31,6 +32,7 @@
   flex: 1;
   display: flex;
   justify-content: center;
+  min-width: 0;
 }
 
 .record-table__toolbar-right {
@@ -40,6 +42,7 @@
   position: relative;
   flex-wrap: wrap;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 .record-table__title {
@@ -133,11 +136,61 @@
   border: none;
   outline: none;
   flex: 1;
+  min-width: 0;
   font-size: 12px;
   color: var(--text-primary);
 
   &::placeholder {
     color: var(--text-tertiary);
+  }
+}
+
+@media (max-width: 760px) {
+  .record-table__toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--s-2);
+    padding-bottom: var(--s-3);
+  }
+
+  .record-table__toolbar-left,
+  .record-table__toolbar-center,
+  .record-table__toolbar-right {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .record-table__toolbar-left {
+    justify-content: flex-start;
+  }
+
+  .record-table__toolbar-center {
+    justify-content: stretch;
+  }
+
+  .record-table__toolbar-right {
+    justify-content: flex-start;
+  }
+
+  .record-table__view-switcher {
+    max-width: 100%;
+  }
+
+  .record-table__view-button {
+    max-width: 100%;
+
+    span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .record-table__search {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
   }
 }
 
