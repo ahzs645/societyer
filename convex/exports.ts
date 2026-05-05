@@ -31,6 +31,7 @@ export const EXPORTABLE_TABLES = [
   "pluginInstallations",
   "webhookSubscriptions",
   "webhookDeliveries",
+  "integrationSyncStates",
   "documentVersions",
   "paperlessConnections",
   "paperlessDocumentSyncs",
@@ -77,6 +78,7 @@ export const EXPORTABLE_TABLES = [
   "fieldMetadata",
   "views",
   "viewFields",
+  "commandMenuItems",
   "members",
   "directors",
   "boardRoleAssignments",
@@ -151,7 +153,6 @@ const DEFAULT_REDACTED_FIELDS = ["secretEncrypted", "tokenHash", "storageId"] as
 const RECOVERY_REDACTED_FIELDS = ["storageId"] as const;
 const GLOBAL_TABLES = new Set(["jurisdictionMetadata"]);
 const OPTIONAL_SOCIETY_TABLES = new Set(["legalTemplateDataFields", "legalTemplates", "legalPrecedents"]);
-const NO_BY_SOCIETY_INDEX = new Set(["transcriptionJobs", "electionEligibleVoters", "electionBallots", "viewFields"]);
 const SOCIETY_INDEX_BY_TABLE: Record<string, string> = {
   budgets: "by_society_fy",
 };
@@ -369,7 +370,6 @@ async function paginateForSociety(
   options?: { includeRecoverySecrets?: boolean },
 ) {
   assertExportable(table);
-  const societyKey = String(societyId);
 
   if (table === "societies") {
     const society = await ctx.db.get(societyId);
@@ -387,38 +387,51 @@ async function paginateForSociety(
   }
 
   if (table === "notificationPrefs") {
-    const users = await ctx.db.query("users").collect();
-    const userIds = new Set(
-      users
-        .filter((row: any) => String(row.societyId) === societyKey)
-        .map((row: any) => String(row._id)),
-    );
-    if (userIds.size === 0) {
-      return { page: [], isDone: true, continueCursor: "" };
+    const users = await ctx.db
+      .query("users")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .collect();
+    const rows: any[] = [];
+    for (const user of users) {
+      rows.push(
+        ...(await ctx.db
+          .query("notificationPrefs")
+          .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+          .collect()),
+      );
     }
-    const page = await ctx.db
-      .query("notificationPrefs")
-      .filter((q: any) => q.or(...Array.from(userIds).map((id) => q.eq(q.field("userId"), id))))
-      .paginate(paginationOpts);
-    return { ...page, page: page.page.map((row: any) => sanitizeRow(row, options)) };
+    return paginateCollectedRows(rows, paginationOpts, options);
   }
 
   if (OPTIONAL_SOCIETY_TABLES.has(table)) {
-    const page = await ctx.db
-      .query(table)
-      .filter((q: any) =>
-        q.or(q.eq(q.field("societyId"), societyId), q.eq(q.field("societyId"), undefined)),
-      )
-      .paginate(paginationOpts);
-    return { ...page, page: page.page.map((row: any) => sanitizeRow(row, options)) };
+    const [globalRows, societyRows] = await Promise.all([
+      ctx.db.query(table).withIndex("by_society", (q: any) => q.eq("societyId", undefined)).collect(),
+      ctx.db.query(table).withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
+    ]);
+    return paginateCollectedRows([...globalRows, ...societyRows], paginationOpts, options);
   }
 
   const indexName = SOCIETY_INDEX_BY_TABLE[table] ?? "by_society";
-  const query = NO_BY_SOCIETY_INDEX.has(table)
-    ? ctx.db.query(table).filter((q: any) => q.eq(q.field("societyId"), societyId))
-    : ctx.db.query(table).withIndex(indexName, (q: any) => q.eq("societyId", societyId));
+  const query = ctx.db.query(table).withIndex(indexName, (q: any) => q.eq("societyId", societyId));
   const page = await query.paginate(paginationOpts);
   return { ...page, page: page.page.map((row: any) => sanitizeRow(row, options)) };
+}
+
+function paginateCollectedRows(
+  rows: any[],
+  paginationOpts: { cursor?: string | null; numItems: number },
+  options?: { includeRecoverySecrets?: boolean },
+) {
+  const start = paginationOpts.cursor ? Number(paginationOpts.cursor) : 0;
+  const safeStart = Number.isFinite(start) && start > 0 ? start : 0;
+  const end = safeStart + paginationOpts.numItems;
+  const page = rows.slice(safeStart, end).map((row: any) => sanitizeRow(row, options));
+  const isDone = end >= rows.length;
+  return {
+    page,
+    isDone,
+    continueCursor: isDone ? "" : String(end),
+  };
 }
 
 function assertExportable(table: string) {

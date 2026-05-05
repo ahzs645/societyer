@@ -1,10 +1,8 @@
 import { RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinitions";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
+import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
 
 const FUNCTION_NAME = Symbol.for("functionName");
-
-export const STATIC_DEMO_SOCIETY_ID = "static_society_riverside";
-export const STATIC_DEMO_USER_ID = "static_user_owner";
 
 const SOCIETY_ID = STATIC_DEMO_SOCIETY_ID;
 const USER_OWNER_ID = STATIC_DEMO_USER_ID;

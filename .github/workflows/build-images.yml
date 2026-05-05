@@ -26,6 +26,9 @@ jobs:
             build_args: |
               VITE_CONVEX_URL=http://societyer.k8s.home:3220
               VITE_AUTH_MODE=none
+          - name: societyer-connector-runner
+            dockerfile: services/connector-runner/Dockerfile
+            build_args: ""
     steps:
       - uses: actions/checkout@v4
 

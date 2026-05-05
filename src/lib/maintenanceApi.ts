@@ -1,5 +1,5 @@
 import type { Id } from "../../convex/_generated/dataModel";
-import { STATIC_DEMO_SOCIETY_ID } from "./staticConvex";
+import { STATIC_DEMO_SOCIETY_ID } from "./staticIds";
 import { isStaticDemoRuntime } from "./staticRuntime";
 
 type SeedResult = { societyId: Id<"societies"> };

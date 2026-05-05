@@ -1,0 +1,367 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - link "Societyer preview" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e7]: Societyer
+        - generic [ref=e8]: preview
+      - navigation [ref=e9]:
+        - link "Problem" [ref=e10] [cursor=pointer]:
+          - /url: "#problem"
+        - link "Features" [ref=e11] [cursor=pointer]:
+          - /url: "#features"
+        - link "Compliance" [ref=e12] [cursor=pointer]:
+          - /url: "#compliance"
+        - link "Self-host" [ref=e13] [cursor=pointer]:
+          - /url: "#self-host"
+        - link "FAQ" [ref=e14] [cursor=pointer]:
+          - /url: "#faq"
+      - generic [ref=e15]:
+        - link "View source on GitHub" [ref=e16] [cursor=pointer]:
+          - /url: https://github.com/ahzs645/societyer
+          - img [ref=e17]
+        - button "Switch to dark mode" [ref=e20] [cursor=pointer]:
+          - img [ref=e21]
+          - generic [ref=e23]: Dark
+        - link "Open demo" [ref=e24] [cursor=pointer]:
+          - /url: /demo
+          - text: Open demo
+          - img [ref=e25]
+  - generic [ref=e27]:
+    - generic [ref=e28]:
+      - generic [ref=e29]:
+        - img [ref=e30]
+        - text: BC Societies Act · PIPA · CRA
+      - heading "Run your society the way the law actually expects." [level=1] [ref=e33]:
+        - text: Run your society the way the
+        - generic [ref=e34]: law actually expects.
+      - paragraph [ref=e35]: Societyer is a governance workspace for British Columbia nonprofit societies. Directors, members, meetings, minutes, filings, bylaws and PIPA in one live register — with the Societies Act checks running in the background.
+      - generic [ref=e36]:
+        - link "Open the live demo" [ref=e37] [cursor=pointer]:
+          - /url: /demo
+          - text: Open the live demo
+          - img [ref=e38]
+        - link "Source on GitHub" [ref=e40] [cursor=pointer]:
+          - /url: https://github.com/ahzs645/societyer
+          - img [ref=e41]
+          - text: Source on GitHub
+      - generic [ref=e44]:
+        - generic [ref=e45]:
+          - img [ref=e46]
+          - text: Seeded with Riverside Community Society
+        - generic [ref=e49]:
+          - img [ref=e50]
+          - text: No login for the
+          - code [ref=e53]: /demo
+          - text: walkthrough
+        - generic [ref=e54]:
+          - img [ref=e55]
+          - text: Public site stays static; full app runs separately with a backend
+    - generic [ref=e58]:
+      - generic [ref=e59]:
+        - generic [ref=e60]: 80+
+        - generic [ref=e61]: wired registers
+      - generic [ref=e62]:
+        - generic [ref=e63]: "1"
+        - generic [ref=e64]: source of truth
+      - generic [ref=e65]:
+        - generic [ref=e66]: ∞
+        - generic [ref=e67]: audit history
+      - generic [ref=e68]:
+        - generic [ref=e69]: "0"
+        - generic [ref=e70]: vendor lock-in
+  - generic [ref=e72]:
+    - generic [ref=e73]:
+      - generic [ref=e74]: The old way
+      - heading "Minutes in a Drive. Registers in Excel. Filings in email." [level=2] [ref=e75]
+      - paragraph [ref=e76]: It works until the AGM. Then somebody has to reconstruct a year of governance in a week.
+    - generic [ref=e77]:
+      - generic [ref=e78]:
+        - img [ref=e80]
+        - heading "Registers live in Excel" [level=3] [ref=e83]
+        - paragraph [ref=e84]: Director terms, member emails, consent forms — every spreadsheet slightly out of sync with what was filed.
+      - generic [ref=e85]:
+        - img [ref=e87]
+        - heading "Filings live in email" [level=3] [ref=e90]
+        - paragraph [ref=e91]: Annual report, T3010, PIPA program. Known only to whoever had the login last year.
+      - generic [ref=e92]:
+        - img [ref=e94]
+        - heading "Minutes live in a Drive folder" [level=3] [ref=e96]
+        - paragraph [ref=e97]: Motions drift. Action items don't come back. Bylaw versions pile up with no audit trail.
+    - paragraph [ref=e98]: Societyer replaces all three with live, audited registers in one place.
+  - generic [ref=e100]:
+    - generic [ref=e101]:
+      - generic [ref=e102]: What's inside
+      - heading "Every register the Societies Act wants you to keep — already wired up." [level=2] [ref=e103]
+      - paragraph [ref=e104]: Members, directors, meetings, minutes, filings, conflicts, bylaws, financials, PIPA. One workspace, one source of truth.
+    - generic [ref=e105]:
+      - generic [ref=e106]:
+        - generic [ref=e107]:
+          - img [ref=e109]
+          - heading "Governance" [level=3] [ref=e115]
+          - generic [ref=e116]: § 20–59
+        - list [ref=e117]:
+          - listitem [ref=e118]:
+            - img [ref=e119]
+            - generic [ref=e122]: Board & member meetings with agendas, minutes, motions and decisions
+          - listitem [ref=e123]:
+            - img [ref=e124]
+            - generic [ref=e127]: AGM workflow, written resolutions, proxy voting and member proposals
+          - listitem [ref=e128]:
+            - img [ref=e129]
+            - generic [ref=e132]: Action items tied to directors with status, owners and due dates
+      - generic [ref=e133]:
+        - generic [ref=e134]:
+          - img [ref=e136]
+          - heading "Compliance" [level=3] [ref=e139]
+          - generic [ref=e140]: § 11, 44, 76
+        - list [ref=e141]:
+          - listitem [ref=e142]:
+            - img [ref=e143]
+            - generic [ref=e146]: "Auto-checked Act flags: s.40 directors, BC residency, consent evidence"
+          - listitem [ref=e147]:
+            - img [ref=e148]
+            - generic [ref=e151]: CRA + BC Societies Online filing tracker with status and pre-fill helper
+          - listitem [ref=e152]:
+            - img [ref=e153]
+            - generic [ref=e156]: Statutory deadline calendar, retention policy and bylaw redlines
+      - generic [ref=e157]:
+        - generic [ref=e158]:
+          - img [ref=e160]
+          - heading "People" [level=3] [ref=e165]
+          - generic [ref=e166]: § 20, 24, 56
+        - list [ref=e167]:
+          - listitem [ref=e168]:
+            - img [ref=e169]
+            - generic [ref=e172]: Members and directors registers with roles, terms and consents
+          - listitem [ref=e173]:
+            - img [ref=e174]
+            - generic [ref=e177]: Committees, employees, auditors and inspections of records
+          - listitem [ref=e178]:
+            - img [ref=e179]
+            - generic [ref=e182]: Conflict of interest disclosures with vote recusal tracking
+      - generic [ref=e183]:
+        - generic [ref=e184]:
+          - img [ref=e186]
+          - heading "Records" [level=3] [ref=e189]
+          - generic [ref=e190]: § 20, 24, PIPA
+        - list [ref=e191]:
+          - listitem [ref=e192]:
+            - img [ref=e193]
+            - generic [ref=e196]: Constitution, bylaws, policies and financial statements with retention
+          - listitem [ref=e197]:
+            - img [ref=e198]
+            - generic [ref=e201]: Donation receipts, insurance, court orders and attestations
+          - listitem [ref=e202]:
+            - img [ref=e203]
+            - generic [ref=e206]: PIPA checklist, training log and privacy officer record
+  - generic [ref=e208]:
+    - generic [ref=e209]:
+      - generic [ref=e210]: One record, end to end
+      - heading "Agenda → motion → minute → audit. No re‑keying." [level=2] [ref=e211]
+      - paragraph [ref=e212]: Every step writes into the same underlying records, so Tuesday's motion is Friday's minute is next year's audit answer.
+    - generic [ref=e213]:
+      - generic [ref=e214]:
+        - generic [ref=e215]:
+          - img [ref=e217]
+          - generic [ref=e221]: Agenda
+        - img [ref=e223]
+      - generic [ref=e225]:
+        - generic [ref=e226]:
+          - img [ref=e228]
+          - generic [ref=e234]: Motion
+        - img [ref=e236]
+      - generic [ref=e238]:
+        - generic [ref=e239]:
+          - img [ref=e241]
+          - generic [ref=e244]: Vote
+        - img [ref=e246]
+      - generic [ref=e248]:
+        - generic [ref=e249]:
+          - img [ref=e251]
+          - generic [ref=e254]: Minute
+        - img [ref=e256]
+      - generic [ref=e258]:
+        - generic [ref=e259]:
+          - img [ref=e261]
+          - generic [ref=e264]: Action
+        - img [ref=e266]
+      - generic [ref=e269]:
+        - img [ref=e271]
+        - generic [ref=e274]: Audit trail
+  - generic [ref=e276]:
+    - generic [ref=e277]:
+      - generic [ref=e278]:
+        - generic [ref=e279]: Compliance posture
+        - heading "The Societies Act, on a dashboard." [level=2] [ref=e280]
+        - paragraph [ref=e281]: Societyer reads your registers and runs the statutory checks for you. You see what's green, what's about to slip, and what's already overdue — before the AGM does.
+      - list [ref=e282]:
+        - listitem [ref=e283]:
+          - img [ref=e284]
+          - text: Director composition, residency exceptions and consent evidence continuously verified
+        - listitem [ref=e288]:
+          - img [ref=e289]
+          - text: Annual report and CRA T3010 surfaced before they slip
+        - listitem [ref=e293]:
+          - img [ref=e294]
+          - text: Conflict of interest disclosures linked to the votes they affect
+        - listitem [ref=e297]:
+          - img [ref=e298]
+          - text: Bylaw redlines and version history so you can prove what was adopted
+        - listitem [ref=e302]:
+          - img [ref=e303]
+          - text: PIPA records inspection rules and privacy officer documented
+      - link "Try the compliance dashboard" [ref=e307] [cursor=pointer]:
+        - /url: /demo
+        - text: Try the compliance dashboard
+        - img [ref=e308]
+    - generic [ref=e310]:
+      - generic [ref=e311]:
+        - generic [ref=e312]:
+          - img [ref=e313]
+          - text: Compliance flags
+          - generic [ref=e315]: "6"
+        - generic [ref=e316]:
+          - generic [ref=e319]: ≥3 directors on the board
+          - generic [ref=e322]: At least one BC-resident director unless exempt
+          - generic [ref=e323]:
+            - generic [ref=e325]: All director consent evidence on file
+            - generic [ref=e326]: 1 missing
+          - generic [ref=e327]:
+            - generic [ref=e329]: Annual report filed with BC Registries
+            - generic [ref=e330]: Overdue 14 days
+          - generic [ref=e333]: PIPA privacy policy published
+          - generic [ref=e336]: Bylaws filed match adopted version
+      - generic [ref=e337]:
+        - generic [ref=e338]:
+          - img [ref=e339]
+          - text: Upcoming deadlines
+        - generic [ref=e342]:
+          - generic [ref=e343]:
+            - generic [ref=e345]: Annual report — BC Registries
+            - generic [ref=e346]: Overdue 14d
+          - generic [ref=e347]:
+            - generic [ref=e349]: T3010 — CRA
+            - generic [ref=e350]: in 23 days
+          - generic [ref=e351]:
+            - generic [ref=e353]: Director consent renewal — M. Singh
+            - generic [ref=e354]: in 45 days
+          - generic [ref=e355]:
+            - generic [ref=e357]: AGM notice (14-day minimum)
+            - generic [ref=e358]: in 62 days
+  - generic [ref=e360]:
+    - generic [ref=e361]:
+      - generic [ref=e362]: The feel
+      - heading "Built for the people who do the work." [level=2] [ref=e363]
+    - generic [ref=e364]:
+      - generic [ref=e365]:
+        - img [ref=e367]
+        - heading "Live-reactive" [level=3] [ref=e369]
+        - paragraph [ref=e370]: Built on Convex. Every change syncs across boards, committees and viewers instantly — no refresh, no stale state.
+      - generic [ref=e371]:
+        - img [ref=e373]
+        - heading "Keyboard-native" [level=3] [ref=e375]
+        - paragraph [ref=e376]: Cmd+K jumps to any society record. File a deadline, draft a motion or open a register without leaving the keyboard.
+      - generic [ref=e377]:
+        - img [ref=e379]
+        - heading "Drafted minutes" [level=3] [ref=e381]
+        - paragraph [ref=e382]: First-pass minutes from agenda, attendance and motions. Edit in place — every change is in the audit trail.
+  - generic [ref=e384]:
+    - generic [ref=e385]:
+      - generic [ref=e386]: Who it's for
+      - heading "Designed around three people in every BC society." [level=2] [ref=e387]
+    - generic [ref=e388]:
+      - generic [ref=e389]:
+        - img [ref=e391]
+        - heading "Board secretary" [level=3] [ref=e397]
+        - paragraph [ref=e398]: Drafts minutes, tracks motions, manages the directors register and keeps consents current. Stops chasing email threads.
+      - generic [ref=e399]:
+        - img [ref=e401]
+        - heading "Executive director" [level=3] [ref=e405]
+        - paragraph [ref=e406]: Owns the filings calendar, AGM workflow, PIPA program and document retention. Sees the whole compliance posture at a glance.
+      - generic [ref=e407]:
+        - img [ref=e409]
+        - heading "Treasurer" [level=3] [ref=e412]
+        - paragraph [ref=e413]: Manages annual financial statements, donation receipts, audit status and remuneration disclosure. One register, fewer spreadsheets.
+  - generic [ref=e415]:
+    - generic [ref=e416]:
+      - generic [ref=e417]: Own your data
+      - heading "Self-host the whole thing. No vendor on your registers." [level=2] [ref=e418]
+      - paragraph [ref=e419]: React + TypeScript on a Convex live-reactive backend. Run the Convex backend in Docker for full data residency, or point at hosted Convex when you want less ops.
+    - generic [ref=e420]:
+      - generic [ref=e421]:
+        - img [ref=e422]
+        - text: Convex backend runs in Docker — your database, your disk
+      - generic [ref=e425]:
+        - img [ref=e426]
+        - text: Schema-driven mutations with audit logs on every write
+      - generic [ref=e429]:
+        - img [ref=e430]
+        - text: Live queries — no polling, no manual refresh
+      - generic [ref=e432]:
+        - img [ref=e433]
+        - text: Export everything as JSON or CSV at any point
+    - generic [ref=e436]:
+      - generic [ref=e437]: React 18
+      - generic [ref=e438]: TypeScript
+      - generic [ref=e439]: Vite
+      - generic [ref=e440]: Convex
+      - generic [ref=e441]: React Router
+      - generic [ref=e442]: Sass
+      - generic [ref=e443]: Lucide
+  - generic [ref=e445]:
+    - generic [ref=e446]:
+      - generic [ref=e447]: Common questions
+      - heading "The things people ask before trusting a compliance tool." [level=2] [ref=e448]
+    - generic [ref=e449]:
+      - group [ref=e450]:
+        - generic "Is this legal advice?" [ref=e451] [cursor=pointer]:
+          - img [ref=e452]
+          - generic [ref=e455]: Is this legal advice?
+          - generic [ref=e456]: +
+        - paragraph [ref=e457]: No. Societyer organizes the compliance work your society already has to do. It is not a substitute for advice from a lawyer, accountant, or BC Registries.
+      - group [ref=e458]:
+        - generic "Does it file my annual report for me?" [ref=e459] [cursor=pointer]:
+          - img [ref=e460]
+          - generic [ref=e463]: Does it file my annual report for me?
+          - generic [ref=e464]: +
+      - group [ref=e465]:
+        - generic "Can I self-host?" [ref=e466] [cursor=pointer]:
+          - img [ref=e467]
+          - generic [ref=e470]: Can I self-host?
+          - generic [ref=e471]: +
+      - group [ref=e472]:
+        - generic "What happens to the audit trail if I delete something?" [ref=e473] [cursor=pointer]:
+          - img [ref=e474]
+          - generic [ref=e477]: What happens to the audit trail if I delete something?
+          - generic [ref=e478]: +
+      - group [ref=e479]:
+        - generic "Is this production-ready?" [ref=e480] [cursor=pointer]:
+          - img [ref=e481]
+          - generic [ref=e484]: Is this production-ready?
+          - generic [ref=e485]: +
+    - paragraph [ref=e486]: Societyer helps organize compliance work; it is not legal advice and does not replace advice from a lawyer, accountant, or the BC Registry.
+  - generic [ref=e488]:
+    - generic [ref=e489]:
+      - img [ref=e490]
+      - text: Public preview · seeded demo
+    - heading "Stop reconstructing the registers the night before the AGM." [level=2] [ref=e492]
+    - paragraph [ref=e493]: Click through the seeded demo in under a minute. Then clone it, self-host it, or point it at your real registers.
+    - generic [ref=e494]:
+      - link "Open the live demo" [ref=e495] [cursor=pointer]:
+        - /url: /demo
+        - text: Open the live demo
+        - img [ref=e496]
+      - link "View the source" [ref=e498] [cursor=pointer]:
+        - /url: https://github.com/ahzs645/societyer
+        - img [ref=e499]
+        - text: View the source
+  - contentinfo [ref=e502]:
+    - generic [ref=e503]:
+      - generic [ref=e505]: Societyer
+      - generic [ref=e506]:
+        - generic [ref=e507]: BC Societies Act compliance workspace
+        - link "Source" [ref=e508] [cursor=pointer]:
+          - /url: https://github.com/ahzs645/societyer
+          - img [ref=e509]
+          - text: Source

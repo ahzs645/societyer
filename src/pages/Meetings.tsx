@@ -44,12 +44,24 @@ const MEETING_FIELDS: FilterField<any>[] = [
   { id: "year", label: "Scheduled in year", icon: <Calendar size={14} />, match: (m, q) => (m.scheduledAt ?? "").startsWith(q) },
 ];
 
+type MeetingDraft = {
+  type: string;
+  title: string;
+  scheduledAt: string;
+  location: string;
+  electronic: boolean;
+  quorumRequired: string;
+  status: string;
+  attendeeIds: string[];
+  notes?: string;
+};
+
 export function MeetingsPage() {
   const society = useSociety();
   const { rules } = useBylawRules();
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<any>(null);
+  const [form, setForm] = useState<MeetingDraft | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [params, setParams] = useSearchParams();
   const formRules = useQuery(
@@ -64,7 +76,7 @@ export function MeetingsPage() {
 
   const conflicts = computeConflicts(meetings ?? []);
 
-  const openNew = (overrides: Record<string, any> = {}) => {
+  const openNew = (overrides: Partial<MeetingDraft> = {}) => {
     setForm({
       type: "Board", title: "",
       scheduledAt: toDateTimeLocalValue(new Date(Date.now() + noticeMinDays * 864e5)),
@@ -146,7 +158,7 @@ export function MeetingsPage() {
                 Calendar
               </button>
             </div>
-            <button className="btn-action btn-action--primary" onClick={openNew}>
+            <button className="btn-action btn-action--primary" type="button" onClick={() => openNew()}>
               <Plus size={12} /> New meeting
             </button>
           </div>
@@ -236,7 +248,7 @@ export function MeetingsPage() {
 
       <Drawer
         open={open} onClose={() => setOpen(false)} title="Schedule meeting"
-        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save}>Schedule</button></>}
+        footer={<><button className="btn" type="button" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" type="button" onClick={save}>Schedule</button></>}
       >
         {form && (
           <div>

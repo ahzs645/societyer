@@ -1478,7 +1478,9 @@ export default defineSchema({
     error: v.optional(v.string()),
     transcriptId: v.optional(v.id("transcripts")),
     demo: v.boolean(),
-  }).index("by_meeting", ["meetingId"]),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_meeting", ["meetingId"]),
 
   // Per-category custom field definitions. Admins add a definition under
   // members/directors/volunteers/employees, then each person in that
@@ -2952,6 +2954,7 @@ export default defineSchema({
     revokedAtISO: v.optional(v.string()),
     createdAtISO: v.string(),
   })
+    .index("by_society", ["societyId"])
     .index("by_election", ["electionId"])
     .index("by_member", ["memberId"])
     .index("by_election_member", ["electionId", "memberId"]),
@@ -2969,6 +2972,7 @@ export default defineSchema({
     ),
     spoiledAtISO: v.optional(v.string()),
   })
+    .index("by_society", ["societyId"])
     .index("by_election", ["electionId"])
     .index("by_receipt", ["electionId", "receiptCode"]),
 
@@ -3420,6 +3424,7 @@ export default defineSchema({
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })
+    .index("by_society", ["societyId"])
     .index("by_view", ["viewId"])
     .index("by_view_position", ["viewId", "position"])
     .index("by_field", ["fieldMetadataId"]),

@@ -3,7 +3,7 @@ import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useEffect, useState } from "react";
 import { getAuthMode } from "../lib/authMode";
-import { STATIC_DEMO_USER_ID } from "../lib/staticConvex";
+import { STATIC_DEMO_USER_ID } from "../lib/staticIds";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 
 const KEY = "societyer.currentUserId";

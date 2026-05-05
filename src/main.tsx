@@ -3,7 +3,6 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { ConvexProvider, type ConvexReactClient } from "convex/react";
 import { convex } from "./lib/convex";
-import { staticConvex } from "./lib/staticConvex";
 import { isStaticDemoRuntime } from "./lib/staticRuntime";
 import { AuthProvider } from "./auth/AuthProvider";
 import { AuthGate } from "./components/AuthGate";
@@ -140,14 +139,32 @@ function AppProviders({ client }: { client: ConvexReactClient }) {
 
 const staticDemoRuntime = isStaticDemoRuntime();
 const routerBasename = staticDemoRuntime ? "/demo" : import.meta.env.BASE_URL;
-const convexClient = staticDemoRuntime
-  ? (staticConvex as unknown as ConvexReactClient)
-  : convex;
 
 function PageLoader() {
   return (
     <div style={{ padding: 24, color: "#888", fontSize: 13 }}>Loading…</div>
   );
+}
+
+function AsyncAppProviders() {
+  const [convexClient, setConvexClient] = React.useState<ConvexReactClient | null>(
+    () => (staticDemoRuntime ? null : convex),
+  );
+
+  React.useEffect(() => {
+    if (!staticDemoRuntime) return;
+    let active = true;
+    import("./lib/staticConvex").then(({ staticConvex }) => {
+      if (active) setConvexClient(staticConvex as unknown as ConvexReactClient);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (!convexClient) return <PageLoader />;
+
+  return <AppProviders client={convexClient} />;
 }
 
 function RootErrorFallback() {
@@ -192,7 +209,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Suspense fallback={<PageLoader />}>
         <Routes>
           {!staticDemoRuntime && <Route path="/" element={<LandingPage />} />}
-          <Route element={<AppProviders client={convexClient} />}>
+          <Route element={<AsyncAppProviders />}>
             {staticDemoRuntime && (
               <Route
                 path="/"
