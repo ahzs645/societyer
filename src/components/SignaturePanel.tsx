@@ -2,11 +2,12 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useCurrentUser } from "../hooks/useCurrentUser";
-import { Badge, Field } from "./ui";
+import { Field } from "./ui";
 import { useToast } from "./Toast";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Pen, Trash2 } from "lucide-react";
 import { formatDateTime } from "../lib/format";
+import { NameAutocomplete } from "./NameAutocomplete";
 
 export function SignaturePanel({
   societyId,
@@ -25,9 +26,24 @@ export function SignaturePanel({
   });
   const sign = useMutation(api.signatures.sign);
   const revoke = useMutation(api.signatures.revoke);
+  const members = useQuery(api.members.list, { societyId });
+  const directors = useQuery(api.directors.list, { societyId });
   const user = useCurrentUser();
   const toast = useToast();
   const [typedName, setTypedName] = useState("");
+
+  const nameOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const m of members ?? []) {
+      const n = `${(m as any).firstName ?? ""} ${(m as any).lastName ?? ""}`.trim();
+      if (n) names.add(n);
+    }
+    for (const d of directors ?? []) {
+      const n = `${(d as any).firstName ?? ""} ${(d as any).lastName ?? ""}`.trim();
+      if (n) names.add(n);
+    }
+    return Array.from(names).sort();
+  }, [members, directors]);
 
   const already = (signatures ?? []).find(
     (s) => s.userId === user?._id || s.signerName === typedName,
@@ -40,17 +56,9 @@ export function SignaturePanel({
           <Pen size={13} style={{ verticalAlign: -1, marginRight: 6 }} />
           {title ?? "Signatures"}
         </h3>
-        <span className="card__subtitle">
-          {(signatures ?? []).length} signature(s) on file
-        </span>
       </div>
       <div className="card__body">
-        {(signatures ?? []).length === 0 && (
-          <div className="muted" style={{ fontSize: "var(--fs-md)", marginBottom: 8 }}>
-            Nobody has signed yet. Type your full name below and click Sign.
-          </div>
-        )}
-
+        
         {(signatures ?? []).map((s) => (
           <div
             className="signature-list-row"
@@ -64,9 +72,6 @@ export function SignaturePanel({
             }}
           >
             <strong>{s.signerName}</strong>
-            {s.signerRole && <span className="muted">· {s.signerRole}</span>}
-            <Badge tone="info">{s.method}</Badge>
-            {s.demo && <Badge>demo</Badge>}
             <div className="signature-list-row__spacer" style={{ flex: 1 }} />
             <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
               {formatDateTime(s.signedAtISO)}
@@ -86,11 +91,11 @@ export function SignaturePanel({
         {!already && (
           <div className="signature-form-row">
             <Field label="Type your full name to sign">
-              <input
-                className="input"
+              <NameAutocomplete
                 value={typedName}
-                onChange={(e) => setTypedName(e.target.value)}
-                placeholder="First name Last name"
+                onChange={setTypedName}
+                options={nameOptions}
+                placeholder="FirstName LastName"
               />
             </Field>
             <button
@@ -106,6 +111,10 @@ export function SignaturePanel({
                   toast.error("Type your name to sign.");
                   return;
                 }
+                const normalized = name.toLowerCase();
+                const isDirector = (directors ?? []).some(
+                  (d: any) => `${d.firstName ?? ""} ${d.lastName ?? ""}`.trim().toLowerCase() === normalized,
+                );
                 await sign({
                   societyId,
                   entityType,
@@ -113,7 +122,7 @@ export function SignaturePanel({
                   userId: user?._id,
                   actingUserId: user._id,
                   signerName: name,
-                  signerRole: user?.role,
+                  signerRole: isDirector ? "Director" : undefined,
                   method: "typed",
                   typedName: name,
                   demo: true,

@@ -9,6 +9,7 @@ import { ArrowLeft, Database, ExternalLink, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useToast } from "../../../components/Toast";
+import { RecordTableMetadataEmpty } from "../../../components/RecordTableMetadataEmpty";
 import {
   TransactionDrawer,
   WaveAccountViewControls,
@@ -404,13 +405,7 @@ export function WaveAccountDetailPage() {
           Wave ledger/system row. Usually payable or transfer clearing internals, not a reusable transaction category.
         </Flag>
       ) : txnMetadataWarning ? (
-        <div className="record-table__empty">
-          <div className="record-table__empty-title">Metadata not seeded</div>
-          <div className="record-table__empty-desc">
-            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-            account-transaction object metadata + default view.
-          </div>
-        </div>
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="account-transaction" />
       ) : txnTableData.objectMetadata ? (
         <RecordTableScope
           tableId={`wave-account-txns-${resource._id}`}
@@ -558,13 +553,7 @@ export function WaveResourceDetailPage() {
 
       {isWaveCounterpartyResource(resource) ? (
         cpMetadataWarning ? (
-          <div className="record-table__empty">
-            <div className="record-table__empty-title">Metadata not seeded</div>
-            <div className="record-table__empty-desc">
-              Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-              counterparty-transaction object metadata + default view.
-            </div>
-          </div>
+          <RecordTableMetadataEmpty societyId={society?._id} objectLabel="counterparty-transaction" />
         ) : cpTableData.objectMetadata ? (
           <RecordTableScope
             tableId={`wave-cp-txns-${resource._id}`}

@@ -161,6 +161,26 @@ export const runForSociety = mutation({
 });
 
 /**
+ * Public, no-token version of `runForSociety`. Safe because seeding is
+ * idempotent (only inserts missing object/field/view rows) and scoped to
+ * the supplied society. Used by the in-app "Seed metadata" empty-state
+ * button so users don't have to drop to the CLI when a society is missing
+ * its metadata. Also called automatically when a new society is created.
+ */
+export const ensureForSociety = mutation({
+  args: { societyId: v.id("societies") },
+  returns: v.object({ ok: v.boolean(), objects: v.number() }),
+  handler: async (ctx, { societyId }) => {
+    const society = await ctx.db.get(societyId);
+    if (!society) throw new Error("Society not found.");
+    await seedSociety(ctx, societyId);
+    return { ok: true, objects: RECORD_TABLE_OBJECTS.length };
+  },
+});
+
+export { seedSociety };
+
+/**
  * Nukes metadata rows for testing. Leaves underlying record tables alone.
  */
 export const wipe = mutation({

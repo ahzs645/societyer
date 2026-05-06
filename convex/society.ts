@@ -3,6 +3,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { disabledModulesValidator } from "./lib/moduleSettings";
 import { assertAllowedOption } from "./lib/orgHubOptions";
+import { seedSociety } from "./seedRecordTableMetadata";
 
 export const get = query({
   args: {},
@@ -95,7 +96,12 @@ export const upsert = mutation({
       await ctx.db.patch(id, payload);
       return id;
     }
-    return await ctx.db.insert("societies", payload);
+    const newId = await ctx.db.insert("societies", payload);
+    // Seed record-table object/field/view metadata for the new society so
+    // pages that render record tables (Members, Directors, etc.) render
+    // immediately instead of showing a "Metadata not seeded" empty state.
+    await seedSociety(ctx, newId);
+    return newId;
   },
 });
 

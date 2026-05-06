@@ -8,6 +8,7 @@ import { Drawer, Field, Button, Banner, SettingsShell } from "../components/ui";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { KeyRound, Plus, Trash2, Copy, Check } from "lucide-react";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
   RecordTableScope,
@@ -188,13 +189,7 @@ export function ApiKeysPage() {
 
       <h2 style={{ marginTop: 24, fontSize: "var(--fs-md)" }}>Clients</h2>
       {clientsShowMetadataWarning ? (
-        <div className="record-table__empty">
-          <div className="record-table__empty-title">Metadata not seeded</div>
-          <div className="record-table__empty-desc">
-            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-            apiClient object metadata + default view.
-          </div>
-        </div>
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="apiClient" />
       ) : clientsTableData.objectMetadata ? (
         <RecordTableScope
           tableId="api-clients"
@@ -237,13 +232,7 @@ export function ApiKeysPage() {
       <div style={{ height: 24 }} />
       <h2 style={{ fontSize: "var(--fs-md)" }}>Tokens</h2>
       {tokensShowMetadataWarning ? (
-        <div className="record-table__empty">
-          <div className="record-table__empty-title">Metadata not seeded</div>
-          <div className="record-table__empty-desc">
-            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-            apiToken object metadata + default view.
-          </div>
-        </div>
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="apiToken" />
       ) : tokensTableData.objectMetadata ? (
         <RecordTableScope
           tableId="api-tokens"

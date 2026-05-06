@@ -11,7 +11,7 @@ import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
 import { formatDate, formatDateTime } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, ClipboardCheck, Download, ExternalLink, EyeOff, FileDown, FileText, Gavel, ListChecks, MoreHorizontal, PackageCheck, Printer, Settings2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardCheck, Download, ExternalLink, EyeOff, FileDown, FileText, Gavel, ListChecks, MoreHorizontal, PackageCheck, Printer, RotateCcw, Settings2 } from "lucide-react";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion } from "../components/MotionEditor";
 import {
   MINUTES_EXPORT_STYLES,
@@ -380,6 +380,7 @@ export function MeetingDetailPage() {
   };
 
   const markHeld = () => updateMeeting({ id: meeting._id, patch: { status: "Held" } });
+  const reopenMeeting = () => updateMeeting({ id: meeting._id, patch: { status: "Scheduled" } });
 
   const minutesRenderPayload = (redact?: (value: string) => string) => {
     if (!minutes) return null;
@@ -572,8 +573,19 @@ export function MeetingDetailPage() {
   const saveMotions = (next: Motion[]) =>
     minutes ? updateMinutes({ id: minutes._id, patch: { motions: next } }) : undefined;
 
-  const saveMinuteSections = (next: any[]) =>
-    minutes ? updateMinutes({ id: minutes._id, patch: { sections: next } }) : undefined;
+  const saveMinuteSections = async (next: any[]) => {
+    if (!minutes) return;
+    await updateMinutes({ id: minutes._id, patch: { sections: next } });
+    // Keep meeting.agendaJson in sync with section titles so the sidebar
+    // agenda card and the right-side Agenda record never drift apart.
+    const nextAgenda = next
+      .map((section: any) => String(section?.title ?? "").trim())
+      .filter(Boolean);
+    await updateMeeting({
+      id: meeting._id,
+      patch: { agendaJson: nextAgenda.length ? JSON.stringify(nextAgenda) : undefined },
+    });
+  };
 
   const sectionsFromAgenda = () =>
     agenda.map((title) => ({
@@ -910,6 +922,21 @@ export function MeetingDetailPage() {
                 </button>
               }
               sections={[
+                ...(meeting.status === "Held"
+                  ? [
+                      {
+                        id: "status",
+                        items: [
+                          {
+                            id: "reopen-meeting",
+                            label: "Reopen meeting",
+                            icon: <RotateCcw size={12} />,
+                            onSelect: reopenMeeting,
+                          },
+                        ],
+                      },
+                    ]
+                  : []),
                 {
                   id: "package",
                   items: [
@@ -1140,6 +1167,10 @@ export function MeetingDetailPage() {
             transcript={transcript}
             setTranscript={setTranscript}
             transcriptOnFile={transcriptOnFile}
+            transcriptEdit={transcriptEdit}
+            setTranscriptEdit={setTranscriptEdit}
+            saveTranscriptEditText={saveTranscriptEditText}
+            savingTranscript={savingTranscript}
             busy={busy}
             runGenerate={runGenerate}
           />

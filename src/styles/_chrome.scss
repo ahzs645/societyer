@@ -19,10 +19,12 @@
   padding: 0 8px;
   border-radius: var(--r-sm);
   font-size: var(--fs-sm);
+  line-height: 1;
   font-weight: 500;
   color: var(--text-secondary);
   border: 1px solid var(--border);
   background: transparent;
+  white-space: nowrap;
   transition: background 0.08s ease, color 0.08s ease;
 }
 .btn-action:hover { background: var(--bg-hover); color: var(--text-primary); }

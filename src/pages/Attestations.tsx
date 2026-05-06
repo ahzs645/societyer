@@ -8,6 +8,7 @@ import { Badge, Drawer, Field, Flag, InspectorNote, RecordChip } from "../compon
 import { ShieldCheck, PenLine } from "lucide-react";
 import { formatDate, initials } from "../lib/format";
 import { DIRECTOR_ATTESTATION_COPY, LEGAL_COPY_REVIEWED } from "../lib/legalCopy";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
   RecordTableScope,
@@ -126,13 +127,7 @@ export function AttestationsPage() {
       )}
 
       {showMetadataWarning ? (
-        <div className="record-table__empty">
-          <div className="record-table__empty-title">Metadata not seeded</div>
-          <div className="record-table__empty-desc">
-            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-            director-attestation object metadata + default view.
-          </div>
-        </div>
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="director-attestation" />
       ) : tableData.objectMetadata ? (
         <RecordTableScope
           tableId="attestations"

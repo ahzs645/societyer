@@ -22,7 +22,7 @@ export function AttendanceDetails({
 }) {
   const rows = [
     ...present.map((name) => ({ status: "Present", ...parseAttendanceName(name) })),
-    ...absent.map((name) => ({ status: "Absent / regrets", ...parseAttendanceName(name) })),
+    ...absent.map((name) => ({ status: "Absent / Regrets", ...parseAttendanceName(name) })),
   ];
 
   if (rows.length === 0) {
@@ -38,7 +38,7 @@ export function AttendanceDetails({
       <summary>
         <span>Attendance list</span>
         <span className="muted">
-          {present.length} present · {absent.length} absent/regrets
+          {present.length} present · {absent.length} Absent/Regrets
         </span>
       </summary>
       <div className="attendance-table-wrap">

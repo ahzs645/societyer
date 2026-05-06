@@ -9,6 +9,7 @@ import { DataTable } from "../components/DataTable";
 import { Modal } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Tabs } from "../components/primitives";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
   RecordTableScope,
@@ -388,13 +389,7 @@ export function OrganizationHistoryPage() {
             </div>
           </div>
           {!factsTableData.loading && !factsTableData.objectMetadata ? (
-            <div className="record-table__empty">
-              <div className="record-table__empty-title">Metadata not seeded</div>
-              <div className="record-table__empty-desc">
-                Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-                profile-fact object metadata + default view.
-              </div>
-            </div>
+            <RecordTableMetadataEmpty societyId={society?._id} objectLabel="profile-fact" />
           ) : factsTableData.objectMetadata ? (
             <RecordTableScope
               tableId="profileFacts"

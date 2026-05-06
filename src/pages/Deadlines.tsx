@@ -11,6 +11,7 @@ import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
 import { Plus, Trash2, Calendar } from "lucide-react";
 import { patchInList } from "../lib/optimistic";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
   RecordTableScope,
@@ -97,13 +98,7 @@ export function DeadlinesPage() {
 
       {view === "list" && (
         showMetadataWarning ? (
-          <div className="record-table__empty">
-            <div className="record-table__empty-title">Metadata not seeded</div>
-            <div className="record-table__empty-desc">
-              Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-              deadline object metadata + default view.
-            </div>
-          </div>
+          <RecordTableMetadataEmpty societyId={society?._id} objectLabel="deadline" />
         ) : tableData.objectMetadata ? (
           <RecordTableScope
             tableId="deadlines"

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { ChevronDown, ClipboardList, FileText, MinusCircle, Plus, Save, Sparkles, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, ChevronDown, ClipboardList, FileText, Mic, MinusCircle, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { Badge, Field } from "../../../components/ui";
 import { Checkbox } from "../../../components/Controls";
 import { LegalGuideInline } from "../../../components/LegalGuide";
@@ -34,6 +34,10 @@ export function MeetingMinutesColumn({
   transcript,
   setTranscript,
   transcriptOnFile,
+  transcriptEdit,
+  setTranscriptEdit,
+  saveTranscriptEditText,
+  savingTranscript,
   busy,
   runGenerate,
 }: {
@@ -58,6 +62,10 @@ export function MeetingMinutesColumn({
   transcript: string;
   setTranscript: (value: string) => void;
   transcriptOnFile: string;
+  transcriptEdit: string | null;
+  setTranscriptEdit: (value: string | null) => void;
+  saveTranscriptEditText: () => Promise<void> | void;
+  savingTranscript: boolean;
   busy: boolean;
   runGenerate: () => void | Promise<void>;
 }) {
@@ -66,13 +74,139 @@ export function MeetingMinutesColumn({
   const sectionsWithDetailCount = sections.filter((section: any) =>
     section?.discussion ||
     section?.presenter ||
-    section?.reportSubmitted ||
     (section?.decisions ?? []).length ||
     (section?.actionItems ?? []).length
   ).length;
   const [sectionEditIndex, setSectionEditIndex] = useState<number | null>(null);
   const [sectionDraft, setSectionDraft] = useState<SectionDraft | null>(null);
   const [sectionEditorTab, setSectionEditorTab] = useState<SectionEditorTab>("notes");
+  const [agendaDeleteIndex, setAgendaDeleteIndex] = useState<number | null>(null);
+  const [sectionDeleteIndex, setSectionDeleteIndex] = useState<number | null>(null);
+  const [newAgendaIndices, setNewAgendaIndices] = useState<Set<number>>(() => new Set());
+  const agendaInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const pendingFocusIndex = useRef<number | null>(null);
+  const sectionTitleRef = useRef<HTMLInputElement | null>(null);
+  const focusSectionTitleOnEdit = useRef(false);
+
+  useEffect(() => {
+    if (agendaEdit === null) setNewAgendaIndices(new Set());
+  }, [agendaEdit]);
+
+  useEffect(() => {
+    if (pendingFocusIndex.current == null) return;
+    const target = agendaInputRefs.current[pendingFocusIndex.current];
+    pendingFocusIndex.current = null;
+    target?.focus();
+  });
+
+  useEffect(() => {
+    if (!focusSectionTitleOnEdit.current) return;
+    if (sectionEditIndex == null) return;
+    const node = sectionTitleRef.current;
+    if (!node) return;
+    focusSectionTitleOnEdit.current = false;
+    node.focus();
+    node.select();
+  });
+
+  const addSection = async () => {
+    const newIndex = sections.length;
+    const next = [
+      ...sections,
+      {
+        title: "New section",
+        type: "discussion",
+        discussion: "",
+        decisions: [],
+        actionItems: [],
+      },
+    ];
+    await saveMinuteSections(next);
+    setOpenSectionIndexes((current) => new Set(current).add(newIndex));
+    focusSectionTitleOnEdit.current = true;
+    setSectionEditIndex(newIndex);
+    setSectionEditorTab("notes");
+    setSectionDraft({
+      title: "New section",
+      type: "discussion",
+      presenter: "",
+      discussion: "",
+      decisions: "",
+      actionItems: [],
+    });
+  };
+
+  const removeSection = async (index: number) => {
+    const removed = sections[index];
+    const removedTitle = String(removed?.title ?? "").trim().toLowerCase();
+    const next = sections.slice();
+    next.splice(index, 1);
+    await saveMinuteSections(next);
+
+    // Motions live on minutes.motions, not inside the section, so we have to
+    // clean them up explicitly: drop motions assigned to the removed section
+    // and shift sectionIndex down by one for motions on later sections.
+    const cleanedMotions = motions
+      .filter((motion) => {
+        if (motion.sectionIndex === index) return false;
+        if (
+          motion.sectionTitle &&
+          String(motion.sectionTitle).trim().toLowerCase() === removedTitle &&
+          (motion.sectionIndex == null || motion.sectionIndex === index)
+        ) return false;
+        return true;
+      })
+      .map((motion) =>
+        motion.sectionIndex != null && motion.sectionIndex > index
+          ? { ...motion, sectionIndex: motion.sectionIndex - 1 }
+          : motion,
+      );
+    const motionsChanged =
+      cleanedMotions.length !== motions.length ||
+      cleanedMotions.some((m, i) => m !== motions[i]);
+    if (motionsChanged) await saveMinuteMotions(cleanedMotions);
+
+    setSectionDeleteIndex(null);
+    if (sectionEditIndex === index) {
+      setSectionEditIndex(null);
+      setSectionDraft(null);
+    }
+  };
+
+  const agendaItems = agendaEdit === null ? [] : agendaEdit.split(/\r?\n/);
+  const writeAgendaItems = (next: string[]) => setAgendaEdit(next.join("\n"));
+  const updateAgendaItem = (index: number, value: string) => {
+    const next = agendaItems.slice();
+    next[index] = value;
+    writeAgendaItems(next);
+  };
+  const addAgendaItem = (afterIndex?: number) => {
+    const next = agendaItems.slice();
+    const insertAt = afterIndex == null ? next.length : afterIndex + 1;
+    next.splice(insertAt, 0, "");
+    writeAgendaItems(next);
+    setNewAgendaIndices((prev) => {
+      const out = new Set<number>();
+      for (const i of prev) out.add(i >= insertAt ? i + 1 : i);
+      out.add(insertAt);
+      return out;
+    });
+    pendingFocusIndex.current = insertAt;
+  };
+  const removeAgendaItem = (index: number) => {
+    const next = agendaItems.slice();
+    next.splice(index, 1);
+    writeAgendaItems(next);
+    setAgendaDeleteIndex(null);
+    setNewAgendaIndices((prev) => {
+      const out = new Set<number>();
+      for (const i of prev) {
+        if (i === index) continue;
+        out.add(i > index ? i - 1 : i);
+      }
+      return out;
+    });
+  };
   const [openSectionIndexes, setOpenSectionIndexes] = useState<Set<number>>(() => new Set([0, 1]));
   const motionPeople = useMemo(() => personLinkCandidates(members, directors), [members, directors]);
   const assigneeOptions = useMemo(
@@ -122,7 +256,6 @@ export function MeetingMinutesColumn({
       discussion: section.discussion ?? "",
       decisions: (section.decisions ?? []).join("\n"),
       actionItems: normalizeActionDrafts(section.actionItems ?? []),
-      reportSubmitted: !!section.reportSubmitted,
     });
   };
 
@@ -144,7 +277,6 @@ export function MeetingMinutesColumn({
           done: !!item.done,
         }))
         .filter((item) => item.text),
-      reportSubmitted: sectionDraft.reportSubmitted || undefined,
     };
     await saveMinuteSections(next);
     setSectionEditIndex(null);
@@ -221,6 +353,50 @@ export function MeetingMinutesColumn({
     });
   };
 
+  if (transcriptEdit !== null) {
+    return (
+      <div className="meeting-minutes-layout meeting-minutes-layout--transcript-focus">
+        <div className="card meeting-minutes-transcript-focus">
+          <div className="card__head">
+            <h2 className="card__title">
+              <Mic size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+              Edit transcript
+            </h2>
+            <span className="card__subtitle">
+              {transcriptEdit.length.toLocaleString()} characters
+              {transcriptOnFile ? ` · ${transcriptOnFile.length.toLocaleString()} on file` : ""}
+            </span>
+            <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+              <button
+                className="btn-action"
+                disabled={savingTranscript}
+                onClick={() => setTranscriptEdit(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-action btn-action--primary"
+                disabled={savingTranscript}
+                onClick={() => { void saveTranscriptEditText(); }}
+              >
+                <Save size={12} /> {savingTranscript ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+          <div className="card__body">
+            <textarea
+              className="textarea meeting-minutes-transcript-focus__editor"
+              value={transcriptEdit}
+              onChange={(event) => setTranscriptEdit(event.target.value)}
+              placeholder="Paste or type the meeting transcript here."
+              autoFocus
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="meeting-minutes-layout">
       <aside className="meeting-minutes-side">
@@ -232,28 +408,31 @@ export function MeetingMinutesColumn({
             </span>
             <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
               {agendaEdit === null ? (
-                <button className="btn-action" onClick={() => setAgendaEdit(agenda.join("\n"))}>
-                  Edit
+                <button
+                  className="btn-action btn-action--icon"
+                  onClick={() => setAgendaEdit(agenda.join("\n"))}
+                  title="Edit agenda"
+                  aria-label="Edit agenda"
+                >
+                  <Pencil size={12} />
                 </button>
               ) : (
                 <>
                   <button
-                    className="btn-action"
-                    onClick={() =>
-                      setAgendaEdit(
-                        (agendaEdit ?? "")
-                          .split(/\r?\n/)
-                          .filter((line) => line.trim())
-                          .join("\n"),
-                      )
-                    }
-                    title="Strip blank lines from the agenda — leaves filled items as-is"
+                    className="btn-action btn-action--icon"
+                    onClick={() => { setAgendaEdit(null); setAgendaDeleteIndex(null); }}
+                    title="Cancel"
+                    aria-label="Cancel"
                   >
-                    <Trash2 size={12} /> Remove empty
+                    <X size={12} />
                   </button>
-                  <button className="btn-action" onClick={() => setAgendaEdit(null)}>Cancel</button>
-                  <button className="btn-action btn-action--primary" onClick={saveAgenda}>
-                    <Save size={12} /> Save
+                  <button
+                    className="btn-action btn-action--icon btn-action--primary"
+                    onClick={() => { setAgendaDeleteIndex(null); void saveAgenda(); }}
+                    title="Save agenda"
+                    aria-label="Save agenda"
+                  >
+                    <Save size={12} />
                   </button>
                 </>
               )}
@@ -261,16 +440,52 @@ export function MeetingMinutesColumn({
           </div>
           <div className="card__body">
             {agendaEdit !== null ? (
-              <Field label="Agenda items" hint="One item per line. These are stored on the meeting record and can be changed without changing the source document.">
-                <textarea
-                  className="textarea"
-                  rows={Math.max(8, Math.min(agenda.length + 2, 14))}
-                  value={agendaEdit}
-                  onChange={(event) => setAgendaEdit(event.target.value)}
-                  placeholder="Call to order&#10;Confirm attendance and quorum&#10;Approve agenda"
-                  style={{ resize: "none" }}
-                />
-              </Field>
+              <div className="meeting-minutes-agenda-editor">
+                {agendaItems.length === 0 && (
+                  <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                    No agenda items yet. Click Add item to start.
+                  </div>
+                )}
+                {agendaItems.map((item, index) => {
+                  const isNew = newAgendaIndices.has(index);
+                  return (
+                    <div className={`meeting-minutes-agenda-editor__row${isNew ? "" : " is-locked"}`} key={index}>
+                      <input
+                        ref={(el) => { agendaInputRefs.current[index] = el; }}
+                        className="input"
+                        value={item}
+                        onChange={(event) => updateAgendaItem(index, event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            addAgendaItem(index);
+                          }
+                        }}
+                        placeholder={index === 0 ? "Call to order" : "Agenda item"}
+                      />
+                      {isNew && (
+                        <button
+                          className="btn-action btn-action--icon"
+                          type="button"
+                          tabIndex={-1}
+                          title="Remove item"
+                          aria-label="Remove item"
+                          onClick={() => removeAgendaItem(index)}
+                        >
+                          <MinusCircle size={12} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+                <button
+                  className="btn-action"
+                  type="button"
+                  onClick={() => addAgendaItem()}
+                >
+                  <Plus size={12} /> Add item
+                </button>
+              </div>
             ) : (
               <>
                 {agenda.length > 0 ? (
@@ -301,6 +516,39 @@ export function MeetingMinutesColumn({
                   </details>
                 )}
               </>
+            )}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card__head">
+            <h2 className="card__title">
+              <Mic size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />
+              Transcript
+            </h2>
+            <span className="card__subtitle">
+              {transcriptOnFile
+                ? `${transcriptOnFile.length.toLocaleString()} characters on file`
+                : "No transcript on file"}
+            </span>
+            <div style={{ marginLeft: "auto" }}>
+              <button
+                className="btn-action btn-action--icon"
+                onClick={() => setTranscriptEdit(transcriptOnFile)}
+                title={transcriptOnFile ? "Edit transcript" : "Add transcript"}
+                aria-label={transcriptOnFile ? "Edit transcript" : "Add transcript"}
+              >
+                {transcriptOnFile ? <Pencil size={12} /> : <Plus size={12} />}
+              </button>
+            </div>
+          </div>
+          <div className="card__body">
+            {transcriptOnFile ? (
+              <pre className="meeting-transcript-preview">{transcriptOnFile}</pre>
+            ) : (
+              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+               
+              </div>
             )}
           </div>
         </div>
@@ -348,7 +596,7 @@ export function MeetingMinutesColumn({
                       {quorumSnapshot.required != null && (
                         <Badge tone="neutral">{quorumSnapshot.required} required</Badge>
                       )}
-                      <Badge tone="neutral">{minutes.absent.length} absent/regrets</Badge>
+                      <Badge tone="neutral">{minutes.absent.length} Absent/Regrets</Badge>
                       {quorumSnapshot.label && (
                         <span className="muted" style={{ flexBasis: "100%", fontSize: "var(--fs-sm)" }}>
                           Rule: {quorumSnapshot.label}
@@ -432,11 +680,24 @@ export function MeetingMinutesColumn({
                     <span className="card__subtitle">
                       {sections.length ? `${sectionsWithDetailCount}/${sections.length} detailed` : "No sections"}
                     </span>
-                    {!sections.length && agenda.length > 0 && (
-                      <button className="btn-action btn-action--primary" type="button" onClick={createMinutesFromAgenda}>
-                        <ClipboardList size={12} /> Create from agenda
-                      </button>
-                    )}
+                    <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                      {!sections.length && agenda.length > 0 && (
+                        <button className="btn-action btn-action--primary" type="button" onClick={createMinutesFromAgenda}>
+                          <ClipboardList size={12} /> Create from agenda
+                        </button>
+                      )}
+                      {sections.length > 0 && (
+                        <button
+                          className="btn-action btn-action--icon"
+                          type="button"
+                          title="Add section"
+                          aria-label="Add section"
+                          onClick={addSection}
+                        >
+                          <Plus size={12} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="card__body">
                     {sections.length ? (
@@ -457,9 +718,55 @@ export function MeetingMinutesColumn({
                               <span className="meeting-minutes-section-item__meta">
                                 {sectionSummaryMeta(section, motionMatchesBySection[index]?.length ?? 0)}
                               </span>
+                              <button
+                                className="btn-action btn-action--icon"
+                                type="button"
+                                title="Remove section"
+                                aria-label="Remove section"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  const isEmpty =
+                                    !section?.discussion &&
+                                    !section?.presenter &&
+                                    !(section?.decisions ?? []).length &&
+                                    !(section?.actionItems ?? []).length &&
+                                    !(motionMatchesBySection[index]?.length);
+                                  if (isEmpty) {
+                                    removeSection(index);
+                                    return;
+                                  }
+                                  setOpenSectionIndexes((current) => new Set(current).add(index));
+                                  setSectionDeleteIndex(index);
+                                }}
+                              >
+                                <MinusCircle size={12} />
+                              </button>
                             </summary>
 
                             <div className="meeting-minutes-section-item__body">
+                              {sectionDeleteIndex === index && (
+                                <div className="meeting-minutes-agenda-editor__confirm" role="alertdialog" style={{ marginBottom: 12 }}>
+                                  <AlertTriangle size={12} aria-hidden="true" />
+                                  <span>
+                                    Delete "{section.title || "Untitled section"}"? Notes, decisions, and action items in this section will be removed.
+                                  </span>
+                                  <button
+                                    className="btn-action btn-action--danger"
+                                    type="button"
+                                    onClick={() => removeSection(index)}
+                                  >
+                                    Delete section
+                                  </button>
+                                  <button
+                                    className="btn-action"
+                                    type="button"
+                                    onClick={() => setSectionDeleteIndex(null)}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              )}
                               {sectionEditIndex === index && sectionDraft ? (() => {
                                 const motionRows = motions
                                   .map((motion, motionIndex) => ({
@@ -475,7 +782,12 @@ export function MeetingMinutesColumn({
                                   <div className="meeting-minutes-section-editor">
                                     <div className="meeting-minutes-section-editor__top">
                                       <Field label="Title">
-                                        <input className="input" value={sectionDraft.title} onChange={(event) => setSectionDraft({ ...sectionDraft, title: event.target.value })} />
+                                        <input
+                                          ref={sectionEditIndex === index ? sectionTitleRef : undefined}
+                                          className="input"
+                                          value={sectionDraft.title}
+                                          onChange={(event) => setSectionDraft({ ...sectionDraft, title: event.target.value })}
+                                        />
                                       </Field>
                                       <Field label="Type">
                                         <select className="input" value={sectionDraft.type} onChange={(event) => setSectionDraft({ ...sectionDraft, type: event.target.value })}>
@@ -487,7 +799,12 @@ export function MeetingMinutesColumn({
                                         </select>
                                       </Field>
                                       <Field label="Presenter">
-                                        <input className="input" value={sectionDraft.presenter} onChange={(event) => setSectionDraft({ ...sectionDraft, presenter: event.target.value })} />
+                                        <NameAutocomplete
+                                          value={sectionDraft.presenter}
+                                          onChange={(next) => setSectionDraft({ ...sectionDraft, presenter: next })}
+                                          options={assigneeOptions}
+                                          placeholder="Type a name and press Enter…"
+                                        />
                                       </Field>
                                     </div>
 
@@ -514,16 +831,9 @@ export function MeetingMinutesColumn({
                                             placeholder="- **Expenses incurred by Ahmad:**&#10;  - $80.00 for notary signing&#10;  - $33.01 for posters&#10;- Receipts are recorded on Teams under Expenses."
                                           />
                                         </Field>
-                                        <div className="meeting-minutes-section-editor__note-options">
-                                          <Field label="Decisions" hint="One per line.">
-                                            <textarea className="textarea" rows={3} value={sectionDraft.decisions} onChange={(event) => setSectionDraft({ ...sectionDraft, decisions: event.target.value })} />
-                                          </Field>
-                                          <Checkbox
-                                            checked={sectionDraft.reportSubmitted}
-                                            onChange={(reportSubmitted) => setSectionDraft({ ...sectionDraft, reportSubmitted })}
-                                            label="Report submitted"
-                                          />
-                                        </div>
+                                        <Field label="Decisions" hint="One per line.">
+                                          <textarea className="textarea" rows={8} value={sectionDraft.decisions} onChange={(event) => setSectionDraft({ ...sectionDraft, decisions: event.target.value })} />
+                                        </Field>
                                       </div>
                                     )}
 
@@ -609,11 +919,6 @@ export function MeetingMinutesColumn({
                                                     onChange={(event) => updateActionDraft(actionIndex, { dueDate: event.target.value })}
                                                   />
                                                 </Field>
-                                                <Checkbox
-                                                  checked={item.done}
-                                                  onChange={(done) => updateActionDraft(actionIndex, { done })}
-                                                  label="Done"
-                                                />
                                                 <button className="btn-action" type="button" title="Remove action" onClick={() => removeActionDraft(actionIndex)}>
                                                   <Trash2 size={12} />
                                                 </button>
@@ -640,7 +945,6 @@ export function MeetingMinutesColumn({
                               })() : (
                                 <>
                                   {section.presenter && <p><strong>Presenter:</strong> {section.presenter}</p>}
-                                  {section.reportSubmitted && <p><strong>Report:</strong> submitted</p>}
                                   {section.discussion ? (
                                     <div className="meeting-minutes-section-markdown">
                                       {renderMinutesMarkdown(section.discussion)}
@@ -719,48 +1023,42 @@ export function MeetingMinutesColumn({
         ) : (
           <div className="card">
             <div className="card__head">
-              <h2 className="card__title">Generate minutes</h2>
+              <h2 className="card__title">Agenda record</h2>
               <span className="card__subtitle">
-                {transcriptOnFile
-                  ? "Use the saved transcript below, or paste rough notes to override it for this draft."
-                  : "Paste a rough transcript or notes — the AI helper will structure them."}
+                {agenda.length
+                  ? `${agenda.length} agenda item${agenda.length === 1 ? "" : "s"} ready to become sections`
+                  : "Add agenda items in the sidebar to start"}
               </span>
+              {agenda.length > 0 && (
+                <button className="btn-action btn-action--primary" type="button" onClick={createMinutesFromAgenda}>
+                  <ClipboardList size={12} /> Create from agenda
+                </button>
+              )}
             </div>
             <div className="card__body col" style={{ gap: 16 }}>
-              {agenda.length > 0 && (
-                <div className="panel" style={{ padding: 12, borderRadius: 8 }}>
-                  <div className="row" style={{ justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
-                    <div>
-                      <strong>Start from agenda</strong>
-                      <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>
-                        Create a minutes draft with {agenda.length} agenda section{agenda.length === 1 ? "" : "s"} ready for notes, motions, decisions, and actions.
+              {agenda.length > 0 ? (
+                <div className="meeting-minutes-section-list">
+                  {agenda.map((item, index) => (
+                    <div className="meeting-minutes-section-item" key={index}>
+                      <div className="meeting-minutes-section-item__summary">
+                        <span className="meeting-minutes-section-item__title">
+                          <strong>{index + 1}. {item || "Untitled item"}</strong>
+                        </span>
+                        <span className="meeting-minutes-section-item__meta muted">Pending</span>
                       </div>
                     </div>
-                    <button className="btn-action btn-action--primary" type="button" onClick={createMinutesFromAgenda}>
-                      <ClipboardList size={12} /> Create minutes from agenda
-                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="meeting-package-empty">
+                  <ClipboardList size={14} />
+                  <div>
+                    <strong>No agenda yet.</strong>
+                    <p>Add agenda items in the Agenda card on the left, then click Create from agenda to start the minutes record.</p>
                   </div>
                 </div>
               )}
-              <Field label="Raw transcript / rough notes">
-                <textarea
-                  className="textarea"
-                  style={{ minHeight: 200 }}
-                  value={transcript}
-                  onChange={(e) => setTranscript(e.target.value)}
-                  placeholder="e.g.&#10;Meeting opened at 7:02pm by Elena. Quorum met.&#10;Treasurer reported Q1 revenue up 8%.&#10;Motion by Jordan to approve Q1 statements, seconded by Priya. Carried 6-0.&#10;Action: Amara to draft fundraising plan by March 1."
-                />
-              </Field>
-              <button
-                className="btn btn--accent"
-                disabled={(!transcript.trim() && !transcriptOnFile.trim()) || busy}
-                onClick={runGenerate}
-              >
-                <Sparkles size={14} /> {busy ? "Generating…" : transcriptOnFile && !transcript.trim() ? "Generate from saved transcript" : "Generate draft minutes"}
-              </button>
-              <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 8 }}>
-                Demo uses a heuristic parser. Wire to an LLM in <code className="mono">convex/minutes.ts</code> for production.
-              </div>
+
             </div>
           </div>
         )}
@@ -776,7 +1074,6 @@ type SectionDraft = {
   discussion: string;
   decisions: string;
   actionItems: SectionActionDraft[];
-  reportSubmitted: boolean;
 };
 
 type SectionEditorTab = "notes" | "motions" | "actions";
@@ -1105,7 +1402,6 @@ function assignedSectionIndexForMotion(motion: Motion, sections: any[]): number 
 
 function sectionSummaryMeta(section: any, motionCount: number) {
   const parts = [
-    section?.type,
     motionCount ? `${motionCount} motion${motionCount === 1 ? "" : "s"}` : "",
     (section?.decisions ?? []).length ? `${section.decisions.length} decision${section.decisions.length === 1 ? "" : "s"}` : "",
     (section?.actionItems ?? []).length ? `${section.actionItems.length} action${section.actionItems.length === 1 ? "" : "s"}` : "",

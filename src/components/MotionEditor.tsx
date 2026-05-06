@@ -114,8 +114,7 @@ function VoteProgress({ motion }: { motion: Motion }) {
   const a = motion.votesAgainst ?? 0;
   const s = motion.abstentions ?? 0;
   const total = f + a + s;
-  if (total === 0) return null;
-  const pct = (n: number) => (n / total) * 100;
+  const pct = (n: number) => (total === 0 ? 0 : (n / total) * 100);
   return (
     <div style={{ marginTop: 6 }}>
       <div
@@ -133,7 +132,9 @@ function VoteProgress({ motion }: { motion: Motion }) {
         {a > 0 && <div style={{ width: `${pct(a)}%`, background: "var(--danger)" }} />}
       </div>
       <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 2 }}>
-        For {f} · Against {a} · Abstain {s} · ({total} voting)
+        {total === 0
+          ? "No votes recorded yet"
+          : `For ${f} · Against ${a} · Abstain ${s} · (${total} voting)`}
       </div>
     </div>
   );

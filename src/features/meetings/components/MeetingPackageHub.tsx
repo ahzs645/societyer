@@ -67,7 +67,7 @@ export function MeetingPackageHub({
   sendPackageBackToReview: () => void | Promise<void>;
   removeMeetingMaterial: (args: { id: any }) => void | Promise<void>;
 }) {
-  const topics = agenda.length ? agenda : ["General materials"];
+  const topics = Array.from(new Set(agenda.length ? agenda : ["General materials"]));
   const materialsForTopic = (topic: string) =>
     packageMaterials.filter((material: any) => (material.agendaLabel || "General materials") === topic);
   const topicsWithMaterials = topics.filter((topic) => materialsForTopic(topic).length > 0);
@@ -99,7 +99,7 @@ export function MeetingPackageHub({
           </div>
         </div>
         <div className="card__body meeting-package-body">
-          <div className="meeting-package-grid">
+          <div className="meeting-package-stack">
           <div className="panel meeting-package-gate">
             <div className="row" style={{ gap: 8, justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap" }}>
               <div>
@@ -112,7 +112,11 @@ export function MeetingPackageHub({
                 </div>
               </div>
               <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                <Badge tone={sourceReviewTone(sourceReviewStatus)}>{sourceReviewLabel(sourceReviewStatus)}</Badge>
+                {(sourceReviewStatus === "imported_needs_review" ||
+                  sourceReviewStatus === "rejected" ||
+                  sourceReviewStatus === "source_reviewed") && (
+                  <Badge tone={sourceReviewTone(sourceReviewStatus)}>{sourceReviewLabel(sourceReviewStatus)}</Badge>
+                )}
                 <Badge tone={packageReviewTone(packageReviewStatus)}>{packageReviewLabel(packageReviewStatus)}</Badge>
                 {packageReviewBlockers.length > 0 && (
                   <Badge tone="warn">
@@ -123,107 +127,108 @@ export function MeetingPackageHub({
               </div>
             </div>
 
-            <div className="meeting-package-review-grid">
-              <div className="col" style={{ gap: 8 }}>
-                <Detail label="Source review">
-                  <Badge tone={sourceReviewTone(sourceReviewStatus)}>{sourceReviewLabel(sourceReviewStatus)}</Badge>
-                </Detail>
-                {(meeting.sourceReviewNotes || minutes?.sourceReviewNotes) && (
-                  <div className="muted" style={{ fontSize: "var(--fs-sm)", whiteSpace: "pre-wrap" }}>
-                    {meeting.sourceReviewNotes ?? minutes?.sourceReviewNotes}
+            <div className="meeting-package-drawers">
+              {(sourceReviewStatus === "imported_needs_review" ||
+                sourceReviewStatus === "rejected" ||
+                sourceReviewStatus === "source_reviewed" ||
+                !!meeting.sourceReviewNotes ||
+                !!minutes?.sourceReviewNotes) && (
+                <details className="meeting-package-drawer">
+                  <summary className="meeting-package-drawer__summary">
+                    <span className="meeting-package-drawer__title">Source review</span>
+                    <Badge tone={sourceReviewTone(sourceReviewStatus)}>{sourceReviewLabel(sourceReviewStatus)}</Badge>
+                  </summary>
+                  <div className="meeting-package-drawer__body">
+                    {(meeting.sourceReviewNotes || minutes?.sourceReviewNotes) && (
+                      <div className="muted" style={{ fontSize: "var(--fs-sm)", whiteSpace: "pre-wrap" }}>
+                        {meeting.sourceReviewNotes ?? minutes?.sourceReviewNotes}
+                      </div>
+                    )}
+                    {(sourceReviewStatus === "imported_needs_review" || sourceReviewStatus === "rejected") && (
+                      <>
+                        <textarea
+                          className="textarea"
+                          rows={2}
+                          value={sourceReviewNote}
+                          onChange={(event) => setSourceReviewNote(event.target.value)}
+                          placeholder="Review note"
+                        />
+                        <button className="btn-action btn-action--primary" onClick={completeSourceReview}>
+                          <ShieldCheck size={12} /> Mark source reviewed
+                        </button>
+                      </>
+                    )}
+                    {sourceReviewStatus === "source_reviewed" && (
+                      <button className="btn-action" onClick={reopenSourceReview}>
+                        Reopen source review
+                      </button>
+                    )}
                   </div>
-                )}
-                {sourceReviewStatus === "imported_needs_review" || sourceReviewStatus === "rejected" ? (
-                  <>
-                    <textarea
-                      className="textarea"
-                      rows={2}
-                      value={sourceReviewNote}
-                      onChange={(event) => setSourceReviewNote(event.target.value)}
-                      placeholder="Review note"
-                    />
-                    <button className="btn-action btn-action--primary" onClick={completeSourceReview}>
-                      <ShieldCheck size={12} /> Mark source reviewed
-                    </button>
-                  </>
-                ) : sourceReviewStatus === "source_reviewed" ? (
-                  <button className="btn-action" onClick={reopenSourceReview}>
-                    Reopen source review
-                  </button>
-                ) : (
-                  <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>No imported source review is open.</div>
-                )}
-              </div>
+                </details>
+              )}
 
-              <div className="col" style={{ gap: 8 }}>
-                <Detail label="Package review">
+              <details className="meeting-package-drawer" open={packageReviewBlockers.length > 0}>
+                <summary className="meeting-package-drawer__summary">
+                  <span className="meeting-package-drawer__title">Package review</span>
                   <Badge tone={packageReviewTone(packageReviewStatus)}>{packageReviewLabel(packageReviewStatus)}</Badge>
-                </Detail>
-                {packageReviewBlockers.length > 0 ? (
-                  <ul style={{ margin: 0, paddingLeft: 18, color: "var(--text-secondary)", fontSize: "var(--fs-sm)" }}>
-                    {packageReviewBlockers.slice(0, 4).map((blocker) => <li key={blocker}>{blocker}</li>)}
-                  </ul>
-                ) : (
-                  <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>No package blockers detected.</div>
-                )}
-                {meeting.packageReviewNotes && (
-                  <div className="muted" style={{ fontSize: "var(--fs-sm)", whiteSpace: "pre-wrap" }}>{meeting.packageReviewNotes}</div>
-                )}
-                <textarea
-                  className="textarea"
-                  rows={2}
-                  value={packageReviewNote}
-                  onChange={(event) => setPackageReviewNote(event.target.value)}
-                  placeholder="Package review note"
-                />
-                <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                  <button
-                    className="btn-action btn-action--primary"
-                    onClick={markPackageReady}
-                    disabled={packageReviewBlockers.length > 0}
-                  >
-                    <ClipboardCheck size={12} /> Mark package ready
-                  </button>
-                  {packageReviewStatus === "ready" || packageReviewStatus === "released" ? (
-                    <button className="btn-action" onClick={sendPackageBackToReview}>Return to review</button>
-                  ) : null}
+                </summary>
+                <div className="meeting-package-drawer__body">
+                  {packageReviewBlockers.length > 0 ? (
+                    <ul style={{ margin: 0, paddingLeft: 18, color: "var(--text-secondary)", fontSize: "var(--fs-sm)" }}>
+                      {packageReviewBlockers.slice(0, 4).map((blocker) => <li key={blocker}>{blocker}</li>)}
+                    </ul>
+                  ) : (
+                    <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>No package blockers detected.</div>
+                  )}
+                  {meeting.packageReviewNotes && (
+                    <div className="muted" style={{ fontSize: "var(--fs-sm)", whiteSpace: "pre-wrap" }}>{meeting.packageReviewNotes}</div>
+                  )}
+                  <textarea
+                    className="textarea"
+                    rows={2}
+                    value={packageReviewNote}
+                    onChange={(event) => setPackageReviewNote(event.target.value)}
+                    placeholder="Package review note"
+                  />
+                  <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                    <button
+                      className="btn-action btn-action--primary"
+                      onClick={markPackageReady}
+                      disabled={packageReviewBlockers.length > 0}
+                    >
+                      <ClipboardCheck size={12} /> Mark package ready
+                    </button>
+                    {(packageReviewStatus === "ready" || packageReviewStatus === "released") && (
+                      <button className="btn-action" onClick={sendPackageBackToReview}>Return to review</button>
+                    )}
+                  </div>
                 </div>
-              </div>
+              </details>
+
+              {joinDetails.url && (
+                <a className="btn btn--accent btn--sm meeting-package-join" href={joinDetails.url} target="_blank" rel="noreferrer">
+                  <ExternalLink size={12} /> Join meeting
+                </a>
+              )}
+
+              {openPackageTasks.length > 0 && (
+                <details className="meeting-package-drawer">
+                  <summary className="meeting-package-drawer__summary">
+                    <span className="meeting-package-drawer__title">Open actions</span>
+                    <Badge tone="warn">{openPackageTasks.length}</Badge>
+                  </summary>
+                  <div className="meeting-package-drawer__body">
+                    {openPackageTasks.slice(0, 5).map((task: any) => (
+                      <Link key={task._id} to="/app/tasks" className="row" style={{ gap: 6 }}>
+                        <Badge tone={task.priority === "High" ? "danger" : task.priority === "Medium" ? "warn" : "neutral"}>{task.priority}</Badge>
+                        <span>{task.title}</span>
+                      </Link>
+                    ))}
+                  </div>
+                </details>
+              )}
             </div>
           </div>
-
-          <div className="col" style={{ gap: 10 }}>
-              <div className="panel meeting-package-side-card">
-                <div className="row" style={{ justifyContent: "space-between" }}>
-                  <strong>Join meeting</strong>
-                  {joinDetails.provider && <Badge tone="info">{joinDetails.provider}</Badge>}
-                </div>
-                {joinDetails.url ? (
-                  <div className="col" style={{ gap: 6, marginTop: 8 }}>
-                    <a className="btn btn--accent btn--sm" href={joinDetails.url} target="_blank" rel="noreferrer">
-                      <ExternalLink size={12} /> Join meeting
-                    </a>
-                    {joinDetails.meetingId && <Detail label="Meeting ID">{joinDetails.meetingId}</Detail>}
-                    {joinDetails.passcode && <Detail label="Passcode">{joinDetails.passcode}</Detail>}
-                    {joinDetails.instructions && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{joinDetails.instructions}</div>}
-                  </div>
-                ) : (
-                  <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 8 }}>No remote meeting link saved.</div>
-                )}
-              </div>
-              <div className="panel meeting-package-side-card">
-                <strong>Open actions</strong>
-                <div className="col" style={{ gap: 6, marginTop: 8 }}>
-                  {openPackageTasks.slice(0, 5).map((task: any) => (
-                    <Link key={task._id} to="/app/tasks" className="row" style={{ gap: 6 }}>
-                      <Badge tone={task.priority === "High" ? "danger" : task.priority === "Medium" ? "warn" : "neutral"}>{task.priority}</Badge>
-                      <span>{task.title}</span>
-                    </Link>
-                  ))}
-                  {openPackageTasks.length === 0 && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>No open tasks linked to this meeting.</div>}
-                </div>
-              </div>
-            </div>
           </div>
 
           <div className="meeting-package-materials">

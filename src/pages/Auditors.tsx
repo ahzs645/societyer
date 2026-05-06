@@ -5,6 +5,7 @@ import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { Plus, Calculator, Trash2 } from "lucide-react";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
   RecordTableScope,
@@ -76,13 +77,7 @@ export function AuditorsPage() {
       />
 
       {showMetadataWarning ? (
-        <div className="record-table__empty">
-          <div className="record-table__empty-title">Metadata not seeded</div>
-          <div className="record-table__empty-desc">
-            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-            auditor-appointment object metadata + default view.
-          </div>
-        </div>
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="auditor-appointment" />
       ) : tableData.objectMetadata ? (
         <RecordTableScope
           tableId="auditors"

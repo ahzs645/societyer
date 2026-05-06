@@ -6,6 +6,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   CheckCircle2,
   Copy,
@@ -227,13 +228,7 @@ export function SecretsPage() {
       </div>
 
       {showMetadataWarning ? (
-        <div className="record-table__empty">
-          <div className="record-table__empty-title">Metadata not seeded</div>
-          <div className="record-table__empty-desc">
-            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-            access-record object metadata + default view.
-          </div>
-        </div>
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="access-record" />
       ) : tableData.objectMetadata ? (
         <RecordTableScope
           tableId="secrets"

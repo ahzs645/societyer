@@ -7,6 +7,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   ExternalLink,
   Plus,
@@ -204,13 +205,7 @@ export function WorkflowsPage() {
       />
 
       {showMetadataWarning ? (
-        <div className="record-table__empty">
-          <div className="record-table__empty-title">Metadata not seeded</div>
-          <div className="record-table__empty-desc">
-            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-            workflow object metadata + default view.
-          </div>
-        </div>
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="workflow" />
       ) : tableData.objectMetadata ? (
         <RecordTableScope
           tableId="workflows"
