@@ -236,6 +236,22 @@ export function MeetingMinutesColumn({
     () => sections.map((section: any, index: number) => relatedMotionsForSection(section, index, motions)),
     [sections, motions],
   );
+  const agendaPreviewAdditions = useMemo(() => {
+    if (agendaEdit === null) return [] as string[];
+    const items = agendaEdit.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const existing = new Set<string>(
+      sections.map((section: any) => String(section?.title ?? "").trim().toLowerCase()),
+    );
+    const seen = new Set<string>();
+    const additions: string[] = [];
+    for (const item of items) {
+      const key = item.toLowerCase();
+      if (existing.has(key) || seen.has(key)) continue;
+      seen.add(key);
+      additions.push(item);
+    }
+    return additions;
+  }, [agendaEdit, sections]);
   const agendaActionItems = useMemo(
     () => sections.flatMap((section: any, sectionIndex: number) =>
       (section.actionItems ?? [])
@@ -1147,6 +1163,35 @@ export function MeetingMinutesColumn({
                               )}
                             </div>
                           </details>
+                        ))}
+                        {agendaPreviewAdditions.map((title, previewIndex) => (
+                          <div
+                            className="meeting-minutes-section-item meeting-minutes-section-item--preview"
+                            key={`preview-${previewIndex}-${title}`}
+                          >
+                            <div className="meeting-minutes-section-item__summary">
+                              <span className="meeting-minutes-section-item__title">
+                                <strong>{sections.length + previewIndex + 1}. {title}</strong>
+                              </span>
+                              <Badge tone="info">Saves with agenda</Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : agendaPreviewAdditions.length > 0 ? (
+                      <div className="meeting-minutes-section-list">
+                        {agendaPreviewAdditions.map((title, previewIndex) => (
+                          <div
+                            className="meeting-minutes-section-item meeting-minutes-section-item--preview"
+                            key={`preview-${previewIndex}-${title}`}
+                          >
+                            <div className="meeting-minutes-section-item__summary">
+                              <span className="meeting-minutes-section-item__title">
+                                <strong>{previewIndex + 1}. {title}</strong>
+                              </span>
+                              <Badge tone="info">Saves with agenda</Badge>
+                            </div>
+                          </div>
                         ))}
                       </div>
                     ) : (

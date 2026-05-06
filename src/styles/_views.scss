@@ -1490,6 +1490,10 @@
 
   &:last-child { border-bottom: 0; }
 }
+.meeting-minutes-section-item--preview .meeting-minutes-section-item__summary {
+  cursor: default;
+  opacity: 0.75;
+}
 .meeting-minutes-section-item__summary {
   display: flex;
   justify-content: space-between;
