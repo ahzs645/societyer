@@ -14,10 +14,12 @@ export function Kanban<T extends { _id: string; status: string }>({
   columns,
   renderCard,
   onMove,
+  onItemClick,
 }: {
   columns: KanbanColumn<T>[];
   renderCard: (item: T) => ReactNode;
   onMove: (itemId: string, toStatus: string) => void;
+  onItemClick?: (item: T) => void;
 }) {
   const flat = columns.flatMap((col) => col.items.map((item) => ({ col: col.id, item })));
   return (
@@ -28,6 +30,7 @@ export function Kanban<T extends { _id: string; status: string }>({
       getColumnId={(row) => row.col}
       renderCard={(row) => renderCard(row.item)}
       onMove={(row, toColumnId) => onMove(row.item._id, toColumnId)}
+      onItemClick={onItemClick ? (row) => onItemClick(row.item) : undefined}
     />
   );
 }

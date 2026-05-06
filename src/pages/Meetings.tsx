@@ -111,7 +111,7 @@ export function MeetingsPage() {
     }, { replace: true });
   }, [open, params, setParams, society]);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <div className="page meetings-page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
   const save = async () => {
     if (!form) return;
@@ -132,7 +132,7 @@ export function MeetingsPage() {
   };
 
   return (
-    <div className="page">
+    <div className="page meetings-page">
       <PageHeader
         title="Meetings"
         icon={<Calendar size={16} />}

@@ -1574,6 +1574,24 @@
   display: grid;
   gap: var(--s-2);
 }
+.meeting-minutes-section-tasks {
+  display: grid;
+  gap: var(--s-3);
+}
+.meeting-minutes-section-task {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-base);
+}
+.meeting-minutes-section-task__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
 .meeting-minutes-section-motion {
   display: grid;
   gap: 3px;
@@ -1815,6 +1833,15 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.meeting-detail-page,
+.meetings-page {
+  scrollbar-width: none;
+}
+.meeting-detail-page::-webkit-scrollbar,
+.meetings-page::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
 .minutes-export-gap {
   padding: var(--s-2);
   border: 1px solid var(--border);
@@ -2048,6 +2075,45 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary::after {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s-3);
   margin-top: var(--s-3);
+}
+.meeting-package-task-list {
+  display: grid;
+  gap: var(--s-2);
+}
+.meeting-package-task-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-base);
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.meeting-package-task-row__main {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.meeting-package-task-row__title {
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meeting-package-task-create {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-2);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-sm);
+}
+details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting-package-task-counts {
+  display: none;
 }
 .meeting-package-materials {
   border: 1px solid var(--border);
@@ -3050,6 +3116,11 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary::after {
 }
 .kanban__card:hover { box-shadow: var(--shadow-sm); }
 .kanban__card.is-dragging { opacity: 0.4; }
+.kanban__card.is-clickable { cursor: pointer; }
+.kanban__card.is-clickable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .kanban__card-title { font-weight: 500; margin-bottom: 4px; }
 .kanban__card-meta {
   display: flex;

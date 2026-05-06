@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ChevronDown, ClipboardList, FileText, Mic, MinusCircle, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, ClipboardList, FileText, ListChecks, Mic, MinusCircle, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
 import { Badge, Field } from "../../../components/ui";
 import { Checkbox } from "../../../components/Controls";
 import { LegalGuideInline } from "../../../components/LegalGuide";
+import { Segmented } from "../../../components/primitives";
 import { isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionPerson } from "../../../components/MotionEditor";
 import { NameAutocomplete } from "../../../components/NameAutocomplete";
 import { SignaturePanel } from "../../../components/SignaturePanel";
@@ -11,6 +12,13 @@ import {
   formatSourceReferences,
   personLinkCandidates,
 } from "./MeetingDetailSupport";
+
+const SECTION_TASK_STATUS_ITEMS: { id: string; label: string }[] = [
+  { id: "Todo", label: "To do" },
+  { id: "InProgress", label: "In progress" },
+  { id: "Blocked", label: "Blocked" },
+  { id: "Done", label: "Done" },
+];
 
 export function MeetingMinutesColumn({
   minutes,
@@ -31,15 +39,13 @@ export function MeetingMinutesColumn({
   createMinutesFromAgenda,
   addSectionToBacklog,
   onOpenMotions,
-  transcript,
-  setTranscript,
+  meetingTasks,
+  applyTaskUpdate,
   transcriptOnFile,
   transcriptEdit,
   setTranscriptEdit,
   saveTranscriptEditText,
   savingTranscript,
-  busy,
-  runGenerate,
 }: {
   minutes: any;
   agenda: string[];
@@ -59,24 +65,35 @@ export function MeetingMinutesColumn({
   createMinutesFromAgenda: () => void | Promise<void>;
   addSectionToBacklog: (section: any) => void | Promise<void>;
   onOpenMotions?: () => void;
-  transcript: string;
-  setTranscript: (value: string) => void;
+  meetingTasks: any[];
+  applyTaskUpdate: (taskId: string, patch: { status?: string; completionNote?: string }) => void | Promise<void>;
   transcriptOnFile: string;
   transcriptEdit: string | null;
   setTranscriptEdit: (value: string | null) => void;
   saveTranscriptEditText: () => Promise<void> | void;
   savingTranscript: boolean;
-  busy: boolean;
-  runGenerate: () => void | Promise<void>;
 }) {
   const sections = Array.isArray(minutes?.sections) ? minutes.sections : [];
   const motions = Array.isArray(minutes?.motions) ? minutes.motions as Motion[] : [];
-  const sectionsWithDetailCount = sections.filter((section: any) =>
-    section?.discussion ||
-    section?.presenter ||
-    (section?.decisions ?? []).length ||
-    (section?.actionItems ?? []).length
-  ).length;
+  const sectionHasDetails = (section: any) =>
+    !!(
+      section?.discussion ||
+      section?.presenter ||
+      (section?.decisions ?? []).length ||
+      (section?.actionItems ?? []).length ||
+      (section?.linkedTaskIds ?? []).length
+    );
+  const sectionsWithDetailCount = sections.filter((section: any) => sectionHasDetails(section)).length;
+  const detailedSectionTitles = useMemo(() => {
+    const set = new Set<string>();
+    for (const section of sections) {
+      if (!sectionHasDetails(section)) continue;
+      const title = String(section?.title ?? "").trim().toLowerCase();
+      if (title) set.add(title);
+    }
+    return set;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sections]);
   const [sectionEditIndex, setSectionEditIndex] = useState<number | null>(null);
   const [sectionDraft, setSectionDraft] = useState<SectionDraft | null>(null);
   const [sectionEditorTab, setSectionEditorTab] = useState<SectionEditorTab>("notes");
@@ -133,6 +150,8 @@ export function MeetingMinutesColumn({
       discussion: "",
       decisions: "",
       actionItems: [],
+      linkedTaskIds: [],
+      taskUpdates: {},
     });
   };
 
@@ -256,6 +275,8 @@ export function MeetingMinutesColumn({
       discussion: section.discussion ?? "",
       decisions: (section.decisions ?? []).join("\n"),
       actionItems: normalizeActionDrafts(section.actionItems ?? []),
+      linkedTaskIds: Array.isArray(section.linkedTaskIds) ? section.linkedTaskIds : [],
+      taskUpdates: {},
     });
   };
 
@@ -277,8 +298,17 @@ export function MeetingMinutesColumn({
           done: !!item.done,
         }))
         .filter((item) => item.text),
+      linkedTaskIds: sectionDraft.linkedTaskIds.length ? sectionDraft.linkedTaskIds : undefined,
     };
     await saveMinuteSections(next);
+    for (const [taskId, patch] of Object.entries(sectionDraft.taskUpdates)) {
+      const cleanPatch: { status?: string; completionNote?: string } = {};
+      if (patch.status) cleanPatch.status = patch.status;
+      if (patch.completionNote !== undefined) cleanPatch.completionNote = patch.completionNote;
+      if (Object.keys(cleanPatch).length) {
+        await applyTaskUpdate(taskId, cleanPatch);
+      }
+    }
     setSectionEditIndex(null);
     setSectionDraft(null);
   };
@@ -333,6 +363,40 @@ export function MeetingMinutesColumn({
       actionItems: sectionDraft.actionItems.filter((_, index) => index !== actionIndex),
     });
   };
+
+  const attachLinkedTask = (taskId: string) => {
+    if (!sectionDraft || !taskId) return;
+    if (sectionDraft.linkedTaskIds.includes(taskId)) return;
+    setSectionDraft({
+      ...sectionDraft,
+      linkedTaskIds: [...sectionDraft.linkedTaskIds, taskId],
+    });
+  };
+  const detachLinkedTask = (taskId: string) => {
+    if (!sectionDraft) return;
+    const nextUpdates = { ...sectionDraft.taskUpdates };
+    delete nextUpdates[taskId];
+    setSectionDraft({
+      ...sectionDraft,
+      linkedTaskIds: sectionDraft.linkedTaskIds.filter((id) => id !== taskId),
+      taskUpdates: nextUpdates,
+    });
+  };
+  const updateTaskDraft = (taskId: string, patch: { status?: string; completionNote?: string }) => {
+    if (!sectionDraft) return;
+    setSectionDraft({
+      ...sectionDraft,
+      taskUpdates: {
+        ...sectionDraft.taskUpdates,
+        [taskId]: { ...sectionDraft.taskUpdates[taskId], ...patch },
+      },
+    });
+  };
+
+  const meetingTaskById = useMemo(
+    () => new Map<string, any>((meetingTasks ?? []).map((task: any) => [task._id, task])),
+    [meetingTasks],
+  );
 
   const toggleSection = (index: number, open: boolean) => {
     setOpenSectionIndexes((current) => {
@@ -447,9 +511,13 @@ export function MeetingMinutesColumn({
                   </div>
                 )}
                 {agendaItems.map((item, index) => {
+                  const trimmed = item.trim();
+                  const isEmpty = !trimmed;
                   const isNew = newAgendaIndices.has(index);
+                  const linkedSectionDetailed = trimmed ? detailedSectionTitles.has(trimmed.toLowerCase()) : false;
+                  const canRemove = isEmpty || isNew || !linkedSectionDetailed;
                   return (
-                    <div className={`meeting-minutes-agenda-editor__row${isNew ? "" : " is-locked"}`} key={index}>
+                    <div className={`meeting-minutes-agenda-editor__row${canRemove ? "" : " is-locked"}`} key={index}>
                       <input
                         ref={(el) => { agendaInputRefs.current[index] = el; }}
                         className="input"
@@ -463,7 +531,7 @@ export function MeetingMinutesColumn({
                         }}
                         placeholder={index === 0 ? "Call to order" : "Agenda item"}
                       />
-                      {isNew && (
+                      {canRemove && (
                         <button
                           className="btn-action btn-action--icon"
                           type="button"
@@ -516,39 +584,6 @@ export function MeetingMinutesColumn({
                   </details>
                 )}
               </>
-            )}
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card__head">
-            <h2 className="card__title">
-              <Mic size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />
-              Transcript
-            </h2>
-            <span className="card__subtitle">
-              {transcriptOnFile
-                ? `${transcriptOnFile.length.toLocaleString()} characters on file`
-                : "No transcript on file"}
-            </span>
-            <div style={{ marginLeft: "auto" }}>
-              <button
-                className="btn-action btn-action--icon"
-                onClick={() => setTranscriptEdit(transcriptOnFile)}
-                title={transcriptOnFile ? "Edit transcript" : "Add transcript"}
-                aria-label={transcriptOnFile ? "Edit transcript" : "Add transcript"}
-              >
-                {transcriptOnFile ? <Pencil size={12} /> : <Plus size={12} />}
-              </button>
-            </div>
-          </div>
-          <div className="card__body">
-            {transcriptOnFile ? (
-              <pre className="meeting-transcript-preview">{transcriptOnFile}</pre>
-            ) : (
-              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-               
-              </div>
             )}
           </div>
         </div>
@@ -778,6 +813,12 @@ export function MeetingMinutesColumn({
                                 const assignedMotionRows = motionRows.filter((row) => row.selectedIndex === index);
                                 const availableMotionRows = motionRows.filter((row) => row.selectedIndex !== index);
                                 const actionCount = sectionDraft.actionItems.filter((item) => item.text.trim()).length;
+                                const linkedTaskRecords = sectionDraft.linkedTaskIds
+                                  .map((taskId) => meetingTaskById.get(taskId))
+                                  .filter(Boolean);
+                                const availableMeetingTasks = (meetingTasks ?? []).filter(
+                                  (task: any) => !sectionDraft.linkedTaskIds.includes(task._id),
+                                );
                                 return (
                                   <div className="meeting-minutes-section-editor">
                                     <div className="meeting-minutes-section-editor__top">
@@ -817,6 +858,9 @@ export function MeetingMinutesColumn({
                                       </button>
                                       <button type="button" className={`meeting-minutes-section-editor-tab${sectionEditorTab === "actions" ? " is-active" : ""}`} onClick={() => setSectionEditorTab("actions")}>
                                         Actions{actionCount ? ` (${actionCount})` : ""}
+                                      </button>
+                                      <button type="button" className={`meeting-minutes-section-editor-tab${sectionEditorTab === "tasks" ? " is-active" : ""}`} onClick={() => setSectionEditorTab("tasks")}>
+                                        Tasks{linkedTaskRecords.length ? ` (${linkedTaskRecords.length})` : ""}
                                       </button>
                                     </div>
 
@@ -934,6 +978,83 @@ export function MeetingMinutesColumn({
                                       </div>
                                     )}
 
+                                    {sectionEditorTab === "tasks" && (
+                                      <div className="meeting-minutes-section-editor__panel">
+                                        <div className="meeting-minutes-section-tasks">
+                                          {linkedTaskRecords.length === 0 ? (
+                                            <div className="muted">
+                                              Link a task from this meeting to capture status updates and a completion note here. Status changes apply to the kanban when you save the section.
+                                            </div>
+                                          ) : (
+                                            linkedTaskRecords.map((task) => {
+                                              const draft = sectionDraft.taskUpdates[task._id] ?? {};
+                                              const currentStatus = draft.status ?? task.status ?? "Todo";
+                                              const noteValue = draft.completionNote ?? task.completionNote ?? "";
+                                              return (
+                                                <div className="meeting-minutes-section-task" key={task._id}>
+                                                  <div className="meeting-minutes-section-task__head">
+                                                    <strong>{task.title}</strong>
+                                                    <div className="row" style={{ gap: 6, alignItems: "center", marginLeft: "auto" }}>
+                                                      {task.priority && <Badge tone={task.priority === "High" ? "danger" : task.priority === "Medium" ? "warn" : "neutral"}>{task.priority}</Badge>}
+                                                      <button
+                                                        className="btn-action btn-action--icon"
+                                                        type="button"
+                                                        title="Unlink from this section"
+                                                        aria-label={`Unlink ${task.title}`}
+                                                        onClick={() => detachLinkedTask(task._id)}
+                                                      >
+                                                        <Unlink size={12} />
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                  <Segmented
+                                                    value={currentStatus}
+                                                    onChange={(next) => updateTaskDraft(task._id, { status: next })}
+                                                    items={SECTION_TASK_STATUS_ITEMS}
+                                                  />
+                                                  <Field label="Completion note" hint="Saved to the task when this section is saved.">
+                                                    <textarea
+                                                      className="textarea"
+                                                      rows={2}
+                                                      value={noteValue}
+                                                      onChange={(event) => updateTaskDraft(task._id, { completionNote: event.target.value })}
+                                                      placeholder="Outcome, blockers, or notes for the kanban card."
+                                                    />
+                                                  </Field>
+                                                </div>
+                                              );
+                                            })
+                                          )}
+
+                                          {availableMeetingTasks.length > 0 ? (
+                                            <select
+                                              className="input"
+                                              value=""
+                                              onChange={(event) => {
+                                                attachLinkedTask(event.target.value);
+                                                event.target.value = "";
+                                              }}
+                                            >
+                                              <option value="">Link a meeting task…</option>
+                                              {availableMeetingTasks.map((task: any) => (
+                                                <option key={task._id} value={task._id}>
+                                                  {task.title}{task.status ? ` · ${task.status}` : ""}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          ) : (meetingTasks?.length ?? 0) === 0 ? (
+                                            <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                                              No tasks linked to this meeting yet. Add tasks on the Package tab to make them available here.
+                                            </div>
+                                          ) : (
+                                            <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                                              All meeting tasks are linked to this section.
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+
                                     <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
                                       <button className="btn-action" onClick={() => { setSectionEditIndex(null); setSectionDraft(null); }}>Cancel</button>
                                       <button className="btn-action btn-action--primary" onClick={saveSectionEdit}>
@@ -988,6 +1109,30 @@ export function MeetingMinutesColumn({
                                       ))}
                                     </ul>
                                   )}
+                                  {(() => {
+                                    const linkedTaskIds: string[] = Array.isArray(section.linkedTaskIds) ? section.linkedTaskIds : [];
+                                    const linkedTaskRows = linkedTaskIds
+                                      .map((taskId) => meetingTaskById.get(taskId))
+                                      .filter(Boolean);
+                                    if (linkedTaskRows.length === 0) return null;
+                                    return (
+                                      <div className="meeting-minutes-section-block">
+                                        <strong>
+                                          <ListChecks size={12} style={{ verticalAlign: -2, marginRight: 4 }} />
+                                          Linked tasks
+                                        </strong>
+                                        <ul className="meeting-minutes-section-actions">
+                                          {linkedTaskRows.map((task: any) => (
+                                            <li key={task._id}>
+                                              {task.title}
+                                              <span className="muted"> · {task.status || "Todo"}</span>
+                                              {task.dueDate && <span className="muted"> · Due {task.dueDate}</span>}
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    );
+                                  })()}
                                   <div className="row" style={{ gap: 6, justifyContent: "space-between", flexWrap: "wrap" }}>
                                     <button className="btn-action" onClick={() => startSectionEdit(index)}>
                                       Edit agenda item
@@ -1074,9 +1219,11 @@ type SectionDraft = {
   discussion: string;
   decisions: string;
   actionItems: SectionActionDraft[];
+  linkedTaskIds: string[];
+  taskUpdates: Record<string, { status?: string; completionNote?: string }>;
 };
 
-type SectionEditorTab = "notes" | "motions" | "actions";
+type SectionEditorTab = "notes" | "motions" | "actions" | "tasks";
 
 type SectionActionDraft = {
   text: string;

@@ -111,6 +111,9 @@ export function MeetingDetailPage() {
   const backfillMeetingQuorum = useMutation(api.meetings.backfillQuorumSnapshot);
   const updateMinutes = useMutation(api.minutes.update);
   const createMinutes = useMutation(api.minutes.create);
+  const updateTask = useMutation(api.tasks.update);
+  const createTask = useMutation(api.tasks.create);
+  const societyTasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
   const backfillMinutesQuorum = useMutation(api.minutes.backfillQuorumSnapshot);
   const createBacklogFromMinutesMotion = useMutation(api.motionBacklog.createFromMinutesMotion);
   const createBacklogFromMinutesSection = useMutation(api.motionBacklog.createFromMinutesSection);
@@ -256,8 +259,8 @@ export function MeetingDetailPage() {
       ? "danger"
       : "warn";
   const packageMaterials = meetingPackage?.materials ?? [];
-  const packageTasks = meetingPackage?.tasks ?? [];
-  const openPackageTasks = packageTasks.filter((task: any) => task.status !== "Done");
+  const linkedTasks = meetingPackage?.tasks ?? [];
+  const linkableTasks = ((societyTasks ?? []) as any[]).filter((task: any) => !task.meetingId);
   const joinDetails = getMeetingJoinDetails(meeting, minutes);
   const packageReadiness = getPackageReadiness(packageMaterials);
   const sourceReviewStatus = meeting.sourceReviewStatus ?? minutes?.sourceReviewStatus ?? "not_applicable";
@@ -874,7 +877,7 @@ export function MeetingDetailPage() {
       meeting,
       agenda,
       materials: packageMaterials,
-      tasks: packageTasks,
+      tasks: linkedTasks,
       minutes,
       joinDetails,
     });
@@ -885,6 +888,44 @@ export function MeetingDetailPage() {
     a.download = `${safe}-meeting-pack.html`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const setLinkedTaskStatus = async (taskId: string, status: string) => {
+    await updateTask({
+      id: taskId as Id<"tasks">,
+      patch: {
+        status,
+        completedByUserId: status === "Done" && actingUserId ? actingUserId : undefined,
+      },
+    });
+  };
+  const linkTaskToMeeting = async (taskId: string) => {
+    if (!meeting?._id) return;
+    await updateTask({ id: taskId as Id<"tasks">, patch: { meetingId: meeting._id as Id<"meetings"> } });
+    toast.success("Task linked to meeting");
+  };
+  const unlinkTaskFromMeeting = async (taskId: string) => {
+    await updateTask({ id: taskId as Id<"tasks">, patch: { meetingId: undefined } });
+    toast.success("Task unlinked");
+  };
+  const applyTaskUpdate = async (taskId: string, patch: { status?: string; completionNote?: string }) => {
+    const update: any = { ...patch };
+    if (patch.status === "Done" && actingUserId) update.completedByUserId = actingUserId;
+    await updateTask({ id: taskId as Id<"tasks">, patch: update });
+  };
+  const createTaskForMeeting = async (input: { title: string; priority: string; status: string; dueDate?: string }) => {
+    if (!society || !meeting?._id) return;
+    await createTask({
+      societyId: society._id,
+      title: input.title,
+      status: input.status,
+      priority: input.priority,
+      dueDate: input.dueDate || undefined,
+      meetingId: meeting._id as Id<"meetings">,
+      committeeId: meeting.committeeId ?? undefined,
+      tags: [],
+    });
+    toast.success("Task created", input.title);
   };
 
   return (
@@ -1118,6 +1159,7 @@ export function MeetingDetailPage() {
               exportToPdf={exportToPdf}
               exportPublicMinutes={exportPublicMinutes}
               minutesExportGaps={minutesExportGaps}
+              showExportGaps
               quorumSnapshot={quorumSnapshot}
               quorumLegalGuides={quorumLegalGuides}
               legalGuideDateISO={legalGuideDateISO}
@@ -1164,15 +1206,13 @@ export function MeetingDetailPage() {
             createMinutesFromAgenda={createMinutesFromAgenda}
             addSectionToBacklog={addSectionToBacklog}
             onOpenMotions={() => setActiveTab("motions")}
-            transcript={transcript}
-            setTranscript={setTranscript}
+            meetingTasks={linkedTasks}
+            applyTaskUpdate={applyTaskUpdate}
             transcriptOnFile={transcriptOnFile}
             transcriptEdit={transcriptEdit}
             setTranscriptEdit={setTranscriptEdit}
             saveTranscriptEditText={saveTranscriptEditText}
             savingTranscript={savingTranscript}
-            busy={busy}
-            runGenerate={runGenerate}
           />
         )}
 
@@ -1220,7 +1260,8 @@ export function MeetingDetailPage() {
             minutes={minutes}
             agenda={agenda}
             packageMaterials={packageMaterials}
-            openPackageTasks={openPackageTasks}
+            linkedTasks={linkedTasks}
+            linkableTasks={linkableTasks}
             joinDetails={joinDetails}
             packageReadiness={packageReadiness}
             sourceReviewStatus={sourceReviewStatus}
@@ -1238,6 +1279,10 @@ export function MeetingDetailPage() {
             markPackageReady={markPackageReady}
             sendPackageBackToReview={sendPackageBackToReview}
             removeMeetingMaterial={removeMeetingMaterial}
+            setLinkedTaskStatus={setLinkedTaskStatus}
+            linkTaskToMeeting={linkTaskToMeeting}
+            unlinkTaskFromMeeting={unlinkTaskFromMeeting}
+            createTaskForMeeting={createTaskForMeeting}
           />
         )}
 

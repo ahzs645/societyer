@@ -43,6 +43,7 @@ export function MeetingSidebarColumn({
   exportToPdf,
   exportPublicMinutes,
   minutesExportGaps,
+  showExportGaps = false,
   quorumSnapshot,
   quorumLegalGuides,
   legalGuideDateISO,
@@ -89,6 +90,7 @@ export function MeetingSidebarColumn({
   exportToPdf: () => void;
   exportPublicMinutes: () => void;
   minutesExportGaps: any[];
+  showExportGaps?: boolean;
   quorumSnapshot: any;
   quorumLegalGuides: any[];
   legalGuideDateISO: string;
@@ -199,17 +201,19 @@ export function MeetingSidebarColumn({
                     <EyeOff size={12} /> Public copy
                   </button>
                 </div>
-                <div className="minutes-export-gaps">
-                  {minutesExportGaps.map((gap) => (
-                    <div key={`${gap.status}-${gap.label}`} className="minutes-export-gap">
-                      <div className="row" style={{ gap: 6, justifyContent: "space-between", alignItems: "flex-start" }}>
-                        <strong>{gap.label}</strong>
-                        <Badge tone={gapStatusTone(gap.status)}>{gapStatusLabel(gap.status)}</Badge>
+                {showExportGaps && (
+                  <div className="minutes-export-gaps">
+                    {minutesExportGaps.map((gap) => (
+                      <div key={`${gap.status}-${gap.label}`} className="minutes-export-gap">
+                        <div className="row" style={{ gap: 6, justifyContent: "space-between", alignItems: "flex-start" }}>
+                          <strong>{gap.label}</strong>
+                          <Badge tone={gapStatusTone(gap.status)}>{gapStatusLabel(gap.status)}</Badge>
+                        </div>
+                        <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{gap.detail}</div>
                       </div>
-                      <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{gap.detail}</div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

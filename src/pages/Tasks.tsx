@@ -244,6 +244,7 @@ export function TasksPage() {
       {view === "kanban" ? (
         <Kanban
           columns={columns}
+          onItemClick={(t: any) => openEdit(t)}
           onMove={(id, status) => update({
             id: id as any,
             patch: {
@@ -361,6 +362,26 @@ export function TasksPage() {
         title={form?._id ? "Edit task" : "New task"}
         footer={
           <>
+            {form?._id && (
+              <button
+                className="btn btn--danger"
+                style={{ marginRight: "auto" }}
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: "Delete task?",
+                    message: `"${form.title}" will be permanently removed.`,
+                    confirmLabel: "Delete",
+                    tone: "danger",
+                  });
+                  if (!ok) return;
+                  await remove({ id: form._id as any });
+                  toast.success("Task deleted");
+                  setOpen(false);
+                }}
+              >
+                Delete
+              </button>
+            )}
             <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
             <button className="btn btn--accent" onClick={save}>{form?._id ? "Save" : "Create"}</button>
           </>

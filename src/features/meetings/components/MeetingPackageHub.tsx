@@ -1,7 +1,23 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, ClipboardCheck, Download, ExternalLink, FileText, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, Download, ExternalLink, FileText, ListChecks, Plus, ShieldCheck, Unlink, X } from "lucide-react";
 import { Badge } from "../../../components/ui";
+import { Segmented } from "../../../components/primitives";
 import { formatDate } from "../../../lib/format";
+
+const TASK_STATUS_ITEMS: { id: string; label: string }[] = [
+  { id: "Todo", label: "To do" },
+  { id: "InProgress", label: "In progress" },
+  { id: "Blocked", label: "Blocked" },
+  { id: "Done", label: "Done" },
+];
+const TASK_PRIORITIES = ["Low", "Medium", "High"] as const;
+
+function priorityTone(priority?: string) {
+  if (priority === "High") return "danger" as const;
+  if (priority === "Medium") return "warn" as const;
+  return "neutral" as const;
+}
 import {
   accessLevelLabel,
   availabilityLabel,
@@ -25,7 +41,8 @@ export function MeetingPackageHub({
   minutes,
   agenda,
   packageMaterials,
-  openPackageTasks,
+  linkedTasks,
+  linkableTasks,
   joinDetails,
   packageReadiness,
   sourceReviewStatus,
@@ -43,12 +60,17 @@ export function MeetingPackageHub({
   markPackageReady,
   sendPackageBackToReview,
   removeMeetingMaterial,
+  setLinkedTaskStatus,
+  linkTaskToMeeting,
+  unlinkTaskFromMeeting,
+  createTaskForMeeting,
 }: {
   meeting: any;
   minutes: any;
   agenda: string[];
   packageMaterials: any[];
-  openPackageTasks: any[];
+  linkedTasks: any[];
+  linkableTasks: any[];
   joinDetails: any;
   packageReadiness: any;
   sourceReviewStatus: string;
@@ -66,7 +88,42 @@ export function MeetingPackageHub({
   markPackageReady: () => void | Promise<void>;
   sendPackageBackToReview: () => void | Promise<void>;
   removeMeetingMaterial: (args: { id: any }) => void | Promise<void>;
+  setLinkedTaskStatus: (taskId: string, status: string) => void | Promise<void>;
+  linkTaskToMeeting: (taskId: string) => void | Promise<void>;
+  unlinkTaskFromMeeting: (taskId: string) => void | Promise<void>;
+  createTaskForMeeting: (input: { title: string; priority: string; status: string; dueDate?: string }) => void | Promise<void>;
 }) {
+  const [creatingTask, setCreatingTask] = useState(false);
+  const [taskDraft, setTaskDraft] = useState({ title: "", priority: "Medium", status: "Todo", dueDate: "" });
+  const [pickerValue, setPickerValue] = useState("");
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const sortedLinkedTasks = [...linkedTasks].sort((a, b) => {
+    if (a.status === "Done" && b.status !== "Done") return 1;
+    if (b.status === "Done" && a.status !== "Done") return -1;
+    return String(a.dueDate ?? "").localeCompare(String(b.dueDate ?? ""));
+  });
+  const taskCounts = {
+    Todo: linkedTasks.filter((task) => task.status === "Todo").length,
+    InProgress: linkedTasks.filter((task) => task.status === "InProgress").length,
+    Blocked: linkedTasks.filter((task) => task.status === "Blocked").length,
+    Done: linkedTasks.filter((task) => task.status === "Done").length,
+  };
+  const submitTaskDraft = async () => {
+    const title = taskDraft.title.trim();
+    if (!title) return;
+    await createTaskForMeeting({
+      title,
+      priority: taskDraft.priority,
+      status: taskDraft.status,
+      dueDate: taskDraft.dueDate || undefined,
+    });
+    setTaskDraft({ ...taskDraft, title: "" });
+  };
+  const handlePick = async (value: string) => {
+    setPickerValue("");
+    if (!value) return;
+    await linkTaskToMeeting(value);
+  };
   const topics = Array.from(new Set(agenda.length ? agenda : ["General materials"]));
   const materialsForTopic = (topic: string) =>
     packageMaterials.filter((material: any) => (material.agendaLabel || "General materials") === topic);
@@ -211,22 +268,150 @@ export function MeetingPackageHub({
                 </a>
               )}
 
-              {openPackageTasks.length > 0 && (
-                <details className="meeting-package-drawer">
-                  <summary className="meeting-package-drawer__summary">
-                    <span className="meeting-package-drawer__title">Open actions</span>
-                    <Badge tone="warn">{openPackageTasks.length}</Badge>
-                  </summary>
-                  <div className="meeting-package-drawer__body">
-                    {openPackageTasks.slice(0, 5).map((task: any) => (
-                      <Link key={task._id} to="/app/tasks" className="row" style={{ gap: 6 }}>
-                        <Badge tone={task.priority === "High" ? "danger" : task.priority === "Medium" ? "warn" : "neutral"}>{task.priority}</Badge>
-                        <span>{task.title}</span>
-                      </Link>
-                    ))}
+              <details className="meeting-package-drawer" open={linkedTasks.length > 0}>
+                <summary className="meeting-package-drawer__summary">
+                  <span className="meeting-package-drawer__title">
+                    <ListChecks size={12} style={{ verticalAlign: -2, marginRight: 6 }} />
+                    Linked tasks
+                  </span>
+                  <span className="meeting-package-task-counts">
+                    <Badge tone="neutral">
+                      {taskCounts.Todo} To do · {taskCounts.InProgress} In progress · {taskCounts.Blocked} Blocked · {taskCounts.Done} Done
+                    </Badge>
+                  </span>
+                </summary>
+                <div className="meeting-package-drawer__body">
+                  {sortedLinkedTasks.length === 0 ? (
+                    <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                      No tasks linked to this meeting yet. Link an existing task or create a new one — status updates here flow back to the kanban.
+                    </div>
+                  ) : (
+                    <div className="meeting-package-task-list">
+                      {sortedLinkedTasks.map((task: any) => {
+                        const overdue = task.dueDate && task.status !== "Done" && task.dueDate < todayISO;
+                        return (
+                          <div key={task._id} className="meeting-package-task-row">
+                            <div className="meeting-package-task-row__main">
+                              <Link to="/app/tasks" className="meeting-package-task-row__title">
+                                {task.title}
+                              </Link>
+                              <div className="row" style={{ gap: 6, flexWrap: "wrap", fontSize: "var(--fs-sm)" }}>
+                                <Badge tone={priorityTone(task.priority)}>{task.priority || "—"}</Badge>
+                                {task.assignee && <span className="muted">· {task.assignee}</span>}
+                                {task.dueDate && (
+                                  <span style={{ color: overdue ? "var(--danger)" : "var(--text-tertiary)" }}>
+                                    · Due {formatDate(task.dueDate)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <Segmented
+                              value={task.status}
+                              onChange={(next) => { void setLinkedTaskStatus(task._id, next); }}
+                              items={TASK_STATUS_ITEMS}
+                            />
+                            <button
+                              className="btn-action btn-action--icon"
+                              type="button"
+                              title="Unlink from meeting"
+                              aria-label={`Unlink ${task.title}`}
+                              onClick={() => { void unlinkTaskFromMeeting(task._id); }}
+                            >
+                              <Unlink size={12} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    {linkableTasks.length > 0 ? (
+                      <select
+                        className="input"
+                        style={{ flex: 1, minWidth: 200 }}
+                        value={pickerValue}
+                        onChange={(event) => { void handlePick(event.target.value); }}
+                      >
+                        <option value="">Link existing task…</option>
+                        {linkableTasks.map((task: any) => (
+                          <option key={task._id} value={task._id}>
+                            {task.title}{task.priority ? ` · ${task.priority}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>No unlinked tasks available.</span>
+                    )}
+                    <button
+                      className="btn-action"
+                      type="button"
+                      onClick={() => setCreatingTask((open) => !open)}
+                    >
+                      {creatingTask ? <X size={12} /> : <Plus size={12} />}
+                      {creatingTask ? "Cancel" : "Create task"}
+                    </button>
                   </div>
-                </details>
-              )}
+
+                  {creatingTask && (
+                    <div className="meeting-package-task-create">
+                      <input
+                        className="input"
+                        placeholder="Task title (Enter to add another)"
+                        value={taskDraft.title}
+                        onChange={(event) => setTaskDraft({ ...taskDraft, title: event.target.value })}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && taskDraft.title.trim()) {
+                            event.preventDefault();
+                            void submitTaskDraft();
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                        <select
+                          className="input"
+                          style={{ width: 130 }}
+                          value={taskDraft.priority}
+                          onChange={(event) => setTaskDraft({ ...taskDraft, priority: event.target.value })}
+                          aria-label="Priority"
+                        >
+                          {TASK_PRIORITIES.map((priority) => (
+                            <option key={priority} value={priority}>{priority}</option>
+                          ))}
+                        </select>
+                        <select
+                          className="input"
+                          style={{ width: 140 }}
+                          value={taskDraft.status}
+                          onChange={(event) => setTaskDraft({ ...taskDraft, status: event.target.value })}
+                          aria-label="Status"
+                        >
+                          {TASK_STATUS_ITEMS.map((status) => (
+                            <option key={status.id} value={status.id}>{status.label}</option>
+                          ))}
+                        </select>
+                        <input
+                          className="input"
+                          type="date"
+                          style={{ width: 150 }}
+                          value={taskDraft.dueDate}
+                          onChange={(event) => setTaskDraft({ ...taskDraft, dueDate: event.target.value })}
+                          aria-label="Due date"
+                        />
+                        <button
+                          className="btn-action btn-action--primary"
+                          type="button"
+                          onClick={submitTaskDraft}
+                          disabled={!taskDraft.title.trim()}
+                        >
+                          <Plus size={12} /> Add task
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </details>
             </div>
           </div>
           </div>
