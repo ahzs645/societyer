@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ClipboardList, FileText, Plus, Save, Sparkles, Trash2 } from "lucide-react";
+import { ChevronDown, ClipboardList, FileText, MinusCircle, Plus, Save, Sparkles, Trash2 } from "lucide-react";
 import { Badge, Field } from "../../../components/ui";
 import { Checkbox } from "../../../components/Controls";
 import { LegalGuideInline } from "../../../components/LegalGuide";
 import { isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionPerson } from "../../../components/MotionEditor";
+import { NameAutocomplete } from "../../../components/NameAutocomplete";
 import { SignaturePanel } from "../../../components/SignaturePanel";
 import {
   AttendanceDetails,
@@ -74,6 +75,10 @@ export function MeetingMinutesColumn({
   const [sectionEditorTab, setSectionEditorTab] = useState<SectionEditorTab>("notes");
   const [openSectionIndexes, setOpenSectionIndexes] = useState<Set<number>>(() => new Set([0, 1]));
   const motionPeople = useMemo(() => personLinkCandidates(members, directors), [members, directors]);
+  const assigneeOptions = useMemo(
+    () => Array.from(new Set(motionPeople.map((p) => p.name))).filter(Boolean).sort(),
+    [motionPeople],
+  );
   const motionMatchesBySection = useMemo(
     () => sections.map((section: any, index: number) => relatedMotionsForSection(section, index, motions)),
     [sections, motions],
@@ -81,16 +86,30 @@ export function MeetingMinutesColumn({
   const agendaActionItems = useMemo(
     () => sections.flatMap((section: any, sectionIndex: number) =>
       (section.actionItems ?? [])
-        .filter((item: any) => String(item?.text ?? "").trim())
+        // Map first so actionIndex stays the original index in section.actionItems
+        // — we need that for write-backs (toggling done) regardless of what the
+        // empty-text filter drops from the visible list.
         .map((item: any, actionIndex: number) => ({
           ...item,
           sectionIndex,
           actionIndex,
           sectionTitle: section.title || `Agenda item ${sectionIndex + 1}`,
-        })),
+        }))
+        .filter((item: any) => String(item?.text ?? "").trim()),
     ),
     [sections],
   );
+
+  const toggleActionItemDone = (sectionIndex: number, actionIndex: number) => {
+    const next = sections.map((section: any, idx: number) => {
+      if (idx !== sectionIndex) return section;
+      const items = (section.actionItems ?? []).map((item: any, aIdx: number) =>
+        aIdx === actionIndex ? { ...item, done: !item.done } : item,
+      );
+      return { ...section, actionItems: items };
+    });
+    void saveMinuteSections(next);
+  };
 
   const startSectionEdit = (index: number) => {
     const section = sections[index] ?? {};
@@ -218,6 +237,20 @@ export function MeetingMinutesColumn({
                 </button>
               ) : (
                 <>
+                  <button
+                    className="btn-action"
+                    onClick={() =>
+                      setAgendaEdit(
+                        (agendaEdit ?? "")
+                          .split(/\r?\n/)
+                          .filter((line) => line.trim())
+                          .join("\n"),
+                      )
+                    }
+                    title="Strip blank lines from the agenda — leaves filled items as-is"
+                  >
+                    <Trash2 size={12} /> Remove empty
+                  </button>
                   <button className="btn-action" onClick={() => setAgendaEdit(null)}>Cancel</button>
                   <button className="btn-action btn-action--primary" onClick={saveAgenda}>
                     <Save size={12} /> Save
@@ -235,6 +268,7 @@ export function MeetingMinutesColumn({
                   value={agendaEdit}
                   onChange={(event) => setAgendaEdit(event.target.value)}
                   placeholder="Call to order&#10;Confirm attendance and quorum&#10;Approve agenda"
+                  style={{ resize: "none" }}
                 />
               </Field>
             ) : (
@@ -270,92 +304,128 @@ export function MeetingMinutesColumn({
             )}
           </div>
         </div>
-      </aside>
 
-      <div className="meeting-minutes-main">
-        {minutes ? (
+        {minutes && (
           <>
-            <div className="card meeting-minutes-summary-card">
+            <div className="card">
               <div className="card__head">
-                <h2 className="card__title"><FileText size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />Minutes</h2>
+                <h2 className="card__title">
+                  <FileText size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />
+                  Attendance
+                </h2>
                 <span className="card__subtitle">
                   Quorum {minutes.quorumMet ? "met" : "not met"} · {minutes.attendees.length} present
                   {quorumSnapshot.required != null ? ` / ${quorumSnapshot.required} required` : ""}
                 </span>
               </div>
               <div className="card__body">
-                <div className="meeting-minutes-overview-grid meeting-minutes-overview-grid--single">
-                  <section className="minutes-section minutes-section--panel">
-                    <h3>Attendance</h3>
-                    {attendanceEdit ? (
-                      <div className="col" style={{ gap: 12 }}>
-                        <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
-                          <Field label="Present" hint="One person per line.">
-                            <textarea
-                              className="textarea"
-                              value={attendanceEdit.attendees}
-                              onChange={(event) => setAttendanceEdit({ ...attendanceEdit, attendees: event.target.value })}
-                              rows={6}
-                            />
-                          </Field>
-                          <Field label="Absent / regrets" hint="One person per line.">
-                            <textarea
-                              className="textarea"
-                              value={attendanceEdit.absent}
-                              onChange={(event) => setAttendanceEdit({ ...attendanceEdit, absent: event.target.value })}
-                              rows={6}
-                            />
-                          </Field>
-                        </div>
-                        <Checkbox
-                          checked={attendanceEdit.quorumMet}
-                          onChange={(quorumMet) => setAttendanceEdit({ ...attendanceEdit, quorumMet })}
-                          label="Quorum met"
-                        />
-                        <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
-                          <button className="btn-action" onClick={() => setAttendanceEdit(null)}>Cancel</button>
-                          <button className="btn-action btn-action--primary" onClick={saveAttendance}>
-                            <Save size={12} /> Save attendance
-                          </button>
-                        </div>
+                {attendanceEdit ? (
+                  <div className="col" style={{ gap: 12 }}>
+                    <AttendanceRoster
+                      people={attendanceEdit.people}
+                      peopleNames={personLinkCandidates(members, directors).map((p) => p.name)}
+                      onChange={(next) => setAttendanceEdit({ ...attendanceEdit, people: next })}
+                    />
+                    <Checkbox
+                      checked={attendanceEdit.quorumMet}
+                      onChange={(quorumMet) => setAttendanceEdit({ ...attendanceEdit, quorumMet })}
+                      label="Quorum met"
+                    />
+                    <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
+                      <button className="btn-action" onClick={() => setAttendanceEdit(null)}>Cancel</button>
+                      <button className="btn-action btn-action--primary" onClick={saveAttendance}>
+                        <Save size={12} /> Save attendance
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="col" style={{ gap: 8 }}>
+                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                      <Badge tone={minutes.quorumMet ? "success" : "warn"}>
+                        Quorum {minutes.quorumMet ? "met" : "not met"}
+                      </Badge>
+                      <Badge tone="info">{minutes.attendees.length} present</Badge>
+                      {quorumSnapshot.required != null && (
+                        <Badge tone="neutral">{quorumSnapshot.required} required</Badge>
+                      )}
+                      <Badge tone="neutral">{minutes.absent.length} absent/regrets</Badge>
+                      {quorumSnapshot.label && (
+                        <span className="muted" style={{ flexBasis: "100%", fontSize: "var(--fs-sm)" }}>
+                          Rule: {quorumSnapshot.label}
+                        </span>
+                      )}
+                      <div style={{ flexBasis: "100%" }}>
+                        <LegalGuideInline rules={quorumLegalGuides} />
                       </div>
-                    ) : (
-                      <div className="col" style={{ gap: 8 }}>
-                        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                          <Badge tone={minutes.quorumMet ? "success" : "warn"}>
-                            Quorum {minutes.quorumMet ? "met" : "not met"}
-                          </Badge>
-                          <Badge tone="info">{minutes.attendees.length} present</Badge>
-                          {quorumSnapshot.required != null && (
-                            <Badge tone="neutral">{quorumSnapshot.required} required</Badge>
-                          )}
-                          <Badge tone="neutral">{minutes.absent.length} absent/regrets</Badge>
-                          {quorumSnapshot.label && (
-                            <span className="muted" style={{ flexBasis: "100%", fontSize: "var(--fs-sm)" }}>
-                              Rule: {quorumSnapshot.label}
-                            </span>
-                          )}
-                          <div style={{ flexBasis: "100%" }}>
-                            <LegalGuideInline rules={quorumLegalGuides} />
-                          </div>
-                          <button className="btn-action" onClick={startAttendanceEdit}>
-                            Edit attendance
-                          </button>
-                        </div>
-                        <AttendanceDetails
-                          present={minutes.attendees}
-                          absent={minutes.absent}
-                          people={personLinkCandidates(members, directors)}
-                        />
-                      </div>
-                    )}
-                  </section>
-                </div>
+                      <button className="btn-action" onClick={startAttendanceEdit}>
+                        Edit attendance
+                      </button>
+                    </div>
+                    <AttendanceDetails
+                      present={minutes.attendees}
+                      absent={minutes.absent}
+                      people={personLinkCandidates(members, directors)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="meeting-minutes-content-grid">
-              <div className="meeting-minutes-primary">
+            {minutes.decisions.length > 0 && (
+              <div className="card" id="meeting-minutes-decisions">
+                <div className="card__head">
+                  <h2 className="card__title">Decisions</h2>
+                  <span className="card__subtitle">{minutes.decisions.length}</span>
+                </div>
+                <div className="card__body">
+                  <ul className="meeting-minutes-compact-list">
+                    {minutes.decisions.map((d, i) => <li key={i}>{d}</li>)}
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {agendaActionItems.length > 0 && (
+              <div className="card" id="meeting-minutes-action-items">
+                <div className="card__head">
+                  <h2 className="card__title">Action items</h2>
+                  <span className="card__subtitle">{agendaActionItems.length}</span>
+                </div>
+                <div className="card__body">
+                  <div className="action-list action-list--compact">
+                    {agendaActionItems.map((a) => (
+                      <div className="action-item" key={`${a.sectionIndex}-${a.actionIndex}`}>
+                        <Checkbox
+                          checked={!!a.done}
+                          onChange={() => toggleActionItemDone(a.sectionIndex, a.actionIndex)}
+                          bare
+                        />
+                        <span className={`action-item__text${a.done ? " done" : ""}`}>
+                          <span>{a.text}</span>
+                          <span className="action-item__context">{a.sectionIndex + 1}. {a.sectionTitle}</span>
+                        </span>
+                        {a.assignee && <Badge>{a.assignee}</Badge>}
+                        {a.dueDate && <span className="action-item__due">{a.dueDate}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <SignaturePanel
+              societyId={minutes.societyId}
+              entityType="minutes"
+              entityId={minutes._id}
+              title="Minutes signatures"
+            />
+          </>
+        )}
+      </aside>
+
+      <div className="meeting-minutes-main">
+        {minutes ? (
+          <>
                 <div className="card">
                   <div className="card__head">
                     <h2 className="card__title">Agenda record</h2>
@@ -435,21 +505,15 @@ export function MeetingMinutesColumn({
 
                                     {sectionEditorTab === "notes" && (
                                       <div className="meeting-minutes-section-editor__panel">
-                                        <div className="meeting-minutes-section-editor__grid">
-                                          <Field label="Discussion notes" hint="Discussion/report points only. Use - for bullets and two spaces for nested details.">
-                                            <textarea
-                                              className="textarea mono"
-                                              rows={8}
-                                              value={sectionDraft.discussion}
-                                              onChange={(event) => setSectionDraft({ ...sectionDraft, discussion: event.target.value })}
-                                              placeholder="- **Expenses incurred by Ahmad:**&#10;  - $80.00 for notary signing&#10;  - $33.01 for posters&#10;- Receipts are recorded on Teams under Expenses."
-                                            />
-                                          </Field>
-                                          <div className="meeting-minutes-markdown-preview">
-                                            <div className="meeting-minutes-markdown-preview__label">Preview</div>
-                                            {renderMinutesMarkdown(sectionDraft.discussion)}
-                                          </div>
-                                        </div>
+                                        <Field label="Discussion notes" hint="Discussion/report points only. Use - for bullets and two spaces for nested details.">
+                                          <textarea
+                                            className="textarea mono"
+                                            rows={8}
+                                            value={sectionDraft.discussion}
+                                            onChange={(event) => setSectionDraft({ ...sectionDraft, discussion: event.target.value })}
+                                            placeholder="- **Expenses incurred by Ahmad:**&#10;  - $80.00 for notary signing&#10;  - $33.01 for posters&#10;- Receipts are recorded on Teams under Expenses."
+                                          />
+                                        </Field>
                                         <div className="meeting-minutes-section-editor__note-options">
                                           <Field label="Decisions" hint="One per line.">
                                             <textarea className="textarea" rows={3} value={sectionDraft.decisions} onChange={(event) => setSectionDraft({ ...sectionDraft, decisions: event.target.value })} />
@@ -530,11 +594,11 @@ export function MeetingMinutesColumn({
                                                   />
                                                 </Field>
                                                 <Field label="Assignee">
-                                                  <input
-                                                    className="input"
+                                                  <NameAutocomplete
                                                     value={item.assignee}
-                                                    onChange={(event) => updateActionDraft(actionIndex, { assignee: event.target.value })}
-                                                    placeholder="Ahmad Jalil"
+                                                    onChange={(next) => updateActionDraft(actionIndex, { assignee: next })}
+                                                    options={assigneeOptions}
+                                                    placeholder="First name Last name"
                                                   />
                                                 </Field>
                                                 <Field label="Due">
@@ -651,57 +715,6 @@ export function MeetingMinutesColumn({
                     )}
                   </div>
                 </div>
-              </div>
-
-              <div className="meeting-minutes-secondary">
-                <div className="card">
-                  <div className="card__head">
-                    <h2 className="card__title">Decisions</h2>
-                    <span className="card__subtitle">{minutes.decisions.length}</span>
-                  </div>
-                  <div className="card__body">
-                    <ul className="meeting-minutes-compact-list">
-                      {minutes.decisions.map((d, i) => <li key={i}>{d}</li>)}
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="card">
-                  <div className="card__head">
-                    <h2 className="card__title">Action items</h2>
-                    <span className="card__subtitle">{agendaActionItems.length}</span>
-                  </div>
-                  <div className="card__body">
-                    {agendaActionItems.length ? (
-                      <div className="action-list action-list--compact">
-                        {agendaActionItems.map((a) => (
-                          <div className="action-item" key={`${a.sectionIndex}-${a.actionIndex}`}>
-                            <Checkbox checked={!!a.done} onChange={() => {}} bare disabled />
-                            <span className={`action-item__text${a.done ? " done" : ""}`}>
-                              <span>{a.text}</span>
-                              <span className="action-item__context">{a.sectionIndex + 1}. {a.sectionTitle}</span>
-                            </span>
-                            {a.assignee && <Badge>{a.assignee}</Badge>}
-                            {a.dueDate && <span className="action-item__due">{a.dueDate}</span>}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                        No action rows have been added to agenda items yet.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <SignaturePanel
-                  societyId={minutes.societyId}
-                  entityType="minutes"
-                  entityId={minutes._id}
-                  title="Minutes signatures"
-                />
-              </div>
-            </div>
           </>
         ) : (
           <div className="card">
@@ -815,6 +828,113 @@ function MotionAssignmentRow({
           </option>
         ))}
       </select>
+    </div>
+  );
+}
+
+type AttendancePerson = { name: string; status: "present" | "absent" };
+
+function AttendanceRoster({
+  people,
+  peopleNames,
+  onChange,
+}: {
+  people: AttendancePerson[];
+  peopleNames: string[];
+  onChange: (next: AttendancePerson[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const suggestions = useMemo(
+    () => Array.from(new Set(peopleNames)).filter(Boolean).sort(),
+    [peopleNames],
+  );
+  const takenNames = useMemo(
+    () => new Set(people.map((p) => p.name.trim().toLowerCase())),
+    [people],
+  );
+
+  const commit = (nameOverride?: string) => {
+    const trimmed = (nameOverride ?? draft).trim();
+    if (!trimmed) return;
+    if (takenNames.has(trimmed.toLowerCase())) {
+      setDraft("");
+      return;
+    }
+    onChange([...people, { name: trimmed, status: "present" }]);
+    setDraft("");
+  };
+
+  const setStatus = (index: number, status: AttendancePerson["status"]) => {
+    onChange(people.map((p, i) => (i === index ? { ...p, status } : p)));
+  };
+
+  const remove = (index: number) => {
+    onChange(people.filter((_, i) => i !== index));
+  };
+
+  const presentCount = people.filter((p) => p.status === "present").length;
+  const absentCount = people.length - presentCount;
+
+  return (
+    <div className="attendance-roster">
+      <div className="attendance-roster__head">
+        <strong>Attendance</strong>
+        <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+          {presentCount} present · {absentCount} absent / regrets
+        </span>
+      </div>
+      {people.length > 0 && (
+        <ul className="attendance-roster__list">
+          {people.map((person, index) => (
+            <li key={`${index}-${person.name}`} className="attendance-roster__row">
+              <button
+                type="button"
+                className="attendance-roster__remove"
+                onClick={() => remove(index)}
+                aria-label={`Remove ${person.name}`}
+                title={`Remove ${person.name}`}
+              >
+                <MinusCircle size={16} />
+              </button>
+              <span className="attendance-roster__name">{person.name}</span>
+              <div className="attendance-roster__status segmented">
+                <button
+                  type="button"
+                  className={`segmented__btn${person.status === "present" ? " is-active" : ""}`}
+                  onClick={() => setStatus(index, "present")}
+                >
+                  Present
+                </button>
+                <button
+                  type="button"
+                  className={`segmented__btn${person.status === "absent" ? " is-active" : ""}`}
+                  onClick={() => setStatus(index, "absent")}
+                >
+                  Absent / regrets
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="attendance-roster__add">
+        <NameAutocomplete
+          value={draft}
+          onChange={setDraft}
+          options={suggestions}
+          excludeOptions={takenNames}
+          placeholder="Type a name and press Enter…"
+          onCommit={(name) => commit(name)}
+        />
+        <button
+          type="button"
+          className="btn-action"
+          onClick={() => commit()}
+          disabled={!draft.trim()}
+        >
+          <Plus size={12} /> Add
+        </button>
+      </div>
     </div>
   );
 }

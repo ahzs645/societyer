@@ -1092,6 +1092,11 @@
   font-size: var(--fs-xs);
 }
 .motion {
+  // container-type lets us run a @container query against the motion card's
+  // own width, independent of the surrounding tab/page layout. When the card
+  // is narrow (long title pushing things tight, or a sidebar squeezing the
+  // tab) the .motion__head rule below stacks actions under the title.
+  container-type: inline-size;
   padding: var(--s-3);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
@@ -1100,6 +1105,44 @@
 }
 .motion__text { font-weight: 500; margin-bottom: 4px; }
 .motion__meta { font-size: var(--fs-sm); color: var(--text-tertiary); display: flex; gap: var(--s-3); flex-wrap: wrap; }
+.motion__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+}
+.motion__head-main {
+  flex: 1;
+  min-width: 0;
+}
+.motion__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+// Long-title escape hatch: drives off the rendered title via a class on
+// .motion__head. When the title heuristic flags it, the action column drops
+// below the title so the title gets the card's full inline width.
+.motion__head--stacked {
+  flex-direction: column;
+  align-items: stretch;
+
+  .motion__actions {
+    align-self: flex-end;
+  }
+}
+// Container-query fallback for narrow cards (sidebar squeeze, etc.) — same
+// stacked layout, applied automatically when the .motion card itself shrinks.
+@container (max-width: 700px) {
+  .motion__head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .motion__actions {
+    align-self: flex-end;
+  }
+}
 .motion-adjournment {
   display: grid;
   gap: var(--s-2);
@@ -1116,17 +1159,23 @@
   align-items: center;
 }
 .meeting-minutes-layout {
+  // Left column: stack of context cards (agenda outline, attendance, decisions,
+  // action items, signatures). Right column: the agenda record (primary
+  // workspace), ~2/3 of the screen.
   display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);
   gap: var(--s-4);
   align-items: start;
 }
 .meeting-minutes-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
   min-width: 0;
 }
 .meeting-minutes-agenda-card {
-  position: sticky;
-  top: var(--s-4);
+  // Was sticky when this column had only one card. Now there are several
+  // stacked cards, so let it scroll with the rest of the column.
 }
 .meeting-minutes-agenda-card .card__body {
   display: grid;
@@ -1168,9 +1217,7 @@
 .meeting-minutes-agenda-link.is-active {
   font-weight: 700;
 }
-.meeting-minutes-main,
-.meeting-minutes-primary,
-.meeting-minutes-secondary {
+.meeting-minutes-main {
   display: grid;
   gap: var(--s-4);
   min-width: 0;
@@ -1192,19 +1239,144 @@
   border-radius: var(--r-sm);
   background: var(--bg-subtle);
 }
-.meeting-minutes-content-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.85fr);
-  gap: var(--s-4);
-  align-items: start;
+.attendance-roster {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
 }
-.meeting-minutes-discussion {
-  max-height: 260px;
-  overflow: auto;
-  padding: var(--s-3);
+.attendance-roster__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+.attendance-roster__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.attendance-roster__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+
+  &:last-child { border-bottom: 0; }
+}
+.attendance-roster__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+
+  &:hover { background: color-mix(in srgb, var(--danger) 16%, transparent); }
+  &:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+  }
+}
+.attendance-roster__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attendance-roster__status {
+  flex: 0 0 auto;
+}
+.attendance-roster__add {
+  display: flex;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}
+// Shared name-autocomplete styles — used by AttendanceRoster, MotionEditor's
+// NameInput, and the section action item Assignee field. Custom dropdown that
+// replaces the browser-native datalist popup with themed UI.
+.name-autocomplete {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+.name-autocomplete > .input {
+  width: 100%;
+}
+.name-autocomplete__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  background: var(--bg-subtle);
+  box-shadow: var(--shadow-md);
+}
+.name-autocomplete__option {
+  padding: 6px 10px;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  font-size: var(--fs-md);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.name-autocomplete__option.is-highlighted {
+  background: var(--bg-hover);
+}
+.meeting-reminder-chip {
+  // Match the .badge--success / .badge--accent visual treatment: soft tinted
+  // background, bold tone-coloured text, transparent border. This resolves
+  // correctly in both light and dark themes via the *-soft and base tone
+  // tokens.
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: filter 0.12s ease;
+
+  &:hover { filter: brightness(1.08); }
+  &:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+  }
+}
+.meeting-reminder-chip--decisions {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.meeting-reminder-chip--actions {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.meeting-minutes-discussion {
+  // Flat: parent card already provides bg + border + padding, so this layer
+  // just needs to constrain height and preserve newlines.
+  max-height: 260px;
+  overflow: auto;
   color: var(--text-secondary);
   font-size: var(--fs-sm);
   line-height: 1.55;
@@ -1212,19 +1384,16 @@
 }
 .meeting-minutes-narrative {
   margin-bottom: var(--s-3);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bg-base);
-  overflow: hidden;
 }
 .meeting-minutes-narrative summary {
-  padding: var(--s-3);
+  padding: var(--s-2) 0;
   cursor: pointer;
   font-weight: 600;
 }
 .meeting-minutes-narrative .meeting-minutes-discussion {
   max-height: 180px;
-  margin: 0 var(--s-3) var(--s-3);
+  margin: 0;
+  padding-top: var(--s-2);
 }
 .meeting-minutes-narrative--agenda {
   margin: 0;
@@ -1234,21 +1403,22 @@
 }
 .meeting-minutes-section-list {
   display: grid;
-  gap: var(--s-3);
+  gap: 0;
   padding-right: var(--s-1);
 }
 .meeting-minutes-section-item {
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bg-subtle);
-  overflow: hidden;
+  // Flat — sections live inside a card, so don't double the box. Use a bottom
+  // divider between sections instead of giving each its own card chrome.
+  border-bottom: 1px solid var(--border);
+
+  &:last-child { border-bottom: 0; }
 }
 .meeting-minutes-section-item__summary {
   display: flex;
   justify-content: space-between;
   gap: var(--s-3);
   align-items: flex-start;
-  padding: var(--s-3);
+  padding: var(--s-3) 0;
   cursor: pointer;
   list-style: none;
 }
@@ -1286,7 +1456,7 @@
 .meeting-minutes-section-item__body {
   display: grid;
   gap: var(--s-3);
-  padding: 0 var(--s-3) var(--s-3);
+  padding: 0 0 var(--s-3);
 }
 .meeting-minutes-section-item p {
   margin: 0;
@@ -1516,8 +1686,16 @@
   gap: var(--s-2);
 }
 .action-list--compact .action-item {
+  // Flat — outer card already has bg + border + padding, so don't render each
+  // row as its own box. A subtle bottom divider keeps rows visually separated.
   align-items: flex-start;
   padding: var(--s-2) 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+
+  &:last-child { border-bottom: 0; }
 }
 .action-list--compact .action-item__text {
   display: grid;
@@ -1530,7 +1708,7 @@
   line-height: 1.35;
 }
 @media (max-width: 1180px) {
-  .meeting-minutes-content-grid {
+  .meeting-minutes-layout {
     grid-template-columns: 1fr;
   }
 }
@@ -1590,17 +1768,37 @@
   font-size: var(--fs-sm);
 }
 .minutes-preview__page {
+  // Force light tokens inside the preview so child elements rendered from the
+  // export HTML (.motion, .meta, .muted) match the exported document and don't
+  // bleed dark-mode backgrounds / text colors when the app theme is dark.
+  --border: #d0d4dc;
+  --text-tertiary: #666;
+  --bg-subtle: #f6f8ff;
+  color-scheme: light;
+
   width: min(680px, 100%);
   min-height: 760px;
   margin: 0 auto;
   padding: 48px;
-  border: 1px solid var(--border);
+  border: 1px solid #d0d4dc;
   background: #fff;
   color: #1a1a1a;
   box-shadow: var(--shadow-md);
   font-family: Calibri, "Segoe UI", Arial, sans-serif;
   font-size: 11pt;
   line-height: 1.35;
+
+  .motion {
+    border-left: 3px solid #3b5bdb;
+    padding: 4px 8px;
+    background: #f6f8ff;
+    margin: 0 0 8px;
+  }
+  .motion .outcome-carried { color: #0a8f4e; font-weight: 600; }
+  .motion .outcome-defeated { color: #c9264a; font-weight: 600; }
+  .motion .outcome-tabled { color: #a86400; font-weight: 600; }
+  .meta { color: #666; font-size: 10pt; }
+  .muted { color: #888; }
 }
 .minutes-preview__page h1 {
   margin: 0 0 8px;
@@ -1792,8 +1990,48 @@
   gap: var(--s-4);
   align-items: start;
 }
+// Hide the browser's native up/down spinners on VoteStepper inputs — the
+// component has its own +/- buttons, native arrows are redundant noise.
+.vote-stepper__input {
+  -moz-appearance: textfield;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
 .minutes-preview--inline .minutes-preview__page {
   width: min(760px, 100%);
+}
+.minutes-preview__viewport {
+  // Outer resizable, clipping container. react-zoom-pan-pinch handles the
+  // pan/zoom transform inside; we just provide a bounded viewport that the
+  // user can drag the bottom edge of to expand or shorten.
+  position: relative;
+  width: 100%;
+  height: 800px;
+  min-height: 240px;
+  max-height: 90vh;
+  overflow: hidden;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-app);
+}
+.minutes-preview__transform-wrapper {
+  width: 100% !important;
+  height: 100% !important;
+  cursor: grab;
+  &:active { cursor: grabbing; }
+}
+.minutes-preview__transform-content {
+  // The library wraps content in this element. We want it to lay out at the
+  // page's natural size so panning bounds work; no extra styling needed beyond
+  // the library's defaults.
+  display: flex;
+  justify-content: center;
 }
 .meeting-preview-page__header {
   display: flex;
@@ -1843,7 +2081,6 @@
   .meeting-overview-grid,
   .meeting-minutes-layout,
   .meeting-minutes-overview-grid,
-  .meeting-minutes-content-grid,
   .meeting-package-grid,
   .meeting-package-review-grid,
   .meeting-export-layout,
@@ -2557,6 +2794,16 @@
 }
 .tab__count {
   margin-left: 2px;
+}
+.tabs__trailing {
+  // Right-side slot in the tab bar — pushed to the far right with margin-left
+  // auto, sits visually separated from the tabs so reminder chips read as a
+  // distinct surface from the navigation tabs themselves.
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: var(--s-2);
 }
 
 @media (max-width: 760px) {

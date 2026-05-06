@@ -1,4 +1,4 @@
-import { Eye, FileDown, FileText, Printer } from "lucide-react";
+import { FileDown, FileText, Printer } from "lucide-react";
 import { EyeOff } from "lucide-react";
 import { Badge, Field } from "../../../components/ui";
 import { Checkbox } from "../../../components/Controls";
@@ -42,7 +42,6 @@ export function MeetingSidebarColumn({
   exportToWord,
   exportToPdf,
   exportPublicMinutes,
-  openMinutesPreview,
   minutesExportGaps,
   quorumSnapshot,
   quorumLegalGuides,
@@ -89,7 +88,6 @@ export function MeetingSidebarColumn({
   exportToWord: () => void;
   exportToPdf: () => void;
   exportPublicMinutes: () => void;
-  openMinutesPreview: () => void;
   minutesExportGaps: any[];
   quorumSnapshot: any;
   quorumLegalGuides: any[];
@@ -158,24 +156,6 @@ export function MeetingSidebarColumn({
                 <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>
                   {selectedMinutesExportStyle.tone}
                 </p>
-                <Field label="Layout">
-                  <div className="minutes-export-layout" role="group" aria-label="Minutes export layout">
-                    <button
-                      type="button"
-                      className={`btn-action${minutesExportStyle !== "action-table" ? " btn-action--primary" : ""}`}
-                      onClick={() => setMinutesExportStyle("numbered-agenda")}
-                    >
-                      Indented
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn-action${minutesExportStyle === "action-table" ? " btn-action--primary" : ""}`}
-                      onClick={() => setMinutesExportStyle("action-table")}
-                    >
-                      Table
-                    </button>
-                  </div>
-                </Field>
                 <div className="col" style={{ gap: 6 }}>
                   <Checkbox
                     checked={includeTranscriptInExport}
@@ -209,9 +189,6 @@ export function MeetingSidebarColumn({
                   />
                 </div>
                 <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                  <button className="btn-action" onClick={openMinutesPreview}>
-                    <Eye size={12} /> Preview
-                  </button>
                   <button className="btn-action btn-action--primary" onClick={exportToWord}>
                     <FileDown size={12} /> Export Word
                   </button>

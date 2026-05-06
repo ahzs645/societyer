@@ -34,7 +34,7 @@ export function SignaturePanel({
   );
 
   return (
-    <div className="card" style={{ marginTop: 16 }}>
+    <div className="card">
       <div className="card__head">
         <h3 className="card__title" style={{ fontSize: "var(--fs-md)" }}>
           <Pen size={13} style={{ verticalAlign: -1, marginRight: 6 }} />
@@ -88,22 +88,22 @@ export function SignaturePanel({
             <Field label="Type your full name to sign">
               <input
                 className="input"
-                value={typedName || user?.displayName || ""}
+                value={typedName}
                 onChange={(e) => setTypedName(e.target.value)}
-                placeholder="e.g. Jane Doe"
+                placeholder="First name Last name"
               />
             </Field>
             <button
               className="btn btn--accent"
-              disabled={!user}
+              disabled={!user || !typedName.trim()}
               onClick={async () => {
                 if (!user) {
                   toast.error("Pick a user in the header before signing.");
                   return;
                 }
-                const name = typedName || user?.displayName;
+                const name = typedName.trim();
                 if (!name) {
-                  toast.error("Pick a user in the header or type your name.");
+                  toast.error("Type your name to sign.");
                   return;
                 }
                 await sign({

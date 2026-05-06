@@ -241,8 +241,8 @@ export function MeetingPackageHub({
               </button>
             </div>
 
-            {topicsWithMaterials.map((topic) => (
-              <div key={topic} className="meeting-package-topic">
+            {topicsWithMaterials.map((topic, topicIndex) => (
+              <div key={`${topicIndex}-${topic}`} className="meeting-package-topic">
                 <div className="meeting-package-topic__head">
                   <strong>{topic}</strong>
                   <button className="btn btn--ghost btn--sm" onClick={() => openMaterialDrawer(topic)}>Add</button>
@@ -320,8 +320,8 @@ export function MeetingPackageHub({
               <details className="meeting-package-empty-topics">
                 <summary>{emptyTopics.length} agenda topic{emptyTopics.length === 1 ? "" : "s"} without linked materials</summary>
                 <div className="meeting-package-topic-list">
-                  {emptyTopics.map((topic) => (
-                    <div key={topic} className="meeting-package-topic-pill">
+                  {emptyTopics.map((topic, topicIndex) => (
+                    <div key={`${topicIndex}-${topic}`} className="meeting-package-topic-pill">
                       <span>{topic}</span>
                       <button className="btn btn--ghost btn--sm" onClick={() => openMaterialDrawer(topic)}>Add</button>
                     </div>

@@ -11,7 +11,7 @@ import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
 import { formatDate, formatDateTime } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ClipboardCheck, Download, ExternalLink, Eye, EyeOff, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Printer, Settings2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardCheck, Download, ExternalLink, EyeOff, FileDown, FileText, Gavel, ListChecks, MoreHorizontal, PackageCheck, Printer, Settings2 } from "lucide-react";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion } from "../components/MotionEditor";
 import {
   MINUTES_EXPORT_STYLES,
@@ -131,8 +131,7 @@ export function MeetingDetailPage() {
   const [transcriptEdit, setTranscriptEdit] = useState<string | null>(null);
   const [agendaEdit, setAgendaEdit] = useState<string | null>(null);
   const [attendanceEdit, setAttendanceEdit] = useState<{
-    attendees: string;
-    absent: string;
+    people: { name: string; status: "present" | "absent" }[];
     quorumMet: boolean;
   } | null>(null);
   const [savingTranscript, setSavingTranscript] = useState(false);
@@ -144,7 +143,6 @@ export function MeetingDetailPage() {
   const [includeApprovalInExport, setIncludeApprovalInExport] = useState(() => readStoredExportBool("includeApproval", true));
   const [includeSignaturesInExport, setIncludeSignaturesInExport] = useState(() => readStoredExportBool("includeSignatures", true));
   const [includePlaceholdersInExport, setIncludePlaceholdersInExport] = useState(() => readStoredExportBool("includePlaceholders", false));
-  const [minutesPreviewOpen, setMinutesPreviewOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<MeetingDetailTab>("overview");
   const [materialDraft, setMaterialDraft] = useState<any | null>(null);
   const [joinEdit, setJoinEdit] = useState<any | null>(null);
@@ -275,6 +273,32 @@ export function MeetingDetailPage() {
         committees,
       })
     : [];
+
+  const decisionsCount =
+    ((minutes?.decisions ?? []) as any[]).filter((d) => String(d ?? "").trim()).length +
+    ((minutes?.sections ?? []) as any[]).reduce(
+      (sum, section) =>
+        sum + ((section?.decisions ?? []) as any[]).filter((d) => String(d ?? "").trim()).length,
+      0,
+    );
+  const actionItemsCount =
+    ((minutes?.actionItems ?? []) as any[]).filter((item) => String(item?.text ?? "").trim()).length +
+    ((minutes?.sections ?? []) as any[]).reduce(
+      (sum, section) =>
+        sum + ((section?.actionItems ?? []) as any[]).filter((item) => String(item?.text ?? "").trim()).length,
+      0,
+    );
+
+  const jumpToMinutesAnchor = (anchorId: string) => {
+    setActiveTab("minutes");
+    // Two animation frames lets React mount the Minutes tab before we try to
+    // scroll to the anchor — without it, document.getElementById returns null.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        document.getElementById(anchorId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  };
 
   const runGenerate = async () => {
     const sourceTranscript = transcript.trim() || transcriptOnFile.trim();
@@ -500,11 +524,6 @@ export function MeetingDetailPage() {
     else toast.error("Popup blocked", "Allow popups for this site to open the printable PDF view.");
   };
 
-  const openMinutesPreview = () => {
-    if (!minutes) return;
-    setMinutesPreviewOpen(true);
-  };
-
   const openMinutesPreviewPage = () => {
     if (!meeting || !minutes) return;
     window.open(`/app/meetings/${meeting._id}/preview`, "_blank", "noopener,noreferrer");
@@ -628,6 +647,33 @@ export function MeetingDetailPage() {
         agendaJson: next.length ? JSON.stringify(next) : undefined,
       },
     });
+
+    // Append-only sync: any agenda title that doesn't match an existing section
+    // (case-insensitive trimmed compare) gets a new empty section. Existing
+    // sections — and their notes/decisions/actions — are left alone, and items
+    // removed from the agenda do NOT remove their sections (that would silently
+    // delete recorded minutes).
+    if (minutes && next.length) {
+      const existingSections = ((minutes.sections ?? []) as any[]);
+      const normalize = (title: string) => title.trim().toLowerCase();
+      const existingTitles = new Set(existingSections.map((s) => normalize(s?.title ?? "")));
+      const additions = next
+        .filter((title) => !existingTitles.has(normalize(title)))
+        .map((title) => ({
+          title,
+          type: inferAgendaSectionType(title),
+          discussion: "",
+          decisions: [],
+          actionItems: [],
+        }));
+      if (additions.length) {
+        await updateMinutes({
+          id: minutes._id,
+          patch: { sections: [...existingSections, ...additions] },
+        });
+      }
+    }
+
     setAgendaEdit(null);
     toast.success("Agenda saved");
   };
@@ -635,16 +681,24 @@ export function MeetingDetailPage() {
   const startAttendanceEdit = () => {
     if (!minutes) return;
     setAttendanceEdit({
-      attendees: minutes.attendees.join("\n"),
-      absent: minutes.absent.join("\n"),
+      people: [
+        ...minutes.attendees.map((name: string) => ({ name, status: "present" as const })),
+        ...minutes.absent.map((name: string) => ({ name, status: "absent" as const })),
+      ],
       quorumMet: minutes.quorumMet,
     });
   };
 
   const saveAttendance = async () => {
     if (!minutes || !attendanceEdit) return;
-    const attendees = parseLines(attendanceEdit.attendees);
-    const absent = parseLines(attendanceEdit.absent);
+    const attendees = attendanceEdit.people
+      .filter((p) => p.status === "present")
+      .map((p) => p.name.trim())
+      .filter(Boolean);
+    const absent = attendanceEdit.people
+      .filter((p) => p.status === "absent")
+      .map((p) => p.name.trim())
+      .filter(Boolean);
     await updateMinutes({
       id: minutes._id,
       patch: { attendees, absent, quorumMet: attendanceEdit.quorumMet },
@@ -847,11 +901,6 @@ export function MeetingDetailPage() {
                 <ExternalLink size={12} /> Join
               </a>
             )}
-            {minutes && (
-              <button className="btn-action btn-action--primary" onClick={openMinutesPreview} title="Preview the selected Word/PDF export layout">
-                <Eye size={12} /> Preview
-              </button>
-            )}
             <Menu
               align="right"
               minWidth={220}
@@ -942,6 +991,30 @@ export function MeetingDetailPage() {
           { id: "export", label: "Export", icon: <Settings2 size={12} /> },
           { id: "sources", label: "Sources", count: linkedSourceCount, icon: <Download size={12} /> },
         ]}
+        trailing={
+          <>
+            <button
+              type="button"
+              className="meeting-reminder-chip meeting-reminder-chip--decisions"
+              onClick={() => jumpToMinutesAnchor("meeting-minutes-decisions")}
+              title={`${decisionsCount} decision${decisionsCount === 1 ? "" : "s"} recorded — click to jump to the Decisions list on the Minutes tab.`}
+              aria-label={`${decisionsCount} decisions recorded — go to Minutes tab`}
+            >
+              <CheckCircle2 size={12} />
+              <span>{decisionsCount}</span>
+            </button>
+            <button
+              type="button"
+              className="meeting-reminder-chip meeting-reminder-chip--actions"
+              onClick={() => jumpToMinutesAnchor("meeting-minutes-action-items")}
+              title={`${actionItemsCount} action item${actionItemsCount === 1 ? "" : "s"} on file — click to jump to Action items on the Minutes tab.`}
+              aria-label={`${actionItemsCount} action items on file — go to Minutes tab`}
+            >
+              <ListChecks size={12} />
+              <span>{actionItemsCount}</span>
+            </button>
+          </>
+        }
       />
 
       <div className="meeting-detail-tabpanel">
@@ -970,7 +1043,6 @@ export function MeetingDetailPage() {
               exportToWord={exportToWord}
               exportToPdf={exportToPdf}
               exportPublicMinutes={exportPublicMinutes}
-              openMinutesPreview={openMinutesPreview}
               minutesExportGaps={minutesExportGaps}
               quorumSnapshot={quorumSnapshot}
               quorumLegalGuides={quorumLegalGuides}
@@ -1018,7 +1090,6 @@ export function MeetingDetailPage() {
               exportToWord={exportToWord}
               exportToPdf={exportToPdf}
               exportPublicMinutes={exportPublicMinutes}
-              openMinutesPreview={openMinutesPreview}
               minutesExportGaps={minutesExportGaps}
               quorumSnapshot={quorumSnapshot}
               quorumLegalGuides={quorumLegalGuides}
@@ -1164,7 +1235,6 @@ export function MeetingDetailPage() {
               exportToWord={exportToWord}
               exportToPdf={exportToPdf}
               exportPublicMinutes={exportPublicMinutes}
-              openMinutesPreview={openMinutesPreview}
               minutesExportGaps={minutesExportGaps}
               quorumSnapshot={quorumSnapshot}
               quorumLegalGuides={quorumLegalGuides}
@@ -1228,7 +1298,6 @@ export function MeetingDetailPage() {
             exportToWord={exportToWord}
             exportToPdf={exportToPdf}
             exportPublicMinutes={exportPublicMinutes}
-            openMinutesPreview={openMinutesPreview}
             minutesExportGaps={minutesExportGaps}
             quorumSnapshot={quorumSnapshot}
             quorumLegalGuides={quorumLegalGuides}
@@ -1296,47 +1365,6 @@ export function MeetingDetailPage() {
             </Field>
           </div>
         )}
-      </Drawer>
-
-      <Drawer
-        open={minutesPreviewOpen}
-        onClose={() => setMinutesPreviewOpen(false)}
-        title="Word preview"
-        size="wide"
-        footer={
-          <>
-            <button className="btn" onClick={() => setMinutesPreviewOpen(false)}>Close</button>
-            <button className="btn" onClick={openMinutesPreviewPage}>
-              <ExternalLink size={14} /> Open page
-            </button>
-            <button className="btn btn--accent" onClick={exportToWord}>
-              <FileDown size={14} /> Export Word
-            </button>
-            <button className="btn" onClick={exportToPdf}>
-              <Printer size={14} /> Print / PDF
-            </button>
-          </>
-        }
-      >
-        <div className="minutes-preview">
-          <div className="minutes-preview__toolbar">
-            <div>
-              <strong>{selectedMinutesExportStyle.label}</strong>
-              <p className="muted">{selectedMinutesExportStyle.tone}</p>
-            </div>
-            <select
-              className="input"
-              value={minutesExportStyle}
-              onChange={(event) => setMinutesExportStyle(event.target.value as MinutesExportStyleId)}
-              aria-label="Preview export style"
-            >
-              {MINUTES_EXPORT_STYLES.map((style) => (
-                <option key={style.id} value={style.id}>{style.label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="minutes-preview__page" dangerouslySetInnerHTML={{ __html: renderExportBody() }} />
-        </div>
       </Drawer>
     </div>
   );
