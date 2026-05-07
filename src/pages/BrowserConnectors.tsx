@@ -1067,6 +1067,8 @@ export function BrowserConnectorsPage() {
     <div className="page">
       <SettingsShell
         title={workspaceConnector ? workspaceConnector.name : "Browser apps"}
+        icon={<MonitorPlay size={16} />}
+        iconColor="orange"
         description={workspaceConnector
           ? `Live browser workspace for ${workspaceConnector.name}.`
           : "Open an installed browser app for imports, downloads, and page utilities."}
