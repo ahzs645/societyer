@@ -7,6 +7,7 @@ import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { RadioGroup, Toggle } from "../components/Controls";
 import { SettingsShell } from "../components/ui";
+import { Settings as SettingsIcon } from "lucide-react";
 import { LocaleSwitcher } from "../components/LocaleSwitcher";
 import { getAuthMode } from "../lib/authMode";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
@@ -100,6 +101,8 @@ export function SettingsPage() {
     <div className="page page--wide">
       <SettingsShell
         title={t("settings.title")}
+        icon={<SettingsIcon size={16} />}
+        iconColor="gray"
         description={t("settings.subtitle")}
         tabs={[
           { id: "workspace", label: "Workspace" },

@@ -9,7 +9,7 @@ import { DatePicker } from "../components/DatePicker";
 import { OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Plus, Trash2, Workflow } from "lucide-react";
+import { FileJson, Plus, Trash2, Workflow } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
 
@@ -101,6 +101,8 @@ export function WorkflowPackagesPage() {
     <div className="page page--wide">
       <SettingsShell
         title="Workflow packages"
+        icon={<FileJson size={16} />}
+        iconColor="orange"
         description="Legal package metadata for events, effective dates, signer rosters, supporting documents, and payment references."
         tabs={[
           { id: "packages", label: "Packages", icon: <Workflow size={14} /> },

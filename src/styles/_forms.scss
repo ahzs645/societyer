@@ -299,7 +299,16 @@
   text-align: left;
 }
 .kbar__item.is-active { background: var(--bg-hover); }
-.kbar__item svg { width: 14px; height: 14px; color: var(--text-tertiary); }
+/* Each row sets `--kbar-item-tone` inline based on its registered route's
+ * group color (see CommandPalette.tsx). The SCSS only knows how to consume
+ * the variable — never how to map a group name to a color, which is the
+ * registry's job (`routeIdentity.ts`). The dim factor + active behavior live
+ * here because they're palette-specific, not registry-specific. */
+.kbar__item svg {
+  width: 14px; height: 14px;
+  color: color-mix(in oklab, var(--kbar-item-tone, var(--text-tertiary)) 72%, transparent);
+}
+.kbar__item.is-active svg { color: var(--kbar-item-tone, var(--text-primary)); }
 .kbar__hint { margin-left: auto; font-size: var(--fs-xs); color: var(--text-tertiary); }
 .kbar__kbd {
   display: inline-flex;

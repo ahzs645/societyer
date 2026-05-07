@@ -123,9 +123,62 @@ export function InspectorBackButton() {
  * the first selected row's detail drawer). */
 export const INSPECTOR_REQUEST_OPEN_EVENT = "societyer:inspector-request-open";
 
+const INSPECTOR_WIDTH_STORAGE_KEY = "societyer.inspector.width";
+const INSPECTOR_MIN_WIDTH = 320;
+const INSPECTOR_MAX_WIDTH = 1200;
+const INSPECTOR_DEFAULT_WIDTH = 480;
+
+function readStoredInspectorWidth() {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem(INSPECTOR_WIDTH_STORAGE_KEY);
+  if (!raw) return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return null;
+  return Math.max(INSPECTOR_MIN_WIDTH, Math.min(INSPECTOR_MAX_WIDTH, value));
+}
+
 export function InspectorHost() {
   const inspector = useInspectorPanel();
   const isOpen = Boolean(inspector?.activePanelId);
+  const [inspectorWidth, setInspectorWidth] = useState<number>(
+    () => readStoredInspectorWidth() ?? INSPECTOR_DEFAULT_WIDTH,
+  );
+  const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(INSPECTOR_WIDTH_STORAGE_KEY, String(inspectorWidth));
+  }, [inspectorWidth]);
+
+  const onResizeStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    dragStateRef.current = { startX: event.clientX, startWidth: inspectorWidth };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const onMove = (moveEvent: MouseEvent) => {
+      const drag = dragStateRef.current;
+      if (!drag) return;
+      // Inspector lives on the right edge — dragging LEFT widens the panel,
+      // dragging RIGHT narrows it. delta is positive when moving left.
+      const delta = drag.startX - moveEvent.clientX;
+      const next = Math.max(
+        INSPECTOR_MIN_WIDTH,
+        Math.min(INSPECTOR_MAX_WIDTH, drag.startWidth + delta),
+      );
+      setInspectorWidth(next);
+    };
+    const onUp = () => {
+      dragStateRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [inspectorWidth]);
 
   useEffect(() => {
     if (!inspector) return;
@@ -156,7 +209,10 @@ export function InspectorHost() {
   if (!inspector) return null;
 
   return (
-    <div className={`inspector-host${isOpen ? " is-open" : ""}`}>
+    <div
+      className={`inspector-host${isOpen ? " is-open" : ""}`}
+      style={isOpen ? ({ "--inspector-width": `${inspectorWidth}px` } as React.CSSProperties) : undefined}
+    >
       {isOpen && (
         <button
           className="inspector-host__backdrop"
@@ -165,6 +221,15 @@ export function InspectorHost() {
         />
       )}
       <aside className="inspector" aria-hidden={!isOpen}>
+        {isOpen && (
+          <div
+            className="inspector__resizer"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize inspector panel"
+            onMouseDown={onResizeStart}
+          />
+        )}
         <div className="inspector__header" ref={inspector.setHeaderTarget} />
         <div className="inspector__portal" ref={inspector.setPortalTarget} />
       </aside>

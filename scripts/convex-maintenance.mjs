@@ -1,4 +1,6 @@
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { config } from "dotenv";
 
 config({ path: ".env.local" });
@@ -17,9 +19,12 @@ if (!token) {
   process.exit(1);
 }
 
+const require = createRequire(import.meta.url);
+const convexBin = join(dirname(require.resolve("convex/package.json")), "bin/main.js");
+
 const result = spawnSync(
-  "npx",
-  ["convex", "run", target, JSON.stringify({ serviceToken: token })],
+  process.execPath,
+  [convexBin, "run", target, JSON.stringify({ serviceToken: token })],
   { stdio: "inherit" },
 );
 

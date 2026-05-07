@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { GitBranch } from "lucide-react";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge } from "../components/ui";
@@ -89,59 +90,80 @@ export function TimelinePage() {
     return events.sort((a, b) => b.date.localeCompare(a.date));
   }, [meetings, committees, filings, commitments, commitmentEvents, feeTimeline, fundingSources]);
 
+  // Hooks must run before any early returns so the rules-of-hooks contract holds.
+  const nowMarkerRef = useRef<HTMLDivElement | null>(null);
+  const renderNow = Date.now();
+  // Order top-to-bottom chronologically: oldest past at the top, future stretching
+  // downward, with the Now marker as the pivot. `grouped` is sorted descending by
+  // date (line 90), so past needs reversing; future is reversed back to ascending.
+  const past = useMemo(
+    () => grouped.filter((e) => new Date(e.date).getTime() < renderNow).slice().reverse(),
+    [grouped, renderNow],
+  );
+  const future = useMemo(
+    () => grouped.filter((e) => new Date(e.date).getTime() >= renderNow).slice().reverse(),
+    [grouped, renderNow],
+  );
+
+  useEffect(() => {
+    // After the initial render, scroll the Now marker into view so the user
+    // lands on the present instead of the top of the entire history.
+    nowMarkerRef.current?.scrollIntoView({ block: "center", behavior: "auto" });
+  }, []);
+
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
 
-  const now = Date.now();
-  const future = grouped.filter((e) => new Date(e.date).getTime() >= now).reverse();
-  const past = grouped.filter((e) => new Date(e.date).getTime() < now);
-
   return (
     <div className="page">
-      <PageHeader title="Timeline" subtitle="Every meeting, filing, commitment, member-fee change, funding event, and due date on one spine." />
+      <PageHeader
+        title="Timeline"
+        icon={<GitBranch size={16} />}
+        iconColor="purple"
+        subtitle="Every meeting, filing, commitment, member-fee change, funding event, and due date on one spine."
+      />
 
-      <div className="two-col">
-        <div className="card">
-          <div className="card__head"><h2 className="card__title">Upcoming</h2></div>
-          <div className="card__body">
-            <div className="timeline-vertical">
-              {future.map((e, i) => (
-                <div className="timeline-vertical__item is-future" key={i}>
-                  <span className="timeline-vertical__dot" style={e.color ? { borderColor: e.color } : undefined} />
-                  <div className="row">
-                    <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDateTime(e.date)}</span>
-                    <Badge tone={eventTone(e.kind)}>{e.kind}</Badge>
-                  </div>
-                  <div className="timeline-vertical__title">
-                    {e.to ? <Link to={e.to}>{e.title}</Link> : e.title}
-                  </div>
-                  {e.sub && <div className="timeline-vertical__desc">{e.sub}</div>}
+      <div className="card">
+        <div className="card__body">
+          <div className="timeline-vertical">
+            {past.map((e, i) => (
+              <div className="timeline-vertical__item is-past" key={`past-${i}-${e.date}`}>
+                <span className="timeline-vertical__dot" style={e.color ? { borderColor: e.color } : undefined} />
+                <div className="row">
+                  <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDateTime(e.date)}</span>
+                  <Badge tone={eventTone(e.kind)}>{e.kind}</Badge>
                 </div>
-              ))}
-              {future.length === 0 && <div className="muted">Nothing upcoming.</div>}
-            </div>
-          </div>
-        </div>
+                <div className="timeline-vertical__title">
+                  {e.to ? <Link to={e.to}>{e.title}</Link> : e.title}
+                </div>
+                {e.sub && <div className="timeline-vertical__desc">{e.sub}</div>}
+              </div>
+            ))}
 
-        <div className="card">
-          <div className="card__head"><h2 className="card__title">Past</h2></div>
-          <div className="card__body">
-            <div className="timeline-vertical">
-              {past.map((e, i) => (
-                <div className="timeline-vertical__item is-past" key={i}>
-                  <span className="timeline-vertical__dot" />
-                  <div className="row">
-                    <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDateTime(e.date)}</span>
-                    <Badge tone={eventTone(e.kind)}>{e.kind}</Badge>
-                  </div>
-                  <div className="timeline-vertical__title">
-                    {e.to ? <Link to={e.to}>{e.title}</Link> : e.title}
-                  </div>
-                  {e.sub && <div className="timeline-vertical__desc">{e.sub}</div>}
-                </div>
-              ))}
-              {past.length === 0 && <div className="muted">Nothing in the past yet.</div>}
+            <div className="timeline-vertical__now" ref={nowMarkerRef} aria-label="Now">
+              <span className="timeline-vertical__now-dot" />
+              <span className="timeline-vertical__now-label">
+                Now · {formatDateTime(new Date(renderNow).toISOString())}
+              </span>
             </div>
+
+            {future.map((e, i) => (
+              <div className="timeline-vertical__item is-future" key={`future-${i}-${e.date}`}>
+                <span className="timeline-vertical__dot" style={e.color ? { borderColor: e.color } : undefined} />
+                <div className="row">
+                  <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDateTime(e.date)}</span>
+                  <Badge tone={eventTone(e.kind)}>{e.kind}</Badge>
+                </div>
+                <div className="timeline-vertical__title">
+                  {e.to ? <Link to={e.to}>{e.title}</Link> : e.title}
+                </div>
+                {e.sub && <div className="timeline-vertical__desc">{e.sub}</div>}
+              </div>
+            ))}
+
+            {past.length === 0 && future.length === 0 && (
+              <div className="muted">No events yet.</div>
+            )}
           </div>
         </div>
       </div>

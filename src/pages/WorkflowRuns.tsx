@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Drawer } from "../components/ui";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   History,
   CheckCircle2,
@@ -95,13 +96,7 @@ export function WorkflowRunsPage() {
       />
 
       {showMetadataWarning ? (
-        <div className="record-table__empty">
-          <div className="record-table__empty-title">Metadata not seeded</div>
-          <div className="record-table__empty-desc">
-            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-            workflow-run object metadata + default view.
-          </div>
-        </div>
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="workflow-run" />
       ) : tableData.objectMetadata ? (
         <RecordTableScope
           tableId="workflow-runs"

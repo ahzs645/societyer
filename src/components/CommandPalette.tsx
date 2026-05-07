@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { useConvex, useMutation } from "convex/react";
+import { createPortal } from "react-dom";
+import { useConvex } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -46,14 +47,18 @@ import {
   Inbox,
   Workflow,
   Plug,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import { api } from "../lib/convexApi";
-import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
-import { useToast } from "./Toast";
-import { maintenanceErrorMessage, seedDemoSociety } from "../lib/maintenanceApi";
+import { useSociety } from "../hooks/useSociety";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { useUIStore } from "../lib/store";
+import { MenuRow } from "./ui";
 import { useRegisteredCommands } from "../lib/commands";
+import { useStaticCommands } from "../lib/useStaticCommands";
+import { ROUTE_IDENTITY, groupToneCssVar, type RouteGroup } from "../lib/routeIdentity";
+import type { CSSProperties } from "react";
 
 type CommandCategory =
   | "Recent"
@@ -76,88 +81,45 @@ type CommandItem = {
   run?: () => void | Promise<void>;
   /** Optional keyboard hint shown as a <kbd>. */
   shortcut?: string;
+  /** Registry group — drives the per-row icon tint. */
+  group?: RouteGroup;
 };
 
-const NAV_ITEMS: CommandItem[] = [
-  // Navigation
-  { id: "nav-dashboard", label: "Dashboard", to: "/app", icon: LayoutDashboard, category: "Navigation" },
-  { id: "nav-timeline", label: "Timeline", to: "/app/timeline", icon: CalendarClock, category: "Navigation" },
-  { id: "nav-society", label: "Society profile", to: "/app/society", icon: Building2, category: "Navigation" },
-  { id: "nav-org-details", label: "Organization details", to: "/app/organization-details", icon: Building2, category: "Navigation" },
-  { id: "nav-org-history", label: "Org history", to: "/app/org-history", icon: Newspaper, category: "Navigation" },
-  { id: "nav-committees", label: "Committees", to: "/app/committees", icon: UsersRound, category: "Navigation" },
-  { id: "nav-employees", label: "Employees", to: "/app/employees", icon: Users, category: "Navigation", module: "employees" },
-  { id: "nav-goals", label: "Goals", to: "/app/goals", icon: Target, category: "Navigation" },
-  { id: "nav-tasks", label: "Tasks", to: "/app/tasks", icon: ListTodo, category: "Navigation" },
-  { id: "nav-members", label: "Members", to: "/app/members", icon: Users, category: "Navigation" },
-  { id: "nav-directors", label: "Directors", to: "/app/directors", icon: UserCog, category: "Navigation" },
-  { id: "nav-role-holders", label: "Role holders", to: "/app/role-holders", icon: UsersRound, category: "Navigation" },
-  { id: "nav-documents", label: "Documents", to: "/app/documents", icon: FolderOpen, category: "Navigation" },
-  { id: "nav-deadlines", label: "Deadlines", to: "/app/deadlines", icon: Calendar, category: "Navigation" },
-  { id: "nav-commitments", label: "Commitments", to: "/app/commitments", icon: ClipboardList, category: "Navigation" },
-  { id: "nav-volunteers", label: "Volunteers", to: "/app/volunteers", icon: HandHeart, category: "Navigation", module: "volunteers" },
-  { id: "nav-communications", label: "Communications", to: "/app/communications", icon: Mail, category: "Navigation", module: "communications" },
-  { id: "nav-outbox", label: "Outbox", to: "/app/outbox", icon: Inbox, category: "Navigation" },
-  { id: "nav-notifications", label: "Notifications", to: "/app/notifications", icon: Mail, category: "Navigation" },
+/**
+ * Map registry route groups to the palette's coarser categories. Several
+ * registry groups collapse into one palette category (workspace/people/work
+ * all become "Navigation"), so we don't end up with a 9-section dropdown.
+ */
+const GROUP_TO_CATEGORY: Record<RouteGroup, CommandCategory> = {
+  workspace: "Navigation",
+  people: "Navigation",
+  work: "Navigation",
+  meetings: "Governance",
+  records: "Governance",
+  finance: "Finance",
+  compliance: "Compliance",
+  workflows: "System",
+  administration: "System",
+};
 
-  // Governance
-  { id: "gov-meetings", label: "Meetings", to: "/app/meetings", icon: Calendar, category: "Governance" },
-  { id: "gov-agendas", label: "Agendas", to: "/app/agendas", icon: ClipboardList, category: "Governance" },
-  { id: "gov-motion-backlog", label: "Motion backlog", to: "/app/motion-backlog", icon: ClipboardList, category: "Governance" },
-  { id: "gov-motions", label: "Motion library", to: "/app/motion-library", icon: ClipboardList, category: "Governance" },
-  { id: "gov-minutes", label: "Minutes", to: "/app/minutes", icon: FileText, category: "Governance" },
-  { id: "gov-evidence", label: "Meeting evidence", to: "/app/meeting-evidence", icon: ClipboardList, category: "Governance" },
-  { id: "gov-proposals", label: "Member proposals", to: "/app/proposals", icon: Vote, category: "Governance", module: "voting" },
-  { id: "gov-elections", label: "Elections", to: "/app/elections", icon: Vote, category: "Governance", module: "voting" },
-  { id: "gov-resolutions", label: "Written resolutions", to: "/app/written-resolutions", icon: PenLine, category: "Governance", module: "voting" },
-  { id: "gov-proxies", label: "Proxies", to: "/app/proxies", icon: UserCheck, category: "Governance", module: "voting" },
-  { id: "gov-bylaw-rules", label: "Bylaw rules", to: "/app/bylaw-rules", icon: ShieldCheck, category: "Governance" },
-  { id: "gov-bylaw-redline", label: "Bylaw redline", to: "/app/bylaw-diff", icon: FileText, category: "Governance" },
-  { id: "gov-bylaws-history", label: "Bylaws history", to: "/app/bylaws-history", icon: BookOpen, category: "Governance" },
-  { id: "gov-conflicts", label: "Conflicts of interest", to: "/app/conflicts", icon: AlertTriangle, category: "Governance" },
-  { id: "gov-attestations", label: "Director attestations", to: "/app/attestations", icon: ShieldCheck, category: "Governance", module: "attestations" },
-  { id: "gov-auditors", label: "Auditors", to: "/app/auditors", icon: Calculator, category: "Governance", module: "auditors" },
-  { id: "gov-court-orders", label: "Court orders", to: "/app/court-orders", icon: Gavel, category: "Governance", module: "courtOrders" },
-  { id: "gov-registers", label: "Governance registers", to: "/app/governance-registers", icon: ShieldCheck, category: "Governance" },
-  { id: "gov-rights-ledger", label: "Rights ledger", to: "/app/rights-ledger", icon: Gavel, category: "Governance" },
-  { id: "gov-minute-book", label: "Minute book", to: "/app/minute-book", icon: BookOpen, category: "Governance" },
-
-  // Finance
-  { id: "fin-financials", label: "Financials", to: "/app/financials", icon: PiggyBank, category: "Finance" },
-  { id: "fin-imports", label: "Finance imports", to: "/app/finance-imports", icon: PiggyBank, category: "Finance" },
-  { id: "fin-treasurer", label: "Treasurer", to: "/app/treasurer", icon: PiggyBank, category: "Finance" },
-  { id: "fin-grants", label: "Grants", to: "/app/grants", icon: BadgeDollarSign, category: "Finance", module: "grants" },
-  { id: "fin-reconciliation", label: "Reconciliation", to: "/app/reconciliation", icon: ShieldCheck, category: "Finance", module: "reconciliation" },
-  { id: "fin-receipts", label: "Donation receipts", to: "/app/receipts", icon: Receipt, category: "Finance", module: "donationReceipts" },
-  { id: "fin-membership", label: "Membership & billing", to: "/app/membership", icon: CreditCard, category: "Finance", module: "membershipBilling" },
-
-  // Compliance
-  { id: "comp-annual-cycle", label: "Annual cycle", to: "/app/annual-cycle", icon: CalendarCheck, category: "Compliance" },
-  { id: "comp-filings", label: "Filings", to: "/app/filings", icon: ClipboardList, category: "Compliance" },
-  { id: "comp-filings-prefill", label: "Filing pre-fill", to: "/app/filings/prefill", icon: FileCog, category: "Compliance", module: "filingPrefill" },
-  { id: "comp-formation-maintenance", label: "Formation & annual", to: "/app/formation-maintenance", icon: Gavel, category: "Compliance" },
-  { id: "comp-policies", label: "Policies", to: "/app/policies", icon: FileText, category: "Compliance" },
-  { id: "comp-transparency", label: "Public transparency", to: "/app/transparency", icon: Globe, category: "Compliance", module: "transparency" },
-  { id: "comp-retention", label: "Records retention", to: "/app/retention", icon: Archive, category: "Compliance", module: "recordsInspection" },
-  { id: "comp-records-archive", label: "Records archive", to: "/app/records-archive", icon: Archive, category: "Compliance" },
-  { id: "comp-inspections", label: "Records inspections", to: "/app/inspections", icon: Eye, category: "Compliance", module: "recordsInspection" },
-  { id: "comp-privacy", label: "Privacy (PIPA)", to: "/app/privacy", icon: Shield, category: "Compliance" },
-  { id: "comp-pipa-training", label: "PIPA training", to: "/app/pipa-training", icon: ShieldCheck, category: "Compliance", module: "pipaTraining" },
-  { id: "comp-insurance", label: "Insurance", to: "/app/insurance", icon: Shield, category: "Compliance", module: "insurance" },
-  { id: "comp-access-custody", label: "Access custody", to: "/app/access-custody", icon: KeyRound, category: "Compliance", module: "secrets" },
-
-  // System
-  { id: "sys-users", label: "Users & roles", to: "/app/users", icon: UserCog, category: "System" },
-  { id: "sys-custom-fields", label: "Custom fields", to: "/app/custom-fields", icon: Settings, category: "System" },
-  { id: "sys-imports", label: "Import sessions", to: "/app/imports", icon: FileJson, category: "System" },
-  { id: "sys-paperless", label: "Paperless-ngx", to: "/app/paperless", icon: Database, category: "System", module: "paperless" },
-  { id: "sys-integrations", label: "Integration marketplace", to: "/app/integrations", icon: Plug, category: "System", module: "workflows" },
-  { id: "sys-workflow-packages", label: "Workflow packages", to: "/app/workflow-packages", icon: Workflow, category: "System", module: "workflows" },
-  { id: "sys-template-engine", label: "Template engine", to: "/app/template-engine", icon: FileCog, category: "System" },
-  { id: "sys-audit", label: "Audit log", to: "/app/audit", icon: ShieldCheck, category: "System" },
-  { id: "sys-exports", label: "Data export", to: "/app/exports", icon: Download, category: "System" },
-  { id: "sys-settings", label: "Settings", to: "/app/settings", icon: Settings, category: "System", shortcut: "," },
-];
+/**
+ * Nav commands are derived from the same `ROUTE_IDENTITY` registry the sidebar
+ * and PageHeader use, so the icon and label here always match what the user
+ * sees in the sidebar — searching the visible sidebar label always finds the
+ * matching nav entry.
+ */
+const NAV_ITEMS: CommandItem[] = Object.entries(ROUTE_IDENTITY).map(([path, identity]) => {
+  const item: CommandItem = {
+    id: `nav:${path}`,
+    label: identity.label,
+    icon: identity.icon,
+    category: GROUP_TO_CATEGORY[identity.group],
+    group: identity.group,
+    to: path,
+  };
+  if (identity.module) item.module = identity.module;
+  return item;
+});
 
 const CATEGORY_ORDER: CommandCategory[] = [
   "Recent",
@@ -336,113 +298,151 @@ function MetadataCommandsLoader({
   return null;
 }
 
+const PINNED_COMMAND_IDS_KEY = "societyer.sidebar.pinnedCommandIds";
+const PINNED_ROUTES_KEY = "societyer.sidebar.pinnedRoutes";
+
+function readStringArray(key: string): string[] {
+  try {
+    const stored = localStorage.getItem(key);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed.filter((value: unknown): value is string => typeof value === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStringArray(key: string, value: string[]) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    // Sync the sidebar in the same tab — `storage` events only fire across tabs.
+    window.dispatchEvent(new Event("kbar:pinned-changed"));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+type PaletteContextMenu = {
+  item: CommandItem;
+  top: number;
+  left: number;
+};
+
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
   const [recents, setRecents] = useState<string[]>(() => readRecents());
   const [metadataCommands, setMetadataCommands] = useState<any[]>([]);
+  const [pinnedCommandIds, setPinnedCommandIds] = useState<string[]>(() => readStringArray(PINNED_COMMAND_IDS_KEY));
+  const [pinnedRoutes, setPinnedRoutes] = useState<string[]>(() => readStringArray(PINNED_ROUTES_KEY));
+  const [contextMenu, setContextMenu] = useState<PaletteContextMenu | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const listId = useId();
   const navigate = useNavigate();
   const location = useLocation();
   const society = useSociety();
-  const toast = useToast();
-  const seedSharedViews = useMutation(api.views.seedGovernanceDataTableViews);
+  const staticCommands = useStaticCommands();
 
   const actions = useMemo<CommandItem[]>(
-    () => [
-      {
-        id: "action-create-meeting",
-        label: "Create meeting",
-        icon: Calendar,
-        category: "Actions",
-        run: () => navigate("/app/meetings?intent=create&type=Board"),
-      },
-      {
-        id: "action-mark-filing-filed",
-        label: "Mark filing filed",
-        icon: FileCheck2,
-        category: "Actions",
-        run: () => navigate("/app/filings?intent=mark-filed"),
-      },
-      {
-        id: "action-generate-agm-package",
-        label: "Generate AGM package",
-        icon: FileCog,
-        category: "Actions",
-        run: () => navigate("/app/meetings?intent=generate-agm-package&type=AGM"),
-      },
-      {
-        id: "action-draft-minutes",
-        label: "Draft minutes",
-        icon: PenLine,
-        category: "Actions",
-        run: () => navigate("/app/minutes?intent=draft"),
-      },
-      {
-        id: "action-request-director-attestation",
-        label: "Request director attestation",
-        icon: ShieldCheck,
-        category: "Actions",
-        module: "attestations",
-        run: () => navigate("/app/attestations?intent=request"),
-      },
-      {
-        id: "action-export-minute-book",
-        label: "Export minute book",
-        icon: Download,
-        category: "Actions",
-        run: () => navigate("/app/minute-book?intent=export"),
-      },
-      {
-        id: "action-start-inspection-response",
-        label: "Start inspection response",
-        icon: Eye,
-        category: "Actions",
-        module: "recordsInspection",
-        run: () => navigate("/app/inspections?intent=start-response"),
-      },
-      {
-        id: "action-seed-demo",
-        label: "Seed demo society",
-        icon: Sparkles,
-        category: "Actions",
-        run: async () => {
-          try {
-            const result = await seedDemoSociety();
-            setStoredSocietyId(result.societyId);
-            toast.success("Demo society seeded");
-          } catch (error) {
-            toast.error(maintenanceErrorMessage(error));
-          }
-        },
-      },
-      ...(society
-        ? [
-            {
-              id: "action-seed-shared-views",
-              label: "Seed governance shared views",
-              icon: Settings,
-              category: "Actions" as const,
-              run: async () => {
-                const result = await seedSharedViews({ societyId: society._id });
-                toast.success("Shared views seeded", `${result.created.length} created, ${result.skipped.length} skipped`);
-              },
-            },
-          ]
-        : []),
-    ],
-    [navigate, seedSharedViews, society, toast],
+    () =>
+      staticCommands.map((command) => ({
+        id: command.id,
+        label: command.label,
+        icon: command.icon,
+        category: "Actions" as const,
+        ...(command.module ? { module: command.module } : {}),
+        run: command.run,
+      })),
+    [staticCommands],
   );
+
+  const pinnedCommandSet = useMemo(() => new Set(pinnedCommandIds), [pinnedCommandIds]);
+  const pinnedRouteSet = useMemo(() => new Set(pinnedRoutes), [pinnedRoutes]);
+
+  // Anything the user can run from the palette can be pinned: navigation
+  // entries (have `to`), action entries (have `run`). Recent rows preserve
+  // both fields when they're spread, so they fall in here too.
+  const canPinItem = (item: CommandItem): boolean => Boolean(item.to || item.run);
+
+  const isItemPinned = (item: CommandItem): boolean => {
+    if (item.to) return pinnedRouteSet.has(item.to);
+    return pinnedCommandSet.has(item.id);
+  };
+
+  const togglePinned = (item: CommandItem) => {
+    if (item.to) {
+      setPinnedRoutes((prev) => {
+        const next = prev.includes(item.to!) ? prev.filter((route) => route !== item.to) : [...prev, item.to!];
+        writeStringArray(PINNED_ROUTES_KEY, next);
+        return next;
+      });
+    } else {
+      setPinnedCommandIds((prev) => {
+        const next = prev.includes(item.id)
+          ? prev.filter((id) => id !== item.id)
+          : [...prev, item.id];
+        writeStringArray(PINNED_COMMAND_IDS_KEY, next);
+        return next;
+      });
+    }
+    setContextMenu(null);
+  };
+
+  // When pinning happens elsewhere (the sidebar's own context menu, another
+  // tab, etc.), pull the new values back into our state so the menu label
+  // and isPinned check stay accurate.
+  useEffect(() => {
+    const onPinChange = () => {
+      setPinnedCommandIds(readStringArray(PINNED_COMMAND_IDS_KEY));
+      setPinnedRoutes(readStringArray(PINNED_ROUTES_KEY));
+    };
+    window.addEventListener("kbar:pinned-changed", onPinChange);
+    return () => window.removeEventListener("kbar:pinned-changed", onPinChange);
+  }, []);
+
+  // Dismiss the right-click context menu on outside click or Escape.
+  useEffect(() => {
+    if (!contextMenu) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (contextMenuRef.current?.contains(event.target as Node)) return;
+      setContextMenu(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setContextMenu(null);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [contextMenu]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setOpen((v) => !v);
-      } else if (e.key === "Escape") setOpen(false);
+        return;
+      }
+      if (e.key === "Escape") {
+        setOpen(false);
+        return;
+      }
+      // `/` opens the palette without modifiers — GitHub/Linear/Slack convention.
+      // Skip when the user is typing in any text-entry surface so they can still
+      // type literal slashes in agenda items, meeting titles, etc.
+      if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const target = e.target as HTMLElement | null;
+        const tag = target?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        if (target?.isContentEditable) return;
+        e.preventDefault();
+        setOpen(true);
+      }
     };
     const onOpen = () => setOpen(true);
     window.addEventListener("keydown", onKey);
@@ -609,6 +609,16 @@ export function CommandPalette() {
                 {group.items.map((item) => {
                   const idx = runningIndex++;
                   const Icon = item.icon;
+                  // Pull the tone straight from the registry — no per-group CSS
+                  // class to keep in sync. Action/Recent items leave it unset
+                  // and fall back to the muted default in the SCSS.
+                  const itemStyle: CSSProperties | undefined = item.group
+                    ? ({ "--kbar-item-tone": groupToneCssVar(item.group) } as CSSProperties)
+                    : undefined;
+                  // Pinnable when the row is something the user can run —
+                  // navigation entries, action entries, and Recent rows
+                  // (which preserve the underlying `to`/`run`).
+                  const canPin = canPinItem(item);
                   return (
                     <button
                       type="button"
@@ -617,8 +627,19 @@ export function CommandPalette() {
                       role="option"
                       aria-selected={idx === active}
                       className={`kbar__item${idx === active ? " is-active" : ""}`}
+                      style={itemStyle}
                       onMouseEnter={() => setActive(idx)}
                       onClick={() => run(item)}
+                      onContextMenu={
+                        canPin
+                          ? (event) => {
+                              event.preventDefault();
+                              const x = Math.min(event.clientX, window.innerWidth - 220);
+                              const y = Math.min(event.clientY, window.innerHeight - 80);
+                              setContextMenu({ item, top: y, left: x });
+                            }
+                          : undefined
+                      }
                     >
                       <Icon />
                       <span>{item.label}</span>
@@ -643,6 +664,25 @@ export function CommandPalette() {
           <span style={{ marginLeft: "auto" }}><kbd>alt</kbd>+<kbd>o</kbd> inspector</span>
         </div>
       </div>
+
+      {contextMenu && createPortal(
+        <div
+          ref={contextMenuRef}
+          className="menu menu--actions"
+          role="menu"
+          style={{ position: "fixed", top: contextMenu.top, left: contextMenu.left, width: 200, zIndex: 1100 }}
+        >
+          <div className="menu__section">
+            <MenuRow
+              role="menuitem"
+              icon={isItemPinned(contextMenu.item) ? <PinOff size={14} /> : <Pin size={14} />}
+              label={isItemPinned(contextMenu.item) ? "Unpin from Favorites" : "Pin to Favorites"}
+              onClick={() => togglePinned(contextMenu.item)}
+            />
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

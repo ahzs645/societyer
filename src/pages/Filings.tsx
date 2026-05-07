@@ -13,6 +13,7 @@ import { Plus, Check, ClipboardList, Bot, FileDown } from "lucide-react";
 import { centsToDollarInput, dollarInputToCents } from "../lib/format";
 import { kindLabel } from "./Dashboard";
 import { FilingBotRunner } from "../components/FilingBotRunner";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
   RecordTableScope,
@@ -141,13 +142,7 @@ export function FilingsPage() {
       />
 
       {showMetadataWarning ? (
-        <div className="record-table__empty">
-          <div className="record-table__empty-title">Metadata not seeded</div>
-          <div className="record-table__empty-desc">
-            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-            filing object metadata + default view.
-          </div>
-        </div>
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="filing" />
       ) : tableData.objectMetadata ? (
         <RecordTableScope
           tableId="filings"

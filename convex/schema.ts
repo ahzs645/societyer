@@ -1809,6 +1809,7 @@ export default defineSchema({
               }),
             ),
           ),
+          linkedTaskIds: v.optional(v.array(v.id("tasks"))),
         }),
       ),
     ),

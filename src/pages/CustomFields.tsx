@@ -7,6 +7,7 @@ import { useConfirm } from "../components/Modal";
 import { SeedPrompt } from "./_helpers";
 import { Button, Drawer, Field, SettingsShell } from "../components/ui";
 import { Sliders, Plus, Trash2 } from "lucide-react";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
   RecordTableScope,
@@ -140,6 +141,8 @@ export function CustomFieldsPage() {
     <div className="page custom-fields-page">
       <SettingsShell
         title="Custom fields"
+        icon={<Sliders size={16} />}
+        iconColor="purple"
         description="Add extra fields to any person category (members, directors, volunteers, employees). Saved values appear on each person's detail and can be pulled into PDF mapping."
         tabs={[
           { id: "definitions", label: "Definitions", icon: <Sliders size={14} /> },
@@ -205,13 +208,7 @@ export function CustomFieldsPage() {
 
       <div className="custom-fields-record-table">
       {showMetadataWarning ? (
-        <div className="record-table__empty">
-          <div className="record-table__empty-title">Metadata not seeded</div>
-          <div className="record-table__empty-desc">
-            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-            custom-field-definition object metadata + default view.
-          </div>
-        </div>
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="custom-field-definition" />
       ) : tableData.objectMetadata ? (
         <RecordTableScope
           tableId="custom-fields"

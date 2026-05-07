@@ -8,6 +8,7 @@ import { useConfirm, usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Scale, Link2, Undo2 } from "lucide-react";
 import { formatDate, money } from "../lib/format";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
   RecordTableScope,
@@ -148,13 +149,7 @@ export function ReconciliationPage() {
       <div className="two-col">
         <div>
           {showMetadataWarning ? (
-            <div className="record-table__empty">
-              <div className="record-table__empty-title">Metadata not seeded</div>
-              <div className="record-table__empty-desc">
-                Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-                reconciliation object metadata + default view.
-              </div>
-            </div>
+            <RecordTableMetadataEmpty societyId={society?._id} objectLabel="reconciliation" />
           ) : tableData.objectMetadata ? (
             <RecordTableScope
               tableId="reconciliation"

@@ -6,6 +6,7 @@ import { SeedPrompt, PageHeader } from "./_helpers";
 import { Drawer, Field, Badge } from "../components/ui";
 import { Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
   RecordTableScope,
@@ -75,13 +76,7 @@ export function PipaTrainingPage() {
       />
 
       {showMetadataWarning ? (
-        <div className="record-table__empty">
-          <div className="record-table__empty-title">Metadata not seeded</div>
-          <div className="record-table__empty-desc">
-            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-            PIPA-training object metadata + default view.
-          </div>
-        </div>
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="PIPA-training" />
       ) : tableData.objectMetadata ? (
         <RecordTableScope
           tableId="pipa-training"

@@ -94,10 +94,12 @@ export function Tabs<T extends string>({
   value,
   onChange,
   items,
+  trailing,
 }: {
   value: T;
   onChange: (v: T) => void;
   items: { id: T; label: string; count?: number | null; icon?: ReactNode }[];
+  trailing?: ReactNode;
 }) {
   return (
     <div className="tabs">
@@ -112,6 +114,7 @@ export function Tabs<T extends string>({
           {it.count != null && <Pill size="sm" className="tab__count">{it.count}</Pill>}
         </button>
       ))}
+      {trailing != null && <div className="tabs__trailing">{trailing}</div>}
     </div>
   );
 }

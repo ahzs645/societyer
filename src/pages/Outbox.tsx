@@ -7,6 +7,7 @@ import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   Inbox,
   Plus,
@@ -264,13 +265,7 @@ export function OutboxPage() {
       />
 
       {showMetadataWarning ? (
-        <div className="record-table__empty">
-          <div className="record-table__empty-title">Metadata not seeded</div>
-          <div className="record-table__empty-desc">
-            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-            outbox object metadata + default view.
-          </div>
-        </div>
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="outbox" />
       ) : tableData.objectMetadata ? (
         <RecordTableScope
           tableId="outbox"

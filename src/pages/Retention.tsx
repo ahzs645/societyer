@@ -6,6 +6,7 @@ import { SeedPrompt, PageHeader } from "./_helpers";
 import { Archive } from "lucide-react";
 import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
   RecordTableScope,
@@ -69,13 +70,7 @@ export function RetentionPage() {
       />
 
       {showMetadataWarning ? (
-        <div className="record-table__empty">
-          <div className="record-table__empty-title">Metadata not seeded</div>
-          <div className="record-table__empty-desc">
-            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-            retention-row object metadata + default view.
-          </div>
-        </div>
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="retention-row" />
       ) : tableData.objectMetadata ? (
         <RecordTableScope
           tableId="retention"

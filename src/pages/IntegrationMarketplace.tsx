@@ -206,6 +206,7 @@ export function IntegrationMarketplacePage() {
   return (
     <div className="page page--wide">
       <SettingsShell
+        routeKey="/app/integrations"
         title="Integration marketplace"
         description="Installable capability manifests for board packs, calendar sync, office documents, CRM bridges, connector actions, scopes, health checks, and audit events."
         tabs={[

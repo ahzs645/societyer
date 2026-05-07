@@ -19,10 +19,12 @@
   padding: 0 8px;
   border-radius: var(--r-sm);
   font-size: var(--fs-sm);
+  line-height: 1;
   font-weight: 500;
   color: var(--text-secondary);
   border: 1px solid var(--border);
   background: transparent;
+  white-space: nowrap;
   transition: background 0.08s ease, color 0.08s ease;
 }
 .btn-action:hover { background: var(--bg-hover); color: var(--text-primary); }
@@ -337,6 +339,15 @@
 .btn--danger:hover {
   background: var(--red-10);
   border-color: var(--red-10);
+}
+.btn--warn {
+  background: var(--orange-9);
+  border-color: var(--orange-9);
+  color: #ffffff;
+}
+.btn--warn:hover {
+  background: var(--orange-10);
+  border-color: var(--orange-10);
 }
 .btn__icon {
   display: inline-grid;
@@ -656,6 +667,17 @@
   font-weight: var(--fw-semibold);
   line-height: 1.2;
   margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.settings-shell__title-text {
+  min-width: 0;
+}
+.settings-shell__icon {
+  flex-shrink: 0;
 }
 .settings-shell__description {
   color: var(--text-tertiary);

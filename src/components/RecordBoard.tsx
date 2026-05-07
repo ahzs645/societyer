@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { ToneVariant } from "./ui";
 
 export type RecordBoardColumn = {
@@ -19,6 +19,8 @@ export function RecordBoard<T>({
   getColumnId,
   renderCard,
   onMove,
+  onItemClick,
+  onItemContextMenu,
   emptyLabel = "Drop here",
 }: {
   columns: RecordBoardColumn[];
@@ -27,6 +29,10 @@ export function RecordBoard<T>({
   getColumnId: (item: T) => string;
   renderCard: (item: T) => ReactNode;
   onMove: (item: T, toColumnId: string) => void;
+  onItemClick?: (item: T) => void;
+  /** Right-click on a card. Receive the item plus the original event so the
+   * caller can position a portal'd menu at the click coordinates. */
+  onItemContextMenu?: (item: T, event: ReactMouseEvent<HTMLDivElement>) => void;
   emptyLabel?: string;
 }) {
   const [dragId, setDragId] = useState<string | null>(null);
@@ -76,7 +82,7 @@ export function RecordBoard<T>({
                 return (
                   <div
                     key={id}
-                    className={`kanban__card${dragId === id ? " is-dragging" : ""}`}
+                    className={`kanban__card${dragId === id ? " is-dragging" : ""}${onItemClick ? " is-clickable" : ""}`}
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.effectAllowed = "move";
@@ -85,6 +91,29 @@ export function RecordBoard<T>({
                     onDragEnd={() => {
                       setDragId(null);
                       setOverCol(null);
+                    }}
+                    onClick={(e) => {
+                      if (!onItemClick) return;
+                      // Don't fire on text selection drags inside the card.
+                      if ((e.target as HTMLElement).closest("a, button, input, select, textarea")) return;
+                      onItemClick(item);
+                    }}
+                    onContextMenu={
+                      onItemContextMenu
+                        ? (e) => {
+                            e.preventDefault();
+                            onItemContextMenu(item, e);
+                          }
+                        : undefined
+                    }
+                    role={onItemClick ? "button" : undefined}
+                    tabIndex={onItemClick ? 0 : undefined}
+                    onKeyDown={(e) => {
+                      if (!onItemClick) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onItemClick(item);
+                      }
                     }}
                   >
                     {renderCard(item)}

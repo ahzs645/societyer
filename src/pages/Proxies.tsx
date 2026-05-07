@@ -6,6 +6,7 @@ import { SeedPrompt, PageHeader } from "./_helpers";
 import { Drawer, Field, InspectorNote } from "../components/ui";
 import { Plus, UserCheck, Trash2 } from "lucide-react";
 import { useBylawRules } from "../hooks/useBylawRules";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
   RecordTableScope,
@@ -103,13 +104,7 @@ export function ProxiesPage() {
       )}
 
       {showMetadataWarning ? (
-        <div className="record-table__empty">
-          <div className="record-table__empty-title">Metadata not seeded</div>
-          <div className="record-table__empty-desc">
-            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-            proxy object metadata + default view.
-          </div>
-        </div>
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="proxy" />
       ) : tableData.objectMetadata ? (
         <RecordTableScope
           tableId="proxies"

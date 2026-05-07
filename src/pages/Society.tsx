@@ -134,6 +134,7 @@ export function SocietyPage() {
   return (
     <div className="page page--wide">
       <PageHeader
+        routeKey="/app/society"
         title="Society profile"
         subtitle="Constitution details, registered office, and key flags."
         actions={

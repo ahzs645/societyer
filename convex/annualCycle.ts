@@ -19,6 +19,16 @@ type CycleItem = {
 
 const DAY_MS = 86_400_000;
 
+function hasAgendaItems(agendaJson: string | undefined | null) {
+  if (typeof agendaJson !== "string" || !agendaJson.trim()) return false;
+  try {
+    const parsed = JSON.parse(agendaJson);
+    return Array.isArray(parsed) && parsed.some((item) => String(item ?? "").trim());
+  } catch {
+    return agendaJson.split(/\r?\n/).some((line) => line.trim());
+  }
+}
+
 export const summary = query({
   args: {
     societyId: v.id("societies"),
@@ -217,9 +227,9 @@ export const summary = query({
         phase: "before",
         title: "Finalize agenda, motions, and proposals",
         detail: selectedAgm
-          ? `${selectedAgm.agendaJson ? "Agenda is drafted" : "Agenda not yet recorded"}; ${meetingProposals.length} linked member proposal${meetingProposals.length === 1 ? "" : "s"}.`
+          ? `${hasAgendaItems(selectedAgm.agendaJson) ? "Agenda is drafted" : "Agenda not yet recorded"}; ${meetingProposals.length} linked member proposal${meetingProposals.length === 1 ? "" : "s"}.`
           : "No AGM selected for agenda planning.",
-        status: selectedAgm?.agendaJson ? "complete" : selectedAgm ? "attention" : "blocked",
+        status: hasAgendaItems(selectedAgm?.agendaJson) ? "complete" : selectedAgm ? "attention" : "blocked",
         evidence: ["Agenda", "Motion text", "Member proposals", "Proxy and voting rules"],
         to: selectedAgm ? `/meetings/${selectedAgm._id}` : "/agendas",
         actionLabel: "Open agenda",

@@ -150,6 +150,7 @@ export function Dashboard() {
   return (
     <div className="page">
       <PageHeader
+        routeKey="/app"
         title="Dashboard"
         subtitle="Compliance posture, upcoming obligations, and governance snapshot."
       />

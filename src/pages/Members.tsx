@@ -16,6 +16,7 @@ import { useRegisterCommand } from "../lib/commands";
 import { rowsToCsv } from "../lib/csv";
 import { BulkEditPanel } from "../components/BulkEditPanel";
 import { MergeRecordsModal } from "../components/MergeRecordsModal";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
   RecordTableScope,
@@ -162,13 +163,7 @@ export function MembersPage() {
       />
 
       {showMetadataWarning ? (
-        <div className="record-table__empty">
-          <div className="record-table__empty-title">Metadata not seeded</div>
-          <div className="record-table__empty-desc">
-            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-            member object metadata + default view.
-          </div>
-        </div>
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="member" />
       ) : tableData.objectMetadata ? (
         <RecordTableScope
           tableId="members"

@@ -10,9 +10,12 @@ const DOCUMENT_CSS = `
   th, td { border: 1px solid #bbb; padding: 4pt 6pt; font-size: 10.5pt; text-align: left; vertical-align: top; }
   th { background: #f1f1f1; }
   .motion { border-left: 3pt solid #3b5bdb; padding: 4pt 8pt; background: #f6f8ff; margin: 0 0 8pt; }
-  .motion .outcome-carried { color: #0a8f4e; font-weight: 600; }
-  .motion .outcome-defeated { color: #c9264a; font-weight: 600; }
-  .motion .outcome-tabled { color: #a86400; font-weight: 600; }
+  .motion .outcome-carried,
+  .outcome-carried { color: #0a8f4e; font-weight: 600; }
+  .motion .outcome-defeated,
+  .outcome-defeated { color: #c9264a; font-weight: 600; }
+  .motion .outcome-tabled,
+  .outcome-tabled { color: #a86400; font-weight: 600; }
   .meta { color: #666; font-size: 10pt; }
   .muted { color: #888; }
   @page { margin: 0.65in; }
@@ -859,20 +862,23 @@ function renderStandardMinutes({
   });
   const businessMotions = minutes.motions.filter((motion) => !isAdjournmentMotionForExport(motion));
 
-  const motionRow = (m: typeof minutes.motions[number]) => `
-    <div class="motion">
-      <p><strong>Motion.</strong> ${eh(m.text)}</p>
-      <p class="meta">
-        ${m.movedBy ? `Moved by <strong>${eh(m.movedBy)}</strong>` : ""}
-        ${m.secondedBy ? ` · Seconded by <strong>${eh(m.secondedBy)}</strong>` : ""}
-      </p>
-      <p><span class="outcome-${eh(m.outcome.toLowerCase())}">${eh(m.outcome.toUpperCase())}</span>${
-        m.votesFor != null
-          ? ` · For ${m.votesFor} · Against ${m.votesAgainst ?? 0} · Abstain ${m.abstentions ?? 0}`
-          : ""
-      }</p>
-    </div>
-  `;
+  const motionRow = (m: typeof minutes.motions[number]) => {
+    const meta = [
+      m.movedBy ? `Moved by ${eh(m.movedBy)}` : "",
+      m.secondedBy ? `Seconded by ${eh(m.secondedBy)}` : "",
+    ].filter(Boolean).join(" · ");
+    const voteTail =
+      m.votesFor != null
+        ? ` · For ${m.votesFor} · Against ${m.votesAgainst ?? 0} · Abstain ${m.abstentions ?? 0}`
+        : "";
+    return `
+      <div class="motion">
+        <p>Motion: ${eh(m.text)}</p>
+        ${meta ? `<p class="meta">${meta}</p>` : ""}
+        <p class="outcome-${eh(m.outcome.toLowerCase())}">${eh(m.outcome.toUpperCase())}${voteTail}</p>
+      </div>
+    `;
+  };
 
   return `
     <h1>${eh(meeting.title)}</h1>
@@ -889,7 +895,7 @@ function renderStandardMinutes({
 
     <h2>Attendance</h2>
     ${renderAttendance(minutes)}
-    <p><strong>Quorum:</strong> ${minutes.quorumMet ? "Met" : "Not met"}${
+    <p>Quorum: ${minutes.quorumMet ? "Met" : "Not met"}${
       minutes.quorumRequired != null ? ` · ${minutes.attendees.length} present / ${minutes.quorumRequired} required` : ""
     }${minutes.quorumSourceLabel ? ` · Rule: ${eh(minutes.quorumSourceLabel)}` : ""}</p>
 
@@ -1045,7 +1051,7 @@ function renderNumberedAgendaMinutes({
     <h2>Attendees:</h2>
     <p><strong>Present:</strong> ${eh(presentLine)}</p>
     ${absentLine ? `<p><strong>Absent / Regrets:</strong> ${eh(absentLine)}</p>` : ""}
-    <p><strong>Quorum:</strong> ${minutes.quorumMet ? "Met" : "Not recorded as met"}${minutes.quorumRequired != null ? ` (${minutes.attendees.length} present / ${minutes.quorumRequired} required)` : ""}${minutes.quorumSourceLabel ? `; ${eh(minutes.quorumSourceLabel)}` : ""}</p>
+    <p>Quorum: ${minutes.quorumMet ? "Met" : "Not recorded as met"}${minutes.quorumRequired != null ? ` (${minutes.attendees.length} present / ${minutes.quorumRequired} required)` : ""}${minutes.quorumSourceLabel ? `; ${eh(minutes.quorumSourceLabel)}` : ""}</p>
     ${renderOfficialLine(minutes, options)}
     ${renderRemoteParticipation(minutes.remoteParticipation)}
 

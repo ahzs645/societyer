@@ -9,6 +9,7 @@ import { Badge, Drawer, Field } from "../components/ui";
 import { Globe, Plus, Save, Trash2, Copy } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
   RecordTableScope,
@@ -252,13 +253,7 @@ export function TransparencyPage() {
       </div>
 
       {showMetadataWarning ? (
-        <div className="record-table__empty">
-          <div className="record-table__empty-title">Metadata not seeded</div>
-          <div className="record-table__empty-desc">
-            Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-            publication object metadata + default view.
-          </div>
-        </div>
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="publication" />
       ) : tableData.objectMetadata ? (
         <RecordTableScope
           tableId="publications"

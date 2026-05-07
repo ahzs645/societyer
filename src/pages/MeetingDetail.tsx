@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useToast } from "../components/Toast";
@@ -11,7 +11,7 @@ import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
 import { formatDate, formatDateTime } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ClipboardCheck, Download, ExternalLink, Eye, EyeOff, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Printer, Settings2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardCheck, Download, ExternalLink, EyeOff, FileDown, FileText, Gavel, ListChecks, MoreHorizontal, PackageCheck, Printer, RotateCcw, Settings2 } from "lucide-react";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion } from "../components/MotionEditor";
 import {
   MINUTES_EXPORT_STYLES,
@@ -111,6 +111,9 @@ export function MeetingDetailPage() {
   const backfillMeetingQuorum = useMutation(api.meetings.backfillQuorumSnapshot);
   const updateMinutes = useMutation(api.minutes.update);
   const createMinutes = useMutation(api.minutes.create);
+  const updateTask = useMutation(api.tasks.update);
+  const createTask = useMutation(api.tasks.create);
+  const societyTasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
   const backfillMinutesQuorum = useMutation(api.minutes.backfillQuorumSnapshot);
   const createBacklogFromMinutesMotion = useMutation(api.motionBacklog.createFromMinutesMotion);
   const createBacklogFromMinutesSection = useMutation(api.motionBacklog.createFromMinutesSection);
@@ -131,8 +134,7 @@ export function MeetingDetailPage() {
   const [transcriptEdit, setTranscriptEdit] = useState<string | null>(null);
   const [agendaEdit, setAgendaEdit] = useState<string | null>(null);
   const [attendanceEdit, setAttendanceEdit] = useState<{
-    attendees: string;
-    absent: string;
+    people: { name: string; status: "present" | "absent" }[];
     quorumMet: boolean;
   } | null>(null);
   const [savingTranscript, setSavingTranscript] = useState(false);
@@ -144,8 +146,25 @@ export function MeetingDetailPage() {
   const [includeApprovalInExport, setIncludeApprovalInExport] = useState(() => readStoredExportBool("includeApproval", true));
   const [includeSignaturesInExport, setIncludeSignaturesInExport] = useState(() => readStoredExportBool("includeSignatures", true));
   const [includePlaceholdersInExport, setIncludePlaceholdersInExport] = useState(() => readStoredExportBool("includePlaceholders", false));
-  const [minutesPreviewOpen, setMinutesPreviewOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<MeetingDetailTab>("overview");
+  // Drive the tab from the `?tab=` URL param so deep links (e.g. the Draft
+  // minutes quick-action) can land users directly on the right tab. The
+  // setter writes back to the URL so the address bar reflects what's shown
+  // and the back button restores the previous tab.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const TAB_VALUES: MeetingDetailTab[] = ["overview", "minutes", "motions", "package", "export", "sources"];
+  const tabFromUrl = searchParams.get("tab") as MeetingDetailTab | null;
+  const activeTab: MeetingDetailTab = tabFromUrl && TAB_VALUES.includes(tabFromUrl) ? tabFromUrl : "overview";
+  const setActiveTab = (next: MeetingDetailTab) => {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (next === "overview") params.delete("tab");
+        else params.set("tab", next);
+        return params;
+      },
+      { replace: true },
+    );
+  };
   const [materialDraft, setMaterialDraft] = useState<any | null>(null);
   const [joinEdit, setJoinEdit] = useState<any | null>(null);
   const [sourceReviewNote, setSourceReviewNote] = useState("");
@@ -258,8 +277,8 @@ export function MeetingDetailPage() {
       ? "danger"
       : "warn";
   const packageMaterials = meetingPackage?.materials ?? [];
-  const packageTasks = meetingPackage?.tasks ?? [];
-  const openPackageTasks = packageTasks.filter((task: any) => task.status !== "Done");
+  const linkedTasks = meetingPackage?.tasks ?? [];
+  const linkableTasks = ((societyTasks ?? []) as any[]).filter((task: any) => !task.meetingId);
   const joinDetails = getMeetingJoinDetails(meeting, minutes);
   const packageReadiness = getPackageReadiness(packageMaterials);
   const sourceReviewStatus = meeting.sourceReviewStatus ?? minutes?.sourceReviewStatus ?? "not_applicable";
@@ -275,6 +294,32 @@ export function MeetingDetailPage() {
         committees,
       })
     : [];
+
+  const decisionsCount =
+    ((minutes?.decisions ?? []) as any[]).filter((d) => String(d ?? "").trim()).length +
+    ((minutes?.sections ?? []) as any[]).reduce(
+      (sum, section) =>
+        sum + ((section?.decisions ?? []) as any[]).filter((d) => String(d ?? "").trim()).length,
+      0,
+    );
+  const actionItemsCount =
+    ((minutes?.actionItems ?? []) as any[]).filter((item) => String(item?.text ?? "").trim()).length +
+    ((minutes?.sections ?? []) as any[]).reduce(
+      (sum, section) =>
+        sum + ((section?.actionItems ?? []) as any[]).filter((item) => String(item?.text ?? "").trim()).length,
+      0,
+    );
+
+  const jumpToMinutesAnchor = (anchorId: string) => {
+    setActiveTab("minutes");
+    // Two animation frames lets React mount the Minutes tab before we try to
+    // scroll to the anchor — without it, document.getElementById returns null.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        document.getElementById(anchorId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  };
 
   const runGenerate = async () => {
     const sourceTranscript = transcript.trim() || transcriptOnFile.trim();
@@ -356,6 +401,7 @@ export function MeetingDetailPage() {
   };
 
   const markHeld = () => updateMeeting({ id: meeting._id, patch: { status: "Held" } });
+  const reopenMeeting = () => updateMeeting({ id: meeting._id, patch: { status: "Scheduled" } });
 
   const minutesRenderPayload = (redact?: (value: string) => string) => {
     if (!minutes) return null;
@@ -500,11 +546,6 @@ export function MeetingDetailPage() {
     else toast.error("Popup blocked", "Allow popups for this site to open the printable PDF view.");
   };
 
-  const openMinutesPreview = () => {
-    if (!minutes) return;
-    setMinutesPreviewOpen(true);
-  };
-
   const openMinutesPreviewPage = () => {
     if (!meeting || !minutes) return;
     window.open(`/app/meetings/${meeting._id}/preview`, "_blank", "noopener,noreferrer");
@@ -553,51 +594,18 @@ export function MeetingDetailPage() {
   const saveMotions = (next: Motion[]) =>
     minutes ? updateMinutes({ id: minutes._id, patch: { motions: next } }) : undefined;
 
-  const saveMinuteSections = (next: any[]) =>
-    minutes ? updateMinutes({ id: minutes._id, patch: { sections: next } }) : undefined;
-
-  const sectionsFromAgenda = () =>
-    agenda.map((title) => ({
-      title,
-      type: inferAgendaSectionType(title),
-      discussion: "",
-      decisions: [],
-      actionItems: [],
-    }));
-
-  const createMinutesFromAgenda = async () => {
-    if (!agenda.length) {
-      toast.error("Add agenda items first.");
-      return;
-    }
-    const sections = sectionsFromAgenda();
-    if (minutes) {
-      if ((minutes.sections ?? []).length > 0) {
-        toast.info("Minutes already have agenda sections.");
-        return;
-      }
-      await updateMinutes({ id: minutes._id, patch: { sections } });
-      toast.success("Agenda copied into minutes.");
-      return;
-    }
-
-    const attendees = Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds.map(String) : [];
-    const quorumRequired = quorumSnapshot.required ?? meeting.quorumRequired;
-    await createMinutes({
-      societyId: meeting.societyId,
-      meetingId: meeting._id,
-      heldAt: meeting.scheduledAt,
-      attendees,
-      absent: [],
-      quorumMet: quorumRequired == null ? false : attendees.length >= quorumRequired,
-      quorumRequired: quorumRequired ?? undefined,
-      discussion: "",
-      sections,
-      motions: [],
-      decisions: [],
-      actionItems: [],
+  const saveMinuteSections = async (next: any[]) => {
+    if (!minutes) return;
+    await updateMinutes({ id: minutes._id, patch: { sections: next } });
+    // Keep meeting.agendaJson in sync with section titles so the sidebar
+    // agenda card and the right-side Agenda record never drift apart.
+    const nextAgenda = next
+      .map((section: any) => String(section?.title ?? "").trim())
+      .filter(Boolean);
+    await updateMeeting({
+      id: meeting._id,
+      patch: { agendaJson: JSON.stringify(nextAgenda) },
     });
-    toast.success("Minutes created from agenda.");
   };
 
   const addMotionToBacklog = async (_motion: Motion, motionIndex: number) => {
@@ -620,14 +628,122 @@ export function MeetingDetailPage() {
     toast.success(result.reused ? "Agenda item already in backlog" : "Agenda item added to backlog");
   };
 
+  const buildSectionFromTitle = (title: string) => ({
+    title,
+    type: inferAgendaSectionType(title),
+    discussion: "",
+    decisions: [],
+    actionItems: [],
+  });
+
   const saveAgenda = async () => {
     const next = parseLines(agendaEdit ?? "");
     await updateMeeting({
       id: meeting._id,
       patch: {
-        agendaJson: next.length ? JSON.stringify(next) : undefined,
+        // Always send a string — `undefined` is treated as "leave field alone",
+        // which would silently undo a save that empties the agenda.
+        agendaJson: JSON.stringify(next),
       },
     });
+
+    // Auto-bootstrap the minutes record on first save. This subsumes the old
+    // "Create from agenda" button — saving the agenda is now the single entry
+    // point that produces an editable minutes draft mirroring the agenda.
+    if (!minutes && next.length) {
+      const attendees = Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds.map(String) : [];
+      const quorumRequired = quorumSnapshot.required ?? meeting.quorumRequired;
+      await createMinutes({
+        societyId: meeting.societyId,
+        meetingId: meeting._id,
+        heldAt: meeting.scheduledAt,
+        attendees,
+        absent: [],
+        quorumMet: quorumRequired == null ? false : attendees.length >= quorumRequired,
+        quorumRequired: quorumRequired ?? undefined,
+        discussion: "",
+        sections: next.map(buildSectionFromTitle),
+        motions: [],
+        decisions: [],
+        actionItems: [],
+      });
+      setAgendaEdit(null);
+      toast.success("Agenda saved");
+      return;
+    }
+
+    // Keep agenda and minutes.sections in 1-to-1 sync: align section order to
+    // the agenda, reuse existing sections by title, and create empty sections
+    // for new titles. Sections whose titles were dropped from the agenda are
+    // removed only if they have no recorded content; sections with data are
+    // preserved as orphans so we never silently destroy recorded minutes.
+    if (minutes) {
+      const existingSections = ((minutes.sections ?? []) as any[]);
+      const existingMotions = ((minutes.motions ?? []) as Motion[]);
+      const normalize = (title: string) => title.trim().toLowerCase();
+      const sectionHasDetails = (section: any) =>
+        !!(
+          section?.discussion ||
+          section?.presenter ||
+          (section?.decisions ?? []).length ||
+          (section?.actionItems ?? []).length ||
+          (section?.linkedTaskIds ?? []).length
+        );
+
+      const sectionsByTitle = new Map<string, any>();
+      for (const section of existingSections) {
+        const key = normalize(section?.title ?? "");
+        if (key && !sectionsByTitle.has(key)) sectionsByTitle.set(key, section);
+      }
+
+      const aligned = next.map((title) => {
+        const existing = sectionsByTitle.get(normalize(title));
+        return existing ?? buildSectionFromTitle(title);
+      });
+
+      const newTitles = new Set(next.map(normalize));
+      const orphans = existingSections.filter((section) => {
+        const key = normalize(section?.title ?? "");
+        return !newTitles.has(key) && sectionHasDetails(section);
+      });
+
+      const finalSections = [...aligned, ...orphans];
+
+      const sectionsChanged =
+        finalSections.length !== existingSections.length ||
+        finalSections.some((s, i) => s !== existingSections[i]);
+
+      const titleToNewIndex = new Map<string, number>();
+      finalSections.forEach((section, index) => {
+        const key = normalize(section?.title ?? "");
+        if (key && !titleToNewIndex.has(key)) titleToNewIndex.set(key, index);
+      });
+
+      let motionsChanged = false;
+      const remappedMotions = existingMotions.map((motion) => {
+        if (motion.sectionIndex == null) return motion;
+        const oldSection = existingSections[motion.sectionIndex];
+        if (!oldSection) return motion;
+        const oldKey = normalize(oldSection?.title ?? "");
+        const newIndex = titleToNewIndex.get(oldKey);
+        if (newIndex == null) {
+          const { sectionIndex: _sectionIndex, sectionTitle: _sectionTitle, ...rest } = motion;
+          motionsChanged = true;
+          return rest as Motion;
+        }
+        if (newIndex === motion.sectionIndex) return motion;
+        motionsChanged = true;
+        return { ...motion, sectionIndex: newIndex };
+      });
+
+      if (sectionsChanged || motionsChanged) {
+        const patch: any = {};
+        if (sectionsChanged) patch.sections = finalSections;
+        if (motionsChanged) patch.motions = remappedMotions;
+        await updateMinutes({ id: minutes._id, patch });
+      }
+    }
+
     setAgendaEdit(null);
     toast.success("Agenda saved");
   };
@@ -635,16 +751,24 @@ export function MeetingDetailPage() {
   const startAttendanceEdit = () => {
     if (!minutes) return;
     setAttendanceEdit({
-      attendees: minutes.attendees.join("\n"),
-      absent: minutes.absent.join("\n"),
+      people: [
+        ...minutes.attendees.map((name: string) => ({ name, status: "present" as const })),
+        ...minutes.absent.map((name: string) => ({ name, status: "absent" as const })),
+      ],
       quorumMet: minutes.quorumMet,
     });
   };
 
   const saveAttendance = async () => {
     if (!minutes || !attendanceEdit) return;
-    const attendees = parseLines(attendanceEdit.attendees);
-    const absent = parseLines(attendanceEdit.absent);
+    const attendees = attendanceEdit.people
+      .filter((p) => p.status === "present")
+      .map((p) => p.name.trim())
+      .filter(Boolean);
+    const absent = attendanceEdit.people
+      .filter((p) => p.status === "absent")
+      .map((p) => p.name.trim())
+      .filter(Boolean);
     await updateMinutes({
       id: minutes._id,
       patch: { attendees, absent, quorumMet: attendanceEdit.quorumMet },
@@ -808,7 +932,7 @@ export function MeetingDetailPage() {
       meeting,
       agenda,
       materials: packageMaterials,
-      tasks: packageTasks,
+      tasks: linkedTasks,
       minutes,
       joinDetails,
     });
@@ -819,6 +943,44 @@ export function MeetingDetailPage() {
     a.download = `${safe}-meeting-pack.html`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const setLinkedTaskStatus = async (taskId: string, status: string) => {
+    await updateTask({
+      id: taskId as Id<"tasks">,
+      patch: {
+        status,
+        completedByUserId: status === "Done" && actingUserId ? actingUserId : undefined,
+      },
+    });
+  };
+  const linkTaskToMeeting = async (taskId: string) => {
+    if (!meeting?._id) return;
+    await updateTask({ id: taskId as Id<"tasks">, patch: { meetingId: meeting._id as Id<"meetings"> } });
+    toast.success("Task linked to meeting");
+  };
+  const unlinkTaskFromMeeting = async (taskId: string) => {
+    await updateTask({ id: taskId as Id<"tasks">, patch: { meetingId: undefined } });
+    toast.success("Task unlinked");
+  };
+  const applyTaskUpdate = async (taskId: string, patch: { status?: string; completionNote?: string }) => {
+    const update: any = { ...patch };
+    if (patch.status === "Done" && actingUserId) update.completedByUserId = actingUserId;
+    await updateTask({ id: taskId as Id<"tasks">, patch: update });
+  };
+  const createTaskForMeeting = async (input: { title: string; priority: string; status: string; dueDate?: string }) => {
+    if (!society || !meeting?._id) return;
+    await createTask({
+      societyId: society._id,
+      title: input.title,
+      status: input.status,
+      priority: input.priority,
+      dueDate: input.dueDate || undefined,
+      meetingId: meeting._id as Id<"meetings">,
+      committeeId: meeting.committeeId ?? undefined,
+      tags: [],
+    });
+    toast.success("Task created", input.title);
   };
 
   return (
@@ -847,11 +1009,6 @@ export function MeetingDetailPage() {
                 <ExternalLink size={12} /> Join
               </a>
             )}
-            {minutes && (
-              <button className="btn-action btn-action--primary" onClick={openMinutesPreview} title="Preview the selected Word/PDF export layout">
-                <Eye size={12} /> Preview
-              </button>
-            )}
             <Menu
               align="right"
               minWidth={220}
@@ -861,6 +1018,21 @@ export function MeetingDetailPage() {
                 </button>
               }
               sections={[
+                ...(meeting.status === "Held"
+                  ? [
+                      {
+                        id: "status",
+                        items: [
+                          {
+                            id: "reopen-meeting",
+                            label: "Reopen meeting",
+                            icon: <RotateCcw size={12} />,
+                            onSelect: reopenMeeting,
+                          },
+                        ],
+                      },
+                    ]
+                  : []),
                 {
                   id: "package",
                   items: [
@@ -942,6 +1114,30 @@ export function MeetingDetailPage() {
           { id: "export", label: "Export", icon: <Settings2 size={12} /> },
           { id: "sources", label: "Sources", count: linkedSourceCount, icon: <Download size={12} /> },
         ]}
+        trailing={
+          <>
+            <button
+              type="button"
+              className="meeting-reminder-chip meeting-reminder-chip--decisions"
+              onClick={() => jumpToMinutesAnchor("meeting-minutes-decisions")}
+              title={`${decisionsCount} decision${decisionsCount === 1 ? "" : "s"} recorded — click to jump to the Decisions list on the Minutes tab.`}
+              aria-label={`${decisionsCount} decisions recorded — go to Minutes tab`}
+            >
+              <CheckCircle2 size={12} />
+              <span>{decisionsCount}</span>
+            </button>
+            <button
+              type="button"
+              className="meeting-reminder-chip meeting-reminder-chip--actions"
+              onClick={() => jumpToMinutesAnchor("meeting-minutes-action-items")}
+              title={`${actionItemsCount} action item${actionItemsCount === 1 ? "" : "s"} on file — click to jump to Action items on the Minutes tab.`}
+              aria-label={`${actionItemsCount} action items on file — go to Minutes tab`}
+            >
+              <ListChecks size={12} />
+              <span>{actionItemsCount}</span>
+            </button>
+          </>
+        }
       />
 
       <div className="meeting-detail-tabpanel">
@@ -970,7 +1166,6 @@ export function MeetingDetailPage() {
               exportToWord={exportToWord}
               exportToPdf={exportToPdf}
               exportPublicMinutes={exportPublicMinutes}
-              openMinutesPreview={openMinutesPreview}
               minutesExportGaps={minutesExportGaps}
               quorumSnapshot={quorumSnapshot}
               quorumLegalGuides={quorumLegalGuides}
@@ -1000,6 +1195,7 @@ export function MeetingDetailPage() {
               minutes={minutes}
               society={society}
               visiblePanels={["export"]}
+              exportControlsReadOnly
               selectedMinutesExportStyle={selectedMinutesExportStyle}
               minutesExportStyle={minutesExportStyle}
               setMinutesExportStyle={setMinutesExportStyle}
@@ -1018,8 +1214,8 @@ export function MeetingDetailPage() {
               exportToWord={exportToWord}
               exportToPdf={exportToPdf}
               exportPublicMinutes={exportPublicMinutes}
-              openMinutesPreview={openMinutesPreview}
               minutesExportGaps={minutesExportGaps}
+              showExportGaps
               quorumSnapshot={quorumSnapshot}
               quorumLegalGuides={quorumLegalGuides}
               legalGuideDateISO={legalGuideDateISO}
@@ -1063,14 +1259,15 @@ export function MeetingDetailPage() {
             directors={directors}
             saveMinuteSections={saveMinuteSections}
             saveMinuteMotions={saveMotions}
-            createMinutesFromAgenda={createMinutesFromAgenda}
             addSectionToBacklog={addSectionToBacklog}
             onOpenMotions={() => setActiveTab("motions")}
-            transcript={transcript}
-            setTranscript={setTranscript}
+            meetingTasks={linkedTasks}
+            applyTaskUpdate={applyTaskUpdate}
             transcriptOnFile={transcriptOnFile}
-            busy={busy}
-            runGenerate={runGenerate}
+            transcriptEdit={transcriptEdit}
+            setTranscriptEdit={setTranscriptEdit}
+            saveTranscriptEditText={saveTranscriptEditText}
+            savingTranscript={savingTranscript}
           />
         )}
 
@@ -1118,7 +1315,8 @@ export function MeetingDetailPage() {
             minutes={minutes}
             agenda={agenda}
             packageMaterials={packageMaterials}
-            openPackageTasks={openPackageTasks}
+            linkedTasks={linkedTasks}
+            linkableTasks={linkableTasks}
             joinDetails={joinDetails}
             packageReadiness={packageReadiness}
             sourceReviewStatus={sourceReviewStatus}
@@ -1136,73 +1334,95 @@ export function MeetingDetailPage() {
             markPackageReady={markPackageReady}
             sendPackageBackToReview={sendPackageBackToReview}
             removeMeetingMaterial={removeMeetingMaterial}
+            setLinkedTaskStatus={setLinkedTaskStatus}
+            linkTaskToMeeting={linkTaskToMeeting}
+            unlinkTaskFromMeeting={unlinkTaskFromMeeting}
+            createTaskForMeeting={createTaskForMeeting}
           />
         )}
 
-        {activeTab === "export" && (
-          <div className="meeting-export-layout">
-            <MeetingSidebarColumn
-              meeting={meeting}
-              minutes={minutes}
-              society={society}
-              visiblePanels={["export"]}
-              selectedMinutesExportStyle={selectedMinutesExportStyle}
-              minutesExportStyle={minutesExportStyle}
-              setMinutesExportStyle={setMinutesExportStyle}
-              includeTranscriptInExport={includeTranscriptInExport}
-              setIncludeTranscriptInExport={setIncludeTranscriptInExport}
-              includeActionItemsInExport={includeActionItemsInExport}
-              setIncludeActionItemsInExport={setIncludeActionItemsInExport}
-              includeDiscussionSummaryInExport={includeDiscussionSummaryInExport}
-              setIncludeDiscussionSummaryInExport={setIncludeDiscussionSummaryInExport}
-              includeApprovalInExport={includeApprovalInExport}
-              setIncludeApprovalInExport={setIncludeApprovalInExport}
-              includeSignaturesInExport={includeSignaturesInExport}
-              setIncludeSignaturesInExport={setIncludeSignaturesInExport}
-              includePlaceholdersInExport={includePlaceholdersInExport}
-              setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
-              exportToWord={exportToWord}
-              exportToPdf={exportToPdf}
-              exportPublicMinutes={exportPublicMinutes}
-              openMinutesPreview={openMinutesPreview}
-              minutesExportGaps={minutesExportGaps}
-              quorumSnapshot={quorumSnapshot}
-              quorumLegalGuides={quorumLegalGuides}
-              legalGuideDateISO={legalGuideDateISO}
-              linkedSourceCount={linkedSourceCount}
-              sourceDocuments={sourceDocuments}
-              minutesSourceExternalIds={minutesSourceExternalIds}
-              vttInputRef={vttInputRef}
-              audioInputRef={audioInputRef}
-              transcriptOnFile={transcriptOnFile}
-              transcriptProvider={transcriptProvider}
-              transcriptionJob={transcriptionJob}
-              transcriptStatusTone={transcriptStatusTone}
-              transcriptEdit={transcriptEdit}
-              savingTranscript={savingTranscript}
-              pipelineBusy={pipelineBusy}
-              audioFile={audioFile}
-              importNote={importNote}
-              setTranscriptEdit={setTranscriptEdit}
-              setAudioFile={setAudioFile}
-              importTranscriptVtt={importTranscriptVtt}
-              saveTranscriptEditText={saveTranscriptEditText}
-              uploadAudioAndRun={uploadAudioAndRun}
-            />
-            <div className="minutes-preview minutes-preview--inline">
-              <div className="minutes-preview__toolbar">
-                <div>
-                  <strong>{selectedMinutesExportStyle.label}</strong>
-                  <p className="muted">{selectedMinutesExportStyle.tone}</p>
-                </div>
-                <button className="btn-action" onClick={openMinutesPreviewPage}>
-                  <ExternalLink size={12} /> Open separate page
-                </button>
+        {activeTab === "export" && (() => {
+          const previewHtml = renderExportBody();
+          // When there's nothing to render, drop the two-column layout so the
+          // empty-state message takes the full width — the export sidebar's
+          // controls aren't actionable until there's content anyway.
+          if (!previewHtml) {
+            return (
+              <div className="minutes-preview-empty-screen">
+                <FileText size={28} aria-hidden="true" />
+                <strong>Nothing to render yet.</strong>
+                <p className="muted">
+                  Add agenda items, discussion notes, decisions, motions, or action items
+                  on this meeting and they'll appear here in the selected export style
+                  ({selectedMinutesExportStyle.label}).
+                </p>
               </div>
-              <div className="minutes-preview__page" dangerouslySetInnerHTML={{ __html: renderExportBody() }} />
+            );
+          }
+          return (
+            <div className="meeting-export-layout">
+              <MeetingSidebarColumn
+                meeting={meeting}
+                minutes={minutes}
+                society={society}
+                visiblePanels={["export"]}
+                selectedMinutesExportStyle={selectedMinutesExportStyle}
+                minutesExportStyle={minutesExportStyle}
+                setMinutesExportStyle={setMinutesExportStyle}
+                includeTranscriptInExport={includeTranscriptInExport}
+                setIncludeTranscriptInExport={setIncludeTranscriptInExport}
+                includeActionItemsInExport={includeActionItemsInExport}
+                setIncludeActionItemsInExport={setIncludeActionItemsInExport}
+                includeDiscussionSummaryInExport={includeDiscussionSummaryInExport}
+                setIncludeDiscussionSummaryInExport={setIncludeDiscussionSummaryInExport}
+                includeApprovalInExport={includeApprovalInExport}
+                setIncludeApprovalInExport={setIncludeApprovalInExport}
+                includeSignaturesInExport={includeSignaturesInExport}
+                setIncludeSignaturesInExport={setIncludeSignaturesInExport}
+                includePlaceholdersInExport={includePlaceholdersInExport}
+                setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
+                exportToWord={exportToWord}
+                exportToPdf={exportToPdf}
+                exportPublicMinutes={exportPublicMinutes}
+                minutesExportGaps={minutesExportGaps}
+                quorumSnapshot={quorumSnapshot}
+                quorumLegalGuides={quorumLegalGuides}
+                legalGuideDateISO={legalGuideDateISO}
+                linkedSourceCount={linkedSourceCount}
+                sourceDocuments={sourceDocuments}
+                minutesSourceExternalIds={minutesSourceExternalIds}
+                vttInputRef={vttInputRef}
+                audioInputRef={audioInputRef}
+                transcriptOnFile={transcriptOnFile}
+                transcriptProvider={transcriptProvider}
+                transcriptionJob={transcriptionJob}
+                transcriptStatusTone={transcriptStatusTone}
+                transcriptEdit={transcriptEdit}
+                savingTranscript={savingTranscript}
+                pipelineBusy={pipelineBusy}
+                audioFile={audioFile}
+                importNote={importNote}
+                setTranscriptEdit={setTranscriptEdit}
+                setAudioFile={setAudioFile}
+                importTranscriptVtt={importTranscriptVtt}
+                saveTranscriptEditText={saveTranscriptEditText}
+                uploadAudioAndRun={uploadAudioAndRun}
+              />
+              <div className="minutes-preview minutes-preview--inline">
+                <div className="minutes-preview__toolbar">
+                  <div>
+                    <strong>{selectedMinutesExportStyle.label}</strong>
+                    <p className="muted">{selectedMinutesExportStyle.tone}</p>
+                  </div>
+                  <button className="btn-action" onClick={openMinutesPreviewPage}>
+                    <ExternalLink size={12} /> Open separate page
+                  </button>
+                </div>
+                <div className="minutes-preview__page" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {activeTab === "sources" && (
           <MeetingSidebarColumn
@@ -1228,7 +1448,6 @@ export function MeetingDetailPage() {
             exportToWord={exportToWord}
             exportToPdf={exportToPdf}
             exportPublicMinutes={exportPublicMinutes}
-            openMinutesPreview={openMinutesPreview}
             minutesExportGaps={minutesExportGaps}
             quorumSnapshot={quorumSnapshot}
             quorumLegalGuides={quorumLegalGuides}
@@ -1296,47 +1515,6 @@ export function MeetingDetailPage() {
             </Field>
           </div>
         )}
-      </Drawer>
-
-      <Drawer
-        open={minutesPreviewOpen}
-        onClose={() => setMinutesPreviewOpen(false)}
-        title="Word preview"
-        size="wide"
-        footer={
-          <>
-            <button className="btn" onClick={() => setMinutesPreviewOpen(false)}>Close</button>
-            <button className="btn" onClick={openMinutesPreviewPage}>
-              <ExternalLink size={14} /> Open page
-            </button>
-            <button className="btn btn--accent" onClick={exportToWord}>
-              <FileDown size={14} /> Export Word
-            </button>
-            <button className="btn" onClick={exportToPdf}>
-              <Printer size={14} /> Print / PDF
-            </button>
-          </>
-        }
-      >
-        <div className="minutes-preview">
-          <div className="minutes-preview__toolbar">
-            <div>
-              <strong>{selectedMinutesExportStyle.label}</strong>
-              <p className="muted">{selectedMinutesExportStyle.tone}</p>
-            </div>
-            <select
-              className="input"
-              value={minutesExportStyle}
-              onChange={(event) => setMinutesExportStyle(event.target.value as MinutesExportStyleId)}
-              aria-label="Preview export style"
-            >
-              {MINUTES_EXPORT_STYLES.map((style) => (
-                <option key={style.id} value={style.id}>{style.label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="minutes-preview__page" dangerouslySetInnerHTML={{ __html: renderExportBody() }} />
-        </div>
       </Drawer>
     </div>
   );
@@ -1501,7 +1679,18 @@ export function MeetingMinutesPreviewPage() {
           </div>
         </aside>
         <div className="minutes-preview minutes-preview--standalone">
-          <div className="minutes-preview__page" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+          {bodyHtml ? (
+            <div className="minutes-preview__page" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+          ) : (
+            <div className="minutes-preview__empty">
+              <FileText size={20} aria-hidden="true" />
+              <strong>Nothing to render yet.</strong>
+              <p className="muted">
+                Add agenda items, discussion notes, decisions, motions, or action items
+                on this meeting and they'll appear here in the selected export style.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

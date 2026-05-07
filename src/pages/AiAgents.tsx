@@ -69,6 +69,8 @@ export function AiAgentsPage() {
     <div className="page page--wide">
       <SettingsShell
         title="AI agents"
+        icon={<Bot size={16} />}
+        iconColor="purple"
         description="Bounded workspace tools with fixed scopes, allowed actions, tool planning, and audit logging."
         tabs={[
           { id: "tools", label: "Tools", icon: <Bot size={14} /> },
@@ -88,13 +90,23 @@ export function AiAgentsPage() {
                   key={agent.key}
                   type="button"
                   className={`btn ${selectedAgent?.key === agent.key ? "btn--accent" : ""}`}
-                  style={{ justifyContent: "flex-start", height: "auto", padding: 12, textAlign: "left" }}
+                  style={{
+                    justifyContent: "flex-start",
+                    height: "auto",
+                    padding: 12,
+                    textAlign: "left",
+                    // .btn defaults to nowrap + inline sizing — override both so the
+                    // multi-line summary wraps inside the button instead of pushing
+                    // the right edge out of the card.
+                    whiteSpace: "normal",
+                    width: "100%",
+                  }}
                   onClick={() => {
                     setSelectedKey(agent.key);
                     setLastResult(null);
                   }}
                 >
-                  <span className="col" style={{ gap: 3 }}>
+                  <span className="col" style={{ gap: 3, minWidth: 0 }}>
                     <strong>{agent.name}</strong>
                     <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{agent.summary}</span>
                   </span>

@@ -13,6 +13,7 @@ import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Archive, ListChecks, Plus, Trash2, UserCog } from "lucide-react";
 import { formatDate } from "../lib/format";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
   RecordTableScope,
@@ -158,13 +159,7 @@ export function DirectorsPage() {
 
       {directorMode === "register" ? (
         showMetadataWarning ? (
-          <div className="record-table__empty">
-            <div className="record-table__empty-title">Metadata not seeded</div>
-            <div className="record-table__empty-desc">
-              Run <code>npx convex run seedRecordTableMetadata:run</code> to create the
-              director object metadata + default view.
-            </div>
-          </div>
+          <RecordTableMetadataEmpty societyId={society?._id} objectLabel="director" />
         ) : tableData.objectMetadata ? (
           <RecordTableScope
             tableId="directors"
