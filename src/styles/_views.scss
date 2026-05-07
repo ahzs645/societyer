@@ -3160,6 +3160,61 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   cursor: grab;
   box-shadow: var(--shadow-xs);
   transition: box-shadow 0.1s ease, transform 0.1s ease;
+  position: relative;
+}
+/* Hover-revealed quick delete. Sits over the bottom-right of the card on the
+ * same line as the due date, but rendered on TOP so it doesn't reflow the
+ * meta row when it appears (no layout shift on hover). A short left-side
+ * gradient fades from transparent to the card background, masking whatever
+ * sits underneath the icon (typically the right edge of the due date). */
+.kanban__card-trash {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-sm);
+  border: 0;
+  background: var(--bg-panel);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s ease, background 0.1s ease, color 0.1s ease;
+}
+.kanban__card-trash::before {
+  /* Gradient mask so the icon doesn't appear to crash into the date — it
+   * blends over the right edge of whatever the meta row was rendering. */
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 100%;
+  width: 18px;
+  background: linear-gradient(to right, transparent, var(--bg-panel));
+  pointer-events: none;
+}
+/* `:focus-visible` instead of `:focus-within` — the latter latches on after a
+ * pointer-driven drag (the card keeps DOM focus once the drag ends, even if
+ * the drop was rejected), leaving the trash icon stuck visible. `:focus-visible`
+ * only matches keyboard-style focus so accessibility is preserved without the
+ * "won't go away" bug. */
+.kanban__card:hover .kanban__card-trash,
+.kanban__card:focus-visible .kanban__card-trash {
+  opacity: 1;
+}
+.kanban__card-trash:hover {
+  /* Mix into --bg-panel (not transparent) so the hover background stays
+   * opaque — otherwise the date underneath bleeds through. */
+  background: color-mix(in oklab, var(--red-9) 14%, var(--bg-panel));
+  color: var(--red-9);
+  opacity: 1;
+}
+.kanban__card-trash:hover::before {
+  /* Keep the gradient fading into the card color, not the tinted hover bg,
+   * so the mask still reads as "the date dissolves into the card." */
+  background: linear-gradient(to right, transparent, var(--bg-panel));
 }
 .kanban__card:hover { box-shadow: var(--shadow-sm); }
 .kanban__card.is-dragging { opacity: 0.4; }

@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Drawer, Field, Badge } from "../components/ui";
+import { Drawer, Field, Badge, MenuRow } from "../components/ui";
 import { Checkbox } from "../components/Controls";
 import { Segmented } from "../components/primitives";
 import { Kanban } from "../components/Kanban";
@@ -13,7 +14,7 @@ import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Plus, Search, ListTodo, Trash2, X } from "lucide-react";
+import { Pencil, Plus, Search, ListTodo, Trash2, X } from "lucide-react";
 import { formatDate } from "../lib/format";
 
 const STATUSES = ["Todo", "InProgress", "Blocked", "Done"];
@@ -48,6 +49,8 @@ export function TasksPage() {
   const [form, setForm] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [cardMenu, setCardMenu] = useState<{ task: any; top: number; left: number } | null>(null);
+  const cardMenuRef = useRef<HTMLDivElement | null>(null);
 
   const committeeById = useMemo(() => new Map<string, any>((committees ?? []).map((c: any) => [c._id, c])), [committees]);
   const userById = useMemo(() => new Map<string, any>((users ?? []).map((u: any) => [u._id, u])), [users]);
@@ -177,6 +180,27 @@ export function TasksPage() {
     await remove({ id: id as any });
     toast.success("Task deleted");
   };
+
+  const closeCardMenu = () => setCardMenu(null);
+
+  // Dismiss the card context menu on outside click or Escape — same pattern
+  // as the sidebar nav context menu.
+  useEffect(() => {
+    if (!cardMenu) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (cardMenuRef.current?.contains(event.target as Node)) return;
+      closeCardMenu();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeCardMenu();
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [cardMenu]);
 
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => {
@@ -336,6 +360,14 @@ export function TasksPage() {
         <Kanban
           columns={columns}
           onItemClick={(t: any) => openEdit(t)}
+          onItemContextMenu={(t: any, event) => {
+            // Position the menu at the click coordinates, clamped so it never
+            // renders off the viewport edge — quick eyeball clamp, the menu is
+            // ~180px wide and ~120px tall.
+            const x = Math.min(event.clientX, window.innerWidth - 200);
+            const y = Math.min(event.clientY, window.innerHeight - 140);
+            setCardMenu({ task: t, top: y, left: x });
+          }}
           onMove={(id, status) => update({
             id: id as any,
             patch: {
@@ -349,6 +381,18 @@ export function TasksPage() {
             const overdue = t.dueDate && new Date(t.dueDate).getTime() < Date.now() && t.status !== "Done";
             return (
               <>
+                <button
+                  type="button"
+                  className="kanban__card-trash"
+                  title="Delete task"
+                  aria-label={`Delete ${t.title}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void confirmDelete(t._id, t.title);
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
                 <div className="kanban__card-title">{t.title}</div>
                 {t.description && <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 4 }}>{t.description}</div>}
                 <div className="kanban__card-meta">
@@ -501,6 +545,41 @@ export function TasksPage() {
             </table>
           </div>
         </>
+      )}
+
+      {cardMenu && createPortal(
+        <div
+          ref={cardMenuRef}
+          className="menu menu--actions"
+          role="menu"
+          style={{ position: "fixed", top: cardMenu.top, left: cardMenu.left, width: 180, zIndex: 1000 }}
+        >
+          <div className="menu__section">
+            <MenuRow
+              role="menuitem"
+              icon={<Pencil size={14} />}
+              label="Edit task"
+              onClick={() => {
+                const task = cardMenu.task;
+                closeCardMenu();
+                openEdit(task);
+              }}
+            />
+            <div className="menu__separator" />
+            <MenuRow
+              role="menuitem"
+              icon={<Trash2 size={14} />}
+              label="Delete task"
+              destructive
+              onClick={() => {
+                const { _id, title } = cardMenu.task;
+                closeCardMenu();
+                void confirmDelete(_id, title);
+              }}
+            />
+          </div>
+        </div>,
+        document.body,
       )}
 
       <Drawer

@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { ToneVariant } from "./ui";
 
 export type RecordBoardColumn = {
@@ -20,6 +20,7 @@ export function RecordBoard<T>({
   renderCard,
   onMove,
   onItemClick,
+  onItemContextMenu,
   emptyLabel = "Drop here",
 }: {
   columns: RecordBoardColumn[];
@@ -29,6 +30,9 @@ export function RecordBoard<T>({
   renderCard: (item: T) => ReactNode;
   onMove: (item: T, toColumnId: string) => void;
   onItemClick?: (item: T) => void;
+  /** Right-click on a card. Receive the item plus the original event so the
+   * caller can position a portal'd menu at the click coordinates. */
+  onItemContextMenu?: (item: T, event: ReactMouseEvent<HTMLDivElement>) => void;
   emptyLabel?: string;
 }) {
   const [dragId, setDragId] = useState<string | null>(null);
@@ -94,6 +98,14 @@ export function RecordBoard<T>({
                       if ((e.target as HTMLElement).closest("a, button, input, select, textarea")) return;
                       onItemClick(item);
                     }}
+                    onContextMenu={
+                      onItemContextMenu
+                        ? (e) => {
+                            e.preventDefault();
+                            onItemContextMenu(item, e);
+                          }
+                        : undefined
+                    }
                     role={onItemClick ? "button" : undefined}
                     tabIndex={onItemClick ? 0 : undefined}
                     onKeyDown={(e) => {
