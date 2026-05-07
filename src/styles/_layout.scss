@@ -205,51 +205,6 @@
   gap: 0;
   flex-shrink: 0;
 }
-.sidebar__mode-row {
-  align-items: center;
-  display: flex;
-  height: 32px;
-  padding: 0 var(--s-3) var(--s-1);
-  width: var(--sidebar-w);
-}
-.sidebar__mode-pill {
-  align-items: center;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color-medium);
-  border-radius: var(--r-pill);
-  display: flex;
-  flex-shrink: 0;
-  gap: 2px;
-  height: 28px;
-  padding: 3px;
-  width: 84px;
-}
-.sidebar__mode-tab {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: var(--r-pill);
-  color: var(--text-tertiary);
-  cursor: pointer;
-  display: flex;
-  flex: 1;
-  height: 100%;
-  justify-content: center;
-  min-width: 0;
-  transition: background var(--anim-fast) ease, color var(--anim-fast) ease;
-}
-.sidebar__mode-tab:hover {
-  background: var(--bg-transparent-lighter);
-  color: var(--text-secondary);
-}
-.sidebar__mode-tab.is-active {
-  background: var(--bg-transparent-light);
-  color: var(--text-primary);
-}
-.sidebar__mode-tab svg {
-  height: 14px;
-  width: 14px;
-}
 .sidebar__identity {
   padding: 6px 12px 0;
 }
@@ -317,8 +272,24 @@
 .sidebar__spotlight-meta + .sidebar__spotlight-meta {
   margin-top: 6px;
 }
+/* Linked variant: each row is a navigation target. Picks up sidebar-item
+ * affordances (hover background, padding) without inheriting nav-icon spacing. */
+.sidebar__spotlight-meta--link {
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  margin: 0 calc(-1 * var(--s-2));
+  padding: 4px var(--s-2);
+  text-decoration: none;
+}
+.sidebar__spotlight-meta--link:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.sidebar__spotlight-meta--link.is-active {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
 .app-shell.is-collapsed .sidebar__identity,
-.app-shell.is-collapsed .sidebar__mode-row,
 .app-shell.is-collapsed .sidebar__spotlight {
   display: none;
 }

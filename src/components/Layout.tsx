@@ -52,7 +52,6 @@ import {
   PinOff,
   ExternalLink,
   KeyRound,
-  Workflow,
   History,
   Sliders,
   MonitorPlay,
@@ -662,14 +661,6 @@ export function Layout() {
   );
   const getNavItemLabel = (item: NavItem) => t(NAV_ITEM_LABEL_KEYS[item.label] ?? item.label, item.label);
   const isSidebarCollapsed = isMobileNav ? !mobileSidebarOpen : collapsed;
-  const activeSidebarMode = loc.pathname.startsWith("/app/workflows") ||
-    loc.pathname.startsWith("/app/workflow-runs") ||
-    loc.pathname.startsWith("/app/workflow-packages") ||
-    loc.pathname.startsWith("/app/integrations") ||
-    loc.pathname.startsWith("/app/browser-connectors") ||
-    loc.pathname.startsWith("/app/template-engine")
-      ? "workflows"
-      : "workspace";
   const shellClassName = useMemo(() => {
     let value = "app-shell";
     if (isSidebarCollapsed) value += " is-collapsed";
@@ -776,7 +767,7 @@ export function Layout() {
               <button
                 className="sidebar__icon-btn"
                 onClick={() => window.dispatchEvent(new Event("kbar:open"))}
-                title={`${t("common.search")} (⌘K)`}
+                title={`${t("common.search")} (/ or ⌘K)`}
                 aria-label={t("common.search")}
               >
                 <Search size={14} />
@@ -788,40 +779,6 @@ export function Layout() {
                 aria-label={`${isSidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")} ${isMobileNav ? t("sidebar.navigation") : t("sidebar.sidebar")}`}
               >
                 <PanelLeftClose size={14} />
-              </button>
-            </div>
-          </div>
-          <div className="sidebar__mode-row" aria-label="Sidebar mode">
-            <div className="sidebar__mode-pill" role="tablist" aria-label="Navigation mode">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeSidebarMode === "workspace"}
-                className={`sidebar__mode-tab${activeSidebarMode === "workspace" ? " is-active" : ""}`}
-                title="Workspace"
-                onClick={() => navigate("/app")}
-              >
-                <LayoutDashboard size={14} />
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={false}
-                className="sidebar__mode-tab"
-                title={`${t("common.search")} (⌘K)`}
-                onClick={() => window.dispatchEvent(new Event("kbar:open"))}
-              >
-                <Search size={14} />
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeSidebarMode === "workflows"}
-                className={`sidebar__mode-tab${activeSidebarMode === "workflows" ? " is-active" : ""}`}
-                title="Workflows"
-                onClick={() => navigate("/app/workflows")}
-              >
-                <Workflow size={14} />
               </button>
             </div>
           </div>
@@ -840,14 +797,24 @@ export function Layout() {
             </button>
             {!spotlightCollapsed && (
               <>
-                <div className="sidebar__spotlight-meta">
+                <NavLink
+                  to="/app/tasks"
+                  className={({ isActive }) =>
+                    `sidebar__spotlight-meta sidebar__spotlight-meta--link${isActive ? " is-active" : ""}`
+                  }
+                >
                   <span>{t("sidebar.openTasks")}</span>
                   <Pill size="sm">{counts?.openTasks ?? 0}</Pill>
-                </div>
-                <div className="sidebar__spotlight-meta">
+                </NavLink>
+                <NavLink
+                  to="/app/deadlines"
+                  className={({ isActive }) =>
+                    `sidebar__spotlight-meta sidebar__spotlight-meta--link${isActive ? " is-active" : ""}`
+                  }
+                >
                   <span>{t("sidebar.upcomingDeadlines")}</span>
                   <Pill size="sm">{counts?.openDeadlines ?? 0}</Pill>
-                </div>
+                </NavLink>
               </>
             )}
           </div>

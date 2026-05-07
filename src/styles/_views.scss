@@ -3217,6 +3217,53 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 .timeline-vertical__item.is-past .timeline-vertical__dot { border-color: var(--text-tertiary); background: var(--text-tertiary); }
 .timeline-vertical__item.is-future .timeline-vertical__dot { background: var(--bg-panel); }
 
+/* "Now" pivot — divides past from future on the single spine. The marker is
+ * `position: sticky` so it stays pinned to the top of the viewport while the
+ * user scrolls deeper into either past or future history (Suggestion B). */
+.timeline-vertical__now {
+  position: sticky;
+  top: var(--s-2);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) 0;
+  margin: var(--s-2) 0;
+  background: var(--bg-panel);
+}
+.timeline-vertical__now-dot {
+  position: absolute;
+  left: calc(var(--s-6) * -1 + 2px);
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-panel);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.timeline-vertical__now::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  top: 50%;
+  background: var(--accent);
+  opacity: 0.35;
+}
+.timeline-vertical__now-label {
+  position: relative;
+  background: var(--bg-panel);
+  padding: 2px var(--s-2);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 /* Activity feed */
 .activity-item {
   display: flex;

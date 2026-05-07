@@ -340,6 +340,15 @@
   background: var(--red-10);
   border-color: var(--red-10);
 }
+.btn--warn {
+  background: var(--orange-9);
+  border-color: var(--orange-9);
+  color: #ffffff;
+}
+.btn--warn:hover {
+  background: var(--orange-10);
+  border-color: var(--orange-10);
+}
 .btn__icon {
   display: inline-grid;
   place-items: center;

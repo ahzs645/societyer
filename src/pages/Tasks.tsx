@@ -6,13 +6,14 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Drawer, Field, Badge } from "../components/ui";
+import { Checkbox } from "../components/Controls";
 import { Segmented } from "../components/primitives";
 import { Kanban } from "../components/Kanban";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Plus, Search, ListTodo } from "lucide-react";
+import { Plus, Search, ListTodo, Trash2, X } from "lucide-react";
 import { formatDate } from "../lib/format";
 
 const STATUSES = ["Todo", "InProgress", "Blocked", "Done"];
@@ -45,6 +46,8 @@ export function TasksPage() {
   const [filterLink, setFilterLink] = useState<string>("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const committeeById = useMemo(() => new Map<string, any>((committees ?? []).map((c: any) => [c._id, c])), [committees]);
   const userById = useMemo(() => new Map<string, any>((users ?? []).map((u: any) => [u._id, u])), [users]);
@@ -175,6 +178,94 @@ export function TasksPage() {
     toast.success("Task deleted");
   };
 
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const visibleSelectedCount = filtered.reduce(
+    (count: number, task: any) => count + (selectedIds.has(task._id) ? 1 : 0),
+    0,
+  );
+  const allVisibleSelected = filtered.length > 0 && visibleSelectedCount === filtered.length;
+  const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
+
+  const toggleSelectAllVisible = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        for (const task of filtered) next.delete(task._id);
+      } else {
+        for (const task of filtered) next.add(task._id);
+      }
+      return next;
+    });
+  };
+
+  const bulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const titles = (tasks ?? [])
+      .filter((task: any) => selectedIds.has(task._id))
+      .map((task: any) => task.title);
+    const previewTitles = titles.slice(0, 5);
+    const overflow = titles.length - previewTitles.length;
+    const message = (
+      <>
+        <p style={{ margin: "0 0 8px" }}>
+          This permanently removes the selected task{ids.length === 1 ? "" : "s"}. This action cannot be undone.
+        </p>
+        <ul style={{ margin: 0, paddingLeft: 18 }}>
+          {previewTitles.map((title: string, index: number) => (
+            <li key={index}>{title}</li>
+          ))}
+        </ul>
+        {overflow > 0 && (
+          <p className="muted" style={{ margin: "6px 0 0", fontSize: "var(--fs-sm)" }}>
+            …and {overflow} more
+          </p>
+        )}
+      </>
+    );
+    const ok = await confirm({
+      title: `Delete ${ids.length} task${ids.length === 1 ? "" : "s"}?`,
+      message,
+      confirmLabel: `Delete ${ids.length}`,
+      tone: "danger",
+    });
+    if (!ok) return;
+    setBulkDeleting(true);
+    try {
+      // Sequential — Convex mutations run on the server one at a time per
+      // call anyway, and serialising keeps optimistic state consistent if a
+      // single delete fails partway through.
+      let failures = 0;
+      for (const id of ids) {
+        try {
+          await remove({ id: id as any });
+        } catch {
+          failures += 1;
+        }
+      }
+      const succeeded = ids.length - failures;
+      if (succeeded > 0) {
+        toast.success(`${succeeded} task${succeeded === 1 ? "" : "s"} deleted`);
+      }
+      if (failures > 0) {
+        toast.error(`${failures} task${failures === 1 ? "" : "s"} could not be deleted`);
+      }
+      clearSelection();
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   const columns = COLS.map((col) => ({
     id: col.id,
     label: col.label,
@@ -285,28 +376,83 @@ export function TasksPage() {
           }}
         />
       ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th />
-                <th>Title</th>
-                <th>Committee</th>
-                <th>Responsible</th>
-                <th>Links</th>
-                <th>Due</th>
-                <th>Status</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((t: any) => {
-                const committee = committeeById.get(t.committeeId);
-                const responsible = userNames(t.responsibleUserIds, userById) || t.assignee;
-                return (
-                  <tr key={t._id}>
-                    <td><span className={`priority-dot priority-${t.priority}`} /></td>
-                    <td><strong>{t.title}</strong>{t.description && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{t.description}</div>}</td>
+        <>
+          {selectedIds.size > 0 && (
+            <div
+              className="row"
+              style={{
+                marginBottom: 12,
+                padding: "8px 12px",
+                background: "var(--bg-subtle)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--r-md)",
+                gap: 12,
+                alignItems: "center",
+              }}
+              role="region"
+              aria-label="Bulk actions"
+            >
+              <strong>{selectedIds.size} selected</strong>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={clearSelection}
+                disabled={bulkDeleting}
+                title="Clear selection"
+              >
+                <X size={12} /> Clear
+              </button>
+              <div style={{ marginLeft: "auto" }}>
+                <button
+                  type="button"
+                  className="btn btn--danger btn--sm"
+                  onClick={bulkDelete}
+                  disabled={bulkDeleting}
+                >
+                  <Trash2 size={12} /> {bulkDeleting ? "Deleting…" : `Delete ${selectedIds.size}`}
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th style={{ width: 32 }}>
+                    <Checkbox
+                      checked={allVisibleSelected}
+                      indeterminate={someVisibleSelected}
+                      onChange={toggleSelectAllVisible}
+                      label=""
+                      bare
+                    />
+                  </th>
+                  <th />
+                  <th>Title</th>
+                  <th>Committee</th>
+                  <th>Responsible</th>
+                  <th>Links</th>
+                  <th>Due</th>
+                  <th>Status</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((t: any) => {
+                  const committee = committeeById.get(t.committeeId);
+                  const responsible = userNames(t.responsibleUserIds, userById) || t.assignee;
+                  return (
+                    <tr key={t._id} className={selectedIds.has(t._id) ? "is-selected" : undefined}>
+                      <td onClick={(event) => event.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.has(t._id)}
+                          onChange={() => toggleSelected(t._id)}
+                          label=""
+                          bare
+                        />
+                      </td>
+                      <td><span className={`priority-dot priority-${t.priority}`} /></td>
+                      <td><strong>{t.title}</strong>{t.description && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{t.description}</div>}</td>
                     <td>
                       {committee ? (
                         <Link to={`/app/committees/${committee._id}`} className="row" style={{ gap: 6 }}>
@@ -350,10 +496,11 @@ export function TasksPage() {
                   </tr>
                 );
               })}
-              {filtered.length === 0 && <tr><td colSpan={8} className="muted" style={{ textAlign: "center", padding: 24 }}>No tasks.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+                {filtered.length === 0 && <tr><td colSpan={9} className="muted" style={{ textAlign: "center", padding: 24 }}>No tasks.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       <Drawer

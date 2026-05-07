@@ -401,7 +401,23 @@ export function CommandPalette() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setOpen((v) => !v);
-      } else if (e.key === "Escape") setOpen(false);
+        return;
+      }
+      if (e.key === "Escape") {
+        setOpen(false);
+        return;
+      }
+      // `/` opens the palette without modifiers — GitHub/Linear/Slack convention.
+      // Skip when the user is typing in any text-entry surface so they can still
+      // type literal slashes in agenda items, meeting titles, etc.
+      if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const target = e.target as HTMLElement | null;
+        const tag = target?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        if (target?.isContentEditable) return;
+        e.preventDefault();
+        setOpen(true);
+      }
     };
     const onOpen = () => setOpen(true);
     window.addEventListener("keydown", onKey);

@@ -495,18 +495,10 @@
 .confirm-icon--danger { background: var(--danger-soft); color: var(--danger); }
 .confirm-icon--warn { background: var(--warn-soft); color: var(--warn); }
 
-.btn--danger {
-  background: var(--danger);
-  border-color: var(--danger);
-  color: var(--accent-on);
-}
-.btn--danger:hover { filter: brightness(0.95); }
-.btn--warn {
-  background: var(--warn);
-  border-color: var(--warn);
-  color: var(--accent-on);
-}
-.btn--warn:hover { filter: brightness(0.95); }
+/* `.btn--danger` and `.btn--warn` live in `_chrome.scss` next to the rest of
+ * the `.btn` family. They use `--red-9` / `--orange-9` for the saturated fill
+ * — the semantic `--danger` / `--warn` tokens map to `--red-11` / `--orange-11`
+ * in dark mode, which are *text* colors and look washed out as backgrounds. */
 
 /* ============================================================
    Toast
