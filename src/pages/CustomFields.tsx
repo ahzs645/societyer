@@ -141,6 +141,8 @@ export function CustomFieldsPage() {
     <div className="page custom-fields-page">
       <SettingsShell
         title="Custom fields"
+        icon={<Sliders size={16} />}
+        iconColor="purple"
         description="Add extra fields to any person category (members, directors, volunteers, employees). Saved values appear on each person's detail and can be pulled into PDF mapping."
         tabs={[
           { id: "definitions", label: "Definitions", icon: <Sliders size={14} /> },
