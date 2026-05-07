@@ -54,7 +54,8 @@ import { maintenanceErrorMessage, seedDemoSociety } from "../lib/maintenanceApi"
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { useUIStore } from "../lib/store";
 import { useRegisteredCommands } from "../lib/commands";
-import { ROUTE_IDENTITY, type RouteGroup } from "../lib/routeIdentity";
+import { ROUTE_IDENTITY, TONE_CSS_VAR, groupToneCssVar, type IconTone, type RouteGroup } from "../lib/routeIdentity";
+import type { CSSProperties } from "react";
 
 type CommandCategory =
   | "Recent"
@@ -77,6 +78,8 @@ type CommandItem = {
   run?: () => void | Promise<void>;
   /** Optional keyboard hint shown as a <kbd>. */
   shortcut?: string;
+  /** Registry group — drives the per-row icon tint. */
+  group?: RouteGroup;
 };
 
 /**
@@ -97,6 +100,20 @@ const GROUP_TO_CATEGORY: Record<RouteGroup, CommandCategory> = {
 };
 
 /**
+ * Each palette category aggregates one or more registry groups, so it picks
+ * a "primary" tone for its label. Recent and Actions stay neutral. This is
+ * the only place where the category→tone aggregation lives — all other tone
+ * lookups come from `routeIdentity` directly.
+ */
+const CATEGORY_TONES: Partial<Record<CommandCategory, IconTone>> = {
+  Navigation: "blue",
+  Governance: "orange",
+  Finance: "yellow",
+  Compliance: "green",
+  System: "gray",
+};
+
+/**
  * Nav commands are derived from the same `ROUTE_IDENTITY` registry the sidebar
  * and PageHeader use, so the icon and label here always match what the user
  * sees in the sidebar — searching the visible sidebar label always finds the
@@ -108,6 +125,7 @@ const NAV_ITEMS: CommandItem[] = Object.entries(ROUTE_IDENTITY).map(([path, iden
     label: identity.label,
     icon: identity.icon,
     category: GROUP_TO_CATEGORY[identity.group],
+    group: identity.group,
     to: path,
   };
   if (identity.module) item.module = identity.module;
@@ -552,7 +570,13 @@ export function CommandPalette() {
             let runningIndex = 0;
             return groups.map((group) => (
               <div key={group.category} role="group" aria-label={group.category}>
-                <div className="kbar__group-label">
+                <div
+                  className="kbar__group-label"
+                  style={(() => {
+                    const tone = CATEGORY_TONES[group.category];
+                    return tone ? { color: TONE_CSS_VAR[tone] } : undefined;
+                  })()}
+                >
                   {group.category === "Recent" ? (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                       <Clock size={10} /> Recent
@@ -564,6 +588,12 @@ export function CommandPalette() {
                 {group.items.map((item) => {
                   const idx = runningIndex++;
                   const Icon = item.icon;
+                  // Pull the tone straight from the registry — no per-group CSS
+                  // class to keep in sync. Action/Recent items leave it unset
+                  // and fall back to the muted default in the SCSS.
+                  const itemStyle: CSSProperties | undefined = item.group
+                    ? ({ "--kbar-item-tone": groupToneCssVar(item.group) } as CSSProperties)
+                    : undefined;
                   return (
                     <button
                       type="button"
@@ -572,6 +602,7 @@ export function CommandPalette() {
                       role="option"
                       aria-selected={idx === active}
                       className={`kbar__item${idx === active ? " is-active" : ""}`}
+                      style={itemStyle}
                       onMouseEnter={() => setActive(idx)}
                       onClick={() => run(item)}
                     >

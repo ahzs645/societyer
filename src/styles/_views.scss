@@ -1886,6 +1886,25 @@
   margin: 2px 0 0;
   font-size: var(--fs-sm);
 }
+/* Empty state shown inside the standalone preview pane when there's
+ * nothing to render. The inline tab uses .minutes-preview-empty-screen
+ * (full-width replacement) instead. */
+.minutes-preview__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--s-2);
+  padding: var(--s-6) var(--s-4);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+  color: var(--text-secondary);
+  min-height: 240px;
+
+  svg { color: var(--text-tertiary); }
+  p { max-width: 52ch; margin: 0; }
+}
 .minutes-preview__page {
   // Force light tokens inside the preview so child elements rendered from the
   // export HTML (.motion, .meta, .muted) match the exported document and don't
@@ -2215,6 +2234,25 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
   gap: var(--s-4);
   align-items: start;
+}
+/* Replaces the export 2-column layout when there is nothing to render —
+ * the export controls aren't actionable with no content, so the message
+ * spans the full width instead of sharing space with a useless sidebar. */
+.minutes-preview-empty-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--s-2);
+  padding: var(--s-6) var(--s-4);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+  color: var(--text-secondary);
+  min-height: 280px;
+
+  svg { color: var(--text-tertiary); }
+  p { max-width: 52ch; margin: 0; }
 }
 // Hide the browser's native up/down spinners on VoteStepper inputs — the
 // component has its own +/- buttons, native arrows are redundant noise.

@@ -119,6 +119,30 @@ export const GROUP_TONES: Record<RouteGroup, IconTone> = {
   administration: "red",
 };
 
+/**
+ * Tone name → CSS color value. The single mapping from our `IconTone` strings
+ * to the actual `--{tone}-11` design-token variables. Any component that needs
+ * to apply a route's color in a non-class-based way (e.g. setting a CSS
+ * custom property inline) should call this so we never duplicate the mapping
+ * in SCSS files.
+ */
+export const TONE_CSS_VAR: Record<IconTone, string> = {
+  blue: "var(--blue-11)",
+  red: "var(--red-11)",
+  turquoise: "var(--turquoise-11)",
+  gray: "var(--gray-11)",
+  orange: "var(--orange-11)",
+  purple: "var(--purple-11)",
+  green: "var(--green-11)",
+  pink: "var(--pink-11)",
+  yellow: "var(--yellow-11)",
+};
+
+/** Resolve a route group to the CSS variable expression for its tone. */
+export function groupToneCssVar(group: RouteGroup): string {
+  return TONE_CSS_VAR[GROUP_TONES[group]];
+}
+
 export type LucideIcon = ComponentType<{ size?: number | string }>;
 
 export type RouteIdentity = {

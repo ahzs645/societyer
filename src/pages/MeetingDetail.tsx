@@ -1341,69 +1341,88 @@ export function MeetingDetailPage() {
           />
         )}
 
-        {activeTab === "export" && (
-          <div className="meeting-export-layout">
-            <MeetingSidebarColumn
-              meeting={meeting}
-              minutes={minutes}
-              society={society}
-              visiblePanels={["export"]}
-              selectedMinutesExportStyle={selectedMinutesExportStyle}
-              minutesExportStyle={minutesExportStyle}
-              setMinutesExportStyle={setMinutesExportStyle}
-              includeTranscriptInExport={includeTranscriptInExport}
-              setIncludeTranscriptInExport={setIncludeTranscriptInExport}
-              includeActionItemsInExport={includeActionItemsInExport}
-              setIncludeActionItemsInExport={setIncludeActionItemsInExport}
-              includeDiscussionSummaryInExport={includeDiscussionSummaryInExport}
-              setIncludeDiscussionSummaryInExport={setIncludeDiscussionSummaryInExport}
-              includeApprovalInExport={includeApprovalInExport}
-              setIncludeApprovalInExport={setIncludeApprovalInExport}
-              includeSignaturesInExport={includeSignaturesInExport}
-              setIncludeSignaturesInExport={setIncludeSignaturesInExport}
-              includePlaceholdersInExport={includePlaceholdersInExport}
-              setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
-              exportToWord={exportToWord}
-              exportToPdf={exportToPdf}
-              exportPublicMinutes={exportPublicMinutes}
-              minutesExportGaps={minutesExportGaps}
-              quorumSnapshot={quorumSnapshot}
-              quorumLegalGuides={quorumLegalGuides}
-              legalGuideDateISO={legalGuideDateISO}
-              linkedSourceCount={linkedSourceCount}
-              sourceDocuments={sourceDocuments}
-              minutesSourceExternalIds={minutesSourceExternalIds}
-              vttInputRef={vttInputRef}
-              audioInputRef={audioInputRef}
-              transcriptOnFile={transcriptOnFile}
-              transcriptProvider={transcriptProvider}
-              transcriptionJob={transcriptionJob}
-              transcriptStatusTone={transcriptStatusTone}
-              transcriptEdit={transcriptEdit}
-              savingTranscript={savingTranscript}
-              pipelineBusy={pipelineBusy}
-              audioFile={audioFile}
-              importNote={importNote}
-              setTranscriptEdit={setTranscriptEdit}
-              setAudioFile={setAudioFile}
-              importTranscriptVtt={importTranscriptVtt}
-              saveTranscriptEditText={saveTranscriptEditText}
-              uploadAudioAndRun={uploadAudioAndRun}
-            />
-            <div className="minutes-preview minutes-preview--inline">
-              <div className="minutes-preview__toolbar">
-                <div>
-                  <strong>{selectedMinutesExportStyle.label}</strong>
-                  <p className="muted">{selectedMinutesExportStyle.tone}</p>
-                </div>
-                <button className="btn-action" onClick={openMinutesPreviewPage}>
-                  <ExternalLink size={12} /> Open separate page
-                </button>
+        {activeTab === "export" && (() => {
+          const previewHtml = renderExportBody();
+          // When there's nothing to render, drop the two-column layout so the
+          // empty-state message takes the full width — the export sidebar's
+          // controls aren't actionable until there's content anyway.
+          if (!previewHtml) {
+            return (
+              <div className="minutes-preview-empty-screen">
+                <FileText size={28} aria-hidden="true" />
+                <strong>Nothing to render yet.</strong>
+                <p className="muted">
+                  Add agenda items, discussion notes, decisions, motions, or action items
+                  on this meeting and they'll appear here in the selected export style
+                  ({selectedMinutesExportStyle.label}).
+                </p>
               </div>
-              <div className="minutes-preview__page" dangerouslySetInnerHTML={{ __html: renderExportBody() }} />
+            );
+          }
+          return (
+            <div className="meeting-export-layout">
+              <MeetingSidebarColumn
+                meeting={meeting}
+                minutes={minutes}
+                society={society}
+                visiblePanels={["export"]}
+                selectedMinutesExportStyle={selectedMinutesExportStyle}
+                minutesExportStyle={minutesExportStyle}
+                setMinutesExportStyle={setMinutesExportStyle}
+                includeTranscriptInExport={includeTranscriptInExport}
+                setIncludeTranscriptInExport={setIncludeTranscriptInExport}
+                includeActionItemsInExport={includeActionItemsInExport}
+                setIncludeActionItemsInExport={setIncludeActionItemsInExport}
+                includeDiscussionSummaryInExport={includeDiscussionSummaryInExport}
+                setIncludeDiscussionSummaryInExport={setIncludeDiscussionSummaryInExport}
+                includeApprovalInExport={includeApprovalInExport}
+                setIncludeApprovalInExport={setIncludeApprovalInExport}
+                includeSignaturesInExport={includeSignaturesInExport}
+                setIncludeSignaturesInExport={setIncludeSignaturesInExport}
+                includePlaceholdersInExport={includePlaceholdersInExport}
+                setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
+                exportToWord={exportToWord}
+                exportToPdf={exportToPdf}
+                exportPublicMinutes={exportPublicMinutes}
+                minutesExportGaps={minutesExportGaps}
+                quorumSnapshot={quorumSnapshot}
+                quorumLegalGuides={quorumLegalGuides}
+                legalGuideDateISO={legalGuideDateISO}
+                linkedSourceCount={linkedSourceCount}
+                sourceDocuments={sourceDocuments}
+                minutesSourceExternalIds={minutesSourceExternalIds}
+                vttInputRef={vttInputRef}
+                audioInputRef={audioInputRef}
+                transcriptOnFile={transcriptOnFile}
+                transcriptProvider={transcriptProvider}
+                transcriptionJob={transcriptionJob}
+                transcriptStatusTone={transcriptStatusTone}
+                transcriptEdit={transcriptEdit}
+                savingTranscript={savingTranscript}
+                pipelineBusy={pipelineBusy}
+                audioFile={audioFile}
+                importNote={importNote}
+                setTranscriptEdit={setTranscriptEdit}
+                setAudioFile={setAudioFile}
+                importTranscriptVtt={importTranscriptVtt}
+                saveTranscriptEditText={saveTranscriptEditText}
+                uploadAudioAndRun={uploadAudioAndRun}
+              />
+              <div className="minutes-preview minutes-preview--inline">
+                <div className="minutes-preview__toolbar">
+                  <div>
+                    <strong>{selectedMinutesExportStyle.label}</strong>
+                    <p className="muted">{selectedMinutesExportStyle.tone}</p>
+                  </div>
+                  <button className="btn-action" onClick={openMinutesPreviewPage}>
+                    <ExternalLink size={12} /> Open separate page
+                  </button>
+                </div>
+                <div className="minutes-preview__page" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {activeTab === "sources" && (
           <MeetingSidebarColumn
@@ -1660,7 +1679,18 @@ export function MeetingMinutesPreviewPage() {
           </div>
         </aside>
         <div className="minutes-preview minutes-preview--standalone">
-          <div className="minutes-preview__page" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+          {bodyHtml ? (
+            <div className="minutes-preview__page" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+          ) : (
+            <div className="minutes-preview__empty">
+              <FileText size={20} aria-hidden="true" />
+              <strong>Nothing to render yet.</strong>
+              <p className="muted">
+                Add agenda items, discussion notes, decisions, motions, or action items
+                on this meeting and they'll appear here in the selected export style.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
