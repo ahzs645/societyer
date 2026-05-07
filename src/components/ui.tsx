@@ -348,6 +348,8 @@ export function LightIconButton({
 export function SettingsShell({
   title,
   description,
+  icon,
+  iconColor = "gray",
   tabs,
   activeTab,
   actions,
@@ -355,6 +357,8 @@ export function SettingsShell({
 }: {
   title: ReactNode;
   description?: ReactNode;
+  icon?: ReactNode;
+  iconColor?: "blue" | "red" | "turquoise" | "gray" | "orange" | "purple" | "green" | "pink" | "yellow";
   tabs?: { id: string; label: ReactNode; icon?: ReactNode }[];
   activeTab?: string;
   actions?: ReactNode;
@@ -364,7 +368,14 @@ export function SettingsShell({
     <div className="settings-shell">
       <div className="settings-shell__bar">
         <div className="settings-shell__main">
-          <h1 className="settings-shell__title">{title}</h1>
+          <h1 className="settings-shell__title">
+            {icon && (
+              <TintedIconTile tone={iconColor} size="md" className="settings-shell__icon">
+                {icon}
+              </TintedIconTile>
+            )}
+            <span className="settings-shell__title-text">{title}</span>
+          </h1>
           {description && <div className="settings-shell__description">{description}</div>}
         </div>
         {tabs && tabs.length > 0 && (
