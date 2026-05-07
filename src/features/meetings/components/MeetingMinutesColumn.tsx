@@ -36,7 +36,6 @@ export function MeetingMinutesColumn({
   directors,
   saveMinuteSections,
   saveMinuteMotions,
-  createMinutesFromAgenda,
   addSectionToBacklog,
   onOpenMotions,
   meetingTasks,
@@ -62,7 +61,6 @@ export function MeetingMinutesColumn({
   directors: any;
   saveMinuteSections: (next: any[]) => void | Promise<void> | undefined;
   saveMinuteMotions: (next: Motion[]) => void | Promise<void> | undefined;
-  createMinutesFromAgenda: () => void | Promise<void>;
   addSectionToBacklog: (section: any) => void | Promise<void>;
   onOpenMotions?: () => void;
   meetingTasks: any[];
@@ -748,11 +746,6 @@ export function MeetingMinutesColumn({
                       {sections.length ? `${sectionsWithDetailCount}/${sections.length} detailed` : "No sections"}
                     </span>
                     <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-                      {!sections.length && agenda.length > 0 && (
-                        <button className="btn-action btn-action--primary" type="button" onClick={createMinutesFromAgenda}>
-                          <ClipboardList size={12} /> Create from agenda
-                        </button>
-                      )}
                       {sections.length > 0 && (
                         <button
                           className="btn-action btn-action--icon"
@@ -1233,14 +1226,9 @@ export function MeetingMinutesColumn({
               <h2 className="card__title">Agenda record</h2>
               <span className="card__subtitle">
                 {agenda.length
-                  ? `${agenda.length} agenda item${agenda.length === 1 ? "" : "s"} ready to become sections`
+                  ? "Save the agenda to start the minutes record"
                   : "Add agenda items in the sidebar to start"}
               </span>
-              {agenda.length > 0 && (
-                <button className="btn-action btn-action--primary" type="button" onClick={createMinutesFromAgenda}>
-                  <ClipboardList size={12} /> Create from agenda
-                </button>
-              )}
             </div>
             <div className="card__body col" style={{ gap: 16 }}>
               {agenda.length > 0 ? (
@@ -1261,7 +1249,7 @@ export function MeetingMinutesColumn({
                   <ClipboardList size={14} />
                   <div>
                     <strong>No agenda yet.</strong>
-                    <p>Add agenda items in the Agenda card on the left, then click Create from agenda to start the minutes record.</p>
+                    <p>Add agenda items in the Agenda card on the left and save — the minutes record is created automatically with one section per item.</p>
                   </div>
                 </div>
               )}

@@ -590,50 +590,6 @@ export function MeetingDetailPage() {
     });
   };
 
-  const sectionsFromAgenda = () =>
-    agenda.map((title) => ({
-      title,
-      type: inferAgendaSectionType(title),
-      discussion: "",
-      decisions: [],
-      actionItems: [],
-    }));
-
-  const createMinutesFromAgenda = async () => {
-    if (!agenda.length) {
-      toast.error("Add agenda items first.");
-      return;
-    }
-    const sections = sectionsFromAgenda();
-    if (minutes) {
-      if ((minutes.sections ?? []).length > 0) {
-        toast.info("Minutes already have agenda sections.");
-        return;
-      }
-      await updateMinutes({ id: minutes._id, patch: { sections } });
-      toast.success("Agenda copied into minutes.");
-      return;
-    }
-
-    const attendees = Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds.map(String) : [];
-    const quorumRequired = quorumSnapshot.required ?? meeting.quorumRequired;
-    await createMinutes({
-      societyId: meeting.societyId,
-      meetingId: meeting._id,
-      heldAt: meeting.scheduledAt,
-      attendees,
-      absent: [],
-      quorumMet: quorumRequired == null ? false : attendees.length >= quorumRequired,
-      quorumRequired: quorumRequired ?? undefined,
-      discussion: "",
-      sections,
-      motions: [],
-      decisions: [],
-      actionItems: [],
-    });
-    toast.success("Minutes created from agenda.");
-  };
-
   const addMotionToBacklog = async (_motion: Motion, motionIndex: number) => {
     if (!minutes) return;
     const result = await createBacklogFromMinutesMotion({
@@ -654,6 +610,14 @@ export function MeetingDetailPage() {
     toast.success(result.reused ? "Agenda item already in backlog" : "Agenda item added to backlog");
   };
 
+  const buildSectionFromTitle = (title: string) => ({
+    title,
+    type: inferAgendaSectionType(title),
+    discussion: "",
+    decisions: [],
+    actionItems: [],
+  });
+
   const saveAgenda = async () => {
     const next = parseLines(agendaEdit ?? "");
     await updateMeeting({
@@ -664,6 +628,31 @@ export function MeetingDetailPage() {
         agendaJson: JSON.stringify(next),
       },
     });
+
+    // Auto-bootstrap the minutes record on first save. This subsumes the old
+    // "Create from agenda" button — saving the agenda is now the single entry
+    // point that produces an editable minutes draft mirroring the agenda.
+    if (!minutes && next.length) {
+      const attendees = Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds.map(String) : [];
+      const quorumRequired = quorumSnapshot.required ?? meeting.quorumRequired;
+      await createMinutes({
+        societyId: meeting.societyId,
+        meetingId: meeting._id,
+        heldAt: meeting.scheduledAt,
+        attendees,
+        absent: [],
+        quorumMet: quorumRequired == null ? false : attendees.length >= quorumRequired,
+        quorumRequired: quorumRequired ?? undefined,
+        discussion: "",
+        sections: next.map(buildSectionFromTitle),
+        motions: [],
+        decisions: [],
+        actionItems: [],
+      });
+      setAgendaEdit(null);
+      toast.success("Agenda saved");
+      return;
+    }
 
     // Keep agenda and minutes.sections in 1-to-1 sync: align section order to
     // the agenda, reuse existing sections by title, and create empty sections
@@ -691,14 +680,7 @@ export function MeetingDetailPage() {
 
       const aligned = next.map((title) => {
         const existing = sectionsByTitle.get(normalize(title));
-        if (existing) return existing;
-        return {
-          title,
-          type: inferAgendaSectionType(title),
-          discussion: "",
-          decisions: [],
-          actionItems: [],
-        };
+        return existing ?? buildSectionFromTitle(title);
       });
 
       const newTitles = new Set(next.map(normalize));
@@ -1195,6 +1177,7 @@ export function MeetingDetailPage() {
               minutes={minutes}
               society={society}
               visiblePanels={["export"]}
+              exportControlsReadOnly
               selectedMinutesExportStyle={selectedMinutesExportStyle}
               minutesExportStyle={minutesExportStyle}
               setMinutesExportStyle={setMinutesExportStyle}
@@ -1258,7 +1241,6 @@ export function MeetingDetailPage() {
             directors={directors}
             saveMinuteSections={saveMinuteSections}
             saveMinuteMotions={saveMotions}
-            createMinutesFromAgenda={createMinutesFromAgenda}
             addSectionToBacklog={addSectionToBacklog}
             onOpenMotions={() => setActiveTab("motions")}
             meetingTasks={linkedTasks}

@@ -54,7 +54,7 @@ import { maintenanceErrorMessage, seedDemoSociety } from "../lib/maintenanceApi"
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { useUIStore } from "../lib/store";
 import { useRegisteredCommands } from "../lib/commands";
-import { ROUTE_IDENTITY, TONE_CSS_VAR, groupToneCssVar, type IconTone, type RouteGroup } from "../lib/routeIdentity";
+import { ROUTE_IDENTITY, groupToneCssVar, type RouteGroup } from "../lib/routeIdentity";
 import type { CSSProperties } from "react";
 
 type CommandCategory =
@@ -97,20 +97,6 @@ const GROUP_TO_CATEGORY: Record<RouteGroup, CommandCategory> = {
   compliance: "Compliance",
   workflows: "System",
   administration: "System",
-};
-
-/**
- * Each palette category aggregates one or more registry groups, so it picks
- * a "primary" tone for its label. Recent and Actions stay neutral. This is
- * the only place where the category→tone aggregation lives — all other tone
- * lookups come from `routeIdentity` directly.
- */
-const CATEGORY_TONES: Partial<Record<CommandCategory, IconTone>> = {
-  Navigation: "blue",
-  Governance: "orange",
-  Finance: "yellow",
-  Compliance: "green",
-  System: "gray",
 };
 
 /**
@@ -570,13 +556,7 @@ export function CommandPalette() {
             let runningIndex = 0;
             return groups.map((group) => (
               <div key={group.category} role="group" aria-label={group.category}>
-                <div
-                  className="kbar__group-label"
-                  style={(() => {
-                    const tone = CATEGORY_TONES[group.category];
-                    return tone ? { color: TONE_CSS_VAR[tone] } : undefined;
-                  })()}
-                >
+                <div className="kbar__group-label">
                   {group.category === "Recent" ? (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                       <Clock size={10} /> Recent
