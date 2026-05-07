@@ -58,7 +58,9 @@ export function useStaticCommands(): StaticCommand[] {
         id: "action-draft-minutes",
         label: "Draft minutes",
         icon: PenLine,
-        run: () => navigate("/app/minutes?intent=draft"),
+        // Open the picker so the user explicitly chooses which meeting to
+        // draft for. The picker (mounted in Layout) listens for this event.
+        run: () => window.dispatchEvent(new Event("quickaction:draft-minutes")),
       },
       {
         id: "action-request-director-attestation",

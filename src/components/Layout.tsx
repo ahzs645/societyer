@@ -75,6 +75,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { DemoBanner } from "./DemoBanner";
 import { CommandPalette } from "./CommandPalette";
+import { DraftMinutesPicker } from "./DraftMinutesPicker";
 import { ShortcutHelp } from "./ShortcutHelp";
 import { NotificationBell } from "./NotificationBell";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -970,6 +971,7 @@ export function Layout() {
   return (
     <InspectorProvider>
       <CommandPaletteSafe />
+      <DraftMinutesPicker />
       <ShortcutHelp />
       <div className={shellClassName}>
         {isMobileNav && mobileSidebarOpen && (

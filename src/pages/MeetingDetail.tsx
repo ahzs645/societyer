@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useToast } from "../components/Toast";
@@ -146,7 +146,25 @@ export function MeetingDetailPage() {
   const [includeApprovalInExport, setIncludeApprovalInExport] = useState(() => readStoredExportBool("includeApproval", true));
   const [includeSignaturesInExport, setIncludeSignaturesInExport] = useState(() => readStoredExportBool("includeSignatures", true));
   const [includePlaceholdersInExport, setIncludePlaceholdersInExport] = useState(() => readStoredExportBool("includePlaceholders", false));
-  const [activeTab, setActiveTab] = useState<MeetingDetailTab>("overview");
+  // Drive the tab from the `?tab=` URL param so deep links (e.g. the Draft
+  // minutes quick-action) can land users directly on the right tab. The
+  // setter writes back to the URL so the address bar reflects what's shown
+  // and the back button restores the previous tab.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const TAB_VALUES: MeetingDetailTab[] = ["overview", "minutes", "motions", "package", "export", "sources"];
+  const tabFromUrl = searchParams.get("tab") as MeetingDetailTab | null;
+  const activeTab: MeetingDetailTab = tabFromUrl && TAB_VALUES.includes(tabFromUrl) ? tabFromUrl : "overview";
+  const setActiveTab = (next: MeetingDetailTab) => {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (next === "overview") params.delete("tab");
+        else params.set("tab", next);
+        return params;
+      },
+      { replace: true },
+    );
+  };
   const [materialDraft, setMaterialDraft] = useState<any | null>(null);
   const [joinEdit, setJoinEdit] = useState<any | null>(null);
   const [sourceReviewNote, setSourceReviewNote] = useState("");
