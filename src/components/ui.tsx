@@ -1,6 +1,7 @@
 import {
   Children,
   cloneElement,
+  createElement,
   Fragment,
   isValidElement,
   ButtonHTMLAttributes,
@@ -14,10 +15,11 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { ChevronRight, X, AlertTriangle, CheckCircle2, Info, Lock, Unlock, type LucideIcon } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useConfirm } from "./Modal";
 import { useInspectorPanel } from "./InspectorPanel";
 import { CitationBadge } from "./CitationTooltip";
+import { getRouteIdentity, resolveRouteIdentity, type IconTone } from "../lib/routeIdentity";
 
 export type Breadcrumb = {
   label: ReactNode;
@@ -349,7 +351,8 @@ export function SettingsShell({
   title,
   description,
   icon,
-  iconColor = "gray",
+  iconColor,
+  routeKey,
   tabs,
   activeTab,
   actions,
@@ -357,21 +360,35 @@ export function SettingsShell({
 }: {
   title: ReactNode;
   description?: ReactNode;
+  /** Fallback icon when the registry has no entry for this route. */
   icon?: ReactNode;
-  iconColor?: "blue" | "red" | "turquoise" | "gray" | "orange" | "purple" | "green" | "pink" | "yellow";
+  /** Fallback color when the registry has no entry for this route. */
+  iconColor?: IconTone;
+  /** Override the auto-detected route. Usually omit — the current pathname is used. */
+  routeKey?: string;
   tabs?: { id: string; label: ReactNode; icon?: ReactNode }[];
   activeTab?: string;
   actions?: ReactNode;
   children: ReactNode;
 }) {
+  const location = useLocation();
+  const identity = routeKey
+    ? getRouteIdentity(routeKey)
+    : resolveRouteIdentity(location.pathname);
+
+  const resolvedIcon = identity
+    ? createElement(identity.icon, { size: 16 })
+    : icon;
+  const resolvedTone: IconTone = identity?.color ?? iconColor ?? "gray";
+
   return (
     <div className="settings-shell">
       <div className="settings-shell__bar">
         <div className="settings-shell__main">
           <h1 className="settings-shell__title">
-            {icon && (
-              <TintedIconTile tone={iconColor} size="md" className="settings-shell__icon">
-                {icon}
+            {resolvedIcon && (
+              <TintedIconTile tone={resolvedTone} size="md" className="settings-shell__icon">
+                {resolvedIcon}
               </TintedIconTile>
             )}
             <span className="settings-shell__title-text">{title}</span>

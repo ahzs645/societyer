@@ -1,9 +1,11 @@
 import { Sparkles } from "lucide-react";
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, createElement } from "react";
+import { useLocation } from "react-router-dom";
 import { EmptyState, TintedIconTile } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { setStoredSocietyId } from "../hooks/useSociety";
 import { maintenanceErrorMessage, seedDemoSociety } from "../lib/maintenanceApi";
+import { getRouteIdentity, resolveRouteIdentity, type IconTone } from "../lib/routeIdentity";
 
 export function SeedPrompt() {
   const toast = useToast();
@@ -45,23 +47,42 @@ export function PageHeader({
   title,
   subtitle,
   icon,
-  iconColor = "blue",
+  iconColor,
+  routeKey,
   actions,
 }: {
   title: ReactNode;
   subtitle?: ReactNode;
+  /** Fallback icon when the registry has no entry for this route. */
   icon?: ReactNode;
-  iconColor?: "blue" | "red" | "turquoise" | "gray" | "orange" | "purple" | "green" | "pink" | "yellow";
+  /** Fallback color when the registry has no entry for this route. */
+  iconColor?: IconTone;
+  /** Override the auto-detected route. Usually omit — the current pathname is used. */
+  routeKey?: string;
   actions?: ReactNode;
 }) {
+  // Auto-resolve from the current location so every page reads its identity
+  // from the registry, even ones that haven't been migrated. Registry wins
+  // over manual `icon`/`iconColor` whenever the route is registered — so the
+  // sidebar and the page header can never disagree.
+  const location = useLocation();
+  const identity = routeKey
+    ? getRouteIdentity(routeKey)
+    : resolveRouteIdentity(location.pathname);
+
+  const resolvedIcon = identity
+    ? createElement(identity.icon, { size: 16 })
+    : icon;
+  const resolvedTone: IconTone = identity?.color ?? iconColor ?? "blue";
+
   return (
     <div className="page__header">
       <div className="page__header-main">
         <div className="page__intro">
           <h1 className="page__title">
-            {icon && (
-              <TintedIconTile tone={iconColor} size="md" className="page__icon">
-                {icon}
+            {resolvedIcon && (
+              <TintedIconTile tone={resolvedTone} size="md" className="page__icon">
+                {resolvedIcon}
               </TintedIconTile>
             )}
             <span className="page__title-text">{title}</span>

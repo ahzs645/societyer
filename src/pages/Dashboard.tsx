@@ -18,7 +18,6 @@ import {
   ClipboardCheck,
   ExternalLink,
   FileCheck2,
-  LayoutDashboard,
   Link2,
   ShieldCheck,
   UploadCloud,
@@ -151,9 +150,8 @@ export function Dashboard() {
   return (
     <div className="page">
       <PageHeader
+        routeKey="/app"
         title="Dashboard"
-        icon={<LayoutDashboard size={16} />}
-        iconColor="blue"
         subtitle="Compliance posture, upcoming obligations, and governance snapshot."
       />
 

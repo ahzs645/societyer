@@ -82,6 +82,7 @@ import { UserPicker } from "./UserPicker";
 import { InspectorHost, InspectorProvider } from "./InspectorPanel";
 import { MenuRow, MenuSectionLabel, Pill, TintedIconTile } from "./ui";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
+import { getRouteIdentity, type IconTone, type LucideIcon } from "../lib/routeIdentity";
 import { useTranslation } from "react-i18next";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { mobileSidebarMediaQuery } from "../lib/breakpoints";
@@ -161,8 +162,8 @@ function OfflineBellFallback() {
 type NavItem = {
   to: string;
   label: string;
-  icon: ComponentType<{ size?: number | string }>;
-  color: "blue" | "red" | "turquoise" | "gray" | "orange" | "purple" | "green" | "pink" | "yellow";
+  icon: LucideIcon;
+  color: IconTone;
   end?: boolean;
   module?: ModuleKey;
 };
@@ -174,17 +175,37 @@ type NavGroup = {
   items: NavItem[];
 };
 
+/**
+ * Resolve a route into a NavItem by reading icon/color/label/module from the
+ * single-source-of-truth registry. Throws at module load if a route is missing
+ * from the registry — catches typos before the sidebar renders.
+ */
+function navItem(to: string, end?: boolean): NavItem {
+  const id = getRouteIdentity(to);
+  if (!id) {
+    throw new Error(`routeIdentity: no entry for ${to}. Add it to ROUTE_IDENTITY.`);
+  }
+  return {
+    to,
+    label: id.label,
+    icon: id.icon,
+    color: id.color,
+    ...(end ? { end } : {}),
+    ...(id.module ? { module: id.module } : {}),
+  };
+}
+
 const NAV_GROUPS: NavGroup[] = [
   {
     id: "workspace",
     label: "Workspace",
     defaultOpen: true,
     items: [
-      { to: "/app", label: "Dashboard", icon: LayoutDashboard, color: "gray", end: true },
-      { to: "/app/society", label: "Society", icon: Building2, color: "blue" },
-      { to: "/app/organization-details", label: "Org details", icon: Building2, color: "blue" },
-      { to: "/app/org-history", label: "Org history", icon: Newspaper, color: "purple" },
-      { to: "/app/timeline", label: "Timeline", icon: CalendarClock, color: "purple" },
+      navItem("/app", true),
+      navItem("/app/society"),
+      navItem("/app/organization-details"),
+      navItem("/app/org-history"),
+      navItem("/app/timeline"),
     ],
   },
   {
@@ -192,12 +213,12 @@ const NAV_GROUPS: NavGroup[] = [
     label: "People",
     defaultOpen: true,
     items: [
-      { to: "/app/members", label: "Members", icon: Users, color: "blue" },
-      { to: "/app/directors", label: "Directors", icon: UserCog, color: "blue" },
-      { to: "/app/role-holders", label: "Role holders", icon: UsersRound, color: "blue" },
-      { to: "/app/committees", label: "Committees", icon: UsersRound, color: "pink" },
-      { to: "/app/volunteers", label: "Volunteers", icon: HandHeart, color: "pink", module: "volunteers" },
-      { to: "/app/employees", label: "Employees", icon: Users, color: "blue", module: "employees" },
+      navItem("/app/members"),
+      navItem("/app/directors"),
+      navItem("/app/role-holders"),
+      navItem("/app/committees"),
+      navItem("/app/volunteers"),
+      navItem("/app/employees"),
     ],
   },
   {
@@ -205,105 +226,105 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Work",
     defaultOpen: true,
     items: [
-      { to: "/app/goals", label: "Goals", icon: Target, color: "red" },
-      { to: "/app/tasks", label: "Tasks", icon: ListTodo, color: "turquoise" },
-      { to: "/app/deadlines", label: "Deadlines", icon: Calendar, color: "yellow" },
-      { to: "/app/commitments", label: "Commitments", icon: ClipboardList, color: "green" },
-      { to: "/app/documents", label: "Documents", icon: FolderOpen, color: "gray" },
-      { to: "/app/library", label: "Library", icon: BookOpen, color: "purple" },
-      { to: "/app/communications", label: "Communications", icon: Mail, color: "orange", module: "communications" },
-      { to: "/app/outbox", label: "Outbox", icon: Inbox, color: "orange" },
+      navItem("/app/goals"),
+      navItem("/app/tasks"),
+      navItem("/app/deadlines"),
+      navItem("/app/commitments"),
+      navItem("/app/documents"),
+      navItem("/app/library"),
+      navItem("/app/communications"),
+      navItem("/app/outbox"),
     ],
   },
   {
     id: "meetings",
     label: "Meetings & votes",
     items: [
-      { to: "/app/meetings", label: "Meetings", icon: Calendar, color: "orange" },
-      { to: "/app/agendas", label: "Agendas", icon: ClipboardList, color: "orange" },
-      { to: "/app/motion-backlog", label: "Motion backlog", icon: ClipboardList, color: "orange" },
-      { to: "/app/motion-library", label: "Motion library", icon: BookOpen, color: "purple" },
-      { to: "/app/minutes", label: "Minutes", icon: FileText, color: "turquoise" },
-      { to: "/app/meeting-evidence", label: "Meeting evidence", icon: ClipboardList, color: "orange" },
-      { to: "/app/proposals", label: "Member proposals", icon: Vote, color: "purple", module: "voting" },
-      { to: "/app/elections", label: "Elections", icon: Vote, color: "purple", module: "voting" },
-      { to: "/app/written-resolutions", label: "Written resolutions", icon: PenLine, color: "purple", module: "voting" },
-      { to: "/app/proxies", label: "Proxies", icon: UserCheck, color: "purple", module: "voting" },
+      navItem("/app/meetings"),
+      navItem("/app/agendas"),
+      navItem("/app/motion-backlog"),
+      navItem("/app/motion-library"),
+      navItem("/app/minutes"),
+      navItem("/app/meeting-evidence"),
+      navItem("/app/proposals"),
+      navItem("/app/elections"),
+      navItem("/app/written-resolutions"),
+      navItem("/app/proxies"),
     ],
   },
   {
     id: "records",
     label: "Governance records",
     items: [
-      { to: "/app/conflicts", label: "Conflicts of int.", icon: AlertTriangle, color: "red" },
-      { to: "/app/attestations", label: "Director attestations", icon: ShieldCheck, color: "red", module: "attestations" },
-      { to: "/app/auditors", label: "Auditors", icon: Calculator, color: "green", module: "auditors" },
-      { to: "/app/court-orders", label: "Court orders", icon: Gavel, color: "red", module: "courtOrders" },
-      { to: "/app/governance-registers", label: "Governance registers", icon: Scale, color: "blue" },
-      { to: "/app/rights-ledger", label: "Rights ledger", icon: Scale, color: "purple" },
-      { to: "/app/minute-book", label: "Minute book", icon: BookOpen, color: "purple" },
-      { to: "/app/bylaw-rules", label: "Bylaw rules", icon: Scale, color: "purple" },
-      { to: "/app/bylaw-diff", label: "Bylaw redline", icon: GitCompare, color: "purple" },
-      { to: "/app/bylaws-history", label: "Bylaws history", icon: BookOpen, color: "purple" },
+      navItem("/app/conflicts"),
+      navItem("/app/attestations"),
+      navItem("/app/auditors"),
+      navItem("/app/court-orders"),
+      navItem("/app/governance-registers"),
+      navItem("/app/rights-ledger"),
+      navItem("/app/minute-book"),
+      navItem("/app/bylaw-rules"),
+      navItem("/app/bylaw-diff"),
+      navItem("/app/bylaws-history"),
     ],
   },
   {
     id: "compliance",
     label: "Compliance",
     items: [
-      { to: "/app/filings", label: "Filings", icon: ClipboardList, color: "orange" },
-      { to: "/app/filings/prefill", label: "Filing pre-fill", icon: FileCog, color: "orange", module: "filingPrefill" },
-      { to: "/app/annual-cycle", label: "Annual cycle", icon: CalendarCheck, color: "orange" },
-      { to: "/app/formation-maintenance", label: "Formation & annual", icon: Gavel, color: "orange" },
-      { to: "/app/policies", label: "Policies", icon: FileText, color: "green" },
-      { to: "/app/retention", label: "Records retention", icon: Archive, color: "gray", module: "recordsInspection" },
-      { to: "/app/records-archive", label: "Records archive", icon: Archive, color: "gray" },
-      { to: "/app/inspections", label: "Records inspections", icon: Eye, color: "gray", module: "recordsInspection" },
-      { to: "/app/privacy", label: "Privacy (PIPA)", icon: Shield, color: "green" },
-      { to: "/app/pipa-training", label: "PIPA training", icon: ShieldCheck, color: "green", module: "pipaTraining" },
-      { to: "/app/insurance", label: "Insurance", icon: Shield, color: "green", module: "insurance" },
-      { to: "/app/access-custody", label: "Access custody", icon: KeyRound, color: "red", module: "secrets" },
-      { to: "/app/transparency", label: "Public transparency", icon: Globe, color: "blue", module: "transparency" },
+      navItem("/app/filings"),
+      navItem("/app/filings/prefill"),
+      navItem("/app/annual-cycle"),
+      navItem("/app/formation-maintenance"),
+      navItem("/app/policies"),
+      navItem("/app/retention"),
+      navItem("/app/records-archive"),
+      navItem("/app/inspections"),
+      navItem("/app/privacy"),
+      navItem("/app/pipa-training"),
+      navItem("/app/insurance"),
+      navItem("/app/access-custody"),
+      navItem("/app/transparency"),
     ],
   },
   {
     id: "finance",
     label: "Finance",
     items: [
-      { to: "/app/financials", label: "Financials", icon: PiggyBank, color: "green" },
-      { to: "/app/finance-imports", label: "Finance imports", icon: PiggyBank, color: "green" },
-      { to: "/app/treasurer", label: "Treasurer", icon: PiggyBank, color: "green" },
-      { to: "/app/grants", label: "Grants", icon: BadgeDollarSign, color: "green", module: "grants" },
-      { to: "/app/reconciliation", label: "Reconciliation", icon: Scale, color: "green", module: "reconciliation" },
-      { to: "/app/receipts", label: "Donation receipts", icon: Receipt, color: "pink", module: "donationReceipts" },
-      { to: "/app/membership", label: "Membership & billing", icon: CreditCard, color: "turquoise", module: "membershipBilling" },
+      navItem("/app/financials"),
+      navItem("/app/finance-imports"),
+      navItem("/app/treasurer"),
+      navItem("/app/grants"),
+      navItem("/app/reconciliation"),
+      navItem("/app/receipts"),
+      navItem("/app/membership"),
     ],
   },
   {
     id: "workflows",
     label: "Workflows",
     items: [
-      { to: "/app/integrations", label: "Integrations", icon: Plug, color: "green", module: "workflows" },
-      { to: "/app/browser-connectors", label: "Browser apps", icon: MonitorPlay, color: "orange", module: "browserConnectors" },
-      { to: "/app/ai-agents", label: "AI agents", icon: Bot, color: "turquoise" },
-      { to: "/app/workflows", label: "Workflows", icon: Workflow, color: "orange", module: "workflows" },
-      { to: "/app/workflow-runs", label: "Workflow runs", icon: History, color: "gray", module: "workflows" },
-      { to: "/app/workflow-packages", label: "Workflow packages", icon: FileJson, color: "orange", module: "workflows" },
-      { to: "/app/template-engine", label: "Template engine", icon: FileCog, color: "green" },
+      navItem("/app/integrations"),
+      navItem("/app/browser-connectors"),
+      navItem("/app/ai-agents"),
+      navItem("/app/workflows"),
+      navItem("/app/workflow-runs"),
+      navItem("/app/workflow-packages"),
+      navItem("/app/template-engine"),
     ],
   },
   {
     id: "administration",
     label: "Administration",
     items: [
-      { to: "/app/notifications", label: "Notifications", icon: Bell, color: "orange" },
-      { to: "/app/users", label: "Users & roles", icon: UserCog, color: "blue" },
-      { to: "/app/custom-fields", label: "Custom fields", icon: Sliders, color: "purple" },
-      { to: "/app/imports", label: "Import sessions", icon: FileJson, color: "purple" },
-      { to: "/app/paperless", label: "Paperless-ngx", icon: Database, color: "gray", module: "paperless" },
-      { to: "/app/settings", label: "Settings", icon: Settings, color: "gray" },
-      { to: "/app/audit", label: "Audit log", icon: ShieldCheck, color: "red" },
-      { to: "/app/exports", label: "Data export", icon: Download, color: "blue" },
+      navItem("/app/notifications"),
+      navItem("/app/users"),
+      navItem("/app/custom-fields"),
+      navItem("/app/imports"),
+      navItem("/app/paperless"),
+      navItem("/app/settings"),
+      navItem("/app/audit"),
+      navItem("/app/exports"),
     ],
   },
 ];

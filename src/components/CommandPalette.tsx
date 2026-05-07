@@ -54,6 +54,7 @@ import { maintenanceErrorMessage, seedDemoSociety } from "../lib/maintenanceApi"
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { useUIStore } from "../lib/store";
 import { useRegisteredCommands } from "../lib/commands";
+import { ROUTE_IDENTITY, type RouteGroup } from "../lib/routeIdentity";
 
 type CommandCategory =
   | "Recent"
@@ -78,86 +79,40 @@ type CommandItem = {
   shortcut?: string;
 };
 
-const NAV_ITEMS: CommandItem[] = [
-  // Navigation
-  { id: "nav-dashboard", label: "Dashboard", to: "/app", icon: LayoutDashboard, category: "Navigation" },
-  { id: "nav-timeline", label: "Timeline", to: "/app/timeline", icon: CalendarClock, category: "Navigation" },
-  { id: "nav-society", label: "Society profile", to: "/app/society", icon: Building2, category: "Navigation" },
-  { id: "nav-org-details", label: "Organization details", to: "/app/organization-details", icon: Building2, category: "Navigation" },
-  { id: "nav-org-history", label: "Org history", to: "/app/org-history", icon: Newspaper, category: "Navigation" },
-  { id: "nav-committees", label: "Committees", to: "/app/committees", icon: UsersRound, category: "Navigation" },
-  { id: "nav-employees", label: "Employees", to: "/app/employees", icon: Users, category: "Navigation", module: "employees" },
-  { id: "nav-goals", label: "Goals", to: "/app/goals", icon: Target, category: "Navigation" },
-  { id: "nav-tasks", label: "Tasks", to: "/app/tasks", icon: ListTodo, category: "Navigation" },
-  { id: "nav-members", label: "Members", to: "/app/members", icon: Users, category: "Navigation" },
-  { id: "nav-directors", label: "Directors", to: "/app/directors", icon: UserCog, category: "Navigation" },
-  { id: "nav-role-holders", label: "Role holders", to: "/app/role-holders", icon: UsersRound, category: "Navigation" },
-  { id: "nav-documents", label: "Documents", to: "/app/documents", icon: FolderOpen, category: "Navigation" },
-  { id: "nav-deadlines", label: "Deadlines", to: "/app/deadlines", icon: Calendar, category: "Navigation" },
-  { id: "nav-commitments", label: "Commitments", to: "/app/commitments", icon: ClipboardList, category: "Navigation" },
-  { id: "nav-volunteers", label: "Volunteers", to: "/app/volunteers", icon: HandHeart, category: "Navigation", module: "volunteers" },
-  { id: "nav-communications", label: "Communications", to: "/app/communications", icon: Mail, category: "Navigation", module: "communications" },
-  { id: "nav-outbox", label: "Outbox", to: "/app/outbox", icon: Inbox, category: "Navigation" },
-  { id: "nav-notifications", label: "Notifications", to: "/app/notifications", icon: Mail, category: "Navigation" },
+/**
+ * Map registry route groups to the palette's coarser categories. Several
+ * registry groups collapse into one palette category (workspace/people/work
+ * all become "Navigation"), so we don't end up with a 9-section dropdown.
+ */
+const GROUP_TO_CATEGORY: Record<RouteGroup, CommandCategory> = {
+  workspace: "Navigation",
+  people: "Navigation",
+  work: "Navigation",
+  meetings: "Governance",
+  records: "Governance",
+  finance: "Finance",
+  compliance: "Compliance",
+  workflows: "System",
+  administration: "System",
+};
 
-  // Governance
-  { id: "gov-meetings", label: "Meetings", to: "/app/meetings", icon: Calendar, category: "Governance" },
-  { id: "gov-agendas", label: "Agendas", to: "/app/agendas", icon: ClipboardList, category: "Governance" },
-  { id: "gov-motion-backlog", label: "Motion backlog", to: "/app/motion-backlog", icon: ClipboardList, category: "Governance" },
-  { id: "gov-motions", label: "Motion library", to: "/app/motion-library", icon: ClipboardList, category: "Governance" },
-  { id: "gov-minutes", label: "Minutes", to: "/app/minutes", icon: FileText, category: "Governance" },
-  { id: "gov-evidence", label: "Meeting evidence", to: "/app/meeting-evidence", icon: ClipboardList, category: "Governance" },
-  { id: "gov-proposals", label: "Member proposals", to: "/app/proposals", icon: Vote, category: "Governance", module: "voting" },
-  { id: "gov-elections", label: "Elections", to: "/app/elections", icon: Vote, category: "Governance", module: "voting" },
-  { id: "gov-resolutions", label: "Written resolutions", to: "/app/written-resolutions", icon: PenLine, category: "Governance", module: "voting" },
-  { id: "gov-proxies", label: "Proxies", to: "/app/proxies", icon: UserCheck, category: "Governance", module: "voting" },
-  { id: "gov-bylaw-rules", label: "Bylaw rules", to: "/app/bylaw-rules", icon: ShieldCheck, category: "Governance" },
-  { id: "gov-bylaw-redline", label: "Bylaw redline", to: "/app/bylaw-diff", icon: FileText, category: "Governance" },
-  { id: "gov-bylaws-history", label: "Bylaws history", to: "/app/bylaws-history", icon: BookOpen, category: "Governance" },
-  { id: "gov-conflicts", label: "Conflicts of interest", to: "/app/conflicts", icon: AlertTriangle, category: "Governance" },
-  { id: "gov-attestations", label: "Director attestations", to: "/app/attestations", icon: ShieldCheck, category: "Governance", module: "attestations" },
-  { id: "gov-auditors", label: "Auditors", to: "/app/auditors", icon: Calculator, category: "Governance", module: "auditors" },
-  { id: "gov-court-orders", label: "Court orders", to: "/app/court-orders", icon: Gavel, category: "Governance", module: "courtOrders" },
-  { id: "gov-registers", label: "Governance registers", to: "/app/governance-registers", icon: ShieldCheck, category: "Governance" },
-  { id: "gov-rights-ledger", label: "Rights ledger", to: "/app/rights-ledger", icon: Gavel, category: "Governance" },
-  { id: "gov-minute-book", label: "Minute book", to: "/app/minute-book", icon: BookOpen, category: "Governance" },
-
-  // Finance
-  { id: "fin-financials", label: "Financials", to: "/app/financials", icon: PiggyBank, category: "Finance" },
-  { id: "fin-imports", label: "Finance imports", to: "/app/finance-imports", icon: PiggyBank, category: "Finance" },
-  { id: "fin-treasurer", label: "Treasurer", to: "/app/treasurer", icon: PiggyBank, category: "Finance" },
-  { id: "fin-grants", label: "Grants", to: "/app/grants", icon: BadgeDollarSign, category: "Finance", module: "grants" },
-  { id: "fin-reconciliation", label: "Reconciliation", to: "/app/reconciliation", icon: ShieldCheck, category: "Finance", module: "reconciliation" },
-  { id: "fin-receipts", label: "Donation receipts", to: "/app/receipts", icon: Receipt, category: "Finance", module: "donationReceipts" },
-  { id: "fin-membership", label: "Membership & billing", to: "/app/membership", icon: CreditCard, category: "Finance", module: "membershipBilling" },
-
-  // Compliance
-  { id: "comp-annual-cycle", label: "Annual cycle", to: "/app/annual-cycle", icon: CalendarCheck, category: "Compliance" },
-  { id: "comp-filings", label: "Filings", to: "/app/filings", icon: ClipboardList, category: "Compliance" },
-  { id: "comp-filings-prefill", label: "Filing pre-fill", to: "/app/filings/prefill", icon: FileCog, category: "Compliance", module: "filingPrefill" },
-  { id: "comp-formation-maintenance", label: "Formation & annual", to: "/app/formation-maintenance", icon: Gavel, category: "Compliance" },
-  { id: "comp-policies", label: "Policies", to: "/app/policies", icon: FileText, category: "Compliance" },
-  { id: "comp-transparency", label: "Public transparency", to: "/app/transparency", icon: Globe, category: "Compliance", module: "transparency" },
-  { id: "comp-retention", label: "Records retention", to: "/app/retention", icon: Archive, category: "Compliance", module: "recordsInspection" },
-  { id: "comp-records-archive", label: "Records archive", to: "/app/records-archive", icon: Archive, category: "Compliance" },
-  { id: "comp-inspections", label: "Records inspections", to: "/app/inspections", icon: Eye, category: "Compliance", module: "recordsInspection" },
-  { id: "comp-privacy", label: "Privacy (PIPA)", to: "/app/privacy", icon: Shield, category: "Compliance" },
-  { id: "comp-pipa-training", label: "PIPA training", to: "/app/pipa-training", icon: ShieldCheck, category: "Compliance", module: "pipaTraining" },
-  { id: "comp-insurance", label: "Insurance", to: "/app/insurance", icon: Shield, category: "Compliance", module: "insurance" },
-  { id: "comp-access-custody", label: "Access custody", to: "/app/access-custody", icon: KeyRound, category: "Compliance", module: "secrets" },
-
-  // System
-  { id: "sys-users", label: "Users & roles", to: "/app/users", icon: UserCog, category: "System" },
-  { id: "sys-custom-fields", label: "Custom fields", to: "/app/custom-fields", icon: Settings, category: "System" },
-  { id: "sys-imports", label: "Import sessions", to: "/app/imports", icon: FileJson, category: "System" },
-  { id: "sys-paperless", label: "Paperless-ngx", to: "/app/paperless", icon: Database, category: "System", module: "paperless" },
-  { id: "sys-integrations", label: "Integration marketplace", to: "/app/integrations", icon: Plug, category: "System", module: "workflows" },
-  { id: "sys-workflow-packages", label: "Workflow packages", to: "/app/workflow-packages", icon: Workflow, category: "System", module: "workflows" },
-  { id: "sys-template-engine", label: "Template engine", to: "/app/template-engine", icon: FileCog, category: "System" },
-  { id: "sys-audit", label: "Audit log", to: "/app/audit", icon: ShieldCheck, category: "System" },
-  { id: "sys-exports", label: "Data export", to: "/app/exports", icon: Download, category: "System" },
-  { id: "sys-settings", label: "Settings", to: "/app/settings", icon: Settings, category: "System", shortcut: "," },
-];
+/**
+ * Nav commands are derived from the same `ROUTE_IDENTITY` registry the sidebar
+ * and PageHeader use, so the icon and label here always match what the user
+ * sees in the sidebar — searching the visible sidebar label always finds the
+ * matching nav entry.
+ */
+const NAV_ITEMS: CommandItem[] = Object.entries(ROUTE_IDENTITY).map(([path, identity]) => {
+  const item: CommandItem = {
+    id: `nav:${path}`,
+    label: identity.label,
+    icon: identity.icon,
+    category: GROUP_TO_CATEGORY[identity.group],
+    to: path,
+  };
+  if (identity.module) item.module = identity.module;
+  return item;
+});
 
 const CATEGORY_ORDER: CommandCategory[] = [
   "Recent",
