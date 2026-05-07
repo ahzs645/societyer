@@ -252,6 +252,22 @@ export function MeetingMinutesColumn({
     }
     return additions;
   }, [agendaEdit, sections]);
+  const agendaPreviewRemovals = useMemo(() => {
+    if (agendaEdit === null) return new Set<number>();
+    const upcoming = new Set<string>(
+      agendaEdit.split(/\r?\n/).map((line) => line.trim().toLowerCase()).filter(Boolean),
+    );
+    const removals = new Set<number>();
+    sections.forEach((section: any, index: number) => {
+      const title = String(section?.title ?? "").trim().toLowerCase();
+      if (!title) return;
+      if (upcoming.has(title)) return;
+      if (sectionHasDetails(section)) return;
+      removals.add(index);
+    });
+    return removals;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agendaEdit, sections]);
   const agendaActionItems = useMemo(
     () => sections.flatMap((section: any, sectionIndex: number) =>
       (section.actionItems ?? [])
@@ -756,7 +772,7 @@ export function MeetingMinutesColumn({
                         {sections.map((section: any, index: number) => (
                           <details
                             id={`meeting-minutes-section-${index}`}
-                            className="meeting-minutes-section-item"
+                            className={`meeting-minutes-section-item${agendaPreviewRemovals.has(index) ? " meeting-minutes-section-item--pending-remove" : ""}`}
                             key={`${section.title ?? "section"}-${index}`}
                             open={openSectionIndexes.has(index)}
                             onToggle={(event) => toggleSection(index, event.currentTarget.open)}
@@ -767,6 +783,7 @@ export function MeetingMinutesColumn({
                                 <strong>{index + 1}. {section.title || "Untitled section"}</strong>
                               </span>
                               <span className="meeting-minutes-section-item__meta">
+                                {agendaPreviewRemovals.has(index) && <Badge tone="warn">Removes with agenda</Badge>}
                                 {sectionSummaryMeta(section, motionMatchesBySection[index]?.length ?? 0)}
                               </span>
                               <button

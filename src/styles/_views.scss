@@ -1494,6 +1494,11 @@
   cursor: default;
   opacity: 0.75;
 }
+.meeting-minutes-section-item--pending-remove > .meeting-minutes-section-item__summary {
+  opacity: 0.6;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
 .meeting-minutes-section-item__summary {
   display: flex;
   justify-content: space-between;

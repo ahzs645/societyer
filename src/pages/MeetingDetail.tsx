@@ -586,7 +586,7 @@ export function MeetingDetailPage() {
       .filter(Boolean);
     await updateMeeting({
       id: meeting._id,
-      patch: { agendaJson: nextAgenda.length ? JSON.stringify(nextAgenda) : undefined },
+      patch: { agendaJson: JSON.stringify(nextAgenda) },
     });
   };
 
@@ -659,33 +659,88 @@ export function MeetingDetailPage() {
     await updateMeeting({
       id: meeting._id,
       patch: {
-        agendaJson: next.length ? JSON.stringify(next) : undefined,
+        // Always send a string — `undefined` is treated as "leave field alone",
+        // which would silently undo a save that empties the agenda.
+        agendaJson: JSON.stringify(next),
       },
     });
 
-    // Append-only sync: any agenda title that doesn't match an existing section
-    // (case-insensitive trimmed compare) gets a new empty section. Existing
-    // sections — and their notes/decisions/actions — are left alone, and items
-    // removed from the agenda do NOT remove their sections (that would silently
-    // delete recorded minutes).
-    if (minutes && next.length) {
+    // Keep agenda and minutes.sections in 1-to-1 sync: align section order to
+    // the agenda, reuse existing sections by title, and create empty sections
+    // for new titles. Sections whose titles were dropped from the agenda are
+    // removed only if they have no recorded content; sections with data are
+    // preserved as orphans so we never silently destroy recorded minutes.
+    if (minutes) {
       const existingSections = ((minutes.sections ?? []) as any[]);
+      const existingMotions = ((minutes.motions ?? []) as Motion[]);
       const normalize = (title: string) => title.trim().toLowerCase();
-      const existingTitles = new Set(existingSections.map((s) => normalize(s?.title ?? "")));
-      const additions = next
-        .filter((title) => !existingTitles.has(normalize(title)))
-        .map((title) => ({
+      const sectionHasDetails = (section: any) =>
+        !!(
+          section?.discussion ||
+          section?.presenter ||
+          (section?.decisions ?? []).length ||
+          (section?.actionItems ?? []).length ||
+          (section?.linkedTaskIds ?? []).length
+        );
+
+      const sectionsByTitle = new Map<string, any>();
+      for (const section of existingSections) {
+        const key = normalize(section?.title ?? "");
+        if (key && !sectionsByTitle.has(key)) sectionsByTitle.set(key, section);
+      }
+
+      const aligned = next.map((title) => {
+        const existing = sectionsByTitle.get(normalize(title));
+        if (existing) return existing;
+        return {
           title,
           type: inferAgendaSectionType(title),
           discussion: "",
           decisions: [],
           actionItems: [],
-        }));
-      if (additions.length) {
-        await updateMinutes({
-          id: minutes._id,
-          patch: { sections: [...existingSections, ...additions] },
-        });
+        };
+      });
+
+      const newTitles = new Set(next.map(normalize));
+      const orphans = existingSections.filter((section) => {
+        const key = normalize(section?.title ?? "");
+        return !newTitles.has(key) && sectionHasDetails(section);
+      });
+
+      const finalSections = [...aligned, ...orphans];
+
+      const sectionsChanged =
+        finalSections.length !== existingSections.length ||
+        finalSections.some((s, i) => s !== existingSections[i]);
+
+      const titleToNewIndex = new Map<string, number>();
+      finalSections.forEach((section, index) => {
+        const key = normalize(section?.title ?? "");
+        if (key && !titleToNewIndex.has(key)) titleToNewIndex.set(key, index);
+      });
+
+      let motionsChanged = false;
+      const remappedMotions = existingMotions.map((motion) => {
+        if (motion.sectionIndex == null) return motion;
+        const oldSection = existingSections[motion.sectionIndex];
+        if (!oldSection) return motion;
+        const oldKey = normalize(oldSection?.title ?? "");
+        const newIndex = titleToNewIndex.get(oldKey);
+        if (newIndex == null) {
+          const { sectionIndex: _sectionIndex, sectionTitle: _sectionTitle, ...rest } = motion;
+          motionsChanged = true;
+          return rest as Motion;
+        }
+        if (newIndex === motion.sectionIndex) return motion;
+        motionsChanged = true;
+        return { ...motion, sectionIndex: newIndex };
+      });
+
+      if (sectionsChanged || motionsChanged) {
+        const patch: any = {};
+        if (sectionsChanged) patch.sections = finalSections;
+        if (motionsChanged) patch.motions = remappedMotions;
+        await updateMinutes({ id: minutes._id, patch });
       }
     }
 
