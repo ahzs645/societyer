@@ -69,6 +69,8 @@ export function AiAgentsPage() {
     <div className="page page--wide">
       <SettingsShell
         title="AI agents"
+        icon={<Bot size={16} />}
+        iconColor="purple"
         description="Bounded workspace tools with fixed scopes, allowed actions, tool planning, and audit logging."
         tabs={[
           { id: "tools", label: "Tools", icon: <Bot size={14} /> },
