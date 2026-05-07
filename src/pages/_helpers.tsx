@@ -57,14 +57,15 @@ export function PageHeader({
   return (
     <div className="page__header">
       <div className="page__header-main">
-        {icon && (
-          <TintedIconTile tone={iconColor} size="md" className="page__icon">
-            {icon}
-          </TintedIconTile>
-        )}
         <div className="page__intro">
-          <div className="page__eyebrow">Workspace view</div>
-          <h1 className="page__title">{title}</h1>
+          <h1 className="page__title">
+            {icon && (
+              <TintedIconTile tone={iconColor} size="md" className="page__icon">
+                {icon}
+              </TintedIconTile>
+            )}
+            <span className="page__title-text">{title}</span>
+          </h1>
           {subtitle && <p className="page__subtitle">{subtitle}</p>}
         </div>
       </div>
