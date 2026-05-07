@@ -1027,7 +1027,10 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   display: inline-flex;
   gap: 4px;
   padding-left: 8px;
-  border-left: 1px solid rgba(255, 255, 255, 0.15);
+  /* currentColor follows the button text (var(--bg-panel)), which flips with
+   * the theme — keeps the divider visible on both the dark pill (light mode)
+   * and the light pill (dark mode). */
+  border-left: 1px solid color-mix(in oklab, currentColor 20%, transparent);
 }
 
 .record-table__bulk-bar-button {
@@ -1044,15 +1047,15 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   cursor: pointer;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: color-mix(in oklab, currentColor 12%, transparent);
   }
 }
 
 .record-table__bulk-bar-button--danger {
-  color: #fca5a5;
+  color: var(--red-9);
 
   &:hover {
-    background: rgba(248, 113, 113, 0.15);
+    background: color-mix(in oklab, var(--red-9) 18%, transparent);
   }
 }
 

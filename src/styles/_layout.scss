@@ -653,14 +653,6 @@
   flex: 1 1 320px;
   min-width: 0;
 }
-.page__eyebrow {
-  margin-bottom: 3px;
-  color: var(--text-tertiary);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
 .page__icon {
   flex-shrink: 0;
 }
@@ -675,6 +667,9 @@
   gap: 8px;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+.page__title-text {
+  min-width: 0;
 }
 .page__title-sub {
   color: var(--text-tertiary);

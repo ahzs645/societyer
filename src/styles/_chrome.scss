@@ -658,6 +658,17 @@
   font-weight: var(--fw-semibold);
   line-height: 1.2;
   margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.settings-shell__title-text {
+  min-width: 0;
+}
+.settings-shell__icon {
+  flex-shrink: 0;
 }
 .settings-shell__description {
   color: var(--text-tertiary);
