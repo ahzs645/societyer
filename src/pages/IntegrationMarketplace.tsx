@@ -207,6 +207,8 @@ export function IntegrationMarketplacePage() {
     <div className="page page--wide">
       <SettingsShell
         title="Integration marketplace"
+        icon={<Plug size={16} />}
+        iconColor="green"
         description="Installable capability manifests for board packs, calendar sync, office documents, CRM bridges, connector actions, scopes, health checks, and audit events."
         tabs={[
           { id: "catalog", label: "Catalog", icon: <Plug size={14} /> },

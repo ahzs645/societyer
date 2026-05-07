@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link } from "react-router-dom";
-import { FileDown, MapPin } from "lucide-react";
+import { Building2, FileDown, MapPin } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
@@ -135,6 +135,8 @@ export function SocietyPage() {
     <div className="page page--wide">
       <PageHeader
         title="Society profile"
+        icon={<Building2 size={16} />}
+        iconColor="turquoise"
         subtitle="Constitution details, registered office, and key flags."
         actions={
           <>

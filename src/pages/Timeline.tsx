@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { GitBranch } from "lucide-react";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge } from "../components/ui";
@@ -98,7 +99,12 @@ export function TimelinePage() {
 
   return (
     <div className="page">
-      <PageHeader title="Timeline" subtitle="Every meeting, filing, commitment, member-fee change, funding event, and due date on one spine." />
+      <PageHeader
+        title="Timeline"
+        icon={<GitBranch size={16} />}
+        iconColor="purple"
+        subtitle="Every meeting, filing, commitment, member-fee change, funding event, and due date on one spine."
+      />
 
       <div className="two-col">
         <div className="card">

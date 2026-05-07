@@ -336,6 +336,8 @@ export function PrivacyPage() {
     <div className="page">
       <PageHeader
         title="Privacy (PIPA)"
+        icon={<Shield size={16} />}
+        iconColor="green"
         subtitle={`A practical setup checklist for privacy policies, complaint handling, member-data access, consent, and training. ${LEGAL_COPY_REVIEWED}.`}
         actions={
           <>
