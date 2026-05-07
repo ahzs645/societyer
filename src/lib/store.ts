@@ -18,6 +18,7 @@ type UIState = {
   pinView: (entry: PinnedView) => void;
   unpinView: (viewsKey: string, viewId: string) => void;
   isViewPinned: (viewsKey: string, viewId: string) => boolean;
+  reorderPinnedView: (fromIndex: number, toIndex: number) => void;
 
   /** Selected row ids keyed by table scope (usually `viewsKey` or route). */
   selection: Record<string, string[]>;
@@ -69,6 +70,16 @@ export const useUIStore = create<UIState>()(
         })),
       isViewPinned: (viewsKey, viewId) =>
         get().pinnedViews.some((p) => p.viewsKey === viewsKey && p.viewId === viewId),
+      reorderPinnedView: (fromIndex, toIndex) =>
+        set((s) => {
+          if (fromIndex === toIndex) return s;
+          if (fromIndex < 0 || fromIndex >= s.pinnedViews.length) return s;
+          const next = s.pinnedViews.slice();
+          const [moved] = next.splice(fromIndex, 1);
+          const clamped = Math.max(0, Math.min(toIndex, next.length));
+          next.splice(clamped, 0, moved);
+          return { pinnedViews: next };
+        }),
 
       selection: {},
       setSelection: (scope, ids) =>

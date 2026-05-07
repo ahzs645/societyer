@@ -48,6 +48,8 @@ import {
   Database,
   Menu,
   Newspaper,
+  ArrowUp,
+  ArrowDown,
   Pin,
   PinOff,
   ExternalLink,
@@ -60,6 +62,7 @@ import {
 } from "lucide-react";
 import {
   ComponentType,
+  DragEvent as ReactDragEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   useEffect,
@@ -82,6 +85,7 @@ import { InspectorHost, InspectorProvider } from "./InspectorPanel";
 import { MenuRow, MenuSectionLabel, Pill, TintedIconTile } from "./ui";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { getRouteIdentity, type IconTone, type LucideIcon } from "../lib/routeIdentity";
+import { useStaticCommands } from "../lib/useStaticCommands";
 import { useTranslation } from "react-i18next";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { mobileSidebarMediaQuery } from "../lib/breakpoints";
@@ -385,6 +389,77 @@ function getInitialOpenGroups(pathname: string, pinnedRoutes: string[] = readSto
 const COLLAPSE_KEY = "societyer.sidebar.collapsed";
 const SPOTLIGHT_COLLAPSED_KEY = "societyer.sidebar.spotlight.collapsed";
 const PINNED_ROUTES_KEY = "societyer.sidebar.pinnedRoutes";
+const PINNED_COMMAND_IDS_KEY = "societyer.sidebar.pinnedCommandIds";
+const PINNED_FAVORITES_ORDER_KEY = "societyer.sidebar.pinnedFavoritesOrder";
+
+/** A single Favorites slot, regardless of what kind of thing it links to.
+ * The unified order array stores these so the user can drag a route between
+ * two actions (and vice versa) — kind is preserved per entry but not used
+ * for grouping. */
+type FavoriteRef =
+  | { kind: "route"; id: string } // id = route path
+  | { kind: "command"; id: string } // id = action id
+  | { kind: "view"; viewsKey: string; viewId: string };
+
+function favoriteRefKey(ref: FavoriteRef): string {
+  if (ref.kind === "view") return `view::${ref.viewsKey}::${ref.viewId}`;
+  return `${ref.kind}::${ref.id}`;
+}
+
+function readStoredPinnedCommandIds(): string[] {
+  if (isStaticDemoRuntime()) return [];
+  try {
+    const stored = localStorage.getItem(PINNED_COMMAND_IDS_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return [];
+    const seen = new Set<string>();
+    return parsed.filter((id): id is string => {
+      if (typeof id !== "string" || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  } catch {
+    return [];
+  }
+}
+
+function readStoredFavoritesOrder(): FavoriteRef[] | null {
+  if (isStaticDemoRuntime()) return null;
+  try {
+    const stored = localStorage.getItem(PINNED_FAVORITES_ORDER_KEY);
+    if (!stored) return null;
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return null;
+    const seen = new Set<string>();
+    const refs: FavoriteRef[] = [];
+    for (const entry of parsed) {
+      if (!entry || typeof entry !== "object") continue;
+      const kind = (entry as any).kind;
+      if (kind === "route" || kind === "command") {
+        const id = (entry as any).id;
+        if (typeof id !== "string") continue;
+        const ref: FavoriteRef = { kind, id };
+        const key = favoriteRefKey(ref);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        refs.push(ref);
+      } else if (kind === "view") {
+        const viewsKey = (entry as any).viewsKey;
+        const viewId = (entry as any).viewId;
+        if (typeof viewsKey !== "string" || typeof viewId !== "string") continue;
+        const ref: FavoriteRef = { kind: "view", viewsKey, viewId };
+        const key = favoriteRefKey(ref);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        refs.push(ref);
+      }
+    }
+    return refs;
+  } catch {
+    return null;
+  }
+}
 const SIDEBAR_MENU_WIDTH = 220;
 const SIDEBAR_MENU_HEIGHT = 116;
 const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
@@ -481,6 +556,21 @@ export function Layout() {
     () => !isStaticDemoRuntime() && localStorage.getItem(SPOTLIGHT_COLLAPSED_KEY) === "1",
   );
   const [pinnedRoutes, setPinnedRoutes] = useState(readStoredPinnedRoutes);
+  const [pinnedCommandIds, setPinnedCommandIds] = useState(readStoredPinnedCommandIds);
+  // Unified favorites order — single source of truth for sidebar ordering.
+  // Lazy-initialized from the existing kind arrays the first time the user
+  // loads after this feature ships (migration). Subsequent edits write here
+  // directly; the kind arrays remain in sync for the existing isPinned
+  // checks scattered through the codebase.
+  const [favoritesOrder, setFavoritesOrder] = useState<FavoriteRef[]>(() => {
+    const stored = readStoredFavoritesOrder();
+    if (stored) return stored;
+    return readStoredPinnedRoutes()
+      .map<FavoriteRef>((id) => ({ kind: "route", id }))
+      .concat(readStoredPinnedCommandIds().map<FavoriteRef>((id) => ({ kind: "command", id })));
+    // Views aren't included in the initial migration because they live in
+    // zustand and need to be appended once that store is read in render.
+  });
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(
     () => getInitialOpenGroups(window.location.pathname),
   );
@@ -519,10 +609,78 @@ export function Layout() {
     localStorage.setItem(SPOTLIGHT_COLLAPSED_KEY, spotlightCollapsed ? "1" : "0");
   }, [spotlightCollapsed]);
 
+  // Persist + notify only on actual changes. The deduplicating check breaks
+  // the ping-pong between sidebar and palette: when the palette writes a new
+  // value and dispatches the sync event, the sidebar listener echoes the value
+  // into state, which would otherwise re-fire this effect, write the same
+  // value again, and dispatch another event — a loop.
   useEffect(() => {
     if (isStaticDemoRuntime()) return;
-    localStorage.setItem(PINNED_ROUTES_KEY, JSON.stringify(pinnedRoutes));
+    const serialized = JSON.stringify(pinnedRoutes);
+    if (localStorage.getItem(PINNED_ROUTES_KEY) === serialized) return;
+    localStorage.setItem(PINNED_ROUTES_KEY, serialized);
+    window.dispatchEvent(new Event("kbar:pinned-changed"));
   }, [pinnedRoutes]);
+
+  useEffect(() => {
+    if (isStaticDemoRuntime()) return;
+    const serialized = JSON.stringify(pinnedCommandIds);
+    if (localStorage.getItem(PINNED_COMMAND_IDS_KEY) === serialized) return;
+    localStorage.setItem(PINNED_COMMAND_IDS_KEY, serialized);
+    window.dispatchEvent(new Event("kbar:pinned-changed"));
+  }, [pinnedCommandIds]);
+
+  useEffect(() => {
+    if (isStaticDemoRuntime()) return;
+    const serialized = JSON.stringify(favoritesOrder);
+    if (localStorage.getItem(PINNED_FAVORITES_ORDER_KEY) === serialized) return;
+    localStorage.setItem(PINNED_FAVORITES_ORDER_KEY, serialized);
+  }, [favoritesOrder]);
+
+  // Reconcile the unified order whenever any kind store changes. Add new
+  // pins (e.g. ones created elsewhere), drop unpins, leave existing order
+  // intact. Views are appended on first appearance and removed when they
+  // disappear from the zustand store.
+  const pinnedViews = useUIStore((s) => s.pinnedViews);
+  useEffect(() => {
+    setFavoritesOrder((prev) => {
+      const seen = new Set(prev.map(favoriteRefKey));
+      const filtered = prev.filter((ref) => {
+        if (ref.kind === "route") return pinnedRoutes.includes(ref.id);
+        if (ref.kind === "command") return pinnedCommandIds.includes(ref.id);
+        return pinnedViews.some((v) => v.viewsKey === ref.viewsKey && v.viewId === ref.viewId);
+      });
+      const additions: FavoriteRef[] = [];
+      for (const id of pinnedRoutes) {
+        const ref: FavoriteRef = { kind: "route", id };
+        if (!seen.has(favoriteRefKey(ref))) additions.push(ref);
+      }
+      for (const id of pinnedCommandIds) {
+        const ref: FavoriteRef = { kind: "command", id };
+        if (!seen.has(favoriteRefKey(ref))) additions.push(ref);
+      }
+      for (const view of pinnedViews) {
+        const ref: FavoriteRef = { kind: "view", viewsKey: view.viewsKey, viewId: view.viewId };
+        if (!seen.has(favoriteRefKey(ref))) additions.push(ref);
+      }
+      if (filtered.length === prev.length && additions.length === 0) return prev;
+      return [...filtered, ...additions];
+    });
+  }, [pinnedRoutes, pinnedCommandIds, pinnedViews]);
+
+  // Cross-component sync: if the palette pins/unpins from its own context
+  // menu, the new localStorage value triggers a `storage` event in other tabs
+  // but NOT in the same tab. We listen for our own custom event so the sidebar
+  // reacts immediately. Both routes and commands can be pinned from the palette
+  // now, so we re-read both stores on the same event.
+  useEffect(() => {
+    const onPinChange = () => {
+      setPinnedCommandIds(readStoredPinnedCommandIds());
+      setPinnedRoutes(readStoredPinnedRoutes());
+    };
+    window.addEventListener("kbar:pinned-changed", onPinChange);
+    return () => window.removeEventListener("kbar:pinned-changed", onPinChange);
+  }, []);
 
   useEffect(() => {
     const media = window.matchMedia(mobileSidebarMediaQuery);
@@ -645,12 +803,23 @@ export function Layout() {
   const counts = useQuery(api.dashboard.navCounts, society ? { societyId: society._id } : "skip");
   const pinnedRouteSet = useMemo(() => new Set(pinnedRoutes), [pinnedRoutes]);
   const pinnedNav = useMemo(() => getPinnedNav(pinnedRoutes), [pinnedRoutes]);
-  const pinnedViews = useUIStore((s) => s.pinnedViews);
   const groupedNav = useMemo(() => getGroupedNav(pinnedRouteSet), [pinnedRouteSet]);
   const visiblePinnedNav = useMemo(
     () => pinnedNav.filter((item) => !item.module || isModuleEnabled(society, item.module)),
     [pinnedNav, society],
   );
+
+  // Resolve pinned command IDs into runnable commands. Commands whose ID isn't
+  // in the static registry (e.g. removed in a later release) are quietly
+  // dropped — the pin stays in localStorage but renders as nothing.
+  const staticCommands = useStaticCommands();
+  const visiblePinnedCommands = useMemo(() => {
+    const byId = new Map(staticCommands.map((command) => [command.id, command]));
+    return pinnedCommandIds
+      .map((id) => byId.get(id))
+      .filter((command): command is NonNullable<typeof command> => Boolean(command))
+      .filter((command) => !command.module || isModuleEnabled(society, command.module));
+  }, [staticCommands, pinnedCommandIds, society]);
   const visibleGroupedNav = useMemo(
     () =>
       groupedNav.map((group) => ({
@@ -691,6 +860,82 @@ export function Layout() {
       return normalizePinnedRoutes([...prev, item.to]);
     });
     setNavContextMenu(null);
+  };
+
+  // Index-based drag for favorites. Items intermingle across kinds; the drop
+  // index is the insertion point in the unified `favoritesOrder` array
+  // (0 = before the first row, `length` = after the last row).
+  const [favoriteDragIndex, setFavoriteDragIndex] = useState<number | null>(null);
+  const [favoriteDropIndex, setFavoriteDropIndex] = useState<number | null>(null);
+
+  const updateDropIndex = (targetIndex: number) => {
+    if (favoriteDragIndex === null) return;
+    // Dropping back into the source slot or the slot immediately after it
+    // is a no-op — clear the indicator so the user knows nothing happens.
+    if (targetIndex === favoriteDragIndex || targetIndex === favoriteDragIndex + 1) {
+      if (favoriteDropIndex !== null) setFavoriteDropIndex(null);
+      return;
+    }
+    if (favoriteDropIndex !== targetIndex) setFavoriteDropIndex(targetIndex);
+  };
+
+  const onFavoriteDragStart = (index: number) => (event: ReactDragEvent) => {
+    event.dataTransfer.effectAllowed = "move";
+    // Required for Firefox to actually start the drag.
+    event.dataTransfer.setData("text/plain", String(index));
+    setFavoriteDragIndex(index);
+  };
+
+  const onFavoriteDragOver = (rowIndex: number) => (event: ReactDragEvent) => {
+    if (favoriteDragIndex === null) return;
+    event.preventDefault();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const isTopHalf = event.clientY < rect.top + rect.height / 2;
+    updateDropIndex(isTopHalf ? rowIndex : rowIndex + 1);
+  };
+
+  const onFavoriteEndZoneDragOver = (event: ReactDragEvent) => {
+    if (favoriteDragIndex === null) return;
+    event.preventDefault();
+    updateDropIndex(favoritesOrder.length);
+  };
+
+  const onFavoriteDrop = (event: ReactDragEvent) => {
+    event.preventDefault();
+    const fromIndex = favoriteDragIndex;
+    const dropIndex = favoriteDropIndex;
+    setFavoriteDragIndex(null);
+    setFavoriteDropIndex(null);
+    if (fromIndex === null || dropIndex === null) return;
+    setFavoritesOrder((prev) => {
+      if (fromIndex < 0 || fromIndex >= prev.length) return prev;
+      let toIndex = dropIndex;
+      // Splice removes the source first, so any insertion point after it
+      // shifts down by one.
+      if (fromIndex < toIndex) toIndex -= 1;
+      if (fromIndex === toIndex) return prev;
+      const next = prev.slice();
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(Math.max(0, Math.min(toIndex, next.length)), 0, moved);
+      return next;
+    });
+  };
+
+  const onFavoriteDragEnd = () => {
+    setFavoriteDragIndex(null);
+    setFavoriteDropIndex(null);
+  };
+
+  const moveFavoriteByIndex = (fromIndex: number, direction: -1 | 1) => {
+    setFavoritesOrder((prev) => {
+      if (fromIndex < 0 || fromIndex >= prev.length) return prev;
+      const target = fromIndex + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = prev.slice();
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(target, 0, moved);
+      return next;
+    });
   };
 
   const openNavContextMenu = (item: NavItem, x: number, y: number) => {
@@ -823,36 +1068,120 @@ export function Layout() {
             <div className="sidebar__section sidebar__section--compact">
               <span>{t("nav.favorites")}</span>
             </div>
-            {visiblePinnedNav.map((item) =>
-              renderNavItem(
-                item,
-                counts,
-                collapsed,
-                isMobileNav,
-                getNavItemLabel,
-                pinnedRouteSet.has(item.to),
-                handleNavItemContextMenu,
-                handleNavItemKeyDown,
-              ),
-            )}
-            {pinnedViews.length > 0 && (
-              <>
-                {pinnedViews.map((pv) => (
+            {favoritesOrder.map((ref, index) => {
+              const isDragging = favoriteDragIndex === index;
+              const showDropAbove = favoriteDropIndex === index;
+              const dropClass = showDropAbove ? " is-drop-above" : "";
+              const dragClass = isDragging ? " is-dragging" : "";
+
+              if (ref.kind === "route") {
+                const item = visiblePinnedNav.find((nav) => nav.to === ref.id);
+                if (!item) return null;
+                const Icon = item.icon;
+                const count = getCount(item.to, counts);
+                const label = getNavItemLabel(item);
+                return (
                   <NavLink
-                    key={`${pv.viewsKey}:${pv.viewId}`}
-                    to={`${pv.to}?view=${pv.viewId}`}
+                    key={favoriteRefKey(ref)}
+                    to={item.to}
+                    end={item.end}
                     className={({ isActive }) =>
-                      `sidebar__nav-item sidebar__nav-item--view${isActive ? " is-active" : ""}`
+                      `sidebar__item${isActive ? " is-active" : ""}${dragClass}${dropClass}`
                     }
-                    title={collapsed ? pv.label : undefined}
+                    data-pinned
+                    title={!isMobileNav && collapsed ? label : undefined}
+                    draggable
+                    onDragStart={onFavoriteDragStart(index)}
+                    onDragOver={onFavoriteDragOver(index)}
+                    onDrop={onFavoriteDrop}
+                    onDragEnd={onFavoriteDragEnd}
+                    onContextMenu={(event) => handleNavItemContextMenu(event, item)}
+                    onKeyDown={(event) => handleNavItemKeyDown(event, item)}
+                  >
+                    <TintedIconTile tone={item.color} size="sm" className="sidebar__icon-chip">
+                      <Icon size={14} />
+                    </TintedIconTile>
+                    <span className="sidebar__label">{label}</span>
+                    {count != null && (
+                      <Pill size="sm" className="sidebar__count">
+                        {count}
+                      </Pill>
+                    )}
+                  </NavLink>
+                );
+              }
+
+              if (ref.kind === "view") {
+                const view = pinnedViews.find(
+                  (pv) => pv.viewsKey === ref.viewsKey && pv.viewId === ref.viewId,
+                );
+                if (!view) return null;
+                return (
+                  <NavLink
+                    key={favoriteRefKey(ref)}
+                    to={`${view.to}?view=${view.viewId}`}
+                    className={({ isActive }) =>
+                      `sidebar__nav-item sidebar__nav-item--view${isActive ? " is-active" : ""}${dragClass}${dropClass}`
+                    }
+                    title={collapsed ? view.label : undefined}
+                    draggable
+                    onDragStart={onFavoriteDragStart(index)}
+                    onDragOver={onFavoriteDragOver(index)}
+                    onDrop={onFavoriteDrop}
+                    onDragEnd={onFavoriteDragEnd}
                   >
                     <span className="sidebar__nav-icon" aria-hidden="true">
                       <Pin size={12} />
                     </span>
-                    {!collapsed && <span className="sidebar__nav-label">{pv.label}</span>}
+                    {!collapsed && <span className="sidebar__nav-label">{view.label}</span>}
                   </NavLink>
-                ))}
-              </>
+                );
+              }
+
+              const command = visiblePinnedCommands.find((cmd) => cmd.id === ref.id);
+              if (!command) return null;
+              const Icon = command.icon;
+              return (
+                <div
+                  key={favoriteRefKey(ref)}
+                  role="button"
+                  tabIndex={0}
+                  className={`sidebar__item sidebar__item--command${dragClass}${dropClass}`}
+                  onClick={() => { void command.run(); }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      void command.run();
+                    }
+                  }}
+                  title={collapsed ? command.label : undefined}
+                  aria-label={command.label}
+                  draggable
+                  onDragStart={onFavoriteDragStart(index)}
+                  onDragOver={onFavoriteDragOver(index)}
+                  onDrop={onFavoriteDrop}
+                  onDragEnd={onFavoriteDragEnd}
+                >
+                  <TintedIconTile tone="gray" size="sm" className="sidebar__icon-chip">
+                    <Icon size={14} />
+                  </TintedIconTile>
+                  {!collapsed && <span className="sidebar__label">{command.label}</span>}
+                </div>
+              );
+            })}
+            {/* Invisible end-of-favorites drop zone. Lets the user drop after
+              * the last row without needing a "below" indicator on a real row.
+              * Lights up with the same top hairline when targeted. */}
+            {favoritesOrder.length > 0 && (
+              <div
+                className={`sidebar__favorite-end-zone${
+                  favoriteDropIndex === favoritesOrder.length ? " is-drop-above" : ""
+                }${favoriteDragIndex !== null ? " is-active" : ""}`}
+                onDragOver={onFavoriteEndZoneDragOver}
+                onDrop={onFavoriteDrop}
+                onDragEnd={onFavoriteDragEnd}
+                aria-hidden="true"
+              />
             )}
             <div className="sidebar__section sidebar__section--compact">
               <span>{t("nav.allRecords")}</span>
@@ -1007,6 +1336,46 @@ export function Layout() {
                 }
                 onClick={() => togglePinnedRoute(navContextMenu.item)}
               />
+              {(() => {
+                // Move up / Move down only show for pinned items, and only
+                // in directions that lead somewhere. Resolved against the
+                // unified favorites order so a pinned route can be moved
+                // past a pinned action that's adjacent to it.
+                const orderIndex = favoritesOrder.findIndex(
+                  (ref) => ref.kind === "route" && ref.id === navContextMenu.item.to,
+                );
+                if (orderIndex < 0) return null;
+                const canMoveUp = orderIndex > 0;
+                const canMoveDown = orderIndex < favoritesOrder.length - 1;
+                if (!canMoveUp && !canMoveDown) return null;
+                return (
+                  <>
+                    <div className="menu__separator" />
+                    {canMoveUp && (
+                      <MenuRow
+                        role="menuitem"
+                        icon={<ArrowUp size={14} />}
+                        label="Move up"
+                        onClick={() => {
+                          moveFavoriteByIndex(orderIndex, -1);
+                          setNavContextMenu(null);
+                        }}
+                      />
+                    )}
+                    {canMoveDown && (
+                      <MenuRow
+                        role="menuitem"
+                        icon={<ArrowDown size={14} />}
+                        label="Move down"
+                        onClick={() => {
+                          moveFavoriteByIndex(orderIndex, 1);
+                          setNavContextMenu(null);
+                        }}
+                      />
+                    )}
+                  </>
+                );
+              })()}
               <div className="menu__separator" />
               <MenuRow
                 role="menuitem"

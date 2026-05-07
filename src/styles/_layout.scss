@@ -406,6 +406,55 @@
   transition: background 0.08s ease, color 0.08s ease;
   border: 1px solid transparent;
 }
+/* Action buttons need a few normalizations on top of the shared item rules
+ * because <button> ships with browser defaults that <a> doesn't. */
+.sidebar__item--command {
+  width: 100%;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  /* `<div role="button" draggable>` needs explicit opt-in to be a drag source
+   * in Webkit, plus `user-select: none` so the browser doesn't intercept the
+   * mousedown as a text-selection start. Native <a> and <button> get this
+   * for free, divs don't. */
+  -webkit-user-drag: element;
+  user-select: none;
+}
+.sidebar__item--command[draggable="true"] {
+  cursor: grab;
+}
+.sidebar__item--command[draggable="true"]:active {
+  cursor: grabbing;
+}
+/* Keep the icon and label from swallowing the drag — without this they can
+ * become the drag source themselves in some browsers, and dragging an inner
+ * span doesn't bubble up to the parent's `dragstart`. */
+.sidebar__item--command > * {
+  pointer-events: none;
+}
+
+/* Favorites drag-and-drop. The dragged row dims; one row at a time gets a
+ * top hairline in the accent color showing where the dropped row will land
+ * (always above the target so the indicator never confuses two rows about
+ * the same gap). The end-of-list zone catches drops that go past the last
+ * favorite. */
+.sidebar__item.is-dragging,
+.sidebar__nav-item.is-dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+.sidebar__item.is-drop-above,
+.sidebar__nav-item.is-drop-above {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+.sidebar__favorite-end-zone {
+  height: 8px;
+  margin-top: 2px;
+}
+.sidebar__favorite-end-zone.is-drop-above {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
 /* Hover / active use bg-transparent-light (gray-a-2, ~4% alpha black) so the
  * tint is visible but doesn't compete with the active page content. */
 .sidebar__item:hover {

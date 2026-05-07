@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { useConvex, useMutation } from "convex/react";
+import { createPortal } from "react-dom";
+import { useConvex } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -46,14 +47,16 @@ import {
   Inbox,
   Workflow,
   Plug,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import { api } from "../lib/convexApi";
-import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
-import { useToast } from "./Toast";
-import { maintenanceErrorMessage, seedDemoSociety } from "../lib/maintenanceApi";
+import { useSociety } from "../hooks/useSociety";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { useUIStore } from "../lib/store";
+import { MenuRow } from "./ui";
 import { useRegisteredCommands } from "../lib/commands";
+import { useStaticCommands } from "../lib/useStaticCommands";
 import { ROUTE_IDENTITY, groupToneCssVar, type RouteGroup } from "../lib/routeIdentity";
 import type { CSSProperties } from "react";
 
@@ -295,106 +298,128 @@ function MetadataCommandsLoader({
   return null;
 }
 
+const PINNED_COMMAND_IDS_KEY = "societyer.sidebar.pinnedCommandIds";
+const PINNED_ROUTES_KEY = "societyer.sidebar.pinnedRoutes";
+
+function readStringArray(key: string): string[] {
+  try {
+    const stored = localStorage.getItem(key);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed.filter((value: unknown): value is string => typeof value === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStringArray(key: string, value: string[]) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    // Sync the sidebar in the same tab — `storage` events only fire across tabs.
+    window.dispatchEvent(new Event("kbar:pinned-changed"));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+type PaletteContextMenu = {
+  item: CommandItem;
+  top: number;
+  left: number;
+};
+
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
   const [recents, setRecents] = useState<string[]>(() => readRecents());
   const [metadataCommands, setMetadataCommands] = useState<any[]>([]);
+  const [pinnedCommandIds, setPinnedCommandIds] = useState<string[]>(() => readStringArray(PINNED_COMMAND_IDS_KEY));
+  const [pinnedRoutes, setPinnedRoutes] = useState<string[]>(() => readStringArray(PINNED_ROUTES_KEY));
+  const [contextMenu, setContextMenu] = useState<PaletteContextMenu | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const listId = useId();
   const navigate = useNavigate();
   const location = useLocation();
   const society = useSociety();
-  const toast = useToast();
-  const seedSharedViews = useMutation(api.views.seedGovernanceDataTableViews);
+  const staticCommands = useStaticCommands();
 
   const actions = useMemo<CommandItem[]>(
-    () => [
-      {
-        id: "action-create-meeting",
-        label: "Create meeting",
-        icon: Calendar,
-        category: "Actions",
-        run: () => navigate("/app/meetings?intent=create&type=Board"),
-      },
-      {
-        id: "action-mark-filing-filed",
-        label: "Mark filing filed",
-        icon: FileCheck2,
-        category: "Actions",
-        run: () => navigate("/app/filings?intent=mark-filed"),
-      },
-      {
-        id: "action-generate-agm-package",
-        label: "Generate AGM package",
-        icon: FileCog,
-        category: "Actions",
-        run: () => navigate("/app/meetings?intent=generate-agm-package&type=AGM"),
-      },
-      {
-        id: "action-draft-minutes",
-        label: "Draft minutes",
-        icon: PenLine,
-        category: "Actions",
-        run: () => navigate("/app/minutes?intent=draft"),
-      },
-      {
-        id: "action-request-director-attestation",
-        label: "Request director attestation",
-        icon: ShieldCheck,
-        category: "Actions",
-        module: "attestations",
-        run: () => navigate("/app/attestations?intent=request"),
-      },
-      {
-        id: "action-export-minute-book",
-        label: "Export minute book",
-        icon: Download,
-        category: "Actions",
-        run: () => navigate("/app/minute-book?intent=export"),
-      },
-      {
-        id: "action-start-inspection-response",
-        label: "Start inspection response",
-        icon: Eye,
-        category: "Actions",
-        module: "recordsInspection",
-        run: () => navigate("/app/inspections?intent=start-response"),
-      },
-      {
-        id: "action-seed-demo",
-        label: "Seed demo society",
-        icon: Sparkles,
-        category: "Actions",
-        run: async () => {
-          try {
-            const result = await seedDemoSociety();
-            setStoredSocietyId(result.societyId);
-            toast.success("Demo society seeded");
-          } catch (error) {
-            toast.error(maintenanceErrorMessage(error));
-          }
-        },
-      },
-      ...(society
-        ? [
-            {
-              id: "action-seed-shared-views",
-              label: "Seed governance shared views",
-              icon: Settings,
-              category: "Actions" as const,
-              run: async () => {
-                const result = await seedSharedViews({ societyId: society._id });
-                toast.success("Shared views seeded", `${result.created.length} created, ${result.skipped.length} skipped`);
-              },
-            },
-          ]
-        : []),
-    ],
-    [navigate, seedSharedViews, society, toast],
+    () =>
+      staticCommands.map((command) => ({
+        id: command.id,
+        label: command.label,
+        icon: command.icon,
+        category: "Actions" as const,
+        ...(command.module ? { module: command.module } : {}),
+        run: command.run,
+      })),
+    [staticCommands],
   );
+
+  const pinnedCommandSet = useMemo(() => new Set(pinnedCommandIds), [pinnedCommandIds]);
+  const pinnedRouteSet = useMemo(() => new Set(pinnedRoutes), [pinnedRoutes]);
+
+  // Anything the user can run from the palette can be pinned: navigation
+  // entries (have `to`), action entries (have `run`). Recent rows preserve
+  // both fields when they're spread, so they fall in here too.
+  const canPinItem = (item: CommandItem): boolean => Boolean(item.to || item.run);
+
+  const isItemPinned = (item: CommandItem): boolean => {
+    if (item.to) return pinnedRouteSet.has(item.to);
+    return pinnedCommandSet.has(item.id);
+  };
+
+  const togglePinned = (item: CommandItem) => {
+    if (item.to) {
+      setPinnedRoutes((prev) => {
+        const next = prev.includes(item.to!) ? prev.filter((route) => route !== item.to) : [...prev, item.to!];
+        writeStringArray(PINNED_ROUTES_KEY, next);
+        return next;
+      });
+    } else {
+      setPinnedCommandIds((prev) => {
+        const next = prev.includes(item.id)
+          ? prev.filter((id) => id !== item.id)
+          : [...prev, item.id];
+        writeStringArray(PINNED_COMMAND_IDS_KEY, next);
+        return next;
+      });
+    }
+    setContextMenu(null);
+  };
+
+  // When pinning happens elsewhere (the sidebar's own context menu, another
+  // tab, etc.), pull the new values back into our state so the menu label
+  // and isPinned check stay accurate.
+  useEffect(() => {
+    const onPinChange = () => {
+      setPinnedCommandIds(readStringArray(PINNED_COMMAND_IDS_KEY));
+      setPinnedRoutes(readStringArray(PINNED_ROUTES_KEY));
+    };
+    window.addEventListener("kbar:pinned-changed", onPinChange);
+    return () => window.removeEventListener("kbar:pinned-changed", onPinChange);
+  }, []);
+
+  // Dismiss the right-click context menu on outside click or Escape.
+  useEffect(() => {
+    if (!contextMenu) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (contextMenuRef.current?.contains(event.target as Node)) return;
+      setContextMenu(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setContextMenu(null);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [contextMenu]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -590,6 +615,10 @@ export function CommandPalette() {
                   const itemStyle: CSSProperties | undefined = item.group
                     ? ({ "--kbar-item-tone": groupToneCssVar(item.group) } as CSSProperties)
                     : undefined;
+                  // Pinnable when the row is something the user can run —
+                  // navigation entries, action entries, and Recent rows
+                  // (which preserve the underlying `to`/`run`).
+                  const canPin = canPinItem(item);
                   return (
                     <button
                       type="button"
@@ -601,6 +630,16 @@ export function CommandPalette() {
                       style={itemStyle}
                       onMouseEnter={() => setActive(idx)}
                       onClick={() => run(item)}
+                      onContextMenu={
+                        canPin
+                          ? (event) => {
+                              event.preventDefault();
+                              const x = Math.min(event.clientX, window.innerWidth - 220);
+                              const y = Math.min(event.clientY, window.innerHeight - 80);
+                              setContextMenu({ item, top: y, left: x });
+                            }
+                          : undefined
+                      }
                     >
                       <Icon />
                       <span>{item.label}</span>
@@ -625,6 +664,25 @@ export function CommandPalette() {
           <span style={{ marginLeft: "auto" }}><kbd>alt</kbd>+<kbd>o</kbd> inspector</span>
         </div>
       </div>
+
+      {contextMenu && createPortal(
+        <div
+          ref={contextMenuRef}
+          className="menu menu--actions"
+          role="menu"
+          style={{ position: "fixed", top: contextMenu.top, left: contextMenu.left, width: 200, zIndex: 1100 }}
+        >
+          <div className="menu__section">
+            <MenuRow
+              role="menuitem"
+              icon={isItemPinned(contextMenu.item) ? <PinOff size={14} /> : <Pin size={14} />}
+              label={isItemPinned(contextMenu.item) ? "Unpin from Favorites" : "Pin to Favorites"}
+              onClick={() => togglePinned(contextMenu.item)}
+            />
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
