@@ -283,7 +283,7 @@ const NAV_GROUPS: NavGroup[] = [
     id: "workflows",
     label: "Workflows",
     items: [
-      { to: "/app/integrations", label: "Integrations", icon: Plug, color: "purple", module: "workflows" },
+      { to: "/app/integrations", label: "Integrations", icon: Plug, color: "green", module: "workflows" },
       { to: "/app/browser-connectors", label: "Browser apps", icon: MonitorPlay, color: "orange", module: "browserConnectors" },
       { to: "/app/ai-agents", label: "AI agents", icon: Bot, color: "turquoise" },
       { to: "/app/workflows", label: "Workflows", icon: Workflow, color: "orange", module: "workflows" },
@@ -402,7 +402,7 @@ const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   "Bylaws history": "nav.bylawsHistory",
   Filings: "nav.filings",
   "Filing pre-fill": "nav.filingPrefill",
-  Policies: "nav.policies",
+  "Policy registry": "nav.policies",
   "Records retention": "nav.recordsRetention",
   "Records inspections": "nav.recordsInspections",
   "Privacy (PIPA)": "nav.privacy",
