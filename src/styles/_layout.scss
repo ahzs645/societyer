@@ -206,7 +206,9 @@
   flex-shrink: 0;
 }
 .sidebar__identity {
-  padding: 6px 12px 0;
+  padding: 8px 12px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-color-light);
 }
 /* Spotlight — Twenty keeps the sidebar flat. No bordered card; just a quiet
  * section with a toggle label and inline metadata rows. */

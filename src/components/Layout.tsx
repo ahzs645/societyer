@@ -577,7 +577,8 @@ export function Layout() {
   );
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspaceAnchor, setWorkspaceAnchor] = useState<{
-    top: number;
+    top?: number;
+    bottom?: number;
     left: number;
     width: number;
     maxHeight: number;
@@ -750,18 +751,19 @@ export function Layout() {
       const margin = 8;
       const gap = 6;
       const width = Math.min(320, window.innerWidth - 16);
-      const maxHeight = Math.min(
-        360,
-        Math.max(180, window.innerHeight - margin * 2),
-      );
-      let top = rect.bottom + gap;
-      if (top + maxHeight > window.innerHeight - margin) {
-        top = Math.max(margin, window.innerHeight - maxHeight - margin);
-      }
       let left = rect.left;
       if (left + width > window.innerWidth - margin) left = window.innerWidth - width - margin;
       if (left < margin) left = margin;
-      setWorkspaceAnchor({ top, left, width, maxHeight });
+      const spaceBelow = window.innerHeight - rect.bottom - margin - gap;
+      const spaceAbove = rect.top - margin - gap;
+      const openUpward = spaceBelow < 200 && spaceAbove > spaceBelow;
+      if (openUpward) {
+        const maxHeight = Math.max(180, Math.min(360, spaceAbove));
+        setWorkspaceAnchor({ bottom: window.innerHeight - rect.top + gap, left, width, maxHeight });
+      } else {
+        const maxHeight = Math.max(180, Math.min(360, spaceBelow));
+        setWorkspaceAnchor({ top: rect.bottom + gap, left, width, maxHeight });
+      }
     };
     place();
     const onDown = (e: MouseEvent) => {
@@ -1029,9 +1031,6 @@ export function Layout() {
               </button>
             </div>
           </div>
-          <div className="sidebar__identity">
-            <UserPickerSafe />
-          </div>
           <div className={`sidebar__spotlight${spotlightCollapsed ? " is-collapsed" : ""}`}>
             <button
               type="button"
@@ -1263,6 +1262,9 @@ export function Layout() {
               <span className="sidebar__label">{t("nav.documentation")}</span>
             </a>
           </nav>
+          <div className="sidebar__identity">
+            <UserPickerSafe />
+          </div>
         </aside>
 
         {workspaceOpen && workspaceAnchor && societies && createPortal(
@@ -1271,6 +1273,7 @@ export function Layout() {
             style={{
               position: "fixed",
               top: workspaceAnchor.top,
+              bottom: workspaceAnchor.bottom,
               left: workspaceAnchor.left,
               width: workspaceAnchor.width,
               background: "var(--bg-panel)",

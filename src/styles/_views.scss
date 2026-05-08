@@ -1123,12 +1123,14 @@
 }
 // Long-title escape hatch: drives off the rendered title via a class on
 // .motion__head. When the title heuristic flags it, the action column drops
-// below the title so the title gets the card's full inline width.
+// the title gets the card's full inline width — actions sit at the top so the
+// row stays "justified to the top of the box" like the non-stacked variant.
 .motion__head--stacked {
   flex-direction: column;
   align-items: stretch;
 
   .motion__actions {
+    order: -1;
     align-self: flex-end;
   }
 }
@@ -1140,6 +1142,7 @@
     align-items: stretch;
   }
   .motion__actions {
+    order: -1;
     align-self: flex-end;
   }
 }

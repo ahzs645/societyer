@@ -1179,22 +1179,20 @@ export function MeetingMinutesColumn({
                   <div className="card__head">
                     <h2 className="card__title">Agenda record</h2>
                     <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-                      {sections.length > 0 && (
-                        <button
-                          className="btn-action btn-action--icon"
-                          type="button"
-                          // Adding from here also opens the inline section
-                          // editor; while the agenda is mid-edit, that would
-                          // hold both editors open at once. The agenda editor
-                          // already has its own "Add item" affordance.
-                          disabled={agendaEdit !== null}
-                          title={agendaEdit !== null ? "Use the agenda editor to add items" : "Add section"}
-                          aria-label="Add section"
-                          onClick={addSection}
-                        >
-                          <Plus size={12} />
-                        </button>
-                      )}
+                      <button
+                        className="btn-action btn-action--icon"
+                        type="button"
+                        // Adding from here also opens the inline section
+                        // editor; while the agenda is mid-edit, that would
+                        // hold both editors open at once. The agenda editor
+                        // already has its own "Add item" affordance.
+                        disabled={agendaEdit !== null}
+                        title={agendaEdit !== null ? "Use the agenda editor to add items" : "Add section"}
+                        aria-label="Add section"
+                        onClick={addSection}
+                      >
+                        <Plus size={12} />
+                      </button>
                     </div>
                   </div>
                   <div className="card__body">

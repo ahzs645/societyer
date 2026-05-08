@@ -517,12 +517,10 @@ export function MeetingDetailPage() {
 
   const exportToPdf = () => {
     if (!meeting || !minutes || !society) return;
-    const opened = openPrintableDocument({
+    openPrintableDocument({
       title: `${meeting.title} — Minutes`,
       bodyHtml: renderExportBody(),
     });
-    if (opened) toast.success("Printable minutes opened", "Use the print dialog to save as PDF.");
-    else toast.error("Popup blocked", "Allow popups for this site to open the printable PDF view.");
   };
 
   const openMinutesPreviewPage = () => {
