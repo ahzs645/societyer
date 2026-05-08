@@ -1082,23 +1082,35 @@ export function Layout() {
                 const Icon = item.icon;
                 const count = getCount(item.to, counts);
                 const label = getNavItemLabel(item);
+                // Rendered as div, not NavLink — Chrome's native link-drag
+                // interferes with our HTML5 drag-to-reorder (it tries to drag
+                // the URL as a draggable bookmark, sometimes preventing our
+                // dragstart from firing or stamping the wrong drag image).
+                const isActive = isNavItemActive(item, loc.pathname);
                 return (
-                  <NavLink
+                  <div
                     key={favoriteRefKey(ref)}
-                    to={item.to}
-                    end={item.end}
-                    className={({ isActive }) =>
-                      `sidebar__item${isActive ? " is-active" : ""}${dragClass}${dropClass}`
-                    }
+                    role="link"
+                    tabIndex={0}
+                    aria-current={isActive ? "page" : undefined}
+                    className={`sidebar__item${isActive ? " is-active" : ""}${dragClass}${dropClass}`}
                     data-pinned
                     title={!isMobileNav && collapsed ? label : undefined}
                     draggable
+                    onClick={() => navigate(item.to)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        navigate(item.to);
+                        return;
+                      }
+                      handleNavItemKeyDown(event, item);
+                    }}
                     onDragStart={onFavoriteDragStart(index)}
                     onDragOver={onFavoriteDragOver(index)}
                     onDrop={onFavoriteDrop}
                     onDragEnd={onFavoriteDragEnd}
                     onContextMenu={(event) => handleNavItemContextMenu(event, item)}
-                    onKeyDown={(event) => handleNavItemKeyDown(event, item)}
                   >
                     <TintedIconTile tone={item.color} size="sm" className="sidebar__icon-chip">
                       <Icon size={14} />
@@ -1109,7 +1121,7 @@ export function Layout() {
                         {count}
                       </Pill>
                     )}
-                  </NavLink>
+                  </div>
                 );
               }
 
@@ -1118,15 +1130,25 @@ export function Layout() {
                   (pv) => pv.viewsKey === ref.viewsKey && pv.viewId === ref.viewId,
                 );
                 if (!view) return null;
+                const target = `${view.to}?view=${view.viewId}`;
+                const isActive =
+                  loc.pathname === view.to || loc.pathname.startsWith(`${view.to}/`);
                 return (
-                  <NavLink
+                  <div
                     key={favoriteRefKey(ref)}
-                    to={`${view.to}?view=${view.viewId}`}
-                    className={({ isActive }) =>
-                      `sidebar__nav-item sidebar__nav-item--view${isActive ? " is-active" : ""}${dragClass}${dropClass}`
-                    }
+                    role="link"
+                    tabIndex={0}
+                    aria-current={isActive ? "page" : undefined}
+                    className={`sidebar__nav-item sidebar__nav-item--view${isActive ? " is-active" : ""}${dragClass}${dropClass}`}
                     title={collapsed ? view.label : undefined}
                     draggable
+                    onClick={() => navigate(target)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        navigate(target);
+                      }
+                    }}
                     onDragStart={onFavoriteDragStart(index)}
                     onDragOver={onFavoriteDragOver(index)}
                     onDrop={onFavoriteDrop}
@@ -1136,7 +1158,7 @@ export function Layout() {
                       <Pin size={12} />
                     </span>
                     {!collapsed && <span className="sidebar__nav-label">{view.label}</span>}
-                  </NavLink>
+                  </div>
                 );
               }
 

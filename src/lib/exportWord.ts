@@ -603,6 +603,11 @@ type MinutesRenderArgs = {
     electronic?: boolean;
     noticeSentAt?: string | null;
     agendaItems?: string[];
+    // Optional structured form. When present, renderers that produce a visible
+    // agenda list (adoption, numbered) nest sub-items under their root.
+    // `agendaItems` continues to represent root titles only — sub-items never
+    // become their own minute section, table row, or executive heading.
+    agendaItemTree?: { title: string; depth: 0 | 1 }[];
   };
   minutes: {
     heldAt: string;
@@ -950,7 +955,7 @@ function renderFormalAgmMinutes({
     <h2>1. Call the Meeting to Order</h2>
     <p>The ${eh(meetingKind)} of the Members of the Society was convened at ${eh(callTime)} by ${eh(chair)}, who acted as Chair of the meeting. ${meeting.noticeSentAt ? `Notice of meeting was sent on ${eh(formatLongDate(meeting.noticeSentAt))}.` : placeholderSentence("Notice date", options)} ${minutes.quorumMet ? "Quorum was declared present and the meeting was properly called and constituted." : "Quorum was not recorded as present."} ${eh(secretary)} acted as Secretary of the Meeting.</p>
 
-    ${renderAgendaAdoption(meeting.agendaItems ?? [], options)}
+    ${renderAgendaAdoption(meeting.agendaItems ?? [], options, meeting.agendaItemTree)}
 
     <h2>Business of the Meeting</h2>
     ${minutes.discussion ? `<p>${eh(minutes.discussion).replace(/\n/g, "<br/>")}</p>` : placeholderParagraph("Business discussion", options)}
@@ -1055,8 +1060,10 @@ function renderNumberedAgendaMinutes({
     ${renderOfficialLine(minutes, options)}
     ${renderRemoteParticipation(minutes.remoteParticipation)}
 
-    <h2>Agenda Items:</h2>
-    ${agendaItems.length ? `<ol>${agendaItems.map((item) => `<li>${eh(item)}</li>`).join("")}</ol>` : placeholderParagraph("agenda items", options)}
+    ${agendaItems.length || options.includePlaceholders ? `
+      <h2>Agenda Items:</h2>
+      ${agendaItems.length ? renderAgendaListHtml(agendaItems, meeting.agendaItemTree) : placeholderParagraph("agenda items", options)}
+    ` : ""}
 
     ${sections.map((section, index) => renderNumberedAgendaSection(index + 1, section, minutes, topicMotions, options)).join("")}
     ${extraSections.length ? renderMinuteSections(extraSections, options) : ""}
@@ -1329,13 +1336,47 @@ function renderBoardMotion(motion: MinutesRenderArgs["minutes"]["motions"][numbe
   `;
 }
 
-function renderAgendaAdoption(agendaItems: string[], options: Required<MinutesExportOptions>) {
+function renderAgendaAdoption(
+  agendaItems: string[],
+  options: Required<MinutesExportOptions>,
+  tree?: { title: string; depth: 0 | 1 }[],
+) {
   if (!agendaItems.length) return placeholderParagraph("Agenda adoption", options);
   return `
     <h2>2. Approval of Agenda</h2>
     <p>The agenda was presented to the meeting.</p>
-    <ol>${agendaItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>
+    ${renderAgendaListHtml(agendaItems, tree)}
   `;
+}
+
+// Build an <ol> of agenda items. When the structured tree is supplied,
+// sub-items render as "1a. / 1b." rows beneath their root, matching the
+// formal-minutes convention used in the on-screen section list.
+function renderAgendaListHtml(
+  agendaItems: string[],
+  tree?: { title: string; depth: 0 | 1 }[],
+): string {
+  if (!tree || tree.length === 0) {
+    return `<ol>${agendaItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>`;
+  }
+  const parts: string[] = [];
+  let rootNumber = 0;
+  for (let i = 0; i < tree.length; i += 1) {
+    const entry = tree[i];
+    if (entry.depth !== 0) continue;
+    rootNumber += 1;
+    const children: string[] = [];
+    for (let j = i + 1; j < tree.length && tree[j].depth === 1; j += 1) {
+      children.push(tree[j].title);
+    }
+    const childList = children.length
+      ? `<ol style="list-style: none; padding-left: 1.25em;">${children
+          .map((title, ci) => `<li>${escapeHtml(`${rootNumber}${String.fromCharCode(97 + ci)}.`)} ${escapeHtml(title)}</li>`)
+          .join("")}</ol>`
+      : "";
+    parts.push(`<li>${escapeHtml(entry.title)}${childList}</li>`);
+  }
+  return `<ol>${parts.join("")}</ol>`;
 }
 
 function renderOfficialDetails(minutes: MinutesRenderArgs["minutes"]) {

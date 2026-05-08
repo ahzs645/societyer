@@ -44,8 +44,9 @@ import {
   isImportTranscriptMetadata,
   namesFromDiscussion,
   parseAgenda,
+  parseAgendaItems,
   parseDocumentMetadata,
-  parseLines,
+  type AgendaItemEntry,
   personLinkCandidates,
   sourceExternalIdsForMinutes,
 } from "../features/meetings/components/MeetingDetailSupport";
@@ -133,7 +134,7 @@ export function MeetingDetailPage() {
   const [busy, setBusy] = useState(false);
   const [pipelineBusy, setPipelineBusy] = useState(false);
   const [transcriptEdit, setTranscriptEdit] = useState<string | null>(null);
-  const [agendaEdit, setAgendaEdit] = useState<string | null>(null);
+  const [agendaEdit, setAgendaEdit] = useState<AgendaItemEntry[] | null>(null);
   const [attendanceEdit, setAttendanceEdit] = useState<{
     people: { name: string; status: "present" | "absent" }[];
     quorumMet: boolean;
@@ -207,6 +208,7 @@ export function MeetingDetailPage() {
   if (society === null) return <SeedPrompt />;
   if (!meeting) return <div className="page">Loading…</div>;
 
+  const agendaTree = parseAgendaItems(meeting.agendaJson);
   const agenda = parseAgenda(meeting.agendaJson);
   const businessMotions = ((minutes?.motions ?? []) as Motion[]).filter((motion) => !isAdjournmentMotion(motion));
   const minutesSourceExternalIds = sourceExternalIdsForMinutes(minutes);
@@ -239,7 +241,8 @@ export function MeetingDetailPage() {
           location: meeting.location ?? null,
           electronic: !!meeting.electronic,
           noticeSentAt: meeting.noticeSentAt ?? null,
-          agendaItems: agenda,
+          agendaItems: agendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
+          agendaItemTree: agendaTree,
         },
         minutes: {
           heldAt: minutes.heldAt,
@@ -484,7 +487,8 @@ export function MeetingDetailPage() {
         location: meeting.location ?? null,
         electronic: !!meeting.electronic,
         noticeSentAt: meeting.noticeSentAt ?? null,
-        agendaItems: agenda,
+        agendaItems: agendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
+        agendaItemTree: agendaTree,
       },
       minutes: payload,
       styleId: minutesExportStyle,
@@ -612,13 +616,27 @@ export function MeetingDetailPage() {
   });
 
   const saveAgenda = async () => {
-    const next = parseLines(agendaEdit ?? "");
+    // Clean: drop empty titles and force any leading depth-1 entry to depth 0
+    // (a child without a preceding root is impossible on save).
+    const cleaned: AgendaItemEntry[] = [];
+    let hasRoot = false;
+    for (const entry of agendaEdit ?? []) {
+      const title = entry.title.trim();
+      if (!title) continue;
+      const depth: 0 | 1 = entry.depth === 1 && hasRoot ? 1 : 0;
+      cleaned.push({ title, depth });
+      if (depth === 0) hasRoot = true;
+    }
+    // Subsections are an agenda-display concern only; minute sections track
+    // root items 1:1, matching the existing per-section editor and motions.
+    const next = cleaned.filter((entry) => entry.depth === 0).map((entry) => entry.title);
+
     await updateMeeting({
       id: meeting._id,
       patch: {
         // Always send a string — `undefined` is treated as "leave field alone",
         // which would silently undo a save that empties the agenda.
-        agendaJson: JSON.stringify(next),
+        agendaJson: JSON.stringify(cleaned),
       },
     });
 
@@ -1206,6 +1224,7 @@ export function MeetingDetailPage() {
           <MeetingMinutesColumn
             minutes={minutes}
             agenda={agenda}
+            agendaTree={agendaTree}
             agendaEdit={agendaEdit}
             setAgendaEdit={setAgendaEdit}
             saveAgenda={saveAgenda}
@@ -1540,6 +1559,7 @@ export function MeetingMinutesPreviewPage() {
   if (society === null) return <SeedPrompt />;
   if (!minutes) return <div className="page">No minutes recorded for this meeting.</div>;
 
+  const agendaTree = parseAgendaItems(meeting.agendaJson);
   const agenda = parseAgenda(meeting.agendaJson);
   const quorumSnapshot = getQuorumSnapshot(minutes, meeting);
   const selectedMinutesExportStyle =
@@ -1555,7 +1575,8 @@ export function MeetingMinutesPreviewPage() {
       location: meeting.location ?? null,
       electronic: !!meeting.electronic,
       noticeSentAt: meeting.noticeSentAt ?? null,
-      agendaItems: agenda,
+      agendaItems: agendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
+      agendaItemTree: agendaTree,
     },
     minutes: {
       heldAt: minutes.heldAt,

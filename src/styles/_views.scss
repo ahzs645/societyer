@@ -1252,6 +1252,23 @@
 .meeting-minutes-agenda-editor__row.is-locked {
   grid-template-columns: minmax(0, 1fr);
 }
+/* Sub-items are visually offset and outlined on the left so the parent/child
+ * relationship reads at a glance. The indent is applied via padding (not
+ * margin) so the input still spans the full available width. */
+.meeting-minutes-agenda-editor__row--child {
+  padding-left: var(--s-4);
+  position: relative;
+}
+.meeting-minutes-agenda-editor__row--child::before {
+  content: "";
+  position: absolute;
+  left: var(--s-2);
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--border);
+}
 .meeting-minutes-agenda-editor__confirm {
   grid-column: 1 / -1;
   display: flex;
@@ -1267,6 +1284,19 @@
 }
 .meeting-minutes-agenda-editor__confirm svg {
   color: var(--warn);
+}
+.meeting-minutes-agenda-list__children {
+  list-style: none;
+  margin: 4px 0 0;
+  padding-left: var(--s-4);
+  display: grid;
+  gap: 2px;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+.meeting-minutes-agenda-list__child-index {
+  color: var(--text-tertiary);
+  font-weight: 600;
 }
 .meeting-minutes-agenda-list li {
   padding-right: var(--s-1);
@@ -1483,6 +1513,34 @@
 .meeting-minutes-narrative--agenda .meeting-minutes-discussion {
   max-height: 220px;
 }
+/* Non-interactive sub-rows that appear under a parent section in the list,
+ * mirroring the "1a. Treasurer" formatting of formal minutes. They're not
+ * editable here — sub-items live on the agenda only — so they have no
+ * disclosure caret or remove button, and they sit indented under the parent. */
+.meeting-minutes-section-item--child {
+  padding: 4px 8px 4px var(--s-5);
+  position: relative;
+  background: transparent;
+  border: 0;
+}
+.meeting-minutes-section-item--child::before {
+  content: "";
+  position: absolute;
+  left: var(--s-3);
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--border);
+}
+.meeting-minutes-section-item--child .meeting-minutes-section-item__title {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+.meeting-minutes-section-item--child .meeting-minutes-section-item__title-index {
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
 .meeting-minutes-section-list {
   display: grid;
   gap: 0;
@@ -1532,43 +1590,76 @@
 .meeting-minutes-section-item[open] .meeting-minutes-section-item__title svg {
   transform: rotate(180deg);
 }
+/* Flex-wrap (not grid) so the title input can size to its content via
+ * field-sizing while the type/presenter fields keep their natural widths.
+ * When the title gets long, the selects wrap to the next row instead of
+ * being squeezed. */
 .meeting-minutes-section-item__title-edit {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1.4fr) minmax(0, 0.7fr) minmax(0, 0.9fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--s-2);
+  row-gap: var(--s-2);
   align-items: center;
   flex: 1 1 auto;
   min-width: 0;
   cursor: default;
 }
 .meeting-minutes-section-item__title-index {
-  font-weight: 600;
-  color: var(--text-secondary);
+  font-weight: 700;
+  color: var(--text-primary);
   white-space: nowrap;
 }
-.meeting-minutes-section-item__title-input,
 .meeting-minutes-section-item__title-type {
+  flex: 0 0 auto;
   min-width: 0;
+}
+/* Title input styled to match the read-only <strong> rendering — bold, no
+ * box. Hover hints editability with a dotted underline; focus solidifies it
+ * to the accent color. */
+.meeting-minutes-section-item__title-input {
+  /* `field-sizing: content` lets the input grow with its text instead of
+   * holding a fixed column width. The placeholder sets a sensible minimum so
+   * an empty input still reads as a click target. Capped to the row so a very
+   * long title forces the type/presenter fields to wrap below rather than
+   * overflowing horizontally. */
+  field-sizing: content;
+  flex: 0 1 auto;
+  min-width: 12ch;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: inherit;
+  border-bottom: 1px dashed transparent;
+  transition: border-color 120ms ease, border-bottom-style 120ms ease;
+}
+.meeting-minutes-section-item__title-input::placeholder {
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+.meeting-minutes-section-item__title-input:hover {
+  border-bottom-color: var(--border);
+}
+.meeting-minutes-section-item__title-input:focus,
+.meeting-minutes-section-item__title-input:focus-visible {
+  outline: none;
+  border-bottom: 1px solid var(--accent);
 }
 .meeting-minutes-section-item__title-type .select-trigger {
   height: 32px;
 }
 .meeting-minutes-section-item__title-presenter {
-  min-width: 0;
+  flex: 0 0 auto;
+  min-width: 180px;
 }
 .meeting-minutes-section-item__title-presenter .name-autocomplete,
 .meeting-minutes-section-item__title-presenter input {
   width: 100%;
   min-width: 0;
-}
-@media (max-width: 720px) {
-  .meeting-minutes-section-item__title-edit {
-    grid-template-columns: auto 1fr;
-  }
-  .meeting-minutes-section-item__title-type,
-  .meeting-minutes-section-item__title-presenter {
-    grid-column: 2;
-  }
 }
 .meeting-minutes-section-item__meta {
   display: none;
@@ -3205,60 +3296,6 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   box-shadow: var(--shadow-xs);
   transition: box-shadow 0.1s ease, transform 0.1s ease;
   position: relative;
-}
-/* Hover-revealed quick delete. Sits over the bottom-right of the card on the
- * same line as the due date, but rendered on TOP so it doesn't reflow the
- * meta row when it appears (no layout shift on hover). A short left-side
- * gradient fades from transparent to the card background, masking whatever
- * sits underneath the icon (typically the right edge of the due date). */
-.kanban__card-trash {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  display: inline-grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--r-sm);
-  border: 0;
-  background: var(--bg-panel);
-  color: var(--text-tertiary);
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.1s ease, background 0.1s ease, color 0.1s ease;
-}
-.kanban__card-trash::before {
-  /* Gradient mask so the icon doesn't appear to crash into the date — it
-   * blends over the right edge of whatever the meta row was rendering. */
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: 100%;
-  width: 18px;
-  background: linear-gradient(to right, transparent, var(--bg-panel));
-  pointer-events: none;
-}
-/* `:focus-visible` instead of `:focus-within` — the latter latches on after a
- * pointer-driven drag (the card keeps DOM focus once the drag ends, even if
- * the drop was rejected), leaving the trash icon stuck visible. `:focus-visible`
- * only matches keyboard-style focus so accessibility is preserved without the
- * "won't go away" bug. */
-.kanban__card:hover .kanban__card-trash,
-.kanban__card:focus-visible .kanban__card-trash {
-  opacity: 1;
-}
-.kanban__card-trash:hover {
-  /* Mix into --bg-panel (not transparent) so the hover background stays
-   * opaque — otherwise the date underneath bleeds through. */
-  background: color-mix(in oklab, var(--red-9) 14%, var(--bg-panel));
-  color: var(--red-9);
-  opacity: 1;
-}
-.kanban__card-trash:hover::before {
-  /* Keep the gradient fading into the card color, not the tinted hover bg,
-   * so the mask still reads as "the date dissolves into the card." */
-  background: linear-gradient(to right, transparent, var(--bg-panel));
 }
 .kanban__card:hover { box-shadow: var(--shadow-sm); }
 .kanban__card.is-dragging { opacity: 0.4; }
