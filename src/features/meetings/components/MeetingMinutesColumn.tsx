@@ -1,7 +1,8 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { ChevronDown, ClipboardList, ExternalLink, FileText, ListChecks, Mic, MinusCircle, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
-import { Badge, Field } from "../../../components/ui";
+import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, ExternalLink, FileText, GripVertical, ListChecks, Mic, MinusCircle, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
+import { Badge, Field, MenuRow } from "../../../components/ui";
 import { useConfirm } from "../../../components/Modal";
 import { Checkbox } from "../../../components/Controls";
 import { LegalGuideInline } from "../../../components/LegalGuide";
@@ -97,7 +98,6 @@ export function MeetingMinutesColumn({
       (section?.actionItems ?? []).length ||
       (section?.linkedTaskIds ?? []).length
     );
-  const sectionsWithDetailCount = sections.filter((section: any) => sectionHasDetails(section)).length;
   const detailedSectionTitles = useMemo(() => {
     const set = new Set<string>();
     for (const section of sections) {
@@ -110,8 +110,18 @@ export function MeetingMinutesColumn({
   }, [sections]);
   const [sectionEditIndex, setSectionEditIndex] = useState<number | null>(null);
   const [sectionDraft, setSectionDraft] = useState<SectionDraft | null>(null);
+  // Drag-to-reorder + right-click menu state for root sections in the agenda
+  // record. Both work on root indices (position in `rootGroups`), not the
+  // raw section index, so children move with their parent.
+  const [dragRootIndex, setDragRootIndex] = useState<number | null>(null);
+  const [dropRootIndex, setDropRootIndex] = useState<number | null>(null);
+  // Section index drives the menu — depth/position are derived from it at
+  // render time so the menu stays accurate if sections shift while it's open.
+  const [sectionContextMenu, setSectionContextMenu] = useState<
+    { sectionIndex: number; top: number; left: number } | null
+  >(null);
+  const sectionContextMenuRef = useRef<HTMLDivElement | null>(null);
   const [sectionEditorTab, setSectionEditorTab] = useState<SectionEditorTab>("notes");
-  const [agendaDeleteIndex, setAgendaDeleteIndex] = useState<number | null>(null);
   const confirm = useConfirm();
   const [newAgendaIndices, setNewAgendaIndices] = useState<Set<number>>(() => new Set());
   const agendaInputRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -124,13 +134,18 @@ export function MeetingMinutesColumn({
     if (agendaEdit === null) setNewAgendaIndices(new Set());
   }, [agendaEdit]);
 
+  // Re-runs when the agenda items array changes — that's the only state path
+  // that sets pendingFocusIndex, so the previous "no deps" version was firing
+  // on every render and just early-returning.
   useEffect(() => {
     if (pendingFocusIndex.current == null) return;
     const target = agendaInputRefs.current[pendingFocusIndex.current];
     pendingFocusIndex.current = null;
     target?.focus();
-  });
+  }, [agendaEdit]);
 
+  // Same idea: focusSectionTitleOnEdit is only flipped when entering section
+  // edit mode, which always coincides with a sectionEditIndex change.
   useEffect(() => {
     if (!focusSectionTitleOnEdit.current) return;
     if (sectionEditIndex == null) return;
@@ -139,7 +154,7 @@ export function MeetingMinutesColumn({
     focusSectionTitleOnEdit.current = false;
     node.focus();
     node.select();
-  });
+  }, [sectionEditIndex]);
 
   const addSection = async () => {
     const newTitle = "New section";
@@ -177,27 +192,39 @@ export function MeetingMinutesColumn({
 
   const removeSection = async (index: number) => {
     const removed = sections[index];
-    const removedTitle = String(removed?.title ?? "").trim().toLowerCase();
+    // Removing a root drops its trailing children too — leaving them parentless
+    // would break the agenda invariant on the next save and surprise the user.
+    let removeCount = 1;
+    if ((removed?.depth ?? 0) === 0) {
+      while ((sections[index + removeCount]?.depth ?? 0) === 1) removeCount += 1;
+    }
+    const removedTitleSet = new Set<string>();
+    const removedIndexSet = new Set<number>();
+    for (let i = index; i < index + removeCount; i += 1) {
+      const t = String(sections[i]?.title ?? "").trim().toLowerCase();
+      if (t) removedTitleSet.add(t);
+      removedIndexSet.add(i);
+    }
     const next = sections.slice();
-    next.splice(index, 1);
+    next.splice(index, removeCount);
     await saveMinuteSections(next);
 
     // Motions live on minutes.motions, not inside the section, so we have to
-    // clean them up explicitly: drop motions assigned to the removed section
-    // and shift sectionIndex down by one for motions on later sections.
+    // clean them up explicitly: drop motions assigned to a removed section
+    // and shift sectionIndex down for motions on later sections.
     const cleanedMotions = motions
       .filter((motion) => {
-        if (motion.sectionIndex === index) return false;
+        if (motion.sectionIndex != null && removedIndexSet.has(motion.sectionIndex)) return false;
         if (
           motion.sectionTitle &&
-          String(motion.sectionTitle).trim().toLowerCase() === removedTitle &&
-          (motion.sectionIndex == null || motion.sectionIndex === index)
+          removedTitleSet.has(String(motion.sectionTitle).trim().toLowerCase()) &&
+          (motion.sectionIndex == null || removedIndexSet.has(motion.sectionIndex))
         ) return false;
         return true;
       })
       .map((motion) =>
-        motion.sectionIndex != null && motion.sectionIndex > index
-          ? { ...motion, sectionIndex: motion.sectionIndex - 1 }
+        motion.sectionIndex != null && motion.sectionIndex >= index + removeCount
+          ? { ...motion, sectionIndex: motion.sectionIndex - removeCount }
           : motion,
       );
     const motionsChanged =
@@ -249,7 +276,6 @@ export function MeetingMinutesColumn({
     }
     next.splice(index, removedCount);
     writeAgendaItems(next);
-    setAgendaDeleteIndex(null);
     setNewAgendaIndices((prev) => {
       const out = new Set<number>();
       const removeRange = new Set<number>();
@@ -330,48 +356,235 @@ export function MeetingMinutesColumn({
     () => sections.map((section: any, index: number) => relatedMotionsForSection(section, index, motions)),
     [sections, motions],
   );
-  // Children grouped per root in agenda order. sections[i] aligns with the
-  // i-th root for i < (root count); orphan sections (i beyond the root count)
-  // simply have no sub-items.
-  const sectionChildrenTitles = useMemo(() => {
-    const groups: string[][] = [];
-    let current: string[] | null = null;
-    for (const entry of agendaTree) {
-      if (entry.depth === 0) {
-        if (current) groups.push(current);
-        current = [];
-      } else if (current) {
-        current.push(entry.title);
+  // Merged section list: when the agenda is mid-edit, this reorders existing
+  // sections to follow agendaEdit's positions and inserts placeholder rows for
+  // not-yet-saved titles where they will land on save. When the agenda isn't
+  // being edited, this is just `sections` with computed labels. Labels follow
+  // the "1.", "1a.", "2." pattern based on depth in the merged sequence.
+  type MergedRow =
+    | { kind: "section"; section: any; sectionIndex: number; depth: 0 | 1; label: string }
+    | { kind: "preview"; title: string; depth: 0 | 1; label: string };
+  const mergedSectionRows = useMemo<MergedRow[]>(() => {
+    const computeLabel = (rootCount: number, childCount: number) =>
+      childCount === 0 ? `${rootCount}.` : `${rootCount}${String.fromCharCode(96 + childCount)}.`;
+
+    if (agendaEdit === null) {
+      const rows: MergedRow[] = [];
+      let rootCount = 0;
+      let childCount = 0;
+      sections.forEach((section: any, index: number) => {
+        const depth: 0 | 1 = section?.depth === 1 ? 1 : 0;
+        if (depth === 0 || rootCount === 0) {
+          rootCount += 1;
+          childCount = 0;
+        } else {
+          childCount += 1;
+        }
+        rows.push({
+          kind: "section",
+          section,
+          sectionIndex: index,
+          depth,
+          label: computeLabel(rootCount, childCount),
+        });
+      });
+      return rows;
+    }
+
+    // Agenda-edit mode: walk agendaEdit in order, matching titles to existing
+    // sections so reordering shows immediately; insert previews for titles
+    // that don't have a section yet. Append unused sections (orphans, plus
+    // any that will be deleted on save) at the end.
+    const sectionByTitle = new Map<string, number>();
+    sections.forEach((section: any, i: number) => {
+      const key = String(section?.title ?? "").trim().toLowerCase();
+      if (key && !sectionByTitle.has(key)) sectionByTitle.set(key, i);
+    });
+    const usedSectionIndexes = new Set<number>();
+    const rows: MergedRow[] = [];
+    let rootCount = 0;
+    let childCount = 0;
+    let hasRoot = false;
+    for (const entry of agendaEdit) {
+      const title = entry.title.trim();
+      if (!title) continue;
+      const depth: 0 | 1 = entry.depth === 1 && hasRoot ? 1 : 0;
+      if (depth === 0) {
+        rootCount += 1;
+        childCount = 0;
+        hasRoot = true;
+      } else {
+        childCount += 1;
+      }
+      const label = computeLabel(rootCount, childCount);
+      const matchIndex = sectionByTitle.get(title.toLowerCase());
+      if (matchIndex != null && !usedSectionIndexes.has(matchIndex)) {
+        usedSectionIndexes.add(matchIndex);
+        rows.push({
+          kind: "section",
+          section: sections[matchIndex],
+          sectionIndex: matchIndex,
+          depth,
+          label,
+        });
+      } else {
+        rows.push({ kind: "preview", title, depth, label });
       }
     }
-    if (current) groups.push(current);
-    return groups;
-  }, [agendaTree]);
-  const agendaPreviewAdditions = useMemo(() => {
-    if (agendaEdit === null) return [] as string[];
-    // Section sync only tracks roots; children never become their own section.
-    const items = agendaEdit
-      .filter((entry) => entry.depth === 0)
-      .map((entry) => entry.title.trim())
-      .filter(Boolean);
-    const existing = new Set<string>(
-      sections.map((section: any) => String(section?.title ?? "").trim().toLowerCase()),
-    );
-    const seen = new Set<string>();
-    const additions: string[] = [];
-    for (const item of items) {
-      const key = item.toLowerCase();
-      if (existing.has(key) || seen.has(key)) continue;
-      seen.add(key);
-      additions.push(item);
-    }
-    return additions;
+    sections.forEach((section: any, index: number) => {
+      if (usedSectionIndexes.has(index)) return;
+      const depth: 0 | 1 = section?.depth === 1 ? 1 : 0;
+      if (depth === 0 || rootCount === 0) {
+        rootCount += 1;
+        childCount = 0;
+      } else {
+        childCount += 1;
+      }
+      rows.push({
+        kind: "section",
+        section,
+        sectionIndex: index,
+        depth,
+        label: computeLabel(rootCount, childCount),
+      });
+    });
+    return rows;
   }, [agendaEdit, sections]);
+  // Hide children whose parent is collapsed, so the parent's `<details>`
+  // disclosure also gates its sub-items — matches outline-tree intuition.
+  // Previews (in-flight agenda additions) are always shown since they have no
+  // saved open state to consult.
+  const hiddenRowIndexes = useMemo(() => {
+    const hidden = new Set<number>();
+    for (let i = 0; i < mergedSectionRows.length; i += 1) {
+      const row = mergedSectionRows[i];
+      if (row.depth !== 0) continue;
+      const isOpen = row.kind === "section" ? openSectionIndexes.has(row.sectionIndex) : true;
+      if (isOpen) continue;
+      for (let j = i + 1; j < mergedSectionRows.length && mergedSectionRows[j].depth === 1; j += 1) {
+        hidden.add(j);
+      }
+    }
+    return hidden;
+  }, [mergedSectionRows, openSectionIndexes]);
+  // Root groups for drag-to-reorder: each entry holds the section indices that
+  // belong to one root (the root itself plus any depth-1 children that follow
+  // it). A leading depth-1 section (which shouldn't normally exist) gets its
+  // own group so we never lose track of it.
+  const rootGroups = useMemo(() => {
+    const groups: number[][] = [];
+    sections.forEach((section: any, index: number) => {
+      const depth = section?.depth === 1 ? 1 : 0;
+      if (depth === 1 && groups.length > 0) {
+        groups[groups.length - 1].push(index);
+      } else {
+        groups.push([index]);
+      }
+    });
+    return groups;
+  }, [sections]);
+  const rootIndexBySectionIndex = useMemo(() => {
+    const map = new Map<number, number>();
+    rootGroups.forEach((group, rootIdx) => {
+      // Only the first index of a group is a "root" for drag/menu purposes.
+      map.set(group[0], rootIdx);
+    });
+    return map;
+  }, [rootGroups]);
+  const reorderRoots = async (fromRootIndex: number, toRootIndex: number) => {
+    // toRootIndex is a "drop slot" — drop above index N means insert before
+    // the group currently at N. Dropping at fromRootIndex (above self) or
+    // fromRootIndex+1 (immediately below self) is a no-op.
+    if (toRootIndex === fromRootIndex || toRootIndex === fromRootIndex + 1) return;
+    if (fromRootIndex < 0 || fromRootIndex >= rootGroups.length) return;
+    if (toRootIndex < 0 || toRootIndex > rootGroups.length) return;
+    const remaining = rootGroups.filter((_, i) => i !== fromRootIndex);
+    // Splicing into `remaining` shifts the target down by one if we removed
+    // a group that came before it.
+    const adjustedTo = fromRootIndex < toRootIndex ? toRootIndex - 1 : toRootIndex;
+    remaining.splice(adjustedTo, 0, rootGroups[fromRootIndex]);
+    const finalOldIndexes = remaining.flat();
+    const newSections = finalOldIndexes.map((oldIdx) => sections[oldIdx]);
+    const { motions: remappedMotions, changed: motionsChanged } =
+      remapMotionsByIndexOrder(motions, finalOldIndexes);
+    await saveMinuteSections(newSections);
+    if (motionsChanged) await saveMinuteMotions(remappedMotions);
+  };
+  const moveRootUp = (rootIndex: number) => {
+    if (rootIndex <= 0) return;
+    void reorderRoots(rootIndex, rootIndex - 1);
+  };
+  const moveRootDown = (rootIndex: number) => {
+    if (rootIndex >= rootGroups.length - 1) return;
+    void reorderRoots(rootIndex, rootIndex + 2);
+  };
+  // Reorder a child within its parent's group only — children can't escape
+  // their parent here. Same motion-remap logic as reorderRoots.
+  const moveChild = async (childSectionIndex: number, direction: -1 | 1) => {
+    const groupIdx = rootGroups.findIndex((group) => group.includes(childSectionIndex));
+    if (groupIdx < 0) return;
+    const group = rootGroups[groupIdx];
+    const position = group.indexOf(childSectionIndex);
+    // Position 0 is the root; children occupy 1..length-1.
+    if (position <= 0) return;
+    const target = position + direction;
+    if (target <= 0 || target >= group.length) return;
+    const newGroup = group.slice();
+    [newGroup[position], newGroup[target]] = [newGroup[target], newGroup[position]];
+    const newRootGroups = rootGroups.map((g, i) => (i === groupIdx ? newGroup : g));
+    const finalOldIndexes = newRootGroups.flat();
+    const newSections = finalOldIndexes.map((oldIdx) => sections[oldIdx]);
+    const { motions: remappedMotions, changed: motionsChanged } =
+      remapMotionsByIndexOrder(motions, finalOldIndexes);
+    await saveMinuteSections(newSections);
+    if (motionsChanged) await saveMinuteMotions(remappedMotions);
+  };
+  // Single source for the "delete this section" interaction — empty sections
+  // remove silently, populated ones go through the confirm modal first.
+  const confirmAndRemoveSection = async (index: number) => {
+    const section = sections[index];
+    if (!section) return;
+    const isEmpty =
+      !section?.discussion &&
+      !section?.presenter &&
+      !(section?.decisions ?? []).length &&
+      !(section?.actionItems ?? []).length &&
+      !(motionMatchesBySection[index]?.length);
+    if (isEmpty) {
+      void removeSection(index);
+      return;
+    }
+    const ok = await confirm({
+      title: `Delete "${section.title || "Untitled section"}"?`,
+      message: "Notes, decisions, and action items in this section will be removed.",
+      confirmLabel: "Delete section",
+      tone: "danger",
+    });
+    if (!ok) return;
+    void removeSection(index);
+  };
+  const closeSectionContextMenu = () => setSectionContextMenu(null);
+  // Dismiss the section context menu on outside click or Escape.
+  useEffect(() => {
+    if (!sectionContextMenu) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (sectionContextMenuRef.current?.contains(event.target as Node)) return;
+      closeSectionContextMenu();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeSectionContextMenu();
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [sectionContextMenu]);
   const agendaPreviewRemovals = useMemo(() => {
     if (agendaEdit === null) return new Set<number>();
     const upcoming = new Set<string>(
       agendaEdit
-        .filter((entry) => entry.depth === 0)
         .map((entry) => entry.title.trim().toLowerCase())
         .filter(Boolean),
     );
@@ -625,7 +838,11 @@ export function MeetingMinutesColumn({
                 <button
                   className="btn-action btn-action--icon"
                   onClick={() => setAgendaEdit(agendaTree.length ? agendaTree.map((entry) => ({ ...entry })) : [])}
-                  title="Edit agenda"
+                  // Disabled while a section is mid-edit: the two editors
+                  // hold independent optimistic copies and saving either while
+                  // the other is dirty silently overwrites the live record.
+                  disabled={sectionEditIndex !== null}
+                  title={sectionEditIndex !== null ? "Finish editing the open section first" : "Edit agenda"}
                   aria-label="Edit agenda"
                 >
                   <Pencil size={12} />
@@ -634,7 +851,7 @@ export function MeetingMinutesColumn({
                 <>
                   <button
                     className="btn-action btn-action--icon"
-                    onClick={() => { setAgendaEdit(null); setAgendaDeleteIndex(null); }}
+                    onClick={() => setAgendaEdit(null)}
                     title="Cancel"
                     aria-label="Cancel"
                   >
@@ -642,7 +859,7 @@ export function MeetingMinutesColumn({
                   </button>
                   <button
                     className="btn-action btn-action--icon btn-action--primary"
-                    onClick={() => { setAgendaDeleteIndex(null); void saveAgenda(); }}
+                    onClick={() => { void saveAgenda(); }}
                     title="Save agenda"
                     aria-label="Save agenda"
                   >
@@ -664,12 +881,13 @@ export function MeetingMinutesColumn({
                   const trimmed = item.title.trim();
                   const isEmpty = !trimmed;
                   const isNew = newAgendaIndices.has(index);
-                  // Children never have their own section, so the "linked
-                  // section has details" lock can't apply to them.
-                  const linkedSectionDetailed =
-                    item.depth === 0 && trimmed
-                      ? detailedSectionTitles.has(trimmed.toLowerCase())
-                      : false;
+                  // Children get real sections too now, so the "this section
+                  // already has notes/decisions/actions" lock applies to them
+                  // identically — removing it from the agenda would orphan
+                  // the recorded content.
+                  const linkedSectionDetailed = trimmed
+                    ? detailedSectionTitles.has(trimmed.toLowerCase())
+                    : false;
                   const canRemove = isEmpty || isNew || !linkedSectionDetailed;
                   const placeholder = index === 0
                     ? "Call to order"
@@ -696,7 +914,6 @@ export function MeetingMinutesColumn({
                           if (event.key === "Escape") {
                             event.preventDefault();
                             setAgendaEdit(null);
-                            setAgendaDeleteIndex(null);
                             return;
                           }
                           if (event.key === "Enter") {
@@ -770,37 +987,49 @@ export function MeetingMinutesColumn({
                 {agendaTree.length > 0 ? (
                   <ol className="meeting-minutes-agenda-list">
                     {(() => {
-                      // Sections map 1:1 with root items; children render as a
-                      // nested <ul> beneath their parent and don't open their
-                      // own section.
+                      // Each agenda entry now maps 1:1 to a minute section by
+                      // position, so both roots and children are clickable
+                      // links that scroll the matching section into view.
                       const rendered: JSX.Element[] = [];
                       let rootIndex = -1;
+                      let childIndex = 0;
                       agendaTree.forEach((entry, i) => {
                         if (entry.depth === 0) {
                           rootIndex += 1;
-                          const myRootIndex = rootIndex;
+                          childIndex = 0;
                           // Collect contiguous following children for this root.
-                          const children: AgendaItemEntry[] = [];
+                          const children: { entry: AgendaItemEntry; sectionIndex: number; letter: string }[] = [];
                           for (let j = i + 1; j < agendaTree.length && agendaTree[j].depth === 1; j += 1) {
-                            children.push(agendaTree[j]);
+                            childIndex += 1;
+                            children.push({
+                              entry: agendaTree[j],
+                              sectionIndex: j,
+                              letter: String.fromCharCode(96 + childIndex),
+                            });
                           }
                           rendered.push(
                             <li key={i}>
                               <button
                                 type="button"
-                                className={`meeting-minutes-agenda-link${openSectionIndexes.has(myRootIndex) ? " is-active" : ""}`}
-                                onClick={() => openAgendaSection(myRootIndex)}
+                                className={`meeting-minutes-agenda-link${openSectionIndexes.has(i) ? " is-active" : ""}`}
+                                onClick={() => openAgendaSection(i)}
                               >
                                 {formatSourceReferences(entry.title)}
                               </button>
                               {children.length > 0 && (
                                 <ol className="meeting-minutes-agenda-list__children">
-                                  {children.map((child, ci) => (
-                                    <li key={ci}>
-                                      <span className="meeting-minutes-agenda-list__child-index">
-                                        {`${myRootIndex + 1}${String.fromCharCode(97 + ci)}.`}
-                                      </span>
-                                      {" "}{formatSourceReferences(child.title)}
+                                  {children.map((child) => (
+                                    <li key={child.sectionIndex}>
+                                      <button
+                                        type="button"
+                                        className={`meeting-minutes-agenda-link${openSectionIndexes.has(child.sectionIndex) ? " is-active" : ""}`}
+                                        onClick={() => openAgendaSection(child.sectionIndex)}
+                                      >
+                                        <span className="meeting-minutes-agenda-list__child-index">
+                                          {`${rootIndex + 1}${child.letter}.`}
+                                        </span>
+                                        {" "}{formatSourceReferences(child.entry.title)}
+                                      </button>
                                     </li>
                                   ))}
                                 </ol>
@@ -949,15 +1178,17 @@ export function MeetingMinutesColumn({
                 <div className="card">
                   <div className="card__head">
                     <h2 className="card__title">Agenda record</h2>
-                    <span className="card__subtitle">
-                      {sections.length ? `${sectionsWithDetailCount}/${sections.length} detailed` : "No sections"}
-                    </span>
                     <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
                       {sections.length > 0 && (
                         <button
                           className="btn-action btn-action--icon"
                           type="button"
-                          title="Add section"
+                          // Adding from here also opens the inline section
+                          // editor; while the agenda is mid-edit, that would
+                          // hold both editors open at once. The agenda editor
+                          // already has its own "Add item" affordance.
+                          disabled={agendaEdit !== null}
+                          title={agendaEdit !== null ? "Use the agenda editor to add items" : "Add section"}
                           aria-label="Add section"
                           onClick={addSection}
                         >
@@ -967,27 +1198,124 @@ export function MeetingMinutesColumn({
                     </div>
                   </div>
                   <div className="card__body">
-                    {sections.length ? (
+                    {mergedSectionRows.length ? (
                       <div className="meeting-minutes-section-list">
-                        {sections.map((section: any, index: number) => {
-                          const childTitles = sectionChildrenTitles[index] ?? [];
+                        {mergedSectionRows.map((row, rowIndex) => {
+                          if (hiddenRowIndexes.has(rowIndex)) return null;
+                          if (row.kind === "preview") {
+                            return (
+                              <div
+                                className={`meeting-minutes-section-item meeting-minutes-section-item--preview${row.depth === 1 ? " meeting-minutes-section-item--child" : ""}`}
+                                key={`preview-${rowIndex}-${row.title}`}
+                              >
+                                <div className="meeting-minutes-section-item__summary">
+                                  <span className="meeting-minutes-section-item__title">
+                                    <strong>{row.label} {row.title}</strong>
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          }
+                          const section = row.section;
+                          const index = row.sectionIndex;
+                          const isChild = row.depth === 1;
+                          const label = row.label;
+                          const rootIndex = isChild ? null : (rootIndexBySectionIndex.get(index) ?? null);
+                          // Drag/menu only on roots, and only when neither
+                          // editor is active — otherwise the optimistic state
+                          // could race the reorder save.
+                          const reorderEnabled =
+                            rootIndex != null && agendaEdit === null && sectionEditIndex === null;
+                          const isDragging = dragRootIndex != null && rootIndex === dragRootIndex;
+                          const showDropAbove =
+                            reorderEnabled && rootIndex != null && dropRootIndex === rootIndex;
+                          const showDropBelow =
+                            reorderEnabled
+                            && rootIndex != null
+                            && rootIndex === rootGroups.length - 1
+                            && dropRootIndex === rootGroups.length;
                           return (
-                          <Fragment key={`${section.title ?? "section"}-${index}`}>
                           <details
+                            key={`${section.title ?? "section"}-${index}`}
                             id={`meeting-minutes-section-${index}`}
-                            className={`meeting-minutes-section-item${agendaPreviewRemovals.has(index) ? " meeting-minutes-section-item--pending-remove" : ""}`}
+                            className={`meeting-minutes-section-item${agendaPreviewRemovals.has(index) ? " meeting-minutes-section-item--pending-remove" : ""}${isChild ? " meeting-minutes-section-item--child" : ""}${isDragging ? " is-dragging" : ""}${showDropAbove ? " is-drop-above" : ""}${showDropBelow ? " is-drop-below" : ""}`}
                             open={openSectionIndexes.has(index)}
                             onToggle={(event) => toggleSection(index, event.currentTarget.open)}
+                            draggable={reorderEnabled}
+                            onDragStart={(event) => {
+                              if (!reorderEnabled || rootIndex == null) {
+                                event.preventDefault();
+                                return;
+                              }
+                              event.dataTransfer.effectAllowed = "move";
+                              event.dataTransfer.setData("text/plain", String(rootIndex));
+                              setDragRootIndex(rootIndex);
+                            }}
+                            onDragOver={(event) => {
+                              if (!reorderEnabled || rootIndex == null) return;
+                              if (dragRootIndex == null) return;
+                              event.preventDefault();
+                              event.dataTransfer.dropEffect = "move";
+                              const rect = event.currentTarget.getBoundingClientRect();
+                              const inLowerHalf = event.clientY > rect.top + rect.height / 2;
+                              // Drop position is the slot index — drop above
+                              // target = target's index, below = next index.
+                              // Clamp to total root count so dropping past the
+                              // last root puts the group at the end.
+                              const dropAt =
+                                inLowerHalf && rootIndex === rootGroups.length - 1
+                                  ? rootGroups.length
+                                  : inLowerHalf
+                                    ? rootIndex + 1
+                                    : rootIndex;
+                              if (dropRootIndex !== dropAt) setDropRootIndex(dropAt);
+                            }}
+                            onDrop={(event) => {
+                              event.preventDefault();
+                              const from = dragRootIndex;
+                              const to = dropRootIndex;
+                              setDragRootIndex(null);
+                              setDropRootIndex(null);
+                              if (from == null || to == null) return;
+                              void reorderRoots(from, to);
+                            }}
+                            onDragEnd={() => {
+                              setDragRootIndex(null);
+                              setDropRootIndex(null);
+                            }}
+                            onContextMenu={(event) => {
+                              // Block during agenda edit (cross-editor desync
+                              // risk), and on OTHER sections during a section
+                              // edit (would race the open draft). On the same
+                              // section being edited, the menu opens with a
+                              // Save action so right-click → save works.
+                              if (agendaEdit !== null) return;
+                              if (sectionEditIndex !== null && sectionEditIndex !== index) return;
+                              event.preventDefault();
+                              event.stopPropagation();
+                              const x = Math.min(event.clientX, window.innerWidth - 200);
+                              const y = Math.min(event.clientY, window.innerHeight - 220);
+                              setSectionContextMenu({ sectionIndex: index, top: y, left: x });
+                            }}
                           >
                             <summary className="meeting-minutes-section-item__summary">
                               <span className="meeting-minutes-section-item__title">
+                                {reorderEnabled && (
+                                  <span
+                                    className="meeting-minutes-section-item__grip"
+                                    aria-hidden="true"
+                                    title="Drag to reorder"
+                                  >
+                                    <GripVertical size={12} />
+                                  </span>
+                                )}
                                 <ChevronDown size={13} aria-hidden="true" />
                                 {sectionEditIndex === index && sectionDraft ? (
                                   <span
                                     className="meeting-minutes-section-item__title-edit"
                                     onClick={(event) => event.stopPropagation()}
                                   >
-                                    <span className="meeting-minutes-section-item__title-index">{index + 1}.</span>
+                                    <span className="meeting-minutes-section-item__title-index">{label}</span>
                                     <input
                                       ref={sectionTitleRef}
                                       className="meeting-minutes-section-item__title-input"
@@ -1031,7 +1359,7 @@ export function MeetingMinutesColumn({
                                     </span>
                                   </span>
                                 ) : (
-                                  <strong>{index + 1}. {section.title || "Untitled section"}</strong>
+                                  <strong>{label} {section.title || "Untitled section"}</strong>
                                 )}
                               </span>
                               <span className="meeting-minutes-section-item__meta">
@@ -1040,29 +1368,16 @@ export function MeetingMinutesColumn({
                               <button
                                 className="btn-action btn-action--icon"
                                 type="button"
-                                title="Remove section"
+                                // Locked while the agenda is mid-edit — saving
+                                // the agenda would re-sync sections anyway, so
+                                // any concurrent removal would race.
+                                disabled={agendaEdit !== null}
+                                title={agendaEdit !== null ? "Finish editing the agenda first" : "Remove section"}
                                 aria-label="Remove section"
-                                onClick={async (event) => {
+                                onClick={(event) => {
                                   event.preventDefault();
                                   event.stopPropagation();
-                                  const isEmpty =
-                                    !section?.discussion &&
-                                    !section?.presenter &&
-                                    !(section?.decisions ?? []).length &&
-                                    !(section?.actionItems ?? []).length &&
-                                    !(motionMatchesBySection[index]?.length);
-                                  if (isEmpty) {
-                                    removeSection(index);
-                                    return;
-                                  }
-                                  const ok = await confirm({
-                                    title: `Delete "${section.title || "Untitled section"}"?`,
-                                    message: "Notes, decisions, and action items in this section will be removed.",
-                                    confirmLabel: "Delete section",
-                                    tone: "danger",
-                                  });
-                                  if (!ok) return;
-                                  removeSection(index);
+                                  void confirmAndRemoveSection(index);
                                 }}
                               >
                                 <MinusCircle size={12} />
@@ -1386,7 +1701,12 @@ export function MeetingMinutesColumn({
                                     );
                                   })()}
                                   <div className="row" style={{ gap: 6, justifyContent: "space-between", flexWrap: "wrap" }}>
-                                    <button className="btn-action" onClick={() => startSectionEdit(index)}>
+                                    <button
+                                      className="btn-action"
+                                      onClick={() => startSectionEdit(index)}
+                                      disabled={agendaEdit !== null}
+                                      title={agendaEdit !== null ? "Finish editing the agenda first" : undefined}
+                                    >
                                       Edit agenda item
                                     </button>
                                     {isDeferredSection(section) && (
@@ -1399,49 +1719,8 @@ export function MeetingMinutesColumn({
                               )}
                             </div>
                           </details>
-                          {childTitles.map((childTitle, childIndex) => (
-                            <div
-                              key={`child-${index}-${childIndex}`}
-                              className="meeting-minutes-section-item meeting-minutes-section-item--child"
-                            >
-                              <span className="meeting-minutes-section-item__title">
-                                <span className="meeting-minutes-section-item__title-index">
-                                  {`${index + 1}${String.fromCharCode(97 + childIndex)}.`}
-                                </span>
-                                <strong>{childTitle || "Untitled sub-item"}</strong>
-                              </span>
-                            </div>
-                          ))}
-                          </Fragment>
                           );
                         })}
-                        {agendaPreviewAdditions.map((title, previewIndex) => (
-                          <div
-                            className="meeting-minutes-section-item meeting-minutes-section-item--preview"
-                            key={`preview-${previewIndex}-${title}`}
-                          >
-                            <div className="meeting-minutes-section-item__summary">
-                              <span className="meeting-minutes-section-item__title">
-                                <strong>{sections.length + previewIndex + 1}. {title}</strong>
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : agendaPreviewAdditions.length > 0 ? (
-                      <div className="meeting-minutes-section-list">
-                        {agendaPreviewAdditions.map((title, previewIndex) => (
-                          <div
-                            className="meeting-minutes-section-item meeting-minutes-section-item--preview"
-                            key={`preview-${previewIndex}-${title}`}
-                          >
-                            <div className="meeting-minutes-section-item__summary">
-                              <span className="meeting-minutes-section-item__title">
-                                <strong>{previewIndex + 1}. {title}</strong>
-                              </span>
-                            </div>
-                          </div>
-                        ))}
                       </div>
                     ) : (
                       <div className="meeting-package-empty">
@@ -1497,6 +1776,111 @@ export function MeetingMinutesColumn({
           </div>
         )}
       </div>
+      {sectionContextMenu && (() => {
+        const i = sectionContextMenu.sectionIndex;
+        const section = sections[i];
+        if (!section) return null;
+        const isChild = section?.depth === 1;
+        // While this section is being edited, swap Edit → Save and lock the
+        // move actions: reordering would shift `sectionEditIndex` out from
+        // under the open draft.
+        const isEditingThis = sectionEditIndex === i;
+        let canMoveUp = false;
+        let canMoveDown = false;
+        let onMoveUp: () => void = () => {};
+        let onMoveDown: () => void = () => {};
+        if (isChild) {
+          // Children move within their parent group only.
+          const groupIdx = rootGroups.findIndex((group) => group.includes(i));
+          const group = groupIdx >= 0 ? rootGroups[groupIdx] : [];
+          const position = group.indexOf(i);
+          canMoveUp = position > 1;
+          canMoveDown = position > 0 && position < group.length - 1;
+          onMoveUp = () => {
+            closeSectionContextMenu();
+            void moveChild(i, -1);
+          };
+          onMoveDown = () => {
+            closeSectionContextMenu();
+            void moveChild(i, 1);
+          };
+        } else {
+          const rootIdx = rootIndexBySectionIndex.get(i);
+          canMoveUp = rootIdx != null && rootIdx > 0;
+          canMoveDown = rootIdx != null && rootIdx < rootGroups.length - 1;
+          onMoveUp = () => {
+            closeSectionContextMenu();
+            if (rootIdx != null) moveRootUp(rootIdx);
+          };
+          onMoveDown = () => {
+            closeSectionContextMenu();
+            if (rootIdx != null) moveRootDown(rootIdx);
+          };
+        }
+        return createPortal(
+          <div
+            ref={sectionContextMenuRef}
+            className="menu menu--actions"
+            role="menu"
+            style={{ position: "fixed", top: sectionContextMenu.top, left: sectionContextMenu.left, width: 200, zIndex: 1000 }}
+          >
+            <div className="menu__section">
+              <MenuRow
+                role="menuitem"
+                icon={<ArrowUp size={14} />}
+                label="Move up"
+                disabled={!canMoveUp || isEditingThis}
+                onClick={onMoveUp}
+              />
+              <MenuRow
+                role="menuitem"
+                icon={<ArrowDown size={14} />}
+                label="Move down"
+                disabled={!canMoveDown || isEditingThis}
+                onClick={onMoveDown}
+              />
+              <div className="menu__separator" />
+              {isEditingThis ? (
+                <MenuRow
+                  role="menuitem"
+                  icon={<Save size={14} />}
+                  label="Save"
+                  onClick={() => {
+                    closeSectionContextMenu();
+                    void saveSectionEdit();
+                  }}
+                />
+              ) : (
+                <MenuRow
+                  role="menuitem"
+                  icon={<Pencil size={14} />}
+                  label="Edit"
+                  onClick={() => {
+                    closeSectionContextMenu();
+                    startSectionEdit(i);
+                  }}
+                />
+              )}
+              {!isEditingThis && (
+                <>
+                  <div className="menu__separator" />
+                  <MenuRow
+                    role="menuitem"
+                    icon={<Trash2 size={14} />}
+                    label={isChild ? "Remove sub-item" : "Remove section"}
+                    destructive
+                    onClick={() => {
+                      closeSectionContextMenu();
+                      void confirmAndRemoveSection(i);
+                    }}
+                  />
+                </>
+              )}
+            </div>
+          </div>,
+          document.body,
+        );
+      })()}
     </div>
   );
 }
@@ -1841,6 +2225,26 @@ function isDeferredSection(section: any) {
 
 function moneyAmounts(value: string) {
   return String(value ?? "").match(/\$\s?\d[\d,]*(?:\.\d{2})?/g)?.map((amount) => amount.replace(/\s+/g, "")) ?? [];
+}
+
+// Shared motion remap for any section reorder that produces a permutation of
+// the existing section indices. `oldIndexOrder[newIdx] === oldIdx`. Each
+// motion's sectionIndex is rewritten to its post-reorder slot.
+function remapMotionsByIndexOrder(
+  motions: Motion[],
+  oldIndexOrder: number[],
+): { motions: Motion[]; changed: boolean } {
+  const newIndexOf = new Map<number, number>();
+  oldIndexOrder.forEach((oldIdx, newIdx) => newIndexOf.set(oldIdx, newIdx));
+  let changed = false;
+  const remapped = motions.map((motion) => {
+    if (motion.sectionIndex == null) return motion;
+    const newIdx = newIndexOf.get(motion.sectionIndex);
+    if (newIdx == null || newIdx === motion.sectionIndex) return motion;
+    changed = true;
+    return { ...motion, sectionIndex: newIdx };
+  });
+  return { motions: remapped, changed };
 }
 
 function normalize(value: string) {

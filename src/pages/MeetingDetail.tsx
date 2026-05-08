@@ -576,11 +576,20 @@ export function MeetingDetailPage() {
   const saveMinuteSections = async (next: any[]) => {
     if (!minutes) return;
     await updateMinutes({ id: minutes._id, patch: { sections: next } });
-    // Keep meeting.agendaJson in sync with section titles so the sidebar
-    // agenda card and the right-side Agenda record never drift apart.
-    const nextAgenda = next
-      .map((section: any) => String(section?.title ?? "").trim())
-      .filter(Boolean);
+    // Keep meeting.agendaJson in sync with section titles AND depth so the
+    // sidebar agenda card and the right-side Agenda record never drift apart.
+    const nextAgenda: AgendaItemEntry[] = [];
+    let hasRoot = false;
+    for (const section of next) {
+      const title = String(section?.title ?? "").trim();
+      if (!title) continue;
+      const rawDepth = section?.depth === 1 ? 1 : 0;
+      // A child without a preceding root is impossible on the agenda side, so
+      // demote leading children to roots to stay consistent.
+      const depth: 0 | 1 = rawDepth === 1 && hasRoot ? 1 : 0;
+      nextAgenda.push({ title, depth });
+      if (depth === 0) hasRoot = true;
+    }
     await updateMeeting({
       id: meeting._id,
       patch: { agendaJson: JSON.stringify(nextAgenda) },
@@ -607,12 +616,13 @@ export function MeetingDetailPage() {
     toast.success(result.reused ? "Agenda item already in backlog" : "Agenda item added to backlog");
   };
 
-  const buildSectionFromTitle = (title: string) => ({
+  const buildSectionFromTitle = (title: string, depth: 0 | 1 = 0) => ({
     title,
     type: inferAgendaSectionType(title),
     discussion: "",
     decisions: [],
     actionItems: [],
+    depth,
   });
 
   const saveAgenda = async () => {
@@ -627,9 +637,9 @@ export function MeetingDetailPage() {
       cleaned.push({ title, depth });
       if (depth === 0) hasRoot = true;
     }
-    // Subsections are an agenda-display concern only; minute sections track
-    // root items 1:1, matching the existing per-section editor and motions.
-    const next = cleaned.filter((entry) => entry.depth === 0).map((entry) => entry.title);
+    // Both root and sub-items become real minute sections. Depth is preserved
+    // on the section so the editor and exports can render sub-numbering.
+    const next = cleaned;
 
     await updateMeeting({
       id: meeting._id,
@@ -655,7 +665,7 @@ export function MeetingDetailPage() {
         quorumMet: quorumRequired == null ? false : attendees.length >= quorumRequired,
         quorumRequired: quorumRequired ?? undefined,
         discussion: "",
-        sections: next.map(buildSectionFromTitle),
+        sections: next.map((entry) => buildSectionFromTitle(entry.title, entry.depth)),
         motions: [],
         decisions: [],
         actionItems: [],
@@ -689,12 +699,18 @@ export function MeetingDetailPage() {
         if (key && !sectionsByTitle.has(key)) sectionsByTitle.set(key, section);
       }
 
-      const aligned = next.map((title) => {
-        const existing = sectionsByTitle.get(normalize(title));
-        return existing ?? buildSectionFromTitle(title);
+      // Preserve existing section content when titles match; always overwrite
+      // depth from the agenda since the agenda is the source of truth for
+      // hierarchy. Brand-new titles get a fresh empty section at the correct
+      // depth.
+      const aligned = next.map((entry) => {
+        const existing = sectionsByTitle.get(normalize(entry.title));
+        return existing
+          ? { ...existing, depth: entry.depth }
+          : buildSectionFromTitle(entry.title, entry.depth);
       });
 
-      const newTitles = new Set(next.map(normalize));
+      const newTitles = new Set(next.map((entry) => normalize(entry.title)));
       const orphans = existingSections.filter((section) => {
         const key = normalize(section?.title ?? "");
         return !newTitles.has(key) && sectionHasDetails(section);

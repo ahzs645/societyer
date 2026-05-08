@@ -55,6 +55,7 @@ const minuteSection = v.object({
   reportSubmitted: v.optional(v.boolean()),
   decisions: v.optional(v.array(v.string())),
   actionItems: v.optional(v.array(actionItem)),
+  depth: v.optional(v.union(v.literal(0), v.literal(1))),
 });
 
 const sessionSegment = v.object({

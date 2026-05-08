@@ -1065,7 +1065,25 @@ function renderNumberedAgendaMinutes({
       ${agendaItems.length ? renderAgendaListHtml(agendaItems, meeting.agendaItemTree) : placeholderParagraph("agenda items", options)}
     ` : ""}
 
-    ${sections.map((section, index) => renderNumberedAgendaSection(index + 1, section, minutes, topicMotions, options)).join("")}
+    ${(() => {
+      // Walk sections, deriving "1." / "1a." labels from depth so sub-sections
+      // render under their parent with letter-numbered headings.
+      let rootCount = 0;
+      let childCount = 0;
+      return sections.map((section: any, index: number) => {
+        const depth: 0 | 1 = section?.depth === 1 ? 1 : 0;
+        let label: string;
+        if (depth === 0 || rootCount === 0) {
+          rootCount += 1;
+          childCount = 0;
+          label = `${rootCount}.`;
+        } else {
+          childCount += 1;
+          label = `${rootCount}${String.fromCharCode(96 + childCount)}.`;
+        }
+        return renderNumberedAgendaSection(label, index, section, minutes, topicMotions, options, depth);
+      }).join("");
+    })()}
     ${extraSections.length ? renderMinuteSections(extraSections, options) : ""}
 
     <h2>Adjournment</h2>
@@ -1201,15 +1219,17 @@ function renderExecutiveSection(
 }
 
 function renderNumberedAgendaSection(
-  index: number,
+  label: string,
+  sectionIndex: number,
   section: NonNullable<MinutesRenderArgs["minutes"]["sections"]>[number] | { title: string },
   minutes: MinutesRenderArgs["minutes"],
   motions: MinutesRenderArgs["minutes"]["motions"],
   options: Required<MinutesExportOptions>,
+  depth: 0 | 1 = 0,
 ) {
   const eh = escapeHtml;
   const sectionSearchText = agendaSectionSearchText(section);
-  const matchingMotions = motions.filter((motion) => motionBelongsToAgendaSection(motion, index - 1, section.title, sectionSearchText));
+  const matchingMotions = motions.filter((motion) => motionBelongsToAgendaSection(motion, sectionIndex, section.title, sectionSearchText));
   const matchingActions = "actionItems" in section ? section.actionItems ?? [] : [];
   const discussion = "discussion" in section ? section.discussion : "";
   const decisions = "decisions" in section ? section.decisions ?? [] : [];
@@ -1224,8 +1244,11 @@ function renderNumberedAgendaSection(
     options.includeActionItems && matchingActions.length ? `<p><strong>Action Items:</strong></p><ul>${matchingActions.map((item) => `<li>${eh(item.assignee ? `${item.assignee}: ${item.text}` : item.text)}${item.dueDate ? ` (${eh(item.dueDate)})` : ""}</li>`).join("")}</ul>` : "",
   ].filter(Boolean).join("");
 
+  // Sub-sections drop down to <h3> so screen readers and Word's outline view
+  // pick up the parent/child relationship.
+  const heading = depth === 1 ? "h3" : "h2";
   return `
-    <h2>${index}. ${eh(section.title)}</h2>
+    <${heading}>${eh(label)} ${eh(section.title)}</${heading}>
     ${parts || placeholderParagraph("agenda item details", options)}
   `;
 }

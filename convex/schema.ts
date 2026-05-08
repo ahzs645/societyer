@@ -1810,6 +1810,9 @@ export default defineSchema({
             ),
           ),
           linkedTaskIds: v.optional(v.array(v.id("tasks"))),
+          // 0 = root agenda item, 1 = sub-item nested under the most recent
+          // preceding root. Absent on legacy data, treated as 0.
+          depth: v.optional(v.union(v.literal(0), v.literal(1))),
         }),
       ),
     ),

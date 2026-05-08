@@ -1513,33 +1513,79 @@
 .meeting-minutes-narrative--agenda .meeting-minutes-discussion {
   max-height: 220px;
 }
-/* Non-interactive sub-rows that appear under a parent section in the list,
- * mirroring the "1a. Treasurer" formatting of formal minutes. They're not
- * editable here — sub-items live on the agenda only — so they have no
- * disclosure caret or remove button, and they sit indented under the parent. */
-.meeting-minutes-section-item--child {
-  padding: 4px 8px 4px var(--s-5);
+/* Drag handle on root section rows — hidden by default, hover-revealed on
+ * the parent row so it doesn't add visual noise to the static state. */
+.meeting-minutes-section-item__grip {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  margin-right: 2px;
+  color: var(--text-tertiary);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.meeting-minutes-section-item:hover > .meeting-minutes-section-item__summary .meeting-minutes-section-item__grip,
+.meeting-minutes-section-item:focus-within > .meeting-minutes-section-item__summary .meeting-minutes-section-item__grip {
+  opacity: 1;
+}
+.meeting-minutes-section-item__grip:active {
+  cursor: grabbing;
+}
+.meeting-minutes-section-item.is-dragging {
+  opacity: 0.5;
+}
+/* Drop indicators — a thin accent line above (or below, for the last row)
+ * the target. Drawn outside the row's box-model via offsets so it doesn't
+ * shift sibling content while dragging. */
+.meeting-minutes-section-item.is-drop-above {
   position: relative;
-  background: transparent;
-  border: 0;
+}
+.meeting-minutes-section-item.is-drop-above::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+  pointer-events: none;
+}
+.meeting-minutes-section-item.is-drop-below {
+  position: relative;
+}
+.meeting-minutes-section-item.is-drop-below::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+  pointer-events: none;
+}
+/* Sub-section rows in the section list — same full editor as their parent,
+ * just indented and marked with a vertical bar so the parent/child grouping
+ * reads at a glance. Additive: keeps the base border-bottom divider. */
+.meeting-minutes-section-item--child {
+  padding-left: var(--s-4);
+  position: relative;
 }
 .meeting-minutes-section-item--child::before {
   content: "";
   position: absolute;
-  left: var(--s-3);
-  top: 4px;
-  bottom: 4px;
+  left: var(--s-2);
+  top: 8px;
+  bottom: 8px;
   width: 2px;
   border-radius: 1px;
   background: var(--border);
-}
-.meeting-minutes-section-item--child .meeting-minutes-section-item__title {
-  font-size: var(--fs-sm);
-  color: var(--text-secondary);
+  pointer-events: none;
 }
 .meeting-minutes-section-item--child .meeting-minutes-section-item__title-index {
   color: var(--text-tertiary);
-  font-weight: 600;
 }
 .meeting-minutes-section-list {
   display: grid;
