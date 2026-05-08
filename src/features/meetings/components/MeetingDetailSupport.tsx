@@ -34,12 +34,9 @@ export function AttendanceDetails({
   }
 
   return (
-    <details className="attendance-details">
+    <details className="attendance-details" open>
       <summary>
         <span>Attendance list</span>
-        <span className="muted">
-          {present.length} present · {absent.length} Absent/Regrets
-        </span>
       </summary>
       <div className="attendance-table-wrap">
         <table className="attendance-table">

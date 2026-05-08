@@ -11,8 +11,8 @@ import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
 import { formatDate, formatDateTime } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, ClipboardCheck, Download, ExternalLink, EyeOff, FileDown, FileText, Gavel, ListChecks, MoreHorizontal, PackageCheck, Printer, RotateCcw, Settings2 } from "lucide-react";
-import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion } from "../components/MotionEditor";
+import { ArrowLeft, ClipboardCheck, Download, ExternalLink, EyeOff, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
+import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../components/MotionEditor";
 import {
   MINUTES_EXPORT_STYLES,
   MinutesExportStyleId,
@@ -128,6 +128,7 @@ export function MeetingDetailPage() {
   const toast = useToast();
   const vttInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
+  const motionEditorRef = useRef<MotionEditorHandle | null>(null);
   const [transcript, setTranscript] = useState("");
   const [busy, setBusy] = useState(false);
   const [pipelineBusy, setPipelineBusy] = useState(false);
@@ -294,32 +295,6 @@ export function MeetingDetailPage() {
         committees,
       })
     : [];
-
-  const decisionsCount =
-    ((minutes?.decisions ?? []) as any[]).filter((d) => String(d ?? "").trim()).length +
-    ((minutes?.sections ?? []) as any[]).reduce(
-      (sum, section) =>
-        sum + ((section?.decisions ?? []) as any[]).filter((d) => String(d ?? "").trim()).length,
-      0,
-    );
-  const actionItemsCount =
-    ((minutes?.actionItems ?? []) as any[]).filter((item) => String(item?.text ?? "").trim()).length +
-    ((minutes?.sections ?? []) as any[]).reduce(
-      (sum, section) =>
-        sum + ((section?.actionItems ?? []) as any[]).filter((item) => String(item?.text ?? "").trim()).length,
-      0,
-    );
-
-  const jumpToMinutesAnchor = (anchorId: string) => {
-    setActiveTab("minutes");
-    // Two animation frames lets React mount the Minutes tab before we try to
-    // scroll to the anchor — without it, document.getElementById returns null.
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        document.getElementById(anchorId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    });
-  };
 
   const runGenerate = async () => {
     const sourceTranscript = transcript.trim() || transcriptOnFile.trim();
@@ -750,11 +725,20 @@ export function MeetingDetailPage() {
 
   const startAttendanceEdit = () => {
     if (!minutes) return;
+    const existing = [
+      ...minutes.attendees.map((name: string) => ({ name, status: "present" as const })),
+      ...minutes.absent.map((name: string) => ({ name, status: "absent" as const })),
+    ];
+    const seedDirectors = existing.length === 0
+      ? (directors ?? [])
+          .map((director: any) => ({
+            name: `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim(),
+            status: "present" as const,
+          }))
+          .filter((person) => person.name)
+      : [];
     setAttendanceEdit({
-      people: [
-        ...minutes.attendees.map((name: string) => ({ name, status: "present" as const })),
-        ...minutes.absent.map((name: string) => ({ name, status: "absent" as const })),
-      ],
+      people: [...existing, ...seedDirectors],
       quorumMet: minutes.quorumMet,
     });
   };
@@ -1114,30 +1098,6 @@ export function MeetingDetailPage() {
           { id: "export", label: "Export", icon: <Settings2 size={12} /> },
           { id: "sources", label: "Sources", count: linkedSourceCount, icon: <Download size={12} /> },
         ]}
-        trailing={
-          <>
-            <button
-              type="button"
-              className="meeting-reminder-chip meeting-reminder-chip--decisions"
-              onClick={() => jumpToMinutesAnchor("meeting-minutes-decisions")}
-              title={`${decisionsCount} decision${decisionsCount === 1 ? "" : "s"} recorded — click to jump to the Decisions list on the Minutes tab.`}
-              aria-label={`${decisionsCount} decisions recorded — go to Minutes tab`}
-            >
-              <CheckCircle2 size={12} />
-              <span>{decisionsCount}</span>
-            </button>
-            <button
-              type="button"
-              className="meeting-reminder-chip meeting-reminder-chip--actions"
-              onClick={() => jumpToMinutesAnchor("meeting-minutes-action-items")}
-              title={`${actionItemsCount} action item${actionItemsCount === 1 ? "" : "s"} on file — click to jump to Action items on the Minutes tab.`}
-              aria-label={`${actionItemsCount} action items on file — go to Minutes tab`}
-            >
-              <ListChecks size={12} />
-              <span>{actionItemsCount}</span>
-            </button>
-          </>
-        }
       />
 
       <div className="meeting-detail-tabpanel">
@@ -1287,10 +1247,22 @@ export function MeetingDetailPage() {
                   {businessMotions.filter((motion: any) => motion.outcome === "Tabled").length} tabled
                 </span>
               ) : null}
+              {minutes && (
+                <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                  <button
+                    className="btn-action btn-action--primary"
+                    type="button"
+                    onClick={() => motionEditorRef.current?.startAdding()}
+                  >
+                    <Plus size={12} /> Add motion
+                  </button>
+                </div>
+              )}
             </div>
             <div className="card__body">
               {minutes ? (
                 <MotionEditor
+                  ref={motionEditorRef}
                   motions={minutes.motions as Motion[]}
                   directorNames={directorNames}
                   people={motionPeople}
@@ -1301,6 +1273,7 @@ export function MeetingDetailPage() {
                   }))}
                   onChange={saveMotions}
                   onAddToBacklog={addMotionToBacklog}
+                  hideInlineAdd
                 />
               ) : (
                 <div className="muted">Create minutes before recording motions.</div>

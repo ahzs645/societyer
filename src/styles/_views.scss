@@ -1397,7 +1397,9 @@
   z-index: 30;
   list-style: none;
   margin: 0;
-  padding: 4px;
+  padding: 4px 0;
+  padding-inline-start: 0;
+  padding-inline-end: 0;
   max-height: 240px;
   overflow-y: auto;
   background: var(--bg-panel);
@@ -1406,14 +1408,17 @@
   box-shadow: var(--shadow-md);
 }
 .name-autocomplete__option {
+  display: block;
+  width: 100%;
+  margin: 0;
   padding: 6px 10px;
-  border-radius: var(--r-xs);
   cursor: pointer;
   font-size: var(--fs-md);
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  box-sizing: border-box;
 }
 .name-autocomplete__option.is-highlighted {
   background: var(--bg-hover);
@@ -1514,17 +1519,56 @@
 .meeting-minutes-section-item__title {
   display: flex;
   gap: var(--s-2);
-  align-items: flex-start;
+  align-items: center;
   min-width: 0;
+  flex: 1 1 auto;
 }
 .meeting-minutes-section-item__title svg {
-  margin-top: 2px;
+  margin-top: 0;
   color: var(--text-tertiary);
   transition: transform 120ms ease;
   flex: 0 0 auto;
 }
 .meeting-minutes-section-item[open] .meeting-minutes-section-item__title svg {
   transform: rotate(180deg);
+}
+.meeting-minutes-section-item__title-edit {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1.4fr) minmax(0, 0.7fr) minmax(0, 0.9fr);
+  gap: var(--s-2);
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  cursor: default;
+}
+.meeting-minutes-section-item__title-index {
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.meeting-minutes-section-item__title-input,
+.meeting-minutes-section-item__title-type {
+  min-width: 0;
+}
+.meeting-minutes-section-item__title-type .select-trigger {
+  height: 32px;
+}
+.meeting-minutes-section-item__title-presenter {
+  min-width: 0;
+}
+.meeting-minutes-section-item__title-presenter .name-autocomplete,
+.meeting-minutes-section-item__title-presenter input {
+  width: 100%;
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  .meeting-minutes-section-item__title-edit {
+    grid-template-columns: auto 1fr;
+  }
+  .meeting-minutes-section-item__title-type,
+  .meeting-minutes-section-item__title-presenter {
+    grid-column: 2;
+  }
 }
 .meeting-minutes-section-item__meta {
   display: none;

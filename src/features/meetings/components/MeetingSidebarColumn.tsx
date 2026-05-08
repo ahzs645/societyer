@@ -146,80 +146,75 @@ export function MeetingSidebarColumn({
           {show("export") && (
             <div className="card">
               <div className="card__head">
-                <h2 className="card__title">Minutes export</h2>
+                <h2 className="card__title">
+                  {exportControlsReadOnly ? "Export readiness" : "Minutes export"}
+                </h2>
                 <span className="card__subtitle">{selectedMinutesExportStyle.source}</span>
               </div>
               <div className="card__body col" style={{ gap: 12 }}>
-                <Field label="Style">
-                  <select
-                    className="input"
-                    value={minutesExportStyle}
-                    onChange={(event) => setMinutesExportStyle(event.target.value as MinutesExportStyleId)}
-                  >
-                    {MINUTES_EXPORT_STYLES.map((style) => (
-                      <option key={style.id} value={style.id}>
-                        {style.label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>
-                  {selectedMinutesExportStyle.tone}
-                </p>
-                {exportControlsReadOnly && (
-                  <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>
-                    Switch to the Export tab to toggle these or download the file.
-                  </p>
+                {!exportControlsReadOnly && (
+                  <>
+                    <Field label="Style">
+                      <select
+                        className="input"
+                        value={minutesExportStyle}
+                        onChange={(event) => setMinutesExportStyle(event.target.value as MinutesExportStyleId)}
+                      >
+                        {MINUTES_EXPORT_STYLES.map((style) => (
+                          <option key={style.id} value={style.id}>
+                            {style.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>
+                      {selectedMinutesExportStyle.tone}
+                    </p>
+                    <div className="col" style={{ gap: 6 }}>
+                      <Checkbox
+                        checked={includeActionItemsInExport}
+                        onChange={setIncludeActionItemsInExport}
+                        label="Include action items"
+                      />
+                      <Checkbox
+                        checked={includeDiscussionSummaryInExport}
+                        onChange={setIncludeDiscussionSummaryInExport}
+                        label="Include discussion summary"
+                      />
+                      <Checkbox
+                        checked={includeApprovalInExport}
+                        onChange={setIncludeApprovalInExport}
+                        label="Include approval block"
+                      />
+                      <Checkbox
+                        checked={includeSignaturesInExport}
+                        onChange={setIncludeSignaturesInExport}
+                        label="Include signature lines"
+                      />
+                      <Checkbox
+                        checked={includePlaceholdersInExport}
+                        onChange={setIncludePlaceholdersInExport}
+                        label="Show not-recorded placeholders"
+                      />
+                      <Checkbox
+                        checked={includeTranscriptInExport}
+                        onChange={setIncludeTranscriptInExport}
+                        label="Include transcript"
+                      />
+                    </div>
+                    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                      <button className="btn-action btn-action--primary" onClick={exportToWord} disabled={!minutes}>
+                        <FileDown size={12} /> Export Word
+                      </button>
+                      <button className="btn-action" onClick={exportToPdf} disabled={!minutes}>
+                        <Printer size={12} /> Print / PDF
+                      </button>
+                      <button className="btn-action" onClick={exportPublicMinutes} disabled={!minutes}>
+                        <EyeOff size={12} /> Public copy
+                      </button>
+                    </div>
+                  </>
                 )}
-                <div className="col" style={{ gap: 6 }}>
-                  <Checkbox
-                    checked={includeTranscriptInExport}
-                    onChange={setIncludeTranscriptInExport}
-                    label="Include transcript"
-                    disabled={exportControlsReadOnly}
-                  />
-                  <Checkbox
-                    checked={includeActionItemsInExport}
-                    onChange={setIncludeActionItemsInExport}
-                    label="Include action items"
-                    disabled={exportControlsReadOnly}
-                  />
-                  <Checkbox
-                    checked={includeDiscussionSummaryInExport}
-                    onChange={setIncludeDiscussionSummaryInExport}
-                    label="Include discussion summary"
-                    disabled={exportControlsReadOnly}
-                  />
-                  <Checkbox
-                    checked={includeApprovalInExport}
-                    onChange={setIncludeApprovalInExport}
-                    label="Include approval block"
-                    disabled={exportControlsReadOnly}
-                  />
-                  <Checkbox
-                    checked={includeSignaturesInExport}
-                    onChange={setIncludeSignaturesInExport}
-                    label="Include signature lines"
-                    disabled={exportControlsReadOnly}
-                  />
-                  <Checkbox
-                    checked={includePlaceholdersInExport}
-                    onChange={setIncludePlaceholdersInExport}
-                    label="Show not-recorded placeholders"
-                    disabled={exportControlsReadOnly}
-                  />
-                </div>
-                <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                  <button className="btn-action btn-action--primary" onClick={exportToWord} disabled={exportControlsReadOnly || !minutes}>
-                    <FileDown size={12} /> Export Word
-                  </button>
-                  <button className="btn-action" onClick={exportToPdf} disabled={exportControlsReadOnly || !minutes}>
-                    <Printer size={12} /> Print / PDF
-                  </button>
-                  <button className="btn-action" onClick={exportPublicMinutes} disabled={exportControlsReadOnly || !minutes}>
-                    <EyeOff size={12} /> Public copy
-                  </button>
-                </div>
                 {showExportGaps && (
                   <div className="minutes-export-gaps">
                     {minutesExportGaps.map((gap) => (

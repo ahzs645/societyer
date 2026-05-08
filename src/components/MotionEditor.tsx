@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { forwardRef, useImperativeHandle, useMemo, useState } from "react";
 import { Check, X, Plus, Trash2, MinusCircle, PlusCircle } from "lucide-react";
 import { Badge, Field } from "./ui";
 import { NameAutocomplete } from "./NameAutocomplete";
@@ -140,14 +140,11 @@ function VoteProgress({ motion }: { motion: Motion }) {
   );
 }
 
-export function MotionEditor({
-  motions,
-  onChange,
-  directorNames,
-  people = [],
-  agendaSections = [],
-  onAddToBacklog,
-}: {
+export type MotionEditorHandle = {
+  startAdding: () => void;
+};
+
+export const MotionEditor = forwardRef<MotionEditorHandle, {
   motions: Motion[];
   onChange: (next: Motion[]) => void;
   /** Director full names used to autofill movedBy/secondedBy. */
@@ -155,8 +152,19 @@ export function MotionEditor({
   people?: MotionPerson[];
   agendaSections?: Array<string | MotionAgendaSection>;
   onAddToBacklog?: (motion: Motion, index: number) => void | Promise<void>;
-}) {
+  /** Hide the inline "Add motion" button; parent provides its own trigger via ref. */
+  hideInlineAdd?: boolean;
+}>(function MotionEditor({
+  motions,
+  onChange,
+  directorNames,
+  people = [],
+  agendaSections = [],
+  onAddToBacklog,
+  hideInlineAdd = false,
+}, ref) {
   const [adding, setAdding] = useState(false);
+  useImperativeHandle(ref, () => ({ startAdding: () => setAdding(true) }), []);
   const [draft, setDraft] = useState<Motion>({ text: "", outcome: "Pending" });
   // While true, votesFor auto-tracks (movedBy ? 1 : 0) + (secondedBy ? 1 : 0).
   // The user breaks this binding the moment they edit votesFor manually.
@@ -238,35 +246,7 @@ export function MotionEditor({
         />
       ))}
 
-      <div className="motion-adjournment">
-        <div className="motion-adjournment__head">
-          <div>
-            <strong>Adjournment</strong>
-            <div className="muted">Procedural close of the meeting.</div>
-          </div>
-          {!adjournmentRows.length && (
-            <button className="btn-action" type="button" onClick={addAdjournmentRecord}>
-              <Plus size={12} /> Add adjournment record
-            </button>
-          )}
-        </div>
-        {adjournmentRows.map(({ motion: m, index: i }) => (
-          <MotionRow
-            key={`adjournment-${i}`}
-            motion={m}
-            nameOptions={nameOptions}
-            directorNames={directorNames}
-            people={people}
-            agendaSections={agendaSections}
-            procedural
-            onPatch={(diff) => patch(i, diff)}
-            onSetVote={(k, n) => setVote(i, k, n)}
-            onDelete={() => onChange(motions.filter((_, j) => j !== i))}
-          />
-        ))}
-      </div>
-
-      {adding ? (
+      {adding && (
         <div className="motion" style={{ borderColor: "var(--accent)" }}>
           <Field label="Motion">
             <textarea
@@ -365,7 +345,37 @@ export function MotionEditor({
             </button>
           </div>
         </div>
-      ) : (
+      )}
+
+      <div className="motion-adjournment">
+        <div className="motion-adjournment__head">
+          <div>
+            <strong>Adjournment</strong>
+            <div className="muted">Procedural close of the meeting.</div>
+          </div>
+          {!adjournmentRows.length && (
+            <button className="btn-action" type="button" onClick={addAdjournmentRecord}>
+              <Plus size={12} /> Add adjournment record
+            </button>
+          )}
+        </div>
+        {adjournmentRows.map(({ motion: m, index: i }) => (
+          <MotionRow
+            key={`adjournment-${i}`}
+            motion={m}
+            nameOptions={nameOptions}
+            directorNames={directorNames}
+            people={people}
+            agendaSections={agendaSections}
+            procedural
+            onPatch={(diff) => patch(i, diff)}
+            onSetVote={(k, n) => setVote(i, k, n)}
+            onDelete={() => onChange(motions.filter((_, j) => j !== i))}
+          />
+        ))}
+      </div>
+
+      {!adding && !hideInlineAdd && (
         <div style={{ marginTop: 8 }}>
           <button className="btn-action" onClick={() => setAdding(true)}>
             <Plus size={12} /> Add motion
@@ -374,7 +384,7 @@ export function MotionEditor({
       )}
     </div>
   );
-}
+});
 
 function MotionRow({
   motion,

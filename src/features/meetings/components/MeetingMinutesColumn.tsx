@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ChevronDown, ClipboardList, FileText, ListChecks, Mic, MinusCircle, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ChevronDown, ClipboardList, ExternalLink, FileText, ListChecks, Mic, MinusCircle, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
 import { Badge, Field } from "../../../components/ui";
+import { useConfirm } from "../../../components/Modal";
 import { Checkbox } from "../../../components/Controls";
 import { LegalGuideInline } from "../../../components/LegalGuide";
 import { Segmented } from "../../../components/primitives";
 import { isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionPerson } from "../../../components/MotionEditor";
 import { NameAutocomplete } from "../../../components/NameAutocomplete";
+import { Select } from "../../../components/Select";
 import { SignaturePanel } from "../../../components/SignaturePanel";
 import {
   AttendanceDetails,
@@ -18,6 +21,16 @@ const SECTION_TASK_STATUS_ITEMS: { id: string; label: string }[] = [
   { id: "InProgress", label: "In progress" },
   { id: "Blocked", label: "Blocked" },
   { id: "Done", label: "Done" },
+];
+
+type SectionTypeId = "discussion" | "motion" | "report" | "decision" | "other";
+
+const SECTION_TYPE_OPTIONS: { value: SectionTypeId; label: string }[] = [
+  { value: "discussion", label: "Discussion" },
+  { value: "motion", label: "Motion" },
+  { value: "report", label: "Report" },
+  { value: "decision", label: "Decision" },
+  { value: "other", label: "Other" },
 ];
 
 export function MeetingMinutesColumn({
@@ -96,7 +109,7 @@ export function MeetingMinutesColumn({
   const [sectionDraft, setSectionDraft] = useState<SectionDraft | null>(null);
   const [sectionEditorTab, setSectionEditorTab] = useState<SectionEditorTab>("notes");
   const [agendaDeleteIndex, setAgendaDeleteIndex] = useState<number | null>(null);
-  const [sectionDeleteIndex, setSectionDeleteIndex] = useState<number | null>(null);
+  const confirm = useConfirm();
   const [newAgendaIndices, setNewAgendaIndices] = useState<Set<number>>(() => new Set());
   const agendaInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const pendingFocusIndex = useRef<number | null>(null);
@@ -125,11 +138,12 @@ export function MeetingMinutesColumn({
   });
 
   const addSection = async () => {
+    const newTitle = "New section";
     const newIndex = sections.length;
     const next = [
       ...sections,
       {
-        title: "New section",
+        title: newTitle,
         type: "discussion",
         discussion: "",
         decisions: [],
@@ -137,6 +151,10 @@ export function MeetingMinutesColumn({
       },
     ];
     await saveMinuteSections(next);
+    if (agendaEdit !== null) {
+      const trimmed = agendaEdit.replace(/\s+$/, "");
+      setAgendaEdit(trimmed ? `${trimmed}\n${newTitle}` : newTitle);
+    }
     setOpenSectionIndexes((current) => new Set(current).add(newIndex));
     focusSectionTitleOnEdit.current = true;
     setSectionEditIndex(newIndex);
@@ -183,7 +201,6 @@ export function MeetingMinutesColumn({
       cleanedMotions.some((m, i) => m !== motions[i]);
     if (motionsChanged) await saveMinuteMotions(cleanedMotions);
 
-    setSectionDeleteIndex(null);
     if (sectionEditIndex === index) {
       setSectionEditIndex(null);
       setSectionDraft(null);
@@ -657,11 +674,6 @@ export function MeetingMinutesColumn({
                       <Badge tone={minutes.quorumMet ? "success" : "warn"}>
                         Quorum {minutes.quorumMet ? "met" : "not met"}
                       </Badge>
-                      <Badge tone="info">{minutes.attendees.length} present</Badge>
-                      {quorumSnapshot.required != null && (
-                        <Badge tone="neutral">{quorumSnapshot.required} required</Badge>
-                      )}
-                      <Badge tone="neutral">{minutes.absent.length} Absent/Regrets</Badge>
                       {quorumSnapshot.label && (
                         <span className="muted" style={{ flexBasis: "100%", fontSize: "var(--fs-sm)" }}>
                           Rule: {quorumSnapshot.label}
@@ -773,7 +785,39 @@ export function MeetingMinutesColumn({
                             <summary className="meeting-minutes-section-item__summary">
                               <span className="meeting-minutes-section-item__title">
                                 <ChevronDown size={13} aria-hidden="true" />
-                                <strong>{index + 1}. {section.title || "Untitled section"}</strong>
+                                {sectionEditIndex === index && sectionDraft ? (
+                                  <span
+                                    className="meeting-minutes-section-item__title-edit"
+                                    onClick={(event) => event.stopPropagation()}
+                                  >
+                                    <span className="meeting-minutes-section-item__title-index">{index + 1}.</span>
+                                    <input
+                                      ref={sectionTitleRef}
+                                      className="input meeting-minutes-section-item__title-input"
+                                      value={sectionDraft.title}
+                                      onChange={(event) => setSectionDraft({ ...sectionDraft, title: event.target.value })}
+                                      placeholder="Section title"
+                                      aria-label="Title"
+                                    />
+                                    <span className="meeting-minutes-section-item__title-type">
+                                      <Select
+                                        value={sectionDraft.type as SectionTypeId}
+                                        onChange={(next) => setSectionDraft({ ...sectionDraft, type: next })}
+                                        options={SECTION_TYPE_OPTIONS}
+                                      />
+                                    </span>
+                                    <span className="meeting-minutes-section-item__title-presenter">
+                                      <NameAutocomplete
+                                        value={sectionDraft.presenter}
+                                        onChange={(next) => setSectionDraft({ ...sectionDraft, presenter: next })}
+                                        options={assigneeOptions}
+                                        placeholder="Presenter…"
+                                      />
+                                    </span>
+                                  </span>
+                                ) : (
+                                  <strong>{index + 1}. {section.title || "Untitled section"}</strong>
+                                )}
                               </span>
                               <span className="meeting-minutes-section-item__meta">
                                 {agendaPreviewRemovals.has(index) && <Badge tone="warn">Removes with agenda</Badge>}
@@ -784,7 +828,7 @@ export function MeetingMinutesColumn({
                                 type="button"
                                 title="Remove section"
                                 aria-label="Remove section"
-                                onClick={(event) => {
+                                onClick={async (event) => {
                                   event.preventDefault();
                                   event.stopPropagation();
                                   const isEmpty =
@@ -797,8 +841,14 @@ export function MeetingMinutesColumn({
                                     removeSection(index);
                                     return;
                                   }
-                                  setOpenSectionIndexes((current) => new Set(current).add(index));
-                                  setSectionDeleteIndex(index);
+                                  const ok = await confirm({
+                                    title: `Delete "${section.title || "Untitled section"}"?`,
+                                    message: "Notes, decisions, and action items in this section will be removed.",
+                                    confirmLabel: "Delete section",
+                                    tone: "danger",
+                                  });
+                                  if (!ok) return;
+                                  removeSection(index);
                                 }}
                               >
                                 <MinusCircle size={12} />
@@ -806,28 +856,6 @@ export function MeetingMinutesColumn({
                             </summary>
 
                             <div className="meeting-minutes-section-item__body">
-                              {sectionDeleteIndex === index && (
-                                <div className="meeting-minutes-agenda-editor__confirm" role="alertdialog" style={{ marginBottom: 12 }}>
-                                  <AlertTriangle size={12} aria-hidden="true" />
-                                  <span>
-                                    Delete "{section.title || "Untitled section"}"? Notes, decisions, and action items in this section will be removed.
-                                  </span>
-                                  <button
-                                    className="btn-action btn-action--danger"
-                                    type="button"
-                                    onClick={() => removeSection(index)}
-                                  >
-                                    Delete section
-                                  </button>
-                                  <button
-                                    className="btn-action"
-                                    type="button"
-                                    onClick={() => setSectionDeleteIndex(null)}
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              )}
                               {sectionEditIndex === index && sectionDraft ? (() => {
                                 const motionRows = motions
                                   .map((motion, motionIndex) => ({
@@ -847,34 +875,6 @@ export function MeetingMinutesColumn({
                                 );
                                 return (
                                   <div className="meeting-minutes-section-editor">
-                                    <div className="meeting-minutes-section-editor__top">
-                                      <Field label="Title">
-                                        <input
-                                          ref={sectionEditIndex === index ? sectionTitleRef : undefined}
-                                          className="input"
-                                          value={sectionDraft.title}
-                                          onChange={(event) => setSectionDraft({ ...sectionDraft, title: event.target.value })}
-                                        />
-                                      </Field>
-                                      <Field label="Type">
-                                        <select className="input" value={sectionDraft.type} onChange={(event) => setSectionDraft({ ...sectionDraft, type: event.target.value })}>
-                                          <option value="discussion">Discussion</option>
-                                          <option value="motion">Motion</option>
-                                          <option value="report">Report</option>
-                                          <option value="decision">Decision</option>
-                                          <option value="other">Other</option>
-                                        </select>
-                                      </Field>
-                                      <Field label="Presenter">
-                                        <NameAutocomplete
-                                          value={sectionDraft.presenter}
-                                          onChange={(next) => setSectionDraft({ ...sectionDraft, presenter: next })}
-                                          options={assigneeOptions}
-                                          placeholder="Type a name and press Enter…"
-                                        />
-                                      </Field>
-                                    </div>
-
                                     <div className="meeting-minutes-section-editor__tabs" role="tablist" aria-label="Section editor areas">
                                       <button type="button" className={`meeting-minutes-section-editor-tab${sectionEditorTab === "notes" ? " is-active" : ""}`} onClick={() => setSectionEditorTab("notes")}>
                                         Notes
@@ -916,16 +916,13 @@ export function MeetingMinutesColumn({
                                           </div>
                                           {assignedMotionRows.length ? (
                                             <div className="meeting-minutes-motion-assignment__list">
-                                              {assignedMotionRows.map(({ motion, motionIndex, selectedIndex }) => (
+                                              {assignedMotionRows.map(({ motion, motionIndex }) => (
                                                 <MotionAssignmentRow
                                                   key={`${motion.text}-${motionIndex}`}
                                                   motion={motion}
                                                   motionIndex={motionIndex}
-                                                  selectedIndex={selectedIndex}
-                                                  sections={sections}
                                                   people={motionPeople}
-                                                  onAssign={assignMotionToSection}
-                                                  current
+                                                  onRemove={() => assignMotionToSection(motionIndex, "")}
                                                 />
                                               ))}
                                             </div>
@@ -940,18 +937,29 @@ export function MeetingMinutesColumn({
                                         </div>
                                         {availableMotionRows.length > 0 && (
                                           <details className="meeting-minutes-motion-picklist">
-                                            <summary>Assign existing motion</summary>
+                                            <summary>Assign existing motion to this item</summary>
                                             <div className="meeting-minutes-motion-assignment__list">
-                                              {availableMotionRows.map(({ motion, motionIndex, selectedIndex }) => (
-                                                <MotionAssignmentRow
+                                              {availableMotionRows.map(({ motion, motionIndex }) => (
+                                                <div
+                                                  className="meeting-minutes-motion-assignment__row"
                                                   key={`${motion.text}-${motionIndex}`}
-                                                  motion={motion}
-                                                  motionIndex={motionIndex}
-                                                  selectedIndex={selectedIndex}
-                                                  sections={sections}
-                                                  people={motionPeople}
-                                                  onAssign={assignMotionToSection}
-                                                />
+                                                >
+                                                  <div className="meeting-minutes-motion-assignment__text">
+                                                    <strong>{motion.text}</strong>
+                                                    <span>
+                                                      {motion.outcome || "Pending"}
+                                                      {motion.movedBy ? ` · Moved by ${motionPersonDisplayName(motion.movedBy, motionPeople, { memberId: motion.movedByMemberId, directorId: motion.movedByDirectorId })}` : ""}
+                                                      {motion.secondedBy ? ` · Seconded by ${motionPersonDisplayName(motion.secondedBy, motionPeople, { memberId: motion.secondedByMemberId, directorId: motion.secondedByDirectorId })}` : ""}
+                                                    </span>
+                                                  </div>
+                                                  <button
+                                                    className="btn-action"
+                                                    type="button"
+                                                    onClick={() => assignMotionToSection(motionIndex, String(index))}
+                                                  >
+                                                    <Plus size={12} /> Assign
+                                                  </button>
+                                                </div>
                                               ))}
                                             </div>
                                           </details>
@@ -1069,8 +1077,11 @@ export function MeetingMinutesColumn({
                                               ))}
                                             </select>
                                           ) : (meetingTasks?.length ?? 0) === 0 ? (
-                                            <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                                              No tasks linked to this meeting yet. Add tasks on the Package tab to make them available here.
+                                            <div className="muted" style={{ fontSize: "var(--fs-sm)", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+                                              <span>No tasks linked to this meeting yet. Add tasks on the Package tab to make them available here.</span>
+                                              <Link to="/app/tasks" className="btn-action">
+                                                <ExternalLink size={12} /> Open Tasks page
+                                              </Link>
                                             </div>
                                           ) : (
                                             <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
@@ -1285,22 +1296,16 @@ type SectionActionDraft = {
 function MotionAssignmentRow({
   motion,
   motionIndex,
-  selectedIndex,
-  sections,
   people,
-  onAssign,
-  current = false,
+  onRemove,
 }: {
   motion: Motion;
   motionIndex: number;
-  selectedIndex: number | null;
-  sections: any[];
   people: MotionPerson[];
-  onAssign: (motionIndex: number, targetIndexValue: string) => void | Promise<void>;
-  current?: boolean;
+  onRemove: () => void | Promise<void>;
 }) {
   return (
-    <div className={`meeting-minutes-motion-assignment__row${current ? " is-current" : ""}`}>
+    <div className="meeting-minutes-motion-assignment__row is-current">
       <div className="meeting-minutes-motion-assignment__text">
         <strong>{motion.text}</strong>
         <span>
@@ -1309,19 +1314,14 @@ function MotionAssignmentRow({
           {motion.secondedBy ? ` · Seconded by ${motionPersonDisplayName(motion.secondedBy, people, { memberId: motion.secondedByMemberId, directorId: motion.secondedByDirectorId })}` : ""}
         </span>
       </div>
-      <select
-        className="input"
-        aria-label={`Assign motion ${motionIndex + 1} to agenda item`}
-        value={selectedIndex == null ? "" : String(selectedIndex)}
-        onChange={(event) => onAssign(motionIndex, event.target.value)}
+      <button
+        className="btn-action"
+        type="button"
+        aria-label={`Remove motion ${motionIndex + 1} from this agenda item`}
+        onClick={() => onRemove()}
       >
-        <option value="">Unassigned</option>
-        {sections.map((targetSection: any, targetIndex: number) => (
-          <option key={targetIndex} value={targetIndex}>
-            {targetIndex + 1}. {targetSection.title || "Untitled section"}
-          </option>
-        ))}
-      </select>
+        <MinusCircle size={12} /> Remove
+      </button>
     </div>
   );
 }
@@ -1417,7 +1417,7 @@ function AttendanceRoster({
           onChange={setDraft}
           options={suggestions}
           excludeOptions={takenNames}
-          placeholder="Type a name and press Enter…"
+          placeholder="Type a name"
           onCommit={(name) => commit(name)}
         />
         <button
