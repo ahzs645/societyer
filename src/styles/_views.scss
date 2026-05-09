@@ -1146,6 +1146,25 @@
     align-self: flex-end;
   }
 }
+// Icon-only collapse: when the motion card is narrow, drop the text label so
+// the action row becomes a compact strip of icons. Native title tooltips on
+// each button preserve discoverability. Mirrors the top tab bar's pattern.
+@container (max-width: 720px) {
+  .motion .btn-action__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .motion .motion__actions .btn-action {
+    width: 24px;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+  }
+}
 .motion-adjournment {
   display: grid;
   gap: var(--s-2);
