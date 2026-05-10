@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\William\\\\Documents\\\\Projects\\\\societyer\\\\src\" -Recurse -Filter \"*.tsx\" -o Name)",
+      "Bash(xargs grep -l \"module.*Map\\\\|module.*Set\\\\|const.*Map.*=\\\\|const.*Set.*=\")"
     ]
   }
 }

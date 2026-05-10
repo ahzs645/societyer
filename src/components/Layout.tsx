@@ -577,7 +577,8 @@ export function Layout() {
   );
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspaceAnchor, setWorkspaceAnchor] = useState<{
-    top: number;
+    top?: number;
+    bottom?: number;
     left: number;
     width: number;
     maxHeight: number;
@@ -750,18 +751,19 @@ export function Layout() {
       const margin = 8;
       const gap = 6;
       const width = Math.min(320, window.innerWidth - 16);
-      const maxHeight = Math.min(
-        360,
-        Math.max(180, window.innerHeight - margin * 2),
-      );
-      let top = rect.bottom + gap;
-      if (top + maxHeight > window.innerHeight - margin) {
-        top = Math.max(margin, window.innerHeight - maxHeight - margin);
-      }
       let left = rect.left;
       if (left + width > window.innerWidth - margin) left = window.innerWidth - width - margin;
       if (left < margin) left = margin;
-      setWorkspaceAnchor({ top, left, width, maxHeight });
+      const spaceBelow = window.innerHeight - rect.bottom - margin - gap;
+      const spaceAbove = rect.top - margin - gap;
+      const openUpward = spaceBelow < 200 && spaceAbove > spaceBelow;
+      if (openUpward) {
+        const maxHeight = Math.max(180, Math.min(360, spaceAbove));
+        setWorkspaceAnchor({ bottom: window.innerHeight - rect.top + gap, left, width, maxHeight });
+      } else {
+        const maxHeight = Math.max(180, Math.min(360, spaceBelow));
+        setWorkspaceAnchor({ top: rect.bottom + gap, left, width, maxHeight });
+      }
     };
     place();
     const onDown = (e: MouseEvent) => {
@@ -1029,9 +1031,6 @@ export function Layout() {
               </button>
             </div>
           </div>
-          <div className="sidebar__identity">
-            <UserPickerSafe />
-          </div>
           <div className={`sidebar__spotlight${spotlightCollapsed ? " is-collapsed" : ""}`}>
             <button
               type="button"
@@ -1082,23 +1081,35 @@ export function Layout() {
                 const Icon = item.icon;
                 const count = getCount(item.to, counts);
                 const label = getNavItemLabel(item);
+                // Rendered as div, not NavLink — Chrome's native link-drag
+                // interferes with our HTML5 drag-to-reorder (it tries to drag
+                // the URL as a draggable bookmark, sometimes preventing our
+                // dragstart from firing or stamping the wrong drag image).
+                const isActive = isNavItemActive(item, loc.pathname);
                 return (
-                  <NavLink
+                  <div
                     key={favoriteRefKey(ref)}
-                    to={item.to}
-                    end={item.end}
-                    className={({ isActive }) =>
-                      `sidebar__item${isActive ? " is-active" : ""}${dragClass}${dropClass}`
-                    }
+                    role="link"
+                    tabIndex={0}
+                    aria-current={isActive ? "page" : undefined}
+                    className={`sidebar__item${isActive ? " is-active" : ""}${dragClass}${dropClass}`}
                     data-pinned
                     title={!isMobileNav && collapsed ? label : undefined}
                     draggable
+                    onClick={() => navigate(item.to)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        navigate(item.to);
+                        return;
+                      }
+                      handleNavItemKeyDown(event, item);
+                    }}
                     onDragStart={onFavoriteDragStart(index)}
                     onDragOver={onFavoriteDragOver(index)}
                     onDrop={onFavoriteDrop}
                     onDragEnd={onFavoriteDragEnd}
                     onContextMenu={(event) => handleNavItemContextMenu(event, item)}
-                    onKeyDown={(event) => handleNavItemKeyDown(event, item)}
                   >
                     <TintedIconTile tone={item.color} size="sm" className="sidebar__icon-chip">
                       <Icon size={14} />
@@ -1109,7 +1120,7 @@ export function Layout() {
                         {count}
                       </Pill>
                     )}
-                  </NavLink>
+                  </div>
                 );
               }
 
@@ -1118,15 +1129,25 @@ export function Layout() {
                   (pv) => pv.viewsKey === ref.viewsKey && pv.viewId === ref.viewId,
                 );
                 if (!view) return null;
+                const target = `${view.to}?view=${view.viewId}`;
+                const isActive =
+                  loc.pathname === view.to || loc.pathname.startsWith(`${view.to}/`);
                 return (
-                  <NavLink
+                  <div
                     key={favoriteRefKey(ref)}
-                    to={`${view.to}?view=${view.viewId}`}
-                    className={({ isActive }) =>
-                      `sidebar__nav-item sidebar__nav-item--view${isActive ? " is-active" : ""}${dragClass}${dropClass}`
-                    }
+                    role="link"
+                    tabIndex={0}
+                    aria-current={isActive ? "page" : undefined}
+                    className={`sidebar__nav-item sidebar__nav-item--view${isActive ? " is-active" : ""}${dragClass}${dropClass}`}
                     title={collapsed ? view.label : undefined}
                     draggable
+                    onClick={() => navigate(target)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        navigate(target);
+                      }
+                    }}
                     onDragStart={onFavoriteDragStart(index)}
                     onDragOver={onFavoriteDragOver(index)}
                     onDrop={onFavoriteDrop}
@@ -1136,7 +1157,7 @@ export function Layout() {
                       <Pin size={12} />
                     </span>
                     {!collapsed && <span className="sidebar__nav-label">{view.label}</span>}
-                  </NavLink>
+                  </div>
                 );
               }
 
@@ -1241,6 +1262,9 @@ export function Layout() {
               <span className="sidebar__label">{t("nav.documentation")}</span>
             </a>
           </nav>
+          <div className="sidebar__identity">
+            <UserPickerSafe />
+          </div>
         </aside>
 
         {workspaceOpen && workspaceAnchor && societies && createPortal(
@@ -1249,6 +1273,7 @@ export function Layout() {
             style={{
               position: "fixed",
               top: workspaceAnchor.top,
+              bottom: workspaceAnchor.bottom,
               left: workspaceAnchor.left,
               width: workspaceAnchor.width,
               background: "var(--bg-panel)",

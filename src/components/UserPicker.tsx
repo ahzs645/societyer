@@ -22,7 +22,7 @@ export function UserPicker() {
   const current = useCurrentUser();
   const currentId = useCurrentUserId();
   const [open, setOpen] = useState(false);
-  const [anchor, setAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [anchor, setAnchor] = useState<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -31,10 +31,22 @@ export function UserPicker() {
     const place = () => {
       const rect = btnRef.current?.getBoundingClientRect();
       if (!rect) return;
+      const margin = 8;
+      const gap = 4;
       const width = Math.max(220, rect.width);
       let left = rect.left;
-      if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
-      setAnchor({ top: rect.bottom + 4, left, width });
+      if (left + width > window.innerWidth - margin) left = window.innerWidth - width - margin;
+      if (left < margin) left = margin;
+      const spaceBelow = window.innerHeight - rect.bottom - margin - gap;
+      const spaceAbove = rect.top - margin - gap;
+      const openUpward = spaceBelow < 200 && spaceAbove > spaceBelow;
+      if (openUpward) {
+        const maxHeight = Math.max(120, Math.min(360, spaceAbove));
+        setAnchor({ bottom: window.innerHeight - rect.top + gap, left, width, maxHeight });
+      } else {
+        const maxHeight = Math.max(120, Math.min(360, spaceBelow));
+        setAnchor({ top: rect.bottom + gap, left, width, maxHeight });
+      }
     };
     place();
     const h = (e: MouseEvent) => {
@@ -148,14 +160,16 @@ export function UserPicker() {
             style={{
               position: "fixed",
               top: anchor.top,
+              bottom: anchor.bottom,
               left: anchor.left,
               width: anchor.width,
+              maxHeight: anchor.maxHeight,
               background: "var(--bg-panel)",
               border: "1px solid var(--border)",
               borderRadius: "var(--r-md)",
               boxShadow: "var(--shadow-md)",
               zIndex: "var(--z-dropdown)",
-              overflow: "hidden",
+              overflowY: "auto",
               color: "var(--text-primary)",
             }}
           >

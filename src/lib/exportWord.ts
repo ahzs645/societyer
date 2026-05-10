@@ -102,21 +102,43 @@ export function openPrintableDocument({
   title: string;
   bodyHtml: string;
 }) {
-  const win = window.open("", "_blank");
-  if (!win) return false;
-  win.document.write(`
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>${escapeHtml(title)}</title>
-        <style>${DOCUMENT_CSS}</style>
-      </head>
-      <body>${bodyHtml}</body>
-    </html>
-  `);
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 250);
+  const html = `<!doctype html><html><head><meta charset="utf-8" /><title>${escapeHtml(title)}</title><style>${DOCUMENT_CSS}</style></head><body>${bodyHtml}</body></html>`;
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.style.visibility = "hidden";
+  document.body.appendChild(iframe);
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    try {
+      iframe.contentWindow?.removeEventListener("afterprint", cleanup);
+    } catch {
+      // contentWindow access may throw after detach — fine to ignore
+    }
+    iframe.remove();
+  };
+  iframe.onload = () => {
+    const cw = iframe.contentWindow;
+    if (!cw) {
+      cleanup();
+      return;
+    }
+    cw.addEventListener("afterprint", cleanup);
+    // Some browsers (Safari) print the parent if the iframe isn't focused.
+    cw.focus();
+    cw.print();
+    // Fallback cleanup in case afterprint never fires (older browsers, dialog
+    // dismissed instantly). 60s is well past any realistic Save-as-PDF flow.
+    setTimeout(cleanup, 60_000);
+  };
+  iframe.srcdoc = html;
   return true;
 }
 
@@ -603,6 +625,11 @@ type MinutesRenderArgs = {
     electronic?: boolean;
     noticeSentAt?: string | null;
     agendaItems?: string[];
+    // Optional structured form. When present, renderers that produce a visible
+    // agenda list (adoption, numbered) nest sub-items under their root.
+    // `agendaItems` continues to represent root titles only — sub-items never
+    // become their own minute section, table row, or executive heading.
+    agendaItemTree?: { title: string; depth: 0 | 1 }[];
   };
   minutes: {
     heldAt: string;
@@ -950,7 +977,7 @@ function renderFormalAgmMinutes({
     <h2>1. Call the Meeting to Order</h2>
     <p>The ${eh(meetingKind)} of the Members of the Society was convened at ${eh(callTime)} by ${eh(chair)}, who acted as Chair of the meeting. ${meeting.noticeSentAt ? `Notice of meeting was sent on ${eh(formatLongDate(meeting.noticeSentAt))}.` : placeholderSentence("Notice date", options)} ${minutes.quorumMet ? "Quorum was declared present and the meeting was properly called and constituted." : "Quorum was not recorded as present."} ${eh(secretary)} acted as Secretary of the Meeting.</p>
 
-    ${renderAgendaAdoption(meeting.agendaItems ?? [], options)}
+    ${renderAgendaAdoption(meeting.agendaItems ?? [], options, meeting.agendaItemTree)}
 
     <h2>Business of the Meeting</h2>
     ${minutes.discussion ? `<p>${eh(minutes.discussion).replace(/\n/g, "<br/>")}</p>` : placeholderParagraph("Business discussion", options)}
@@ -1055,10 +1082,30 @@ function renderNumberedAgendaMinutes({
     ${renderOfficialLine(minutes, options)}
     ${renderRemoteParticipation(minutes.remoteParticipation)}
 
-    <h2>Agenda Items:</h2>
-    ${agendaItems.length ? `<ol>${agendaItems.map((item) => `<li>${eh(item)}</li>`).join("")}</ol>` : placeholderParagraph("agenda items", options)}
+    ${agendaItems.length || options.includePlaceholders ? `
+      <h2>Agenda Items:</h2>
+      ${agendaItems.length ? renderAgendaListHtml(agendaItems, meeting.agendaItemTree) : placeholderParagraph("agenda items", options)}
+    ` : ""}
 
-    ${sections.map((section, index) => renderNumberedAgendaSection(index + 1, section, minutes, topicMotions, options)).join("")}
+    ${(() => {
+      // Walk sections, deriving "1." / "1a." labels from depth so sub-sections
+      // render under their parent with letter-numbered headings.
+      let rootCount = 0;
+      let childCount = 0;
+      return sections.map((section: any, index: number) => {
+        const depth: 0 | 1 = section?.depth === 1 ? 1 : 0;
+        let label: string;
+        if (depth === 0 || rootCount === 0) {
+          rootCount += 1;
+          childCount = 0;
+          label = `${rootCount}.`;
+        } else {
+          childCount += 1;
+          label = `${rootCount}${String.fromCharCode(96 + childCount)}.`;
+        }
+        return renderNumberedAgendaSection(label, index, section, minutes, topicMotions, options, depth);
+      }).join("");
+    })()}
     ${extraSections.length ? renderMinuteSections(extraSections, options) : ""}
 
     <h2>Adjournment</h2>
@@ -1194,15 +1241,17 @@ function renderExecutiveSection(
 }
 
 function renderNumberedAgendaSection(
-  index: number,
+  label: string,
+  sectionIndex: number,
   section: NonNullable<MinutesRenderArgs["minutes"]["sections"]>[number] | { title: string },
   minutes: MinutesRenderArgs["minutes"],
   motions: MinutesRenderArgs["minutes"]["motions"],
   options: Required<MinutesExportOptions>,
+  depth: 0 | 1 = 0,
 ) {
   const eh = escapeHtml;
   const sectionSearchText = agendaSectionSearchText(section);
-  const matchingMotions = motions.filter((motion) => motionBelongsToAgendaSection(motion, index - 1, section.title, sectionSearchText));
+  const matchingMotions = motions.filter((motion) => motionBelongsToAgendaSection(motion, sectionIndex, section.title, sectionSearchText));
   const matchingActions = "actionItems" in section ? section.actionItems ?? [] : [];
   const discussion = "discussion" in section ? section.discussion : "";
   const decisions = "decisions" in section ? section.decisions ?? [] : [];
@@ -1217,8 +1266,11 @@ function renderNumberedAgendaSection(
     options.includeActionItems && matchingActions.length ? `<p><strong>Action Items:</strong></p><ul>${matchingActions.map((item) => `<li>${eh(item.assignee ? `${item.assignee}: ${item.text}` : item.text)}${item.dueDate ? ` (${eh(item.dueDate)})` : ""}</li>`).join("")}</ul>` : "",
   ].filter(Boolean).join("");
 
+  // Sub-sections drop down to <h3> so screen readers and Word's outline view
+  // pick up the parent/child relationship.
+  const heading = depth === 1 ? "h3" : "h2";
   return `
-    <h2>${index}. ${eh(section.title)}</h2>
+    <${heading}>${eh(label)} ${eh(section.title)}</${heading}>
     ${parts || placeholderParagraph("agenda item details", options)}
   `;
 }
@@ -1329,13 +1381,47 @@ function renderBoardMotion(motion: MinutesRenderArgs["minutes"]["motions"][numbe
   `;
 }
 
-function renderAgendaAdoption(agendaItems: string[], options: Required<MinutesExportOptions>) {
+function renderAgendaAdoption(
+  agendaItems: string[],
+  options: Required<MinutesExportOptions>,
+  tree?: { title: string; depth: 0 | 1 }[],
+) {
   if (!agendaItems.length) return placeholderParagraph("Agenda adoption", options);
   return `
     <h2>2. Approval of Agenda</h2>
     <p>The agenda was presented to the meeting.</p>
-    <ol>${agendaItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>
+    ${renderAgendaListHtml(agendaItems, tree)}
   `;
+}
+
+// Build an <ol> of agenda items. When the structured tree is supplied,
+// sub-items render as "1a. / 1b." rows beneath their root, matching the
+// formal-minutes convention used in the on-screen section list.
+function renderAgendaListHtml(
+  agendaItems: string[],
+  tree?: { title: string; depth: 0 | 1 }[],
+): string {
+  if (!tree || tree.length === 0) {
+    return `<ol>${agendaItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>`;
+  }
+  const parts: string[] = [];
+  let rootNumber = 0;
+  for (let i = 0; i < tree.length; i += 1) {
+    const entry = tree[i];
+    if (entry.depth !== 0) continue;
+    rootNumber += 1;
+    const children: string[] = [];
+    for (let j = i + 1; j < tree.length && tree[j].depth === 1; j += 1) {
+      children.push(tree[j].title);
+    }
+    const childList = children.length
+      ? `<ol style="list-style: none; padding-left: 1.25em;">${children
+          .map((title, ci) => `<li>${escapeHtml(`${rootNumber}${String.fromCharCode(97 + ci)}.`)} ${escapeHtml(title)}</li>`)
+          .join("")}</ol>`
+      : "";
+    parts.push(`<li>${escapeHtml(entry.title)}${childList}</li>`);
+  }
+  return `<ol>${parts.join("")}</ol>`;
 }
 
 function renderOfficialDetails(minutes: MinutesRenderArgs["minutes"]) {

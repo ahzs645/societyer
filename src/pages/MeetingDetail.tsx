@@ -11,8 +11,8 @@ import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
 import { formatDate, formatDateTime } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, ClipboardCheck, Download, ExternalLink, EyeOff, FileDown, FileText, Gavel, ListChecks, MoreHorizontal, PackageCheck, Printer, RotateCcw, Settings2 } from "lucide-react";
-import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion } from "../components/MotionEditor";
+import { ArrowLeft, ClipboardCheck, Download, ExternalLink, EyeOff, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
+import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../components/MotionEditor";
 import {
   MINUTES_EXPORT_STYLES,
   MinutesExportStyleId,
@@ -44,8 +44,9 @@ import {
   isImportTranscriptMetadata,
   namesFromDiscussion,
   parseAgenda,
+  parseAgendaItems,
   parseDocumentMetadata,
-  parseLines,
+  type AgendaItemEntry,
   personLinkCandidates,
   sourceExternalIdsForMinutes,
 } from "../features/meetings/components/MeetingDetailSupport";
@@ -128,11 +129,12 @@ export function MeetingDetailPage() {
   const toast = useToast();
   const vttInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
+  const motionEditorRef = useRef<MotionEditorHandle | null>(null);
   const [transcript, setTranscript] = useState("");
   const [busy, setBusy] = useState(false);
   const [pipelineBusy, setPipelineBusy] = useState(false);
   const [transcriptEdit, setTranscriptEdit] = useState<string | null>(null);
-  const [agendaEdit, setAgendaEdit] = useState<string | null>(null);
+  const [agendaEdit, setAgendaEdit] = useState<AgendaItemEntry[] | null>(null);
   const [attendanceEdit, setAttendanceEdit] = useState<{
     people: { name: string; status: "present" | "absent" }[];
     quorumMet: boolean;
@@ -206,6 +208,7 @@ export function MeetingDetailPage() {
   if (society === null) return <SeedPrompt />;
   if (!meeting) return <div className="page">Loading…</div>;
 
+  const agendaTree = parseAgendaItems(meeting.agendaJson);
   const agenda = parseAgenda(meeting.agendaJson);
   const businessMotions = ((minutes?.motions ?? []) as Motion[]).filter((motion) => !isAdjournmentMotion(motion));
   const minutesSourceExternalIds = sourceExternalIdsForMinutes(minutes);
@@ -238,7 +241,8 @@ export function MeetingDetailPage() {
           location: meeting.location ?? null,
           electronic: !!meeting.electronic,
           noticeSentAt: meeting.noticeSentAt ?? null,
-          agendaItems: agenda,
+          agendaItems: agendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
+          agendaItemTree: agendaTree,
         },
         minutes: {
           heldAt: minutes.heldAt,
@@ -294,32 +298,6 @@ export function MeetingDetailPage() {
         committees,
       })
     : [];
-
-  const decisionsCount =
-    ((minutes?.decisions ?? []) as any[]).filter((d) => String(d ?? "").trim()).length +
-    ((minutes?.sections ?? []) as any[]).reduce(
-      (sum, section) =>
-        sum + ((section?.decisions ?? []) as any[]).filter((d) => String(d ?? "").trim()).length,
-      0,
-    );
-  const actionItemsCount =
-    ((minutes?.actionItems ?? []) as any[]).filter((item) => String(item?.text ?? "").trim()).length +
-    ((minutes?.sections ?? []) as any[]).reduce(
-      (sum, section) =>
-        sum + ((section?.actionItems ?? []) as any[]).filter((item) => String(item?.text ?? "").trim()).length,
-      0,
-    );
-
-  const jumpToMinutesAnchor = (anchorId: string) => {
-    setActiveTab("minutes");
-    // Two animation frames lets React mount the Minutes tab before we try to
-    // scroll to the anchor — without it, document.getElementById returns null.
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        document.getElementById(anchorId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    });
-  };
 
   const runGenerate = async () => {
     const sourceTranscript = transcript.trim() || transcriptOnFile.trim();
@@ -509,7 +487,8 @@ export function MeetingDetailPage() {
         location: meeting.location ?? null,
         electronic: !!meeting.electronic,
         noticeSentAt: meeting.noticeSentAt ?? null,
-        agendaItems: agenda,
+        agendaItems: agendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
+        agendaItemTree: agendaTree,
       },
       minutes: payload,
       styleId: minutesExportStyle,
@@ -538,12 +517,10 @@ export function MeetingDetailPage() {
 
   const exportToPdf = () => {
     if (!meeting || !minutes || !society) return;
-    const opened = openPrintableDocument({
+    openPrintableDocument({
       title: `${meeting.title} — Minutes`,
       bodyHtml: renderExportBody(),
     });
-    if (opened) toast.success("Printable minutes opened", "Use the print dialog to save as PDF.");
-    else toast.error("Popup blocked", "Allow popups for this site to open the printable PDF view.");
   };
 
   const openMinutesPreviewPage = () => {
@@ -597,11 +574,20 @@ export function MeetingDetailPage() {
   const saveMinuteSections = async (next: any[]) => {
     if (!minutes) return;
     await updateMinutes({ id: minutes._id, patch: { sections: next } });
-    // Keep meeting.agendaJson in sync with section titles so the sidebar
-    // agenda card and the right-side Agenda record never drift apart.
-    const nextAgenda = next
-      .map((section: any) => String(section?.title ?? "").trim())
-      .filter(Boolean);
+    // Keep meeting.agendaJson in sync with section titles AND depth so the
+    // sidebar agenda card and the right-side Agenda record never drift apart.
+    const nextAgenda: AgendaItemEntry[] = [];
+    let hasRoot = false;
+    for (const section of next) {
+      const title = String(section?.title ?? "").trim();
+      if (!title) continue;
+      const rawDepth = section?.depth === 1 ? 1 : 0;
+      // A child without a preceding root is impossible on the agenda side, so
+      // demote leading children to roots to stay consistent.
+      const depth: 0 | 1 = rawDepth === 1 && hasRoot ? 1 : 0;
+      nextAgenda.push({ title, depth });
+      if (depth === 0) hasRoot = true;
+    }
     await updateMeeting({
       id: meeting._id,
       patch: { agendaJson: JSON.stringify(nextAgenda) },
@@ -628,22 +614,37 @@ export function MeetingDetailPage() {
     toast.success(result.reused ? "Agenda item already in backlog" : "Agenda item added to backlog");
   };
 
-  const buildSectionFromTitle = (title: string) => ({
+  const buildSectionFromTitle = (title: string, depth: 0 | 1 = 0) => ({
     title,
     type: inferAgendaSectionType(title),
     discussion: "",
     decisions: [],
     actionItems: [],
+    depth,
   });
 
   const saveAgenda = async () => {
-    const next = parseLines(agendaEdit ?? "");
+    // Clean: drop empty titles and force any leading depth-1 entry to depth 0
+    // (a child without a preceding root is impossible on save).
+    const cleaned: AgendaItemEntry[] = [];
+    let hasRoot = false;
+    for (const entry of agendaEdit ?? []) {
+      const title = entry.title.trim();
+      if (!title) continue;
+      const depth: 0 | 1 = entry.depth === 1 && hasRoot ? 1 : 0;
+      cleaned.push({ title, depth });
+      if (depth === 0) hasRoot = true;
+    }
+    // Both root and sub-items become real minute sections. Depth is preserved
+    // on the section so the editor and exports can render sub-numbering.
+    const next = cleaned;
+
     await updateMeeting({
       id: meeting._id,
       patch: {
         // Always send a string — `undefined` is treated as "leave field alone",
         // which would silently undo a save that empties the agenda.
-        agendaJson: JSON.stringify(next),
+        agendaJson: JSON.stringify(cleaned),
       },
     });
 
@@ -662,7 +663,7 @@ export function MeetingDetailPage() {
         quorumMet: quorumRequired == null ? false : attendees.length >= quorumRequired,
         quorumRequired: quorumRequired ?? undefined,
         discussion: "",
-        sections: next.map(buildSectionFromTitle),
+        sections: next.map((entry) => buildSectionFromTitle(entry.title, entry.depth)),
         motions: [],
         decisions: [],
         actionItems: [],
@@ -696,12 +697,18 @@ export function MeetingDetailPage() {
         if (key && !sectionsByTitle.has(key)) sectionsByTitle.set(key, section);
       }
 
-      const aligned = next.map((title) => {
-        const existing = sectionsByTitle.get(normalize(title));
-        return existing ?? buildSectionFromTitle(title);
+      // Preserve existing section content when titles match; always overwrite
+      // depth from the agenda since the agenda is the source of truth for
+      // hierarchy. Brand-new titles get a fresh empty section at the correct
+      // depth.
+      const aligned = next.map((entry) => {
+        const existing = sectionsByTitle.get(normalize(entry.title));
+        return existing
+          ? { ...existing, depth: entry.depth }
+          : buildSectionFromTitle(entry.title, entry.depth);
       });
 
-      const newTitles = new Set(next.map(normalize));
+      const newTitles = new Set(next.map((entry) => normalize(entry.title)));
       const orphans = existingSections.filter((section) => {
         const key = normalize(section?.title ?? "");
         return !newTitles.has(key) && sectionHasDetails(section);
@@ -750,11 +757,20 @@ export function MeetingDetailPage() {
 
   const startAttendanceEdit = () => {
     if (!minutes) return;
+    const existing = [
+      ...minutes.attendees.map((name: string) => ({ name, status: "present" as const })),
+      ...minutes.absent.map((name: string) => ({ name, status: "absent" as const })),
+    ];
+    const seedDirectors = existing.length === 0
+      ? (directors ?? [])
+          .map((director: any) => ({
+            name: `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim(),
+            status: "present" as const,
+          }))
+          .filter((person) => person.name)
+      : [];
     setAttendanceEdit({
-      people: [
-        ...minutes.attendees.map((name: string) => ({ name, status: "present" as const })),
-        ...minutes.absent.map((name: string) => ({ name, status: "absent" as const })),
-      ],
+      people: [...existing, ...seedDirectors],
       quorumMet: minutes.quorumMet,
     });
   };
@@ -1114,30 +1130,6 @@ export function MeetingDetailPage() {
           { id: "export", label: "Export", icon: <Settings2 size={12} /> },
           { id: "sources", label: "Sources", count: linkedSourceCount, icon: <Download size={12} /> },
         ]}
-        trailing={
-          <>
-            <button
-              type="button"
-              className="meeting-reminder-chip meeting-reminder-chip--decisions"
-              onClick={() => jumpToMinutesAnchor("meeting-minutes-decisions")}
-              title={`${decisionsCount} decision${decisionsCount === 1 ? "" : "s"} recorded — click to jump to the Decisions list on the Minutes tab.`}
-              aria-label={`${decisionsCount} decisions recorded — go to Minutes tab`}
-            >
-              <CheckCircle2 size={12} />
-              <span>{decisionsCount}</span>
-            </button>
-            <button
-              type="button"
-              className="meeting-reminder-chip meeting-reminder-chip--actions"
-              onClick={() => jumpToMinutesAnchor("meeting-minutes-action-items")}
-              title={`${actionItemsCount} action item${actionItemsCount === 1 ? "" : "s"} on file — click to jump to Action items on the Minutes tab.`}
-              aria-label={`${actionItemsCount} action items on file — go to Minutes tab`}
-            >
-              <ListChecks size={12} />
-              <span>{actionItemsCount}</span>
-            </button>
-          </>
-        }
       />
 
       <div className="meeting-detail-tabpanel">
@@ -1246,6 +1238,7 @@ export function MeetingDetailPage() {
           <MeetingMinutesColumn
             minutes={minutes}
             agenda={agenda}
+            agendaTree={agendaTree}
             agendaEdit={agendaEdit}
             setAgendaEdit={setAgendaEdit}
             saveAgenda={saveAgenda}
@@ -1287,10 +1280,22 @@ export function MeetingDetailPage() {
                   {businessMotions.filter((motion: any) => motion.outcome === "Tabled").length} tabled
                 </span>
               ) : null}
+              {minutes && (
+                <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                  <button
+                    className="btn-action btn-action--primary"
+                    type="button"
+                    onClick={() => motionEditorRef.current?.startAdding()}
+                  >
+                    <Plus size={12} /> Add motion
+                  </button>
+                </div>
+              )}
             </div>
             <div className="card__body">
               {minutes ? (
                 <MotionEditor
+                  ref={motionEditorRef}
                   motions={minutes.motions as Motion[]}
                   directorNames={directorNames}
                   people={motionPeople}
@@ -1301,6 +1306,7 @@ export function MeetingDetailPage() {
                   }))}
                   onChange={saveMotions}
                   onAddToBacklog={addMotionToBacklog}
+                  hideInlineAdd
                 />
               ) : (
                 <div className="muted">Create minutes before recording motions.</div>
@@ -1567,6 +1573,7 @@ export function MeetingMinutesPreviewPage() {
   if (society === null) return <SeedPrompt />;
   if (!minutes) return <div className="page">No minutes recorded for this meeting.</div>;
 
+  const agendaTree = parseAgendaItems(meeting.agendaJson);
   const agenda = parseAgenda(meeting.agendaJson);
   const quorumSnapshot = getQuorumSnapshot(minutes, meeting);
   const selectedMinutesExportStyle =
@@ -1582,7 +1589,8 @@ export function MeetingMinutesPreviewPage() {
       location: meeting.location ?? null,
       electronic: !!meeting.electronic,
       noticeSentAt: meeting.noticeSentAt ?? null,
-      agendaItems: agenda,
+      agendaItems: agendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
+      agendaItemTree: agendaTree,
     },
     minutes: {
       heldAt: minutes.heldAt,

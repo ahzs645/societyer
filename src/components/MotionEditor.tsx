@@ -1,5 +1,34 @@
-import { useMemo, useState } from "react";
-import { Check, X, Plus, Trash2, MinusCircle, PlusCircle } from "lucide-react";
+import { forwardRef, useImperativeHandle, useMemo, useState } from "react";
+import { Check, X, Plus, Trash2, MinusCircle, PlusCircle, Pencil } from "lucide-react";
+
+function DinnerTableIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 22 14.61"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      aria-hidden="true"
+    >
+      <path d="M21 1H1" />
+      <path
+        d="M3.01,1.92v11.78c0,1.22,1.9,1.22,1.9,0V1.92c0-1.22-1.9-1.22-1.9,0Z"
+        fill="currentColor"
+        stroke="none"
+      />
+      <path
+        d="M17.05,1.92c0,3.93,0,7.85,0,11.78s1.9,1.22,1.9,0c0-3.93,0-7.85,0-11.78s-1.9-1.22-1.9,0Z"
+        fill="currentColor"
+        stroke="none"
+      />
+    </svg>
+  );
+}
 import { Badge, Field } from "./ui";
 import { NameAutocomplete } from "./NameAutocomplete";
 
@@ -140,14 +169,11 @@ function VoteProgress({ motion }: { motion: Motion }) {
   );
 }
 
-export function MotionEditor({
-  motions,
-  onChange,
-  directorNames,
-  people = [],
-  agendaSections = [],
-  onAddToBacklog,
-}: {
+export type MotionEditorHandle = {
+  startAdding: () => void;
+};
+
+export const MotionEditor = forwardRef<MotionEditorHandle, {
   motions: Motion[];
   onChange: (next: Motion[]) => void;
   /** Director full names used to autofill movedBy/secondedBy. */
@@ -155,8 +181,19 @@ export function MotionEditor({
   people?: MotionPerson[];
   agendaSections?: Array<string | MotionAgendaSection>;
   onAddToBacklog?: (motion: Motion, index: number) => void | Promise<void>;
-}) {
+  /** Hide the inline "Add motion" button; parent provides its own trigger via ref. */
+  hideInlineAdd?: boolean;
+}>(function MotionEditor({
+  motions,
+  onChange,
+  directorNames,
+  people = [],
+  agendaSections = [],
+  onAddToBacklog,
+  hideInlineAdd = false,
+}, ref) {
   const [adding, setAdding] = useState(false);
+  useImperativeHandle(ref, () => ({ startAdding: () => setAdding(true) }), []);
   const [draft, setDraft] = useState<Motion>({ text: "", outcome: "Pending" });
   // While true, votesFor auto-tracks (movedBy ? 1 : 0) + (secondedBy ? 1 : 0).
   // The user breaks this binding the moment they edit votesFor manually.
@@ -238,35 +275,7 @@ export function MotionEditor({
         />
       ))}
 
-      <div className="motion-adjournment">
-        <div className="motion-adjournment__head">
-          <div>
-            <strong>Adjournment</strong>
-            <div className="muted">Procedural close of the meeting.</div>
-          </div>
-          {!adjournmentRows.length && (
-            <button className="btn-action" type="button" onClick={addAdjournmentRecord}>
-              <Plus size={12} /> Add adjournment record
-            </button>
-          )}
-        </div>
-        {adjournmentRows.map(({ motion: m, index: i }) => (
-          <MotionRow
-            key={`adjournment-${i}`}
-            motion={m}
-            nameOptions={nameOptions}
-            directorNames={directorNames}
-            people={people}
-            agendaSections={agendaSections}
-            procedural
-            onPatch={(diff) => patch(i, diff)}
-            onSetVote={(k, n) => setVote(i, k, n)}
-            onDelete={() => onChange(motions.filter((_, j) => j !== i))}
-          />
-        ))}
-      </div>
-
-      {adding ? (
+      {adding && (
         <div className="motion" style={{ borderColor: "var(--accent)" }}>
           <Field label="Motion">
             <textarea
@@ -365,7 +374,37 @@ export function MotionEditor({
             </button>
           </div>
         </div>
-      ) : (
+      )}
+
+      <div className="motion-adjournment">
+        <div className="motion-adjournment__head">
+          <div>
+            <strong>Adjournment</strong>
+            <div className="muted">Procedural close of the meeting.</div>
+          </div>
+          {!adjournmentRows.length && (
+            <button className="btn-action" type="button" onClick={addAdjournmentRecord}>
+              <Plus size={12} /> Add adjournment record
+            </button>
+          )}
+        </div>
+        {adjournmentRows.map(({ motion: m, index: i }) => (
+          <MotionRow
+            key={`adjournment-${i}`}
+            motion={m}
+            nameOptions={nameOptions}
+            directorNames={directorNames}
+            people={people}
+            agendaSections={agendaSections}
+            procedural
+            onPatch={(diff) => patch(i, diff)}
+            onSetVote={(k, n) => setVote(i, k, n)}
+            onDelete={() => onChange(motions.filter((_, j) => j !== i))}
+          />
+        ))}
+      </div>
+
+      {!adding && !hideInlineAdd && (
         <div style={{ marginTop: 8 }}>
           <button className="btn-action" onClick={() => setAdding(true)}>
             <Plus size={12} /> Add motion
@@ -374,7 +413,7 @@ export function MotionEditor({
       )}
     </div>
   );
-}
+});
 
 function MotionRow({
   motion,
@@ -469,31 +508,40 @@ function MotionRow({
                   onClick={() => onPatch({ outcome: "Carried" })}
                   title="Record as Carried"
                 >
-                  ✓ Carried
+                  <Check size={12} />
+                  <span className="btn-action__label">Carried</span>
                 </button>
                 <button
                   className="btn-action btn-action--danger"
                   onClick={() => onPatch({ outcome: "Defeated" })}
                   title="Record as Defeated"
                 >
-                  ✗ Defeated
+                  <X size={12} />
+                  <span className="btn-action__label">Defeated</span>
                 </button>
                 <button
                   className="btn-action btn-action--warn"
                   onClick={() => onPatch({ outcome: "Tabled" })}
-                  title="Table this motion"
+                  title="Record as Tabled"
                 >
-                  Table
+                  <DinnerTableIcon size={12} />
+                  <span className="btn-action__label">Tabled</span>
                 </button>
               </>
             )}
             {onAddToBacklog && /^(Tabled|Deferred)$/i.test(motion.outcome) && (
-              <button className="btn-action" onClick={onAddToBacklog}>
-                Add to backlog
+              <button className="btn-action" onClick={onAddToBacklog} title="Add to motion backlog">
+                <Plus size={12} />
+                <span className="btn-action__label">Add to backlog</span>
               </button>
             )}
-            <button className="btn-action" onClick={() => setExpanded((v) => !v)}>
-              {expanded ? "Done" : "Edit"}
+            <button
+              className="btn-action"
+              onClick={() => setExpanded((v) => !v)}
+              title={expanded ? "Done editing" : "Edit motion"}
+            >
+              <Pencil size={12} />
+              <span className="btn-action__label">{expanded ? "Done" : "Edit"}</span>
             </button>
             <button className="btn-action" onClick={onDelete} title="Remove motion">
               <Trash2 size={12} />

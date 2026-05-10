@@ -34,12 +34,9 @@ export function AttendanceDetails({
   }
 
   return (
-    <details className="attendance-details">
+    <details className="attendance-details" open>
       <summary>
         <span>Attendance list</span>
-        <span className="muted">
-          {present.length} present · {absent.length} Absent/Regrets
-        </span>
       </summary>
       <div className="attendance-table-wrap">
         <table className="attendance-table">
@@ -332,14 +329,46 @@ export function SourceDocumentRow({
   );
 }
 
-export function parseAgenda(value: unknown) {
+export type AgendaItemEntry = { title: string; depth: 0 | 1 };
+
+// Structured agenda parser. Stored as JSON: either a string[] (legacy) or
+// Array<{title, depth}> (current). Children (depth=1) must follow a root
+// (depth=0); orphan children get coerced to depth 0 so nothing dangles.
+export function parseAgendaItems(value: unknown): AgendaItemEntry[] {
   if (typeof value !== "string" || !value.trim()) return [];
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+    parsed = JSON.parse(value);
   } catch {
-    return parseLines(value);
+    return parseLines(value).map((title) => ({ title, depth: 0 as const }));
   }
+  if (!Array.isArray(parsed)) return [];
+  const items: AgendaItemEntry[] = [];
+  let hasRoot = false;
+  for (const entry of parsed) {
+    if (typeof entry === "string") {
+      const title = entry.trim();
+      if (!title) continue;
+      items.push({ title, depth: 0 });
+      hasRoot = true;
+      continue;
+    }
+    if (entry && typeof entry === "object") {
+      const title = typeof (entry as any).title === "string" ? (entry as any).title.trim() : "";
+      if (!title) continue;
+      const wantsChild = (entry as any).depth === 1;
+      const depth: 0 | 1 = wantsChild && hasRoot ? 1 : 0;
+      items.push({ title, depth });
+      if (depth === 0) hasRoot = true;
+    }
+  }
+  return items;
+}
+
+export function parseAgenda(value: unknown) {
+  // Returns a flat list of all titles (roots + children) for backward compat.
+  // New code that needs depth should call parseAgendaItems instead.
+  return parseAgendaItems(value).map((item) => item.title);
 }
 
 export function parseLines(value: string) {

@@ -381,18 +381,6 @@ export function TasksPage() {
             const overdue = t.dueDate && new Date(t.dueDate).getTime() < Date.now() && t.status !== "Done";
             return (
               <>
-                <button
-                  type="button"
-                  className="kanban__card-trash"
-                  title="Delete task"
-                  aria-label={`Delete ${t.title}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void confirmDelete(t._id, t.title);
-                  }}
-                >
-                  <Trash2 size={12} />
-                </button>
                 <div className="kanban__card-title">{t.title}</div>
                 {t.description && <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 4 }}>{t.description}</div>}
                 <div className="kanban__card-meta">
