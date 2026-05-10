@@ -513,6 +513,112 @@ export const listLogicFunctions = query({
       .collect(),
 });
 
+export const listToolDrafts = query({
+  args: {
+    societyId: v.id("societies"),
+    status: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("aiToolDrafts")
+      .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))
+      .order("desc")
+      .take(args.limit ?? 30);
+    return args.status ? rows.filter((row: any) => row.status === args.status) : rows;
+  },
+});
+
+export const approveToolDraft = mutation({
+  args: {
+    societyId: v.id("societies"),
+    actingUserId: v.optional(v.id("users")),
+    id: v.id("aiToolDrafts"),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const { user } = await requireRole(ctx, {
+      actingUserId: args.actingUserId,
+      societyId: args.societyId,
+      required: "Director",
+    });
+    const draft = await ctx.db.get(args.id);
+    if (!draft || draft.societyId !== args.societyId) throw new Error("Draft not found.");
+    if (draft.status !== "draft" && draft.status !== "approved") throw new Error(`Draft is ${draft.status}.`);
+    const now = new Date().toISOString();
+    let result: any = { status: "approved" };
+    if (draft.toolName === "draft_task") {
+      const payload = draft.payload ?? {};
+      const taskId = await ctx.db.insert("tasks", {
+        societyId: args.societyId,
+        title: String(payload.title ?? draft.title ?? "AI drafted task"),
+        description: payload.description ? String(payload.description) : undefined,
+        status: "Todo",
+        priority: String(payload.priority ?? "Medium"),
+        dueDate: payload.dueDate ? String(payload.dueDate) : undefined,
+        tags: Array.isArray(payload.tags) ? payload.tags.map(String) : ["ai-draft"],
+        createdAtISO: now,
+      });
+      await ctx.db.insert("activity", {
+        societyId: args.societyId,
+        actor: user?.displayName ?? "AI approver",
+        entityType: "task",
+        entityId: taskId,
+        action: "created",
+        summary: `Approved AI task draft "${payload.title ?? draft.title ?? "Untitled"}"`,
+        createdAtISO: now,
+      });
+      result = { status: "executed", taskId };
+    }
+    await ctx.db.patch(args.id, {
+      status: result.status,
+      updatedAtISO: now,
+      payload: { ...(draft.payload ?? {}), approval: { approvedByUserId: args.actingUserId, approvedAtISO: now, result } },
+    });
+    await insertAgentAudit(ctx, {
+      societyId: args.societyId,
+      runId: draft.runId,
+      agentKey: draft.agentKey ?? "draft",
+      eventType: "tool_draft_approved",
+      toolName: draft.toolName,
+      summary: `Approved AI tool draft ${String(args.id)}.`,
+      metadata: result,
+      actorUserId: args.actingUserId,
+    });
+    return result;
+  },
+});
+
+export const rejectToolDraft = mutation({
+  args: {
+    societyId: v.id("societies"),
+    actingUserId: v.optional(v.id("users")),
+    id: v.id("aiToolDrafts"),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    await requireRole(ctx, {
+      actingUserId: args.actingUserId,
+      societyId: args.societyId,
+      required: "Director",
+    });
+    const draft = await ctx.db.get(args.id);
+    if (!draft || draft.societyId !== args.societyId) throw new Error("Draft not found.");
+    await ctx.db.patch(args.id, { status: "rejected", updatedAtISO: new Date().toISOString() });
+    await insertAgentAudit(ctx, {
+      societyId: args.societyId,
+      runId: draft.runId,
+      agentKey: draft.agentKey ?? "draft",
+      eventType: "tool_draft_rejected",
+      toolName: draft.toolName,
+      summary: `Rejected AI tool draft ${String(args.id)}.`,
+      actorUserId: args.actingUserId,
+    });
+    return args.id;
+  },
+});
+
 export const upsertLogicFunction = mutation({
   args: {
     societyId: v.id("societies"),
@@ -1007,6 +1113,18 @@ async function executeToolWithEffects(
     const table = tool.executionRef.table;
     if (!table) return { success: false, error: "Tool has no table binding." };
     const limit = clampLimit(args?.limit);
+    const metadataPolicy = await metadataPolicyForTable(ctx, societyId, table, role);
+    if (!metadataPolicy.objectReadable) {
+      return {
+        success: false,
+        error: `Object "${table}" is not readable for role ${role}.`,
+        permission: {
+          objectReadable: false,
+          fieldPolicy: "metadata_permission_config",
+          publicSafeOutput: true,
+        },
+      };
+    }
     const rows =
       table === "societies"
         ? [await ctx.db.get(societyId)].filter(Boolean)
@@ -1019,11 +1137,12 @@ async function executeToolWithEffects(
     return {
       success: true,
       toolName: tool.name,
-      rows: filteredRows.map((row) => sanitizeRecord(table, row, role)),
+      rows: filteredRows.map((row) => sanitizeRecord(table, row, role, metadataPolicy.allowedFields)),
       recordReferences: filteredRows.map((row) => recordReferenceFor(table, row)).filter(Boolean),
       permission: {
         objectReadable: true,
-        fieldPolicy: "export_safe_allowlist",
+        fieldPolicy: metadataPolicy.usedMetadata ? "metadata_permission_config" : "export_safe_allowlist",
+        readableFields: metadataPolicy.allowedFields,
         publicSafeOutput: true,
       },
     };
@@ -1187,9 +1306,41 @@ async function executeLogicFunction(ctx: any, societyId: Id<"societies">, tool: 
   };
 }
 
-function sanitizeRecord(table: string, row: any, role: string) {
+async function metadataPolicyForTable(ctx: any, societyId: Id<"societies">, table: string, role: string) {
+  const object = await ctx.db
+    .query("objectMetadata")
+    .withIndex("by_society_name_plural", (q: any) => q.eq("societyId", societyId).eq("namePlural", table))
+    .first()
+    .catch(() => null);
+  if (!object) {
+    return {
+      usedMetadata: false,
+      objectReadable: true,
+      allowedFields: SAFE_FIELD_ALLOWLIST[table],
+    };
+  }
+  if (!canReadPermissionConfig(readPermissionConfig(object), role)) {
+    return { usedMetadata: true, objectReadable: false, allowedFields: [] as string[] };
+  }
+  const fields = await ctx.db
+    .query("fieldMetadata")
+    .withIndex("by_object", (q: any) => q.eq("objectMetadataId", object._id))
+    .collect()
+    .catch(() => []);
+  const metadataFields = fields
+    .filter((field: any) => !field.isHidden && canReadPermissionConfig(readPermissionConfig(field), role))
+    .map((field: any) => field.name);
+  const safeFields = SAFE_FIELD_ALLOWLIST[table] ?? metadataFields;
+  return {
+    usedMetadata: true,
+    objectReadable: true,
+    allowedFields: metadataFields.length ? metadataFields.filter((field: string) => safeFields.includes(field)) : safeFields,
+  };
+}
+
+function sanitizeRecord(table: string, row: any, role: string, allowedFields?: string[]) {
   if (!row || typeof row !== "object") return row;
-  const allowlist = SAFE_FIELD_ALLOWLIST[table] ?? [];
+  const allowlist = allowedFields ?? SAFE_FIELD_ALLOWLIST[table] ?? [];
   const out: Record<string, any> = {
     _id: row._id,
     _table: table,
@@ -1204,6 +1355,32 @@ function sanitizeRecord(table: string, row: any, role: string) {
     }
   }
   return out;
+}
+
+function readPermissionConfig(source: any) {
+  const configFromJson = parseConfigJson(source?.configJson);
+  const raw = source?.permissionConfig ?? configFromJson?.permissions ?? configFromJson?.permissionConfig;
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+}
+
+function parseConfigJson(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return {};
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+
+function canReadPermissionConfig(config: any, role: string) {
+  if (Array.isArray(config.hiddenFromRoles) && roleMatches(config.hiddenFromRoles, role)) return false;
+  if (Array.isArray(config.readableRoles) && config.readableRoles.length && !roleMatches(config.readableRoles, role)) return false;
+  return true;
+}
+
+function roleMatches(roles: string[], role: string) {
+  const normalized = role.trim().toLowerCase();
+  return roles.some((entry) => entry === "*" || String(entry).trim().toLowerCase() === normalized);
 }
 
 function isFieldReadable(role: string, _table: string, field: string) {

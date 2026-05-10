@@ -1792,6 +1792,8 @@ const aiAgentRuns: any[] = [];
 const aiAgentAuditEvents: any[] = [];
 const aiChatThreads: any[] = [];
 const aiMessages: any[] = [];
+const aiToolDrafts: any[] = [];
+const aiProviderSettings: any[] = [];
 
 const motionBacklog = [
   {
@@ -1854,6 +1856,8 @@ const tables: Record<string, any[]> = {
   aiAgentAuditEvents,
   aiChatThreads,
   aiMessages,
+  aiToolDrafts,
+  aiProviderSettings,
   motionBacklog,
   pendingEmails: [
     {
@@ -2672,6 +2676,101 @@ function dashboardSummary() {
   };
 }
 
+function annualCycleSummary(args: StaticArgs) {
+  const cycleYear = Number(args?.year ?? new Date().getFullYear());
+  const today = "2026-05-10";
+  const activeMembers = members.filter((member) => member.status === "Active");
+  const votingMembers = activeMembers.filter((member) => member.votingRights);
+  const activeDirectors = directors.filter((director: any) => director.status === "Active" && !director.resignedAt);
+  const agm = meetings.find((meeting) => meeting.type === "AGM" && inStaticYear(meeting.scheduledAt, cycleYear)) ?? null;
+  const agmMinutes = agm ? minutes.find((row) => row.meetingId === agm._id) ?? null : null;
+  const annualReport = filings.find((filing) => filing.kind === "AnnualReport" && filingMatchesStaticYear(filing, cycleYear)) ?? null;
+  const financial = financials.find((row) => inStaticYear(row.periodEnd, cycleYear) || String(row.fiscalYear).includes(String(cycleYear))) ?? null;
+  const annualReportDueDate = agm ? addStaticDays(dateOnlyStatic(agm.scheduledAt), bylawRules.annualReportDueDaysAfterMeeting) : annualReport?.dueDate;
+  const noticeWindowClose = agm ? addStaticDays(dateOnlyStatic(agm.scheduledAt), -bylawRules.generalNoticeMinDays) : undefined;
+  const officialRecordEvidenceCount = [
+    society.constitutionDocId,
+    society.bylawsDocId,
+    (financial as any)?.statementsDocId,
+    annualReport?.receiptDocumentId,
+    ...(((agmMinutes as any)?.sourceDocumentIds ?? []) as string[]),
+  ].filter(Boolean).length;
+
+  const items = [
+    cycleItem("agm-scheduled", "before", "Schedule the AGM", agm ? `${agm.title} is on ${dateOnlyStatic(agm.scheduledAt)}.` : "No AGM is scheduled for this cycle year.", agm ? "complete" : "attention", ["AGM meeting record", "Active bylaw rule set"], agm?.scheduledAt, agm ? `/meetings/${agm._id}` : "/meetings", agm ? "Open AGM" : "Schedule AGM"),
+    cycleItem("member-register", "before", "Confirm voting member register", `${votingMembers.length} active voting members found for notice and quorum planning.`, votingMembers.length > 0 || society.memberDataGapDocumented ? "complete" : "attention", ["Active member register", "Voting rights and contact details"], undefined, "/members", "Review members"),
+    cycleItem("financial-statements", "before", "Prepare financial statements", financial ? `${financial.fiscalYear} statements end ${financial.periodEnd}; board approval ${financial.approvedByBoardAt ? "recorded" : "not recorded"}.` : "No financial statement record is linked to this cycle yet.", financial?.approvedByBoardAt ? "complete" : financial ? "attention" : "blocked", ["Financial statement document", "Board approval"], agm?.scheduledAt, financial ? `/financials/fy/${encodeURIComponent(financial.fiscalYear)}` : "/financials", financial ? "Open financials" : "Add financials"),
+    cycleItem("notice-package", "before", "Send member notice package", agm ? `Notice window closes ${noticeWindowClose}.` : "Schedule the AGM before sending notice.", agm ? "attention" : "blocked", ["Notice delivery log", "Agenda", "Motions"], noticeWindowClose, agm ? `/meetings/${agm._id}/agm` : "/meetings", "Handle notice"),
+    cycleItem("attendance-quorum", "during", "Record attendance and quorum", agmMinutes ? `${agmMinutes.attendees?.length ?? 0} attendees; quorum ${agmMinutes.quorumMet ? "met" : "not met"}.` : "Minutes have not captured attendance and quorum yet.", agmMinutes?.quorumMet ? "complete" : agm ? "attention" : "upcoming", ["Attendance list", "Quorum snapshot"], agm?.scheduledAt, agm ? `/meetings/${agm._id}` : "/meetings", "Open meeting"),
+    cycleItem("votes-minutes", "during", "Capture votes and minutes", agmMinutes ? `${agmMinutes.motions?.length ?? 0} motions and ${agmMinutes.decisions?.length ?? 0} decisions recorded.` : "No AGM minutes are linked yet.", agmMinutes?.motions?.length || agmMinutes?.decisions?.length ? "complete" : "attention", ["Draft minutes", "Motion outcomes"], undefined, "/minutes", "Open minutes"),
+    cycleItem("financials-presented", "during", "Present financial statements", agmMinutes?.agmDetails?.financialStatementsPresented ? "Financial presentation evidence is linked to the AGM." : "Financial presentation has not been confirmed.", agmMinutes?.agmDetails?.financialStatementsPresented ? "complete" : "attention", ["AGM minutes reference", "Financial statements"], agm?.scheduledAt, financial ? `/financials/fy/${encodeURIComponent(financial.fiscalYear)}` : "/financials", "Review presentation"),
+    cycleItem("minutes-approval", "after", "Approve and store minutes", agmMinutes?.approvedAt ? `Approved ${agmMinutes.approvedAt}.` : "Minutes are not approved yet.", agmMinutes?.approvedAt ? "complete" : agmMinutes ? "attention" : "upcoming", ["Approved minutes", "Approval evidence"], undefined, "/minutes", "Review minutes"),
+    cycleItem("annual-report", "after", "File annual report", annualReport?.status === "Filed" ? `Filed ${annualReport.filedAt ?? "with evidence"}.` : annualReportDueDate ? `Expected due date ${annualReportDueDate}.` : "Schedule the AGM to compute the annual report filing deadline.", annualReport?.status === "Filed" ? "complete" : annualReportDueDate && today > annualReportDueDate ? "blocked" : "attention", ["Annual report filing", "Confirmation number"], annualReport?.dueDate ?? annualReportDueDate, "/filings", annualReport?.status === "Filed" ? "Open filing" : "Prepare filing"),
+    cycleItem("minute-book", "after", "Update minute book evidence", `${officialRecordEvidenceCount} core evidence links found for AGM, financials, filings, and governing documents.`, officialRecordEvidenceCount >= 3 ? "complete" : "attention", ["Notice", "Minutes", "Financial statements", "Annual report evidence"], undefined, "/minute-book", "Open minute book"),
+    cycleItem("pipa-review", "ongoing", "Review PIPA privacy program", `${society.privacyProgramStatus} privacy program.`, society.privacyPolicyDocId && society.privacyProgramStatus === "Documented" ? "complete" : "attention", ["Privacy policy evidence", "Privacy officer"], undefined, "/privacy", "Open privacy"),
+    cycleItem("conflicts", "ongoing", "Refresh conflict disclosures", `${conflicts.filter((conflict) => !conflict.resolvedAt).length} open conflict disclosure.`, conflicts.some((conflict) => !conflict.resolvedAt) ? "attention" : "complete", ["Conflict register", "Resolution notes"], undefined, "/conflicts", "Open conflicts"),
+    cycleItem("open-deadlines", "ongoing", "Clear deadlines and recurring obligations", `${deadlines.filter((deadline) => !deadline.done && deadline.dueDate < today).length} overdue deadlines.`, deadlines.some((deadline) => !deadline.done && deadline.dueDate < today) ? "blocked" : "complete", ["Deadline register", "Completion notes"], undefined, "/deadlines", "Open deadlines"),
+  ];
+  const completed = items.filter((item) => item.status === "complete").length;
+  const blocked = items.filter((item) => item.status === "blocked").length;
+  const attention = items.filter((item) => item.status === "attention").length;
+  const nextItem = items.find((item) => item.status === "blocked") ?? items.find((item) => item.status === "attention") ?? items[0];
+
+  return {
+    cycleYear,
+    currentStage: annualReport?.status === "Filed" ? "Annual report filed" : agmMinutes ? "Post-AGM work" : agm ? "Planning and notice" : "Not scheduled",
+    society,
+    agm,
+    annualReport,
+    annualReportDueDate,
+    counts: {
+      completed,
+      total: items.length,
+      blocked,
+      attention,
+      activeMembers: activeMembers.length,
+      votingMembers: votingMembers.length,
+      activeDirectors: activeDirectors.length,
+      openConflicts: conflicts.filter((conflict) => !conflict.resolvedAt).length,
+    },
+    nextItem,
+    phases: {
+      before: items.filter((item) => item.phase === "before"),
+      during: items.filter((item) => item.phase === "during"),
+      after: items.filter((item) => item.phase === "after"),
+      ongoing: items.filter((item) => item.phase === "ongoing"),
+    },
+    caveats: [
+      "Compliance status means evidence readiness in Societyer, not a legal opinion.",
+      "Notice, quorum, proxy, electronic voting, and director term rules depend on the active bylaw rule set.",
+      "BC annual reports, CRA charity returns, payroll, GST/HST, funder reports, and federal annual returns are separate obligations.",
+    ],
+  };
+}
+
+function cycleItem(id: string, phase: string, title: string, detail: string, status: string, evidence: string[], dueDate: string | undefined, to: string, actionLabel: string) {
+  return { id, phase, title, detail, status, evidence, dueDate, to, actionLabel };
+}
+
+function dateOnlyStatic(value?: string | null) {
+  return String(value ?? "").slice(0, 10);
+}
+
+function inStaticYear(value: unknown, year: number) {
+  return typeof value === "string" && value.slice(0, 4) === String(year);
+}
+
+function filingMatchesStaticYear(filing: any, year: number) {
+  return String(filing.periodLabel ?? filing.title ?? "").includes(String(year)) || inStaticYear(filing.dueDate, year) || inStaticYear(filing.filedAt, year);
+}
+
+function addStaticDays(date: string, days: number) {
+  if (!date) return "";
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+  return parsed.toISOString().slice(0, 10);
+}
+
 function financialSummary() {
   return {
     totalBalance: financialAccounts.reduce((sum, account) => sum + account.balanceCents, 0),
@@ -3410,10 +3509,23 @@ function queryResult(name: string, args: StaticArgs) {
     }
     case "aiAgents:executeTool":
       return { success: true, toolName: args?.toolName, rows: [] };
+    case "annualCycle:summary":
+      return annualCycleSummary(args);
     case "aiAgents:listRuns":
       return aiAgentRuns.slice(0, args?.limit ?? aiAgentRuns.length);
     case "aiAgents:auditForRun":
       return aiAgentAuditEvents.filter((event) => event.runId === args?.runId);
+    case "aiAgents:listToolDrafts":
+      return aiToolDrafts.slice(0, args?.limit ?? aiToolDrafts.length);
+    case "aiSettings:getEffective": {
+      const personal = aiProviderSettings.filter((row) => row.societyId === args?.societyId && row.userId === args?.actingUserId);
+      const workspace = aiProviderSettings.filter((row) => row.societyId === args?.societyId && row.scope === "workspace");
+      return {
+        effective: personal.find((row) => row.status === "active") ?? workspace.find((row) => row.status === "active") ?? null,
+        personal,
+        workspace,
+      };
+    }
     case "aiChat:listThreads":
       return aiChatThreads.slice(0, args?.limit ?? aiChatThreads.length);
     case "aiChat:messagesForThread":
@@ -3857,7 +3969,7 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       "Static AI chat reply.",
       "",
       "This route is wired to the same skill catalog and tool catalog as live Convex.",
-      "Set OPENAI_API_KEY in a real deployment to stream through the Vercel AI SDK.",
+      "Set OPENAI_API_KEY or OPENROUTER_API_KEY in a real deployment to stream through the Vercel AI SDK.",
     ].join("\n");
     const message = {
       _id: `static_ai_message_assistant_${Date.now()}`,
@@ -3871,6 +3983,56 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     };
     aiMessages.push(message);
     return { threadId, messageId: message._id, content, provider: "static_fallback" };
+  }
+  if (name === "aiSettingsActions:validateProviderKey") {
+    const provider = args?.provider ?? "openai";
+    const modelCatalog = staticModelCatalog(provider);
+    return {
+      ok: Boolean(args?.apiKey),
+      provider,
+      baseUrl: args?.baseUrl ?? (provider === "openrouter" ? "https://openrouter.ai/api/v1" : "https://api.openai.com/v1"),
+      message: args?.apiKey ? "Static provider key validated." : "API key is required.",
+      modelIds: modelCatalog.models.map((model: any) => model.id),
+      modelCatalog,
+    };
+  }
+  if (name === "aiSettingsActions:listProviderModels") {
+    return staticModelCatalog(args?.provider ?? "openai");
+  }
+  if (name === "aiSettings:upsert") {
+    const now = new Date().toISOString();
+    const id = args?.id ?? `static_ai_provider_${Date.now()}`;
+    const existing = aiProviderSettings.find((row) => row._id === id);
+    const row = {
+      _id: id,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      scope: args?.scope ?? "personal",
+      userId: args?.scope === "workspace" ? undefined : args?.actingUserId,
+      provider: args?.provider ?? "openai",
+      label: args?.label ?? "OpenAI",
+      status: args?.validationStatus === "ok" ? "active" : "needs_validation",
+      modelId: args?.modelId ?? "gpt-4.1-mini",
+      baseUrl: args?.baseUrl,
+      secretVaultItemId: args?.secretVaultItemId,
+      temperature: args?.temperature,
+      maxSteps: args?.maxSteps,
+      validationStatus: args?.validationStatus,
+      validationMessage: args?.validationMessage,
+      validatedAtISO: args?.validationStatus === "ok" ? now : undefined,
+      createdAtISO: now,
+      updatedAtISO: now,
+    };
+    if (existing) Object.assign(existing, row);
+    else aiProviderSettings.unshift(row);
+    return id;
+  }
+  if (name === "aiSettings:setStatus") {
+    const existing = aiProviderSettings.find((row) => row._id === args?.id);
+    if (existing) existing.status = args?.status;
+    return args?.id;
+  }
+  if (name === "secrets:create") {
+    return `static_secret_${Date.now()}`;
   }
   if (name === "aiAgents:upsertSkill") {
     const now = new Date().toISOString();
@@ -3902,7 +4064,35 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     return args?.id;
   }
   if (name === "aiAgents:executeTool") {
+    if (args?.toolName === "draft_task") {
+      const now = new Date().toISOString();
+      const draft = {
+        _id: `static_ai_tool_draft_${Date.now()}`,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        threadId: args?.threadId,
+        runId: args?.runId,
+        agentKey: args?.agentKey,
+        toolName: "draft_task",
+        title: args?.arguments?.title ?? "AI drafted task",
+        payload: { status: "draft", priority: "Medium", tags: [], ...(args?.arguments ?? {}) },
+        status: "draft",
+        createdAtISO: now,
+        updatedAtISO: now,
+      };
+      aiToolDrafts.unshift(draft);
+      return { success: true, draftId: draft._id, draft: draft.payload };
+    }
     return { success: true, toolName: args?.toolName, rows: [], recordReferences: [] };
+  }
+  if (name === "aiAgents:approveToolDraft") {
+    const draft = aiToolDrafts.find((item) => item._id === args?.id);
+    if (draft) draft.status = "executed";
+    return { status: "executed", taskId: `static_task_${Date.now()}` };
+  }
+  if (name === "aiAgents:rejectToolDraft") {
+    const draft = aiToolDrafts.find((item) => item._id === args?.id);
+    if (draft) draft.status = "rejected";
+    return args?.id;
   }
   if (name === "aiAgents:runAgent") {
     const agent = aiAgentDefinitions.find((item) => item.key === args?.agentKey) ?? aiAgentDefinitions[0];
@@ -4406,6 +4596,68 @@ async function putMissingStaticRows(table: Table<any, string>, seedRows: any[]) 
     if (!(await table.get(row._id))) missing.push(cloneStaticRow(row));
   }
   if (missing.length) await table.bulkPut(missing);
+}
+
+function staticModelCatalog(provider: string) {
+  const models = provider === "openrouter"
+    ? [
+        staticModel("openai/gpt-4.1-mini", "GPT-4.1 Mini", "openai", 1_000_000, true, false, false, "0.0000004", "0.0000016"),
+        staticModel("openai/gpt-4.1", "GPT-4.1", "openai", 1_000_000, true, false, false, "0.000002", "0.000008"),
+        staticModel("anthropic/claude-sonnet-4", "Claude Sonnet 4", "anthropic", 200_000, true, true, false, "0.000003", "0.000015"),
+        staticModel("google/gemini-2.5-pro", "Gemini 2.5 Pro", "google", 1_000_000, true, true, false, "0.00000125", "0.00001"),
+        staticModel("meta-llama/llama-3.1-70b-instruct:free", "Llama 3.1 70B Instruct Free", "meta-llama", 131_000, false, false, true, "0", "0"),
+      ]
+    : [
+        staticModel("gpt-4.1-mini", "GPT-4.1 Mini", "openai", 1_000_000, true, false, false, "0.0000004", "0.0000016"),
+        staticModel("gpt-4.1", "GPT-4.1", "openai", 1_000_000, true, false, false, "0.000002", "0.000008"),
+        staticModel("gpt-4o-mini", "GPT-4o Mini", "openai", 128_000, true, true, false, "0.00000015", "0.0000006"),
+      ];
+  return {
+    provider,
+    cached: true,
+    stale: false,
+    fetchedAtISO: new Date().toISOString(),
+    recommendedIds: models.map((model) => model.id),
+    models,
+    categories: {
+      recommended: models.slice(0, 4),
+      fastCheap: models.filter((model) => model.isFree || Number(model.promptPrice) < 0.000001),
+      reasoning: models.filter((model) => /gpt-4\.1|claude|gemini/i.test(model.id)),
+      coding: models.filter((model) => /gpt|claude|llama/i.test(model.id)),
+      vision: models.filter((model) => model.supportsVision),
+      free: models.filter((model) => model.isFree),
+      tools: models.filter((model) => model.supportsTools),
+      all: models,
+    },
+  };
+}
+
+function staticModel(
+  id: string,
+  name: string,
+  provider: string,
+  contextLength: number,
+  supportsTools: boolean,
+  supportsVision: boolean,
+  isFree: boolean,
+  promptPrice: string,
+  completionPrice: string,
+) {
+  return {
+    id,
+    name,
+    provider,
+    contextLength,
+    promptPrice,
+    completionPrice,
+    inputModalities: supportsVision ? ["text", "image"] : ["text"],
+    outputModalities: ["text"],
+    supportedParameters: supportsTools ? ["tools", "temperature", "max_tokens", "response_format"] : ["temperature", "max_tokens"],
+    supportsTools,
+    supportsVision,
+    supportsStructuredOutputs: supportsTools,
+    isFree,
+  };
 }
 
 export class StaticConvexClient {

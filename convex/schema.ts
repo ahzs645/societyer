@@ -1283,6 +1283,42 @@ export default defineSchema({
     .index("by_thread", ["threadId"])
     .index("by_run", ["runId"]),
 
+  aiProviderSettings: defineTable({
+    societyId: v.id("societies"),
+    scope: v.string(), // personal | workspace
+    userId: v.optional(v.id("users")),
+    provider: v.string(), // openai | openrouter | openai-compatible
+    label: v.string(),
+    status: v.string(), // active | inactive | needs_validation
+    modelId: v.string(),
+    baseUrl: v.optional(v.string()),
+    secretVaultItemId: v.optional(v.id("secretVaultItems")),
+    temperature: v.optional(v.number()),
+    maxSteps: v.optional(v.number()),
+    validatedAtISO: v.optional(v.string()),
+    validationStatus: v.optional(v.string()),
+    validationMessage: v.optional(v.string()),
+    createdByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_scope", ["societyId", "scope"])
+    .index("by_society_user", ["societyId", "userId"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  aiModelCatalogCache: defineTable({
+    provider: v.string(),
+    cacheKey: v.string(),
+    models: v.any(),
+    fetchedAtISO: v.string(),
+    expiresAtISO: v.string(),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_provider_cache", ["provider", "cacheKey"])
+    .index("by_provider", ["provider"]),
+
   recordLayouts: defineTable({
     societyId: v.id("societies"),
     scopeKey: v.string(),
@@ -1850,6 +1886,7 @@ export default defineSchema({
         depth: v.optional(v.union(v.literal(0), v.literal(1))),
         sectionType: v.optional(v.string()),
         presenter: v.optional(v.string()),
+        details: v.optional(v.string()),
         motionTemplateId: v.optional(v.id("motionTemplates")),
         motionText: v.optional(v.string()),
       }),
@@ -3537,6 +3574,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     icon: v.optional(v.string()),  // lucide icon name
     iconColor: v.optional(v.string()),
+    permissionConfig: v.optional(v.any()),
     // Field id used as the record's "identifier" — shown as the headline cell,
     // becomes the click target. References fieldMetadata.name, resolved lazily.
     labelIdentifierFieldName: v.optional(v.string()),
@@ -3573,6 +3611,7 @@ export default defineSchema({
     //   RELATION:    { targetObjectMetadataId, kind: "many-to-one" | "one-to-many" }
     //   RATING:      { max?: number }
     configJson: v.optional(v.string()),
+    permissionConfig: v.optional(v.any()),
     // Default value for new records (serialized).
     defaultValueJson: v.optional(v.string()),
     // When true, the field can't be removed and its type can't be changed.

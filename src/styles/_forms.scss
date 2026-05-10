@@ -440,6 +440,23 @@
 .row--nowrap { flex-wrap: nowrap; }
 .row > * { min-width: 0; }
 .row > .field { flex: 1 1 220px; align-items: stretch; align-self: stretch; }
+.row:has(.input):has(> .btn-action) > .btn-action,
+.row:has(.select):has(> .btn-action) > .btn-action,
+.row:has(.textarea):has(> .btn-action) > .btn-action,
+.row:has(.input):has(> .btn) > .btn:not(.btn--icon),
+.row:has(.select):has(> .btn) > .btn:not(.btn--icon),
+.row:has(.textarea):has(> .btn) > .btn:not(.btn--icon) {
+  height: 32px;
+}
+.row:has(.input):has(> .btn-action) > .btn-action--icon,
+.row:has(.select):has(> .btn-action) > .btn-action--icon,
+.row:has(.textarea):has(> .btn-action) > .btn-action--icon,
+.row:has(.input):has(> .btn) > .btn--icon,
+.row:has(.select):has(> .btn) > .btn--icon,
+.row:has(.textarea):has(> .btn) > .btn--icon {
+  height: 32px;
+  width: 32px;
+}
 .col { display: flex; flex-direction: column; gap: var(--s-2); }
 .muted { color: var(--text-tertiary); }
 .mono { font-family: var(--font-mono); font-size: var(--fs-sm); }

@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation } from "convex/react";
-import { ExternalLink, FileText, Globe2, Plus } from "lucide-react";
+import { ExternalLink, FileText, Globe2, LayoutGrid, Plus, Table2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
+import { Column, DataTable } from "../../../components/DataTable";
+import { FilterField } from "../../../components/FilterBar";
 import { Badge, Drawer, Field } from "../../../components/ui";
 import { useToast } from "../../../components/Toast";
 
@@ -18,6 +20,7 @@ export function GrantSourceLibrarySection({
   sourceLibrary,
 }: GrantSourceLibrarySectionProps) {
   const toast = useToast();
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [sourceDraft, setSourceDraft] = useState<any | null>(null);
   const addGrantSourceFromLibrary = useMutation(api.grantSources.addFromLibrary);
   const upsertGrantSource = useMutation(api.grantSources.upsert);
@@ -39,6 +42,127 @@ export function GrantSourceLibrarySection({
     [sourceLibrary],
   );
 
+  const sourceTypeOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => row.sourceType)), [sourceRows]);
+  const statusOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => row.installed ? "installed" : row.status)), [sourceRows]);
+  const trustOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => row.trustLevel)), [sourceRows]);
+  const cadenceOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => row.scrapeCadence)), [sourceRows]);
+  const funderOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => row.funderType)), [sourceRows]);
+
+  const sourceFilterFields = useMemo<FilterField<any>[]>(() => [
+    {
+      id: "status",
+      label: "Status",
+      options: statusOptions,
+      match: (row, query) => normalizeSourceStatus(row).toLowerCase() === query.toLowerCase(),
+    },
+    {
+      id: "sourceType",
+      label: "Source type",
+      options: sourceTypeOptions,
+      match: (row, query) => String(row.sourceType ?? "").toLowerCase() === query.toLowerCase(),
+    },
+    {
+      id: "trustLevel",
+      label: "Trust level",
+      options: trustOptions,
+      match: (row, query) => String(row.trustLevel ?? "").toLowerCase() === query.toLowerCase(),
+    },
+    {
+      id: "cadence",
+      label: "Cadence",
+      options: cadenceOptions,
+      match: (row, query) => String(row.scrapeCadence ?? "").toLowerCase() === query.toLowerCase(),
+    },
+    {
+      id: "funderType",
+      label: "Funder type",
+      options: funderOptions,
+      match: (row, query) => String(row.funderType ?? "").toLowerCase() === query.toLowerCase(),
+    },
+    {
+      id: "jurisdiction",
+      label: "Jurisdiction",
+      match: (row, query) => String(row.jurisdiction ?? "").toLowerCase().includes(query.toLowerCase()),
+    },
+    {
+      id: "tags",
+      label: "Tags",
+      match: (row, query) => getSourceTags(row).some((tag) => tag.toLowerCase().includes(query.toLowerCase())),
+    },
+  ], [cadenceOptions, funderOptions, sourceTypeOptions, statusOptions, trustOptions]);
+
+  const sourceColumns = useMemo<Column<any>[]>(() => [
+    {
+      id: "name",
+      header: "Source",
+      accessor: (row) => row.name,
+      sortable: true,
+      width: 260,
+      render: (row) => (
+        <div className="grant-source-table-source">
+          <strong>{row.name}</strong>
+          <span>{row.rowKind === "library" ? "Societyer library" : "Workspace source"}</span>
+        </div>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      accessor: (row) => normalizeSourceStatus(row),
+      sortable: true,
+      render: (row) => (
+        <Badge tone={row.installed ? "success" : row.status === "active" ? "info" : "warn"}>
+          {row.installed ? "Installed" : formatSourceLabel(row.status)}
+        </Badge>
+      ),
+    },
+    {
+      id: "sourceType",
+      header: "Type",
+      accessor: (row) => row.sourceType,
+      sortable: true,
+      render: (row) => formatSourceLabel(row.sourceType),
+    },
+    {
+      id: "jurisdiction",
+      header: "Jurisdiction",
+      accessor: (row) => row.jurisdiction ?? "",
+      sortable: true,
+      render: (row) => row.jurisdiction ?? "No jurisdiction",
+    },
+    {
+      id: "funderType",
+      header: "Funder",
+      accessor: (row) => row.funderType ?? "",
+      sortable: true,
+      render: (row) => formatSourceLabel(row.funderType ?? "unknown"),
+    },
+    {
+      id: "cadence",
+      header: "Cadence",
+      accessor: (row) => row.scrapeCadence ?? "",
+      sortable: true,
+      render: (row) => formatSourceLabel(row.scrapeCadence ?? "manual"),
+    },
+    {
+      id: "tags",
+      header: "Tags",
+      accessor: (row) => getSourceTags(row).join(" "),
+      render: (row) => <SourceTagList tags={getSourceTags(row)} limit={3} />,
+      width: 260,
+    },
+  ], []);
+
+  const sourceActions = (row: any) => (
+    <SourceActions
+      row={row}
+      societyId={societyId}
+      actingUserId={actingUserId}
+      addGrantSourceFromLibrary={addGrantSourceFromLibrary}
+      onAdded={(name) => toast.success("Grant source added", name)}
+    />
+  );
+
   return (
     <>
       <section aria-labelledby="grant-source-library-title">
@@ -51,6 +175,22 @@ export function GrantSourceLibrarySection({
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <span className="muted">{sourceLibrary === undefined ? "Loading sources..." : `${sourceRows.length} sources`}</span>
+            <div className="segmented-control" aria-label="Source library view">
+              <button
+                className={viewMode === "cards" ? "segmented-control__item is-active" : "segmented-control__item"}
+                onClick={() => setViewMode("cards")}
+                type="button"
+              >
+                <LayoutGrid size={12} /> Cards
+              </button>
+              <button
+                className={viewMode === "table" ? "segmented-control__item is-active" : "segmented-control__item"}
+                onClick={() => setViewMode("table")}
+                type="button"
+              >
+                <Table2 size={12} /> Table
+              </button>
+            </div>
             <button
               className="btn btn--ghost btn--sm"
               onClick={() =>
@@ -73,75 +213,38 @@ export function GrantSourceLibrarySection({
             </button>
           </div>
         </div>
-        <div className="grid-auto grid-auto--lg">
-          {(sourceLibrary === undefined ? [] : sourceRows).map((row: any) => (
-            <article className="card" key={`${row.rowKind}:${row.libraryKey ?? row._id ?? row.url}`}>
-              <div className="card__head" style={{ alignItems: "flex-start", justifyContent: "space-between" }}>
-                <div style={{ minWidth: 0 }}>
-                  <h3 className="card__title" style={{ overflowWrap: "anywhere" }}>
-                    {row.name}
-                  </h3>
-                  <div className="card__subtitle">
-                    {row.rowKind === "library" ? "Societyer library" : "Workspace source"} · {row.sourceType}
-                  </div>
-                </div>
-                <Badge tone={row.installed ? "success" : row.status === "active" ? "info" : "warn"}>{row.installed ? "Installed" : row.status}</Badge>
-              </div>
-              <div className="card__body" style={{ display: "grid", gap: 12 }}>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <Badge tone={row.trustLevel === "official" ? "success" : "info"}>{row.trustLevel}</Badge>
-                  <Badge tone="neutral">{row.scrapeCadence}</Badge>
-                  <Badge tone="neutral">{row.profile?.profileKind ?? "no profile"}</Badge>
-                </div>
-                <div className="muted" style={{ fontSize: 12 }}>
-                  {row.jurisdiction ?? "No jurisdiction"} · {row.funderType ?? "unknown funder"}
-                </div>
-                {row.notes && (
-                  <p style={{ margin: 0, color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.45 }}>
-                    {row.notes}
-                  </p>
-                )}
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {((row.topicTags ?? row.eligibilityTags ?? []) as string[]).slice(0, 4).map((tag) => (
-                    <span className="chip" key={tag}>
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 2 }}>
-                  <a className="btn btn--ghost btn--sm" href={row.url} target="_blank" rel="noreferrer">
-                    <ExternalLink size={12} /> Open
-                  </a>
-                  {row.libraryKey && (
-                    <Link className="btn btn--ghost btn--sm" to={`/app/grants/sources/${row.libraryKey}`}>
-                      <FileText size={12} /> Details
-                    </Link>
-                  )}
-                  {row.rowKind === "library" && !row.installed && (
-                    <button
-                      className="btn btn--ghost btn--sm"
-                      onClick={async () => {
-                        await addGrantSourceFromLibrary({
-                          societyId,
-                          libraryKey: row.libraryKey,
-                          actingUserId,
-                        });
-                        toast.success("Grant source added", row.name);
-                      }}
-                    >
-                      <Plus size={12} /> Add source
-                    </button>
-                  )}
-                </div>
-              </div>
-            </article>
-          ))}
-          {sourceLibrary === undefined && (
-            <article className="card">
-              <div className="card__body muted">Loading grant sources...</div>
-            </article>
-          )}
-        </div>
+        {viewMode === "table" ? (
+          <DataTable
+            label="Source library"
+            icon={<Globe2 size={14} />}
+            data={sourceLibrary === undefined ? [] : sourceRows}
+            loading={sourceLibrary === undefined}
+            columns={sourceColumns}
+            filterFields={sourceFilterFields}
+            rowKey={(row) => `${row.rowKind}:${row.libraryKey ?? row._id ?? row.url}`}
+            searchPlaceholder="Search sources, jurisdictions, funders, or tags..."
+            searchExtraFields={[
+              (row) => row.notes,
+              (row) => getSourceTags(row).join(" "),
+            ]}
+            defaultSort={{ columnId: "name", dir: "asc" }}
+            pagination
+            initialPageSize={25}
+            viewsKey="grant-source-library"
+            renderRowActions={sourceActions}
+          />
+        ) : (
+          <div className="grid-auto grid-auto--lg">
+            {(sourceLibrary === undefined ? [] : sourceRows).map((row: any) => (
+              <GrantSourceCard key={`${row.rowKind}:${row.libraryKey ?? row._id ?? row.url}`} row={row} actions={sourceActions(row)} />
+            ))}
+            {sourceLibrary === undefined && (
+              <article className="card">
+                <div className="card__body muted">Loading grant sources...</div>
+              </article>
+            )}
+          </div>
+        )}
       </section>
 
       <GrantSourceDrawer
@@ -152,6 +255,95 @@ export function GrantSourceLibrarySection({
         upsertGrantSource={upsertGrantSource}
       />
     </>
+  );
+}
+
+function GrantSourceCard({ row, actions }: { row: any; actions: React.ReactNode }) {
+  return (
+    <article className="card grant-source-card">
+      <div className="grant-source-card__head">
+        <div className="grant-source-card__main">
+          <div className="grant-source-card__eyebrow">
+            {row.rowKind === "library" ? "Societyer library" : "Workspace source"}
+          </div>
+          <h3 className="grant-source-card__title">{row.name}</h3>
+        </div>
+        <Badge tone={row.installed ? "success" : row.status === "active" ? "info" : "warn"}>
+          {row.installed ? "Installed" : formatSourceLabel(row.status)}
+        </Badge>
+      </div>
+      <div className="grant-source-card__body">
+        <div className="grant-source-card__meta">
+          <span>{formatSourceLabel(row.sourceType)}</span>
+          <span>{row.jurisdiction ?? "No jurisdiction"}</span>
+          <span>{formatSourceLabel(row.funderType ?? "unknown funder")}</span>
+        </div>
+        <div className="grant-source-card__signals">
+          <Badge tone={row.trustLevel === "official" ? "success" : "neutral"}>{formatSourceLabel(row.trustLevel ?? "unknown")}</Badge>
+          <Badge tone="neutral">{formatSourceLabel(row.scrapeCadence ?? "manual")}</Badge>
+        </div>
+        <SourceTagList tags={getSourceTags(row)} limit={4} />
+      </div>
+      <div className="grant-source-card__footer">{actions}</div>
+    </article>
+  );
+}
+
+function SourceActions({
+  row,
+  societyId,
+  actingUserId,
+  addGrantSourceFromLibrary,
+  onAdded,
+}: {
+  row: any;
+  societyId: any;
+  actingUserId?: any;
+  addGrantSourceFromLibrary: any;
+  onAdded: (name: string) => void;
+}) {
+  return (
+    <div className="grant-source-actions">
+      <a className="btn btn--ghost btn--sm" href={row.url} target="_blank" rel="noreferrer">
+        <ExternalLink size={12} /> Open
+      </a>
+      {row.libraryKey && (
+        <Link className="btn btn--ghost btn--sm" to={`/app/grants/sources/${row.libraryKey}`}>
+          <FileText size={12} /> Details
+        </Link>
+      )}
+      {row.rowKind === "library" && !row.installed && (
+        <button
+          className="btn btn--ghost btn--sm"
+          onClick={async () => {
+            await addGrantSourceFromLibrary({
+              societyId,
+              libraryKey: row.libraryKey,
+              actingUserId,
+            });
+            onAdded(row.name);
+          }}
+        >
+          <Plus size={12} /> Add source
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SourceTagList({ tags, limit = 4 }: { tags: string[]; limit?: number }) {
+  const visibleTags = tags.slice(0, limit);
+  const hiddenCount = Math.max(0, tags.length - visibleTags.length);
+  if (tags.length === 0) return <div className="muted grant-source-tags">No tags</div>;
+  return (
+    <div className="grant-source-tags">
+      {visibleTags.map((tag) => (
+        <span className="chip grant-source-tag" key={tag} title={tag}>
+          {formatTagLabel(tag)}
+        </span>
+      ))}
+      {hiddenCount > 0 && <span className="chip chip--transparent grant-source-tag">+{hiddenCount}</span>}
+    </div>
   );
 }
 

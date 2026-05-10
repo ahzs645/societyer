@@ -84,13 +84,16 @@ export const create = mutation({
       throw new Error("Meeting template belongs to a different society.");
     }
     const templateItems = template ? normalizeTemplateItems(template.items) : [];
+    const templateContext = template
+      ? await buildTemplateContext(ctx, args.societyId, args.scheduledAt)
+      : {};
     const templateMotions = template
-      ? await buildTemplateMotions(ctx, templateItems)
+      ? await buildTemplateMotions(ctx, templateItems, templateContext)
       : [];
     const agendaJson =
       args.agendaJson ??
       (templateItems.length
-        ? JSON.stringify(templateItems.map(({ title, depth }) => ({ title, depth })))
+        ? JSON.stringify(templateItems.map(({ title, depth }) => ({ title: resolveTemplateText(title, templateContext), depth })))
         : undefined);
     const templateSnapshotJson = template
       ? JSON.stringify({
@@ -138,10 +141,10 @@ export const create = mutation({
           args.quorumComputedAtISO ?? snapshot.quorumComputedAtISO,
         discussion: "",
         sections: templateItems.map((item) => ({
-          title: item.title,
+          title: resolveTemplateText(item.title, templateContext),
           type: item.sectionType ?? inferAgendaSectionType(item.title),
           presenter: item.presenter || undefined,
-          discussion: "",
+          discussion: item.details ? resolveTemplateText(item.details, templateContext) : "",
           decisions: [],
           actionItems: [],
           depth: item.depth,
@@ -204,6 +207,7 @@ type TemplateItem = {
   depth: 0 | 1;
   sectionType?: string;
   presenter?: string;
+  details?: string;
   motionTemplateId?: any;
   motionText?: string;
 };
@@ -220,6 +224,7 @@ function normalizeTemplateItems(items: any[]): TemplateItem[] {
       depth,
       sectionType: item?.sectionType || undefined,
       presenter: item?.presenter || undefined,
+      details: item?.details || undefined,
       motionTemplateId: item?.motionTemplateId,
       motionText: item?.motionText || undefined,
     });
@@ -228,7 +233,7 @@ function normalizeTemplateItems(items: any[]): TemplateItem[] {
   return normalized;
 }
 
-async function buildTemplateMotions(ctx: any, items: TemplateItem[]) {
+async function buildTemplateMotions(ctx: any, items: TemplateItem[], templateContext: Record<string, string>) {
   const motions: any[] = [];
   const now = new Date().toISOString();
   for (let index = 0; index < items.length; index++) {
@@ -246,6 +251,7 @@ async function buildTemplateMotions(ctx: any, items: TemplateItem[]) {
         });
       }
     }
+    text = resolveTemplateText(text, templateContext);
     if (!text?.trim()) continue;
     motions.push({
       text: text.trim(),
@@ -256,6 +262,41 @@ async function buildTemplateMotions(ctx: any, items: TemplateItem[]) {
     });
   }
   return motions;
+}
+
+async function buildTemplateContext(ctx: any, societyId: any, scheduledAt: string) {
+  const meetings = await ctx.db
+    .query("meetings")
+    .withIndex("by_society_date", (q: any) => q.eq("societyId", societyId))
+    .order("desc")
+    .collect();
+  const previous = meetings.find((meeting: any) => {
+    if (meeting.status === "Cancelled") return false;
+    if (!meeting.scheduledAt || meeting.scheduledAt >= scheduledAt) return false;
+    return true;
+  });
+  return {
+    previousMeetingTitle: previous?.title ?? "previous meeting",
+    previousMeetingDate: previous?.scheduledAt ? formatLongDate(previous.scheduledAt) : "the previous meeting date",
+    calledToOrderTime: "[time]",
+    adjournedAt: "[time]",
+  };
+}
+
+function resolveTemplateText(value: string | undefined, context: Record<string, string>) {
+  if (!value) return "";
+  return value.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) => context[key] ?? "");
+}
+
+function formatLongDate(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value.slice(0, 10);
+  return date.toLocaleDateString("en-CA", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "America/Vancouver",
+  });
 }
 
 function inferAgendaSectionType(title: string) {

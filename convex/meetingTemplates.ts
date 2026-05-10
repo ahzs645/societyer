@@ -6,6 +6,7 @@ const templateItem = v.object({
   depth: v.optional(v.union(v.literal(0), v.literal(1))),
   sectionType: v.optional(v.string()),
   presenter: v.optional(v.string()),
+  details: v.optional(v.string()),
   motionTemplateId: v.optional(v.id("motionTemplates")),
   motionText: v.optional(v.string()),
 });
@@ -130,6 +131,7 @@ export const createFromMeeting = mutation({
         depth: entry.depth,
         sectionType: minutes?.sections?.[index]?.type,
         presenter: minutes?.sections?.[index]?.presenter,
+        details: minutes?.sections?.[index]?.discussion,
         motionText: motion?.text,
       };
     });
@@ -167,7 +169,12 @@ export const seedDefaults = mutation({
       isDefault: true,
       items: [
         { title: "Welcome and call to order", depth: 0, sectionType: "discussion" },
-        { title: "Indigenous acknowledgement", depth: 0, sectionType: "discussion" },
+        {
+          title: "Indigenous acknowledgement",
+          depth: 0,
+          sectionType: "discussion",
+          details: "Acknowledgement that the meeting is taking place on the unceded and ancestral territory of the Lheidli T'enneh, part of the Dakelh (Carrier) First Nations.",
+        },
         {
           title: "Adopt agenda",
           depth: 0,
@@ -222,6 +229,7 @@ function cleanItems(items: any[]) {
       depth,
       sectionType: item?.sectionType || undefined,
       presenter: item?.presenter || undefined,
+      details: item?.details || undefined,
       motionTemplateId: item?.motionTemplateId || undefined,
       motionText: item?.motionText || undefined,
     });

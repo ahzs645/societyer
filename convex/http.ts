@@ -1,12 +1,157 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
+import { createOpenAI } from "@ai-sdk/openai";
+import { streamText } from "ai";
 
 const http = httpRouter();
 const WEBHOOK_TOLERANCE_MS = 5 * 60 * 1000;
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+
+http.route({
+  path: "/ai-chat/stream",
+  method: "OPTIONS",
+  handler: httpAction(async () =>
+    new Response(null, {
+      status: 204,
+      headers: corsHeaders(),
+    }),
+  ),
+});
+
+http.route({
+  path: "/ai-chat/stream",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const body = await request.json().catch(() => ({}));
+    const societyId = body.societyId;
+    const content = String(body.content ?? "").trim();
+    if (!societyId || !content) {
+      return new Response("Missing societyId or content", { status: 400 });
+    }
+    const actingUserId = body.actingUserId || undefined;
+    const runtimeConfig = await resolveAiRuntimeConfig(ctx, societyId, actingUserId, body.modelId);
+    const modelId = runtimeConfig.modelId;
+    const threadId =
+      body.threadId ??
+      (await ctx.runMutation((api as any).aiChat.createThread, {
+        societyId,
+        title: content,
+        modelId,
+        browsingContext: body.browsingContext,
+        actingUserId,
+      }));
+
+    await ctx.runMutation((internal as any).aiChat._appendMessage, {
+      societyId,
+      threadId,
+      role: "user",
+      content,
+      createdByUserId: actingUserId,
+    });
+    const [context, history] = await Promise.all([
+      ctx.runQuery((api as any).aiAgents.getChatContext, {
+        societyId,
+        actingUserId,
+        browsingContext: body.browsingContext,
+      }),
+      ctx.runQuery((api as any).aiChat.messagesForThread, { threadId }),
+    ]);
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        let text = "";
+        try {
+          if (!runtimeConfig.model) throw new Error("No AI provider key is configured.");
+          controller.enqueue(encoder.encode(sse({ threadId, modelId }, "ready")));
+          const result = streamText({
+            model: runtimeConfig.model,
+            system: context.systemPrompt,
+            messages: history
+              .filter((message: any) => message.role === "user" || message.role === "assistant")
+              .slice(-16)
+              .map((message: any) => ({ role: message.role, content: message.content })),
+          } as any);
+          for await (const chunk of result.textStream) {
+            text += chunk;
+            controller.enqueue(encoder.encode(sse({ text: chunk }, "token")));
+          }
+          const messageId = await ctx.runMutation((internal as any).aiChat._appendMessage, {
+            societyId,
+            threadId,
+            role: "assistant",
+            content: text,
+            status: "complete",
+            modelId,
+            parts: { provider: "vercel_ai_sdk_sse" },
+            createdByUserId: actingUserId,
+          });
+          controller.enqueue(encoder.encode(sse({ threadId, messageId }, "done")));
+        } catch (error: any) {
+          const fallback = `Live streaming is not available: ${error?.message ?? "unknown error"}`;
+          await ctx.runMutation((internal as any).aiChat._appendMessage, {
+            societyId,
+            threadId,
+            role: "assistant",
+            content: fallback,
+            status: "error",
+            modelId,
+            parts: { provider: "sse_fallback" },
+            createdByUserId: actingUserId,
+          });
+          controller.enqueue(encoder.encode(sse({ error: fallback, threadId }, "error")));
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        ...corsHeaders(),
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache",
+        connection: "keep-alive",
+      },
+    });
+  }),
+});
 
 function env(name: string) {
   return (globalThis as any)?.process?.env?.[name] as string | undefined;
+}
+
+async function resolveAiRuntimeConfig(ctx: any, societyId: any, actingUserId: any, requestedModelId?: string) {
+  const settings = await ctx.runQuery((api as any).aiSettings.getEffective, {
+    societyId,
+    actingUserId,
+  }).catch(() => null);
+  const effective = settings?.effective;
+  const secret = effective?.secretVaultItemId
+    ? await ctx.runQuery((internal as any).secrets._revealForServer, { id: effective.secretVaultItemId }).catch(() => null)
+    : null;
+  const provider = effective?.provider ?? (env("OPENROUTER_API_KEY") ? "openrouter" : "openai");
+  const apiKey = secret?.value ?? (provider === "openrouter" ? env("OPENROUTER_API_KEY") : env("OPENAI_API_KEY")) ?? env("OPENAI_API_KEY");
+  const modelId = requestedModelId ?? effective?.modelId ?? env("SOCIETYER_AI_MODEL") ?? (provider === "openrouter" ? "openai/gpt-4.1-mini" : "gpt-4.1-mini");
+  const baseURL = effective?.baseUrl || (provider === "openrouter" ? OPENROUTER_BASE_URL : undefined);
+  const openai = apiKey ? createOpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) }) : null;
+  return {
+    modelId,
+    model: openai ? openai(modelId) : null,
+  };
+}
+
+function sse(data: unknown, event?: string) {
+  return `${event ? `event: ${event}\n` : ""}data: ${JSON.stringify(data)}\n\n`;
+}
+
+function corsHeaders() {
+  return {
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "POST, OPTIONS",
+    "access-control-allow-headers": "content-type, authorization",
+  };
 }
 
 function normalizePhone(value?: string | null) {

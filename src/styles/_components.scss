@@ -1621,6 +1621,14 @@
   align-items: center;
   gap: var(--s-2);
 }
+.advanced-filter__group-head:has(.input) .btn,
+.advanced-filter__rule:has(.input) .btn {
+  height: 32px;
+}
+.advanced-filter__group-head:has(.input) .btn--icon,
+.advanced-filter__rule:has(.input) .btn--icon {
+  width: 32px;
+}
 .advanced-filter__rules { display: flex; flex-direction: column; gap: var(--s-2); }
 .advanced-filter__rule {
   display: flex;

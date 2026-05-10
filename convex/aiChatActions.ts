@@ -11,6 +11,8 @@ function env(name: string): string | undefined {
   return process.env[name];
 }
 
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+
 export const sendChatMessage = action({
   args: {
     societyId: v.id("societies"),
@@ -22,7 +24,8 @@ export const sendChatMessage = action({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    const modelId = args.modelId ?? env("SOCIETYER_AI_MODEL") ?? "gpt-4.1-mini";
+    const runtimeConfig = await resolveAiRuntimeConfig(ctx, args.societyId, args.actingUserId, args.modelId);
+    const modelId = runtimeConfig.modelId;
     const threadId =
       args.threadId ??
       (await ctx.runMutation((api as any).aiChat.createThread, {
@@ -50,7 +53,6 @@ export const sendChatMessage = action({
       ctx.runQuery((api as any).aiChat.messagesForThread, { threadId }),
     ]);
 
-    const model = aiModel(modelId);
     const tools = {
       load_skills: tool({
         description: "Load Societyer skill instructions by name before using domain tools.",
@@ -93,9 +95,9 @@ export const sendChatMessage = action({
     let usage: unknown = undefined;
     let provider = "vercel_ai_sdk";
     try {
-      if (!model) throw new Error("OPENAI_API_KEY is not configured.");
+      if (!runtimeConfig.model) throw new Error("No AI provider key is configured.");
       const result = streamText({
-        model,
+        model: runtimeConfig.model,
         system: context.systemPrompt,
         messages: history
           .filter((message: any) => message.role === "user" || message.role === "assistant")
@@ -134,11 +136,26 @@ export const sendChatMessage = action({
   },
 });
 
-function aiModel(modelId: string) {
-  const apiKey = env("OPENAI_API_KEY");
-  if (!apiKey) return null;
-  const openai = createOpenAI({ apiKey });
-  return openai(modelId);
+async function resolveAiRuntimeConfig(ctx: any, societyId: any, actingUserId: any, requestedModelId?: string) {
+  const settings = await ctx.runQuery((api as any).aiSettings.getEffective, {
+    societyId,
+    actingUserId,
+  }).catch(() => null);
+  const effective = settings?.effective;
+  const secret = effective?.secretVaultItemId
+    ? await ctx.runQuery((internal as any).secrets._revealForServer, { id: effective.secretVaultItemId }).catch(() => null)
+    : null;
+  const provider = effective?.provider ?? (env("OPENROUTER_API_KEY") ? "openrouter" : "openai");
+  const apiKey = secret?.value ?? (provider === "openrouter" ? env("OPENROUTER_API_KEY") : env("OPENAI_API_KEY")) ?? env("OPENAI_API_KEY");
+  const modelId = requestedModelId ?? effective?.modelId ?? env("SOCIETYER_AI_MODEL") ?? (provider === "openrouter" ? "openai/gpt-4.1-mini" : "gpt-4.1-mini");
+  const baseURL = effective?.baseUrl || (provider === "openrouter" ? OPENROUTER_BASE_URL : undefined);
+  const openai = apiKey ? createOpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) }) : null;
+  return {
+    provider,
+    modelId,
+    model: openai ? openai(modelId) : null,
+    configuredFrom: secret?.value ? effective.scope : apiKey ? "environment" : "missing",
+  };
 }
 
 function fallbackResponse({ error, content, context }: { error?: string; content: string; context: any }) {
@@ -156,6 +173,6 @@ function fallbackResponse({ error, content, context }: { error?: string; content
     `Relevant skill catalog: ${skills.join(", ") || "none"}.`,
     `Available tools for this actor: ${tools.join(", ") || "none"}.`,
     "",
-    "Set OPENAI_API_KEY to enable Vercel AI SDK streamText responses. Tool calls, drafts, and audit logging are wired server-side.",
+    "Set OPENAI_API_KEY or OPENROUTER_API_KEY, or save a provider in AI setup, to enable Vercel AI SDK streamText responses. Tool calls, drafts, and audit logging are wired server-side.",
   ].join("\n");
 }

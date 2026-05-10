@@ -57,6 +57,9 @@ import {
   History,
   Sliders,
   MonitorPlay,
+  Monitor,
+  Moon,
+  Sun,
   Bot,
   Plug,
 } from "lucide-react";
@@ -89,6 +92,8 @@ import { getRouteIdentity, type IconTone, type LucideIcon } from "../lib/routeId
 import { useStaticCommands } from "../lib/useStaticCommands";
 import { useTranslation } from "react-i18next";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
+import { useThemePreference } from "../hooks/useThemePreference";
+import type { ThemePreference } from "../lib/theme";
 import { mobileSidebarMediaQuery } from "../lib/breakpoints";
 import { DEFAULT_PINNED_ROUTES } from "../lib/navConfig";
 import { useUIStore } from "../lib/store";
@@ -106,6 +111,43 @@ function UserPickerSafe() {
     <ErrorBoundary label="UserPicker" fallback={null}>
       <UserPicker />
     </ErrorBoundary>
+  );
+}
+
+const THEME_OPTIONS: Array<{
+  value: ThemePreference;
+  label: string;
+  Icon: LucideIcon;
+}> = [
+  { value: "light", label: "Light mode", Icon: Sun },
+  { value: "dark", label: "Dark mode", Icon: Moon },
+  { value: "system", label: "System theme", Icon: Monitor },
+];
+
+function SidebarThemeToggle() {
+  const { preference, resolvedTheme, setPreference } = useThemePreference();
+
+  return (
+    <div
+      className="sidebar-theme-toggle"
+      role="group"
+      aria-label="Theme preference"
+      title={`Theme: ${preference}${preference === "system" ? ` (${resolvedTheme})` : ""}`}
+    >
+      {THEME_OPTIONS.map(({ value, label, Icon }) => (
+        <button
+          key={value}
+          type="button"
+          className={`sidebar-theme-toggle__btn${preference === value ? " is-active" : ""}`}
+          onClick={() => setPreference(value)}
+          aria-label={label}
+          aria-pressed={preference === value}
+          title={label}
+        >
+          <Icon size={12} />
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -1266,6 +1308,7 @@ export function Layout() {
           </nav>
           <div className="sidebar__identity">
             <UserPickerSafe />
+            <SidebarThemeToggle />
           </div>
         </aside>
 

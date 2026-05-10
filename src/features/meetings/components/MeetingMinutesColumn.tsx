@@ -11,6 +11,7 @@ import { isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionP
 import { NameAutocomplete } from "../../../components/NameAutocomplete";
 import { Select } from "../../../components/Select";
 import { SignaturePanel } from "../../../components/SignaturePanel";
+import { Tooltip } from "../../../components/Tooltip";
 import {
   AttendanceDetails,
   formatSourceReferences,
@@ -26,6 +27,9 @@ const SECTION_TASK_STATUS_ITEMS: { id: string; label: string }[] = [
 ];
 
 type SectionTypeId = "discussion" | "motion" | "report" | "decision" | "other";
+type AgendaNumberingMode = "letters" | "decimal";
+
+const AGENDA_NUMBERING_PREF_KEY = "societyer.meetingAgendaNumberingMode";
 
 const SECTION_TYPE_OPTIONS: { value: SectionTypeId; label: string }[] = [
   { value: "discussion", label: "Discussion" },
@@ -34,6 +38,50 @@ const SECTION_TYPE_OPTIONS: { value: SectionTypeId; label: string }[] = [
   { value: "decision", label: "Decision" },
   { value: "other", label: "Other" },
 ];
+
+const AGENDA_NUMBERING_ITEMS: { id: AgendaNumberingMode; label: string }[] = [
+  { id: "letters", label: "1.a" },
+  { id: "decimal", label: "1.1" },
+];
+
+function readStoredAgendaNumberingMode(): AgendaNumberingMode {
+  if (typeof window === "undefined") return "letters";
+  return window.localStorage.getItem(AGENDA_NUMBERING_PREF_KEY) === "decimal" ? "decimal" : "letters";
+}
+
+function agendaAlphaLabel(index: number) {
+  let n = index + 1;
+  let label = "";
+  while (n > 0) {
+    n -= 1;
+    label = String.fromCharCode(65 + (n % 26)) + label;
+    n = Math.floor(n / 26);
+  }
+  return label;
+}
+
+function agendaNumberingLabel(rootIndex: number, childIndex: number, mode: AgendaNumberingMode) {
+  const root = `${rootIndex + 1}`;
+  if (mode === "decimal") {
+    return childIndex > 0 ? `${root}.${childIndex}` : root;
+  }
+  return childIndex > 0 ? `${root}.${agendaAlphaLabel(childIndex - 1).toLowerCase()}` : root;
+}
+
+function agendaEntryLabel(items: AgendaItemEntry[], targetIndex: number, mode: AgendaNumberingMode) {
+  let rootIndex = -1;
+  let childIndex = 0;
+  for (let i = 0; i <= targetIndex; i += 1) {
+    const isChild = items[i]?.depth === 1 && rootIndex >= 0;
+    if (isChild) {
+      childIndex += 1;
+    } else {
+      rootIndex += 1;
+      childIndex = 0;
+    }
+  }
+  return agendaNumberingLabel(Math.max(rootIndex, 0), childIndex, mode);
+}
 
 export function MeetingMinutesColumn({
   minutes,
@@ -110,6 +158,7 @@ export function MeetingMinutesColumn({
   }, [sections]);
   const [sectionEditIndex, setSectionEditIndex] = useState<number | null>(null);
   const [sectionDraft, setSectionDraft] = useState<SectionDraft | null>(null);
+  const [agendaNumberingMode, setAgendaNumberingMode] = useState<AgendaNumberingMode>(readStoredAgendaNumberingMode);
   // Drag-to-reorder + right-click menu state for root sections in the agenda
   // record. Both work on root indices (position in `rootGroups`), not the
   // raw section index, so children move with their parent.
@@ -123,9 +172,16 @@ export function MeetingMinutesColumn({
   const sectionContextMenuRef = useRef<HTMLDivElement | null>(null);
   const [sectionEditorTab, setSectionEditorTab] = useState<SectionEditorTab>("notes");
   const confirm = useConfirm();
+  const attendancePresentCount = attendanceEdit
+    ? attendanceEdit.people.filter((person: AttendancePerson) => person.status === "present").length
+    : minutes?.attendees.length;
   const [newAgendaIndices, setNewAgendaIndices] = useState<Set<number>>(() => new Set());
   const agendaInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const pendingFocusIndex = useRef<number | null>(null);
+
+  useEffect(() => {
+    window.localStorage.setItem(AGENDA_NUMBERING_PREF_KEY, agendaNumberingMode);
+  }, [agendaNumberingMode]);
   const sectionTitleRef = useRef<HTMLInputElement | null>(null);
   const sectionDiscussionRef = useRef<HTMLTextAreaElement | null>(null);
   const focusSectionTitleOnEdit = useRef(false);
@@ -830,9 +886,15 @@ export function MeetingMinutesColumn({
         <div className="card meeting-minutes-agenda-card">
           <div className="card__head">
             <h2 className="card__title">Agenda</h2>
-            <span className="card__subtitle">
-              {agenda.length ? `${agenda.length} item${agenda.length === 1 ? "" : "s"}` : "No agenda items yet"}
-            </span>
+            {agendaEdit !== null && (
+              <div className="meeting-minutes-agenda-numbering">
+                <Segmented
+                  value={agendaNumberingMode}
+                  onChange={setAgendaNumberingMode}
+                  items={AGENDA_NUMBERING_ITEMS}
+                />
+              </div>
+            )}
             <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
               {agendaEdit === null ? (
                 <button
@@ -889,6 +951,7 @@ export function MeetingMinutesColumn({
                     ? detailedSectionTitles.has(trimmed.toLowerCase())
                     : false;
                   const canRemove = isEmpty || isNew || !linkedSectionDetailed;
+                  const itemLabel = agendaEntryLabel(agendaItems, index, agendaNumberingMode);
                   const placeholder = index === 0
                     ? "Call to order"
                     : item.depth === 1
@@ -901,6 +964,9 @@ export function MeetingMinutesColumn({
                       className={`meeting-minutes-agenda-editor__row${canRemove ? "" : " is-locked"}${item.depth === 1 ? " meeting-minutes-agenda-editor__row--child" : ""}`}
                       key={index}
                     >
+                      <span className="meeting-minutes-agenda-editor__index" aria-hidden="true">
+                        {itemLabel}
+                      </span>
                       <input
                         ref={(el) => { agendaInputRefs.current[index] = el; }}
                         className="input"
@@ -985,18 +1051,17 @@ export function MeetingMinutesColumn({
                           <IndentIncrease size={12} />
                         </button>
                       </div>
-                      {canRemove && (
-                        <button
-                          className="btn-action btn-action--icon meeting-minutes-agenda-editor__remove"
-                          type="button"
-                          tabIndex={-1}
-                          title="Remove item"
-                          aria-label="Remove item"
-                          onClick={() => removeAgendaItem(index)}
-                        >
-                          <MinusCircle size={12} />
-                        </button>
-                      )}
+                      <button
+                        className="btn-action btn-action--icon meeting-minutes-agenda-editor__remove"
+                        type="button"
+                        tabIndex={-1}
+                        title={canRemove ? "Remove item" : "This item has notes, decisions, or actions. Clear those before removing it from the agenda."}
+                        aria-label={canRemove ? "Remove item" : "Cannot remove item with recorded section details"}
+                        disabled={!canRemove}
+                        onClick={() => removeAgendaItem(index)}
+                      >
+                        <MinusCircle size={12} />
+                      </button>
                     </div>
                   );
                 })}
@@ -1094,7 +1159,7 @@ export function MeetingMinutesColumn({
                   Attendance
                 </h2>
                 <span className="card__subtitle">
-                  Quorum {minutes.quorumMet ? "met" : "not met"} · {minutes.attendees.length} present
+                  {attendancePresentCount} present
                   {quorumSnapshot.required != null ? ` / ${quorumSnapshot.required} required` : ""}
                 </span>
               </div>
@@ -1389,23 +1454,45 @@ export function MeetingMinutesColumn({
                               <span className="meeting-minutes-section-item__meta">
                                 {sectionSummaryMeta(section, motionMatchesBySection[index]?.length ?? 0)}
                               </span>
-                              <button
-                                className="btn-action btn-action--icon"
-                                type="button"
-                                // Locked while the agenda is mid-edit — saving
-                                // the agenda would re-sync sections anyway, so
-                                // any concurrent removal would race.
-                                disabled={agendaEdit !== null}
-                                title={agendaEdit !== null ? "Finish editing the agenda first" : "Remove section"}
-                                aria-label="Remove section"
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  void confirmAndRemoveSection(index);
-                                }}
-                              >
-                                <MinusCircle size={12} />
-                              </button>
+                              <span className="meeting-minutes-section-item__actions">
+                                <Tooltip content={agendaEdit !== null ? "Finish editing the agenda first" : "Edit agenda item"} placement="top">
+                                  <span className="meeting-minutes-section-item__action-tooltip">
+                                    <button
+                                      className="btn-action btn-action--icon"
+                                      type="button"
+                                      disabled={agendaEdit !== null}
+                                      aria-label="Edit agenda item"
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        startSectionEdit(index);
+                                      }}
+                                    >
+                                      <Pencil size={12} />
+                                    </button>
+                                  </span>
+                                </Tooltip>
+                                <Tooltip content={agendaEdit !== null ? "Finish editing the agenda first" : "Remove section"} placement="top">
+                                  <span className="meeting-minutes-section-item__action-tooltip">
+                                    <button
+                                      className="btn-action btn-action--icon"
+                                      type="button"
+                                      // Locked while the agenda is mid-edit — saving
+                                      // the agenda would re-sync sections anyway, so
+                                      // any concurrent removal would race.
+                                      disabled={agendaEdit !== null}
+                                      aria-label="Remove section"
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        void confirmAndRemoveSection(index);
+                                      }}
+                                    >
+                                      <MinusCircle size={12} />
+                                    </button>
+                                  </span>
+                                </Tooltip>
+                              </span>
                             </summary>
 
                             <div className="meeting-minutes-section-item__body">
@@ -1724,21 +1811,13 @@ export function MeetingMinutesColumn({
                                       </div>
                                     );
                                   })()}
-                                  <div className="row" style={{ gap: 6, justifyContent: "space-between", flexWrap: "wrap" }}>
-                                    <button
-                                      className="btn-action"
-                                      onClick={() => startSectionEdit(index)}
-                                      disabled={agendaEdit !== null}
-                                      title={agendaEdit !== null ? "Finish editing the agenda first" : undefined}
-                                    >
-                                      Edit agenda item
-                                    </button>
-                                    {isDeferredSection(section) && (
+                                  {isDeferredSection(section) && (
+                                    <div className="row" style={{ gap: 6, justifyContent: "space-between", flexWrap: "wrap" }}>
                                       <button className="btn-action" onClick={() => addSectionToBacklog(section)}>
                                         Add to backlog
                                       </button>
-                                    )}
-                                  </div>
+                                    </div>
+                                  )}
                                 </>
                               )}
                             </div>

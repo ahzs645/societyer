@@ -22,7 +22,6 @@ import {
   GrantEditorForm,
   GrantReadPanel,
 } from "../features/grants/components/GrantPanels";
-import { GrantSourceLibrarySection } from "../features/grants/components/GrantSourceLibrary";
 import { enrichGcosNormalizedGrant, readGcosExportFile } from "../lib/gcosExportImport";
 
 export function GrantsPage() {
@@ -72,10 +71,6 @@ export function GrantsPage() {
   const reports = useQuery(
     api.grants.reports,
     society && (loadLowerSections || !!selectedGrant || !!grantDraft || !!reportDraft) ? { societyId: society._id } : "skip",
-  );
-  const sourceLibrary = useQuery(
-    api.grantSources.listWithLibrary,
-    society ? { societyId: society._id } : "skip",
   );
   const committees = useQuery(
     api.committees.list,
@@ -172,6 +167,9 @@ export function GrantsPage() {
             <Link className="btn-action" to="/app/imports">
               <FileText size={12} /> Review imports
             </Link>
+            <Link className="btn-action" to="/app/grants/sources">
+              <FileText size={12} /> Source library
+            </Link>
             <label className="btn-action" style={{ cursor: "pointer" }}>
               <Upload size={12} /> Import GCOS
               <input
@@ -229,14 +227,6 @@ export function GrantsPage() {
         <Stat label="Pending intake" value={String(summary?.pendingApplications ?? 0)} />
         <Stat label="Ledger spend" value={money(summary?.ledgerSpendCents ?? 0)} tone={(summary?.overdueReports ?? 0) > 0 ? "danger" : undefined} />
       </div>
-
-      <GrantSourceLibrarySection
-        actingUserId={actingUserId}
-        societyId={society._id}
-        sourceLibrary={sourceLibrary}
-      />
-
-      <div className="spacer-6" />
 
       <DataTable
         label="Applications"

@@ -59,6 +59,7 @@ const AuditLogPage = React.lazy(() => import("./pages/AuditLog").then((m) => ({ 
 const ExportsPage = React.lazy(() => import("./pages/Exports").then((m) => ({ default: m.ExportsPage })));
 const AgendaBuilderPage = React.lazy(() => import("./pages/AgendaBuilder").then((m) => ({ default: m.AgendaBuilderPage })));
 const MeetingTemplatesPage = React.lazy(() => import("./pages/MeetingTemplates").then((m) => ({ default: m.MeetingTemplatesPage })));
+const MeetingTemplateBuilderPage = React.lazy(() => import("./pages/MeetingTemplates").then((m) => ({ default: m.MeetingTemplateBuilderPage })));
 const MotionBacklogPage = React.lazy(() => import("./pages/MotionBacklog").then((m) => ({ default: m.MotionBacklogPage })));
 const MotionLibraryPage = React.lazy(() => import("./pages/MotionLibrary").then((m) => ({ default: m.MotionLibraryPage })));
 const TreasurerPage = React.lazy(() => import("./pages/Treasurer").then((m) => ({ default: m.TreasurerPage })));
@@ -91,6 +92,7 @@ const PortalPage = React.lazy(() => import("./pages/Portal").then((m) => ({ defa
 const CommunicationsPage = React.lazy(() => import("./pages/Communications").then((m) => ({ default: m.CommunicationsPage })));
 const VolunteersPage = React.lazy(() => import("./pages/Volunteers").then((m) => ({ default: m.VolunteersPage })));
 const GrantsPage = React.lazy(() => import("./pages/Grants").then((m) => ({ default: m.GrantsPage })));
+const GrantSourcesPage = React.lazy(() => import("./pages/GrantSources").then((m) => ({ default: m.GrantSourcesPage })));
 const GrantSourceDetailPage = React.lazy(() => import("./pages/GrantSourceDetail").then((m) => ({ default: m.GrantSourceDetailPage })));
 const GrantDetailPage = React.lazy(() => import("./pages/Grants").then((m) => ({ default: m.GrantDetailPage })));
 const GrantEditPage = React.lazy(() => import("./pages/Grants").then((m) => ({ default: m.GrantEditPage })));
@@ -269,6 +271,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="directors" element={<DirectorsPage />} />
             <Route path="meetings" element={<MeetingsPage />} />
             <Route path="meeting-templates" element={<MeetingTemplatesPage />} />
+            <Route path="meeting-templates/new" element={<MeetingTemplateBuilderPage />} />
+            <Route path="meeting-templates/:templateId" element={<MeetingTemplateBuilderPage />} />
             <Route path="meetings/:id" element={<MeetingDetailPage />} />
             <Route path="meetings/:id/preview" element={<MeetingMinutesPreviewPage />} />
             <Route path="minutes" element={<MinutesPage />} />
@@ -288,6 +292,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route
               path="grants"
               element={withModule("grants", <GrantsPage />)}
+            />
+            <Route
+              path="grants/sources"
+              element={withModule("grants", <GrantSourcesPage />)}
             />
             <Route
               path="grants/sources/:libraryKey"

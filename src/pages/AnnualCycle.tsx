@@ -79,8 +79,18 @@ export function AnnualCyclePage() {
   if (society === null) return <SeedPrompt />;
   if (!data) return <div className="page">Loading...</div>;
 
-  const progress = Math.round((data.counts.completed / data.counts.total) * 100);
-  const nextItem = data.nextItem as CycleItem;
+  const phases = data.phases ?? {};
+  const fallbackItems = PHASES.flatMap((phase) => phases[phase.id] ?? []) as CycleItem[];
+  const counts = data.counts ?? {
+    completed: fallbackItems.filter((item) => item.status === "complete").length,
+    total: fallbackItems.length,
+    blocked: fallbackItems.filter((item) => item.status === "blocked").length,
+    attention: fallbackItems.filter((item) => item.status === "attention").length,
+    votingMembers: 0,
+    activeDirectors: 0,
+  };
+  const progress = counts.total > 0 ? Math.round((counts.completed / counts.total) * 100) : 0;
+  const nextItem = (data.nextItem ?? fallbackItems.find((item) => item.status !== "complete") ?? fallbackItems[0]) as CycleItem | undefined;
 
   return (
     <div className="page">
@@ -103,8 +113,8 @@ export function AnnualCyclePage() {
           <div>
             <h2 id="annual-cycle-title">{data.society?.name ?? "Society"} annual compliance cycle</h2>
             <p>
-              {data.currentStage}. {data.counts.completed}/{data.counts.total} evidence checks are complete,
-              with {data.counts.blocked} blocked and {data.counts.attention} needing attention.
+              {data.currentStage ?? "Annual cycle"}. {counts.completed}/{counts.total} evidence checks are complete,
+              with {counts.blocked} blocked and {counts.attention} needing attention.
             </p>
           </div>
           <div className="onboarding-flow__status">
@@ -120,30 +130,32 @@ export function AnnualCyclePage() {
         <div className="onboarding-flow__next">
           <div>
             <span className="onboarding-flow__eyebrow">Next action</span>
-            <strong>{nextItem.title}</strong>
-            <span>{nextItem.detail}</span>
+            <strong>{nextItem?.title ?? "No next action"}</strong>
+            <span>{nextItem?.detail ?? "No annual-cycle evidence checks are available yet."}</span>
           </div>
-          <Link to={appPath(nextItem.to)} className="btn-action btn-action--primary">
-            {nextItem.actionLabel} <ArrowRight size={12} />
-          </Link>
+          {nextItem && (
+            <Link to={appPath(nextItem.to)} className="btn-action btn-action--primary">
+              {nextItem.actionLabel} <ArrowRight size={12} />
+            </Link>
+          )}
         </div>
       </section>
 
       <div className="stat-grid">
-        <Stat label="Stage" value={data.currentStage} icon={<Clock size={14} />} />
-        <Stat label="Voting members" value={data.counts.votingMembers} icon={<Circle size={14} />} />
-        <Stat label="Active directors" value={data.counts.activeDirectors} icon={<ShieldCheck size={14} />} />
+        <Stat label="Stage" value={data.currentStage ?? "Unknown"} icon={<Clock size={14} />} />
+        <Stat label="Voting members" value={counts.votingMembers} icon={<Circle size={14} />} />
+        <Stat label="Active directors" value={counts.activeDirectors} icon={<ShieldCheck size={14} />} />
         <Stat
           label="Annual report due"
           value={data.annualReportDueDate ? formatDate(data.annualReportDueDate) : "Not computed"}
           icon={<FileCheck2 size={14} />}
-          tone={data.annualReport?.status === "Filed" ? "ok" : data.counts.blocked ? "danger" : undefined}
+          tone={data.annualReport?.status === "Filed" ? "ok" : counts.blocked ? "danger" : undefined}
         />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
         {PHASES.map((phase) => {
-          const items = (data.phases[phase.id] ?? []) as CycleItem[];
+          const items = (phases[phase.id] ?? []) as CycleItem[];
           const complete = items.filter((item) => item.status === "complete").length;
           const Icon = phase.icon;
           return (
@@ -173,7 +185,7 @@ export function AnnualCyclePage() {
         </div>
         <div className="card__body">
           <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {data.caveats.map((caveat: string) => (
+            {(data.caveats ?? []).map((caveat: string) => (
               <li key={caveat}>{caveat}</li>
             ))}
           </ul>

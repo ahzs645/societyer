@@ -1,4 +1,4 @@
-import { query, mutation } from "./lib/untypedServer";
+import { internalQuery, query, mutation } from "./lib/untypedServer";
 import { v, ConvexError } from "convex/values";
 import { requireRole, canActAs } from "./users";
 
@@ -266,6 +266,21 @@ export const revealSecret = mutation({
     });
     await logActivity(ctx, row, user.displayName, "revealed", `Revealed stored access value for "${row.name}".`);
     return { value: await decryptSecret(row.secretEncrypted), revealedAtISO: now };
+  },
+});
+
+export const _revealForServer = internalQuery({
+  args: { id: v.id("secretVaultItems") },
+  returns: v.any(),
+  handler: async (ctx, { id }) => {
+    const row = await ctx.db.get(id);
+    if (!row || !row.secretEncrypted) return null;
+    return {
+      value: await decryptSecret(row.secretEncrypted),
+      preview: row.secretPreview,
+      service: row.service,
+      credentialType: row.credentialType,
+    };
   },
 });
 

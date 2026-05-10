@@ -376,6 +376,7 @@
 .btn svg {
   width: 14px;
   height: 14px;
+  color: currentColor;
   stroke-width: 2;
 }
 
@@ -1973,6 +1974,9 @@
   border-radius: var(--r-sm);
   background: var(--bg-base);
   color: var(--text-primary);
+}
+.table-pagination:has(select) .btn--sm {
+  height: 28px;
 }
 .table-pagination__page {
   min-width: 80px;
