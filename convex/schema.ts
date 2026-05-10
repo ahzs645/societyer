@@ -1178,6 +1178,9 @@ export default defineSchema({
     createdAtISO: v.string(),
     completedAtISO: v.optional(v.string()),
     triggeredByUserId: v.optional(v.id("users")),
+    loadedSkillNames: v.optional(v.array(v.string())),
+    toolCatalogSnapshot: v.optional(v.any()),
+    unavailableTools: v.optional(v.array(v.string())),
   })
     .index("by_society", ["societyId"])
     .index("by_society_agent", ["societyId", "agentKey"]),
@@ -1186,7 +1189,7 @@ export default defineSchema({
     societyId: v.id("societies"),
     runId: v.optional(v.id("aiAgentRuns")),
     agentKey: v.string(),
-    eventType: v.string(), // run_requested | tool_planned | run_completed | run_failed
+    eventType: v.string(), // run_requested | skill_loaded | tool_learned | tool_planned | run_completed | run_failed
     toolName: v.optional(v.string()),
     summary: v.string(),
     metadata: v.optional(v.any()),
@@ -1196,6 +1199,89 @@ export default defineSchema({
     .index("by_society", ["societyId"])
     .index("by_run", ["runId"])
     .index("by_society_agent", ["societyId", "agentKey"]),
+
+  aiSkills: defineTable({
+    societyId: v.id("societies"),
+    name: v.string(),
+    label: v.string(),
+    description: v.optional(v.string()),
+    content: v.string(),
+    isCustom: v.boolean(),
+    isActive: v.boolean(),
+    createdByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_name", ["societyId", "name"]),
+
+  aiLogicFunctions: defineTable({
+    societyId: v.id("societies"),
+    name: v.string(),
+    label: v.string(),
+    description: v.optional(v.string()),
+    status: v.string(), // active | inactive | draft
+    inputSchema: v.optional(v.any()),
+    toolTriggerSettings: v.optional(v.any()),
+    implementationKind: v.string(), // built_in | webhook | workflow | manual
+    workflowId: v.optional(v.id("workflows")),
+    webhookUrl: v.optional(v.string()),
+    manualInstructions: v.optional(v.string()),
+    requiredPermission: v.optional(v.string()),
+    createdByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_name", ["societyId", "name"]),
+
+  aiChatThreads: defineTable({
+    societyId: v.id("societies"),
+    title: v.string(),
+    status: v.string(), // active | archived
+    modelId: v.optional(v.string()),
+    browsingContext: v.optional(v.any()),
+    workspaceInstructions: v.optional(v.string()),
+    createdByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+    lastMessageAtISO: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  aiMessages: defineTable({
+    societyId: v.id("societies"),
+    threadId: v.id("aiChatThreads"),
+    role: v.string(), // user | assistant | system | tool
+    content: v.string(),
+    status: v.string(), // complete | error | streaming
+    modelId: v.optional(v.string()),
+    parts: v.optional(v.any()),
+    toolCalls: v.optional(v.any()),
+    usage: v.optional(v.any()),
+    createdByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+  })
+    .index("by_thread", ["threadId"])
+    .index("by_society", ["societyId"]),
+
+  aiToolDrafts: defineTable({
+    societyId: v.id("societies"),
+    threadId: v.optional(v.id("aiChatThreads")),
+    runId: v.optional(v.id("aiAgentRuns")),
+    agentKey: v.optional(v.string()),
+    toolName: v.string(),
+    title: v.optional(v.string()),
+    payload: v.any(),
+    status: v.string(), // draft | approved | rejected | executed
+    createdByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_thread", ["threadId"])
+    .index("by_run", ["runId"]),
 
   recordLayouts: defineTable({
     societyId: v.id("societies"),
@@ -1298,6 +1384,7 @@ export default defineSchema({
         status: v.string(), // pending | running | ok | fail | skip
         atISO: v.optional(v.string()),
         note: v.optional(v.string()),
+        output: v.optional(v.any()),
       }),
     ),
     provider: v.optional(v.string()), // internal | n8n
@@ -1734,6 +1821,8 @@ export default defineSchema({
     status: v.string(),
     attendeeIds: v.array(v.string()),
     agendaJson: v.optional(v.string()),
+    meetingTemplateId: v.optional(v.id("meetingTemplates")),
+    templateSnapshotJson: v.optional(v.string()),
     minutesId: v.optional(v.id("minutes")),
     sourceReviewStatus: v.optional(v.string()), // imported_needs_review | source_reviewed | rejected
     sourceReviewNotes: v.optional(v.string()),
@@ -1748,6 +1837,28 @@ export default defineSchema({
     .index("by_society", ["societyId"])
     .index("by_society_date", ["societyId", "scheduledAt"])
     .index("by_committee", ["committeeId"]),
+
+  meetingTemplates: defineTable({
+    societyId: v.id("societies"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    meetingType: v.optional(v.string()),
+    isDefault: v.optional(v.boolean()),
+    items: v.array(
+      v.object({
+        title: v.string(),
+        depth: v.optional(v.union(v.literal(0), v.literal(1))),
+        sectionType: v.optional(v.string()),
+        presenter: v.optional(v.string()),
+        motionTemplateId: v.optional(v.id("motionTemplates")),
+        motionText: v.optional(v.string()),
+      }),
+    ),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_default", ["societyId", "isDefault"]),
 
   minutes: defineTable({
     societyId: v.id("societies"),
@@ -2187,6 +2298,120 @@ export default defineSchema({
     .index("by_grant", ["grantId"])
     .index("by_employee", ["employeeId"])
     .index("by_grant_employee", ["grantId", "employeeId"]),
+
+  grantSources: defineTable({
+    societyId: v.optional(v.id("societies")),
+    libraryKey: v.optional(v.string()),
+    name: v.string(),
+    url: v.string(),
+    sourceType: v.string(), // funder_site | government_portal | rss | pdf | airtable | spreadsheet | authenticated_portal | custom
+    jurisdiction: v.optional(v.string()),
+    funderType: v.optional(v.string()), // government | foundation | corporate | university | other
+    eligibilityTags: v.array(v.string()),
+    topicTags: v.array(v.string()),
+    scrapeCadence: v.string(), // manual | daily | weekly | monthly
+    trustLevel: v.string(), // official | partner | aggregator | unknown
+    status: v.string(), // active | paused | broken | archived
+    lastScrapedAtISO: v.optional(v.string()),
+    createdByUserId: v.optional(v.id("users")),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_library_key", ["libraryKey"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  grantSourceProfiles: defineTable({
+    societyId: v.optional(v.id("societies")),
+    sourceId: v.optional(v.id("grantSources")),
+    libraryKey: v.optional(v.string()),
+    profileKind: v.string(), // html_selectors | json_feed | rss | pdf_text | playwright_steps | manual_mapping
+    listSelector: v.optional(v.string()),
+    itemSelector: v.optional(v.string()),
+    detailUrlPattern: v.optional(v.string()),
+    fieldMappings: v.object({
+      title: v.optional(v.string()),
+      funder: v.optional(v.string()),
+      program: v.optional(v.string()),
+      registrationDeadline: v.optional(v.string()),
+      applicationDeadline: v.optional(v.string()),
+      amount: v.optional(v.string()),
+      eligibility: v.optional(v.string()),
+      description: v.optional(v.string()),
+      applicationUrl: v.optional(v.string()),
+      contactEmail: v.optional(v.string()),
+    }),
+    detailFieldMappings: v.optional(
+      v.object({
+        fundingOrganization: v.optional(v.string()),
+        programName: v.optional(v.string()),
+        alternateTitle: v.optional(v.string()),
+        sponsors: v.optional(v.string()),
+        programLaunchDate: v.optional(v.string()),
+        competitions: v.optional(v.string()),
+        registrationDeadline: v.optional(v.string()),
+        applicationDeadline: v.optional(v.string()),
+        anticipatedNoticeOfDecision: v.optional(v.string()),
+        fundingStartDate: v.optional(v.string()),
+        notices: v.optional(v.string()),
+        description: v.optional(v.string()),
+        objectives: v.optional(v.string()),
+        eligibility: v.optional(v.string()),
+        guidelines: v.optional(v.string()),
+        reviewProcess: v.optional(v.string()),
+        howToApply: v.optional(v.string()),
+        contactInformation: v.optional(v.string()),
+        sponsorDescription: v.optional(v.string()),
+        additionalInformation: v.optional(v.string()),
+        fundsAvailable: v.optional(v.string()),
+        dateModified: v.optional(v.string()),
+      }),
+    ),
+    dateFormat: v.optional(v.string()),
+    currency: v.optional(v.string()),
+    pagination: v.optional(
+      v.object({
+        mode: v.string(), // none | next_link | query_param | load_more
+        selectorOrParam: v.optional(v.string()),
+      }),
+    ),
+    requiresAuth: v.optional(v.boolean()),
+    connectorId: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_source", ["sourceId"])
+    .index("by_library_key", ["libraryKey"])
+    .index("by_society", ["societyId"]),
+
+  grantOpportunityCandidates: defineTable({
+    societyId: v.id("societies"),
+    sourceId: v.optional(v.id("grantSources")),
+    sourceLibraryKey: v.optional(v.string()),
+    title: v.string(),
+    funder: v.optional(v.string()),
+    program: v.optional(v.string()),
+    opportunityUrl: v.optional(v.string()),
+    applicationDueDate: v.optional(v.string()),
+    registrationDueDate: v.optional(v.string()),
+    amountText: v.optional(v.string()),
+    amountMinCents: v.optional(v.number()),
+    amountMaxCents: v.optional(v.number()),
+    eligibilityText: v.optional(v.string()),
+    description: v.optional(v.string()),
+    confidence: v.string(), // low | medium | high
+    status: v.string(), // New | Reviewing | Accepted | Rejected | Duplicate
+    sourceExternalIds: v.array(v.string()),
+    riskFlags: v.optional(v.array(v.string())),
+    rawSnapshot: v.optional(v.any()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_source", ["sourceId"]),
 
   deadlines: defineTable({
     societyId: v.id("societies"),

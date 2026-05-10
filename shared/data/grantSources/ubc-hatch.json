@@ -1,0 +1,42 @@
+{
+  "libraryKey": "ubc-hatch",
+  "name": "UBC HATCH Venture Builder",
+  "url": "https://icics.ubc.ca/hatch/",
+  "sourceType": "funder_site",
+  "jurisdiction": "University of British Columbia",
+  "funderType": "university",
+  "eligibilityTags": [
+    "startup",
+    "university",
+    "research",
+    "social-impact"
+  ],
+  "topicTags": [
+    "hatch",
+    "concept-fund",
+    "venture-builder",
+    "incubator"
+  ],
+  "scrapeCadence": "monthly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official UBC HATCH source for venture-building support and related funding opportunities.",
+  "profile": {
+    "profileKind": "manual_mapping",
+    "fieldMappings": {
+      "title": "programName",
+      "applicationUrl": "url",
+      "description": "programSummary"
+    },
+    "requiresAuth": false
+  },
+  "extractionPlan": {
+    "status": "representative-detail-page-reviewed",
+    "detailPagesReviewed": [
+      "https://icics.ubc.ca/hatch/",
+      "https://icics.ubc.ca/hatch/funding-opportunities/"
+    ],
+    "listPageNotes": "HATCH pages separate program overview from funding opportunities.",
+    "detailPageNotes": "Funding page has Concept Fund and related support sections; profile should target headings within HATCH subpages."
+  }
+}

@@ -36,6 +36,7 @@ type NodePreview = {
     | "pdf_fill"
     | "document_create"
     | "email"
+    | "ai_agent"
     | "external_n8n";
   label: string;
   description?: string;
@@ -730,6 +731,7 @@ export const NODE_TYPE_CATALOG: Array<{
   { type: "pdf_fill", label: "Fill PDF", description: "Hands a template + payload to the PDF fill endpoint." },
   { type: "document_create", label: "Save document", description: "Stores the generated file in Documents." },
   { type: "email", label: "Send notification", description: "Sends an email / in-app notification." },
+  { type: "ai_agent", label: "AI agent", description: "Runs a permissioned Societyer AI agent with workflow variables." },
   { type: "external_n8n", label: "External n8n step", description: "Delegates work to an n8n workflow node." },
 ];
 
@@ -886,6 +888,17 @@ function checkNodeSetup(
     checks.push({
       ok: hasCategory,
       message: hasCategory ? undefined : "Set the document category to file under.",
+    });
+  } else if (node.type === "ai_agent") {
+    const hasAgent = typeof cfg.agentKey === "string" && cfg.agentKey.trim().length > 0;
+    checks.push({
+      ok: hasAgent,
+      message: hasAgent ? undefined : "Select a Societyer AI agent.",
+    });
+    const hasPrompt = typeof cfg.promptTemplate === "string" && cfg.promptTemplate.trim().length > 0;
+    checks.push({
+      ok: hasPrompt,
+      message: hasPrompt ? undefined : "Write a prompt template for this workflow step.",
     });
   }
   return checks;
@@ -1814,14 +1827,15 @@ export const _updateStep = internalMutation({
     stepIndex: v.number(),
     status: v.string(),
     note: v.optional(v.string()),
+    output: v.optional(v.any()),
   },
   returns: v.any(),
-  handler: async (ctx, { id, stepIndex, status, note }) => {
+  handler: async (ctx, { id, stepIndex, status, note, output }) => {
     const run = await ctx.db.get(id);
     if (!run) return;
     const steps = run.steps.map((s, i) =>
       i === stepIndex
-        ? { ...s, status, atISO: new Date().toISOString(), note: note ?? s.note }
+        ? { ...s, status, atISO: new Date().toISOString(), note: note ?? s.note, output: output ?? (s as any).output }
         : s,
     );
     await ctx.db.patch(id, {
@@ -2108,7 +2122,10 @@ export const run = action({
     }
 
     const rawIntake = normalizeWorkflowRunInput(wf, args.input);
-    const steps = RECIPE_STEPS[wf.recipe as RecipeKey] ?? [];
+    const steps = stepsForRun(wf.recipe, wf.nodePreview);
+    const nodes = Array.isArray(wf.nodePreview) && wf.nodePreview.length > 0
+      ? wf.nodePreview
+      : nodePreviewForRecipe(wf.recipe as RecipeKey);
     try {
       for (let i = 0; i < steps.length; i++) {
         await ctx.runMutation(internal.workflows._updateStep, {
@@ -2117,12 +2134,13 @@ export const run = action({
           status: "running",
         });
         await sleep(400);
-        const note = await handleStep(ctx, wf, i, rawIntake);
+        const result = await handleStep(ctx, wf, i, rawIntake, nodes[i], args.actingUserId);
         await ctx.runMutation(internal.workflows._updateStep, {
           id: runId,
           stepIndex: i,
           status: "ok",
-          note,
+          note: typeof result === "string" ? result : result?.note,
+          output: typeof result === "string" ? undefined : result?.output,
         });
       }
 
@@ -2501,7 +2519,45 @@ async function runExternalNotificationWorkflow(ctx: any, wf: any, runId: any, ar
 // Step handlers. In demo mode these just annotate the step; in live mode
 // they chain into real mutations. Additive: adding a recipe means adding
 // a case here, not a new action type.
-async function handleStep(ctx: any, wf: any, stepIndex: number, intake: Record<string, any> = {}): Promise<string | undefined> {
+async function handleStep(
+  ctx: any,
+  wf: any,
+  stepIndex: number,
+  intake: Record<string, any> = {},
+  node?: NodePreview,
+  actingUserId?: any,
+): Promise<string | { note?: string; output?: any } | undefined> {
+  if (node?.type === "ai_agent") {
+    const cfg = node.config ?? {};
+    const agentKey = String(cfg.agentKey ?? "compliance_analyst");
+    const prompt = renderWorkflowPrompt(
+      String(cfg.promptTemplate ?? "Review this workflow step with the supplied variables."),
+      {
+        workflow: wf,
+        input: intake,
+        node,
+      },
+    );
+    const result = await ctx.runMutation((api as any).aiAgents.runAgent, {
+      societyId: wf.societyId,
+      agentKey,
+      input: prompt,
+      actingUserId,
+      browsingContext: {
+        surface: "workflow",
+        workflowId: String(wf._id),
+        workflowName: wf.name,
+        nodeKey: node.key,
+        nodeLabel: node.label,
+        variables: intake,
+        roleIntersection: "workflow actor permissions intersected with selected agent allowed tools",
+      },
+    });
+    return {
+      note: `AI agent ${agentKey} completed with ${result?.plannedToolCalls?.length ?? 0} planned tool call(s).`,
+      output: result,
+    };
+  }
   if (wf.recipe === "insurance_renewal" && stepIndex === 0) {
     const policies = await ctx.runQuery(api.insurance.list, {
       societyId: wf.societyId,
@@ -2533,6 +2589,16 @@ async function handleStep(ctx: any, wf: any, stepIndex: number, intake: Record<s
     }
   }
   return undefined;
+}
+
+function renderWorkflowPrompt(template: string, context: Record<string, any>) {
+  return template.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_match, path) => {
+    const value = String(path)
+      .split(".")
+      .reduce((acc: any, key: string) => (acc == null ? undefined : acc[key]), context);
+    if (value == null) return "";
+    return typeof value === "object" ? JSON.stringify(value) : String(value);
+  });
 }
 
 function nodePreviewForRecipe(recipe: RecipeKey) {

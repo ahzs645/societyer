@@ -1,0 +1,77 @@
+{
+  "libraryKey": "cihr-researchnet",
+  "name": "CIHR ResearchNet current funding opportunities",
+  "url": "https://www.researchnet-recherchenet.ca/rnetsso/ssologin?language=en",
+  "sourceType": "government_portal",
+  "jurisdiction": "Canada",
+  "funderType": "government",
+  "eligibilityTags": [
+    "research",
+    "health-research",
+    "canada",
+    "institutional-applicants"
+  ],
+  "topicTags": [
+    "cihr",
+    "researchnet",
+    "health",
+    "grants"
+  ],
+  "scrapeCadence": "weekly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official CIHR ResearchNet sign-in page exposes a public Current funding opportunities list with opportunity links, registration/LOI deadlines, and application deadlines. Deeper application/project pages may require ResearchNet authentication.",
+  "profile": {
+    "profileKind": "html_selectors",
+    "listSelector": "section, main, body",
+    "itemSelector": "a[href*='OpportunityDetails'], a[href*='FundingOpportunity'], a[href*='Opportunity']",
+    "detailUrlPattern": "/rnr16/vwOpprtntyDtls.do?prog={programId}&view=currentOpps&org=CIHR&type=EXACT&resultCount=25&sort=program&all=1&masterList=true&language=E",
+    "fieldMappings": {
+      "title": "linkText",
+      "funder": "constant:Canadian Institutes of Health Research",
+      "program": "linkTextPrefixBeforeColon",
+      "registrationDeadline": "followingText:Registration/LOI Deadline",
+      "applicationDeadline": "followingText:Application Deadline",
+      "applicationUrl": "href",
+      "description": "nearestRowText"
+    },
+    "detailFieldMappings": {
+      "fundingOrganization": "labelAfterText:Funding Organization",
+      "programName": "labelAfterText:Program Name",
+      "alternateTitle": "textAfterProgramNameParentheses",
+      "sponsors": "labelAfterText:Sponsor(s)",
+      "programLaunchDate": "labelAfterText:Program Launch Date",
+      "competitions": "importantDatesRow:Competition",
+      "registrationDeadline": "importantDatesRow:Registration Deadline|LOI Deadline",
+      "applicationDeadline": "importantDatesRow:Application Deadline",
+      "anticipatedNoticeOfDecision": "importantDatesRow:Anticipated Notice of Decision",
+      "fundingStartDate": "importantDatesRow:Funding Start Date",
+      "notices": "sectionText:Notices",
+      "description": "sectionText:Description",
+      "objectives": "sectionText:Objectives",
+      "eligibility": "sectionText:Eligibility",
+      "guidelines": "sectionText:Guidelines",
+      "reviewProcess": "sectionText:Review Process and Evaluation",
+      "howToApply": "sectionText:How to Apply",
+      "contactInformation": "sectionText:Contact Information",
+      "sponsorDescription": "sectionText:Sponsor Description",
+      "additionalInformation": "sectionText:Additional Information",
+      "fundsAvailable": "subsectionText:Funds Available",
+      "dateModified": "labelAfterText:Date Modified"
+    },
+    "dateFormat": "YYYY-MM-DD",
+    "currency": "CAD",
+    "pagination": {
+      "mode": "none"
+    },
+    "requiresAuth": false,
+    "connectorId": "researchnet",
+    "notes": "Use public-page extraction for the opportunity list. Use an authenticated browser connector only for signed-in application records or organization-specific project data."
+  },
+  "extractionPlan": {
+    "status": "list-and-detail-profile-started",
+    "detailPagesReviewed": [],
+    "listPageNotes": "",
+    "detailPageNotes": "Open representative program/detail pages for this source before promoting the profile beyond manual_mapping."
+  }
+}

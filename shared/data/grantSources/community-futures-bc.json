@@ -1,0 +1,40 @@
+{
+  "libraryKey": "community-futures-bc",
+  "name": "Community Futures British Columbia",
+  "url": "https://www.communityfutures.ca/our-services/loans-funding",
+  "sourceType": "funder_site",
+  "jurisdiction": "British Columbia",
+  "funderType": "nonprofit",
+  "eligibilityTags": [
+    "rural",
+    "entrepreneurs",
+    "small-business",
+    "nonprofit"
+  ],
+  "topicTags": [
+    "loans",
+    "micro-loans",
+    "business-advisory"
+  ],
+  "scrapeCadence": "monthly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official Community Futures BC loans and funding source; local offices administer many details.",
+  "profile": {
+    "profileKind": "manual_mapping",
+    "fieldMappings": {
+      "title": "programName",
+      "applicationUrl": "url",
+      "description": "programSummary"
+    },
+    "requiresAuth": false
+  },
+  "extractionPlan": {
+    "status": "representative-detail-page-reviewed",
+    "detailPagesReviewed": [
+      "https://www.communityfutures.ca/our-services/loans-funding"
+    ],
+    "listPageNotes": "Dedicated loans/funding page plus local-office search.",
+    "detailPageNotes": "Source details are high-level; local Community Futures offices likely require separate local source files if we scrape terms."
+  }
+}

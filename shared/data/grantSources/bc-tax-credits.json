@@ -1,0 +1,38 @@
+{
+  "libraryKey": "bc-tax-credits",
+  "name": "B.C. business tax credits and incentives",
+  "url": "https://www2.gov.bc.ca/gov/content/taxes/income-taxes/corporate/credits",
+  "sourceType": "government_portal",
+  "jurisdiction": "British Columbia",
+  "funderType": "government",
+  "eligibilityTags": [
+    "business",
+    "tax-credit",
+    "provincial"
+  ],
+  "topicTags": [
+    "sr-ed",
+    "book-publishing",
+    "interactive-digital-media",
+    "training-tax-credit"
+  ],
+  "scrapeCadence": "monthly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official B.C. corporate income tax credits source for several incentive-style programs.",
+  "profile": {
+    "profileKind": "manual_mapping",
+    "fieldMappings": {
+      "title": "creditName",
+      "applicationUrl": "url",
+      "description": "description"
+    },
+    "requiresAuth": false
+  },
+  "extractionPlan": {
+    "status": "source-verified-detail-structure-pending",
+    "detailPagesReviewed": [],
+    "listPageNotes": "",
+    "detailPageNotes": "Open representative program/detail pages for this source before promoting the profile beyond manual_mapping."
+  }
+}

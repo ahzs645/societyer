@@ -11,7 +11,7 @@ import { Select } from "../components/Select";
 import { DateTimeInput } from "../components/DateTimeInput";
 import { Toggle } from "../components/Controls";
 import { useToast } from "../components/Toast";
-import { Plus, Calendar, Tag, AlertTriangle } from "lucide-react";
+import { Plus, Calendar, Tag, AlertTriangle, BookMarked } from "lucide-react";
 import { formatDateTime } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { CalendarView } from "../components/CalendarView";
@@ -53,6 +53,7 @@ type MeetingDraft = {
   quorumRequired: string;
   status: string;
   attendeeIds: string[];
+  meetingTemplateId: string;
   notes?: string;
 };
 
@@ -60,6 +61,7 @@ export function MeetingsPage() {
   const society = useSociety();
   const { rules } = useBylawRules();
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
+  const meetingTemplates = useQuery(api.meetingTemplates.list, society ? { societyId: society._id } : "skip");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<MeetingDraft | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
@@ -75,6 +77,7 @@ export function MeetingsPage() {
   const noticeMaxDays = rules?.generalNoticeMaxDays ?? 60;
 
   const conflicts = computeConflicts(meetings ?? []);
+  const defaultTemplate = (meetingTemplates ?? []).find((template: any) => template.isDefault) ?? (meetingTemplates ?? [])[0];
 
   const openNew = (overrides: Partial<MeetingDraft> = {}) => {
     setForm({
@@ -85,6 +88,7 @@ export function MeetingsPage() {
       quorumRequired: "",
       status: "Scheduled",
       attendeeIds: [],
+      meetingTemplateId: defaultTemplate?._id ? String(defaultTemplate._id) : "",
       ...overrides,
     });
     setOpen(true);
@@ -111,6 +115,11 @@ export function MeetingsPage() {
     }, { replace: true });
   }, [open, params, setParams, society]);
 
+  useEffect(() => {
+    if (!open || !form || form.meetingTemplateId || !defaultTemplate?._id) return;
+    setForm({ ...form, meetingTemplateId: String(defaultTemplate._id) });
+  }, [defaultTemplate?._id, form, open]);
+
   if (society === undefined) return <div className="page meetings-page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
   const save = async () => {
@@ -122,13 +131,15 @@ export function MeetingsPage() {
       toast.error(`General meetings need ${effectiveNoticeMinDays}–${effectiveNoticeMaxDays} days of notice.`);
       return;
     }
-    await create({
+    const meetingId = await create({
       societyId: society._id,
       ...form,
+      meetingTemplateId: form.meetingTemplateId || undefined,
       quorumRequired: numberOrUndefined(form.quorumRequired),
     });
     setOpen(false);
     toast.success("Meeting scheduled", form.title);
+    if (meetingId) navigate(`/app/meetings/${meetingId}`);
   };
 
   return (
@@ -265,6 +276,29 @@ export function MeetingsPage() {
               </div>
               ) : null;
             })()}
+            <div className="meeting-template-picker">
+              <Field label="Template">
+                <Select
+                  value={form.meetingTemplateId}
+                  onChange={(v) => setForm({ ...form, meetingTemplateId: v })}
+                  options={[
+                    { value: "", label: "Blank meeting" },
+                    ...(meetingTemplates ?? []).map((template: any) => ({
+                      value: String(template._id),
+                      label: `${template.name}${template.isDefault ? " (default)" : ""}`,
+                    })),
+                  ]}
+                />
+              </Field>
+              {form.meetingTemplateId ? (
+                <p className="meeting-template-picker__summary">
+                  <BookMarked size={12} style={{ verticalAlign: -2, marginRight: 4 }} />
+                  {templateSummary((meetingTemplates ?? []).find((template: any) => String(template._id) === form.meetingTemplateId))}
+                </p>
+              ) : (
+                <p className="meeting-template-picker__summary">Start with an empty agenda and add sections from the meeting page.</p>
+              )}
+            </div>
             <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Type">
@@ -374,6 +408,13 @@ function meetingTimeLabel(value: string) {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return "";
   return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function templateSummary(template: any) {
+  if (!template) return "Template details are loading.";
+  const items = Array.isArray(template.items) ? template.items : [];
+  const motionCount = items.filter((item: any) => item.motionTemplateId || item.motionText).length;
+  return `${items.length} agenda item${items.length === 1 ? "" : "s"}${motionCount ? `, ${motionCount} recurring motion${motionCount === 1 ? "" : "s"}` : ""}. New meetings receive a snapshot.`;
 }
 
 function toDateTimeLocalValue(date: Date) {

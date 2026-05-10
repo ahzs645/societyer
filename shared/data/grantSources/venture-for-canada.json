@@ -1,0 +1,39 @@
+{
+  "libraryKey": "venture-for-canada",
+  "name": "Venture for Canada programs",
+  "url": "https://www.ventureforcanada.ca/programs",
+  "sourceType": "funder_site",
+  "jurisdiction": "Canada",
+  "funderType": "nonprofit",
+  "eligibilityTags": [
+    "startup",
+    "small-business",
+    "students",
+    "hiring"
+  ],
+  "topicTags": [
+    "internship",
+    "workforce",
+    "wage-subsidy",
+    "entrepreneurship"
+  ],
+  "scrapeCadence": "monthly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official Venture for Canada programs source for internships and entrepreneur workforce supports.",
+  "profile": {
+    "profileKind": "manual_mapping",
+    "fieldMappings": {
+      "title": "programName",
+      "applicationUrl": "url",
+      "description": "programSummary"
+    },
+    "requiresAuth": false
+  },
+  "extractionPlan": {
+    "status": "source-verified-detail-structure-pending",
+    "detailPagesReviewed": [],
+    "listPageNotes": "",
+    "detailPageNotes": "Open representative program/detail pages for this source before promoting the profile beyond manual_mapping."
+  }
+}

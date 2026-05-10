@@ -284,12 +284,14 @@ export function SocietyPage() {
                 />
               </div>
               <div className="hr" />
-              <Field label="Privacy officer (PIPA)">
-                <input className="input" value={form.privacyOfficerName ?? ""} onChange={(e) => set("privacyOfficerName", e.target.value)} />
-              </Field>
-              <Field label="Privacy officer email">
-                <input className="input" value={form.privacyOfficerEmail ?? ""} onChange={(e) => set("privacyOfficerEmail", e.target.value)} />
-              </Field>
+              <div className="society-field-grid society-field-grid--mobile-pair">
+                <Field label="Privacy officer (PIPA)">
+                  <input className="input" value={form.privacyOfficerName ?? ""} onChange={(e) => set("privacyOfficerName", e.target.value)} />
+                </Field>
+                <Field label="Privacy officer email">
+                  <input className="input" value={form.privacyOfficerEmail ?? ""} onChange={(e) => set("privacyOfficerEmail", e.target.value)} />
+                </Field>
+              </div>
             </div>
           </div>
 
@@ -317,7 +319,7 @@ export function SocietyPage() {
           <div className="card">
             <div className="card__head"><h2 className="card__title">Board meeting cadence</h2></div>
             <div className="card__body">
-              <div className="society-field-grid">
+              <div className="society-field-grid society-field-grid--mobile-pair">
                 <Field label="Cadence">
                   <Select
                     value={form.boardCadence ?? ""}

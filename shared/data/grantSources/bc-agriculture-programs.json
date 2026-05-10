@@ -1,0 +1,39 @@
+{
+  "libraryKey": "bc-agriculture-programs",
+  "name": "B.C. agriculture programs",
+  "url": "https://www2.gov.bc.ca/gov/content/industry/agriculture-seafood/programs",
+  "sourceType": "government_portal",
+  "jurisdiction": "British Columbia",
+  "funderType": "government",
+  "eligibilityTags": [
+    "agriculture",
+    "farmers",
+    "producers",
+    "provincial"
+  ],
+  "topicTags": [
+    "agriculture-wildlife",
+    "production-insurance",
+    "tree-fruit",
+    "buy-bc"
+  ],
+  "scrapeCadence": "monthly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official B.C. agriculture and seafood programs portal for farm, crop, livestock, and sector support programs.",
+  "profile": {
+    "profileKind": "manual_mapping",
+    "fieldMappings": {
+      "title": "programName",
+      "applicationUrl": "url",
+      "description": "programSummary"
+    },
+    "requiresAuth": false
+  },
+  "extractionPlan": {
+    "status": "source-verified-detail-structure-pending",
+    "detailPagesReviewed": [],
+    "listPageNotes": "",
+    "detailPageNotes": "Open representative program/detail pages for this source before promoting the profile beyond manual_mapping."
+  }
+}

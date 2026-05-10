@@ -21,6 +21,7 @@ import { Modal } from "../components/Modal";
 import { SeedPrompt } from "./_helpers";
 import {
   ArrowLeft,
+  Bot,
   ClipboardList,
   ExternalLink,
   FileText,
@@ -525,6 +526,8 @@ function NodeIcon({ type }: { type: string }) {
       return <Save {...props} />;
     case "email":
       return <Mail {...props} />;
+    case "ai_agent":
+      return <Bot {...props} />;
     default:
       return <ClipboardList {...props} />;
   }
@@ -542,6 +545,8 @@ function nodeTypeLabel(type: string) {
       return "Document";
     case "email":
       return "Notification";
+    case "ai_agent":
+      return "AI agent";
     default:
       return "Action";
   }
@@ -859,6 +864,7 @@ function NodeSetupPanel({ node, workflow, documents, onLaunch, launchDisabled, o
     pdf_fill: "Picks up a fillable PDF from Documents, fills mapped AcroForm fields, and saves the output as a new document version.",
     document_create: "Saves the output of a prior step into Documents with a category and retention policy.",
     email: "Queues a manual-send Outbox draft with templated content and the generated document attached.",
+    ai_agent: "Runs a permissioned Societyer AI agent. The prompt can include workflow and intake variables.",
     external_n8n: "Hands execution to an n8n workflow via its webhook URL. n8n then calls back to progress the timeline.",
   };
   const launchLabel =
@@ -949,6 +955,24 @@ function NodeSetupPanel({ node, workflow, documents, onLaunch, launchDisabled, o
         </>
       )}
 
+      {node.type === "ai_agent" && (
+        <>
+          <LabeledInput
+            label="Agent key"
+            value={cfg.agentKey ?? "compliance_analyst"}
+            placeholder="compliance_analyst"
+            onSave={(v) => onSave({ agentKey: v })}
+          />
+          <TemplateTextarea
+            label="Prompt template"
+            value={cfg.promptTemplate ?? "Review {{workflow.name}} with this workflow input: {{input}}"}
+            placeholder="Review {{workflow.name}} with this workflow input: {{input}}"
+            tokens={workflowTemplateTokens(workflow)}
+            onSave={(v) => onSave({ promptTemplate: v })}
+          />
+        </>
+      )}
+
       {node.type === "external_n8n" && (
         <>
           <LabeledInput
@@ -972,12 +996,14 @@ function NodeSetupPanel({ node, workflow, documents, onLaunch, launchDisabled, o
             type="button"
             className="btn btn--ghost btn--sm"
             disabled
-            title="Test harness ships with Phase 2 — executing nodes individually."
+            title={node.type === "ai_agent" ? "AI agent steps run as part of the workflow." : "Test harness ships with Phase 2 — executing nodes individually."}
           >
             <Play size={12} /> Test node
           </button>
           <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
-            Runner support for user-edited nodes is staged; config saved here will wire in once execution lands.
+            {node.type === "ai_agent"
+              ? "AI agent output is stored on the workflow run step."
+              : "Runner support for user-edited nodes is staged; config saved here will wire in once execution lands."}
           </span>
         </div>
       )}

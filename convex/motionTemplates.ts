@@ -74,6 +74,12 @@ const SEED_MOTIONS: Array<{
   notes?: string;
 }> = [
   {
+    title: "Adopt agenda",
+    body: "BE IT RESOLVED THAT the agenda for this meeting be adopted as presented.",
+    category: "governance",
+    requiresSpecialResolution: false,
+  },
+  {
     title: "Approve minutes of previous meeting",
     body: "BE IT RESOLVED THAT the minutes of the previous meeting, as circulated, be approved.",
     category: "governance",

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, ExternalLink, FileText, GripVertical, ListChecks, Mic, MinusCircle, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, ExternalLink, FileText, GripVertical, IndentDecrease, IndentIncrease, ListChecks, Mic, MinusCircle, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
 import { Badge, Field, MenuRow } from "../../../components/ui";
 import { useConfirm } from "../../../components/Modal";
 import { Checkbox } from "../../../components/Controls";
@@ -894,6 +894,8 @@ export function MeetingMinutesColumn({
                     : item.depth === 1
                       ? "Sub-item"
                       : "Agenda item";
+                  const canIndent = item.depth === 0 && agendaItems.slice(0, index).some((entry) => entry.depth === 0);
+                  const canOutdent = item.depth === 1;
                   return (
                     <div
                       className={`meeting-minutes-agenda-editor__row${canRemove ? "" : " is-locked"}${item.depth === 1 ? " meeting-minutes-agenda-editor__row--child" : ""}`}
@@ -959,9 +961,33 @@ export function MeetingMinutesColumn({
                         }}
                         placeholder={placeholder}
                       />
-                      {canRemove && (
+                      <div className="meeting-minutes-agenda-editor__hierarchy-actions" aria-label="Agenda item hierarchy">
                         <button
                           className="btn-action btn-action--icon"
+                          type="button"
+                          tabIndex={-1}
+                          title="Outdent item"
+                          aria-label="Outdent item"
+                          disabled={!canOutdent}
+                          onClick={() => outdentAgendaItem(index)}
+                        >
+                          <IndentDecrease size={12} />
+                        </button>
+                        <button
+                          className="btn-action btn-action--icon"
+                          type="button"
+                          tabIndex={-1}
+                          title="Indent item"
+                          aria-label="Indent item"
+                          disabled={!canIndent}
+                          onClick={() => indentAgendaItem(index)}
+                        >
+                          <IndentIncrease size={12} />
+                        </button>
+                      </div>
+                      {canRemove && (
+                        <button
+                          className="btn-action btn-action--icon meeting-minutes-agenda-editor__remove"
                           type="button"
                           tabIndex={-1}
                           title="Remove item"

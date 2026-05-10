@@ -37,3 +37,6 @@
 
 // RecordTable (Twenty-style metadata-driven table).
 @use "record-table";
+
+// Mobile-only form control text sizing to prevent iOS input-focus zoom.
+@use "mobile-input-zoom";

@@ -111,7 +111,7 @@ export function MotionLibraryPage() {
                 toast.success(`Added ${res.inserted} starter motions`);
               }}
             >
-              <Sparkles size={12} /> Seed 10 starter motions
+              <Sparkles size={12} /> Seed starter motions
             </button>
           )
         }
@@ -246,7 +246,7 @@ export function MotionLibraryPage() {
                     toast.success(`Added ${res.inserted} starter motions`);
                   }}
                 >
-                  <Sparkles size={14} /> Seed 10 starter motions
+                  <Sparkles size={14} /> Seed starter motions
                 </button>
               </div>
             ) : filtered.length === 0 ? (

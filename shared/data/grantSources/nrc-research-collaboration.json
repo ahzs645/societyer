@@ -1,0 +1,39 @@
+{
+  "libraryKey": "nrc-research-collaboration",
+  "name": "National Research Council research collaboration programs",
+  "url": "https://nrc.canada.ca/en/research-development/research-collaboration",
+  "sourceType": "government_portal",
+  "jurisdiction": "Canada",
+  "funderType": "government",
+  "eligibilityTags": [
+    "research",
+    "commercialization",
+    "national",
+    "industry-partnership"
+  ],
+  "topicTags": [
+    "aerospace",
+    "automotive",
+    "research-centres",
+    "collaboration"
+  ],
+  "scrapeCadence": "monthly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official NRC source for research collaboration opportunities and research centre partnership pages.",
+  "profile": {
+    "profileKind": "manual_mapping",
+    "fieldMappings": {
+      "title": "programName",
+      "applicationUrl": "url",
+      "description": "programSummary"
+    },
+    "requiresAuth": false
+  },
+  "extractionPlan": {
+    "status": "source-verified-detail-structure-pending",
+    "detailPagesReviewed": [],
+    "listPageNotes": "",
+    "detailPageNotes": "Open representative program/detail pages for this source before promoting the profile beyond manual_mapping."
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "libraryKey": "accelerate-okanagan",
+  "name": "Accelerate Okanagan programs",
+  "url": "https://accelerateokanagan.com/programs/",
+  "sourceType": "funder_site",
+  "jurisdiction": "British Columbia",
+  "funderType": "nonprofit",
+  "eligibilityTags": [
+    "startup",
+    "early-stage",
+    "growth",
+    "okanagan"
+  ],
+  "topicTags": [
+    "accelerator",
+    "mentorship",
+    "startup-basics",
+    "revup"
+  ],
+  "scrapeCadence": "monthly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official Accelerate Okanagan programs source for RevUp, Startup Basics, and related startup support programs.",
+  "profile": {
+    "profileKind": "manual_mapping",
+    "fieldMappings": {
+      "title": "programName",
+      "applicationUrl": "url",
+      "description": "programSummary"
+    },
+    "requiresAuth": false,
+    "notes": "Program pages may need per-program selectors before automated scraping."
+  },
+  "extractionPlan": {
+    "status": "source-verified-detail-structure-pending",
+    "detailPagesReviewed": [],
+    "listPageNotes": "",
+    "detailPageNotes": "Open representative program/detail pages for this source before promoting the profile beyond manual_mapping."
+  }
+}

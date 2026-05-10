@@ -1,0 +1,39 @@
+{
+  "libraryKey": "buy-bc",
+  "name": "Buy BC Partnership Program",
+  "url": "https://buybc.gov.bc.ca/members/become-a-buy-bc-member/",
+  "sourceType": "government_portal",
+  "jurisdiction": "British Columbia",
+  "funderType": "government",
+  "eligibilityTags": [
+    "agriculture",
+    "food",
+    "seafood",
+    "producers",
+    "processors"
+  ],
+  "topicTags": [
+    "marketing",
+    "buy-bc",
+    "partnership"
+  ],
+  "scrapeCadence": "monthly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official Buy BC source for producers, processors, and industry association funding references.",
+  "profile": {
+    "profileKind": "manual_mapping",
+    "fieldMappings": {
+      "title": "programName",
+      "applicationUrl": "url",
+      "description": "programSummary"
+    },
+    "requiresAuth": false
+  },
+  "extractionPlan": {
+    "status": "source-verified-detail-structure-pending",
+    "detailPagesReviewed": [],
+    "listPageNotes": "",
+    "detailPageNotes": "Open representative program/detail pages for this source before promoting the profile beyond manual_mapping."
+  }
+}

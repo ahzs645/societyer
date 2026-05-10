@@ -1002,9 +1002,28 @@
   .society-layout__side {
     gap: var(--s-3);
   }
-  .society-field-grid,
-  .society-field-grid--three {
+  .society-field-grid {
     grid-template-columns: 1fr;
+  }
+  .society-field-grid--three {
+    grid-template-columns: 1fr 1fr;
+  }
+  .society-field-grid--three > :first-child {
+    grid-column: 1 / -1;
+  }
+  .society-field-grid--mobile-pair {
+    grid-template-columns: 1fr 1fr;
+  }
+  .society-layout .card__head,
+  .society-layout .card__body {
+    padding: var(--s-3);
+  }
+  .society-layout .card__body .field {
+    margin-bottom: var(--s-3);
+  }
+  .society-layout .card__body > .field:last-child,
+  .society-layout .card__body > .society-field-grid:last-child .field {
+    margin-bottom: 0;
   }
 }
 

@@ -1,0 +1,41 @@
+{
+  "libraryKey": "innovate-bc",
+  "name": "Innovate BC programs",
+  "url": "https://www.innovatebc.ca/programs",
+  "sourceType": "funder_site",
+  "jurisdiction": "British Columbia",
+  "funderType": "government",
+  "eligibilityTags": [
+    "innovation",
+    "research",
+    "small-business",
+    "technology"
+  ],
+  "topicTags": [
+    "ignite",
+    "skills",
+    "commercialization",
+    "tech-adoption"
+  ],
+  "scrapeCadence": "monthly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official Innovate BC programs source, including Ignite and innovation workforce initiatives.",
+  "profile": {
+    "profileKind": "manual_mapping",
+    "fieldMappings": {
+      "title": "programName",
+      "applicationUrl": "url",
+      "description": "programSummary"
+    },
+    "requiresAuth": false
+  },
+  "extractionPlan": {
+    "status": "representative-detail-page-reviewed",
+    "detailPagesReviewed": [
+      "https://www.innovatebc.ca/programs/ignite"
+    ],
+    "listPageNotes": "Programs hub links to program detail pages.",
+    "detailPageNotes": "Ignite detail page has eligibility, key dates, steps to apply, and FAQ sections."
+  }
+}

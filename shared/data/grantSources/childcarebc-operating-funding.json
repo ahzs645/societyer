@@ -1,0 +1,40 @@
+{
+  "libraryKey": "childcarebc-operating-funding",
+  "name": "ChildCareBC operating funding",
+  "url": "https://www2.gov.bc.ca/gov/content/family-social-supports/caring-for-young-children/childcarebc-programs/child-care-operating-funding",
+  "sourceType": "government_portal",
+  "jurisdiction": "British Columbia",
+  "funderType": "government",
+  "eligibilityTags": [
+    "child-care",
+    "providers",
+    "small-business",
+    "nonprofit"
+  ],
+  "topicTags": [
+    "operating-funding",
+    "fee-reduction",
+    "wage-enhancement"
+  ],
+  "scrapeCadence": "monthly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official ChildCareBC source for base operating funding, fee reduction, and ECE wage enhancement.",
+  "profile": {
+    "profileKind": "manual_mapping",
+    "fieldMappings": {
+      "title": "programName",
+      "applicationUrl": "url",
+      "description": "programSummary"
+    },
+    "requiresAuth": false
+  },
+  "extractionPlan": {
+    "status": "representative-detail-page-reviewed",
+    "detailPagesReviewed": [
+      "https://www2.gov.bc.ca/gov/content/family-social-supports/caring-for-young-children/childcarebc-programs/child-care-operating-funding"
+    ],
+    "listPageNotes": "Dedicated program page combining base funding, fee reduction, and wage enhancement.",
+    "detailPageNotes": "Detail page uses section headings for yearly information, eligibility, reporting, and linked guidelines."
+  }
+}

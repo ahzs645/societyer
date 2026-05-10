@@ -183,6 +183,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
 
   // ---- Meetings & votes ----
   "/app/meetings": { icon: Calendar, group: "meetings", label: "Meetings" },
+  "/app/meeting-templates": { icon: BookMarked, group: "meetings", label: "Meeting templates" },
   "/app/agendas": { icon: ListOrdered, group: "meetings", label: "Agendas" },
   "/app/motion-backlog": { icon: Layers, group: "meetings", label: "Motion backlog" },
   "/app/motion-library": { icon: BookOpen, group: "meetings", label: "Motion library" },

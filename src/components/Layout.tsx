@@ -245,6 +245,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Meetings & votes",
     items: [
       navItem("/app/meetings"),
+      navItem("/app/meeting-templates"),
       navItem("/app/agendas"),
       navItem("/app/motion-backlog"),
       navItem("/app/motion-library"),
@@ -481,6 +482,7 @@ const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   Documents: "nav.documents",
   Communications: "nav.communications",
   "Meetings": "nav.meetingsItem",
+  "Meeting templates": "nav.meetingTemplates",
   "Agendas": "nav.agenda",
   "Motion library": "nav.motionLibrary",
   Minutes: "nav.minutes",

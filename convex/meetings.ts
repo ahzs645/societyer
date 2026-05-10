@@ -43,6 +43,7 @@ export const create = mutation({
     status: v.string(),
     attendeeIds: v.array(v.string()),
     agendaJson: v.optional(v.string()),
+    meetingTemplateId: v.optional(v.id("meetingTemplates")),
     sourceReviewStatus: v.optional(v.string()),
     sourceReviewNotes: v.optional(v.string()),
     sourceReviewedAtISO: v.optional(v.string()),
@@ -73,8 +74,39 @@ export const create = mutation({
       quorumRequiredOverride: args.quorumRequired,
     });
 
-    return ctx.db.insert("meetings", {
+    const template = args.meetingTemplateId
+      ? await ctx.db.get(args.meetingTemplateId)
+      : null;
+    if (args.meetingTemplateId && !template) {
+      throw new Error("Meeting template not found.");
+    }
+    if (template && template.societyId !== args.societyId) {
+      throw new Error("Meeting template belongs to a different society.");
+    }
+    const templateItems = template ? normalizeTemplateItems(template.items) : [];
+    const templateMotions = template
+      ? await buildTemplateMotions(ctx, templateItems)
+      : [];
+    const agendaJson =
+      args.agendaJson ??
+      (templateItems.length
+        ? JSON.stringify(templateItems.map(({ title, depth }) => ({ title, depth })))
+        : undefined);
+    const templateSnapshotJson = template
+      ? JSON.stringify({
+          templateId: template._id,
+          name: template.name,
+          description: template.description,
+          meetingType: template.meetingType,
+          items: templateItems,
+          capturedAtISO: new Date().toISOString(),
+        })
+      : undefined;
+
+    const meetingId = await ctx.db.insert("meetings", {
       ...args,
+      agendaJson,
+      templateSnapshotJson,
       bylawRuleSetId: args.bylawRuleSetId ?? snapshot.bylawRuleSetId,
       quorumRuleVersion: args.quorumRuleVersion ?? snapshot.quorumRuleVersion,
       quorumRuleEffectiveFromISO:
@@ -85,6 +117,42 @@ export const create = mutation({
       quorumComputedAtISO:
         args.quorumComputedAtISO ?? snapshot.quorumComputedAtISO,
     });
+    if (template && templateItems.length > 0) {
+      const attendees = Array.isArray(args.attendeeIds) ? args.attendeeIds.map(String) : [];
+      const quorumRequired = args.quorumRequired ?? snapshot.quorumRequired;
+      const minutesId = await ctx.db.insert("minutes", {
+        societyId: args.societyId,
+        meetingId,
+        heldAt: args.scheduledAt,
+        attendees,
+        absent: [],
+        quorumMet: quorumRequired == null ? false : attendees.length >= quorumRequired,
+        quorumRequired: quorumRequired ?? undefined,
+        bylawRuleSetId: args.bylawRuleSetId ?? snapshot.bylawRuleSetId,
+        quorumRuleVersion: args.quorumRuleVersion ?? snapshot.quorumRuleVersion,
+        quorumRuleEffectiveFromISO:
+          args.quorumRuleEffectiveFromISO ??
+          snapshot.quorumRuleEffectiveFromISO,
+        quorumSourceLabel: args.quorumSourceLabel ?? snapshot.quorumSourceLabel,
+        quorumComputedAtISO:
+          args.quorumComputedAtISO ?? snapshot.quorumComputedAtISO,
+        discussion: "",
+        sections: templateItems.map((item) => ({
+          title: item.title,
+          type: item.sectionType ?? inferAgendaSectionType(item.title),
+          presenter: item.presenter || undefined,
+          discussion: "",
+          decisions: [],
+          actionItems: [],
+          depth: item.depth,
+        })),
+        motions: templateMotions,
+        decisions: [],
+        actionItems: [],
+      });
+      await ctx.db.patch(meetingId, { minutesId });
+    }
+    return meetingId;
   },
 });
 
@@ -111,6 +179,8 @@ export const update = mutation({
       status: v.optional(v.string()),
       attendeeIds: v.optional(v.array(v.string())),
       agendaJson: v.optional(v.string()),
+      meetingTemplateId: v.optional(v.id("meetingTemplates")),
+      templateSnapshotJson: v.optional(v.string()),
       minutesId: v.optional(v.id("minutes")),
       sourceReviewStatus: v.optional(v.string()),
       sourceReviewNotes: v.optional(v.string()),
@@ -128,6 +198,73 @@ export const update = mutation({
     await ctx.db.patch(id, patch);
   },
 });
+
+type TemplateItem = {
+  title: string;
+  depth: 0 | 1;
+  sectionType?: string;
+  presenter?: string;
+  motionTemplateId?: any;
+  motionText?: string;
+};
+
+function normalizeTemplateItems(items: any[]): TemplateItem[] {
+  const normalized: TemplateItem[] = [];
+  let hasRoot = false;
+  for (const item of items ?? []) {
+    const title = String(item?.title ?? "").trim();
+    if (!title) continue;
+    const depth: 0 | 1 = item?.depth === 1 && hasRoot ? 1 : 0;
+    normalized.push({
+      title,
+      depth,
+      sectionType: item?.sectionType || undefined,
+      presenter: item?.presenter || undefined,
+      motionTemplateId: item?.motionTemplateId,
+      motionText: item?.motionText || undefined,
+    });
+    if (depth === 0) hasRoot = true;
+  }
+  return normalized;
+}
+
+async function buildTemplateMotions(ctx: any, items: TemplateItem[]) {
+  const motions: any[] = [];
+  const now = new Date().toISOString();
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    let text = item.motionText;
+    let resolutionType = "Ordinary";
+    if (item.motionTemplateId) {
+      const template = await ctx.db.get(item.motionTemplateId);
+      if (template) {
+        text = text || template.body;
+        resolutionType = template.requiresSpecialResolution ? "Special" : "Ordinary";
+        await ctx.db.patch(template._id, {
+          usageCount: (template.usageCount ?? 0) + 1,
+          updatedAtISO: now,
+        });
+      }
+    }
+    if (!text?.trim()) continue;
+    motions.push({
+      text: text.trim(),
+      outcome: "Pending",
+      resolutionType,
+      sectionIndex: index,
+      sectionTitle: item.title,
+    });
+  }
+  return motions;
+}
+
+function inferAgendaSectionType(title: string) {
+  const lower = title.toLowerCase();
+  if (lower.includes("motion") || lower.includes("adopt") || lower.includes("approve") || lower.includes("adjourn")) return "motion";
+  if (lower.includes("report") || lower.includes("financial statement")) return "report";
+  if (lower.includes("decision") || lower.includes("resolution")) return "decision";
+  return "discussion";
+}
 
 export const markSourceReview = mutation({
   args: {

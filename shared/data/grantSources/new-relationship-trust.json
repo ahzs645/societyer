@@ -1,0 +1,41 @@
+{
+  "libraryKey": "new-relationship-trust",
+  "name": "New Relationship Trust funding programs",
+  "url": "https://newrelationshiptrust.ca/apply-for-funding/funding-overview/overview-of-funding-programs/",
+  "sourceType": "funder_site",
+  "jurisdiction": "British Columbia",
+  "funderType": "nonprofit",
+  "eligibilityTags": [
+    "first-nations",
+    "indigenous",
+    "communities",
+    "economic-development"
+  ],
+  "topicTags": [
+    "cannabis-business-fund",
+    "equity-matching",
+    "capacity",
+    "grants"
+  ],
+  "scrapeCadence": "monthly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official New Relationship Trust funding overview source for First Nations funding programs.",
+  "profile": {
+    "profileKind": "manual_mapping",
+    "fieldMappings": {
+      "title": "programName",
+      "applicationUrl": "url",
+      "description": "programSummary"
+    },
+    "requiresAuth": false
+  },
+  "extractionPlan": {
+    "status": "representative-detail-page-reviewed",
+    "detailPagesReviewed": [
+      "https://newrelationshiptrust.ca/apply-for-funding/funding-overview/overview-of-funding-programs/"
+    ],
+    "listPageNotes": "Funding overview page links to multiple program areas.",
+    "detailPageNotes": "Needs follow-up per linked program page before automated extraction."
+  }
+}

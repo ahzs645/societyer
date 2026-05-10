@@ -1,0 +1,20 @@
+/* iOS Safari auto-zooms editable controls whose computed text size is below
+ * 16px. Keep the compact desktop controls, but use 16px on mobile focusable
+ * text fields so typing does not change the page zoom. */
+@media (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select,
+  .input,
+  .select,
+  .textarea,
+  .popover__input,
+  .menu__search-input,
+  .text-input,
+  .text-input--sm,
+  .text-input input,
+  .text-area textarea,
+  .kbar__input {
+    font-size: 16px;
+  }
+}

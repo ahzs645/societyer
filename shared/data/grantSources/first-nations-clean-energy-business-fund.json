@@ -1,0 +1,42 @@
+{
+  "libraryKey": "first-nations-clean-energy-business-fund",
+  "name": "First Nations Clean Energy Business Fund",
+  "url": "https://www2.gov.bc.ca/gov/content/environment/natural-resource-stewardship/consulting-with-first-nations/first-nations-clean-energy-business-fund",
+  "sourceType": "government_portal",
+  "jurisdiction": "British Columbia",
+  "funderType": "government",
+  "eligibilityTags": [
+    "first-nations",
+    "indigenous",
+    "clean-energy",
+    "communities"
+  ],
+  "topicTags": [
+    "capacity-funding",
+    "equity-funding",
+    "revenue-sharing",
+    "clean-energy"
+  ],
+  "scrapeCadence": "weekly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official B.C. source for FNCEBF capacity funding, equity funding, and revenue sharing.",
+  "profile": {
+    "profileKind": "manual_mapping",
+    "fieldMappings": {
+      "title": "programName",
+      "applicationDeadline": "deadline",
+      "applicationUrl": "url",
+      "description": "programSummary"
+    },
+    "requiresAuth": false
+  },
+  "extractionPlan": {
+    "status": "representative-detail-page-reviewed",
+    "detailPagesReviewed": [
+      "https://www2.gov.bc.ca/gov/content/environment/natural-resource-stewardship/consulting-with-first-nations/first-nations-clean-energy-business-fund"
+    ],
+    "listPageNotes": "Dedicated source page for capacity, equity, and revenue sharing categories.",
+    "detailPageNotes": "Detail page includes update/deadline callout, Eligibility, Funding Categories, Capacity Funding, Equity Funding, Revenue Sharing, and contact sections."
+  }
+}

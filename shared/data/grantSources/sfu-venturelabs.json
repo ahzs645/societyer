@@ -1,0 +1,41 @@
+{
+  "libraryKey": "sfu-venturelabs",
+  "name": "SFU VentureLabs programs",
+  "url": "https://venturelabs.ca/programs-services/",
+  "sourceType": "funder_site",
+  "jurisdiction": "British Columbia",
+  "funderType": "university",
+  "eligibilityTags": [
+    "startup",
+    "scale-up",
+    "deeptech",
+    "life-sciences"
+  ],
+  "topicTags": [
+    "accelerator",
+    "perago",
+    "venturelabs",
+    "commercialization"
+  ],
+  "scrapeCadence": "monthly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official SFU VentureLabs source for accelerator and venture support programs.",
+  "profile": {
+    "profileKind": "manual_mapping",
+    "fieldMappings": {
+      "title": "programName",
+      "applicationUrl": "url",
+      "description": "programSummary"
+    },
+    "requiresAuth": false
+  },
+  "extractionPlan": {
+    "status": "representative-detail-page-reviewed",
+    "detailPagesReviewed": [
+      "https://venturelabs.ca/programs-services/perago/"
+    ],
+    "listPageNotes": "Program/service pages are individual marketing/detail pages.",
+    "detailPageNotes": "Detail pages vary by program and include eligibility/application calls to action; profile should stay manual until more samples are reviewed."
+  }
+}

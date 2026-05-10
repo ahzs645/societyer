@@ -1,0 +1,38 @@
+{
+  "libraryKey": "northern-development-initiative-trust",
+  "name": "Northern Development Initiative Trust funding programs",
+  "url": "https://www.northerndevelopment.bc.ca/funding-programs/",
+  "sourceType": "funder_site",
+  "jurisdiction": "Northern British Columbia",
+  "funderType": "nonprofit",
+  "eligibilityTags": [
+    "regional",
+    "small-business",
+    "nonprofit",
+    "local-government"
+  ],
+  "topicTags": [
+    "consulting-rebate",
+    "innovation",
+    "economic-development"
+  ],
+  "scrapeCadence": "monthly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official Northern Development funding program source for regional business and community development supports.",
+  "profile": {
+    "profileKind": "manual_mapping",
+    "fieldMappings": {
+      "title": "programName",
+      "applicationUrl": "url",
+      "description": "programSummary"
+    },
+    "requiresAuth": false
+  },
+  "extractionPlan": {
+    "status": "source-verified-detail-structure-pending",
+    "detailPagesReviewed": [],
+    "listPageNotes": "",
+    "detailPageNotes": "Open representative program/detail pages for this source before promoting the profile beyond manual_mapping."
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "libraryKey": "accelerateip",
+  "name": "AccelerateIP",
+  "url": "https://www.accelerateip.ca/",
+  "sourceType": "funder_site",
+  "jurisdiction": "British Columbia, Yukon, Northwest Territories, Nunavut",
+  "funderType": "nonprofit",
+  "eligibilityTags": [
+    "startup",
+    "intellectual-property",
+    "small-business"
+  ],
+  "topicTags": [
+    "ip",
+    "commercialization",
+    "new-ventures-bc",
+    "innovate-bc"
+  ],
+  "scrapeCadence": "monthly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official AccelerateIP source led by New Ventures BC with Innovate BC collaboration.",
+  "profile": {
+    "profileKind": "manual_mapping",
+    "fieldMappings": {
+      "title": "programName",
+      "applicationUrl": "url",
+      "description": "programSummary"
+    },
+    "requiresAuth": false
+  },
+  "extractionPlan": {
+    "status": "representative-detail-page-reviewed",
+    "detailPagesReviewed": [
+      "https://www.accelerateip.ca/"
+    ],
+    "listPageNotes": "Single official program site with stream sections rather than a broad grant list.",
+    "detailPageNotes": "Program details are organized by stream with guidelines links; likely needs custom page-section extraction."
+  }
+}

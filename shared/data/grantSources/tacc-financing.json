@@ -1,0 +1,39 @@
+{
+  "libraryKey": "tacc-financing",
+  "name": "Tale'awtxw Aboriginal Capital Corporation",
+  "url": "https://www.tacc.ca/",
+  "sourceType": "funder_site",
+  "jurisdiction": "Coast Salish territories",
+  "funderType": "nonprofit",
+  "eligibilityTags": [
+    "indigenous-owned",
+    "small-business",
+    "entrepreneurs"
+  ],
+  "topicTags": [
+    "business-loans",
+    "business-equity",
+    "first-citizens-fund"
+  ],
+  "scrapeCadence": "monthly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official TACC source for Indigenous business financing and support services.",
+  "profile": {
+    "profileKind": "manual_mapping",
+    "fieldMappings": {
+      "title": "programName",
+      "applicationUrl": "url",
+      "description": "programSummary"
+    },
+    "requiresAuth": false
+  },
+  "extractionPlan": {
+    "status": "representative-detail-page-reviewed",
+    "detailPagesReviewed": [
+      "https://www.tacc.ca/"
+    ],
+    "listPageNotes": "Homepage is the official source; program details may be in downloadable application PDFs.",
+    "detailPageNotes": "Needs PDF/application extraction for Business Equity Program and First Citizens Fund details."
+  }
+}

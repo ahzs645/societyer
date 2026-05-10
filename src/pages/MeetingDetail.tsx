@@ -11,7 +11,7 @@ import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
 import { formatDate, formatDateTime } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ClipboardCheck, Download, ExternalLink, EyeOff, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
+import { ArrowLeft, BookMarked, ClipboardCheck, Download, ExternalLink, EyeOff, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../components/MotionEditor";
 import {
   MINUTES_EXPORT_STYLES,
@@ -118,6 +118,7 @@ export function MeetingDetailPage() {
   const backfillMinutesQuorum = useMutation(api.minutes.backfillQuorumSnapshot);
   const createBacklogFromMinutesMotion = useMutation(api.motionBacklog.createFromMinutesMotion);
   const createBacklogFromMinutesSection = useMutation(api.motionBacklog.createFromMinutesSection);
+  const createTemplateFromMeeting = useMutation(api.meetingTemplates.createFromMeeting);
   const saveTranscriptText = useMutation(api.transcripts.saveText);
   const importVtt = useMutation(api.transcripts.importVtt);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
@@ -999,6 +1000,16 @@ export function MeetingDetailPage() {
     toast.success("Task created", input.title);
   };
 
+  const saveCurrentMeetingAsTemplate = async () => {
+    await createTemplateFromMeeting({
+      meetingId: meeting._id,
+      name: `${meeting.title} template`,
+      description: `Created from ${meeting.title} on ${formatDate(new Date().toISOString())}.`,
+      isDefault: false,
+    });
+    toast.success("Meeting template saved");
+  };
+
   return (
     <div className="page page--wide meeting-detail-page">
       <Link to="/app/meetings" className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
@@ -1052,6 +1063,13 @@ export function MeetingDetailPage() {
                 {
                   id: "package",
                   items: [
+                    {
+                      id: "save-template",
+                      label: "Save as meeting template",
+                      icon: <BookMarked size={12} />,
+                      disabled: agendaTree.length === 0,
+                      onSelect: saveCurrentMeetingAsTemplate,
+                    },
                     {
                       id: "meeting-pack",
                       label: "Download meeting pack",

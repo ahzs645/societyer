@@ -1,0 +1,42 @@
+{
+  "libraryKey": "bc-tech",
+  "name": "BC Tech programs",
+  "url": "https://wearebctech.com/",
+  "sourceType": "funder_site",
+  "jurisdiction": "British Columbia",
+  "funderType": "nonprofit",
+  "eligibilityTags": [
+    "technology",
+    "startup",
+    "scale-up",
+    "members"
+  ],
+  "topicTags": [
+    "scaleup-academy",
+    "ip-accelerator",
+    "growth",
+    "talent"
+  ],
+  "scrapeCadence": "monthly",
+  "trustLevel": "official",
+  "status": "active",
+  "notes": "Official BC Tech Association source for member growth, scaleup, IP, talent, and accelerator programs.",
+  "profile": {
+    "profileKind": "manual_mapping",
+    "fieldMappings": {
+      "title": "programName",
+      "applicationUrl": "url",
+      "description": "programSummary"
+    },
+    "requiresAuth": false
+  },
+  "extractionPlan": {
+    "status": "representative-detail-page-reviewed",
+    "detailPagesReviewed": [
+      "https://wearebctech.com/accelerators/scaleup-academy/",
+      "https://wearebctech.com/accelerators/scaleup-accelerator-ip/"
+    ],
+    "listPageNotes": "Program pages are spread across accelerator and membership sections.",
+    "detailPageNotes": "Detail pages vary by program; likely needs source-specific routing from the homepage/program sections."
+  }
+}

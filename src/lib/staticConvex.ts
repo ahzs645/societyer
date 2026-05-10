@@ -1,4 +1,6 @@
+import Dexie, { type Table } from "dexie";
 import { RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinitions";
+import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
 
@@ -637,6 +639,68 @@ const meetings = [
 ];
 
 const minutes = [
+  {
+    _id: "static_minutes_board_q2",
+    societyId: SOCIETY_ID,
+    meetingId: MEETING_BOARD_ID,
+    status: "Draft",
+    heldAt: "2026-04-23T19:00:00.000Z",
+    chairName: "Devon Clarke",
+    secretaryName: "Mina Patel",
+    recorderName: "Avery Santos",
+    calledToOrderAt: null,
+    adjournedAt: null,
+    detailedAttendance: [
+      { name: "Mina Patel", status: "present", roleTitle: "Secretary", quorumCounted: true },
+      { name: "Jordan Lee", status: "present", roleTitle: "Treasurer", quorumCounted: true },
+      { name: "Devon Clarke", status: "present", roleTitle: "President", quorumCounted: true },
+    ],
+    attendees: ["Mina Patel", "Jordan Lee", "Devon Clarke"],
+    absent: ["Sam Nguyen"],
+    quorumMet: false,
+    quorumRequired: 4,
+    bylawRuleSetId: "static_bylaw_rules",
+    quorumRuleVersion: 1,
+    quorumRuleEffectiveFromISO: "2025-06-25T00:00:00.000Z",
+    quorumSourceLabel: "Bylaw rules v1, effective 2025-06-25",
+    quorumComputedAtISO: "2026-04-23T19:00:00.000Z",
+    discussion: "",
+    sections: [
+      {
+        title: "Privacy program review",
+        type: "policy",
+        presenter: "Avery Santos",
+        discussion: "",
+        decisions: [],
+        actionItems: [],
+        depth: 0,
+      },
+      {
+        title: "Finance committee update",
+        type: "report",
+        presenter: "Jordan Lee",
+        discussion: "",
+        decisions: [],
+        actionItems: [],
+        depth: 0,
+      },
+      {
+        title: "Grant reporting calendar",
+        type: "report",
+        presenter: "Mina Patel",
+        discussion: "",
+        decisions: [],
+        actionItems: [],
+        depth: 0,
+      },
+    ],
+    appendices: [],
+    motions: [],
+    decisions: [],
+    actionItems: [],
+    nextMeetingAt: null,
+    nextMeetingLocation: null,
+  },
   {
     _id: "static_minutes_agm",
     societyId: SOCIETY_ID,
@@ -1633,8 +1697,10 @@ const aiAgentDefinitions = [
     name: "Compliance analyst",
     summary: "Reviews governance posture against BC society obligations and produces a bounded issue list.",
     scope: "Compliance review only. May inspect workspace records and suggest next steps; cannot file, approve, or change records.",
+    modelId: "auto:societyer-smart",
+    skillNames: ["compliance-review", "data-table-access"],
     allowedActions: ["summarize_gaps", "prioritize_findings", "cite_workspace_evidence", "recommend_tasks"],
-    allowedTools: ["society.read", "directors.read", "meetings.read", "filings.read", "policies.read", "activity.read"],
+    allowedTools: ["find_society_profile", "find_directors", "find_meetings", "find_filings", "find_policies", "find_activity", "draft_task"],
     requiredInputHints: ["Review period or event", "Compliance concern or obligation", "Records to include"],
   },
   {
@@ -1642,8 +1708,10 @@ const aiAgentDefinitions = [
     name: "Meeting minutes copilot",
     summary: "Drafts agendas, revises draft minutes, and turns uploaded content or spoken notes into structured minutes.",
     scope: "Meeting drafting support only. May draft agenda or minutes content for secretary review; cannot approve minutes, record final decisions, or overwrite source evidence.",
+    modelId: "auto:societyer-smart",
+    skillNames: ["meeting-minutes", "data-table-access"],
     allowedActions: ["draft_agenda", "revise_draft_minutes", "draft_minutes", "extract_motions", "extract_action_items", "flag_quorum_gaps", "flag_source_gaps"],
-    allowedTools: ["meetings.read", "minutes.read", "transcripts.read", "documents.read", "members.read", "directors.read", "bylawRules.read"],
+    allowedTools: ["find_meetings", "find_minutes", "find_documents", "find_members", "find_directors", "app_extract_minutes_action_items", "draft_task"],
     requiredInputHints: ["Meeting date or title", "Uploaded content, transcript, rough notes, or spoken instructions", "Agenda/minutes style", "Known chair, secretary, attendance, quorum, or approval constraints"],
     workflowModes: [
       "Agenda from upload or spoken instructions",
@@ -1663,8 +1731,10 @@ const aiAgentDefinitions = [
     name: "Filing assistant",
     summary: "Plans registry filing packets and preflight checks without submitting anything externally.",
     scope: "Filing preparation only. May assemble filing data and checklist; cannot submit, sign, or represent completion.",
+    modelId: "auto:societyer-fast",
+    skillNames: ["registry-filings", "workflow-building"],
     allowedActions: ["preflight_filing", "prepare_packet_outline", "identify_missing_fields", "draft_operator_checklist"],
-    allowedTools: ["society.read", "directors.read", "filings.read", "documents.read", "activity.read"],
+    allowedTools: ["find_society_profile", "find_directors", "find_filings", "find_documents", "find_activity", "app_prepare_filing_packet", "draft_task"],
     requiredInputHints: ["Filing type", "Effective date or filing period", "Known changed information"],
   },
   {
@@ -1672,8 +1742,10 @@ const aiAgentDefinitions = [
     name: "Policy reviewer",
     summary: "Reviews internal policies for stale dates, missing owners, and implementation evidence.",
     scope: "Policy review only. May comment and recommend revisions; cannot adopt policies or alter approved text.",
+    modelId: "auto:societyer-fast",
+    skillNames: ["policy-review", "data-table-access"],
     allowedActions: ["review_policy", "compare_to_template", "flag_review_dates", "suggest_revision_notes"],
-    allowedTools: ["policies.read", "documents.read", "activity.read", "tasks.read"],
+    allowedTools: ["find_policies", "find_documents", "find_activity", "find_tasks", "draft_task"],
     requiredInputHints: ["Policy name or area", "Review reason", "Applicable template or requirement"],
   },
   {
@@ -1681,14 +1753,45 @@ const aiAgentDefinitions = [
     name: "Grant reporting assistant",
     summary: "Plans grant report evidence, restricted-fund summaries, and missing deliverables.",
     scope: "Grant reporting support only. May summarize evidence and draft report structure; cannot certify, submit, or alter financials.",
+    modelId: "auto:societyer-smart",
+    skillNames: ["grant-reporting", "data-table-access"],
     allowedActions: ["summarize_grant_progress", "map_evidence", "flag_restricted_fund_gaps", "draft_report_outline"],
-    allowedTools: ["grants.read", "financials.read", "documents.read", "tasks.read", "activity.read"],
+    allowedTools: ["find_grants", "find_financials", "find_documents", "find_tasks", "find_activity", "draft_task"],
     requiredInputHints: ["Grant or funder name", "Reporting period", "Deliverables or budget categories"],
   },
 ];
 
+const aiSkills: any[] = [
+  { name: "compliance-review", label: "Compliance Review", description: "Review governance records, missing evidence, filings, and board obligations.", isCustom: false },
+  { name: "meeting-minutes", label: "Meeting Minutes", description: "Draft agendas and minutes from meetings, transcripts, documents, and prompts.", isCustom: false },
+  { name: "registry-filings", label: "Registry Filings", description: "Prepare filing packets and preflight checklists without submitting externally.", isCustom: false },
+  { name: "policy-review", label: "Policy Review", description: "Review policies for stale dates, missing owners, and implementation evidence.", isCustom: false },
+  { name: "grant-reporting", label: "Grant Reporting", description: "Map grant deliverables, financial evidence, and missing report materials.", isCustom: false },
+  { name: "workflow-building", label: "Workflow Building", description: "Plan workflow runs and workflow package handoffs.", isCustom: false },
+  { name: "data-table-access", label: "Data Table Access", description: "Use Societyer record tables safely through permissioned read tools.", isCustom: false },
+];
+
+const aiToolCatalog = [
+  ["DATABASE_CRUD", ["find_society_profile", "find_members", "find_directors", "find_meetings", "find_minutes", "find_filings", "find_documents", "find_policies", "find_tasks", "find_grants", "find_financials", "find_activity"]],
+  ["ACTION", ["draft_task", "navigate_app"]],
+  ["WORKFLOW", ["list_workflows"]],
+  ["METADATA", ["list_object_metadata"]],
+  ["VIEW", ["list_views"]],
+  ["DASHBOARD", ["summarize_dashboard"]],
+  ["LOGIC_FUNCTION", ["app_prepare_filing_packet", "app_extract_minutes_action_items"]],
+].flatMap(([category, names]) =>
+  (names as string[]).map((name) => ({
+    name,
+    label: name.replace(/^app_/, "").replace(/_/g, " "),
+    category,
+    description: `Permissioned ${String(category).toLowerCase()} tool for ${name}.`,
+  })),
+);
+
 const aiAgentRuns: any[] = [];
 const aiAgentAuditEvents: any[] = [];
+const aiChatThreads: any[] = [];
+const aiMessages: any[] = [];
 
 const motionBacklog = [
   {
@@ -1749,6 +1852,8 @@ const tables: Record<string, any[]> = {
   workflowRuns,
   aiAgentRuns,
   aiAgentAuditEvents,
+  aiChatThreads,
+  aiMessages,
   motionBacklog,
   pendingEmails: [
     {
@@ -1975,6 +2080,80 @@ const tables: Record<string, any[]> = {
     },
   ],
   grantTransactions: [],
+  grantSources: [
+    {
+      _id: "static_grant_source_cihr_researchnet",
+      societyId: SOCIETY_ID,
+      libraryKey: "cihr-researchnet",
+      name: "CIHR ResearchNet current funding opportunities",
+      url: "https://www.researchnet-recherchenet.ca/rnetsso/ssologin?language=en",
+      sourceType: "government_portal",
+      jurisdiction: "Canada",
+      funderType: "government",
+      eligibilityTags: ["research", "health-research", "canada", "institutional-applicants"],
+      topicTags: ["cihr", "researchnet", "health", "grants"],
+      scrapeCadence: "weekly",
+      trustLevel: "official",
+      status: "active",
+      notes: "Official CIHR ResearchNet source profile for public funding opportunities.",
+      createdAtISO: "2026-05-10T00:00:00.000Z",
+      updatedAtISO: "2026-05-10T00:00:00.000Z",
+    },
+  ],
+  grantSourceProfiles: [
+    {
+      _id: "static_grant_source_profile_cihr_researchnet",
+      societyId: SOCIETY_ID,
+      sourceId: "static_grant_source_cihr_researchnet",
+      libraryKey: "cihr-researchnet",
+      profileKind: "html_selectors",
+      listSelector: "section, main, body",
+      itemSelector: "a[href*='Opportunity']",
+      detailUrlPattern: "/rnr16/vwOpprtntyDtls.do?prog={programId}&view=currentOpps&org=CIHR&type=EXACT&resultCount=25&sort=program&all=1&masterList=true&language=E",
+      fieldMappings: {
+        title: "linkText",
+        funder: "constant:Canadian Institutes of Health Research",
+        program: "linkTextPrefixBeforeColon",
+        registrationDeadline: "followingText:Registration/LOI Deadline",
+        applicationDeadline: "followingText:Application Deadline",
+        applicationUrl: "href",
+        description: "nearestRowText",
+      },
+      detailFieldMappings: {
+        fundingOrganization: "labelAfterText:Funding Organization",
+        programName: "labelAfterText:Program Name",
+        alternateTitle: "textAfterProgramNameParentheses",
+        sponsors: "labelAfterText:Sponsor(s)",
+        programLaunchDate: "labelAfterText:Program Launch Date",
+        competitions: "importantDatesRow:Competition",
+        registrationDeadline: "importantDatesRow:Registration Deadline|LOI Deadline",
+        applicationDeadline: "importantDatesRow:Application Deadline",
+        anticipatedNoticeOfDecision: "importantDatesRow:Anticipated Notice of Decision",
+        fundingStartDate: "importantDatesRow:Funding Start Date",
+        notices: "sectionText:Notices",
+        description: "sectionText:Description",
+        objectives: "sectionText:Objectives",
+        eligibility: "sectionText:Eligibility",
+        guidelines: "sectionText:Guidelines",
+        reviewProcess: "sectionText:Review Process and Evaluation",
+        howToApply: "sectionText:How to Apply",
+        contactInformation: "sectionText:Contact Information",
+        sponsorDescription: "sectionText:Sponsor Description",
+        additionalInformation: "sectionText:Additional Information",
+        fundsAvailable: "subsectionText:Funds Available",
+        dateModified: "labelAfterText:Date Modified",
+      },
+      dateFormat: "YYYY-MM-DD",
+      currency: "CAD",
+      pagination: { mode: "none" },
+      requiresAuth: false,
+      connectorId: "researchnet",
+      notes: "Public-page extraction profile for CIHR ResearchNet opportunity listings.",
+      createdAtISO: "2026-05-10T00:00:00.000Z",
+      updatedAtISO: "2026-05-10T00:00:00.000Z",
+    },
+  ],
+  grantOpportunityCandidates: [],
   inspections: [],
   meetingMaterials,
   secrets: [
@@ -2842,6 +3021,19 @@ function grantsSummary() {
   };
 }
 
+function staticGrantSourceLibrary() {
+  return BUILT_IN_GRANT_SOURCES.map((librarySource) => {
+    const source = tables.grantSources.find((row) => row.libraryKey === librarySource.libraryKey);
+    const profile = tables.grantSourceProfiles.find((row) => row.libraryKey === librarySource.libraryKey);
+    return {
+      ...(source ?? {}),
+      ...librarySource,
+      builtIn: true,
+      profile: profile ?? BUILT_IN_GRANT_SOURCE_PROFILES.find((row) => row.libraryKey === librarySource.libraryKey),
+    };
+  });
+}
+
 function electionBundle(args: StaticArgs) {
   const election = byId(elections, args?.id) ?? elections[0];
   const questions = electionQuestions.filter((row) => row.electionId === election._id);
@@ -3000,6 +3192,9 @@ const STATIC_EXPORT_TABLES = [
   "grantApplications",
   "grantReports",
   "grantTransactions",
+  "grantSources",
+  "grantSourceProfiles",
+  "grantOpportunityCandidates",
   "deadlines",
   "commitments",
   "commitmentEvents",
@@ -3037,6 +3232,7 @@ const STATIC_EXPORT_TABLES = [
   "bylawAmendments",
   "agendas",
   "agendaItems",
+  "meetingTemplates",
   "motionTemplates",
   "motionBacklog",
   "recordsLocation",
@@ -3173,10 +3369,55 @@ function queryResult(name: string, args: StaticArgs) {
       return tables.activity.slice(0, args?.limit ?? tables.activity.length);
     case "aiAgents:listDefinitions":
       return aiAgentDefinitions;
+    case "aiAgents:listSkills":
+      return aiSkills.filter((skill: any) => skill.isActive !== false);
+    case "aiAgents:listAllSkills":
+      return aiSkills;
+    case "aiAgents:loadSkills": {
+      const names = new Set(args?.skillNames ?? []);
+      const skills = aiSkills.filter((skill) => names.has(skill.name));
+      return { skills, missing: [...names].filter((name) => !skills.some((skill) => skill.name === name)), message: `Loaded ${skills.length} skill(s).` };
+    }
+    case "aiAgents:getToolCatalog": {
+      const catalog: Record<string, any[]> = {};
+      aiToolCatalog.forEach((tool) => {
+        catalog[tool.category as string] ??= [];
+        catalog[tool.category as string].push(tool);
+      });
+      return { role: "Owner", categories: Object.keys(catalog), catalog, tools: aiToolCatalog };
+    }
+    case "aiAgents:getChatContext": {
+      const catalog: Record<string, any[]> = {};
+      aiToolCatalog.forEach((tool) => {
+        catalog[tool.category as string] ??= [];
+        catalog[tool.category as string].push(tool);
+      });
+      return {
+        role: "Owner",
+        user: { id: USER_OWNER_ID, displayName: "Mina Patel", role: "Owner" },
+        skillCatalog: aiSkills,
+        toolCatalog: catalog,
+        browsingContext: args?.browsingContext ?? null,
+        systemPrompt: "You are Societyer's AI assistant. Follow Plan -> Skill -> Learn -> Execute.",
+      };
+    }
+    case "aiAgents:learnTools": {
+      const names = new Set(args?.toolNames ?? []);
+      const tools = aiToolCatalog
+        .filter((tool) => names.has(tool.name))
+        .map((tool) => ({ ...tool, inputSchema: { type: "object", additionalProperties: true } }));
+      return { tools, notFound: [...names].filter((name) => !tools.some((tool) => tool.name === name)), message: `Learned ${tools.length} tool(s).` };
+    }
+    case "aiAgents:executeTool":
+      return { success: true, toolName: args?.toolName, rows: [] };
     case "aiAgents:listRuns":
       return aiAgentRuns.slice(0, args?.limit ?? aiAgentRuns.length);
     case "aiAgents:auditForRun":
       return aiAgentAuditEvents.filter((event) => event.runId === args?.runId);
+    case "aiChat:listThreads":
+      return aiChatThreads.slice(0, args?.limit ?? aiChatThreads.length);
+    case "aiChat:messagesForThread":
+      return aiMessages.filter((message) => message.threadId === args?.threadId);
     case "apiPlatform:listIntegrationCatalog":
       return INTEGRATION_CATALOG.map((manifest) => {
         const installation = tables.pluginInstallations.find((row) => row.slug === manifest.slug);
@@ -3466,6 +3707,21 @@ function queryResult(name: string, args: StaticArgs) {
       return grantsSummary();
     case "grants:transactions":
       return tables.grantTransactions;
+    case "grantSources:library":
+      return staticGrantSourceLibrary();
+    case "grantSources:list":
+      return tables.grantSources;
+    case "grantSources:listWithLibrary":
+      return {
+        library: staticGrantSourceLibrary().map((source: any) => ({
+          ...source,
+          _id: tables.grantSources.find((row) => row.libraryKey === source.libraryKey)?._id,
+          installed: tables.grantSources.some((row) => row.libraryKey === source.libraryKey),
+        })),
+        workspace: tables.grantSources,
+      };
+    case "grantSources:candidates":
+      return tables.grantOpportunityCandidates;
     case "members:get":
       return byId(members, args?.id);
     case "meetings:get":
@@ -3556,7 +3812,98 @@ function queryResult(name: string, args: StaticArgs) {
   return [];
 }
 
-function mutationResult(name: string, args: StaticArgs) {
+function mutableQueryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null) {
+  return store?.queryResult(name, args) ?? queryResult(name, args);
+}
+
+function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null) {
+  const localResult = store?.mutationResult(name, args);
+  if (localResult !== undefined) return localResult;
+
+  if (name === "aiChat:createThread") {
+    const now = new Date().toISOString();
+    const thread = {
+      _id: `static_ai_chat_thread_${Date.now()}`,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      title: args?.title ?? "New AI chat",
+      status: "active",
+      modelId: args?.modelId,
+      browsingContext: args?.browsingContext,
+      createdByUserId: args?.actingUserId,
+      createdAtISO: now,
+      updatedAtISO: now,
+      lastMessageAtISO: now,
+    };
+    aiChatThreads.unshift(thread);
+    return thread._id;
+  }
+  if (name === "aiChatActions:sendChatMessage") {
+    const now = new Date().toISOString();
+    const threadId = args?.threadId ?? mutationResult("aiChat:createThread", {
+      societyId: args?.societyId,
+      title: args?.content,
+      actingUserId: args?.actingUserId,
+    });
+    aiMessages.push({
+      _id: `static_ai_message_user_${Date.now()}`,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      threadId,
+      role: "user",
+      content: args?.content ?? "",
+      status: "complete",
+      createdAtISO: now,
+    });
+    const content = [
+      "Static AI chat reply.",
+      "",
+      "This route is wired to the same skill catalog and tool catalog as live Convex.",
+      "Set OPENAI_API_KEY in a real deployment to stream through the Vercel AI SDK.",
+    ].join("\n");
+    const message = {
+      _id: `static_ai_message_assistant_${Date.now()}`,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      threadId,
+      role: "assistant",
+      content,
+      status: "complete",
+      provider: "static_fallback",
+      createdAtISO: now,
+    };
+    aiMessages.push(message);
+    return { threadId, messageId: message._id, content, provider: "static_fallback" };
+  }
+  if (name === "aiAgents:upsertSkill") {
+    const now = new Date().toISOString();
+    const id = args?.id ?? `static_ai_skill_${Date.now()}`;
+    const existing = aiSkills.find((skill: any) => skill._id === id);
+    const payload = {
+      _id: id,
+      name: args?.name,
+      label: args?.label,
+      description: args?.description,
+      content: args?.content,
+      isActive: args?.isActive !== false,
+      isCustom: true,
+      createdAtISO: now,
+      updatedAtISO: now,
+    };
+    if (existing) Object.assign(existing, payload);
+    else aiSkills.push(payload);
+    return id;
+  }
+  if (name === "aiAgents:setSkillActive") {
+    const existing = aiSkills.find((skill: any) => skill._id === args?.id);
+    if (existing) existing.isActive = args?.isActive;
+    return args?.id;
+  }
+  if (name === "aiAgents:removeSkill") {
+    const idx = aiSkills.findIndex((skill: any) => skill._id === args?.id);
+    if (idx >= 0) aiSkills.splice(idx, 1);
+    return args?.id;
+  }
+  if (name === "aiAgents:executeTool") {
+    return { success: true, toolName: args?.toolName, rows: [], recordReferences: [] };
+  }
   if (name === "aiAgents:runAgent") {
     const agent = aiAgentDefinitions.find((item) => item.key === args?.agentKey) ?? aiAgentDefinitions[0];
     const now = new Date().toISOString();
@@ -3571,19 +3918,29 @@ function mutationResult(name: string, args: StaticArgs) {
       scope: agent.scope,
       allowedActions: agent.allowedActions,
       allowedTools: agent.allowedTools,
+      loadedSkillNames: agent.skillNames ?? [],
+      toolCatalogSnapshot: aiToolCatalog.filter((tool) => agent.allowedTools.includes(tool.name)),
+      unavailableTools: [],
       plannedToolCalls: agent.allowedTools.map((toolName: string) => ({
         toolName,
-        purpose: `Read ${toolName.split(".")[0]} records within the agent scope.`,
+        purpose: `Use ${toolName} within the agent scope.`,
         status: "planned",
       })),
       output: staticAgentOutput(agent, args?.input ?? ""),
-      provider: "deterministic_stub",
+      provider: "deterministic_skill_router",
       createdAtISO: now,
       completedAtISO: now,
       triggeredByUserId: args?.actingUserId,
     };
     aiAgentRuns.unshift(run);
-    return { runId: run._id, output: run.output, plannedToolCalls: run.plannedToolCalls };
+    return {
+      runId: run._id,
+      output: run.output,
+      plannedToolCalls: run.plannedToolCalls,
+      loadedSkills: aiSkills.filter((skill) => (agent.skillNames ?? []).includes(skill.name)),
+      learnedTools: run.toolCatalogSnapshot,
+      unavailableTools: [],
+    };
   }
   if (name === "apiPlatform:installIntegration") {
     const manifest = INTEGRATION_CATALOG.find((item) => item.slug === args?.slug);
@@ -3835,6 +4192,52 @@ function mutationResult(name: string, args: StaticArgs) {
       updatedFeePeriods: 0,
     };
   }
+  if (name === "grantSources:addFromLibrary") {
+    const librarySource = BUILT_IN_GRANT_SOURCES.find((source) => source.libraryKey === args?.libraryKey);
+    if (!librarySource) return { sourceId: "static_grant_source_unknown", installed: false };
+    const { profile: _profile, ...sourcePayload } = librarySource;
+    const now = new Date().toISOString();
+    let source = tables.grantSources.find((row) => row.libraryKey === librarySource.libraryKey);
+    if (source) {
+      Object.assign(source, {
+        ...sourcePayload,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        updatedAtISO: now,
+      });
+    } else {
+      source = {
+        _id: `static_grant_source_${librarySource.libraryKey}`,
+        _creationTime: Date.now(),
+        societyId: args?.societyId ?? SOCIETY_ID,
+        ...sourcePayload,
+        createdByUserId: args?.actingUserId,
+        createdAtISO: now,
+        updatedAtISO: now,
+      };
+      tables.grantSources.push(source);
+    }
+    const libraryProfile = BUILT_IN_GRANT_SOURCE_PROFILES.find((profile) => profile.libraryKey === librarySource.libraryKey);
+    if (libraryProfile) {
+      const existingProfile = tables.grantSourceProfiles.find((profile) => profile.sourceId === source._id || profile.libraryKey === librarySource.libraryKey);
+      const profilePayload = {
+        societyId: args?.societyId ?? SOCIETY_ID,
+        sourceId: source._id,
+        ...libraryProfile,
+        updatedAtISO: now,
+      };
+      if (existingProfile) {
+        Object.assign(existingProfile, profilePayload);
+      } else {
+        tables.grantSourceProfiles.push({
+          _id: `static_grant_source_profile_${librarySource.libraryKey}`,
+          _creationTime: Date.now(),
+          ...profilePayload,
+          createdAtISO: now,
+        });
+      }
+    }
+    return { sourceId: source._id, installed: true };
+  }
   if (name.endsWith(":create") || name.includes(":upsert") || name.includes(":issue")) {
     return args?.id ?? `static_${Date.now()}`;
   }
@@ -3854,7 +4257,160 @@ function staticAgentOutput(agent: any, input: string) {
   ].join("\n");
 }
 
+type StaticDemoTableName = "meetings" | "minutes";
+
+class StaticDemoDexieDatabase extends Dexie {
+  meetings!: Table<any, string>;
+  minutes!: Table<any, string>;
+
+  constructor() {
+    super("societyer-static-demo");
+    this.version(1).stores({
+      meetings: "_id, societyId, scheduledAt, status",
+      minutes: "_id, meetingId, societyId, heldAt, status",
+    });
+  }
+}
+
+class StaticDemoDexieStore {
+  private db: StaticDemoDexieDatabase | null = null;
+  private cache: Record<StaticDemoTableName, any[]>;
+  private listeners = new Set<() => void>();
+
+  constructor(seed: Record<StaticDemoTableName, any[]>) {
+    this.cache = {
+      meetings: cloneStaticRows(seed.meetings),
+      minutes: cloneStaticRows(seed.minutes),
+    };
+
+    if (typeof window === "undefined" || !("indexedDB" in window)) return;
+
+    this.db = new StaticDemoDexieDatabase();
+    void this.hydrate(seed).catch((error) => {
+      console.warn("[societyer-demo] Dexie hydrate failed; using in-memory static data.", error);
+    });
+  }
+
+  onUpdate(listener: () => void) {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  queryResult(name: string, args: StaticArgs) {
+    switch (name) {
+      case "meetings:get":
+        return byId(this.cache.meetings, args?.id) ?? this.cache.meetings[0] ?? null;
+      case "meetings:list":
+        return scopedRows(this.cache.meetings, args);
+      case "minutes:getByMeeting":
+        return this.cache.minutes.find((row) => row.meetingId === args?.meetingId) ?? null;
+      case "minutes:get":
+        return byId(this.cache.minutes, args?.id);
+    }
+    return undefined;
+  }
+
+  mutationResult(name: string, args: StaticArgs) {
+    if (name === "meetings:update") {
+      const updated = this.patchRow("meetings", args?.id, args?.patch ?? {});
+      return updated?._id ?? null;
+    }
+
+    if (name === "minutes:update") {
+      const updated = this.patchRow("minutes", args?.id, args?.patch ?? {});
+      return updated?._id ?? null;
+    }
+
+    if (name === "minutes:create") {
+      const now = Date.now();
+      const row = {
+        _id: args?.id ?? `static_minutes_${now}`,
+        _creationTime: now,
+        status: args?.status ?? "Draft",
+        createdAtISO: new Date(now).toISOString(),
+        updatedAtISO: new Date(now).toISOString(),
+        ...args,
+      };
+      this.cache.minutes = upsertStaticRow(this.cache.minutes, row);
+      void this.db?.minutes.put(cloneStaticRow(row));
+      this.notify();
+      return row._id;
+    }
+
+    return undefined;
+  }
+
+  private async hydrate(seed: Record<StaticDemoTableName, any[]>) {
+    if (!this.db) return;
+
+    await this.db.open();
+    const [meetingCount, minuteCount] = await Promise.all([
+      this.db.meetings.count(),
+      this.db.minutes.count(),
+    ]);
+
+    if (meetingCount === 0) await this.db.meetings.bulkPut(cloneStaticRows(seed.meetings));
+    else await putMissingStaticRows(this.db.meetings, seed.meetings);
+    if (minuteCount === 0) await this.db.minutes.bulkPut(cloneStaticRows(seed.minutes));
+    else await putMissingStaticRows(this.db.minutes, seed.minutes);
+
+    const [localMeetings, localMinutes] = await Promise.all([
+      this.db.meetings.toArray(),
+      this.db.minutes.toArray(),
+    ]);
+
+    this.cache = {
+      meetings: localMeetings.length ? localMeetings : cloneStaticRows(seed.meetings),
+      minutes: localMinutes.length ? localMinutes : cloneStaticRows(seed.minutes),
+    };
+    this.notify();
+  }
+
+  private patchRow(table: StaticDemoTableName, id: string | undefined, patch: Record<string, any>) {
+    if (!id) return null;
+    const existing = this.cache[table].find((row) => row._id === id);
+    if (!existing) return null;
+    const updated = { ...existing, ...patch, updatedAtISO: new Date().toISOString() };
+    this.cache[table] = upsertStaticRow(this.cache[table], updated);
+    void this.db?.[table].put(cloneStaticRow(updated));
+    this.notify();
+    return updated;
+  }
+
+  private notify() {
+    for (const listener of this.listeners) listener();
+  }
+}
+
+function cloneStaticRow<T>(row: T): T {
+  return JSON.parse(JSON.stringify(row));
+}
+
+function cloneStaticRows<T>(rows: T[]): T[] {
+  return rows.map((row) => cloneStaticRow(row));
+}
+
+function upsertStaticRow(rows: any[], row: any) {
+  const index = rows.findIndex((candidate) => candidate._id === row._id);
+  if (index === -1) return [...rows, row];
+  const next = rows.slice();
+  next[index] = row;
+  return next;
+}
+
+async function putMissingStaticRows(table: Table<any, string>, seedRows: any[]) {
+  const missing: any[] = [];
+  for (const row of seedRows) {
+    if (!(await table.get(row._id))) missing.push(cloneStaticRow(row));
+  }
+  if (missing.length) await table.bulkPut(missing);
+}
+
 export class StaticConvexClient {
+  private store = new StaticDemoDexieStore({ meetings, minutes });
+
   get url() {
     return "static://societyer-demo";
   }
@@ -3862,8 +4418,8 @@ export class StaticConvexClient {
   watchQuery(query: any, args?: StaticArgs) {
     const name = functionName(query);
     return {
-      onUpdate: () => () => undefined,
-      localQueryResult: () => queryResult(name, args),
+      onUpdate: (callback: () => void) => this.store.onUpdate(callback),
+      localQueryResult: () => mutableQueryResult(name, args, this.store),
       journal: () => undefined,
     };
   }
@@ -3871,9 +4427,9 @@ export class StaticConvexClient {
   watchPaginatedQuery(query: any, args?: StaticArgs) {
     const name = functionName(query);
     return {
-      onUpdate: () => () => undefined,
+      onUpdate: (callback: () => void) => this.store.onUpdate(callback),
       localQueryResult: () => ({
-        results: queryResult(name, args) ?? [],
+        results: mutableQueryResult(name, args, this.store) ?? [],
         status: "Exhausted",
         loadMore: () => undefined,
       }),
@@ -3881,15 +4437,15 @@ export class StaticConvexClient {
   }
 
   query(query: any, args?: StaticArgs) {
-    return Promise.resolve(queryResult(functionName(query), args));
+    return Promise.resolve(mutableQueryResult(functionName(query), args, this.store));
   }
 
   mutation(mutation: any, args?: StaticArgs) {
-    return Promise.resolve(mutationResult(functionName(mutation), args));
+    return Promise.resolve(mutationResult(functionName(mutation), args, this.store));
   }
 
   action(action: any, args?: StaticArgs) {
-    return Promise.resolve(mutationResult(functionName(action), args));
+    return Promise.resolve(mutationResult(functionName(action), args, this.store));
   }
 
   prewarmQuery() {
