@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useMutation } from "convex/react";
 import { ExternalLink, FileText, Globe2, LayoutGrid, Plus, Table2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
-import { Column, DataTable } from "../../../components/DataTable";
-import { FilterField } from "../../../components/FilterBar";
+import { DataTable } from "../../../components/DataTable";
+import type { Column } from "../../../components/DataTable";
+import type { FilterField } from "../../../components/FilterBar";
 import { Badge, Drawer, Field } from "../../../components/ui";
 import { useToast } from "../../../components/Toast";
 
@@ -42,42 +44,42 @@ export function GrantSourceLibrarySection({
     [sourceLibrary],
   );
 
-  const sourceTypeOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => row.sourceType)), [sourceRows]);
-  const statusOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => row.installed ? "installed" : row.status)), [sourceRows]);
-  const trustOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => row.trustLevel)), [sourceRows]);
-  const cadenceOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => row.scrapeCadence)), [sourceRows]);
-  const funderOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => row.funderType)), [sourceRows]);
+  const sourceTypeOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => formatSourceLabel(row.sourceType))), [sourceRows]);
+  const statusOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => formatSourceLabel(row.installed ? "installed" : row.status))), [sourceRows]);
+  const trustOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => formatSourceLabel(row.trustLevel))), [sourceRows]);
+  const cadenceOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => formatSourceLabel(row.scrapeCadence))), [sourceRows]);
+  const funderOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => formatSourceLabel(row.funderType))), [sourceRows]);
 
   const sourceFilterFields = useMemo<FilterField<any>[]>(() => [
     {
       id: "status",
       label: "Status",
       options: statusOptions,
-      match: (row, query) => normalizeSourceStatus(row).toLowerCase() === query.toLowerCase(),
+      match: (row, query) => formatSourceLabel(normalizeSourceStatus(row)).toLowerCase() === query.toLowerCase(),
     },
     {
       id: "sourceType",
       label: "Source type",
       options: sourceTypeOptions,
-      match: (row, query) => String(row.sourceType ?? "").toLowerCase() === query.toLowerCase(),
+      match: (row, query) => formatSourceLabel(row.sourceType).toLowerCase() === query.toLowerCase(),
     },
     {
       id: "trustLevel",
       label: "Trust level",
       options: trustOptions,
-      match: (row, query) => String(row.trustLevel ?? "").toLowerCase() === query.toLowerCase(),
+      match: (row, query) => formatSourceLabel(row.trustLevel).toLowerCase() === query.toLowerCase(),
     },
     {
       id: "cadence",
       label: "Cadence",
       options: cadenceOptions,
-      match: (row, query) => String(row.scrapeCadence ?? "").toLowerCase() === query.toLowerCase(),
+      match: (row, query) => formatSourceLabel(row.scrapeCadence).toLowerCase() === query.toLowerCase(),
     },
     {
       id: "funderType",
       label: "Funder type",
       options: funderOptions,
-      match: (row, query) => String(row.funderType ?? "").toLowerCase() === query.toLowerCase(),
+      match: (row, query) => formatSourceLabel(row.funderType).toLowerCase() === query.toLowerCase(),
     },
     {
       id: "jurisdiction",
@@ -101,7 +103,9 @@ export function GrantSourceLibrarySection({
       render: (row) => (
         <div className="grant-source-table-source">
           <strong>{row.name}</strong>
-          <span>{row.rowKind === "library" ? "Societyer library" : "Workspace source"}</span>
+          <span>
+            {row.rowKind === "library" ? "Societyer library" : "Workspace source"} · {formatSourceLabel(row.sourceType)}
+          </span>
         </div>
       ),
     },
@@ -117,25 +121,17 @@ export function GrantSourceLibrarySection({
       ),
     },
     {
-      id: "sourceType",
-      header: "Type",
-      accessor: (row) => row.sourceType,
+      id: "scope",
+      header: "Scope",
+      accessor: (row) => `${row.jurisdiction ?? ""} ${row.funderType ?? ""}`,
       sortable: true,
-      render: (row) => formatSourceLabel(row.sourceType),
-    },
-    {
-      id: "jurisdiction",
-      header: "Jurisdiction",
-      accessor: (row) => row.jurisdiction ?? "",
-      sortable: true,
-      render: (row) => row.jurisdiction ?? "No jurisdiction",
-    },
-    {
-      id: "funderType",
-      header: "Funder",
-      accessor: (row) => row.funderType ?? "",
-      sortable: true,
-      render: (row) => formatSourceLabel(row.funderType ?? "unknown"),
+      width: 320,
+      render: (row) => (
+        <div className="grant-source-table-source">
+          <strong>{row.jurisdiction ?? "No jurisdiction"}</strong>
+          <span>{formatSourceLabel(row.funderType ?? "unknown funder")}</span>
+        </div>
+      ),
     },
     {
       id: "cadence",
@@ -149,7 +145,7 @@ export function GrantSourceLibrarySection({
       header: "Tags",
       accessor: (row) => getSourceTags(row).join(" "),
       render: (row) => <SourceTagList tags={getSourceTags(row)} limit={3} />,
-      width: 260,
+      width: 220,
     },
   ], []);
 
@@ -258,7 +254,7 @@ export function GrantSourceLibrarySection({
   );
 }
 
-function GrantSourceCard({ row, actions }: { row: any; actions: React.ReactNode }) {
+function GrantSourceCard({ row, actions }: { row: any; actions: ReactNode }) {
   return (
     <article className="card grant-source-card">
       <div className="grant-source-card__head">
@@ -465,7 +461,7 @@ function splitTags(value: unknown) {
   if (typeof value !== "string") return [];
   const seen = new Set<string>();
   const tags: string[] = [];
-  for (const item of value.split(",")) {
+  for (const item of value.split(/[,;\n]+/)) {
     const tag = item.trim();
     const key = tag.toLowerCase();
     if (!tag || seen.has(key)) continue;
@@ -473,4 +469,42 @@ function splitTags(value: unknown) {
     tags.push(tag);
   }
   return tags;
+}
+
+function getSourceTags(row: any): string[] {
+  const tags = [...(row.topicTags ?? []), ...(row.eligibilityTags ?? [])]
+    .map((tag) => String(tag ?? "").trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const tag of tags) {
+    const key = tag.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(tag);
+  }
+  return result;
+}
+
+function normalizeSourceStatus(row: any): string {
+  return row.installed ? "installed" : String(row.status ?? "unknown");
+}
+
+function formatSourceLabel(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "Unknown";
+  return raw
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatTagLabel(value: string): string {
+  return value.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function uniqueOptions(values: unknown[]): string[] {
+  return Array.from(
+    new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b));
 }

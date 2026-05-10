@@ -16,9 +16,12 @@ import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion
 import {
   MINUTES_EXPORT_STYLES,
   MinutesExportStyleId,
+  downloadStoredZip,
+  escapeHtml,
+  exportPdfDownload,
+  exportWordDoc,
   exportWordDocx,
   getMinutesStyleGaps,
-  openPrintableDocument,
   renderMinutesHtml,
 } from "../lib/exportWord";
 import { redactText, RedactOptions } from "../lib/redactPii";
@@ -66,6 +69,71 @@ function readStoredExportBool(key: string, fallback: boolean) {
   const stored = window.localStorage.getItem(`${MINUTES_EXPORT_PREF_PREFIX}${key}`);
   if (stored == null) return fallback;
   return stored === "true";
+}
+
+function slugifyFilePart(value: string) {
+  return (value || "item").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "item";
+}
+
+function isCurrentDirector(director: any) {
+  const status = String(director?.status ?? "").toLowerCase();
+  if (status && !["active", "current", "verified"].includes(status)) return false;
+  const end = director?.termEnd || director?.resignedAt;
+  return !end || String(end).slice(0, 10) >= new Date().toISOString().slice(0, 10);
+}
+
+function attendanceRowsForDirectors(directors: any[]) {
+  return directors
+    .map((director) => ({
+      name: `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim(),
+      status: "present" as const,
+    }))
+    .filter((person) => person.name);
+}
+
+function buildMeetingOutboxEmail({
+  societyName,
+  meeting,
+  joinDetails,
+  materials,
+  packageReviewStatus,
+  packageReviewBlockers,
+}: {
+  societyName: string;
+  meeting: any;
+  joinDetails: any;
+  materials: Array<{ label: string; agendaLabel: string; fileName: string | null; paperlessUrl: string | null }>;
+  packageReviewStatus: string;
+  packageReviewBlockers: string[];
+}) {
+  const lines = [
+    `Hello,`,
+    ``,
+    `Please find the meeting package for ${meeting.title}.`,
+    ``,
+    `Society: ${societyName}`,
+    `When: ${formatDateTime(meeting.scheduledAt)}`,
+    `Location: ${meeting.location ?? "Not recorded"}`,
+    joinDetails.url ? `Join link: ${joinDetails.url}` : "",
+    joinDetails.meetingId ? `Meeting ID: ${joinDetails.meetingId}` : "",
+    joinDetails.passcode ? `Passcode: ${joinDetails.passcode}` : "",
+    joinDetails.instructions ? `Instructions: ${joinDetails.instructions}` : "",
+    ``,
+    `Package status: ${packageReviewStatus}`,
+    packageReviewBlockers.length ? `Review blockers: ${packageReviewBlockers.join("; ")}` : "",
+    ``,
+    `Attachments / references:`,
+    ...(materials.length
+      ? materials.map((material, index) =>
+          `${index + 1}. ${material.label} (${material.agendaLabel})${material.fileName ? ` - ${material.fileName}` : ""}${material.paperlessUrl ? ` - ${material.paperlessUrl}` : ""}`,
+        )
+      : ["No linked materials are recorded."]),
+    ``,
+    `The ZIP also includes a meeting-pack HTML file, agenda text, and an attachment manifest for manual upload/send workflows.`,
+    ``,
+    `Regards,`,
+  ];
+  return lines.filter((line, index, array) => line || array[index - 1] !== "").join("\n");
 }
 
 export function MeetingDetailPage() {
@@ -143,7 +211,7 @@ export function MeetingDetailPage() {
   const [savingTranscript, setSavingTranscript] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
-  const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", true));
+  const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", false));
   const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
   const [includeDiscussionSummaryInExport, setIncludeDiscussionSummaryInExport] = useState(() => readStoredExportBool("includeDiscussionSummary", false));
   const [includeApprovalInExport, setIncludeApprovalInExport] = useState(() => readStoredExportBool("includeApproval", true));
@@ -284,6 +352,7 @@ export function MeetingDetailPage() {
   const packageMaterials = meetingPackage?.materials ?? [];
   const linkedTasks = meetingPackage?.tasks ?? [];
   const linkableTasks = ((societyTasks ?? []) as any[]).filter((task: any) => !task.meetingId);
+  const currentDirectors = ((directors ?? []) as any[]).filter(isCurrentDirector);
   const joinDetails = getMeetingJoinDetails(meeting, minutes);
   const packageReadiness = getPackageReadiness(packageMaterials);
   const sourceReviewStatus = meeting.sourceReviewStatus ?? minutes?.sourceReviewStatus ?? "not_applicable";
@@ -508,20 +577,23 @@ export function MeetingDetailPage() {
     if (!meeting || !minutes || !society) return;
     const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
     const bodyHtml = renderExportBody();
-    exportWordDocx({
-      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.docx`,
+    exportWordDoc({
+      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.doc`,
       title: `${meeting.title} — Minutes`,
       bodyHtml,
     });
-    toast.success("Minutes exported", "Downloaded as a Word .docx file.");
+    toast.success("Minutes exported", "Downloaded as a styled Word-compatible document.");
   };
 
-  const exportToPdf = () => {
+  const exportToPdf = async () => {
     if (!meeting || !minutes || !society) return;
-    openPrintableDocument({
+    const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    await exportPdfDownload({
+      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.pdf`,
       title: `${meeting.title} — Minutes`,
       bodyHtml: renderExportBody(),
     });
+    toast.success("PDF exported", "Downloaded as a PDF file.");
   };
 
   const openMinutesPreviewPage = () => {
@@ -763,17 +835,28 @@ export function MeetingDetailPage() {
       ...minutes.absent.map((name: string) => ({ name, status: "absent" as const })),
     ];
     const seedDirectors = existing.length === 0
-      ? (directors ?? [])
-          .map((director: any) => ({
-            name: `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim(),
-            status: "present" as const,
-          }))
-          .filter((person) => person.name)
+      ? attendanceRowsForDirectors(currentDirectors)
       : [];
     setAttendanceEdit({
       people: [...existing, ...seedDirectors],
       quorumMet: minutes.quorumMet,
     });
+  };
+
+  const autofillCurrentDirectors = () => {
+    const directorRows = attendanceRowsForDirectors(currentDirectors);
+    if (!directorRows.length) {
+      toast.info("No current directors found", "Directors must be active and not past their end date.");
+      return;
+    }
+    const existing = attendanceEdit?.people ?? [];
+    const existingNames = new Set(existing.map((person: any) => person.name.trim().toLowerCase()).filter(Boolean));
+    const additions = directorRows.filter((person) => !existingNames.has(person.name.toLowerCase()));
+    setAttendanceEdit({
+      people: [...existing, ...additions],
+      quorumMet: attendanceEdit?.quorumMet ?? minutes?.quorumMet ?? false,
+    });
+    toast.success("Current directors added", `${additions.length} director${additions.length === 1 ? "" : "s"} added to attendance.`);
   };
 
   const saveAttendance = async () => {
@@ -962,6 +1045,92 @@ export function MeetingDetailPage() {
     URL.revokeObjectURL(url);
   };
 
+  const downloadOutboxPackage = () => {
+    if (!meeting || !society) return;
+    const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    const subject = `${meeting.title} package - ${formatDateTime(meeting.scheduledAt)}`;
+    const materials = packageMaterials.map((material: any, index: number) => {
+      const doc = material.document ?? {};
+      return {
+        number: index + 1,
+        label: material.label || doc.title || "Document",
+        agendaLabel: material.agendaLabel || "General materials",
+        fileName: doc.fileName ?? null,
+        paperlessUrl: doc.paperlessDocumentUrl ?? doc.paperlessUrl ?? null,
+        paperlessId: doc.paperlessDocumentId ?? null,
+        documentId: doc._id ?? material.documentId ?? null,
+        storage: doc.storageId || doc.storageKey ? "Uploaded in Societyer" : "Reference only",
+        notes: material.notes ?? "",
+      };
+    });
+    const packHtml = renderMeetingPackHtml({
+      meeting,
+      agenda,
+      materials: packageMaterials,
+      tasks: linkedTasks,
+      minutes,
+      joinDetails,
+    });
+    const files: Record<string, string> = {
+      "email/subject.txt": subject,
+      "email/body.txt": buildMeetingOutboxEmail({
+        societyName: society.name,
+        meeting,
+        joinDetails,
+        materials,
+        packageReviewStatus,
+        packageReviewBlockers,
+      }),
+      "meeting-pack.html": packHtml,
+      "agenda.txt": agenda.length ? agenda.map((item, index) => `${index + 1}. ${item}`).join("\n") : "No agenda items recorded.",
+      "attachments-manifest.json": JSON.stringify({
+        generatedAtISO: new Date().toISOString(),
+        society: society.name,
+        meeting: {
+          id: meeting._id,
+          title: meeting.title,
+          type: meeting.type,
+          scheduledAt: meeting.scheduledAt,
+          location: meeting.location ?? null,
+          packageReviewStatus,
+        },
+        materials,
+        tasks: linkedTasks.map((task: any) => ({
+          id: task._id,
+          title: task.title,
+          status: task.status,
+          priority: task.priority,
+          dueDate: task.dueDate ?? null,
+        })),
+        note: "Binary document files are referenced in this bundle. Download source files from Societyer or Paperless when storage URLs are not embedded.",
+      }, null, 2),
+    };
+    if (minutes) {
+      files["minutes-preview.html"] = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(meeting.title)} minutes</title></head><body>${renderExportBody()}</body></html>`;
+    }
+    for (const material of materials) {
+      const slug = `${String(material.number).padStart(2, "0")}-${slugifyFilePart(material.label)}`;
+      files[`attachments/${slug}.txt`] = [
+        `Label: ${material.label}`,
+        `Agenda: ${material.agendaLabel}`,
+        `Document ID: ${material.documentId ?? "not linked"}`,
+        `File name: ${material.fileName ?? "metadata only"}`,
+        `Paperless ID: ${material.paperlessId ?? "not linked"}`,
+        `Paperless URL: ${material.paperlessUrl ?? "not linked"}`,
+        `Storage: ${material.storage}`,
+        material.notes ? `Notes: ${material.notes}` : "",
+      ].filter(Boolean).join("\n");
+      if (material.paperlessUrl) {
+        files[`attachments/${slug}.url`] = `[InternetShortcut]\nURL=${material.paperlessUrl}\n`;
+      }
+    }
+    downloadStoredZip({
+      filename: `${safe}-outbox-package-${formatDate(meeting.scheduledAt, "yyyy-MM-dd")}.zip`,
+      files,
+    });
+    toast.success("Outbox package generated", "ZIP includes the email draft, meeting pack, minutes preview, agenda, and attachment manifest.");
+  };
+
   const setLinkedTaskStatus = async (taskId: string, status: string) => {
     await updateTask({
       id: taskId as Id<"tasks">,
@@ -1098,7 +1267,7 @@ export function MeetingDetailPage() {
                     },
                     {
                       id: "pdf",
-                      label: "Print / PDF",
+                      label: "Export PDF",
                       icon: <Printer size={12} />,
                       disabled: !minutes,
                       onSelect: exportToPdf,
@@ -1263,6 +1432,7 @@ export function MeetingDetailPage() {
             attendanceEdit={attendanceEdit}
             setAttendanceEdit={setAttendanceEdit}
             startAttendanceEdit={startAttendanceEdit}
+            autofillCurrentDirectors={autofillCurrentDirectors}
             saveAttendance={saveAttendance}
             quorumSnapshot={quorumSnapshot}
             quorumLegalGuides={quorumLegalGuides}
@@ -1353,6 +1523,7 @@ export function MeetingDetailPage() {
             openMaterialDrawer={openMaterialDrawer}
             startJoinEdit={startJoinEdit}
             downloadMeetingPack={downloadMeetingPack}
+            downloadOutboxPackage={downloadOutboxPackage}
             completeSourceReview={completeSourceReview}
             reopenSourceReview={reopenSourceReview}
             markPackageReady={markPackageReady}
@@ -1560,7 +1731,7 @@ export function MeetingMinutesPreviewPage() {
   const meeting = useQuery(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
   const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
-  const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", true));
+  const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", false));
   const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
   const [includeDiscussionSummaryInExport, setIncludeDiscussionSummaryInExport] = useState(() => readStoredExportBool("includeDiscussionSummary", false));
   const [includeApprovalInExport, setIncludeApprovalInExport] = useState(() => readStoredExportBool("includeApproval", true));
@@ -1651,15 +1822,17 @@ export function MeetingMinutesPreviewPage() {
 
   const exportPreviewToWord = () => {
     const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-    exportWordDocx({
-      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.docx`,
+    exportWordDoc({
+      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.doc`,
       title: `${meeting.title} — Minutes`,
       bodyHtml,
     });
   };
 
-  const printPreview = () => {
-    openPrintableDocument({
+  const exportPreviewToPdf = async () => {
+    const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    await exportPdfDownload({
+      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.pdf`,
       title: `${meeting.title} — Minutes`,
       bodyHtml,
     });
@@ -1680,8 +1853,8 @@ export function MeetingMinutesPreviewPage() {
           <button className="btn-action btn-action--primary" onClick={exportPreviewToWord}>
             <FileDown size={12} /> Export Word
           </button>
-          <button className="btn-action" onClick={printPreview}>
-            <Printer size={12} /> Print / PDF
+          <button className="btn-action" onClick={exportPreviewToPdf}>
+            <Printer size={12} /> Export PDF
           </button>
         </div>
       </div>

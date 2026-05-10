@@ -2033,6 +2033,19 @@
   font: inherit;
   outline: none;
 }
+select.editable-cell__input {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-tertiary) 50%),
+    linear-gradient(135deg, var(--text-tertiary) 50%, transparent 50%);
+  background-position:
+    calc(100% - 15px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 5px 5px, 5px 5px;
+  cursor: pointer;
+  padding-right: 30px;
+}
 .editable-cell__input:focus { outline: none; }
 .editable-cell__spinner {
   width: 12px;

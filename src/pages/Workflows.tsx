@@ -331,6 +331,7 @@ export function WorkflowsPage() {
           <>
             <Field label="Recipe">
               <select
+                className="input"
                 value={form.recipe}
                 onChange={(e) => {
                   const next = catalog?.find((c: any) => c.key === e.target.value);
@@ -374,15 +375,17 @@ export function WorkflowsPage() {
             )}
             <Field label="Name">
               <input
+                className="input"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </Field>
             <Field label="Provider">
-              <input value={form.provider ?? "internal"} readOnly />
+              <input className="input" value={form.provider ?? "internal"} readOnly />
             </Field>
             <Field label="Trigger">
               <select
+                className="input"
                 value={form.triggerKind}
                 onChange={(e) => setForm({ ...form, triggerKind: e.target.value as TriggerKind })}
               >
@@ -394,7 +397,7 @@ export function WorkflowsPage() {
             {form.triggerKind === "cron" && (
               <Field label="Cron expression">
                 <input
-                  className="mono"
+                  className="input mono"
                   value={form.cron}
                   onChange={(e) => setForm({ ...form, cron: e.target.value })}
                   placeholder="0 8 * * 1"
@@ -405,6 +408,7 @@ export function WorkflowsPage() {
               <>
                 <Field label="Anchor">
                   <select
+                    className="input"
                     value={form.anchor}
                     onChange={(e) => setForm({ ...form, anchor: e.target.value })}
                   >
@@ -415,6 +419,7 @@ export function WorkflowsPage() {
                 </Field>
                 <Field label="Days before">
                   <input
+                    className="input"
                     type="number"
                     value={form.daysBefore}
                     onChange={(e) => setForm({ ...form, daysBefore: e.target.value })}

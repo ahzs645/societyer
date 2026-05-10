@@ -261,6 +261,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       navItem("/app/members"),
       navItem("/app/directors"),
+      navItem("/app/org-chart"),
       navItem("/app/role-holders"),
       navItem("/app/committees"),
       navItem("/app/volunteers"),
@@ -514,6 +515,7 @@ const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   Timeline: "nav.timeline",
   Members: "nav.members",
   Directors: "nav.directors",
+  "Org chart": "nav.orgChart",
   Committees: "nav.committees",
   Volunteers: "nav.volunteers",
   Employees: "nav.employees",

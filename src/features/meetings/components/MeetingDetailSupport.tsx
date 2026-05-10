@@ -34,31 +34,23 @@ export function AttendanceDetails({
   }
 
   return (
-    <details className="attendance-details" open>
-      <summary>
-        <span>Attendance list</span>
-      </summary>
-      <div className="attendance-table-wrap">
-        <table className="attendance-table">
-          <thead>
-            <tr>
-              <th scope="col">Status</th>
-              <th scope="col">Name</th>
-              <th scope="col">Role</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => (
-              <tr key={`${row.status}-${row.name}-${index}`}>
-                <td>{row.status}</td>
-                <td><LinkedPersonName name={row.name} people={people} /></td>
-                <td>{row.role || "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div className="attendance-details">
+      <div className="attendance-details__head">
+        <strong>Attendance list</strong>
+        <span className="muted">{present.length} present · {absent.length} absent / regrets</span>
       </div>
-    </details>
+      <div className="attendance-list">
+        {rows.map((row, index) => (
+          <div key={`${row.status}-${row.name}-${index}`} className="attendance-list__item">
+            <Badge tone={row.status === "Present" ? "success" : "neutral"}>{row.status}</Badge>
+            <div className="attendance-list__person">
+              <LinkedPersonName name={row.name} people={people} />
+              {row.role && <span className="muted">{row.role}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -199,6 +191,8 @@ export type PersonLinkCandidate = {
   name: string;
   aliases: string[];
   kind: "member" | "director";
+  role?: string;
+  status?: string;
 };
 
 export function personLinkCandidates(members: any[] | undefined, directors: any[] | undefined): PersonLinkCandidate[] {
@@ -214,6 +208,8 @@ export function personLinkCandidates(members: any[] | undefined, directors: any[
       name: `${director.firstName} ${director.lastName}`.trim(),
       aliases: Array.isArray(director.aliases) ? director.aliases : [],
       kind: "director" as const,
+      role: director.position,
+      status: director.status,
     })),
   ];
 }
@@ -225,7 +221,11 @@ function LinkedPersonName({ name, people }: { name: string; people: PersonLinkCa
   );
   if (!match) return <span>{name}</span>;
   return (
-    <span className="row" style={{ gap: 4, flexWrap: "wrap" }}>
+    <span
+      className="row"
+      style={{ gap: 4, flexWrap: "wrap" }}
+      title={[match.role, match.status].filter(Boolean).join(" · ") || undefined}
+    >
       <Link to={match.kind === "director" ? "/app/directors" : "/app/members"}>{name}</Link>
       <Badge tone="success">Linked</Badge>
     </span>

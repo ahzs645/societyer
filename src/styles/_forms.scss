@@ -105,6 +105,29 @@
   font-size: var(--fs-sm);
   transition: border-color 0.08s ease, box-shadow 0.08s ease;
 }
+select.input,
+select.select,
+.table-pagination__size select,
+select.editable-cell__input {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-tertiary) 50%),
+    linear-gradient(135deg, var(--text-tertiary) 50%, transparent 50%);
+  background-position:
+    calc(100% - 15px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 5px 5px, 5px 5px;
+  cursor: pointer;
+  line-height: 30px;
+  padding-right: 30px;
+}
+select.input:hover:not(:disabled),
+select.select:hover:not(:disabled),
+.table-pagination__size select:hover:not(:disabled),
+select.editable-cell__input:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
 .input:focus,
 .select:focus,
 .textarea:focus {

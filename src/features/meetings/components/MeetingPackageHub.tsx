@@ -55,6 +55,7 @@ export function MeetingPackageHub({
   openMaterialDrawer,
   startJoinEdit,
   downloadMeetingPack,
+  downloadOutboxPackage,
   completeSourceReview,
   reopenSourceReview,
   markPackageReady,
@@ -83,6 +84,7 @@ export function MeetingPackageHub({
   openMaterialDrawer: (agendaLabel?: string, material?: any) => void;
   startJoinEdit: () => void;
   downloadMeetingPack: () => void;
+  downloadOutboxPackage: () => void;
   completeSourceReview: () => void | Promise<void>;
   reopenSourceReview: () => void | Promise<void>;
   markPackageReady: () => void | Promise<void>;
@@ -152,6 +154,9 @@ export function MeetingPackageHub({
             </button>
             <button className="btn-action btn-action--primary" onClick={downloadMeetingPack}>
               <Download size={12} /> Download pack
+            </button>
+            <button className="btn-action btn-action--primary" onClick={downloadOutboxPackage}>
+              <Download size={12} /> Outbox ZIP
             </button>
           </div>
         </div>

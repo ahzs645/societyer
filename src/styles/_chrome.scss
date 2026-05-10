@@ -310,6 +310,9 @@
   color: var(--text-inverse);
   border-color: var(--bg-inverse);
 }
+.btn--primary .muted {
+  color: var(--font-color-inverted-secondary);
+}
 .btn--primary:hover {
   background: #1a1a1a;
 }
@@ -317,6 +320,9 @@
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-on);
+}
+.btn--accent .muted {
+  color: rgba(255, 255, 255, 0.9);
 }
 .btn--accent:hover {
   background: var(--accent-hover);

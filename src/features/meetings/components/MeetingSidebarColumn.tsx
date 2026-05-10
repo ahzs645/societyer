@@ -207,7 +207,7 @@ export function MeetingSidebarColumn({
                         <FileDown size={12} /> Export Word
                       </button>
                       <button className="btn-action" onClick={exportToPdf} disabled={!minutes}>
-                        <Printer size={12} /> Print / PDF
+                        <Printer size={12} /> Export PDF
                       </button>
                       <button className="btn-action" onClick={exportPublicMinutes} disabled={!minutes}>
                         <EyeOff size={12} /> Public copy

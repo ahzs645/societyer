@@ -25,6 +25,7 @@ const RecordsArchivePage = React.lazy(() => import("./pages/EvidenceRegisters").
 const ImportSessionsPage = React.lazy(() => import("./pages/ImportSessions").then((m) => ({ default: m.ImportSessionsPage })));
 const MembersPage = React.lazy(() => import("./pages/Members").then((m) => ({ default: m.MembersPage })));
 const DirectorsPage = React.lazy(() => import("./pages/Directors").then((m) => ({ default: m.DirectorsPage })));
+const OrgChartPage = React.lazy(() => import("./pages/OrgChart").then((m) => ({ default: m.OrgChartPage })));
 const MeetingsPage = React.lazy(() => import("./pages/Meetings").then((m) => ({ default: m.MeetingsPage })));
 const MeetingDetailPage = React.lazy(() => import("./pages/MeetingDetail").then((m) => ({ default: m.MeetingDetailPage })));
 const MeetingMinutesPreviewPage = React.lazy(() => import("./pages/MeetingDetail").then((m) => ({ default: m.MeetingMinutesPreviewPage })));
@@ -269,6 +270,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="imports" element={<ImportSessionsPage />} />
             <Route path="members" element={<MembersPage />} />
             <Route path="directors" element={<DirectorsPage />} />
+            <Route path="org-chart" element={<OrgChartPage />} />
             <Route path="meetings" element={<MeetingsPage />} />
             <Route path="meeting-templates" element={<MeetingTemplatesPage />} />
             <Route path="meeting-templates/new" element={<MeetingTemplateBuilderPage />} />

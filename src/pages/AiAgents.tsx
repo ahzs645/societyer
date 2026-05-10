@@ -144,6 +144,8 @@ export function AiAgentsPage() {
   const visibleSkills = allSkills ?? skills ?? [];
   const effectiveProvider = aiSettings?.effective;
   const isOpenRouter = aiSetup.provider === "openrouter";
+  const setupFingerprint = `${aiSetup.provider}|${aiSetup.apiKey.trim()}|${aiSetup.baseUrl.trim()}`;
+  const setupValidated = Boolean(validation?.ok && validation.fingerprint === setupFingerprint);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -221,7 +223,7 @@ export function AiAgentsPage() {
     }
   };
 
-  const validateAndSaveProvider = async () => {
+  const validateProviderAndLoadModels = async () => {
     if (!society || !aiSetup.apiKey.trim()) return;
     setSetupBusy(true);
     try {
@@ -230,16 +232,32 @@ export function AiAgentsPage() {
         apiKey: aiSetup.apiKey.trim(),
         baseUrl: aiSetup.provider === "openai-compatible" ? aiSetup.baseUrl.trim() : undefined,
       });
-      setValidation(result);
+      setValidation({ ...result, fingerprint: setupFingerprint });
       if (result.modelCatalog) setModelCatalog(result.modelCatalog);
       if (!result.ok) {
         toast.error(result.message ?? "Provider key did not validate");
         return;
       }
+      const defaultModel = result.modelCatalog?.categories?.recommended?.[0] ?? result.modelCatalog?.models?.[0];
+      if (defaultModel?.id && !result.modelCatalog?.models?.some((model: AiModelInfo) => model.id === aiSetup.modelId)) {
+        setAiSetup((draft) => ({ ...draft, modelId: defaultModel.id }));
+      }
+      toast.success("Provider key validated");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Couldn't validate AI provider");
+    } finally {
+      setSetupBusy(false);
+    }
+  };
+
+  const saveValidatedProvider = async () => {
+    if (!society || !setupValidated) return;
+    setSetupBusy(true);
+    try {
       const secretId = await createSecret({
         societyId: society._id,
         actingUserId,
-        name: `${aiSetup.scope === "workspace" ? "Workspace" : "Personal"} AI provider key - ${aiSetup.label || result.provider}`,
+        name: `${aiSetup.scope === "workspace" ? "Workspace" : "Personal"} AI provider key - ${aiSetup.label || providerLabel(aiSetup.provider)}`,
         service: `Societyer AI:${aiSetup.provider}`,
         credentialType: "api_key",
         ownerRole: aiSetup.scope === "workspace" ? "Workspace AI" : "Personal AI",
@@ -264,9 +282,10 @@ export function AiAgentsPage() {
         temperature: Number(aiSetup.temperature),
         maxSteps: Number(aiSetup.maxSteps),
         validationStatus: "ok",
-        validationMessage: result.message,
+        validationMessage: validation.message,
       });
       setAiSetup((draft) => ({ ...draft, apiKey: "" }));
+      setValidation(null);
       toast.success("AI provider configured");
     } catch (error: any) {
       toast.error(error?.message ?? "Couldn't configure AI provider");
@@ -329,6 +348,11 @@ export function AiAgentsPage() {
               {effectiveProvider?.scope && <Badge tone="info">{effectiveProvider.scope}</Badge>}
               {effectiveProvider?.validationStatus && <Badge tone="success">{effectiveProvider.validationStatus}</Badge>}
             </div>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <Badge tone={aiSetup.apiKey.trim() ? "success" : "neutral"}>1. Add key</Badge>
+              <Badge tone={setupValidated ? "success" : "neutral"}>2. Choose model</Badge>
+              <Badge tone={setupValidated && aiSetup.modelId.trim() ? "info" : "neutral"}>3. Save</Badge>
+            </div>
             <div className="settings-pair">
               <Field label="Scope">
                 <select className="input" value={aiSetup.scope} onChange={(event) => setAiSetup((draft) => ({ ...draft, scope: event.target.value }))}>
@@ -351,6 +375,7 @@ export function AiAgentsPage() {
                     }));
                     setModelCatalog(null);
                     setModelTab("recommended");
+                    setValidation(null);
                   }}
                 >
                   <option value="openai">OpenAI</option>
@@ -359,15 +384,52 @@ export function AiAgentsPage() {
                 </select>
               </Field>
             </div>
+            {aiSetup.provider === "openai-compatible" && (
+              <Field label="Base URL">
+                <input
+                  className="input"
+                  value={aiSetup.baseUrl}
+                  onChange={(event) => {
+                    setAiSetup((draft) => ({ ...draft, baseUrl: event.target.value }));
+                    setValidation(null);
+                    setModelCatalog(null);
+                  }}
+                  placeholder="https://api.example.com/v1"
+                />
+              </Field>
+            )}
+            <Field label="API key">
+              <input
+                className="input"
+                type="password"
+                value={aiSetup.apiKey}
+                onChange={(event) => {
+                  setAiSetup((draft) => ({ ...draft, apiKey: event.target.value }));
+                  setValidation(null);
+                  setModelCatalog(null);
+                }}
+                placeholder={isOpenRouter ? "sk-or-v1-..." : "sk-..."}
+              />
+            </Field>
+            {validation && (
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <Badge tone={validation.ok ? "success" : "danger"}>{validation.ok ? "Validated" : "Failed"}</Badge>
+                <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{validation.message}</span>
+              </div>
+            )}
+            <button className="btn btn--accent" disabled={setupBusy || !aiSetup.apiKey.trim()} onClick={validateProviderAndLoadModels}>
+              <ShieldCheck size={12} /> {setupBusy ? "Validating..." : "Validate key and load models"}
+            </button>
+            <div style={{ height: 1, background: "var(--border)" }} />
             <div className="settings-pair">
               <Field label="Label">
-                <input className="input" value={aiSetup.label} onChange={(event) => setAiSetup((draft) => ({ ...draft, label: event.target.value }))} />
+                <input className="input" value={aiSetup.label} onChange={(event) => setAiSetup((draft) => ({ ...draft, label: event.target.value }))} disabled={!setupValidated} />
               </Field>
-              <Field label="Model">
-                <input className="input" value={aiSetup.modelId} onChange={(event) => setAiSetup((draft) => ({ ...draft, modelId: event.target.value }))} placeholder="gpt-4.1-mini" />
+              <Field label="Selected model">
+                <input className="input" value={aiSetup.modelId} onChange={(event) => setAiSetup((draft) => ({ ...draft, modelId: event.target.value }))} placeholder="gpt-4.1-mini" disabled={!setupValidated} />
               </Field>
             </div>
-            {isOpenRouter && (
+            {isOpenRouter && setupValidated && (
               <ModelSelector
                 catalog={modelCatalog}
                 busy={modelBusy}
@@ -381,36 +443,19 @@ export function AiAgentsPage() {
                 onSelect={(modelId) => setAiSetup((draft) => ({ ...draft, modelId }))}
               />
             )}
-            {aiSetup.provider === "openai-compatible" && (
-              <Field label="Base URL">
-                <input className="input" value={aiSetup.baseUrl} onChange={(event) => setAiSetup((draft) => ({ ...draft, baseUrl: event.target.value }))} placeholder="https://api.example.com/v1" />
-              </Field>
+            {!setupValidated && (
+              <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>Validate a provider key before choosing a model or saving settings.</span>
             )}
-            <Field label="API key">
-              <input
-                className="input"
-                type="password"
-                value={aiSetup.apiKey}
-                onChange={(event) => setAiSetup((draft) => ({ ...draft, apiKey: event.target.value }))}
-                placeholder="sk-..."
-              />
-            </Field>
             <div className="settings-pair">
               <Field label="Temperature">
-                <input className="input" type="number" min="0" max="2" step="0.1" value={aiSetup.temperature} onChange={(event) => setAiSetup((draft) => ({ ...draft, temperature: event.target.value }))} />
+                <input className="input" type="number" min="0" max="2" step="0.1" value={aiSetup.temperature} onChange={(event) => setAiSetup((draft) => ({ ...draft, temperature: event.target.value }))} disabled={!setupValidated} />
               </Field>
               <Field label="Max tool steps">
-                <input className="input" type="number" min="1" max="12" step="1" value={aiSetup.maxSteps} onChange={(event) => setAiSetup((draft) => ({ ...draft, maxSteps: event.target.value }))} />
+                <input className="input" type="number" min="1" max="12" step="1" value={aiSetup.maxSteps} onChange={(event) => setAiSetup((draft) => ({ ...draft, maxSteps: event.target.value }))} disabled={!setupValidated} />
               </Field>
             </div>
-            {validation && (
-              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                <Badge tone={validation.ok ? "success" : "danger"}>{validation.ok ? "Validated" : "Failed"}</Badge>
-                <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{validation.message}</span>
-              </div>
-            )}
-            <button className="btn btn--accent" disabled={setupBusy || !aiSetup.apiKey.trim()} onClick={validateAndSaveProvider}>
-              <SlidersHorizontal size={12} /> {setupBusy ? "Validating..." : "Validate and save provider"}
+            <button className="btn btn--accent" disabled={setupBusy || !setupValidated || !aiSetup.modelId.trim()} onClick={saveValidatedProvider}>
+              <SlidersHorizontal size={12} /> {setupBusy ? "Saving..." : "Save AI provider"}
             </button>
           </div>
         </div>

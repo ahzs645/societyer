@@ -93,6 +93,7 @@ export function MeetingMinutesColumn({
   attendanceEdit,
   setAttendanceEdit,
   startAttendanceEdit,
+  autofillCurrentDirectors,
   saveAttendance,
   quorumSnapshot,
   quorumLegalGuides,
@@ -119,6 +120,7 @@ export function MeetingMinutesColumn({
   attendanceEdit: any;
   setAttendanceEdit: (value: any) => void;
   startAttendanceEdit: () => void;
+  autofillCurrentDirectors: () => void;
   saveAttendance: () => void | Promise<void>;
   quorumSnapshot: any;
   quorumLegalGuides: any[];
@@ -183,8 +185,18 @@ export function MeetingMinutesColumn({
     window.localStorage.setItem(AGENDA_NUMBERING_PREF_KEY, agendaNumberingMode);
   }, [agendaNumberingMode]);
   const sectionTitleRef = useRef<HTMLInputElement | null>(null);
+  const sectionMobileTitleRef = useRef<HTMLInputElement | null>(null);
   const sectionDiscussionRef = useRef<HTMLTextAreaElement | null>(null);
   const focusSectionTitleOnEdit = useRef(false);
+  const [isMobileSectionEditor, setIsMobileSectionEditor] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 760px)");
+    const update = () => setIsMobileSectionEditor(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     if (agendaEdit === null) setNewAgendaIndices(new Set());
@@ -205,12 +217,12 @@ export function MeetingMinutesColumn({
   useEffect(() => {
     if (!focusSectionTitleOnEdit.current) return;
     if (sectionEditIndex == null) return;
-    const node = sectionTitleRef.current;
+    const node = isMobileSectionEditor ? sectionMobileTitleRef.current : sectionTitleRef.current;
     if (!node) return;
     focusSectionTitleOnEdit.current = false;
     node.focus();
     node.select();
-  }, [sectionEditIndex]);
+  }, [isMobileSectionEditor, sectionEditIndex]);
 
   const addSection = async () => {
     const newTitle = "New section";
@@ -732,6 +744,11 @@ export function MeetingMinutesColumn({
     setSectionDraft(null);
   };
 
+  const cancelSectionEdit = () => {
+    setSectionEditIndex(null);
+    setSectionDraft(null);
+  };
+
   const assignMotionToSection = async (motionIndex: number, targetIndexValue: string) => {
     if (targetIndexValue === "") {
       const next = motions.map((motion, index) => {
@@ -816,6 +833,311 @@ export function MeetingMinutesColumn({
     () => new Map<string, any>((meetingTasks ?? []).map((task: any) => [task._id, task])),
     [meetingTasks],
   );
+
+  const renderSectionEditor = (mode: "inline" | "mobile" = "inline") => {
+    if (sectionEditIndex == null || !sectionDraft) return null;
+    const index = sectionEditIndex;
+    const motionRows = motions
+      .map((motion, motionIndex) => ({
+        motion,
+        motionIndex,
+        selectedIndex: assignedSectionIndexForMotion(motion, sections),
+      }))
+      .filter(({ motion }) => !isAdjournmentMotion(motion));
+    const assignedMotionRows = motionRows.filter((row) => row.selectedIndex === index);
+    const availableMotionRows = motionRows.filter((row) => row.selectedIndex !== index);
+    const actionCount = sectionDraft.actionItems.filter((item) => item.text.trim()).length;
+    const linkedTaskRecords = sectionDraft.linkedTaskIds
+      .map((taskId) => meetingTaskById.get(taskId))
+      .filter(Boolean);
+    const availableMeetingTasks = (meetingTasks ?? []).filter(
+      (task: any) => !sectionDraft.linkedTaskIds.includes(task._id),
+    );
+    const isMobile = mode === "mobile";
+
+    const editor = (
+      <div className={`meeting-minutes-section-editor${isMobile ? " meeting-minutes-section-editor--mobile" : ""}`}>
+        {isMobile && (
+          <>
+            <div className="meeting-minutes-section-editor__mobile-head">
+              <button className="btn-action btn-action--icon" type="button" onClick={cancelSectionEdit} aria-label="Cancel">
+                <X size={14} />
+              </button>
+              <div>
+                <h2>Edit agenda item</h2>
+                <span>{agendaEntryLabel(sections.map((section: any) => ({ title: section.title ?? "", depth: section.depth === 1 ? 1 : 0 })), index, agendaNumberingMode)}</span>
+              </div>
+              <button className="btn-action btn-action--primary" type="button" onClick={saveSectionEdit}>
+                <Save size={12} /> Save
+              </button>
+            </div>
+            <div className="meeting-minutes-section-editor__top">
+              <Field label="Title">
+                <input
+                  ref={sectionMobileTitleRef}
+                  className="input"
+                  value={sectionDraft.title}
+                  onChange={(event) => setSectionDraft({ ...sectionDraft, title: event.target.value })}
+                  placeholder="Section title"
+                />
+              </Field>
+              <Field label="Type">
+                <Select
+                  value={sectionDraft.type as SectionTypeId}
+                  onChange={(next) => setSectionDraft({ ...sectionDraft, type: next })}
+                  options={SECTION_TYPE_OPTIONS}
+                />
+              </Field>
+              <Field label="Presenter">
+                <NameAutocomplete
+                  value={sectionDraft.presenter}
+                  onChange={(next) => setSectionDraft({ ...sectionDraft, presenter: next })}
+                  options={assigneeOptions}
+                  placeholder="Presenter..."
+                />
+              </Field>
+            </div>
+          </>
+        )}
+
+        <div className="meeting-minutes-section-editor__tabs" role="tablist" aria-label="Section editor areas">
+          <button type="button" className={`meeting-minutes-section-editor-tab${sectionEditorTab === "notes" ? " is-active" : ""}`} onClick={() => setSectionEditorTab("notes")}>
+            Notes
+          </button>
+          <button type="button" className={`meeting-minutes-section-editor-tab${sectionEditorTab === "motions" ? " is-active" : ""}`} onClick={() => setSectionEditorTab("motions")}>
+            Motions{assignedMotionRows.length ? ` (${assignedMotionRows.length})` : ""}
+          </button>
+          <button type="button" className={`meeting-minutes-section-editor-tab${sectionEditorTab === "actions" ? " is-active" : ""}`} onClick={() => setSectionEditorTab("actions")}>
+            Actions{actionCount ? ` (${actionCount})` : ""}
+          </button>
+          <button type="button" className={`meeting-minutes-section-editor-tab${sectionEditorTab === "tasks" ? " is-active" : ""}`} onClick={() => setSectionEditorTab("tasks")}>
+            Tasks{linkedTaskRecords.length ? ` (${linkedTaskRecords.length})` : ""}
+          </button>
+        </div>
+
+        {sectionEditorTab === "notes" && (
+          <div className="meeting-minutes-section-editor__panel">
+            <Field label="Discussion notes" hint="Discussion/report points only. Use - for bullets and two spaces for nested details.">
+              <textarea
+                ref={isMobile ? undefined : sectionDiscussionRef}
+                className="textarea mono"
+                rows={8}
+                value={sectionDraft.discussion}
+                onChange={(event) => setSectionDraft({ ...sectionDraft, discussion: event.target.value })}
+                placeholder="- **Expenses incurred by Ahmad:**&#10;  - $80.00 for notary signing&#10;  - $33.01 for posters&#10;- Receipts are recorded on Teams under Expenses."
+              />
+            </Field>
+            <Field label="Decisions" hint="One per line.">
+              <textarea className="textarea" rows={8} value={sectionDraft.decisions} onChange={(event) => setSectionDraft({ ...sectionDraft, decisions: event.target.value })} />
+            </Field>
+          </div>
+        )}
+
+        {sectionEditorTab === "motions" && (
+          <div className="meeting-minutes-section-editor__panel">
+            <div className="meeting-minutes-motion-assignment">
+              <div className="meeting-minutes-motion-assignment__head">
+                <strong>Assigned motions</strong>
+                <span className="muted">{assignedMotionRows.length} of {motions.length}</span>
+              </div>
+              {assignedMotionRows.length ? (
+                <div className="meeting-minutes-motion-assignment__list">
+                  {assignedMotionRows.map(({ motion, motionIndex }) => (
+                    <MotionAssignmentRow
+                      key={`${motion.text}-${motionIndex}`}
+                      motion={motion}
+                      motionIndex={motionIndex}
+                      people={motionPeople}
+                      onRemove={() => assignMotionToSection(motionIndex, "")}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="muted">No motions are assigned to this agenda item yet.</div>
+              )}
+              <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                <button className="btn-action" type="button" onClick={onOpenMotions}>
+                  <Plus size={12} /> Add motion in Motions tab
+                </button>
+              </div>
+            </div>
+            {availableMotionRows.length > 0 && (
+              <details className="meeting-minutes-motion-picklist">
+                <summary>Assign existing motion to this item</summary>
+                <div className="meeting-minutes-motion-assignment__list">
+                  {availableMotionRows.map(({ motion, motionIndex }) => (
+                    <div
+                      className="meeting-minutes-motion-assignment__row"
+                      key={`${motion.text}-${motionIndex}`}
+                    >
+                      <div className="meeting-minutes-motion-assignment__text">
+                        <strong>{motion.text}</strong>
+                        <span>
+                          {motion.outcome || "Pending"}
+                          {motion.movedBy ? ` · Moved by ${motionPersonDisplayName(motion.movedBy, motionPeople, { memberId: motion.movedByMemberId, directorId: motion.movedByDirectorId })}` : ""}
+                          {motion.secondedBy ? ` · Seconded by ${motionPersonDisplayName(motion.secondedBy, motionPeople, { memberId: motion.secondedByMemberId, directorId: motion.secondedByDirectorId })}` : ""}
+                        </span>
+                      </div>
+                      <button
+                        className="btn-action"
+                        type="button"
+                        onClick={() => assignMotionToSection(motionIndex, String(index))}
+                      >
+                        <Plus size={12} /> Assign
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
+        )}
+
+        {sectionEditorTab === "actions" && (
+          <div className="meeting-minutes-section-editor__panel">
+            <div className="meeting-minutes-action-editor">
+              {sectionDraft.actionItems.length ? (
+                sectionDraft.actionItems.map((item, actionIndex) => (
+                  <div className="meeting-minutes-action-editor__row" key={actionIndex}>
+                    <Field label="Action">
+                      <input
+                        className="input"
+                        value={item.text}
+                        onChange={(event) => updateActionDraft(actionIndex, { text: event.target.value })}
+                        placeholder="Follow up on insurance renewal"
+                      />
+                    </Field>
+                    <Field label="Assignee">
+                      <NameAutocomplete
+                        value={item.assignee}
+                        onChange={(next) => updateActionDraft(actionIndex, { assignee: next })}
+                        options={assigneeOptions}
+                        placeholder="First name Last name"
+                      />
+                    </Field>
+                    <Field label="Due">
+                      <input
+                        className="input"
+                        type="date"
+                        value={item.dueDate}
+                        onChange={(event) => updateActionDraft(actionIndex, { dueDate: event.target.value })}
+                      />
+                    </Field>
+                    <button className="btn-action" type="button" title="Remove action" onClick={() => removeActionDraft(actionIndex)}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="muted">No section-specific action rows yet.</div>
+              )}
+              <button className="btn-action" type="button" onClick={addActionDraft}>
+                <Plus size={12} /> Add action
+              </button>
+            </div>
+          </div>
+        )}
+
+        {sectionEditorTab === "tasks" && (
+          <div className="meeting-minutes-section-editor__panel">
+            <div className="meeting-minutes-section-tasks">
+              {linkedTaskRecords.length === 0 ? (
+                <div className="muted">
+                  Link a task from this meeting to capture status updates and a completion note here. Status changes apply to the kanban when you save the section.
+                </div>
+              ) : (
+                linkedTaskRecords.map((task) => {
+                  const draft = sectionDraft.taskUpdates[task._id] ?? {};
+                  const currentStatus = draft.status ?? task.status ?? "Todo";
+                  const noteValue = draft.completionNote ?? task.completionNote ?? "";
+                  return (
+                    <div className="meeting-minutes-section-task" key={task._id}>
+                      <div className="meeting-minutes-section-task__head">
+                        <strong>{task.title}</strong>
+                        <div className="row" style={{ gap: 6, alignItems: "center", marginLeft: "auto" }}>
+                          {task.priority && <Badge tone={task.priority === "High" ? "danger" : task.priority === "Medium" ? "warn" : "neutral"}>{task.priority}</Badge>}
+                          <button
+                            className="btn-action btn-action--icon"
+                            type="button"
+                            title="Unlink from this section"
+                            aria-label={`Unlink ${task.title}`}
+                            onClick={() => detachLinkedTask(task._id)}
+                          >
+                            <Unlink size={12} />
+                          </button>
+                        </div>
+                      </div>
+                      <Segmented
+                        value={currentStatus}
+                        onChange={(next) => updateTaskDraft(task._id, { status: next })}
+                        items={SECTION_TASK_STATUS_ITEMS}
+                      />
+                      <Field label="Completion note" hint="Saved to the task when this section is saved.">
+                        <textarea
+                          className="textarea"
+                          rows={2}
+                          value={noteValue}
+                          onChange={(event) => updateTaskDraft(task._id, { completionNote: event.target.value })}
+                          placeholder="Outcome, blockers, or notes for the kanban card."
+                        />
+                      </Field>
+                    </div>
+                  );
+                })
+              )}
+
+              {availableMeetingTasks.length > 0 ? (
+                <select
+                  className="input"
+                  value=""
+                  onChange={(event) => {
+                    attachLinkedTask(event.target.value);
+                    event.target.value = "";
+                  }}
+                >
+                  <option value="">Link a meeting task...</option>
+                  {availableMeetingTasks.map((task: any) => (
+                    <option key={task._id} value={task._id}>
+                      {task.title}{task.status ? ` · ${task.status}` : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : (meetingTasks?.length ?? 0) === 0 ? (
+                <div className="muted" style={{ fontSize: "var(--fs-sm)", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+                  <span>No tasks linked to this meeting yet. Add tasks on the Package tab to make them available here.</span>
+                  <Link to="/app/tasks" className="btn-action">
+                    <ExternalLink size={12} /> Open Tasks page
+                  </Link>
+                </div>
+              ) : (
+                <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  All meeting tasks are linked to this section.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {!isMobile && (
+          <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
+            <button className="btn-action" onClick={cancelSectionEdit}>Cancel</button>
+            <button className="btn-action btn-action--primary" onClick={saveSectionEdit}>
+              <Save size={12} /> Save section
+            </button>
+          </div>
+        )}
+      </div>
+    );
+
+    if (!isMobile) return editor;
+
+    return createPortal(
+      <div className="meeting-minutes-section-editor-screen" role="dialog" aria-modal="true" aria-label="Edit agenda item">
+        {editor}
+      </div>,
+      document.body,
+    );
+  };
 
   const toggleSection = (index: number, open: boolean) => {
     setOpenSectionIndexes((current) => {
@@ -1171,6 +1493,9 @@ export function MeetingMinutesColumn({
                       peopleNames={personLinkCandidates(members, directors).map((p) => p.name)}
                       onChange={(next) => setAttendanceEdit({ ...attendanceEdit, people: next })}
                     />
+                    <button className="btn-action" type="button" onClick={autofillCurrentDirectors}>
+                      Add current directors
+                    </button>
                     <Checkbox
                       checked={attendanceEdit.quorumMet}
                       onChange={(quorumMet) => setAttendanceEdit({ ...attendanceEdit, quorumMet })}
@@ -1258,6 +1583,7 @@ export function MeetingMinutesColumn({
               entityType="minutes"
               entityId={minutes._id}
               title="Minutes signatures"
+              signerScope="directors"
             />
           </>
         )}
@@ -1399,7 +1725,7 @@ export function MeetingMinutesColumn({
                                   </span>
                                 )}
                                 <ChevronDown size={13} aria-hidden="true" />
-                                {sectionEditIndex === index && sectionDraft ? (
+                                {sectionEditIndex === index && sectionDraft && !isMobileSectionEditor ? (
                                   <span
                                     className="meeting-minutes-section-item__title-edit"
                                     onClick={(event) => event.stopPropagation()}
@@ -1496,252 +1822,7 @@ export function MeetingMinutesColumn({
                             </summary>
 
                             <div className="meeting-minutes-section-item__body">
-                              {sectionEditIndex === index && sectionDraft ? (() => {
-                                const motionRows = motions
-                                  .map((motion, motionIndex) => ({
-                                    motion,
-                                    motionIndex,
-                                    selectedIndex: assignedSectionIndexForMotion(motion, sections),
-                                  }))
-                                  .filter(({ motion }) => !isAdjournmentMotion(motion));
-                                const assignedMotionRows = motionRows.filter((row) => row.selectedIndex === index);
-                                const availableMotionRows = motionRows.filter((row) => row.selectedIndex !== index);
-                                const actionCount = sectionDraft.actionItems.filter((item) => item.text.trim()).length;
-                                const linkedTaskRecords = sectionDraft.linkedTaskIds
-                                  .map((taskId) => meetingTaskById.get(taskId))
-                                  .filter(Boolean);
-                                const availableMeetingTasks = (meetingTasks ?? []).filter(
-                                  (task: any) => !sectionDraft.linkedTaskIds.includes(task._id),
-                                );
-                                return (
-                                  <div className="meeting-minutes-section-editor">
-                                    <div className="meeting-minutes-section-editor__tabs" role="tablist" aria-label="Section editor areas">
-                                      <button type="button" className={`meeting-minutes-section-editor-tab${sectionEditorTab === "notes" ? " is-active" : ""}`} onClick={() => setSectionEditorTab("notes")}>
-                                        Notes
-                                      </button>
-                                      <button type="button" className={`meeting-minutes-section-editor-tab${sectionEditorTab === "motions" ? " is-active" : ""}`} onClick={() => setSectionEditorTab("motions")}>
-                                        Motions{assignedMotionRows.length ? ` (${assignedMotionRows.length})` : ""}
-                                      </button>
-                                      <button type="button" className={`meeting-minutes-section-editor-tab${sectionEditorTab === "actions" ? " is-active" : ""}`} onClick={() => setSectionEditorTab("actions")}>
-                                        Actions{actionCount ? ` (${actionCount})` : ""}
-                                      </button>
-                                      <button type="button" className={`meeting-minutes-section-editor-tab${sectionEditorTab === "tasks" ? " is-active" : ""}`} onClick={() => setSectionEditorTab("tasks")}>
-                                        Tasks{linkedTaskRecords.length ? ` (${linkedTaskRecords.length})` : ""}
-                                      </button>
-                                    </div>
-
-                                    {sectionEditorTab === "notes" && (
-                                      <div className="meeting-minutes-section-editor__panel">
-                                        <Field label="Discussion notes" hint="Discussion/report points only. Use - for bullets and two spaces for nested details.">
-                                          <textarea
-                                            ref={sectionDiscussionRef}
-                                            className="textarea mono"
-                                            rows={8}
-                                            value={sectionDraft.discussion}
-                                            onChange={(event) => setSectionDraft({ ...sectionDraft, discussion: event.target.value })}
-                                            placeholder="- **Expenses incurred by Ahmad:**&#10;  - $80.00 for notary signing&#10;  - $33.01 for posters&#10;- Receipts are recorded on Teams under Expenses."
-                                          />
-                                        </Field>
-                                        <Field label="Decisions" hint="One per line.">
-                                          <textarea className="textarea" rows={8} value={sectionDraft.decisions} onChange={(event) => setSectionDraft({ ...sectionDraft, decisions: event.target.value })} />
-                                        </Field>
-                                      </div>
-                                    )}
-
-                                    {sectionEditorTab === "motions" && (
-                                      <div className="meeting-minutes-section-editor__panel">
-                                        <div className="meeting-minutes-motion-assignment">
-                                          <div className="meeting-minutes-motion-assignment__head">
-                                            <strong>Assigned motions</strong>
-                                            <span className="muted">{assignedMotionRows.length} of {motions.length}</span>
-                                          </div>
-                                          {assignedMotionRows.length ? (
-                                            <div className="meeting-minutes-motion-assignment__list">
-                                              {assignedMotionRows.map(({ motion, motionIndex }) => (
-                                                <MotionAssignmentRow
-                                                  key={`${motion.text}-${motionIndex}`}
-                                                  motion={motion}
-                                                  motionIndex={motionIndex}
-                                                  people={motionPeople}
-                                                  onRemove={() => assignMotionToSection(motionIndex, "")}
-                                                />
-                                              ))}
-                                            </div>
-                                          ) : (
-                                            <div className="muted">No motions are assigned to this agenda item yet.</div>
-                                          )}
-                                          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                                            <button className="btn-action" type="button" onClick={onOpenMotions}>
-                                              <Plus size={12} /> Add motion in Motions tab
-                                            </button>
-                                          </div>
-                                        </div>
-                                        {availableMotionRows.length > 0 && (
-                                          <details className="meeting-minutes-motion-picklist">
-                                            <summary>Assign existing motion to this item</summary>
-                                            <div className="meeting-minutes-motion-assignment__list">
-                                              {availableMotionRows.map(({ motion, motionIndex }) => (
-                                                <div
-                                                  className="meeting-minutes-motion-assignment__row"
-                                                  key={`${motion.text}-${motionIndex}`}
-                                                >
-                                                  <div className="meeting-minutes-motion-assignment__text">
-                                                    <strong>{motion.text}</strong>
-                                                    <span>
-                                                      {motion.outcome || "Pending"}
-                                                      {motion.movedBy ? ` · Moved by ${motionPersonDisplayName(motion.movedBy, motionPeople, { memberId: motion.movedByMemberId, directorId: motion.movedByDirectorId })}` : ""}
-                                                      {motion.secondedBy ? ` · Seconded by ${motionPersonDisplayName(motion.secondedBy, motionPeople, { memberId: motion.secondedByMemberId, directorId: motion.secondedByDirectorId })}` : ""}
-                                                    </span>
-                                                  </div>
-                                                  <button
-                                                    className="btn-action"
-                                                    type="button"
-                                                    onClick={() => assignMotionToSection(motionIndex, String(index))}
-                                                  >
-                                                    <Plus size={12} /> Assign
-                                                  </button>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </details>
-                                        )}
-                                      </div>
-                                    )}
-
-                                    {sectionEditorTab === "actions" && (
-                                      <div className="meeting-minutes-section-editor__panel">
-                                        <div className="meeting-minutes-action-editor">
-                                          {sectionDraft.actionItems.length ? (
-                                            sectionDraft.actionItems.map((item, actionIndex) => (
-                                              <div className="meeting-minutes-action-editor__row" key={actionIndex}>
-                                                <Field label="Action">
-                                                  <input
-                                                    className="input"
-                                                    value={item.text}
-                                                    onChange={(event) => updateActionDraft(actionIndex, { text: event.target.value })}
-                                                    placeholder="Follow up on insurance renewal"
-                                                  />
-                                                </Field>
-                                                <Field label="Assignee">
-                                                  <NameAutocomplete
-                                                    value={item.assignee}
-                                                    onChange={(next) => updateActionDraft(actionIndex, { assignee: next })}
-                                                    options={assigneeOptions}
-                                                    placeholder="First name Last name"
-                                                  />
-                                                </Field>
-                                                <Field label="Due">
-                                                  <input
-                                                    className="input"
-                                                    type="date"
-                                                    value={item.dueDate}
-                                                    onChange={(event) => updateActionDraft(actionIndex, { dueDate: event.target.value })}
-                                                  />
-                                                </Field>
-                                                <button className="btn-action" type="button" title="Remove action" onClick={() => removeActionDraft(actionIndex)}>
-                                                  <Trash2 size={12} />
-                                                </button>
-                                              </div>
-                                            ))
-                                          ) : (
-                                            <div className="muted">No section-specific action rows yet.</div>
-                                          )}
-                                          <button className="btn-action" type="button" onClick={addActionDraft}>
-                                            <Plus size={12} /> Add action
-                                          </button>
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {sectionEditorTab === "tasks" && (
-                                      <div className="meeting-minutes-section-editor__panel">
-                                        <div className="meeting-minutes-section-tasks">
-                                          {linkedTaskRecords.length === 0 ? (
-                                            <div className="muted">
-                                              Link a task from this meeting to capture status updates and a completion note here. Status changes apply to the kanban when you save the section.
-                                            </div>
-                                          ) : (
-                                            linkedTaskRecords.map((task) => {
-                                              const draft = sectionDraft.taskUpdates[task._id] ?? {};
-                                              const currentStatus = draft.status ?? task.status ?? "Todo";
-                                              const noteValue = draft.completionNote ?? task.completionNote ?? "";
-                                              return (
-                                                <div className="meeting-minutes-section-task" key={task._id}>
-                                                  <div className="meeting-minutes-section-task__head">
-                                                    <strong>{task.title}</strong>
-                                                    <div className="row" style={{ gap: 6, alignItems: "center", marginLeft: "auto" }}>
-                                                      {task.priority && <Badge tone={task.priority === "High" ? "danger" : task.priority === "Medium" ? "warn" : "neutral"}>{task.priority}</Badge>}
-                                                      <button
-                                                        className="btn-action btn-action--icon"
-                                                        type="button"
-                                                        title="Unlink from this section"
-                                                        aria-label={`Unlink ${task.title}`}
-                                                        onClick={() => detachLinkedTask(task._id)}
-                                                      >
-                                                        <Unlink size={12} />
-                                                      </button>
-                                                    </div>
-                                                  </div>
-                                                  <Segmented
-                                                    value={currentStatus}
-                                                    onChange={(next) => updateTaskDraft(task._id, { status: next })}
-                                                    items={SECTION_TASK_STATUS_ITEMS}
-                                                  />
-                                                  <Field label="Completion note" hint="Saved to the task when this section is saved.">
-                                                    <textarea
-                                                      className="textarea"
-                                                      rows={2}
-                                                      value={noteValue}
-                                                      onChange={(event) => updateTaskDraft(task._id, { completionNote: event.target.value })}
-                                                      placeholder="Outcome, blockers, or notes for the kanban card."
-                                                    />
-                                                  </Field>
-                                                </div>
-                                              );
-                                            })
-                                          )}
-
-                                          {availableMeetingTasks.length > 0 ? (
-                                            <select
-                                              className="input"
-                                              value=""
-                                              onChange={(event) => {
-                                                attachLinkedTask(event.target.value);
-                                                event.target.value = "";
-                                              }}
-                                            >
-                                              <option value="">Link a meeting task…</option>
-                                              {availableMeetingTasks.map((task: any) => (
-                                                <option key={task._id} value={task._id}>
-                                                  {task.title}{task.status ? ` · ${task.status}` : ""}
-                                                </option>
-                                              ))}
-                                            </select>
-                                          ) : (meetingTasks?.length ?? 0) === 0 ? (
-                                            <div className="muted" style={{ fontSize: "var(--fs-sm)", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
-                                              <span>No tasks linked to this meeting yet. Add tasks on the Package tab to make them available here.</span>
-                                              <Link to="/app/tasks" className="btn-action">
-                                                <ExternalLink size={12} /> Open Tasks page
-                                              </Link>
-                                            </div>
-                                          ) : (
-                                            <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                                              All meeting tasks are linked to this section.
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
-                                      <button className="btn-action" onClick={() => { setSectionEditIndex(null); setSectionDraft(null); }}>Cancel</button>
-                                      <button className="btn-action btn-action--primary" onClick={saveSectionEdit}>
-                                        <Save size={12} /> Save section
-                                      </button>
-                                    </div>
-                                  </div>
-                                );
-                              })() : (
+                              {sectionEditIndex === index && sectionDraft ? renderSectionEditor("inline") : (
                                 <>
                                   {section.presenter && <p><strong>Presenter:</strong> {section.presenter}</p>}
                                   {section.discussion ? (
@@ -1841,7 +1922,7 @@ export function MeetingMinutesColumn({
                   </div>
                 </div>
           </>
-        ) : (
+      ) : (
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Agenda record</h2>
@@ -1879,6 +1960,7 @@ export function MeetingMinutesColumn({
           </div>
         )}
       </div>
+      {isMobileSectionEditor && sectionEditIndex !== null && sectionDraft && renderSectionEditor("mobile")}
       {sectionContextMenu && (() => {
         const i = sectionContextMenu.sectionIndex;
         const section = sections[i];

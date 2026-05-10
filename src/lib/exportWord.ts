@@ -1,3 +1,5 @@
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+
 const DOCUMENT_CSS = `
   body { font-family: Calibri, "Segoe UI", Arial, sans-serif; font-size: 11pt; color: #1a1a1a; }
   h1 { font-size: 20pt; margin: 0 0 4pt; }
@@ -95,6 +97,74 @@ export function exportWordDocx({
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+export function downloadStoredZip({
+  filename,
+  files,
+}: {
+  filename: string;
+  files: Record<string, string>;
+}) {
+  const zipBytes = createStoredZip(files);
+  const blob = new Blob([zipBytes], { type: "application/zip" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename.endsWith(".zip") ? filename : `${filename}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export async function exportPdfDownload({
+  filename,
+  title,
+  bodyHtml,
+}: {
+  filename: string;
+  title: string;
+  bodyHtml: string;
+}) {
+  const pdfDoc = await PDFDocument.create();
+  const regular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const state: PdfRenderState = {
+    pdfDoc,
+    page: pdfDoc.addPage([612, 792]),
+    regular,
+    bold,
+    margin: 54,
+    y: 738,
+    width: 504,
+  };
+
+  drawPdfLine(state, title, { font: bold, size: 18, gapAfter: 14 });
+  const lines = htmlToPdfLines(bodyHtml);
+  for (const line of lines) {
+    if (line.type === "space") {
+      state.y -= 8;
+      continue;
+    }
+    drawPdfLine(state, line.text, {
+      font: line.bold ? bold : regular,
+      size: line.size,
+      indent: line.indent,
+      gapAfter: line.gapAfter,
+    });
+  }
+
+  const bytes = await pdfDoc.save();
+  const blob = new Blob([bytes], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename.endsWith(".pdf") ? filename : `${filename}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export function openPrintableDocument({
   title,
   bodyHtml,
@@ -140,6 +210,124 @@ export function openPrintableDocument({
   };
   iframe.srcdoc = html;
   return true;
+}
+
+type PdfLine =
+  | { type: "text"; text: string; bold?: boolean; size: number; indent?: number; gapAfter?: number }
+  | { type: "space" };
+
+type PdfRenderState = {
+  pdfDoc: PDFDocument;
+  page: PDFPage;
+  regular: PDFFont;
+  bold: PDFFont;
+  margin: number;
+  y: number;
+  width: number;
+};
+
+function htmlToPdfLines(bodyHtml: string): PdfLine[] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(`<body>${bodyHtml}</body>`, "text/html");
+  const lines: PdfLine[] = [];
+  for (const node of Array.from(doc.body.childNodes)) {
+    appendPdfLines(node, lines, 0);
+  }
+  return lines;
+}
+
+function appendPdfLines(node: ChildNode, lines: PdfLine[], indent: number) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const text = normalizePdfText(node.textContent ?? "");
+    if (text) lines.push({ type: "text", text, size: 10, indent });
+    return;
+  }
+  if (!(node instanceof HTMLElement)) return;
+  const tag = node.tagName.toLowerCase();
+  if (tag === "h1") {
+    lines.push({ type: "text", text: normalizePdfText(node.textContent ?? ""), bold: true, size: 16, gapAfter: 8 });
+    return;
+  }
+  if (tag === "h2") {
+    lines.push({ type: "space" });
+    lines.push({ type: "text", text: normalizePdfText(node.textContent ?? ""), bold: true, size: 13, gapAfter: 6 });
+    return;
+  }
+  if (tag === "h3") {
+    lines.push({ type: "text", text: normalizePdfText(node.textContent ?? ""), bold: true, size: 11.5, gapAfter: 4 });
+    return;
+  }
+  if (tag === "p" || tag === "blockquote") {
+    const text = normalizePdfText(node.textContent ?? "");
+    if (text) lines.push({ type: "text", text, size: 10.5, indent, gapAfter: 4 });
+    return;
+  }
+  if (tag === "li") {
+    const text = normalizePdfText(node.textContent ?? "");
+    if (text) lines.push({ type: "text", text: `• ${text}`, size: 10.5, indent: indent + 14, gapAfter: 3 });
+    return;
+  }
+  if (tag === "tr") {
+    const cells = Array.from(node.children).map((cell) => normalizePdfText(cell.textContent ?? "")).filter(Boolean);
+    if (cells.length) lines.push({ type: "text", text: cells.join(" | "), size: 9.5, indent, gapAfter: 3 });
+    return;
+  }
+  if (tag === "br" || tag === "hr") {
+    lines.push({ type: "space" });
+    return;
+  }
+  for (const child of Array.from(node.childNodes)) {
+    appendPdfLines(child, lines, tag === "ul" || tag === "ol" ? indent + 10 : indent);
+  }
+  if (["section", "div", "table", "ul", "ol"].includes(tag)) lines.push({ type: "space" });
+}
+
+function drawPdfLine(
+  state: PdfRenderState,
+  text: string,
+  options: { font: PDFFont; size: number; indent?: number; gapAfter?: number },
+) {
+  const normalized = normalizePdfText(text);
+  if (!normalized) return;
+  const x = state.margin + (options.indent ?? 0);
+  const maxWidth = state.width - (options.indent ?? 0);
+  const wrapped = wrapPdfText(normalized, options.font, options.size, maxWidth);
+  for (const line of wrapped) {
+    if (state.y < state.margin + options.size * 2) {
+      state.page = state.pdfDoc.addPage([612, 792]);
+      state.y = 738;
+    }
+    state.page.drawText(line, {
+      x,
+      y: state.y,
+      size: options.size,
+      font: options.font,
+      color: rgb(0.1, 0.1, 0.1),
+    });
+    state.y -= options.size * 1.35;
+  }
+  state.y -= options.gapAfter ?? 2;
+}
+
+function wrapPdfText(text: string, font: PDFFont, size: number, maxWidth: number) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+      line = candidate;
+      continue;
+    }
+    if (line) lines.push(line);
+    line = word;
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [text];
+}
+
+function normalizePdfText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
 }
 
 export function escapeHtml(s: string | undefined | null): string {
