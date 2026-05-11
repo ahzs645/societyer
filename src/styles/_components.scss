@@ -207,6 +207,17 @@
   font-size: var(--fs-sm);
   text-align: center;
 }
+.option-multi-select {
+  position: relative;
+  width: 100%;
+}
+.option-multi-select__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  min-width: 100%;
+}
 
 /* ============================================================
    DatePicker

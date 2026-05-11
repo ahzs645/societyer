@@ -9,6 +9,7 @@ import type { Column } from "../../../components/DataTable";
 import type { FilterField } from "../../../components/FilterBar";
 import { Badge, Drawer, Field } from "../../../components/ui";
 import { useToast } from "../../../components/Toast";
+import { Select } from "../../../components/Select";
 
 type GrantSourceLibrarySectionProps = {
   societyId: any;
@@ -409,16 +410,34 @@ function GrantSourceDrawer({
           </Field>
           <div className="grid-2">
             <Field label="Source type">
-              <select className="input" value={sourceDraft.sourceType} onChange={(event) => setSourceDraft({ ...sourceDraft, sourceType: event.target.value })}>
-                <option value="funder_site">Funder site</option>
-                <option value="government_portal">Government portal</option>
-                <option value="rss">RSS</option>
-                <option value="pdf">PDF</option>
-                <option value="airtable">Airtable</option>
-                <option value="spreadsheet">Spreadsheet</option>
-                <option value="authenticated_portal">Authenticated portal</option>
-                <option value="custom">Custom</option>
-              </select>
+              <Select value={sourceDraft.sourceType} onChange={value => setSourceDraft({
+  ...sourceDraft,
+  sourceType: value
+})} options={[{
+  value: "funder_site",
+  label: "Funder site"
+}, {
+  value: "government_portal",
+  label: "Government portal"
+}, {
+  value: "rss",
+  label: "RSS"
+}, {
+  value: "pdf",
+  label: "PDF"
+}, {
+  value: "airtable",
+  label: "Airtable"
+}, {
+  value: "spreadsheet",
+  label: "Spreadsheet"
+}, {
+  value: "authenticated_portal",
+  label: "Authenticated portal"
+}, {
+  value: "custom",
+  label: "Custom"
+}]} className="input" />
             </Field>
             <Field label="Jurisdiction">
               <input className="input" value={sourceDraft.jurisdiction} onChange={(event) => setSourceDraft({ ...sourceDraft, jurisdiction: event.target.value })} placeholder="Canada, BC, municipal" />
@@ -426,20 +445,40 @@ function GrantSourceDrawer({
           </div>
           <div className="grid-2">
             <Field label="Scrape cadence">
-              <select className="input" value={sourceDraft.scrapeCadence} onChange={(event) => setSourceDraft({ ...sourceDraft, scrapeCadence: event.target.value })}>
-                <option value="manual">Manual</option>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-              </select>
+              <Select value={sourceDraft.scrapeCadence} onChange={value => setSourceDraft({
+  ...sourceDraft,
+  scrapeCadence: value
+})} options={[{
+  value: "manual",
+  label: "Manual"
+}, {
+  value: "daily",
+  label: "Daily"
+}, {
+  value: "weekly",
+  label: "Weekly"
+}, {
+  value: "monthly",
+  label: "Monthly"
+}]} className="input" />
             </Field>
             <Field label="Trust level">
-              <select className="input" value={sourceDraft.trustLevel} onChange={(event) => setSourceDraft({ ...sourceDraft, trustLevel: event.target.value })}>
-                <option value="official">Official</option>
-                <option value="partner">Partner</option>
-                <option value="aggregator">Aggregator</option>
-                <option value="unknown">Unknown</option>
-              </select>
+              <Select value={sourceDraft.trustLevel} onChange={value => setSourceDraft({
+  ...sourceDraft,
+  trustLevel: value
+})} options={[{
+  value: "official",
+  label: "Official"
+}, {
+  value: "partner",
+  label: "Partner"
+}, {
+  value: "aggregator",
+  label: "Aggregator"
+}, {
+  value: "unknown",
+  label: "Unknown"
+}]} className="input" />
             </Field>
           </div>
           <Field label="Eligibility tags">

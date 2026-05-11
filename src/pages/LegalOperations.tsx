@@ -11,6 +11,7 @@ import { useToast } from "../components/Toast";
 import { BookTemplate, FileSignature, Landmark, Plus, Scale, Trash2, UsersRound } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
+import { Select } from "../components/Select";
 
 export function RoleHoldersPage() {
   const society = useSociety();
@@ -388,10 +389,16 @@ export function RightsLedgerPage() {
             </div>
             <Field label="Transfer date"><DatePicker value={transferDraft.transferDate ?? ""} onChange={(value) => setTransferDraft({ ...transferDraft, transferDate: value })} /></Field>
             <Field label="Rights class">
-              <select className="input" value={transferDraft.rightsClassId ?? ""} onChange={(e) => setTransferDraft({ ...transferDraft, rightsClassId: e.target.value || undefined })}>
-                <option value="">No class</option>
-                {(data?.classes ?? []).map((row: any) => <option key={row._id} value={row._id}>{row.className}</option>)}
-              </select>
+              <Select value={transferDraft.rightsClassId ?? ""} onChange={value => setTransferDraft({
+  ...transferDraft,
+  rightsClassId: value || undefined
+})} options={[{
+  value: "",
+  label: "No class"
+}, ...(data?.classes ?? []).map((row: any) => ({
+  value: row._id,
+  label: row.className
+}))]} className="input" />
             </Field>
             <div className="grid two">
               <Field label="Source holder"><input className="input" value={transferDraft.sourceHolderName ?? ""} onChange={(e) => setTransferDraft({ ...transferDraft, sourceHolderName: e.target.value })} /></Field>
@@ -618,6 +625,7 @@ export function FormationMaintenancePage() {
   const upsertLog = useMutation(api.legalOperations.upsertSupportLog);
   const toast = useToast();
   const [draft, setDraft] = useState<any>(null);
+  const [activeTable, setActiveTable] = useState("formations");
   const latestJurisdictionByCode = useMemo(
     () => new Map((data?.jurisdictionMetadata ?? []).map((row: any) => [row.jurisdiction, row])),
     [data],
@@ -666,6 +674,120 @@ export function FormationMaintenancePage() {
     toast.success("Formation and maintenance record saved");
   };
 
+  const tableTabs = [
+    {
+      id: "formations",
+      label: "Formation records",
+      count: data?.formations?.length ?? 0,
+      content: (
+        <SimpleTable
+          cols={["NUANS", "Jurisdiction", "Purpose/classes", "Staff/signing", "Status"]}
+          rows={(data?.formations ?? []).map((row: any) => [
+            <RecordTitle title={row.nuansNumber || "No NUANS"} subtitle={dateLabel(row.nuansDate)} />,
+            row.jurisdiction ? optionLabel("entityJurisdictions", row.jurisdiction) : "-",
+            row.purposeStatement || row.classesOfMembership || "-",
+            `${row.assignedStaffIds?.length || 0} staff / ${row.signingPackageIds?.length || 0} packages`,
+            <Badge tone={toneForStatus(row.status)}>{optionLabel("formationStatuses", row.status)}</Badge>,
+          ])}
+          empty="No formation records yet."
+        />
+      ),
+    },
+    {
+      id: "name-searches",
+      label: "Name searches",
+      count: data?.nameSearches?.length ?? 0,
+      content: (
+        <SimpleTable
+          cols={["Name", "NUANS report", "Elements", "Result", "Rank"]}
+          rows={(data?.nameSearches ?? []).map((row: any) => [
+            <RecordTitle title={row.name || "Unnamed search"} subtitle={row.reportUrl || "No report URL"} />,
+            row.nuansReportNumber || "-",
+            [row.distinctiveElement, row.descriptiveElement, row.suffix].filter(Boolean).join(" / ") || "-",
+            row.success ? "Successful" : row.errors?.length ? row.errors.join(", ") : "-",
+            row.rank ?? "-",
+          ])}
+          empty="No name searches yet."
+        />
+      ),
+    },
+    {
+      id: "amendments",
+      label: "Amendments",
+      count: data?.amendments?.length ?? 0,
+      content: (
+        <SimpleTable
+          cols={["Effective", "Name", "Directors", "Jurisdiction", "Status"]}
+          rows={(data?.amendments ?? []).map((row: any) => [
+            dateLabel(row.effectiveDate),
+            row.entityNameNew || "-",
+            [row.directorsMinimum, row.directorsMaximum].some((value) => value != null)
+              ? `${row.directorsMinimum ?? "-"} to ${row.directorsMaximum ?? "-"}`
+              : "-",
+            row.jurisdictionNew ? optionLabel("entityJurisdictions", row.jurisdictionNew) : "-",
+            <Badge tone={toneForStatus(row.status)}>{optionLabel("amendmentStatuses", row.status)}</Badge>,
+          ])}
+          empty="No amendments yet."
+        />
+      ),
+    },
+    {
+      id: "annual",
+      label: "Annual maintenance",
+      count: data?.annualRecords?.length ?? 0,
+      content: (
+        <SimpleTable
+          cols={["Year", "AGM", "Filing", "Financial statement", "Status"]}
+          rows={(data?.annualRecords ?? []).map((row: any) => [
+            row.yearFilingFor || "-",
+            dateLabel(row.lastAgmDate),
+            dateLabel(row.filingDate),
+            row.annualFinancialStatementOption ? optionLabel("annualFinancialStatementOptions", row.annualFinancialStatementOption) : row.financialStatementReportType || "-",
+            <Badge tone={toneForStatus(row.status)}>{optionLabel("annualMaintenanceStatuses", row.status)}</Badge>,
+          ])}
+          empty="No annual maintenance records yet."
+        />
+      ),
+    },
+    {
+      id: "jurisdiction",
+      label: "Jurisdiction metadata",
+      count: data?.jurisdictionMetadata?.length ?? 0,
+      content: (
+        <SimpleTable
+          cols={["Jurisdiction", "Act", "NUANS jurisdiction", "Reservation report", "Eligible"]}
+          rows={(data?.jurisdictionMetadata ?? []).map((row: any) => [
+            <RecordTitle title={row.label} subtitle={row.jurisdiction} />,
+            row.actFormedUnder ? optionLabel("actsFormedUnder", row.actFormedUnder) : "-",
+            row.nuansJurisdictionNumber || "-",
+            row.nuansReservationReportTypeId || "-",
+            row.incorporationServiceEligible ? "Yes" : "No",
+          ])}
+          empty="No jurisdiction metadata yet."
+        />
+      ),
+    },
+    {
+      id: "logs",
+      label: "Operational logs",
+      count: data?.logs?.length ?? 0,
+      content: (
+        <SimpleTable
+          cols={["When", "Type", "Page", "Details", "Severity"]}
+          rows={(data?.logs ?? []).map((row: any) => [
+            row.createdAtISO ? formatDate(row.createdAtISO) : "-",
+            optionLabel("logTypes", row.logType),
+            row.page || row.pageLocationUrl || "-",
+            row.errorMessage || row.detailsHeading || "-",
+            <Badge tone={row.severity === "error" || row.severity === "critical" ? "danger" : row.severity === "warning" ? "warn" : "neutral"}>{optionLabel("logSeverities", row.severity)}</Badge>,
+          ])}
+          empty="No operational logs yet."
+        />
+      ),
+    },
+  ];
+  const activeTableTab = tableTabs.find((tab) => tab.id === activeTable) ?? tableTabs[0];
+
   return (
     <div className="page page--wide">
       <PageHeader
@@ -685,60 +807,23 @@ export function FormationMaintenancePage() {
         }
       />
 
-      <Section title="Formation records" count={data?.formations?.length ?? 0}>
-        <SimpleTable
-          cols={["NUANS", "Jurisdiction", "Purpose/classes", "Staff/signing", "Status"]}
-          rows={(data?.formations ?? []).map((row: any) => [
-            <RecordTitle title={row.nuansNumber || "No NUANS"} subtitle={dateLabel(row.nuansDate)} />,
-            row.jurisdiction ? optionLabel("entityJurisdictions", row.jurisdiction) : "-",
-            row.purposeStatement || row.classesOfMembership || "-",
-            `${row.assignedStaffIds?.length || 0} staff / ${row.signingPackageIds?.length || 0} packages`,
-            <Badge tone={toneForStatus(row.status)}>{optionLabel("formationStatuses", row.status)}</Badge>,
-          ])}
-          empty="No formation records yet."
-        />
-      </Section>
-
-      <Section title="Annual maintenance" count={data?.annualRecords?.length ?? 0}>
-        <SimpleTable
-          cols={["Year", "AGM", "Filing", "Financial statement", "Status"]}
-          rows={(data?.annualRecords ?? []).map((row: any) => [
-            row.yearFilingFor || "-",
-            dateLabel(row.lastAgmDate),
-            dateLabel(row.filingDate),
-            row.annualFinancialStatementOption ? optionLabel("annualFinancialStatementOptions", row.annualFinancialStatementOption) : row.financialStatementReportType || "-",
-            <Badge tone={toneForStatus(row.status)}>{optionLabel("annualMaintenanceStatuses", row.status)}</Badge>,
-          ])}
-          empty="No annual maintenance records yet."
-        />
-      </Section>
-
-      <Section title="Jurisdiction metadata" count={data?.jurisdictionMetadata?.length ?? 0}>
-        <SimpleTable
-          cols={["Jurisdiction", "Act", "NUANS jurisdiction", "Reservation report", "Eligible"]}
-          rows={(data?.jurisdictionMetadata ?? []).map((row: any) => [
-            <RecordTitle title={row.label} subtitle={row.jurisdiction} />,
-            row.actFormedUnder ? optionLabel("actsFormedUnder", row.actFormedUnder) : "-",
-            row.nuansJurisdictionNumber || "-",
-            row.nuansReservationReportTypeId || "-",
-            row.incorporationServiceEligible ? "Yes" : "No",
-          ])}
-          empty="No jurisdiction metadata yet."
-        />
-      </Section>
-
-      <Section title="Operational logs" count={data?.logs?.length ?? 0}>
-        <SimpleTable
-          cols={["When", "Type", "Page", "Details", "Severity"]}
-          rows={(data?.logs ?? []).map((row: any) => [
-            row.createdAtISO ? formatDate(row.createdAtISO) : "-",
-            optionLabel("logTypes", row.logType),
-            row.page || row.pageLocationUrl || "-",
-            row.errorMessage || row.detailsHeading || "-",
-            <Badge tone={row.severity === "error" || row.severity === "critical" ? "danger" : row.severity === "warning" ? "warn" : "neutral"}>{optionLabel("logSeverities", row.severity)}</Badge>,
-          ])}
-          empty="No operational logs yet."
-        />
+      <Section title={activeTableTab.label} count={activeTableTab.count}>
+        <div className="tabs" role="tablist" aria-label="Formation and maintenance tables">
+          {tableTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTableTab.id === tab.id}
+              className={`tab${activeTableTab.id === tab.id ? " is-active" : ""}`}
+              onClick={() => setActiveTable(tab.id)}
+            >
+              <span className="tab__label">{tab.label}</span>
+              <span className="badge tab__count">{tab.count}</span>
+            </button>
+          ))}
+        </div>
+        {activeTableTab.content}
       </Section>
 
       <Drawer open={Boolean(draft)} onClose={() => setDraft(null)} title={formationDraftTitle(draft)} footer={<><button className="btn" onClick={() => setDraft(null)}>Cancel</button><button className="btn btn--accent" onClick={save}>Save</button></>}>

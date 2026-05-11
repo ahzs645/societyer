@@ -23,6 +23,7 @@ import {
   GrantReadPanel,
 } from "../features/grants/components/GrantPanels";
 import { enrichGcosNormalizedGrant, readGcosExportFile } from "../lib/gcosExportImport";
+import { Select } from "../components/Select";
 
 export function GrantsPage() {
   const society = useSociety();
@@ -680,28 +681,48 @@ export function GrantsPage() {
         {txnDraft && (
           <div>
             <Field label="Grant">
-              <select className="input" value={txnDraft.grantId ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, grantId: e.target.value })}>
-                {(grants ?? []).map((grant) => <option key={grant._id} value={grant._id}>{grant.title}</option>)}
-              </select>
+              <Select value={txnDraft.grantId ?? ""} onChange={value => setTxnDraft({
+  ...txnDraft,
+  grantId: value
+})} options={[...(grants ?? []).map(grant => ({
+  value: grant._id,
+  label: grant.title
+}))]} className="input" />
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Date"><input className="input" type="date" value={txnDraft.date ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, date: e.target.value })} /></Field>
               <Field label="Direction">
-                <select className="input" value={txnDraft.direction} onChange={(e) => setTxnDraft({ ...txnDraft, direction: e.target.value })}>
-                  <option>inflow</option>
-                  <option>outflow</option>
-                  <option>commitment</option>
-                  <option>adjustment</option>
-                </select>
+                <Select value={txnDraft.direction} onChange={value => setTxnDraft({
+  ...txnDraft,
+  direction: value
+})} options={[{
+  value: "",
+  label: "inflow"
+}, {
+  value: "",
+  label: "outflow"
+}, {
+  value: "",
+  label: "commitment"
+}, {
+  value: "",
+  label: "adjustment"
+}]} className="input" />
               </Field>
             </div>
             <Field label="Amount" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={txnDraft.amountDollars ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, amountDollars: e.target.value })} /></Field>
             <Field label="Description"><input className="input" value={txnDraft.description ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, description: e.target.value })} /></Field>
             <Field label="Evidence document">
-              <select className="input" value={txnDraft.documentId ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, documentId: e.target.value })}>
-                <option value="">None</option>
-                {(documents ?? []).map((document) => <option key={document._id} value={document._id}>{document.title}</option>)}
-              </select>
+              <Select value={txnDraft.documentId ?? ""} onChange={value => setTxnDraft({
+  ...txnDraft,
+  documentId: value
+})} options={[{
+  value: "",
+  label: "None"
+}, ...(documents ?? []).map(document => ({
+  value: document._id,
+  label: document.title
+}))]} className="input" />
             </Field>
             <Field label="Notes"><textarea className="textarea" value={txnDraft.notes ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, notes: e.target.value })} /></Field>
           </div>
@@ -731,19 +752,33 @@ export function GrantsPage() {
         {reportDraft && (
           <div>
             <Field label="Grant">
-              <select className="input" value={reportDraft.grantId ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, grantId: e.target.value })}>
-                {(grants ?? []).map((grant) => <option key={grant._id} value={grant._id}>{grant.title}</option>)}
-              </select>
+              <Select value={reportDraft.grantId ?? ""} onChange={value => setReportDraft({
+  ...reportDraft,
+  grantId: value
+})} options={[...(grants ?? []).map(grant => ({
+  value: grant._id,
+  label: grant.title
+}))]} className="input" />
             </Field>
             <Field label="Title"><input className="input" value={reportDraft.title} onChange={(e) => setReportDraft({ ...reportDraft, title: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Status">
-                <select className="input" value={reportDraft.status} onChange={(e) => setReportDraft({ ...reportDraft, status: e.target.value })}>
-                  <option>Upcoming</option>
-                  <option>Due</option>
-                  <option>Submitted</option>
-                  <option>Overdue</option>
-                </select>
+                <Select value={reportDraft.status} onChange={value => setReportDraft({
+  ...reportDraft,
+  status: value
+})} options={[{
+  value: "",
+  label: "Upcoming"
+}, {
+  value: "",
+  label: "Due"
+}, {
+  value: "",
+  label: "Submitted"
+}, {
+  value: "",
+  label: "Overdue"
+}]} className="input" />
               </Field>
               <Field label="Due"><input className="input" type="date" value={reportDraft.dueAtISO ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, dueAtISO: e.target.value })} /></Field>
             </div>
@@ -751,10 +786,16 @@ export function GrantsPage() {
             <Field label="Spending to date" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={reportDraft.spendingToDateDollars ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, spendingToDateDollars: e.target.value })} /></Field>
             <Field label="Outcome summary"><textarea className="textarea" value={reportDraft.outcomeSummary ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, outcomeSummary: e.target.value })} /></Field>
             <Field label="Report document">
-              <select className="input" value={reportDraft.documentId ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, documentId: e.target.value })}>
-                <option value="">None</option>
-                {(documents ?? []).map((document) => <option key={document._id} value={document._id}>{document.title}</option>)}
-              </select>
+              <Select value={reportDraft.documentId ?? ""} onChange={value => setReportDraft({
+  ...reportDraft,
+  documentId: value
+})} options={[{
+  value: "",
+  label: "None"
+}, ...(documents ?? []).map(document => ({
+  value: document._id,
+  label: document.title
+}))]} className="input" />
             </Field>
             <Field label="Notes"><textarea className="textarea" value={reportDraft.notes ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, notes: e.target.value })} /></Field>
           </div>

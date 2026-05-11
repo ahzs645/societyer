@@ -18,6 +18,7 @@ import {
   sourceLabelForExternalId,
 } from "./MeetingDetailSupport";
 import { MeetingTranscriptCard } from "./MeetingTranscriptCard";
+import { Select } from "../../../components/Select";
 
 export function MeetingSidebarColumn({
   meeting,
@@ -155,17 +156,10 @@ export function MeetingSidebarColumn({
                 {!exportControlsReadOnly && (
                   <>
                     <Field label="Style">
-                      <select
-                        className="input"
-                        value={minutesExportStyle}
-                        onChange={(event) => setMinutesExportStyle(event.target.value as MinutesExportStyleId)}
-                      >
-                        {MINUTES_EXPORT_STYLES.map((style) => (
-                          <option key={style.id} value={style.id}>
-                            {style.label}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={minutesExportStyle} onChange={value => setMinutesExportStyle(value as MinutesExportStyleId)} options={[...MINUTES_EXPORT_STYLES.map(style => ({
+  value: style.id,
+  label: style.label
+}))]} className="input" />
                     </Field>
                     <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>
                       {selectedMinutesExportStyle.tone}

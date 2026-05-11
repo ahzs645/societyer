@@ -31,6 +31,7 @@ function DinnerTableIcon({ size = 12 }: { size?: number }) {
 }
 import { Badge, Field } from "./ui";
 import { NameAutocomplete } from "./NameAutocomplete";
+import { Select } from "./Select";
 
 export type Motion = {
   text: string;
@@ -318,17 +319,19 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
           </div>
           <div className="row" style={{ gap: 12 }}>
             <Field label="Resolution type">
-              <select
-                className="input"
-                value={draft.resolutionType ?? "Ordinary"}
-                onChange={(e) =>
-                  setDraft({ ...draft, resolutionType: e.target.value })
-                }
-              >
-                <option value="Ordinary">Ordinary (simple majority)</option>
-                <option value="Special">Special (≥ 2⁄3)</option>
-                <option value="Unanimous">Unanimous</option>
-              </select>
+              <Select value={draft.resolutionType ?? "Ordinary"} onChange={value => setDraft({
+  ...draft,
+  resolutionType: value
+})} options={[{
+  value: "Ordinary",
+  label: "Ordinary (simple majority)"
+}, {
+  value: "Special",
+  label: "Special (≥ 2⁄3)"
+}, {
+  value: "Unanimous",
+  label: "Unanimous"
+}]} className="input" />
             </Field>
             <Field label="Outcome">
               <OutcomePicker value={draft.outcome} onChange={(v) => setDraft({ ...draft, outcome: v })} />
@@ -336,18 +339,16 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
           </div>
           {agendaSections.length > 0 && (
             <Field label="Agenda item">
-              <select
-                className="input"
-                value={draft.sectionIndex == null ? "" : String(draft.sectionIndex)}
-                onChange={(event) => setDraft((current) => ({ ...current, ...motionSectionPatch(event.target.value, agendaSections) }))}
-              >
-                <option value="">Unassigned</option>
-                {agendaSections.map((section, index) => (
-                  <option key={index} value={index}>
-                    {index + 1}. {agendaSectionTitle(section) || "Untitled section"}
-                  </option>
-                ))}
-              </select>
+              <Select value={draft.sectionIndex == null ? "" : String(draft.sectionIndex)} onChange={value => setDraft(current => ({
+  ...current,
+  ...motionSectionPatch(value, agendaSections)
+}))} options={[{
+  value: "",
+  label: "Unassigned"
+}, ...agendaSections.map((section, index) => ({
+  value: String(index),
+  label: [index + 1, ".", agendaSectionTitle(section) || "Untitled section"].join(" ")
+}))]} className="input" />
             </Field>
           )}
           <div className="row" style={{ gap: 12, alignItems: "flex-end" }}>
@@ -575,15 +576,18 @@ function MotionRow({
           </div>
           <div className="row" style={{ gap: 12 }}>
             <Field label="Resolution type">
-              <select
-                className="input"
-                value={motion.resolutionType ?? "Ordinary"}
-                onChange={(event) => onPatch({ resolutionType: event.target.value })}
-              >
-                <option value="Ordinary">Ordinary (simple majority)</option>
-                <option value="Special">Special (≥ 2⁄3)</option>
-                <option value="Unanimous">Unanimous</option>
-              </select>
+              <Select value={motion.resolutionType ?? "Ordinary"} onChange={value => onPatch({
+  resolutionType: value
+})} options={[{
+  value: "Ordinary",
+  label: "Ordinary (simple majority)"
+}, {
+  value: "Special",
+  label: "Special (≥ 2⁄3)"
+}, {
+  value: "Unanimous",
+  label: "Unanimous"
+}]} className="input" />
             </Field>
             <Field label="Outcome">
               <OutcomePicker value={motion.outcome} onChange={(v) => onPatch({ outcome: v })} />
@@ -591,18 +595,13 @@ function MotionRow({
           </div>
           {agendaSections.length > 0 && (
             <Field label="Agenda item">
-              <select
-                className="input"
-                value={selectedAgendaIndex == null ? "" : String(selectedAgendaIndex)}
-                onChange={(event) => onPatch(motionSectionPatch(event.target.value, agendaSections))}
-              >
-                <option value="">Unassigned</option>
-                {agendaSections.map((section, index) => (
-                  <option key={index} value={index}>
-                    {index + 1}. {agendaSectionTitle(section) || "Untitled section"}
-                  </option>
-                ))}
-              </select>
+              <Select value={selectedAgendaIndex == null ? "" : String(selectedAgendaIndex)} onChange={value => onPatch(motionSectionPatch(value, agendaSections))} options={[{
+  value: "",
+  label: "Unassigned"
+}, ...agendaSections.map((section, index) => ({
+  value: String(index),
+  label: [index + 1, ".", agendaSectionTitle(section) || "Untitled section"].join(" ")
+}))]} className="input" />
             </Field>
           )}
           <div className="row" style={{ gap: 12, alignItems: "flex-end" }}>

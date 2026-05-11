@@ -977,12 +977,16 @@ export function TreasurerPage() {
         {eventDraft && (
           <div>
             <Field label="Funding source">
-              <select className="input" value={eventDraft.sourceId ?? ""} onChange={(e) => setEventDraft({ ...eventDraft, sourceId: e.target.value })}>
-                <option value="">Select source</option>
-                {(fundingSources ?? []).map((source: any) => (
-                  <option key={source._id} value={source._id}>{source.name}</option>
-                ))}
-              </select>
+              <Select value={eventDraft.sourceId ?? ""} onChange={value => setEventDraft({
+  ...eventDraft,
+  sourceId: value
+})} options={[{
+  value: "",
+  label: "Select source"
+}, ...(fundingSources ?? []).map((source: any) => ({
+  value: source._id,
+  label: source.name
+}))]} className="input" />
             </Field>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Field label="Date">
@@ -1068,23 +1072,20 @@ export function TreasurerPage() {
                 <input className="input" value={expenseDraft.claimantName} onChange={(e) => setExpenseDraft({ ...expenseDraft, claimantName: e.target.value })} />
               </Field>
               <Field label="Linked user">
-                <select
-                  className="input"
-                  value={expenseDraft.claimantUserId ?? ""}
-                  onChange={(e) => {
-                    const selected = (users ?? []).find((user: any) => user._id === e.target.value);
-                    setExpenseDraft({
-                      ...expenseDraft,
-                      claimantUserId: e.target.value,
-                      claimantName: selected?.displayName || expenseDraft.claimantName,
-                    });
-                  }}
-                >
-                  <option value="">No linked user</option>
-                  {(users ?? []).map((user: any) => (
-                    <option key={user._id} value={user._id}>{user.displayName}</option>
-                  ))}
-                </select>
+                <Select value={expenseDraft.claimantUserId ?? ""} onChange={value => {
+  const selected = (users ?? []).find((user: any) => user._id === value);
+  setExpenseDraft({
+    ...expenseDraft,
+    claimantUserId: value,
+    claimantName: selected?.displayName || expenseDraft.claimantName
+  });
+}} options={[{
+  value: "",
+  label: "No linked user"
+}, ...(users ?? []).map((user: any) => ({
+  value: user._id,
+  label: user.displayName
+}))]} className="input" />
               </Field>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -1104,12 +1105,16 @@ export function TreasurerPage() {
               </Field>
             </div>
             <Field label="Receipt document" hint="Upload receipts in Documents, then link them here.">
-              <select className="input" value={expenseDraft.receiptDocumentId ?? ""} onChange={(e) => setExpenseDraft({ ...expenseDraft, receiptDocumentId: e.target.value })}>
-                <option value="">No receipt linked</option>
-                {(documents ?? []).map((document: any) => (
-                  <option key={document._id} value={document._id}>{document.title}</option>
-                ))}
-              </select>
+              <Select value={expenseDraft.receiptDocumentId ?? ""} onChange={value => setExpenseDraft({
+  ...expenseDraft,
+  receiptDocumentId: value
+})} options={[{
+  value: "",
+  label: "No receipt linked"
+}, ...(documents ?? []).map((document: any) => ({
+  value: document._id,
+  label: document.title
+}))]} className="input" />
             </Field>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Field label="Submitted date">

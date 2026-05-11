@@ -10,6 +10,7 @@ import { DataTable } from "../components/DataTable";
 import { HandHeart, Plus, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
+import { Select } from "../components/Select";
 
 export function VolunteersPage() {
   const society = useSociety();
@@ -372,14 +373,16 @@ export function VolunteersPage() {
         {volunteerDraft && (
           <div>
             <Field label="Linked member">
-              <select className="input" value={volunteerDraft.memberId ?? ""} onChange={(e) => setVolunteerDraft({ ...volunteerDraft, memberId: e.target.value })}>
-                <option value="">None</option>
-                {(members ?? []).map((member) => (
-                  <option key={member._id} value={member._id}>
-                    {member.firstName} {member.lastName}
-                  </option>
-                ))}
-              </select>
+              <Select value={volunteerDraft.memberId ?? ""} onChange={value => setVolunteerDraft({
+  ...volunteerDraft,
+  memberId: value
+})} options={[{
+  value: "",
+  label: "None"
+}, ...(members ?? []).map(member => ({
+  value: member._id,
+  label: [member.firstName, member.lastName].join(" ")
+}))]} className="input" />
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="First name"><input className="input" value={volunteerDraft.firstName} onChange={(e) => setVolunteerDraft({ ...volunteerDraft, firstName: e.target.value })} /></Field>
@@ -389,22 +392,40 @@ export function VolunteersPage() {
             <Field label="Phone"><input className="input" value={volunteerDraft.phone ?? ""} onChange={(e) => setVolunteerDraft({ ...volunteerDraft, phone: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Status">
-                <select className="input" value={volunteerDraft.status} onChange={(e) => setVolunteerDraft({ ...volunteerDraft, status: e.target.value })}>
-                  <option>Prospect</option>
-                  <option>Applied</option>
-                  <option>Active</option>
-                  <option>Paused</option>
-                  <option>Inactive</option>
-                  <option>Declined</option>
-                </select>
+                <Select value={volunteerDraft.status} onChange={value => setVolunteerDraft({
+  ...volunteerDraft,
+  status: value
+})} options={[{
+  value: "",
+  label: "Prospect"
+}, {
+  value: "",
+  label: "Applied"
+}, {
+  value: "",
+  label: "Active"
+}, {
+  value: "",
+  label: "Paused"
+}, {
+  value: "",
+  label: "Inactive"
+}, {
+  value: "",
+  label: "Declined"
+}]} className="input" />
               </Field>
               <Field label="Committee">
-                <select className="input" value={volunteerDraft.committeeId ?? ""} onChange={(e) => setVolunteerDraft({ ...volunteerDraft, committeeId: e.target.value })}>
-                  <option value="">None</option>
-                  {(committees ?? []).map((committee) => (
-                    <option key={committee._id} value={committee._id}>{committee.name}</option>
-                  ))}
-                </select>
+                <Select value={volunteerDraft.committeeId ?? ""} onChange={value => setVolunteerDraft({
+  ...volunteerDraft,
+  committeeId: value
+})} options={[{
+  value: "",
+  label: "None"
+}, ...(committees ?? []).map(committee => ({
+  value: committee._id,
+  label: committee.name
+}))]} className="input" />
               </Field>
             </div>
             <Field label="Role wanted"><input className="input" value={volunteerDraft.roleWanted ?? ""} onChange={(e) => setVolunteerDraft({ ...volunteerDraft, roleWanted: e.target.value })} /></Field>
@@ -413,11 +434,19 @@ export function VolunteersPage() {
             <label className="checkbox"><input type="checkbox" checked={volunteerDraft.screeningRequired} onChange={(e) => setVolunteerDraft({ ...volunteerDraft, screeningRequired: e.target.checked })} /> Screening required for this role</label>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Training status">
-                <select className="input" value={volunteerDraft.trainingStatus ?? "Pending"} onChange={(e) => setVolunteerDraft({ ...volunteerDraft, trainingStatus: e.target.value })}>
-                  <option>Pending</option>
-                  <option>InProgress</option>
-                  <option>Complete</option>
-                </select>
+                <Select value={volunteerDraft.trainingStatus ?? "Pending"} onChange={value => setVolunteerDraft({
+  ...volunteerDraft,
+  trainingStatus: value
+})} options={[{
+  value: "",
+  label: "Pending"
+}, {
+  value: "",
+  label: "InProgress"
+}, {
+  value: "",
+  label: "Complete"
+}]} className="input" />
               </Field>
               <Field label="Orientation completed">
                 <input className="input" type="date" value={volunteerDraft.orientationCompletedAtISO ?? ""} onChange={(e) => setVolunteerDraft({ ...volunteerDraft, orientationCompletedAtISO: e.target.value })} />
@@ -482,40 +511,76 @@ export function VolunteersPage() {
               Use provider <strong>BC_CRRP</strong> when the check is going through the BC Criminal Records Review Program, then attach the consent and result documents once complete.
             </InspectorNote>
             <Field label="Volunteer">
-              <select className="input" value={screeningDraft.volunteerId ?? ""} onChange={(e) => setScreeningDraft({ ...screeningDraft, volunteerId: e.target.value })}>
-                {(volunteers ?? []).map((volunteer) => (
-                  <option key={volunteer._id} value={volunteer._id}>{volunteer.firstName} {volunteer.lastName}</option>
-                ))}
-              </select>
+              <Select value={screeningDraft.volunteerId ?? ""} onChange={value => setScreeningDraft({
+  ...screeningDraft,
+  volunteerId: value
+})} options={[...(volunteers ?? []).map(volunteer => ({
+  value: volunteer._id,
+  label: [volunteer.firstName, volunteer.lastName].join(" ")
+}))]} className="input" />
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Check type">
-                <select className="input" value={screeningDraft.kind} onChange={(e) => setScreeningDraft({ ...screeningDraft, kind: e.target.value })}>
-                  <option>CriminalRecordCheck</option>
-                  <option>ReferenceCheck</option>
-                  <option>Orientation</option>
-                  <option>PolicyAttestation</option>
-                  <option>Training</option>
-                </select>
+                <Select value={screeningDraft.kind} onChange={value => setScreeningDraft({
+  ...screeningDraft,
+  kind: value
+})} options={[{
+  value: "",
+  label: "CriminalRecordCheck"
+}, {
+  value: "",
+  label: "ReferenceCheck"
+}, {
+  value: "",
+  label: "Orientation"
+}, {
+  value: "",
+  label: "PolicyAttestation"
+}, {
+  value: "",
+  label: "Training"
+}]} className="input" />
               </Field>
               <Field label="Provider">
-                <select className="input" value={screeningDraft.provider ?? "BC_CRRP"} onChange={(e) => setScreeningDraft({ ...screeningDraft, provider: e.target.value })}>
-                  <option>BC_CRRP</option>
-                  <option>Manual</option>
-                  <option>Other</option>
-                </select>
+                <Select value={screeningDraft.provider ?? "BC_CRRP"} onChange={value => setScreeningDraft({
+  ...screeningDraft,
+  provider: value
+})} options={[{
+  value: "",
+  label: "BC_CRRP"
+}, {
+  value: "",
+  label: "Manual"
+}, {
+  value: "",
+  label: "Other"
+}]} className="input" />
               </Field>
             </div>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Status">
-                <select className="input" value={screeningDraft.status} onChange={(e) => setScreeningDraft({ ...screeningDraft, status: e.target.value })}>
-                  <option>needed</option>
-                  <option>requested</option>
-                  <option>clear</option>
-                  <option>failed</option>
-                  <option>expired</option>
-                  <option>waived</option>
-                </select>
+                <Select value={screeningDraft.status} onChange={value => setScreeningDraft({
+  ...screeningDraft,
+  status: value
+})} options={[{
+  value: "",
+  label: "needed"
+}, {
+  value: "",
+  label: "requested"
+}, {
+  value: "",
+  label: "clear"
+}, {
+  value: "",
+  label: "failed"
+}, {
+  value: "",
+  label: "expired"
+}, {
+  value: "",
+  label: "waived"
+}]} className="input" />
               </Field>
               <Field label="Portal URL">
                 <input className="input" value={screeningDraft.portalUrl ?? ""} onChange={(e) => setScreeningDraft({ ...screeningDraft, portalUrl: e.target.value })} />
@@ -528,20 +593,28 @@ export function VolunteersPage() {
             <Field label="Expires"><input className="input" type="date" value={screeningDraft.expiresAtISO ?? ""} onChange={(e) => setScreeningDraft({ ...screeningDraft, expiresAtISO: e.target.value })} /></Field>
             <Field label="Reference number"><input className="input" value={screeningDraft.referenceNumber ?? ""} onChange={(e) => setScreeningDraft({ ...screeningDraft, referenceNumber: e.target.value })} /></Field>
             <Field label="Consent document">
-              <select className="input" value={screeningDraft.consentDocumentId ?? ""} onChange={(e) => setScreeningDraft({ ...screeningDraft, consentDocumentId: e.target.value })}>
-                <option value="">None</option>
-                {(documents ?? []).map((document) => (
-                  <option key={document._id} value={document._id}>{document.title}</option>
-                ))}
-              </select>
+              <Select value={screeningDraft.consentDocumentId ?? ""} onChange={value => setScreeningDraft({
+  ...screeningDraft,
+  consentDocumentId: value
+})} options={[{
+  value: "",
+  label: "None"
+}, ...(documents ?? []).map(document => ({
+  value: document._id,
+  label: document.title
+}))]} className="input" />
             </Field>
             <Field label="Result document">
-              <select className="input" value={screeningDraft.resultDocumentId ?? ""} onChange={(e) => setScreeningDraft({ ...screeningDraft, resultDocumentId: e.target.value })}>
-                <option value="">None</option>
-                {(documents ?? []).map((document) => (
-                  <option key={document._id} value={document._id}>{document.title}</option>
-                ))}
-              </select>
+              <Select value={screeningDraft.resultDocumentId ?? ""} onChange={value => setScreeningDraft({
+  ...screeningDraft,
+  resultDocumentId: value
+})} options={[{
+  value: "",
+  label: "None"
+}, ...(documents ?? []).map(document => ({
+  value: document._id,
+  label: document.title
+}))]} className="input" />
             </Field>
             <Field label="Notes"><textarea className="textarea" value={screeningDraft.notes ?? ""} onChange={(e) => setScreeningDraft({ ...screeningDraft, notes: e.target.value })} /></Field>
           </div>

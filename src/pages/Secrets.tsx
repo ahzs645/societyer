@@ -31,6 +31,7 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
+import { Select } from "../components/Select";
 
 const CREDENTIAL_TYPES = ["recovery_key", "registry_key", "api_key", "password", "certificate", "other"];
 const STORAGE_MODES = ["stored_encrypted", "external_reference", "encrypted_elsewhere", "not_stored"];
@@ -323,14 +324,22 @@ export function SecretsPage() {
             <Field label="Service"><input className="input" value={form.service} onChange={(e) => setForm({ ...form, service: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Credential type">
-                <select className="input" value={form.credentialType} onChange={(e) => setForm({ ...form, credentialType: e.target.value })}>
-                  {CREDENTIAL_TYPES.map((type) => <option key={type} value={type}>{typeLabel(type)}</option>)}
-                </select>
+                <Select value={form.credentialType} onChange={value => setForm({
+  ...form,
+  credentialType: value
+})} options={[...CREDENTIAL_TYPES.map(type => ({
+  value: type,
+  label: typeLabel(type)
+}))]} className="input" />
               </Field>
               <Field label="Status">
-                <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                  {STATUSES.map((status) => <option key={status}>{statusLabel(status)}</option>)}
-                </select>
+                <Select value={form.status} onChange={value => setForm({
+  ...form,
+  status: value
+})} options={[...STATUSES.map(status => ({
+  value: "",
+  label: statusLabel(status)
+}))]} className="input" />
               </Field>
             </div>
 
@@ -341,10 +350,13 @@ export function SecretsPage() {
               </div>
               <div className="card__body">
                 <Field label="Linked user">
-                  <select className="input" value={form.custodianUserId ?? ""} onChange={(e) => selectCustodian(e.target.value)}>
-                    <option value="">Manual or external person</option>
-                    {people.map((person) => <option key={person.id} value={person.id}>{person.label}</option>)}
-                  </select>
+                  <Select value={form.custodianUserId ?? ""} onChange={value => selectCustodian(value)} options={[{
+  value: "",
+  label: "Manual or external person"
+}, ...people.map(person => ({
+  value: person.id,
+  label: person.label
+}))]} className="input" />
                 </Field>
                 <Field label="Primary custodian"><input className="input" value={form.custodianPersonName ?? ""} onChange={(e) => setForm({ ...form, custodianUserId: "", custodianPersonName: e.target.value })} /></Field>
                 <Field label="Custodian email"><input className="input" type="email" value={form.custodianEmail ?? ""} onChange={(e) => setForm({ ...form, custodianEmail: e.target.value })} /></Field>
@@ -356,9 +368,13 @@ export function SecretsPage() {
 
             <div className="row" style={{ gap: 12 }}>
               <Field label="Storage">
-                <select className="input" value={form.storageMode} onChange={(e) => setForm({ ...form, storageMode: e.target.value })}>
-                  {STORAGE_MODES.map((mode) => <option key={mode} value={mode}>{storageLabel(mode)}</option>)}
-                </select>
+                <Select value={form.storageMode} onChange={value => setForm({
+  ...form,
+  storageMode: value
+})} options={[...STORAGE_MODES.map(mode => ({
+  value: mode,
+  label: storageLabel(mode)
+}))]} className="input" />
               </Field>
               <Field label="Vault record / location"><input className="input" value={form.externalLocation ?? ""} onChange={(e) => setForm({ ...form, externalLocation: e.target.value })} /></Field>
             </div>
@@ -404,9 +420,13 @@ export function SecretsPage() {
                   </>
                 )}
                 <Field label="Reveal access">
-                  <select className="input" value={form.revealPolicy ?? "owner_admin_custodian"} onChange={(e) => setForm({ ...form, revealPolicy: e.target.value })}>
-                    {REVEAL_POLICIES.map((policy) => <option key={policy.value} value={policy.value}>{policy.label}</option>)}
-                  </select>
+                  <Select value={form.revealPolicy ?? "owner_admin_custodian"} onChange={value => setForm({
+  ...form,
+  revealPolicy: value
+})} options={[...REVEAL_POLICIES.map(policy => ({
+  value: policy.value,
+  label: policy.label
+}))]} className="input" />
                 </Field>
                 <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
                   Acting user: {currentUser?.displayName ?? "not selected"}. Save access requires Admin or Owner.

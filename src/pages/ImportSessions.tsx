@@ -8,6 +8,7 @@ import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
 import { Segmented } from "../components/primitives";
 import { useToast } from "../components/Toast";
 import { ImportWizard } from "../components/ImportWizard";
+import { Select } from "../components/Select";
 import {
   Archive,
   Check,
@@ -609,18 +610,20 @@ export function ImportSessionsPage() {
                 />
                 <div className="import-review-filters">
                   <Segmented value={statusFilter} onChange={setStatusFilter} items={STATUS_ITEMS} />
-                  <select className="input import-review-filter-select" value={kindFilter} onChange={(event) => setKindFilter(event.target.value)}>
-                    <option value="all">All record types</option>
-                    {kinds.map((kind) => (
-                      <option key={kind} value={kind}>{KIND_LABELS[kind] ?? kind}</option>
-                    ))}
-                  </select>
-                  <select className="input import-review-filter-select" value={targetFilter} onChange={(event) => setTargetFilter(event.target.value)}>
-                    <option value="all">All targets</option>
-                    {targets.map((target) => (
-                      <option key={target} value={target}>{target}</option>
-                    ))}
-                  </select>
+                  <Select value={kindFilter} onChange={value => setKindFilter(value)} options={[{
+  value: "all",
+  label: "All record types"
+}, ...kinds.map(kind => ({
+  value: kind,
+  label: KIND_LABELS[kind] ?? kind
+}))]} className="input import-review-filter-select" />
+                  <Select value={targetFilter} onChange={value => setTargetFilter(value)} options={[{
+  value: "all",
+  label: "All targets"
+}, ...targets.map(target => ({
+  value: target,
+  label: target
+}))]} className="input import-review-filter-select" />
                   <input
                     className="input import-review-search"
                     value={searchText}
@@ -796,18 +799,33 @@ function RecordDrawer({
         <div className="col" style={{ gap: 12 }}>
           <div className="row" style={{ gap: 12 }}>
             <Field label="Review status">
-              <select className="input" value={form.status} onChange={(event) => onChange({ ...form, status: event.target.value })}>
-                <option value="Pending">Pending</option>
-                <option value="Approved">Approved</option>
-                <option value="Rejected">Rejected</option>
-              </select>
+              <Select value={form.status} onChange={value => onChange({
+  ...form,
+  status: value
+})} options={[{
+  value: "Pending",
+  label: "Pending"
+}, {
+  value: "Approved",
+  label: "Approved"
+}, {
+  value: "Rejected",
+  label: "Rejected"
+}]} className="input" />
             </Field>
             <Field label="Confidence">
-              <select className="input" value={form.payload.confidence ?? form.confidence ?? "Review"} onChange={(event) => updatePayload(form, onChange, { confidence: event.target.value })}>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Review">Review</option>
-              </select>
+              <Select value={form.payload.confidence ?? form.confidence ?? "Review"} onChange={value => updatePayload(form, onChange, {
+  confidence: value
+})} options={[{
+  value: "High",
+  label: "High"
+}, {
+  value: "Medium",
+  label: "Medium"
+}, {
+  value: "Review",
+  label: "Review"
+}]} className="input" />
             </Field>
           </div>
           {renderPayloadEditor(form, onChange)}
@@ -1005,14 +1023,27 @@ function renderPayloadEditor(form: any, onChange: (form: any) => void) {
         <Field label="Title"><input className="input" value={payload.title ?? ""} onChange={(event) => set({ title: event.target.value })} /></Field>
         <div className="row" style={{ gap: 12 }}>
           <Field label="Status">
-            <select className="input" value={payload.status ?? "Draft"} onChange={(event) => set({ status: event.target.value })}>
-              <option>Draft</option>
-              <option>Consultation</option>
-              <option>ResolutionPassed</option>
-              <option>Filed</option>
-              <option>Withdrawn</option>
-              <option>Superseded</option>
-            </select>
+            <Select value={payload.status ?? "Draft"} onChange={value => set({
+  status: value
+})} options={[{
+  value: "",
+  label: "Draft"
+}, {
+  value: "",
+  label: "Consultation"
+}, {
+  value: "",
+  label: "ResolutionPassed"
+}, {
+  value: "",
+  label: "Filed"
+}, {
+  value: "",
+  label: "Withdrawn"
+}, {
+  value: "",
+  label: "Superseded"
+}]} className="input" />
           </Field>
           <Field label="Filed at">
             <input className="input" value={payload.filedAtISO ?? ""} onChange={(event) => set({ filedAtISO: event.target.value })} placeholder="YYYY-MM-DD or ISO date" />
@@ -1043,16 +1074,33 @@ function renderPayloadEditor(form: any, onChange: (form: any) => void) {
         </div>
         <div className="row" style={{ gap: 12 }}>
           <Field label="Status">
-            <select className="input" value={payload.status ?? "Drafting"} onChange={(event) => set({ status: event.target.value })}>
-              <option>Prospecting</option>
-              <option>Drafting</option>
-              <option>Submitted</option>
-              <option>Awarded</option>
-              <option>Declined</option>
-              <option>Active</option>
-              <option>Closed</option>
-              <option>NeedsReview</option>
-            </select>
+            <Select value={payload.status ?? "Drafting"} onChange={value => set({
+  status: value
+})} options={[{
+  value: "",
+  label: "Prospecting"
+}, {
+  value: "",
+  label: "Drafting"
+}, {
+  value: "",
+  label: "Submitted"
+}, {
+  value: "",
+  label: "Awarded"
+}, {
+  value: "",
+  label: "Declined"
+}, {
+  value: "",
+  label: "Active"
+}, {
+  value: "",
+  label: "Closed"
+}, {
+  value: "",
+  label: "NeedsReview"
+}]} className="input" />
           </Field>
           <Field label="Requested cents"><input className="input" type="number" value={payload.amountRequestedCents ?? ""} onChange={(event) => set({ amountRequestedCents: numericInput(event.target.value) })} /></Field>
           <Field label="Awarded cents"><input className="input" type="number" value={payload.amountAwardedCents ?? ""} onChange={(event) => set({ amountAwardedCents: numericInput(event.target.value) })} /></Field>

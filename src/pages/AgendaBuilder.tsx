@@ -7,6 +7,7 @@ import { PageHeader, SeedPrompt } from "./_helpers";
 import { ArrowDown, ArrowUp, ClipboardList, IndentDecrease, IndentIncrease, ListChecks, Plus, Save, Trash2 } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
+import { Select } from "../components/Select";
 
 const ITEM_TYPES = ["discussion", "motion", "report", "break", "executive_session"] as const;
 const STATUS_OPTIONS = ["Draft", "Published", "Finalized"] as const;
@@ -182,19 +183,16 @@ export function AgendaBuilderPage() {
           <h2 className="card__title">New agenda</h2>
         </div>
         <div className="card__body row" style={{ gap: 8, flexWrap: "wrap" }}>
-          <select
-            className="input"
-            value={newMeetingId}
-            onChange={(e) => setNewMeetingId(e.target.value)}
-            style={{ flex: "1 1 220px", minWidth: 0 }}
-          >
-            <option value="">Select meeting…</option>
-            {(meetings ?? []).map((m: any) => (
-              <option key={m._id} value={m._id}>
-                {m.title} — {formatDate(m.scheduledAt)}
-              </option>
-            ))}
-          </select>
+          <Select value={newMeetingId} onChange={value => setNewMeetingId(value)} options={[{
+  value: "",
+  label: "Select meeting…"
+}, ...(meetings ?? []).map((m: any) => ({
+  value: m._id,
+  label: [m.title, "—", formatDate(m.scheduledAt)].join(" ")
+}))]} className="input" style={{
+  flex: "1 1 220px",
+  minWidth: 0
+}} />
           <input
             className="input"
             value={newTitle}
@@ -246,9 +244,10 @@ export function AgendaBuilderPage() {
               {draftItems.length} items · {draftStatus}
             </span>
             <div className="row" style={{ gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
-              <select className="input" value={draftStatus} onChange={(event) => setDraftStatus(event.target.value)}>
-                {STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}
-              </select>
+              <Select value={draftStatus} onChange={value => setDraftStatus(value)} options={[...STATUS_OPTIONS.map(status => ({
+  value: status,
+  label: status
+}))]} className="input" />
               <button className="btn" onClick={startMinutes}>
                 <ListChecks size={12} /> Start minutes
               </button>
@@ -269,11 +268,10 @@ export function AgendaBuilderPage() {
                   <Plus size={12} /> {t.replace("_", " ")}
                 </button>
               ))}
-              <select
-                className="input"
-                defaultValue=""
-                onChange={(e) => {
-                  const templateId = e.target.value as Id<"motionTemplates"> | "";
+              <Select
+                value=""
+                onChange={(value) => {
+                  const templateId = value as Id<"motionTemplates"> | "";
                   if (!templateId) return;
                   const t = (templates ?? []).find((x: any) => x._id === templateId);
                   handleAddItem("motion", {
@@ -281,24 +279,18 @@ export function AgendaBuilderPage() {
                     motionTemplateId: templateId,
                     motionText: t?.body ?? "",
                   });
-                  e.target.value = "";
                 }}
                 disabled={finalized}
-              >
-                <option value="">
-                  Add from motion library…
-                </option>
-                {(templates ?? []).map((t: any) => (
-                  <option key={t._id} value={t._id}>
-                    {t.title}
-                  </option>
-                ))}
-              </select>
-              <select
+                options={[
+                  { value: "", label: "Add from motion library..." },
+                  ...(templates ?? []).map((template: any) => ({ value: template._id, label: template.title })),
+                ]}
                 className="input"
-                defaultValue=""
-                onChange={(e) => {
-                  const backlogId = e.target.value;
+              />
+              <Select
+                value=""
+                onChange={(value) => {
+                  const backlogId = value;
                   if (!backlogId) return;
                   const item = (backlog ?? []).find((row: any) => row._id === backlogId);
                   handleAddItem("motion", {
@@ -306,21 +298,16 @@ export function AgendaBuilderPage() {
                     motionBacklogId: backlogId as Id<"motionBacklog">,
                     motionText: item?.motionText ?? item?.text ?? "",
                   });
-                  e.target.value = "";
                 }}
                 disabled={finalized}
-              >
-                <option value="">
-                  Add from motion backlog...
-                </option>
-                {(backlog ?? [])
-                  .filter((item: any) => item.status !== "Archived" && item.status !== "Adopted")
-                  .map((item: any) => (
-                    <option key={item._id} value={item._id}>
-                      {item.title} ({item.status})
-                    </option>
-                  ))}
-              </select>
+                options={[
+                  { value: "", label: "Add from motion backlog..." },
+                  ...(backlog ?? [])
+                    .filter((item: any) => item.status !== "Archived" && item.status !== "Adopted")
+                    .map((item: any) => ({ value: item._id, label: `${item.title} (${item.status})` })),
+                ]}
+                className="input"
+              />
             </div>
 
             <div className="col" style={{ gap: 8 }}>
@@ -337,9 +324,12 @@ export function AgendaBuilderPage() {
                     <div style={{ flex: 1 }}>
                       <div className="row" style={{ gap: 6, alignItems: "center" }}>
                         <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>#{i + 1}</span>
-                        <select className="input" value={item.type} onChange={(event) => patchDraftItem(i, { type: event.target.value })} disabled={finalized}>
-                          {ITEM_TYPES.map((type) => <option key={type} value={type}>{type.replace("_", " ")}</option>)}
-                        </select>
+                        <Select value={item.type} onChange={value => patchDraftItem(i, {
+  type: value
+})} options={[...ITEM_TYPES.map(type => ({
+  value: type,
+  label: type.replace("_", " ")
+}))]} className="input" disabled={finalized} />
                         <button className="btn" onClick={() => patchDraftItem(i, { depth: 0 })} disabled={finalized || item.depth === 0} title="Outdent item">
                           <IndentDecrease size={12} />
                         </button>

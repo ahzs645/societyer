@@ -3,6 +3,7 @@ import { ExternalLink, ListChecks, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge, Field, InspectorNote } from "../../../components/ui";
 import { formatDate, money } from "../../../lib/format";
+import { Select } from "../../../components/Select";
 import {
   type GrantRequirement,
   type GrantRequirementStatus,
@@ -164,22 +165,46 @@ export function GrantEditorForm({
       </div>
       <div className="row" style={{ gap: 12 }}>
         <Field label="Opportunity type">
-          <select className="input" value={grantDraft.opportunityType ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, opportunityType: e.target.value })}>
-            <option value="">Unspecified</option>
-            <option>Government</option>
-            <option>Foundation</option>
-            <option>Corporate</option>
-            <option>Internal</option>
-            <option>Other</option>
-          </select>
+          <Select value={grantDraft.opportunityType ?? ""} onChange={value => setGrantDraft({
+  ...grantDraft,
+  opportunityType: value
+})} options={[{
+  value: "",
+  label: "Unspecified"
+}, {
+  value: "",
+  label: "Government"
+}, {
+  value: "",
+  label: "Foundation"
+}, {
+  value: "",
+  label: "Corporate"
+}, {
+  value: "",
+  label: "Internal"
+}, {
+  value: "",
+  label: "Other"
+}]} className="input" />
         </Field>
         <Field label="Priority">
-          <select className="input" value={grantDraft.priority ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, priority: e.target.value })}>
-            <option value="">Unspecified</option>
-            <option>High</option>
-            <option>Medium</option>
-            <option>Low</option>
-          </select>
+          <Select value={grantDraft.priority ?? ""} onChange={value => setGrantDraft({
+  ...grantDraft,
+  priority: value
+})} options={[{
+  value: "",
+  label: "Unspecified"
+}, {
+  value: "",
+  label: "High"
+}, {
+  value: "",
+  label: "Medium"
+}, {
+  value: "",
+  label: "Low"
+}]} className="input" />
         </Field>
       </div>
       <div className="row" style={{ gap: 12 }}>
@@ -189,21 +214,43 @@ export function GrantEditorForm({
       <Field label="Next action"><input className="input" value={grantDraft.nextAction ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, nextAction: e.target.value })} /></Field>
       <div className="row" style={{ gap: 12 }}>
         <Field label="Status">
-          <select className="input" value={grantDraft.status} onChange={(e) => setGrantDraft({ ...grantDraft, status: e.target.value })}>
-            <option>Prospecting</option>
-            <option>Drafting</option>
-            <option>Submitted</option>
-            <option>Awarded</option>
-            <option>Declined</option>
-            <option>Active</option>
-            <option>Closed</option>
-          </select>
+          <Select value={grantDraft.status} onChange={value => setGrantDraft({
+  ...grantDraft,
+  status: value
+})} options={[{
+  value: "",
+  label: "Prospecting"
+}, {
+  value: "",
+  label: "Drafting"
+}, {
+  value: "",
+  label: "Submitted"
+}, {
+  value: "",
+  label: "Awarded"
+}, {
+  value: "",
+  label: "Declined"
+}, {
+  value: "",
+  label: "Active"
+}, {
+  value: "",
+  label: "Closed"
+}]} className="input" />
         </Field>
         <Field label="Committee">
-          <select className="input" value={grantDraft.committeeId ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, committeeId: e.target.value })}>
-            <option value="">None</option>
-            {committees.map((committee) => <option key={committee._id} value={committee._id}>{committee.name}</option>)}
-          </select>
+          <Select value={grantDraft.committeeId ?? ""} onChange={value => setGrantDraft({
+  ...grantDraft,
+  committeeId: value
+})} options={[{
+  value: "",
+  label: "None"
+}, ...committees.map(committee => ({
+  value: committee._id,
+  label: committee.name
+}))]} className="input" />
         </Field>
       </div>
       <div className="row" style={{ gap: 12 }}>
@@ -228,16 +275,28 @@ export function GrantEditorForm({
         <Field label="End"><input className="input" type="date" value={grantDraft.endDate ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, endDate: e.target.value })} /></Field>
       </div>
       <Field label="Board owner">
-        <select className="input" value={grantDraft.boardOwnerUserId ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, boardOwnerUserId: e.target.value })}>
-          <option value="">None</option>
-          {users.map((user) => <option key={user._id} value={user._id}>{user.displayName}</option>)}
-        </select>
+        <Select value={grantDraft.boardOwnerUserId ?? ""} onChange={value => setGrantDraft({
+  ...grantDraft,
+  boardOwnerUserId: value
+})} options={[{
+  value: "",
+  label: "None"
+}, ...users.map(user => ({
+  value: user._id,
+  label: user.displayName
+}))]} className="input" />
       </Field>
       <Field label="Linked financial account">
-        <select className="input" value={grantDraft.linkedFinancialAccountId ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, linkedFinancialAccountId: e.target.value })}>
-          <option value="">None</option>
-          {accounts.map((account) => <option key={account._id} value={account._id}>{account.name}</option>)}
-        </select>
+        <Select value={grantDraft.linkedFinancialAccountId ?? ""} onChange={value => setGrantDraft({
+  ...grantDraft,
+  linkedFinancialAccountId: value
+})} options={[{
+  value: "",
+  label: "None"
+}, ...accounts.map(account => ({
+  value: account._id,
+  label: account.name
+}))]} className="input" />
       </Field>
       {grantDraft.linkedFinancialAccountId && (
         <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
@@ -250,18 +309,34 @@ export function GrantEditorForm({
       />
       <div className="row" style={{ gap: 12 }}>
         <Field label="Confidence">
-          <select className="input" value={grantDraft.confidence ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, confidence: e.target.value })}>
-            <option value="">Unspecified</option>
-            <option>High</option>
-            <option>Medium</option>
-            <option>Review</option>
-          </select>
+          <Select value={grantDraft.confidence ?? ""} onChange={value => setGrantDraft({
+  ...grantDraft,
+  confidence: value
+})} options={[{
+  value: "",
+  label: "Unspecified"
+}, {
+  value: "",
+  label: "High"
+}, {
+  value: "",
+  label: "Medium"
+}, {
+  value: "",
+  label: "Review"
+}]} className="input" />
         </Field>
         <Field label="Sensitivity">
-          <select className="input" value={grantDraft.sensitivity ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, sensitivity: e.target.value })}>
-            <option value="">Standard</option>
-            <option value="restricted">Restricted</option>
-          </select>
+          <Select value={grantDraft.sensitivity ?? ""} onChange={value => setGrantDraft({
+  ...grantDraft,
+  sensitivity: value
+})} options={[{
+  value: "",
+  label: "Standard"
+}, {
+  value: "restricted",
+  label: "Restricted"
+}]} className="input" />
         </Field>
       </div>
       <Field label="Risk flags" hint="Comma-separated review markers.">
@@ -335,22 +410,44 @@ function GrantEditorPageLayout({
           </div>
           <div className="grant-edit-grid grant-edit-grid--3">
             <Field label="Opportunity type">
-              <select className="input" value={grantDraft.opportunityType ?? ""} onChange={(e) => update({ opportunityType: e.target.value })}>
-                <option value="">Unspecified</option>
-                <option>Government</option>
-                <option>Foundation</option>
-                <option>Corporate</option>
-                <option>Internal</option>
-                <option>Other</option>
-              </select>
+              <Select value={grantDraft.opportunityType ?? ""} onChange={value => update({
+  opportunityType: value
+})} options={[{
+  value: "",
+  label: "Unspecified"
+}, {
+  value: "",
+  label: "Government"
+}, {
+  value: "",
+  label: "Foundation"
+}, {
+  value: "",
+  label: "Corporate"
+}, {
+  value: "",
+  label: "Internal"
+}, {
+  value: "",
+  label: "Other"
+}]} className="input" />
             </Field>
             <Field label="Priority">
-              <select className="input" value={grantDraft.priority ?? ""} onChange={(e) => update({ priority: e.target.value })}>
-                <option value="">Unspecified</option>
-                <option>High</option>
-                <option>Medium</option>
-                <option>Low</option>
-              </select>
+              <Select value={grantDraft.priority ?? ""} onChange={value => update({
+  priority: value
+})} options={[{
+  value: "",
+  label: "Unspecified"
+}, {
+  value: "",
+  label: "High"
+}, {
+  value: "",
+  label: "Medium"
+}, {
+  value: "",
+  label: "Low"
+}]} className="input" />
             </Field>
             <Field label="Fit score" hint="0 to 100">
               <input className="input" type="number" inputMode="numeric" min="0" max="100" step="1" value={grantDraft.fitScore ?? ""} onChange={(e) => update({ fitScore: e.target.value })} />
@@ -364,21 +461,41 @@ function GrantEditorPageLayout({
         <EditSection id="grant-edit-status" title="Status & amounts" description="Pipeline stage, committee, and the money that goes with it.">
           <div className="grant-edit-grid grant-edit-grid--2">
             <Field label="Status">
-              <select className="input" value={grantDraft.status} onChange={(e) => update({ status: e.target.value })}>
-                <option>Prospecting</option>
-                <option>Drafting</option>
-                <option>Submitted</option>
-                <option>Awarded</option>
-                <option>Declined</option>
-                <option>Active</option>
-                <option>Closed</option>
-              </select>
+              <Select value={grantDraft.status} onChange={value => update({
+  status: value
+})} options={[{
+  value: "",
+  label: "Prospecting"
+}, {
+  value: "",
+  label: "Drafting"
+}, {
+  value: "",
+  label: "Submitted"
+}, {
+  value: "",
+  label: "Awarded"
+}, {
+  value: "",
+  label: "Declined"
+}, {
+  value: "",
+  label: "Active"
+}, {
+  value: "",
+  label: "Closed"
+}]} className="input" />
             </Field>
             <Field label="Committee">
-              <select className="input" value={grantDraft.committeeId ?? ""} onChange={(e) => update({ committeeId: e.target.value })}>
-                <option value="">None</option>
-                {committees.map((committee) => <option key={committee._id} value={committee._id}>{committee.name}</option>)}
-              </select>
+              <Select value={grantDraft.committeeId ?? ""} onChange={value => update({
+  committeeId: value
+})} options={[{
+  value: "",
+  label: "None"
+}, ...committees.map(committee => ({
+  value: committee._id,
+  label: committee.name
+}))]} className="input" />
             </Field>
           </div>
           <div className="grant-edit-grid grant-edit-grid--2">
@@ -434,16 +551,26 @@ function GrantEditorPageLayout({
           </div>
           <div className="grant-edit-grid grant-edit-grid--2">
             <Field label="Board owner">
-              <select className="input" value={grantDraft.boardOwnerUserId ?? ""} onChange={(e) => update({ boardOwnerUserId: e.target.value })}>
-                <option value="">None</option>
-                {users.map((user) => <option key={user._id} value={user._id}>{user.displayName}</option>)}
-              </select>
+              <Select value={grantDraft.boardOwnerUserId ?? ""} onChange={value => update({
+  boardOwnerUserId: value
+})} options={[{
+  value: "",
+  label: "None"
+}, ...users.map(user => ({
+  value: user._id,
+  label: user.displayName
+}))]} className="input" />
             </Field>
             <Field label="Linked financial account">
-              <select className="input" value={grantDraft.linkedFinancialAccountId ?? ""} onChange={(e) => update({ linkedFinancialAccountId: e.target.value })}>
-                <option value="">None</option>
-                {accounts.map((account) => <option key={account._id} value={account._id}>{account.name}</option>)}
-              </select>
+              <Select value={grantDraft.linkedFinancialAccountId ?? ""} onChange={value => update({
+  linkedFinancialAccountId: value
+})} options={[{
+  value: "",
+  label: "None"
+}, ...accounts.map(account => ({
+  value: account._id,
+  label: account.name
+}))]} className="input" />
             </Field>
           </div>
           {grantDraft.linkedFinancialAccountId && (
@@ -460,18 +587,32 @@ function GrantEditorPageLayout({
           />
           <div className="grant-edit-grid grant-edit-grid--2">
             <Field label="Confidence">
-              <select className="input" value={grantDraft.confidence ?? ""} onChange={(e) => update({ confidence: e.target.value })}>
-                <option value="">Unspecified</option>
-                <option>High</option>
-                <option>Medium</option>
-                <option>Review</option>
-              </select>
+              <Select value={grantDraft.confidence ?? ""} onChange={value => update({
+  confidence: value
+})} options={[{
+  value: "",
+  label: "Unspecified"
+}, {
+  value: "",
+  label: "High"
+}, {
+  value: "",
+  label: "Medium"
+}, {
+  value: "",
+  label: "Review"
+}]} className="input" />
             </Field>
             <Field label="Sensitivity">
-              <select className="input" value={grantDraft.sensitivity ?? ""} onChange={(e) => update({ sensitivity: e.target.value })}>
-                <option value="">Standard</option>
-                <option value="restricted">Restricted</option>
-              </select>
+              <Select value={grantDraft.sensitivity ?? ""} onChange={value => update({
+  sensitivity: value
+})} options={[{
+  value: "",
+  label: "Standard"
+}, {
+  value: "restricted",
+  label: "Restricted"
+}]} className="input" />
             </Field>
           </div>
           <Field label="Risk flags" hint="Comma-separated review markers.">
@@ -598,21 +739,26 @@ function SourceExternalIdsField({
       <div className="source-external-ids-field">
         {visibleRows.map((row, index) => (
           <div className="source-external-ids-field__row" key={`${index}-${rows.length}`}>
-            <select
-              className="input"
-              aria-label={`Source ${index + 1}`}
-              value={row.source}
-              onChange={(event) => {
-                const next = [...visibleRows];
-                next[index] = { ...row, source: event.target.value };
-                commit(next);
-              }}
-            >
-              <option value="gcos">GCOS</option>
-              <option value="paperless">Paperless</option>
-              <option value="local">Local</option>
-              <option value="custom">Other</option>
-            </select>
+            <Select value={row.source} onChange={value => {
+  const next = [...visibleRows];
+  next[index] = {
+    ...row,
+    source: value
+  };
+  commit(next);
+}} options={[{
+  value: "gcos",
+  label: "GCOS"
+}, {
+  value: "paperless",
+  label: "Paperless"
+}, {
+  value: "local",
+  label: "Local"
+}, {
+  value: "custom",
+  label: "Other"
+}]} className="input" aria-label={`Source ${index + 1}`} />
             {row.source === "custom" && (
               <input
                 className="input"
@@ -626,23 +772,32 @@ function SourceExternalIdsField({
                 }}
               />
             )}
-            <select
-              className="input"
-              aria-label={`Source ID type ${index + 1}`}
-              value={row.idType}
-              onChange={(event) => {
-                const next = [...visibleRows];
-                next[index] = { ...row, idType: event.target.value };
-                commit(next);
-              }}
-            >
-              <option value="project">Project ID</option>
-              <option value="project-number">Project number</option>
-              <option value="document">Document ID</option>
-              <option value="record">Record ID</option>
-              <option value="file">File ID</option>
-              <option value="custom">Other ID</option>
-            </select>
+            <Select value={row.idType} onChange={value => {
+  const next = [...visibleRows];
+  next[index] = {
+    ...row,
+    idType: value
+  };
+  commit(next);
+}} options={[{
+  value: "project",
+  label: "Project ID"
+}, {
+  value: "project-number",
+  label: "Project number"
+}, {
+  value: "document",
+  label: "Document ID"
+}, {
+  value: "record",
+  label: "Record ID"
+}, {
+  value: "file",
+  label: "File ID"
+}, {
+  value: "custom",
+  label: "Other ID"
+}]} className="input" aria-label={`Source ID type ${index + 1}`} />
             {row.idType === "custom" && (
               <input
                 className="input"
@@ -1195,14 +1350,15 @@ function GrantFundedEmployeesPanel({
         )}
         {onLinkEmployee && availableEmployees.length > 0 && canLinkMoreEmployees && (
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <select className="input" style={{ flex: "1 1 220px" }} value={selectedEmployeeId} onChange={(event) => setSelectedEmployeeId(event.target.value)}>
-              <option value="">Select an employee to link</option>
-              {availableEmployees.map((employee) => (
-                <option key={String(employee._id)} value={String(employee._id)}>
-                  {employee.firstName} {employee.lastName} · {employee.role}
-                </option>
-              ))}
-            </select>
+            <Select value={selectedEmployeeId} onChange={value => setSelectedEmployeeId(value)} options={[{
+  value: "",
+  label: "Select an employee to link"
+}, ...availableEmployees.map(employee => ({
+  value: String(employee._id),
+  label: [employee.firstName, employee.lastName, "·", employee.role].join(" ")
+}))]} className="input" style={{
+  flex: "1 1 220px"
+}} />
             <button className="btn btn--accent" type="button" disabled={!selectedEmployeeId} onClick={linkSelected}>
               Link employee
             </button>
@@ -1238,14 +1394,16 @@ function GrantFundedEmployeesPanel({
                   <Field label="Country"><input className="input" value={employeeDraft.country} onChange={(event) => setEmployeeDraft({ ...employeeDraft, country: event.target.value })} /></Field>
                 </div>
                 <Field label="SIN vault record" hint="Raw SIN stays in Secrets; this links only the vault metadata record.">
-                  <select className="input" value={employeeDraft.sinSecretVaultItemId} onChange={(event) => setEmployeeDraft({ ...employeeDraft, sinSecretVaultItemId: event.target.value })}>
-                    <option value="">No SIN vault record linked</option>
-                    {secretVaultItems.map((secret) => (
-                      <option key={String(secret._id)} value={String(secret._id)}>
-                        {[secret.name, secret.service, secret.secretPreview].filter(Boolean).join(" · ")}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={employeeDraft.sinSecretVaultItemId} onChange={value => setEmployeeDraft({
+  ...employeeDraft,
+  sinSecretVaultItemId: value
+})} options={[{
+  value: "",
+  label: "No SIN vault record linked"
+}, ...secretVaultItems.map(secret => ({
+  value: String(secret._id),
+  label: [secret.name, secret.service, secret.secretPreview].filter(Boolean).join(" · ")
+}))]} className="input" />
                 </Field>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   {onCreateSinVaultRecord && (
@@ -1279,12 +1437,22 @@ function GrantFundedEmployeesPanel({
                     <input className="input" readOnly={Boolean(lockedAssignment.role)} value={employeeDraft.role} onChange={(event) => setEmployeeDraft({ ...employeeDraft, role: event.target.value })} />
                   </Field>
                   <Field label="Type" hint={lockedAssignment.employmentType ? "From grant-funded role" : undefined}>
-                    <select className="input" disabled={Boolean(lockedAssignment.employmentType)} value={employeeDraft.employmentType} onChange={(event) => setEmployeeDraft({ ...employeeDraft, employmentType: event.target.value })}>
-                      <option>FullTime</option>
-                      <option>PartTime</option>
-                      <option>Casual</option>
-                      <option>Contractor</option>
-                    </select>
+                    <Select value={employeeDraft.employmentType} onChange={value => setEmployeeDraft({
+  ...employeeDraft,
+  employmentType: value
+})} options={[{
+  value: "",
+  label: "FullTime"
+}, {
+  value: "",
+  label: "PartTime"
+}, {
+  value: "",
+  label: "Casual"
+}, {
+  value: "",
+  label: "Contractor"
+}]} className="input" disabled={Boolean(lockedAssignment.employmentType)} />
                   </Field>
                 </div>
                 <div className="row" style={{ gap: 8 }}>
@@ -2383,20 +2551,12 @@ function GrantRequirementsEditor({
             return (
               <div key={item.id} className="grant-requirement-card">
                 <div className="grant-requirement-card__summary">
-                  <select
-                    className="input grant-requirement-card__status"
-                    aria-label={`Status for ${item.label}`}
-                    value={item.status}
-                    onChange={(event) =>
-                      updateRequirement(index, {
-                        status: event.target.value as GrantRequirementStatus,
-                      })
-                    }
-                  >
-                    {REQUIREMENT_STATUSES.map((status) => (
-                      <option key={status}>{status}</option>
-                    ))}
-                  </select>
+                  <Select value={item.status} onChange={value => updateRequirement(index, {
+  status: value as GrantRequirementStatus
+})} options={[...REQUIREMENT_STATUSES.map(status => ({
+  value: "",
+  label: status
+}))]} className="input grant-requirement-card__status" aria-label={`Status for ${item.label}`} />
                   <input
                     className="input grant-requirement-card__title"
                     aria-label="Requirement"
@@ -2469,18 +2629,15 @@ function GrantRequirementsEditor({
                       </button>
                     </div>
                     {pickerOpen && (
-                      <select
-                        className="input"
-                        value={item.documentId ?? ""}
-                        onChange={(event) => updateRequirement(index, { documentId: event.target.value || undefined })}
-                      >
-                        <option value="">None</option>
-                        {documents.map((document) => (
-                          <option key={document._id} value={document._id}>
-                            {document.title}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={item.documentId ?? ""} onChange={value => updateRequirement(index, {
+  documentId: value || undefined
+})} options={[{
+  value: "",
+  label: "None"
+}, ...documents.map(document => ({
+  value: document._id,
+  label: document.title
+}))]} className="input" />
                     )}
                   </div>
                   <Field label="Notes">

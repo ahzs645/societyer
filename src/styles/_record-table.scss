@@ -13,7 +13,8 @@
 /* ------------------------- Toolbar ------------------------- */
 
 .record-table__toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(160px, 280px) minmax(180px, 420px) minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   padding: 6px 0;
@@ -25,13 +26,13 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  min-width: 180px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .record-table__toolbar-center {
-  flex: 1;
   display: flex;
-  justify-content: center;
+  justify-content: stretch;
   min-width: 0;
 }
 
@@ -43,6 +44,7 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   min-width: 0;
+  max-width: 100%;
 }
 
 .record-table__title {
@@ -55,6 +57,7 @@
 
 .record-table__view-switcher {
   position: relative;
+  min-width: 0;
 }
 
 .record-table__view-switcher:first-child {
@@ -62,6 +65,7 @@
   border: 1px solid var(--border-color-medium);
   border-radius: var(--r-pill);
   padding: 3px;
+  width: 100%;
 }
 
 .record-table__view-button,
@@ -78,6 +82,8 @@
   border-radius: var(--r-sm);
   cursor: pointer;
   transition: background 100ms ease;
+  min-width: 0;
+  white-space: nowrap;
 
   &:hover {
     background: var(--bg-transparent-light);
@@ -87,6 +93,15 @@
 .record-table__view-button {
   border-radius: var(--r-pill);
   font-weight: var(--fw-medium);
+  width: 100%;
+  max-width: 100%;
+
+  span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 .record-table__toolbar-button--active {
@@ -121,9 +136,10 @@
   border: 1px solid var(--border-color-medium);
   border-radius: var(--r-pill);
   background: var(--bg-secondary);
-  min-width: 280px;
+  width: 100%;
+  min-width: 0;
   max-width: 420px;
-  flex: 1;
+  flex: 1 1 auto;
 
   svg {
     color: var(--text-tertiary);
@@ -145,10 +161,25 @@
   }
 }
 
+@media (max-width: 1560px) {
+  .record-table__toolbar {
+    grid-template-columns: minmax(160px, 280px) minmax(180px, 1fr);
+  }
+
+  .record-table__toolbar-right {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .record-table__search {
+    max-width: none;
+  }
+}
+
 @media (max-width: 760px) {
   .record-table__toolbar {
     align-items: stretch;
-    flex-direction: column;
+    grid-template-columns: 1fr;
     gap: var(--s-2);
     padding-bottom: var(--s-3);
   }
@@ -156,6 +187,7 @@
   .record-table__toolbar-left,
   .record-table__toolbar-center,
   .record-table__toolbar-right {
+    grid-column: auto;
     width: 100%;
     min-width: 0;
   }
@@ -166,6 +198,7 @@
 
   .record-table__toolbar-center {
     justify-content: stretch;
+    min-width: 0;
   }
 
   .record-table__toolbar-right {
@@ -178,13 +211,6 @@
 
   .record-table__view-button {
     max-width: 100%;
-
-    span {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
   }
 
   .record-table__search {

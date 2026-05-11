@@ -11,6 +11,7 @@ import { Plus, PenLine, Trash2, Tag } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
+import { Select } from "../components/Select";
 
 const FIELDS: FilterField<any>[] = [
   { id: "kind", label: "Kind", icon: <Tag size={14} />, options: ["Ordinary", "Special"], match: (r, q) => r.kind === q },
@@ -127,13 +128,20 @@ export function WrittenResolutionsPage() {
             <Field label="Resolution text"><textarea className="textarea" value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Kind">
-                <select className="input" value={form.kind} onChange={(e) => {
-                  const k = e.target.value;
-                  setForm({ ...form, kind: k, requiredCount: k === "Special" ? eligibleVoters : Math.ceil(eligibleVoters / 2) });
-                }}>
-                  <option value="Ordinary">Ordinary (majority)</option>
-                  <option value="Special">Special (unanimous, in lieu of meeting)</option>
-                </select>
+                <Select value={form.kind} onChange={value => {
+  const k = value;
+  setForm({
+    ...form,
+    kind: k,
+    requiredCount: k === "Special" ? eligibleVoters : Math.ceil(eligibleVoters / 2)
+  });
+}} options={[{
+  value: "Ordinary",
+  label: "Ordinary (majority)"
+}, {
+  value: "Special",
+  label: "Special (unanimous, in lieu of meeting)"
+}]} className="input" />
               </Field>
               <Field label="Required signatures" hint={`Eligible voting members: ${eligibleVoters}`}>
                 <input className="input" type="number" value={form.requiredCount} onChange={(e) => setForm({ ...form, requiredCount: Number(e.target.value) })} />

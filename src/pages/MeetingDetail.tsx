@@ -37,6 +37,7 @@ import { MeetingMaterialDrawer } from "../features/meetings/components/MeetingMa
 import { MeetingPackageHub } from "../features/meetings/components/MeetingPackageHub";
 import { MeetingMinutesColumn } from "../features/meetings/components/MeetingMinutesColumn";
 import { MeetingSidebarColumn } from "../features/meetings/components/MeetingSidebarColumn";
+import { Select } from "../components/Select";
 import {
   addRedactionName,
   getMeetingJoinDetails,
@@ -2052,11 +2053,10 @@ export function MeetingMinutesPreviewPage() {
       <div className="meeting-preview-page__layout">
         <aside className="meeting-preview-page__settings">
           <Field label="Style">
-            <select className="input" value={minutesExportStyle} onChange={(event) => setMinutesExportStyle(event.target.value as MinutesExportStyleId)}>
-              {MINUTES_EXPORT_STYLES.map((style) => (
-                <option key={style.id} value={style.id}>{style.label}</option>
-              ))}
-            </select>
+            <Select value={minutesExportStyle} onChange={value => setMinutesExportStyle(value as MinutesExportStyleId)} options={[...MINUTES_EXPORT_STYLES.map(style => ({
+  value: style.id,
+  label: style.label
+}))]} className="input" />
           </Field>
           <div className="col" style={{ gap: 6 }}>
             <label><input type="checkbox" checked={includeTranscriptInExport} onChange={(event) => setIncludeTranscriptInExport(event.target.checked)} /> Include transcript</label>

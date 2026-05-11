@@ -19,6 +19,7 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
+import { Select } from "../components/Select";
 import {
   Archive,
   ArrowLeft,
@@ -880,14 +881,22 @@ export function OrganizationHistoryPage() {
                 <input className="input" value={sourceForm.sourceDate ?? ""} onChange={(e) => setSourceForm({ ...sourceForm, sourceDate: e.target.value })} placeholder="YYYY-MM-DD or YYYY" />
               </Field>
               <Field label="Category">
-                <select className="input" value={sourceForm.category} onChange={(e) => setSourceForm({ ...sourceForm, category: e.target.value })}>
-                  {CATEGORY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-                </select>
+                <Select value={sourceForm.category} onChange={value => setSourceForm({
+  ...sourceForm,
+  category: value
+})} options={[...CATEGORY_OPTIONS.map(option => ({
+  value: option,
+  label: option
+}))]} className="input" />
               </Field>
               <Field label="Confidence">
-                <select className="input" value={sourceForm.confidence} onChange={(e) => setSourceForm({ ...sourceForm, confidence: e.target.value as Confidence })}>
-                  {CONFIDENCE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-                </select>
+                <Select value={sourceForm.confidence} onChange={value => setSourceForm({
+  ...sourceForm,
+  confidence: value as Confidence
+})} options={[...CONFIDENCE_OPTIONS.map(option => ({
+  value: option,
+  label: option
+}))]} className="input" />
               </Field>
             </div>
             <Field label="URL">
@@ -941,9 +950,13 @@ export function OrganizationHistoryPage() {
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Category">
-                <select className="input" value={eventForm.category} onChange={(e) => setEventForm({ ...eventForm, category: e.target.value })}>
-                  {CATEGORY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-                </select>
+                <Select value={eventForm.category} onChange={value => setEventForm({
+  ...eventForm,
+  category: value
+})} options={[...CATEGORY_OPTIONS.map(option => ({
+  value: option,
+  label: option
+}))]} className="input" />
               </Field>
               <StatusFields form={eventForm} setForm={setEventForm} />
             </div>
@@ -1003,9 +1016,13 @@ export function OrganizationHistoryPage() {
                 <input className="input" value={boardTermForm.endDate ?? ""} onChange={(e) => setBoardTermForm({ ...boardTermForm, endDate: e.target.value })} />
               </Field>
               <Field label="Change">
-                <select className="input" value={boardTermForm.changeType} onChange={(e) => setBoardTermForm({ ...boardTermForm, changeType: e.target.value })}>
-                  {CHANGE_TYPE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-                </select>
+                <Select value={boardTermForm.changeType} onChange={value => setBoardTermForm({
+  ...boardTermForm,
+  changeType: value
+})} options={[...CHANGE_TYPE_OPTIONS.map(option => ({
+  value: option,
+  label: option
+}))]} className="input" />
               </Field>
             </div>
             <StatusFields form={boardTermForm} setForm={setBoardTermForm} />
@@ -2035,14 +2052,22 @@ function StatusFields({ form, setForm }: { form: any; setForm: (form: any) => vo
   return (
     <>
       <Field label="Confidence">
-        <select className="input" value={form.confidence} onChange={(e) => setForm({ ...form, confidence: e.target.value as Confidence })}>
-          {CONFIDENCE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-        </select>
+        <Select value={form.confidence} onChange={value => setForm({
+  ...form,
+  confidence: value as Confidence
+})} options={[...CONFIDENCE_OPTIONS.map(option => ({
+  value: option,
+  label: option
+}))]} className="input" />
       </Field>
       <Field label="Status">
-        <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Status })}>
-          {STATUS_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-        </select>
+        <Select value={form.status} onChange={value => setForm({
+  ...form,
+  status: value as Status
+})} options={[...STATUS_OPTIONS.map(option => ({
+  value: option,
+  label: option
+}))]} className="input" />
       </Field>
     </>
   );
@@ -2096,9 +2121,12 @@ function BudgetLinesEditor({ lines, onChange }: { lines: any[]; onChange: (lines
             alignItems: "center",
           }}
         >
-          <select className="input" value={line.section ?? "note"} onChange={(e) => updateLine(index, { section: e.target.value })}>
-            {LINE_SECTION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-          </select>
+          <Select value={line.section ?? "note"} onChange={value => updateLine(index, {
+  section: value
+})} options={[...LINE_SECTION_OPTIONS.map(option => ({
+  value: option,
+  label: option
+}))]} className="input" />
           <input className="input" value={line.label ?? ""} onChange={(e) => updateLine(index, { label: e.target.value })} placeholder="Line label" />
           <input
             className="input"

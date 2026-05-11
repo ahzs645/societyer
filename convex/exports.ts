@@ -236,6 +236,75 @@ export const countTablePage = query({
   },
 });
 
+export const previewWorkspaceImportTable = query({
+  args: {
+    societyId: v.id("societies"),
+    table: v.string(),
+    source: v.object({
+      rowCount: v.number(),
+      ids: v.array(v.string()),
+      naturalKeys: v.array(v.string()),
+      idSampled: v.optional(v.boolean()),
+      naturalKeySampled: v.optional(v.boolean()),
+    }),
+  },
+  returns: v.any(),
+  handler: async (ctx, { societyId, table, source }) => {
+    assertExportable(table);
+    const society = await ctx.db.get(societyId);
+    if (!society) throw new Error("Society not found.");
+
+    const currentRows = await collectRowsForSociety(ctx, table, societyId, { includeRecoverySecrets: false });
+    const currentIds = new Set(currentRows.map((row: any) => String(row._id)).filter(Boolean));
+    const sourceIds = new Set<string>(source.ids.map(String).filter(Boolean));
+    const overlappingIds = Array.from(sourceIds).filter((id) => currentIds.has(id));
+
+    const currentNaturalKeys = new Set(
+      currentRows
+        .map((row: any) => naturalKeyForTable(table, row))
+        .filter(Boolean) as string[],
+    );
+    const sourceNaturalKeys = new Set<string>(source.naturalKeys.map(String).filter(Boolean));
+    const overlappingNaturalKeys = Array.from(sourceNaturalKeys).filter((key) => currentNaturalKeys.has(key));
+
+    const existingRows = currentRows.length;
+    const importRows = source.rowCount;
+    const nonOverlappingRows = Math.max(0, importRows - overlappingIds.length);
+    const issues: string[] = [];
+    if (overlappingIds.length > 0) {
+      issues.push(`${overlappingIds.length} row ID${overlappingIds.length === 1 ? "" : "s"} already exist in this table.`);
+    }
+    if (overlappingNaturalKeys.length > 0) {
+      issues.push(`${overlappingNaturalKeys.length} natural-key match${overlappingNaturalKeys.length === 1 ? "" : "es"} found.`);
+    }
+    if (source.idSampled || source.naturalKeySampled) {
+      issues.push("Overlap checks are sampled for this table because the export is large.");
+    }
+
+    return {
+      table,
+      exportable: true,
+      importRows,
+      existingRows,
+      nonOverlappingRows,
+      overlappingIds: overlappingIds.slice(0, 25),
+      overlappingIdCount: overlappingIds.length,
+      overlappingNaturalKeys: overlappingNaturalKeys.slice(0, 25),
+      overlappingNaturalKeyCount: overlappingNaturalKeys.length,
+      idSampled: source.idSampled === true,
+      naturalKeySampled: source.naturalKeySampled === true,
+      recommendedMode: importRows === 0
+        ? "skip"
+        : existingRows === 0
+          ? "restore-empty"
+          : overlappingIds.length > 0 || overlappingNaturalKeys.length > 0
+            ? "merge-review"
+            : "append-review",
+      issues,
+    };
+  },
+});
+
 export const exportAttachmentPage = query({
   args: {
     societyId: v.id("societies"),
@@ -429,6 +498,36 @@ async function paginateForSociety(
   return { ...page, page: page.page.map((row: any) => sanitizeRow(row, options)) };
 }
 
+async function collectRowsForSociety(
+  ctx: any,
+  table: string,
+  societyId: string,
+  options?: { includeRecoverySecrets?: boolean },
+) {
+  const rows: any[] = [];
+  let cursor: string | null = null;
+  const seenCursors = new Set<string>();
+  do {
+    if (cursor) {
+      if (seenCursors.has(cursor)) throw new Error(`Pagination cursor repeated while previewing ${table}.`);
+      seenCursors.add(cursor);
+    }
+    const result = await paginateForSociety(
+      ctx,
+      table,
+      societyId,
+      { cursor, numItems: 1000 },
+      options,
+    );
+    rows.push(...(result.page ?? []));
+    if (rows.length > 20_000) {
+      throw new Error(`Table "${table}" is too large for one import preview. Add paged preview support before restoring it.`);
+    }
+    cursor = result.isDone ? null : result.continueCursor;
+  } while (cursor);
+  return rows;
+}
+
 function paginateCollectedRows(
   rows: any[],
   paginationOpts: { cursor?: string | null; numItems: number },
@@ -487,4 +586,99 @@ function sanitizeRow<T extends Record<string, unknown>>(row: T, options?: { incl
 
 function redactedFieldsFor(options?: { includeRecoverySecrets?: boolean }) {
   return Array.from(options?.includeRecoverySecrets ? RECOVERY_REDACTED_FIELDS : DEFAULT_REDACTED_FIELDS);
+}
+
+function naturalKeyForTable(table: string, row: any): string | null {
+  const valuesByTable: Record<string, unknown[]> = {
+    societies: [row.name],
+    organizationAddresses: [row.type, row.street ?? row.address, row.city, row.postalCode],
+    organizationRegistrations: [row.jurisdiction, row.registrationNumber],
+    organizationIdentifiers: [row.kind ?? row.type, row.number],
+    roleHolders: [row.roleType, row.fullName ?? row.name, row.startDate],
+    users: [row.email, row.name],
+    apiClients: [row.name],
+    pluginInstallations: [row.slug],
+    paperlessConnections: [row.baseUrl],
+    financialConnections: [row.provider, row.externalId ?? row.name],
+    waveCacheResources: [row.provider, row.resourceType, row.externalId],
+    financialAccounts: [row.externalId, row.name, row.accountType],
+    financialTransactions: [row.externalId, row.date, row.amountCents],
+    budgets: [row.fiscalYear],
+    budgetSnapshots: [row.fiscalYear, row.scenario, row.createdAtISO],
+    financialStatementImports: [row.fiscalYear, row.periodLabel, row.sourceDocumentId],
+    workflows: [row.name, row.eventType],
+    workflowRuns: [row.workflowId, row.startedAtISO],
+    membershipFeePeriods: [row.name, row.effectiveFrom],
+    fundingSources: [row.name, row.sourceType],
+    objectMetadata: [row.nameSingular, row.namePlural],
+    fieldMetadata: [row.objectMetadataId, row.name],
+    views: [row.objectMetadataId, row.name],
+    members: [row.email, row.firstName, row.lastName],
+    directors: [row.email, row.firstName, row.lastName, row.startDate],
+    boardRoleAssignments: [row.personName, row.roleTitle, row.startDate],
+    boardRoleChanges: [row.personName, row.roleTitle, row.effectiveDate, row.changeType],
+    signingAuthorities: [row.personName, row.institutionName, row.effectiveDate],
+    committees: [row.name],
+    committeeMembers: [row.committeeId, row.memberName ?? row.personName, row.role],
+    orgChartAssignments: [row.subjectType, row.subjectId],
+    volunteers: [row.email, row.name],
+    volunteerApplications: [row.email, row.name, row.createdAtISO],
+    meetings: [row.title, row.scheduledAt],
+    minutes: [row.meetingId, row.heldAt],
+    meetingMaterials: [row.meetingId, row.documentId],
+    documents: [row.title, row.category, row.fileName, row.createdAtISO],
+    documentVersions: [row.documentId, row.version, row.fileName],
+    sourceEvidence: [row.externalId, row.sourceTitle],
+    filings: [row.kind, row.dueDate, row.filedAt],
+    grants: [row.title, row.program, row.confirmationCode],
+    grantApplications: [row.grantId, row.submittedAtISO],
+    grantEmployeeLinks: [row.grantId, row.employeeId],
+    deadlines: [row.title, row.dueDate],
+    commitments: [row.title, row.status],
+    policies: [row.policyName ?? row.name, row.effectiveDate],
+    goals: [row.title],
+    tasks: [row.title, row.dueDate],
+    activity: [row.entityType, row.entityId, row.createdAtISO, row.type],
+    notes: [row.entityType, row.entityId, row.createdAtISO],
+    invitations: [row.email, row.createdAtISO],
+    inspections: [row.title, row.scheduledAt],
+    writtenResolutions: [row.title, row.resolutionDate],
+    agmRuns: [row.meetingId],
+    noticeDeliveries: [row.meetingId, row.recipientEmail],
+    insurancePolicies: [row.policyNumber, row.policyTermLabel, row.insurer],
+    pipaTrainings: [row.participantName, row.completedAtISO],
+    proxies: [row.memberId, row.meetingId],
+    auditorAppointments: [row.auditorName, row.fiscalYear],
+    memberProposals: [row.title, row.submittedAtISO],
+    elections: [row.title, row.opensAtISO],
+    electionQuestions: [row.electionId, row.title],
+    electionEligibleVoters: [row.electionId, row.memberId],
+    electionBallots: [row.electionId, row.voterId],
+    donationReceipts: [row.receiptNumber, row.donorEmail],
+    employees: [row.email, row.name],
+    courtOrders: [row.title, row.orderDate],
+    bylawAmendments: [row.title, row.filedAtISO],
+    agendas: [row.meetingId, row.title],
+    agendaItems: [row.agendaId, row.position, row.title],
+    meetingTemplates: [row.name],
+    motionTemplates: [row.title, row.category],
+    motionBacklog: [row.title, row.createdAtISO],
+    recordsLocation: [row.title, row.address],
+    secretVaultItems: [row.service, row.name],
+    archiveAccessions: [row.accessionNumber, row.title],
+  };
+  const values = valuesByTable[table];
+  if (!values) return null;
+  const cleaned = values.map((value) => normalizeKeyPart(value)).filter(Boolean);
+  return cleaned.length ? `${table}:${cleaned.join("|")}` : null;
+}
+
+function normalizeKeyPart(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .slice(0, 160);
 }

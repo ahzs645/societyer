@@ -6,6 +6,7 @@ import { useSociety } from "../hooks/useSociety";
 import { Badge } from "../components/ui";
 import { PageHeader, SeedPrompt } from "./_helpers";
 import { escapeCsvCell } from "../lib/csv";
+import { Select } from "../components/Select";
 
 type TableSummary = {
   name: string;
@@ -19,6 +20,7 @@ type ImportPreview = {
   fileName: string;
   kind: string;
   societyName: string;
+  sourceSocietyId: string;
   tableCount: number;
   exportedTableCount: number;
   totalRows: number;
@@ -26,6 +28,32 @@ type ImportPreview = {
   binaryFilesIncluded: boolean;
   recoverySecretsIncluded: boolean;
   redactedFields: string[];
+  issues: string[];
+};
+
+type ImportOverlapRow = {
+  table: string;
+  importRows: number;
+  existingRows: number;
+  nonOverlappingRows: number;
+  overlappingIdCount: number;
+  overlappingNaturalKeyCount: number;
+  idSampled?: boolean;
+  naturalKeySampled?: boolean;
+  recommendedMode: "skip" | "restore-empty" | "merge-review" | "append-review";
+  issues: string[];
+};
+
+type ImportPlan = {
+  rows: ImportOverlapRow[];
+  totalImportRows: number;
+  totalExistingRows: number;
+  totalOverlappingIds: number;
+  totalOverlappingNaturalKeys: number;
+  appendRows: number;
+  replaceCandidates: number;
+  sampledTables: number;
+  recommendedMode: "restore-empty" | "merge-review" | "append-review";
   issues: string[];
 };
 
@@ -41,6 +69,8 @@ export function ExportsPage() {
   const [hideEmpty, setHideEmpty] = useState(false);
   const [includeRecoverySecrets, setIncludeRecoverySecrets] = useState(false);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [importPlan, setImportPlan] = useState<ImportPlan | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
   const [importError, setImportError] = useState("");
 
   const tableSummaries = useQuery(
@@ -187,13 +217,66 @@ export function ExportsPage() {
   const inspectImportFile = async (file: File | undefined) => {
     setImportError("");
     setImportPreview(null);
+    setImportPlan(null);
     if (!file) return;
+    setImportBusy(true);
     try {
       const parsed = JSON.parse(await file.text());
-      setImportPreview(inspectWorkspaceExport(parsed, file.name));
+      const preview = inspectWorkspaceExport(parsed, file.name);
+      setImportPreview(preview);
+      setImportPlan(await previewWorkspaceImport(parsed));
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Could not read export file.");
+    } finally {
+      setImportBusy(false);
     }
+  };
+
+  const previewWorkspaceImport = async (bundle: any): Promise<ImportPlan> => {
+    const tables = bundle?.tables && typeof bundle.tables === "object" ? bundle.tables : {};
+    const rows: ImportOverlapRow[] = [];
+    for (const table of Object.keys(tables).sort()) {
+      const tableRows = Array.isArray(tables[table]) ? tables[table] : [];
+      if (tableRows.length === 0) continue;
+      const source = sourceFingerprintForTable(table, tableRows);
+      rows.push(await convex.query(api.exports.previewWorkspaceImportTable, {
+        societyId: society._id,
+        table,
+        source,
+      }) as ImportOverlapRow);
+    }
+
+    const totalImportRows = rows.reduce((sum, row) => sum + row.importRows, 0);
+    const totalExistingRows = rows.reduce((sum, row) => sum + row.existingRows, 0);
+    const totalOverlappingIds = rows.reduce((sum, row) => sum + row.overlappingIdCount, 0);
+    const totalOverlappingNaturalKeys = rows.reduce((sum, row) => sum + row.overlappingNaturalKeyCount, 0);
+    const appendRows = rows.reduce((sum, row) => sum + row.nonOverlappingRows, 0);
+    const replaceCandidates = Math.max(totalOverlappingIds, totalOverlappingNaturalKeys);
+    const sampledTables = rows.filter((row) => row.idSampled || row.naturalKeySampled).length;
+    const issues = [
+      ...(totalOverlappingIds > 0 ? [`${formatNumber(totalOverlappingIds)} exported row IDs already exist in this workspace.`] : []),
+      ...(totalOverlappingNaturalKeys > 0 ? [`${formatNumber(totalOverlappingNaturalKeys)} likely duplicates were found by natural key.`] : []),
+      ...(sampledTables > 0 ? [`${sampledTables} table${sampledTables === 1 ? "" : "s"} used sampled overlap checks.`] : []),
+      ...(bundle?.manifest?.binaryFilesIncluded ? ["This export references an attachment manifest; binary rehydration is not part of this JSON preview."] : []),
+      ...restoreLimitations(bundle),
+    ];
+    const recommendedMode = totalExistingRows === 0
+      ? "restore-empty"
+      : totalOverlappingIds > 0 || totalOverlappingNaturalKeys > 0
+        ? "merge-review"
+        : "append-review";
+    return {
+      rows,
+      totalImportRows,
+      totalExistingRows,
+      totalOverlappingIds,
+      totalOverlappingNaturalKeys,
+      appendRows,
+      replaceCandidates,
+      sampledTables,
+      recommendedMode,
+      issues,
+    };
   };
 
   return (
@@ -207,14 +290,13 @@ export function ExportsPage() {
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <label className="row" style={{ gap: 6, alignItems: "center" }}>
               <span className="muted">Format</span>
-              <select
-                value={format}
-                onChange={(e) => setFormat(e.target.value as Format)}
-                className="input"
-              >
-                <option value="csv">CSV</option>
-                <option value="json">JSON</option>
-              </select>
+              <Select value={format} onChange={value => setFormat(value as Format)} options={[{
+  value: "csv",
+  label: "CSV"
+}, {
+  value: "json",
+  label: "JSON"
+}]} className="input" />
             </label>
             <button className="btn-action" disabled={countBusy || workspaceBusy || !tablesReady} onClick={validateCounts}>
               <CheckCircle2 size={12} /> {countBusy ? "Validating..." : "Validate rows"}
@@ -310,6 +392,11 @@ export function ExportsPage() {
             onChange={(event) => void inspectImportFile(event.target.files?.[0])}
             style={{ maxWidth: 420 }}
           />
+          {importBusy && (
+            <div className="notice notice--info" style={{ marginTop: 12 }}>
+              Building import preview and checking overlap against the selected workspace...
+            </div>
+          )}
           {importError && (
             <div className="notice notice--danger" style={{ marginTop: 12 }}>
               {importError}
@@ -328,6 +415,78 @@ export function ExportsPage() {
               {importPreview.issues.length > 0 && (
                 <div className="notice notice--warning" style={{ gridColumn: "1 / -1" }}>
                   {importPreview.issues.join(" ")}
+                </div>
+              )}
+            </div>
+          )}
+          {importPlan && (
+            <div style={{ marginTop: 16 }}>
+              <div className="stat-grid stat-grid--3">
+                <Stat
+                  label="Overlap"
+                  value={formatNumber(importPlan.totalOverlappingIds + importPlan.totalOverlappingNaturalKeys)}
+                  icon={<ShieldAlert size={14} />}
+                  sub={`${formatNumber(importPlan.totalOverlappingIds)} ID, ${formatNumber(importPlan.totalOverlappingNaturalKeys)} likely duplicate`}
+                />
+                <Stat
+                  label="Can append"
+                  value={formatNumber(importPlan.appendRows)}
+                  icon={<Database size={14} />}
+                  sub="rows without same exported IDs in this workspace"
+                />
+                <Stat
+                  label="Mode"
+                  value={modeLabel(importPlan.recommendedMode)}
+                  icon={<CheckCircle2 size={14} />}
+                  sub={modeDescription(importPlan.recommendedMode)}
+                />
+              </div>
+              {importPlan.issues.length > 0 && (
+                <div className="notice notice--warning" style={{ marginTop: 12 }}>
+                  {importPlan.issues.join(" ")}
+                </div>
+              )}
+              <div className="notice notice--info" style={{ marginTop: 12 }}>
+                This is a dry-run preview only. Generic workspace restore is intentionally blocked until the restore step can remap Convex IDs, rehydrate attachments, and write an audit record.
+              </div>
+              <div className="table-wrap" style={{ marginTop: 12 }}>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Table</th>
+                      <th>Import</th>
+                      <th>Existing</th>
+                      <th>Overlap</th>
+                      <th>Recommendation</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importPlan.rows
+                      .filter((row) => row.importRows > 0)
+                      .sort((a, b) => (b.overlappingIdCount + b.overlappingNaturalKeyCount) - (a.overlappingIdCount + a.overlappingNaturalKeyCount) || b.importRows - a.importRows)
+                      .slice(0, 30)
+                      .map((row) => (
+                        <tr key={row.table}>
+                          <td><strong>{row.table}</strong></td>
+                          <td>{formatNumber(row.importRows)}</td>
+                          <td>{formatNumber(row.existingRows)}</td>
+                          <td>
+                            <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
+                              {row.overlappingIdCount > 0 && <Badge tone="warn">{formatNumber(row.overlappingIdCount)} IDs</Badge>}
+                              {row.overlappingNaturalKeyCount > 0 && <Badge tone="warn">{formatNumber(row.overlappingNaturalKeyCount)} keys</Badge>}
+                              {row.overlappingIdCount === 0 && row.overlappingNaturalKeyCount === 0 && <Badge tone="success">none</Badge>}
+                              {(row.idSampled || row.naturalKeySampled) && <Badge tone="neutral">sampled</Badge>}
+                            </div>
+                          </td>
+                          <td>{modeLabel(row.recommendedMode)}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+              {importPlan.rows.length > 30 && (
+                <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 8 }}>
+                  Showing the 30 highest-risk tables from {formatNumber(importPlan.rows.length)} non-empty imported tables.
                 </div>
               )}
             </div>
@@ -508,6 +667,7 @@ function inspectWorkspaceExport(value: any, fileName: string): ImportPreview {
     fileName,
     kind: value.kind,
     societyName: String(manifest.societyName ?? value.society?.name ?? "Unknown society"),
+    sourceSocietyId: String(manifest.societyId ?? value.society?._id ?? ""),
     tableCount: Number(manifest.tableCount ?? validation.tableCount ?? exportedTableCount),
     exportedTableCount,
     totalRows,
@@ -517,4 +677,140 @@ function inspectWorkspaceExport(value: any, fileName: string): ImportPreview {
     redactedFields,
     issues,
   };
+}
+
+function sourceFingerprintForTable(table: string, rows: Array<Record<string, unknown>>) {
+  const sampleLimit = 5000;
+  const sampledRows = rows.slice(0, sampleLimit);
+  return {
+    rowCount: rows.length,
+    ids: sampledRows.map((row) => String(row._id ?? "")).filter(Boolean),
+    naturalKeys: sampledRows.map((row) => naturalKeyForTable(table, row)).filter(Boolean) as string[],
+    idSampled: rows.length > sampleLimit,
+    naturalKeySampled: rows.length > sampleLimit,
+  };
+}
+
+function restoreLimitations(bundle: any) {
+  const manifest = bundle?.manifest ?? {};
+  const redacted = Array.isArray(manifest.redactedFields) ? manifest.redactedFields.map(String) : [];
+  const issues: string[] = [];
+  if (redacted.includes("storageId")) {
+    issues.push("Storage IDs are redacted, so document files must be rehydrated from the attachment manifest or another source.");
+  }
+  if (redacted.includes("secretEncrypted") || redacted.includes("tokenHash")) {
+    issues.push("Stored secrets and API token hashes are redacted in this export.");
+  }
+  if (!bundle?.tables || typeof bundle.tables !== "object") {
+    issues.push("No table payloads are available to restore.");
+  }
+  return issues;
+}
+
+function modeLabel(mode: ImportOverlapRow["recommendedMode"] | ImportPlan["recommendedMode"]) {
+  if (mode === "restore-empty") return "Restore empty";
+  if (mode === "merge-review") return "Merge review";
+  if (mode === "append-review") return "Append review";
+  return "Skip";
+}
+
+function modeDescription(mode: ImportPlan["recommendedMode"]) {
+  if (mode === "restore-empty") return "target workspace has no rows in imported tables";
+  if (mode === "merge-review") return "existing data overlaps; review before applying";
+  return "no overlaps found; still needs ID remap before apply";
+}
+
+function naturalKeyForTable(table: string, row: Record<string, unknown>): string | null {
+  const valuesByTable: Record<string, unknown[]> = {
+    societies: [row.name],
+    organizationAddresses: [row.type, row.street ?? row.address, row.city, row.postalCode],
+    organizationRegistrations: [row.jurisdiction, row.registrationNumber],
+    organizationIdentifiers: [row.kind ?? row.type, row.number],
+    roleHolders: [row.roleType, row.fullName ?? row.name, row.startDate],
+    users: [row.email, row.name],
+    apiClients: [row.name],
+    pluginInstallations: [row.slug],
+    paperlessConnections: [row.baseUrl],
+    financialConnections: [row.provider, row.externalId ?? row.name],
+    waveCacheResources: [row.provider, row.resourceType, row.externalId],
+    financialAccounts: [row.externalId, row.name, row.accountType],
+    financialTransactions: [row.externalId, row.date, row.amountCents],
+    budgets: [row.fiscalYear],
+    budgetSnapshots: [row.fiscalYear, row.scenario, row.createdAtISO],
+    financialStatementImports: [row.fiscalYear, row.periodLabel, row.sourceDocumentId],
+    workflows: [row.name, row.eventType],
+    workflowRuns: [row.workflowId, row.startedAtISO],
+    membershipFeePeriods: [row.name, row.effectiveFrom],
+    fundingSources: [row.name, row.sourceType],
+    objectMetadata: [row.nameSingular, row.namePlural],
+    fieldMetadata: [row.objectMetadataId, row.name],
+    views: [row.objectMetadataId, row.name],
+    members: [row.email, row.firstName, row.lastName],
+    directors: [row.email, row.firstName, row.lastName, row.startDate],
+    boardRoleAssignments: [row.personName, row.roleTitle, row.startDate],
+    boardRoleChanges: [row.personName, row.roleTitle, row.effectiveDate, row.changeType],
+    signingAuthorities: [row.personName, row.institutionName, row.effectiveDate],
+    committees: [row.name],
+    committeeMembers: [row.committeeId, row.memberName ?? row.personName, row.role],
+    orgChartAssignments: [row.subjectType, row.subjectId],
+    volunteers: [row.email, row.name],
+    volunteerApplications: [row.email, row.name, row.createdAtISO],
+    meetings: [row.title, row.scheduledAt],
+    minutes: [row.meetingId, row.heldAt],
+    meetingMaterials: [row.meetingId, row.documentId],
+    documents: [row.title, row.category, row.fileName, row.createdAtISO],
+    documentVersions: [row.documentId, row.version, row.fileName],
+    sourceEvidence: [row.externalId, row.sourceTitle],
+    filings: [row.kind, row.dueDate, row.filedAt],
+    grants: [row.title, row.program, row.confirmationCode],
+    grantApplications: [row.grantId, row.submittedAtISO],
+    grantEmployeeLinks: [row.grantId, row.employeeId],
+    deadlines: [row.title, row.dueDate],
+    commitments: [row.title, row.status],
+    policies: [row.policyName ?? row.name, row.effectiveDate],
+    goals: [row.title],
+    tasks: [row.title, row.dueDate],
+    activity: [row.entityType, row.entityId, row.createdAtISO, row.type],
+    notes: [row.entityType, row.entityId, row.createdAtISO],
+    invitations: [row.email, row.createdAtISO],
+    inspections: [row.title, row.scheduledAt],
+    writtenResolutions: [row.title, row.resolutionDate],
+    agmRuns: [row.meetingId],
+    noticeDeliveries: [row.meetingId, row.recipientEmail],
+    insurancePolicies: [row.policyNumber, row.policyTermLabel, row.insurer],
+    pipaTrainings: [row.participantName, row.completedAtISO],
+    proxies: [row.memberId, row.meetingId],
+    auditorAppointments: [row.auditorName, row.fiscalYear],
+    memberProposals: [row.title, row.submittedAtISO],
+    elections: [row.title, row.opensAtISO],
+    electionQuestions: [row.electionId, row.title],
+    electionEligibleVoters: [row.electionId, row.memberId],
+    electionBallots: [row.electionId, row.voterId],
+    donationReceipts: [row.receiptNumber, row.donorEmail],
+    employees: [row.email, row.name],
+    courtOrders: [row.title, row.orderDate],
+    bylawAmendments: [row.title, row.filedAtISO],
+    agendas: [row.meetingId, row.title],
+    agendaItems: [row.agendaId, row.position, row.title],
+    meetingTemplates: [row.name],
+    motionTemplates: [row.title, row.category],
+    motionBacklog: [row.title, row.createdAtISO],
+    recordsLocation: [row.title, row.address],
+    secretVaultItems: [row.service, row.name],
+    archiveAccessions: [row.accessionNumber, row.title],
+  };
+  const values = valuesByTable[table];
+  if (!values) return null;
+  const cleaned = values.map(normalizeKeyPart).filter(Boolean);
+  return cleaned.length ? `${table}:${cleaned.join("|")}` : null;
+}
+
+function normalizeKeyPart(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .slice(0, 160);
 }

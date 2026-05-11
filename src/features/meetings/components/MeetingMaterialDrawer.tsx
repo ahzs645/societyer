@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { LockKeyhole } from "lucide-react";
 import { Badge, Drawer, Field } from "../../../components/ui";
 import { Checkbox } from "../../../components/Controls";
+import { Select } from "../../../components/Select";
 import {
   ACCESS_GRANT_LEVELS,
   ACCESS_GRANT_TYPES,
@@ -51,26 +52,28 @@ export function MeetingMaterialDrawer({
       {materialDraft && (
         <div>
           <Field label="Document">
-            <select
-              className="input"
-              value={materialDraft.documentId}
-              onChange={(event) => setMaterialDraft({ ...materialDraft, documentId: event.target.value })}
-            >
-              <option value="">Choose document</option>
-              {allDocuments.map((document: any) => (
-                <option key={document._id} value={document._id}>{document.title}</option>
-              ))}
-            </select>
+            <Select value={materialDraft.documentId} onChange={value => setMaterialDraft({
+  ...materialDraft,
+  documentId: value
+})} options={[{
+  value: "",
+  label: "Choose document"
+}, ...allDocuments.map((document: any) => ({
+  value: document._id,
+  label: document.title
+}))]} className="input" />
           </Field>
           <Field label="Agenda topic">
-            <select
-              className="input"
-              value={materialDraft.agendaLabel}
-              onChange={(event) => setMaterialDraft({ ...materialDraft, agendaLabel: event.target.value })}
-            >
-              <option value="">General materials</option>
-              {agenda.map((item) => <option key={item} value={item}>{item}</option>)}
-            </select>
+            <Select value={materialDraft.agendaLabel} onChange={value => setMaterialDraft({
+  ...materialDraft,
+  agendaLabel: value
+})} options={[{
+  value: "",
+  label: "General materials"
+}, ...agenda.map(item => ({
+  value: item,
+  label: item
+}))]} className="input" />
           </Field>
           <Field label="Label">
             <input className="input" value={materialDraft.label} onChange={(event) => setMaterialDraft({ ...materialDraft, label: event.target.value })} placeholder="Optional display label" />
@@ -80,25 +83,45 @@ export function MeetingMaterialDrawer({
               <input className="input" type="number" min="1" value={materialDraft.order} onChange={(event) => setMaterialDraft({ ...materialDraft, order: event.target.value })} />
             </Field>
             <Field label="Access">
-              <select className="input" value={materialDraft.accessLevel} onChange={(event) => setMaterialDraft({ ...materialDraft, accessLevel: event.target.value })}>
-                <option value="board">Board</option>
-                <option value="committee">Committee</option>
-                <option value="members">Members</option>
-                <option value="public">Public</option>
-                <option value="restricted">Restricted</option>
-              </select>
+              <Select value={materialDraft.accessLevel} onChange={value => setMaterialDraft({
+  ...materialDraft,
+  accessLevel: value
+})} options={[{
+  value: "board",
+  label: "Board"
+}, {
+  value: "committee",
+  label: "Committee"
+}, {
+  value: "members",
+  label: "Members"
+}, {
+  value: "public",
+  label: "Public"
+}, {
+  value: "restricted",
+  label: "Restricted"
+}]} className="input" />
             </Field>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Field label="Availability">
-              <select className="input" value={materialDraft.availabilityStatus} onChange={(event) => setMaterialDraft({ ...materialDraft, availabilityStatus: event.target.value })}>
-                {AVAILABILITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
+              <Select value={materialDraft.availabilityStatus} onChange={value => setMaterialDraft({
+  ...materialDraft,
+  availabilityStatus: value
+})} options={[...AVAILABILITY_OPTIONS.map(option => ({
+  value: option.value,
+  label: option.label
+}))]} className="input" />
             </Field>
             <Field label="Sync / offline">
-              <select className="input" value={materialDraft.syncStatus} onChange={(event) => setMaterialDraft({ ...materialDraft, syncStatus: event.target.value })}>
-                {SYNC_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
+              <Select value={materialDraft.syncStatus} onChange={value => setMaterialDraft({
+  ...materialDraft,
+  syncStatus: value
+})} options={[...SYNC_OPTIONS.map(option => ({
+  value: option.value,
+  label: option.label
+}))]} className="input" />
             </Field>
           </div>
           <Field label="Expires">
@@ -118,18 +141,24 @@ export function MeetingMaterialDrawer({
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <Field label="Target type">
-                <select
-                  className="input"
-                  value={materialDraft.grantSubjectType}
-                  onChange={(event) => setMaterialDraft({ ...materialDraft, grantSubjectType: event.target.value, grantSubjectId: "", grantSubjectLabel: "" })}
-                >
-                  {ACCESS_GRANT_TYPES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
+                <Select value={materialDraft.grantSubjectType} onChange={value => setMaterialDraft({
+  ...materialDraft,
+  grantSubjectType: value,
+  grantSubjectId: "",
+  grantSubjectLabel: ""
+})} options={[...ACCESS_GRANT_TYPES.map(option => ({
+  value: option.value,
+  label: option.label
+}))]} className="input" />
               </Field>
               <Field label="Permission">
-                <select className="input" value={materialDraft.grantAccess} onChange={(event) => setMaterialDraft({ ...materialDraft, grantAccess: event.target.value })}>
-                  {ACCESS_GRANT_LEVELS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
+                <Select value={materialDraft.grantAccess} onChange={value => setMaterialDraft({
+  ...materialDraft,
+  grantAccess: value
+})} options={[...ACCESS_GRANT_LEVELS.map(option => ({
+  value: option.value,
+  label: option.label
+}))]} className="input" />
               </Field>
             </div>
             {materialDraft.grantSubjectType === "group" ? (
@@ -138,10 +167,16 @@ export function MeetingMaterialDrawer({
               </Field>
             ) : (
               <Field label="Target">
-                <select className="input" value={materialDraft.grantSubjectId} onChange={(event) => setMaterialDraft({ ...materialDraft, grantSubjectId: event.target.value })}>
-                  <option value="">Choose target</option>
-                  {grantCandidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}
-                </select>
+                <Select value={materialDraft.grantSubjectId} onChange={value => setMaterialDraft({
+  ...materialDraft,
+  grantSubjectId: value
+})} options={[{
+  value: "",
+  label: "Choose target"
+}, ...grantCandidates.map(candidate => ({
+  value: candidate.id,
+  label: candidate.label
+}))]} className="input" />
               </Field>
             )}
             <button className="btn btn--ghost btn--sm" type="button" onClick={onAddAccessGrant}>

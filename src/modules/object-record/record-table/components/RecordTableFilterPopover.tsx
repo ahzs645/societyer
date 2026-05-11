@@ -135,37 +135,40 @@ export function RecordTableFilterPopover({
     <div ref={popoverRef} className="record-table__filter-popover">
       <div className="record-table__popover-head">
         <strong>Advanced filters</strong>
-        <select
-          className="record-table__menu-select"
-          style={{ width: 140 }}
-          value={rootLogicalOperator}
-          onChange={(event) => {
-            const logicalOperator = event.target.value as "and" | "or";
-            const root = filterGroups.find((group) => !group.parentViewFilterGroupId);
-            if (root) {
-              handle.get().setFilterGroups(
-                filterGroups.map((group) =>
-                  group.id === root.id ? { ...group, logicalOperator } : group,
-                ),
-              );
-              return;
-            }
-            if (filters.length > 0) {
-              const rootId = `fg_${Date.now()}`;
-              handle.set({
-                filterGroups: [{ id: rootId, logicalOperator, parentViewFilterGroupId: null }],
-                filters: filters.map((entry, index) => ({
-                  ...entry,
-                  viewFilterGroupId: rootId,
-                  positionInViewFilterGroup: index,
-                })),
-              });
-            }
-          }}
-        >
-          <option value="and">Match all</option>
-          <option value="or">Match any</option>
-        </select>
+        <Select value={rootLogicalOperator} onChange={value => {
+  const logicalOperator = value as "and" | "or";
+  const root = filterGroups.find(group => !group.parentViewFilterGroupId);
+  if (root) {
+    handle.get().setFilterGroups(filterGroups.map(group => group.id === root.id ? {
+      ...group,
+      logicalOperator
+    } : group));
+    return;
+  }
+  if (filters.length > 0) {
+    const rootId = `fg_${Date.now()}`;
+    handle.set({
+      filterGroups: [{
+        id: rootId,
+        logicalOperator,
+        parentViewFilterGroupId: null
+      }],
+      filters: filters.map((entry, index) => ({
+        ...entry,
+        viewFilterGroupId: rootId,
+        positionInViewFilterGroup: index
+      }))
+    });
+  }
+}} options={[{
+  value: "and",
+  label: "Match all"
+}, {
+  value: "or",
+  label: "Match any"
+}]} className="record-table__menu-select" style={{
+  width: 140
+}} />
       </div>
       <div className="record-table__filter-popover-row">
         <Select

@@ -16,6 +16,7 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
+import { Select } from "../components/Select";
 
 /**
  * Proxies and ballots. Each row in the record table is a proxy joined
@@ -177,52 +178,46 @@ export function ProxiesPage() {
               record should match the signed proxy form kept with meeting materials.
             </InspectorNote>
             <Field label="Meeting">
-              <select className="input" value={form.meetingId ?? ""} onChange={(e) => setForm({ ...form, meetingId: e.target.value })}>
-                {(meetings ?? []).map((m: any) => <option key={m._id} value={m._id}>{m.title}</option>)}
-              </select>
+              <Select value={form.meetingId ?? ""} onChange={value => setForm({
+  ...form,
+  meetingId: value
+})} options={[...(meetings ?? []).map((m: any) => ({
+  value: m._id,
+  label: m.title
+}))]} className="input" />
             </Field>
             <Field label="Grantor member (optional)">
-              <select
-                className="input"
-                value={form.grantorMemberId ?? ""}
-                onChange={(e) => {
-                  const member = (members ?? []).find((row: any) => row._id === e.target.value);
-                  setForm({
-                    ...form,
-                    grantorMemberId: e.target.value || undefined,
-                    grantorName: member ? `${member.firstName} ${member.lastName}` : form.grantorName,
-                  });
-                }}
-              >
-                <option value="">— none —</option>
-                {(members ?? []).map((member: any) => (
-                  <option key={member._id} value={member._id}>
-                    {member.firstName} {member.lastName}
-                  </option>
-                ))}
-              </select>
+              <Select value={form.grantorMemberId ?? ""} onChange={value => {
+  const member = (members ?? []).find((row: any) => row._id === value);
+  setForm({
+    ...form,
+    grantorMemberId: value || undefined,
+    grantorName: member ? `${member.firstName} ${member.lastName}` : form.grantorName
+  });
+}} options={[{
+  value: "",
+  label: "— none —"
+}, ...(members ?? []).map((member: any) => ({
+  value: member._id,
+  label: [member.firstName, member.lastName].join(" ")
+}))]} className="input" />
             </Field>
             <Field label="Grantor (voting member)"><input className="input" value={form.grantorName} onChange={(e) => setForm({ ...form, grantorName: e.target.value })} /></Field>
             <Field label={`Proxy holder${rules?.proxyHolderMustBeMember ? " member" : " member (optional)"}`}>
-              <select
-                className="input"
-                value={form.proxyHolderMemberId ?? ""}
-                onChange={(e) => {
-                  const member = (members ?? []).find((row: any) => row._id === e.target.value);
-                  setForm({
-                    ...form,
-                    proxyHolderMemberId: e.target.value || undefined,
-                    proxyHolderName: member ? `${member.firstName} ${member.lastName}` : form.proxyHolderName,
-                  });
-                }}
-              >
-                <option value="">— none —</option>
-                {(members ?? []).map((member: any) => (
-                  <option key={member._id} value={member._id}>
-                    {member.firstName} {member.lastName}
-                  </option>
-                ))}
-              </select>
+              <Select value={form.proxyHolderMemberId ?? ""} onChange={value => {
+  const member = (members ?? []).find((row: any) => row._id === value);
+  setForm({
+    ...form,
+    proxyHolderMemberId: value || undefined,
+    proxyHolderName: member ? `${member.firstName} ${member.lastName}` : form.proxyHolderName
+  });
+}} options={[{
+  value: "",
+  label: "— none —"
+}, ...(members ?? []).map((member: any) => ({
+  value: member._id,
+  label: [member.firstName, member.lastName].join(" ")
+}))]} className="input" />
             </Field>
             <Field label="Proxy holder"><input className="input" value={form.proxyHolderName} onChange={(e) => setForm({ ...form, proxyHolderName: e.target.value })} /></Field>
             <Field label="Instructions (optional)"><textarea className="textarea" value={form.instructions ?? ""} onChange={(e) => setForm({ ...form, instructions: e.target.value })} /></Field>

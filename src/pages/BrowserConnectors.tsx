@@ -1119,11 +1119,12 @@ export function BrowserConnectorsPage() {
                     <span className="card__subtitle">{connector.category ?? "Browser app"}</span>
                   </div>
                   <div className="card__body col" style={{ gap: 12 }}>
-                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                      {appSession && <Badge tone="success">Running</Badge>}
-                      {!isRegistered && <Badge tone="gray">Template</Badge>}
-                      {isRegistered && !appSession && <Badge tone="info">Installed</Badge>}
-                    </div>
+                    {(appSession || isRegistered) && (
+                      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                        {appSession && <Badge tone="success">Running</Badge>}
+                        {isRegistered && !appSession && <Badge tone="info">Installed</Badge>}
+                      </div>
+                    )}
                     <div className="muted">{connector.description}</div>
                     <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                       <button className="btn btn--accent btn--sm" disabled={busy} onClick={() => openWorkspace(connector.id)}>

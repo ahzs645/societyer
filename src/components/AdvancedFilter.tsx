@@ -10,6 +10,7 @@ import type {
   FilterOperator,
 } from "./FilterBar";
 import { OPERATOR_LABELS } from "./FilterBar";
+import { Select } from "./Select";
 
 function emptyRule(fields: FilterField[]): AppliedFilter {
   const first = fields[0];
@@ -118,15 +119,15 @@ function GroupEditor({
   return (
     <div className="advanced-filter__group">
       <div className="advanced-filter__group-head">
-        <select
-          className="input"
-          value={group.op}
-          onChange={(e) => updateGroupOp(path, e.target.value as "and" | "or")}
-          style={{ width: 80 }}
-        >
-          <option value="and">AND</option>
-          <option value="or">OR</option>
-        </select>
+        <Select value={group.op} onChange={value => updateGroupOp(path, value as "and" | "or")} options={[{
+  value: "and",
+  label: "AND"
+}, {
+  value: "or",
+  label: "OR"
+}]} className="input" style={{
+  width: 80
+}} />
         <span className="muted">match {group.op === "and" ? "all" : "any"} of the following</span>
         <div style={{ flex: 1 }} />
         <Button size="sm" onClick={() => addRule(path)}><Plus size={12} /> Rule</Button>
@@ -166,36 +167,31 @@ function GroupEditor({
             field?.operators ?? (field?.options ? ["is", "is_not"] : ["contains", "equals", "starts_with"]);
           return (
             <div key={i} className="advanced-filter__rule">
-              <select
-                className="input"
-                value={rule.fieldId}
-                onChange={(e) => updateRule(nodePath, { fieldId: e.target.value, value: "" })}
-              >
-                {fields.map((f) => (
-                  <option key={f.id} value={f.id}>{f.label}</option>
-                ))}
-              </select>
-              <select
-                className="input"
-                value={rule.operator ?? ops[0]}
-                onChange={(e) => updateRule(nodePath, { operator: e.target.value as FilterOperator })}
-                style={{ width: 120 }}
-              >
-                {ops.map((op) => (
-                  <option key={op} value={op}>{OPERATOR_LABELS[op]}</option>
-                ))}
-              </select>
+              <Select value={rule.fieldId} onChange={value => updateRule(nodePath, {
+  fieldId: value,
+  value: ""
+})} options={[...fields.map(f => ({
+  value: f.id,
+  label: f.label
+}))]} className="input" />
+              <Select value={rule.operator ?? ops[0]} onChange={value => updateRule(nodePath, {
+  operator: value as FilterOperator
+})} options={[...ops.map(op => ({
+  value: op,
+  label: OPERATOR_LABELS[op]
+}))]} className="input" style={{
+  width: 120
+}} />
               {field?.options ? (
-                <select
-                  className="input"
-                  value={rule.value}
-                  onChange={(e) => updateRule(nodePath, { value: e.target.value })}
-                >
-                  <option value="">—</option>
-                  {field.options.map((o) => (
-                    <option key={o} value={o}>{o}</option>
-                  ))}
-                </select>
+                <Select value={rule.value} onChange={value => updateRule(nodePath, {
+  value: value
+})} options={[{
+  value: "",
+  label: "—"
+}, ...field.options.map(o => ({
+  value: o,
+  label: o
+}))]} className="input" />
               ) : (
                 <input
                   className="input"

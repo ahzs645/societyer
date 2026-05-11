@@ -12,6 +12,7 @@ import { useToast } from "../components/Toast";
 import { FileText, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
+import { Select } from "../components/Select";
 
 export function PoliciesPage() {
   const society = useSociety();
@@ -230,16 +231,28 @@ export function PoliciesPage() {
               <OptionMultiSelect label="Entity types" setName="entityTypes" values={listValues(draft.entityTypes)} onChange={(values) => setDraft({ ...draft, entityTypes: values })} rows={3} />
             </div>
             <Field label="DOCX document">
-              <select className="input" value={draft.docxDocumentId ?? ""} onChange={(e) => setDraft({ ...draft, docxDocumentId: e.target.value || undefined })}>
-                <option value="">No DOCX document</option>
-                {(documents ?? []).map((doc: any) => <option key={doc._id} value={doc._id}>{doc.title}</option>)}
-              </select>
+              <Select value={draft.docxDocumentId ?? ""} onChange={value => setDraft({
+  ...draft,
+  docxDocumentId: value || undefined
+})} options={[{
+  value: "",
+  label: "No DOCX document"
+}, ...(documents ?? []).map((doc: any) => ({
+  value: doc._id,
+  label: doc.title
+}))]} className="input" />
             </Field>
             <Field label="PDF document">
-              <select className="input" value={draft.pdfDocumentId ?? ""} onChange={(e) => setDraft({ ...draft, pdfDocumentId: e.target.value || undefined })}>
-                <option value="">No PDF document</option>
-                {(documents ?? []).map((doc: any) => <option key={doc._id} value={doc._id}>{doc.title}</option>)}
-              </select>
+              <Select value={draft.pdfDocumentId ?? ""} onChange={value => setDraft({
+  ...draft,
+  pdfDocumentId: value || undefined
+})} options={[{
+  value: "",
+  label: "No PDF document"
+}, ...(documents ?? []).map((doc: any) => ({
+  value: doc._id,
+  label: doc.title
+}))]} className="input" />
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <RecordSelect
@@ -278,10 +291,13 @@ export function PoliciesPage() {
 function RecordSelect({ label, value, rows, onChange, getLabel }: any) {
   return (
     <Field label={label}>
-      <select className="input" value={value ?? ""} onChange={(e) => onChange(e.target.value || undefined)}>
-        <option value="">No {label.toLowerCase()}</option>
-        {rows.map((row: any) => <option key={row._id} value={row._id}>{getLabel(row)}</option>)}
-      </select>
+      <Select value={value ?? ""} onChange={value => onChange(value || undefined)} options={[{
+  value: "",
+  label: ["No", label.toLowerCase()].join(" ")
+}, ...rows.map((row: any) => ({
+  value: row._id,
+  label: getLabel(row)
+}))]} className="input" />
     </Field>
   );
 }

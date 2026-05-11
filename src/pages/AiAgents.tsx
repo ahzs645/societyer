@@ -7,6 +7,7 @@ import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt } from "./_helpers";
 import { Badge, Field, SettingsShell } from "../components/ui";
 import { useToast } from "../components/Toast";
+import { Select } from "../components/Select";
 
 type AgentDefinition = {
   key: string;
@@ -355,33 +356,40 @@ export function AiAgentsPage() {
             </div>
             <div className="settings-pair">
               <Field label="Scope">
-                <select className="input" value={aiSetup.scope} onChange={(event) => setAiSetup((draft) => ({ ...draft, scope: event.target.value }))}>
-                  <option value="personal">Personal</option>
-                  <option value="workspace">Workspace</option>
-                </select>
+                <Select value={aiSetup.scope} onChange={value => setAiSetup(draft => ({
+  ...draft,
+  scope: value
+}))} options={[{
+  value: "personal",
+  label: "Personal"
+}, {
+  value: "workspace",
+  label: "Workspace"
+}]} className="input" />
               </Field>
               <Field label="Provider">
-                <select
-                  className="input"
-                  value={aiSetup.provider}
-                  onChange={(event) => {
-                    const provider = event.target.value;
-                    setAiSetup((draft) => ({
-                      ...draft,
-                      provider,
-                      label: providerLabel(provider),
-                      modelId: defaultModelForProvider(provider),
-                      baseUrl: provider === "openai-compatible" ? draft.baseUrl : "",
-                    }));
-                    setModelCatalog(null);
-                    setModelTab("recommended");
-                    setValidation(null);
-                  }}
-                >
-                  <option value="openai">OpenAI</option>
-                  <option value="openrouter">OpenRouter</option>
-                  <option value="openai-compatible">OpenAI-compatible</option>
-                </select>
+                <Select value={aiSetup.provider} onChange={value => {
+  const provider = value;
+  setAiSetup(draft => ({
+    ...draft,
+    provider,
+    label: providerLabel(provider),
+    modelId: defaultModelForProvider(provider),
+    baseUrl: provider === "openai-compatible" ? draft.baseUrl : ""
+  }));
+  setModelCatalog(null);
+  setModelTab("recommended");
+  setValidation(null);
+}} options={[{
+  value: "openai",
+  label: "OpenAI"
+}, {
+  value: "openrouter",
+  label: "OpenRouter"
+}, {
+  value: "openai-compatible",
+  label: "OpenAI-compatible"
+}]} className="input" />
               </Field>
             </div>
             {aiSetup.provider === "openai-compatible" && (

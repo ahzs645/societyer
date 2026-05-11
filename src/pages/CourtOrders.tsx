@@ -15,6 +15,7 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
+import { Select } from "../components/Select";
 
 /**
  * Court orders affecting the society — required to be kept with
@@ -139,15 +140,31 @@ export function CourtOrdersPage() {
             </div>
             <Field label="Description"><textarea className="textarea" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
             <Field label="Document (optional)">
-              <select className="input" value={form.documentId ?? ""} onChange={(e) => setForm({ ...form, documentId: e.target.value || undefined })}>
-                <option value="">— none —</option>
-                {(documents ?? []).map((d: any) => <option key={d._id} value={d._id}>{d.title}</option>)}
-              </select>
+              <Select value={form.documentId ?? ""} onChange={value => setForm({
+  ...form,
+  documentId: value || undefined
+})} options={[{
+  value: "",
+  label: "— none —"
+}, ...(documents ?? []).map((d: any) => ({
+  value: d._id,
+  label: d.title
+}))]} className="input" />
             </Field>
             <Field label="Status">
-              <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                <option>Active</option><option>Satisfied</option><option>Vacated</option>
-              </select>
+              <Select value={form.status} onChange={value => setForm({
+  ...form,
+  status: value
+})} options={[{
+  value: "",
+  label: "Active"
+}, {
+  value: "",
+  label: "Satisfied"
+}, {
+  value: "",
+  label: "Vacated"
+}]} className="input" />
             </Field>
           </div>
         )}

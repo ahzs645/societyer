@@ -1,6 +1,7 @@
 import { ReactNode, useRef, useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { MenuRow, MenuSectionLabel } from "./ui";
+import { Select } from "./Select";
 
 function readCssPx(name: string, fallback: number): number {
   if (typeof window === "undefined") return fallback;
@@ -184,15 +185,10 @@ export function FilterPopover<T>({
             {picked.label}
             {" "}
             {picked.operators && picked.operators.length > 1 ? (
-              <select
-                className="popover__op-select"
-                value={operator ?? picked.operators[0]}
-                onChange={(e) => setOperator(e.target.value as FilterOperator)}
-              >
-                {picked.operators.map((op) => (
-                  <option key={op} value={op}>{OPERATOR_LABELS[op]}</option>
-                ))}
-              </select>
+              <Select value={operator ?? picked.operators[0]} onChange={value => setOperator(value as FilterOperator)} options={[...picked.operators.map(op => ({
+  value: op,
+  label: OPERATOR_LABELS[op]
+}))]} className="popover__op-select" />
             ) : (
               <span className="muted">{picked.options ? "is" : "contains"}</span>
             )}

@@ -1109,21 +1109,16 @@ export function MeetingMinutesColumn({
               )}
 
               {availableMeetingTasks.length > 0 ? (
-                <select
-                  className="input"
-                  value=""
-                  onChange={(event) => {
-                    attachLinkedTask(event.target.value);
-                    event.target.value = "";
-                  }}
-                >
-                  <option value="">Link a meeting task...</option>
-                  {availableMeetingTasks.map((task: any) => (
-                    <option key={task._id} value={task._id}>
-                      {task.title}{task.status ? ` · ${task.status}` : ""}
-                    </option>
-                  ))}
-                </select>
+                <Select value={""} onChange={value => {
+  attachLinkedTask(value);
+  value = "";
+}} options={[{
+  value: "",
+  label: "Link a meeting task..."
+}, ...availableMeetingTasks.map((task: any) => ({
+  value: task._id,
+  label: [task.title, task.status ? ` · ${task.status}` : ""].join(" ")
+}))]} className="input" />
               ) : (meetingTasks?.length ?? 0) === 0 ? (
                 <div className="muted" style={{ fontSize: "var(--fs-sm)", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
                   <span>No tasks linked to this meeting yet. Add tasks on the Package tab to make them available here.</span>

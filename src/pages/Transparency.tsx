@@ -19,6 +19,7 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
+import { Select } from "../components/Select";
 
 const PUBLICATION_PRESETS = [
   { category: "AnnualReport", title: "Annual report", summary: "Publish the filed annual report package or registry confirmation." },
@@ -454,33 +455,69 @@ export function TransparencyPage() {
           <div>
             <Field label="Title"><input className="input" value={publicationDraft.title} onChange={(e) => setPublicationDraft({ ...publicationDraft, title: e.target.value })} /></Field>
             <Field label="Category">
-              <select className="input" value={publicationDraft.category} onChange={(e) => setPublicationDraft({ ...publicationDraft, category: e.target.value })}>
-                <option>AnnualReport</option>
-                <option>Bylaws</option>
-                <option>AGM</option>
-                <option>FinancialSummary</option>
-                <option>Grant</option>
-                <option>InspectionInstructions</option>
-                <option>Policy</option>
-                <option>Notice</option>
-                <option>Resource</option>
-                <option>Custom</option>
-              </select>
+              <Select value={publicationDraft.category} onChange={value => setPublicationDraft({
+  ...publicationDraft,
+  category: value
+})} options={[{
+  value: "",
+  label: "AnnualReport"
+}, {
+  value: "",
+  label: "Bylaws"
+}, {
+  value: "",
+  label: "AGM"
+}, {
+  value: "",
+  label: "FinancialSummary"
+}, {
+  value: "",
+  label: "Grant"
+}, {
+  value: "",
+  label: "InspectionInstructions"
+}, {
+  value: "",
+  label: "Policy"
+}, {
+  value: "",
+  label: "Notice"
+}, {
+  value: "",
+  label: "Resource"
+}, {
+  value: "",
+  label: "Custom"
+}]} className="input" />
             </Field>
             <Field label="Document">
-              <select className="input" value={publicationDraft.documentId ?? ""} onChange={(e) => setPublicationDraft({ ...publicationDraft, documentId: e.target.value })}>
-                <option value="">None</option>
-                {(documents ?? []).map((document) => <option key={document._id} value={document._id}>{document.title}</option>)}
-              </select>
+              <Select value={publicationDraft.documentId ?? ""} onChange={value => setPublicationDraft({
+  ...publicationDraft,
+  documentId: value
+})} options={[{
+  value: "",
+  label: "None"
+}, ...(documents ?? []).map(document => ({
+  value: document._id,
+  label: document.title
+}))]} className="input" />
             </Field>
             <Field label="External URL"><input className="input" value={publicationDraft.url ?? ""} onChange={(e) => setPublicationDraft({ ...publicationDraft, url: e.target.value })} /></Field>
             <Field label="Published on"><input className="input" type="date" value={publicationDraft.publishedAtISO ?? ""} onChange={(e) => setPublicationDraft({ ...publicationDraft, publishedAtISO: e.target.value })} /></Field>
             <Field label="Status">
-              <select className="input" value={publicationDraft.status} onChange={(e) => setPublicationDraft({ ...publicationDraft, status: e.target.value })}>
-                <option>Draft</option>
-                <option>Published</option>
-                <option>Archived</option>
-              </select>
+              <Select value={publicationDraft.status} onChange={value => setPublicationDraft({
+  ...publicationDraft,
+  status: value
+})} options={[{
+  value: "",
+  label: "Draft"
+}, {
+  value: "",
+  label: "Published"
+}, {
+  value: "",
+  label: "Archived"
+}]} className="input" />
             </Field>
             <Field label="Summary"><textarea className="textarea" rows={5} value={publicationDraft.summary ?? ""} onChange={(e) => setPublicationDraft({ ...publicationDraft, summary: e.target.value })} /></Field>
           </div>

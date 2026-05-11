@@ -22,6 +22,7 @@ import { formatDateTime, formatDate } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { useModuleEnabled } from "../hooks/useModules";
 import { useConfirm } from "../components/Modal";
+import { Select } from "../components/Select";
 
 type Step = "notice" | "held" | "financialsPresented" | "electionsHeld" | "minutesApproved" | "annualReportFiled";
 
@@ -162,11 +163,19 @@ export function AgmWorkflowPage() {
                       <>
                         {communicationsEnabled ? (
                           <>
-                            <select className="input" style={{ height: 24, fontSize: 12 }} value={noticeChannel} onChange={(e) => setNoticeChannel(e.target.value as any)}>
-                              <option value="email">Email</option>
-                              <option value="mail">Postal mail</option>
-                              <option value="in-person">In person</option>
-                            </select>
+                            <Select value={noticeChannel} onChange={value => setNoticeChannel(value as any)} options={[{
+  value: "email",
+  label: "Email"
+}, {
+  value: "mail",
+  label: "Postal mail"
+}, {
+  value: "in-person",
+  label: "In person"
+}]} className="input" style={{
+  height: 24,
+  fontSize: 12
+}} />
                             <button className="btn-action btn-action--primary" onClick={async () => {
                               const ok = await confirm({
                                 title: "Send AGM notice?",
