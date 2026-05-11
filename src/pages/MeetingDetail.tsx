@@ -150,14 +150,45 @@ function bytesToBase64(bytes: Uint8Array) {
 }
 
 function agendaEntriesFromRecord(record: any): AgendaItemEntry[] | null {
+  const items = agendaItemsFromRecord(record);
+  return items?.map((item) => ({ title: item.title, depth: item.depth })) ?? null;
+}
+
+function agendaItemsFromRecord(record: any): Array<AgendaItemEntry & {
+  type?: string;
+  presenter?: string;
+  details?: string;
+  timeAllottedMinutes?: number;
+  motionTemplateId?: any;
+  motionBacklogId?: any;
+  motionText?: string;
+}> | null {
   if (!record?.items?.length) return null;
-  const entries: AgendaItemEntry[] = [];
+  const entries: Array<AgendaItemEntry & {
+    type?: string;
+    presenter?: string;
+    details?: string;
+    timeAllottedMinutes?: number;
+    motionTemplateId?: any;
+    motionBacklogId?: any;
+    motionText?: string;
+  }> = [];
   let hasRoot = false;
   for (const item of record.items) {
     const title = String(item?.title ?? "").trim();
     if (!title) continue;
     const depth: 0 | 1 = item?.depth === 1 && hasRoot ? 1 : 0;
-    entries.push({ title, depth });
+    entries.push({
+      title,
+      depth,
+      type: item.type,
+      presenter: item.presenter,
+      details: item.details,
+      timeAllottedMinutes: item.timeAllottedMinutes,
+      motionTemplateId: item.motionTemplateId,
+      motionBacklogId: item.motionBacklogId,
+      motionText: item.motionText,
+    });
     if (depth === 0) hasRoot = true;
   }
   return entries.length ? entries : null;
@@ -344,6 +375,7 @@ export function MeetingDetailPage() {
   if (!meeting) return <div className="page">Loading…</div>;
 
   const agendaTree = agendaEntriesFromRecord(agendaRecord) ?? parseAgendaItems(meeting.agendaJson);
+  const canonicalAgendaItems = agendaItemsFromRecord(agendaRecord);
   const agenda = agendaTree.map((entry) => entry.title);
   const businessMotions = ((minutes?.motions ?? []) as Motion[]).filter((motion) => !isAdjournmentMotion(motion));
   const minutesSourceExternalIds = sourceExternalIdsForMinutes(minutes);
@@ -735,6 +767,8 @@ export function MeetingDetailPage() {
         title: entry.title,
         depth: entry.depth,
         type: inferAgendaSectionType(entry.title),
+        presenter: next.find((section: any) => section?.title === entry.title)?.presenter || undefined,
+        details: next.find((section: any) => section?.title === entry.title)?.discussion || undefined,
       })),
     });
     await updateMeeting({
@@ -795,7 +829,13 @@ export function MeetingDetailPage() {
       items: cleaned.map((entry) => ({
         title: entry.title,
         depth: entry.depth,
-        type: inferAgendaSectionType(entry.title),
+        type: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.type ?? inferAgendaSectionType(entry.title),
+        presenter: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.presenter,
+        details: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.details,
+        timeAllottedMinutes: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.timeAllottedMinutes,
+        motionTemplateId: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionTemplateId,
+        motionBacklogId: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionBacklogId,
+        motionText: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionText,
       })),
     });
     await updateMeeting({
@@ -822,8 +862,24 @@ export function MeetingDetailPage() {
         quorumMet: quorumRequired == null ? false : attendees.length >= quorumRequired,
         quorumRequired: quorumRequired ?? undefined,
         discussion: "",
-        sections: next.map((entry) => buildSectionFromTitle(entry.title, entry.depth)),
-        motions: [],
+        sections: next.map((entry) => {
+          const metadata = canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase());
+          return {
+            ...buildSectionFromTitle(entry.title, entry.depth),
+            type: metadata?.type ?? inferAgendaSectionType(entry.title),
+            presenter: metadata?.presenter,
+            discussion: metadata?.details ?? "",
+          };
+        }),
+        motions: (canonicalAgendaItems ?? [])
+          .map((item, index) => ({
+            text: String(item.motionText ?? "").trim(),
+            outcome: "Pending",
+            resolutionType: "Ordinary",
+            sectionIndex: index,
+            sectionTitle: item.title,
+          }))
+          .filter((motion) => motion.text),
         decisions: [],
         actionItems: [],
       });

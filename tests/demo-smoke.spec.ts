@@ -84,6 +84,33 @@ test.describe("Demo navigation", () => {
   });
 });
 
+test.describe("Meeting agenda minutes workflow", () => {
+  test("meeting agenda edits sync to Agenda Builder and minutes sections", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (err) => errors.push(err.message));
+
+    await page.goto("/demo/app/meetings/static_meeting_board_q2", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Minutes" }).click();
+    await page.getByRole("button", { name: "Edit agenda", exact: true }).click();
+    await page.getByRole("button", { name: "Add item" }).click();
+    await page.locator(".meeting-minutes-agenda-editor input.input").last().fill("Volunteer program update");
+    await page.getByRole("button", { name: "Save agenda", exact: true }).click();
+
+    await expect(page.getByText("Agenda saved")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Volunteer program update" })).toBeVisible();
+    await expect(page.locator("#meeting-minutes-section-3")).toContainText("Volunteer program update");
+
+    await page.goto("/demo/app/agendas", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Q2 board meeting agenda — Apr 23, 2026 Draft" }).click();
+    const agendaInputValues = await page.locator("input.input").evaluateAll((inputs) =>
+      inputs.map((input) => (input as HTMLInputElement).value),
+    );
+    expect(agendaInputValues).toContain("Volunteer program update");
+
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe("Theme preference", () => {
   test("defaults to system theme and follows OS theme changes", async ({
     page,

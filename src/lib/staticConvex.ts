@@ -2984,13 +2984,20 @@ function parseStaticAgendaItems(value?: string) {
   try {
     const parsed = JSON.parse(value);
     if (!Array.isArray(parsed)) return [];
-    const entries: Array<{ title: string; depth: 0 | 1 }> = [];
+    const entries: Array<{ title: string; depth: 0 | 1; type?: string; presenter?: string; details?: string; motionText?: string }> = [];
     let hasRoot = false;
     for (const entry of parsed) {
       const title = typeof entry === "string" ? entry.trim() : String(entry?.title ?? "").trim();
       if (!title) continue;
       const depth: 0 | 1 = typeof entry === "object" && entry?.depth === 1 && hasRoot ? 1 : 0;
-      entries.push({ title, depth });
+      entries.push({
+        title,
+        depth,
+        type: typeof entry === "object" ? entry?.type : undefined,
+        presenter: typeof entry === "object" ? entry?.presenter : undefined,
+        details: typeof entry === "object" ? entry?.details : undefined,
+        motionText: typeof entry === "object" ? entry?.motionText : undefined,
+      });
       if (depth === 0) hasRoot = true;
     }
     return entries;
@@ -3592,9 +3599,12 @@ function queryResult(name: string, args: StaticArgs) {
         societyId: meeting.societyId,
         agendaId: `static_agenda_${meeting._id}`,
         order,
-        type: staticAgendaItemType(entry.title),
+        type: entry.type || staticAgendaItemType(entry.title),
         title: entry.title,
         depth: entry.depth,
+        presenter: entry.presenter,
+        details: entry.details,
+        motionText: entry.motionText,
         createdAtISO: meeting.scheduledAt,
       }));
       if (items.length === 0) return null;
@@ -4599,9 +4609,74 @@ class StaticDemoDexieStore {
       const agendaJson = JSON.stringify(items.map((item: any) => ({
         title: String(item?.title ?? "").trim(),
         depth: item?.depth === 1 ? 1 : 0,
+        type: item?.type,
+        presenter: item?.presenter,
+        details: item?.details,
+        motionText: item?.motionText,
       })).filter((item: any) => item.title));
       const updated = this.patchRow("meetings", args?.meetingId, { agendaJson });
+      const minute = this.cache.minutes.find((row) => row.meetingId === args?.meetingId);
+      if (minute) {
+        this.patchRow("minutes", minute._id, {
+          sections: items.filter((item: any) => String(item?.title ?? "").trim()).map((item: any) => ({
+            title: String(item.title).trim(),
+            type: item.type || staticAgendaItemType(item.title),
+            presenter: item.presenter,
+            discussion: item.details ?? "",
+            decisions: [],
+            actionItems: [],
+            depth: item.depth === 1 ? 1 : 0,
+          })),
+          motions: items
+            .map((item: any, index: number) => ({
+              text: String(item.motionText ?? "").trim(),
+              outcome: "Pending",
+              resolutionType: "Ordinary",
+              sectionIndex: index,
+              sectionTitle: item.title,
+            }))
+            .filter((motion: any) => motion.text),
+        });
+      }
       return updated ? `static_agenda_${updated._id}` : null;
+    }
+
+    if (name === "agendas:startMinutesFromAgenda") {
+      const meetingId = String(args?.agendaId ?? "").replace(/^static_agenda_/, "");
+      const meeting = byId(this.cache.meetings, meetingId);
+      if (!meeting) return { minutesId: null, reused: false };
+      const existing = this.cache.minutes.find((row) => row.meetingId === meetingId);
+      if (existing) return { minutesId: existing._id, reused: true };
+      const items = parseStaticAgendaItems(meeting.agendaJson);
+      const now = Date.now();
+      const row = {
+        _id: `static_minutes_${now}`,
+        _creationTime: now,
+        societyId: meeting.societyId,
+        meetingId,
+        heldAt: meeting.scheduledAt,
+        attendees: meeting.attendeeIds ?? [],
+        absent: [],
+        quorumMet: false,
+        quorumRequired: meeting.quorumRequired,
+        discussion: "",
+        sections: items.map((item) => ({
+          title: item.title,
+          type: staticAgendaItemType(item.title),
+          discussion: "",
+          decisions: [],
+          actionItems: [],
+          depth: item.depth,
+        })),
+        motions: [],
+        decisions: [],
+        actionItems: [],
+      };
+      this.cache.minutes = upsertStaticRow(this.cache.minutes, row);
+      void this.db?.minutes.put(cloneStaticRow(row));
+      this.patchRow("meetings", meetingId, { minutesId: row._id });
+      this.notify();
+      return { minutesId: row._id, reused: false };
     }
 
     if (name === "minutes:update") {
