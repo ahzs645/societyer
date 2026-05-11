@@ -1974,6 +1974,7 @@ const tables: Record<string, any[]> = {
       status: "Active",
     },
   ],
+  orgChartAssignments: [],
   filings,
   financials,
   operatingSubscriptions,
@@ -3894,6 +3895,8 @@ function queryResult(name: string, args: StaticArgs) {
       return profitAndLoss(args);
     case "treasury:restrictedFunds":
       return restrictedFunds();
+    case "orgChartAssignments:list":
+      return tables.orgChartAssignments;
     case "users:get":
       return byId(users, args?.id) ?? users[0];
     case "volunteers:applications":
@@ -4232,6 +4235,8 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
   if (name === "meetings:setPackageReviewStatus") return null;
   if (name === "meetingMaterials:attach") return "static_material_new";
   if (name === "meetingMaterials:remove") return null;
+  if (name === "orgChartAssignments:upsert") return "static_org_chart_assignment";
+  if (name === "orgChartAssignments:remove") return null;
   if (name === "expenseReports:upsert") return "static_expense_new";
   if (name === "expenseReports:setStatus") return null;
   if (name === "expenseReports:remove") return null;

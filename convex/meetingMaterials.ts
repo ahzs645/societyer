@@ -54,10 +54,16 @@ export const packageForMeeting = query({
     ]);
 
     const materialRows = await Promise.all(
-      materials.map(async (material) => ({
-        ...material,
-        document: await ctx.db.get(material.documentId),
-      })),
+      materials.map(async (material) => {
+        const document = await ctx.db.get(material.documentId);
+        const downloadUrl = document?.storageId
+          ? await ctx.storage.getUrl(document.storageId)
+          : null;
+        return {
+          ...material,
+          document: document ? { ...document, downloadUrl } : document,
+        };
+      }),
     );
 
     const agenda = parseAgenda(meeting.agendaJson);

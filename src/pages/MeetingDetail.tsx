@@ -136,6 +136,57 @@ function buildMeetingOutboxEmail({
   return lines.filter((line, index, array) => line || array[index - 1] !== "").join("\n");
 }
 
+function sanitizeAttachmentFileName(value: string, fallback: string) {
+  const clean = value.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim();
+  return clean || fallback;
+}
+
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
+  }
+  return btoa(binary).replace(/.{1,76}/g, "$&\r\n").trim();
+}
+
+function buildEmlMessage({
+  subject,
+  body,
+  attachments,
+}: {
+  subject: string;
+  body: string;
+  attachments: Array<{ fileName: string; mimeType: string; bytes: Uint8Array }>;
+}) {
+  const boundary = `societyer-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const safeSubject = subject.replace(/\r?\n/g, " ");
+  const parts = [
+    `Subject: ${safeSubject}`,
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
+    "Content-Type: text/plain; charset=utf-8",
+    "Content-Transfer-Encoding: 8bit",
+    "",
+    body,
+    "",
+    ...attachments.flatMap((attachment) => [
+      `--${boundary}`,
+      `Content-Type: ${attachment.mimeType || "application/octet-stream"}; name="${attachment.fileName.replace(/"/g, "'")}"`,
+      "Content-Transfer-Encoding: base64",
+      `Content-Disposition: attachment; filename="${attachment.fileName.replace(/"/g, "'")}"`,
+      "",
+      bytesToBase64(attachment.bytes),
+      "",
+    ]),
+    `--${boundary}--`,
+    "",
+  ];
+  return parts.join("\r\n");
+}
+
 export function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
@@ -1045,7 +1096,7 @@ export function MeetingDetailPage() {
     URL.revokeObjectURL(url);
   };
 
-  const downloadOutboxPackage = () => {
+  const downloadOutboxPackage = async () => {
     if (!meeting || !society) return;
     const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
     const subject = `${meeting.title} package - ${formatDateTime(meeting.scheduledAt)}`;
@@ -1059,6 +1110,10 @@ export function MeetingDetailPage() {
         paperlessUrl: doc.paperlessDocumentUrl ?? doc.paperlessUrl ?? null,
         paperlessId: doc.paperlessDocumentId ?? null,
         documentId: doc._id ?? material.documentId ?? null,
+        downloadUrl: doc.downloadUrl ?? null,
+        mimeType: doc.mimeType ?? "application/octet-stream",
+        content: doc.content ?? null,
+        url: doc.url ?? null,
         storage: doc.storageId || doc.storageKey ? "Uploaded in Societyer" : "Reference only",
         notes: material.notes ?? "",
       };
@@ -1071,16 +1126,17 @@ export function MeetingDetailPage() {
       minutes,
       joinDetails,
     });
-    const files: Record<string, string> = {
+    const body = buildMeetingOutboxEmail({
+      societyName: society.name,
+      meeting,
+      joinDetails,
+      materials,
+      packageReviewStatus,
+      packageReviewBlockers,
+    });
+    const files: Record<string, string | Uint8Array | ArrayBuffer | Blob> = {
       "email/subject.txt": subject,
-      "email/body.txt": buildMeetingOutboxEmail({
-        societyName: society.name,
-        meeting,
-        joinDetails,
-        materials,
-        packageReviewStatus,
-        packageReviewBlockers,
-      }),
+      "email/body.txt": body,
       "meeting-pack.html": packHtml,
       "agenda.txt": agenda.length ? agenda.map((item, index) => `${index + 1}. ${item}`).join("\n") : "No agenda items recorded.",
       "attachments-manifest.json": JSON.stringify({
@@ -1102,12 +1158,14 @@ export function MeetingDetailPage() {
           priority: task.priority,
           dueDate: task.dueDate ?? null,
         })),
-        note: "Binary document files are referenced in this bundle. Download source files from Societyer or Paperless when storage URLs are not embedded.",
+        note: "When source files were available to this browser, binary attachments are embedded under attachments/files and in email/message.eml. Reference-only records include .txt and .url files.",
       }, null, 2),
     };
     if (minutes) {
       files["minutes-preview.html"] = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(meeting.title)} minutes</title></head><body>${renderExportBody()}</body></html>`;
     }
+    const emlAttachments: Array<{ fileName: string; mimeType: string; bytes: Uint8Array }> = [];
+    const failedDownloads: string[] = [];
     for (const material of materials) {
       const slug = `${String(material.number).padStart(2, "0")}-${slugifyFilePart(material.label)}`;
       files[`attachments/${slug}.txt`] = [
@@ -1118,17 +1176,58 @@ export function MeetingDetailPage() {
         `Paperless ID: ${material.paperlessId ?? "not linked"}`,
         `Paperless URL: ${material.paperlessUrl ?? "not linked"}`,
         `Storage: ${material.storage}`,
+        `Source URL: ${material.url ?? "not linked"}`,
+        `Download URL embedded: ${material.downloadUrl ? "yes" : "no"}`,
         material.notes ? `Notes: ${material.notes}` : "",
       ].filter(Boolean).join("\n");
       if (material.paperlessUrl) {
         files[`attachments/${slug}.url`] = `[InternetShortcut]\nURL=${material.paperlessUrl}\n`;
       }
+      if (material.url) {
+        files[`attachments/${slug}-source.url`] = `[InternetShortcut]\nURL=${material.url}\n`;
+      }
+      const fileName = sanitizeAttachmentFileName(
+        material.fileName || `${slug}${material.content ? ".txt" : ".bin"}`,
+        `${slug}.bin`,
+      );
+      if (material.content) {
+        const textName = fileName.includes(".") ? fileName : `${fileName}.txt`;
+        files[`attachments/files/${slug}-${textName}`] = material.content;
+        emlAttachments.push({
+          fileName: textName,
+          mimeType: material.mimeType || "text/plain",
+          bytes: new TextEncoder().encode(material.content),
+        });
+      } else if (material.downloadUrl) {
+        try {
+          const response = await fetch(material.downloadUrl);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          files[`attachments/files/${slug}-${fileName}`] = bytes;
+          emlAttachments.push({
+            fileName,
+            mimeType: material.mimeType || response.headers.get("content-type") || "application/octet-stream",
+            bytes,
+          });
+        } catch (err: any) {
+          failedDownloads.push(`${material.label}: ${err?.message ?? "download failed"}`);
+        }
+      }
+    }
+    files["email/message.eml"] = buildEmlMessage({ subject, body, attachments: emlAttachments });
+    if (failedDownloads.length) {
+      files["attachments/download-errors.txt"] = failedDownloads.join("\n");
     }
     downloadStoredZip({
       filename: `${safe}-outbox-package-${formatDate(meeting.scheduledAt, "yyyy-MM-dd")}.zip`,
       files,
     });
-    toast.success("Outbox package generated", "ZIP includes the email draft, meeting pack, minutes preview, agenda, and attachment manifest.");
+    toast.success(
+      "Outbox package generated",
+      emlAttachments.length
+        ? `ZIP includes ${emlAttachments.length} binary attachment${emlAttachments.length === 1 ? "" : "s"} and an openable .eml draft.`
+        : "ZIP includes an openable .eml draft plus references for materials without downloadable files.",
+    );
   };
 
   const setLinkedTaskStatus = async (taskId: string, status: string) => {

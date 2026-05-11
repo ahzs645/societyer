@@ -750,7 +750,18 @@ export function MeetingMinutesColumn({
   };
 
   const assignMotionToSection = async (motionIndex: number, targetIndexValue: string) => {
+    const existingMotion = motions[motionIndex];
+    const existingIndex = assignedSectionIndexForMotion(existingMotion, sections);
     if (targetIndexValue === "") {
+      if (existingIndex != null) {
+        const ok = await confirm({
+          title: "Unassign motion?",
+          message: "This removes the agenda link from the motion. The motion itself will stay in the minutes.",
+          confirmLabel: "Unassign",
+          tone: "warn",
+        });
+        if (!ok) return;
+      }
       const next = motions.map((motion, index) => {
         if (index !== motionIndex) return motion;
         const { sectionIndex: _sectionIndex, sectionTitle: _sectionTitle, ...rest } = motion;
@@ -761,6 +772,17 @@ export function MeetingMinutesColumn({
     }
     const targetIndex = Number(targetIndexValue);
     if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= sections.length) return;
+    if (existingIndex != null && existingIndex !== targetIndex) {
+      const currentTitle = sections[existingIndex]?.title || "the current agenda item";
+      const targetTitle = sections[targetIndex]?.title || "the new agenda item";
+      const ok = await confirm({
+        title: "Reassign motion?",
+        message: `Move this motion from "${currentTitle}" to "${targetTitle}"? A motion can only belong to one agenda item.`,
+        confirmLabel: "Reassign",
+        tone: "warn",
+      });
+      if (!ok) return;
+    }
     const target = sections[targetIndex] ?? {};
     const next = motions.map((motion, index) =>
       index === motionIndex

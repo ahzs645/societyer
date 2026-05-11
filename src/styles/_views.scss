@@ -1121,6 +1121,16 @@
   align-items: flex-end;
   flex-shrink: 0;
 }
+.motion__action-strip,
+.motion-add-before-adjournment {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+.motion-add-before-adjournment {
+  margin: var(--s-2) 0;
+}
 // Long-title escape hatch: drives off the rendered title via a class on
 // .motion__head. When the title heuristic flags it, the action column drops
 // the title gets the card's full inline width — actions sit at the top so the
@@ -2941,7 +2951,6 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   border-radius: var(--r-sm);
   background: var(--bg-base);
   color: var(--text-primary);
-  text-decoration: none;
 }
 .org-card:hover {
   border-color: var(--border-strong);
@@ -2952,19 +2961,45 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   justify-content: flex-start;
   background: var(--bg-subtle);
 }
-.org-card > div {
-  min-width: 0;
+.org-card--root > div {
   display: grid;
   gap: 2px;
 }
+.org-card__main {
+  min-width: 0;
+  display: grid;
+  gap: var(--s-2);
+  flex: 1;
+}
+.org-card__main > a {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  color: inherit;
+  text-decoration: none;
+}
 .org-card strong,
-.org-card span {
+.org-card span,
+.org-card select {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 .org-card span {
   color: var(--text-tertiary);
   font-size: var(--fs-sm);
+}
+.org-card__manager {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s-2);
+  align-items: center;
+}
+.org-card__manager .input {
+  height: 32px;
+  font-size: var(--fs-sm);
+}
+.org-card__reports {
+  color: var(--text-secondary);
 }
 
 @media (max-width: 980px) {

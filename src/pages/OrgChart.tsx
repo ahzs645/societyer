@@ -1,18 +1,31 @@
 import { useMemo } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge } from "../components/ui";
-import { Briefcase, HandHeart, Network, UserCog, UsersRound } from "lucide-react";
+import { Briefcase, HandHeart, Network, UserCog, UsersRound, X } from "lucide-react";
+
+type OrgPerson = {
+  type: "director" | "employee" | "volunteer";
+  id: string;
+  name: string;
+  role: string;
+  status?: string;
+  href: string;
+  note?: string;
+};
 
 export function OrgChartPage() {
   const society = useSociety();
   const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
   const employees = useQuery(api.employees.list, society ? { societyId: society._id } : "skip");
   const volunteers = useQuery(api.volunteers.list, society ? { societyId: society._id } : "skip");
+  const assignments = useQuery(api.orgChartAssignments.list, society ? { societyId: society._id } : "skip");
+  const upsertAssignment = useMutation(api.orgChartAssignments.upsert);
+  const removeAssignment = useMutation(api.orgChartAssignments.remove);
 
   const currentDirectors = useMemo(
     () => ((directors ?? []) as any[]).filter(isCurrentDirector),
@@ -26,6 +39,63 @@ export function OrgChartPage() {
     () => ((volunteers ?? []) as any[]).filter((volunteer) => ["Active", "Applied", "NeedsReview"].includes(volunteer.status)),
     [volunteers],
   );
+  const directorPeople: OrgPerson[] = currentDirectors.map((director) => ({
+    type: "director",
+    id: String(director._id),
+    name: `${director.firstName} ${director.lastName}`.trim(),
+    role: director.position || "Director",
+    status: director.status,
+    href: "/app/directors",
+  }));
+  const employeePeople: OrgPerson[] = activeEmployees.map((employee) => ({
+    type: "employee",
+    id: String(employee._id),
+    name: `${employee.firstName} ${employee.lastName}`.trim(),
+    role: employee.role || employee.employmentType,
+    status: employee.employmentType,
+    href: "/app/employees",
+    note: employee.notes,
+  }));
+  const volunteerPeople: OrgPerson[] = activeVolunteers.map((volunteer) => ({
+    type: "volunteer",
+    id: String(volunteer._id),
+    name: `${volunteer.firstName} ${volunteer.lastName}`.trim(),
+    role: volunteer.roleWanted || "Volunteer",
+    status: volunteer.status,
+    href: "/app/volunteers",
+    note: volunteer.notes,
+  }));
+  const allPeople = [...directorPeople, ...employeePeople, ...volunteerPeople];
+  const assignmentBySubject = new Map(
+    ((assignments ?? []) as any[]).map((assignment) => [`${assignment.subjectType}:${assignment.subjectId}`, assignment]),
+  );
+  const managerOptions = allPeople.map((person) => ({
+    value: `${person.type}:${person.id}`,
+    label: `${person.name || "Unnamed person"} - ${person.role || person.type}`,
+    person,
+  }));
+  const saveManager = async (person: OrgPerson, value: string) => {
+    if (!society) return;
+    if (!value) {
+      await removeAssignment({
+        societyId: society._id,
+        subjectType: person.type,
+        subjectId: person.id,
+      });
+      return;
+    }
+    const manager = managerOptions.find((option) => option.value === value)?.person;
+    if (!manager) return;
+    await upsertAssignment({
+      societyId: society._id,
+      subjectType: person.type,
+      subjectId: person.id,
+      subjectName: person.name || "Unnamed person",
+      managerType: manager.type,
+      managerId: manager.id,
+      managerName: manager.name || "Unnamed person",
+    });
+  };
 
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
@@ -57,13 +127,13 @@ export function OrgChartPage() {
             count={currentDirectors.length}
             empty="No active directors recorded."
           >
-            {currentDirectors.map((director) => (
+            {directorPeople.map((person) => (
               <OrgPersonCard
-                key={director._id}
-                name={`${director.firstName} ${director.lastName}`}
-                role={director.position || "Director"}
-                status={director.status}
-                href="/app/directors"
+                key={person.id}
+                person={person}
+                assignment={assignmentBySubject.get(`${person.type}:${person.id}`)}
+                managerOptions={managerOptions.filter((option) => option.value !== `${person.type}:${person.id}`)}
+                onSaveManager={saveManager}
               />
             ))}
           </OrgLane>
@@ -74,14 +144,13 @@ export function OrgChartPage() {
             count={activeEmployees.length}
             empty="No active employees recorded."
           >
-            {activeEmployees.map((employee) => (
+            {employeePeople.map((person) => (
               <OrgPersonCard
-                key={employee._id}
-                name={`${employee.firstName} ${employee.lastName}`}
-                role={employee.role || employee.employmentType}
-                status={employee.employmentType}
-                href="/app/employees"
-                note={employee.notes}
+                key={person.id}
+                person={person}
+                assignment={assignmentBySubject.get(`${person.type}:${person.id}`)}
+                managerOptions={managerOptions.filter((option) => option.value !== `${person.type}:${person.id}`)}
+                onSaveManager={saveManager}
               />
             ))}
           </OrgLane>
@@ -92,14 +161,13 @@ export function OrgChartPage() {
             count={activeVolunteers.length}
             empty="No active volunteers recorded."
           >
-            {activeVolunteers.map((volunteer) => (
+            {volunteerPeople.map((person) => (
               <OrgPersonCard
-                key={volunteer._id}
-                name={`${volunteer.firstName} ${volunteer.lastName}`}
-                role={volunteer.roleWanted || "Volunteer"}
-                status={volunteer.status}
-                href="/app/volunteers"
-                note={volunteer.notes}
+                key={person.id}
+                person={person}
+                assignment={assignmentBySubject.get(`${person.type}:${person.id}`)}
+                managerOptions={managerOptions.filter((option) => option.value !== `${person.type}:${person.id}`)}
+                onSaveManager={saveManager}
               />
             ))}
           </OrgLane>
@@ -108,7 +176,7 @@ export function OrgChartPage() {
         <div className="org-chart__note">
           <strong>Manager assignments</strong>
           <p>
-            This chart is derived from existing records. The current employee and volunteer schemas do not include a dedicated manager or reports-to field, so formal reporting lines are not yet editable.
+            Assign a reports-to relationship on any active person. Assignments are stored separately from the source director, employee, and volunteer records.
           </p>
         </div>
       </div>
@@ -143,26 +211,48 @@ function OrgLane({
 }
 
 function OrgPersonCard({
-  name,
-  role,
-  status,
-  href,
-  note,
+  person,
+  assignment,
+  managerOptions,
+  onSaveManager,
 }: {
-  name: string;
-  role: string;
-  status?: string;
-  href: string;
-  note?: string;
+  person: OrgPerson;
+  assignment?: any;
+  managerOptions: Array<{ value: string; label: string; person: OrgPerson }>;
+  onSaveManager: (person: OrgPerson, value: string) => void | Promise<void>;
 }) {
+  const selected = assignment?.managerType && assignment?.managerId
+    ? `${assignment.managerType}:${assignment.managerId}`
+    : "";
   return (
-    <Link className="org-card" to={href} title={note || undefined}>
-      <div>
-        <strong>{name.trim() || "Unnamed person"}</strong>
-        <span>{role || "Unassigned role"}</span>
+    <div className="org-card" title={person.note || undefined}>
+      <div className="org-card__main">
+        <Link to={person.href}>
+          <strong>{person.name.trim() || "Unnamed person"}</strong>
+          <span>{person.role || "Unassigned role"}</span>
+        </Link>
+        <div className="org-card__manager">
+          <select
+            className="input"
+            value={selected}
+            aria-label={`Manager for ${person.name}`}
+            onChange={(event) => onSaveManager(person, event.target.value)}
+          >
+            <option value="">No manager assigned</option>
+            {managerOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+          {selected && (
+            <button className="btn-action btn-action--icon" type="button" aria-label={`Clear manager for ${person.name}`} onClick={() => onSaveManager(person, "")}>
+              <X size={12} />
+            </button>
+          )}
+        </div>
+        {assignment?.managerName && <span className="org-card__reports">Reports to {assignment.managerName}</span>}
       </div>
-      {status && <Badge tone={status === "Active" ? "success" : "neutral"}>{status}</Badge>}
-    </Link>
+      {person.status && <Badge tone={person.status === "Active" ? "success" : "neutral"}>{person.status}</Badge>}
+    </div>
   );
 }
 

@@ -1769,6 +1769,20 @@ export default defineSchema({
     .index("by_committee", ["committeeId"])
     .index("by_society", ["societyId"]),
 
+  orgChartAssignments: defineTable({
+    societyId: v.id("societies"),
+    subjectType: v.string(), // director | employee | volunteer
+    subjectId: v.string(),
+    subjectName: v.string(),
+    managerType: v.optional(v.string()), // director | employee | volunteer
+    managerId: v.optional(v.string()),
+    managerName: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_subject", ["societyId", "subjectType", "subjectId"]),
+
   volunteers: defineTable({
     societyId: v.id("societies"),
     memberId: v.optional(v.id("members")),

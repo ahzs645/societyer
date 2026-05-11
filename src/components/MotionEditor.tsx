@@ -275,6 +275,14 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
         />
       ))}
 
+      {!adding && !hideInlineAdd && (
+        <div className="motion-add-before-adjournment">
+          <button className="btn-action" onClick={() => setAdding(true)}>
+            <Plus size={12} /> Add motion
+          </button>
+        </div>
+      )}
+
       {adding && (
         <div className="motion" style={{ borderColor: "var(--accent)" }}>
           <Field label="Motion">
@@ -403,14 +411,6 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
           />
         ))}
       </div>
-
-      {!adding && !hideInlineAdd && (
-        <div style={{ marginTop: 8 }}>
-          <button className="btn-action" onClick={() => setAdding(true)}>
-            <Plus size={12} /> Add motion
-          </button>
-        </div>
-      )}
     </div>
   );
 });
@@ -490,7 +490,7 @@ function MotionRow({
             )}
             {!expanded && <Badge tone={tone as any}>{motion.outcome}</Badge>}
             {assignedAgendaLabel && !procedural && (
-              <Badge tone="neutral">{assignedAgendaLabel}</Badge>
+              <Badge tone="neutral">Agenda: {assignedAgendaLabel}</Badge>
             )}
             {thresholdMet != null && (
               <Badge tone={thresholdMet ? "success" : "danger"}>
@@ -500,7 +500,7 @@ function MotionRow({
           </div>
         </div>
         <div className="motion__actions">
-          <div className="row row--nowrap" style={{ gap: 4 }}>
+          <div className="motion__action-strip">
             {isPending && (
               <>
                 <button
@@ -669,6 +669,20 @@ function motionBelongsToAgendaSection(motion: Motion, section: string | MotionAg
   const haystack = normalizeMotionText(haystackRaw);
   const motionText = normalizeMotionText(motion.text);
   if (!haystack || !motionText) return false;
+  if (
+    haystack.includes("agenda") &&
+    /\b(approve|adopt|approval)\b/.test(motionText) &&
+    motionText.includes("agenda")
+  ) {
+    return true;
+  }
+  if (
+    /\b(previous )?minutes?\b/.test(haystack) &&
+    /\b(approve|adopt|approval)\b/.test(motionText) &&
+    /\bminutes?\b/.test(motionText)
+  ) {
+    return true;
+  }
 
   const amounts = moneyAmounts(motion.text);
   if (amounts.length && !amounts.some((amount) => haystackRaw.replace(/\s+/g, "").includes(amount))) return false;

@@ -83,6 +83,7 @@ import type * as motionTemplates from "../motionTemplates.js";
 import type * as notes from "../notes.js";
 import type * as notifications from "../notifications.js";
 import type * as objectMetadata from "../objectMetadata.js";
+import type * as orgChartAssignments from "../orgChartAssignments.js";
 import type * as organizationDetails from "../organizationDetails.js";
 import type * as organizationHistory from "../organizationHistory.js";
 import type * as paperless from "../paperless.js";
@@ -212,6 +213,7 @@ declare const fullApi: ApiFromModules<{
   notes: typeof notes;
   notifications: typeof notifications;
   objectMetadata: typeof objectMetadata;
+  orgChartAssignments: typeof orgChartAssignments;
   organizationDetails: typeof organizationDetails;
   organizationHistory: typeof organizationHistory;
   paperless: typeof paperless;

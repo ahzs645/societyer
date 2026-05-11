@@ -102,7 +102,7 @@ export function downloadStoredZip({
   files,
 }: {
   filename: string;
-  files: Record<string, string>;
+  files: Record<string, string | Uint8Array | ArrayBuffer | Blob>;
 }) {
   const zipBytes = createStoredZip(files);
   const blob = new Blob([zipBytes], { type: "application/zip" });
@@ -623,7 +623,14 @@ function escapeXml(value: string) {
     .replace(/'/g, "&apos;");
 }
 
-function createStoredZip(files: Record<string, string>) {
+function zipContentBytesSync(content: string | Uint8Array | ArrayBuffer | Blob, encoder: TextEncoder) {
+  if (typeof content === "string") return encoder.encode(content);
+  if (content instanceof Uint8Array) return content;
+  if (content instanceof ArrayBuffer) return new Uint8Array(content);
+  throw new Error("Blob ZIP entries must be converted to bytes before calling createStoredZip.");
+}
+
+function createStoredZip(files: Record<string, string | Uint8Array | ArrayBuffer | Blob>) {
   const encoder = new TextEncoder();
   const localParts: Uint8Array[] = [];
   const centralParts: Uint8Array[] = [];
@@ -631,7 +638,7 @@ function createStoredZip(files: Record<string, string>) {
 
   for (const [name, content] of Object.entries(files)) {
     const nameBytes = encoder.encode(name);
-    const data = encoder.encode(content);
+    const data = zipContentBytesSync(content, encoder);
     const crc = crc32(data);
     const localHeader = concatBytes(
       le32(0x04034b50),
@@ -1258,6 +1265,16 @@ function renderNumberedAgendaMinutes({
   const topicMotions = minutes.motions.filter((motion) => motion !== adjournmentMotion);
   const sectionTitles = new Set(sections.map((section) => section.title));
   const extraSections = recordedSections.filter((section) => !sectionTitles.has(section.title));
+  const unplacedTopicMotions = topicMotions.filter((motion) =>
+    !sections.some((section: any, sectionIndex: number) =>
+      motionBelongsToAgendaSection(
+        motion,
+        sectionIndex,
+        section.title,
+        agendaSectionSearchText(section),
+      ),
+    ),
+  );
 
   return `
     <h1>${eh(minutesTitleForSampleStyle(society.name, meeting))}</h1>
@@ -1295,6 +1312,7 @@ function renderNumberedAgendaMinutes({
       }).join("");
     })()}
     ${extraSections.length ? renderMinuteSections(extraSections, options) : ""}
+    ${unplacedTopicMotions.length ? `<h2>Other Motions</h2>${unplacedTopicMotions.map(renderSampleMotion).join("")}` : ""}
 
     <h2>Adjournment</h2>
     ${adjournmentMotion ? renderSampleMotion(adjournmentMotion) : ""}
@@ -2089,6 +2107,22 @@ function motionBelongsToAgendaSection(
   }
 
   const sectionText = sectionSearchText || sectionTitle;
+  const normalizedSection = normalizeExportText(sectionText);
+  const normalizedMotion = normalizeExportText(motion.text);
+  if (
+    /\bagenda\b/.test(normalizedSection) &&
+    /\b(approve|adopt|approval)\b/.test(normalizedMotion) &&
+    /\bagenda\b/.test(normalizedMotion)
+  ) {
+    return true;
+  }
+  if (
+    /\b(minutes?|previous minutes?|adopt minutes?)\b/.test(normalizedSection) &&
+    /\b(approve|adopt|approval)\b/.test(normalizedMotion) &&
+    /\bminutes?\b/.test(normalizedMotion)
+  ) {
+    return true;
+  }
   const amounts = moneyAmounts(motion.text);
   if (amounts.length) {
     const compactSectionText = String(sectionText).replace(/\s+/g, "");
