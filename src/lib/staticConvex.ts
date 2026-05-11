@@ -2971,10 +2971,41 @@ function parseStaticAgenda(value?: string) {
   if (!value) return [];
   try {
     const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.map(String) : [];
+    return Array.isArray(parsed)
+      ? parsed.map((entry) => typeof entry === "string" ? entry : String(entry?.title ?? "")).filter(Boolean)
+      : [];
   } catch {
     return [];
   }
+}
+
+function parseStaticAgendaItems(value?: string) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    const entries: Array<{ title: string; depth: 0 | 1 }> = [];
+    let hasRoot = false;
+    for (const entry of parsed) {
+      const title = typeof entry === "string" ? entry.trim() : String(entry?.title ?? "").trim();
+      if (!title) continue;
+      const depth: 0 | 1 = typeof entry === "object" && entry?.depth === 1 && hasRoot ? 1 : 0;
+      entries.push({ title, depth });
+      if (depth === 0) hasRoot = true;
+    }
+    return entries;
+  } catch {
+    return [];
+  }
+}
+
+function staticAgendaItemType(title: string) {
+  const lower = title.toLowerCase();
+  if (lower.includes("motion") || lower.includes("adopt") || lower.includes("approve")) return "motion";
+  if (lower.includes("report") || lower.includes("financial")) return "report";
+  if (lower.includes("break")) return "break";
+  if (lower.includes("camera") || lower.includes("closed") || lower.includes("executive")) return "executive_session";
+  return "discussion";
 }
 
 function staticFundingSourcesList() {
@@ -3553,6 +3584,44 @@ function queryResult(name: string, args: StaticArgs) {
       return [];
     case "agm:runForMeeting":
       return { _id: "static_agm_run", meetingId: args?.meetingId, status: "Ready", steps: [] };
+    case "agendas:getForMeeting": {
+      const meeting = byId(meetings, args?.meetingId);
+      if (!meeting) return null;
+      const items = parseStaticAgendaItems(meeting.agendaJson).map((entry, order) => ({
+        _id: `static_agenda_item_${meeting._id}_${order}`,
+        societyId: meeting.societyId,
+        agendaId: `static_agenda_${meeting._id}`,
+        order,
+        type: staticAgendaItemType(entry.title),
+        title: entry.title,
+        depth: entry.depth,
+        createdAtISO: meeting.scheduledAt,
+      }));
+      if (items.length === 0) return null;
+      return {
+        agenda: {
+          _id: `static_agenda_${meeting._id}`,
+          societyId: meeting.societyId,
+          meetingId: meeting._id,
+          title: `${meeting.title} agenda`,
+          status: "Draft",
+          createdAtISO: meeting.scheduledAt,
+          updatedAtISO: meeting.updatedAtISO ?? meeting.scheduledAt,
+        },
+        items,
+      };
+    }
+    case "agendas:listForSociety":
+      return scopedRows(meetings, args)
+        .map((meeting) => ({
+          _id: `static_agenda_${meeting._id}`,
+          societyId: meeting.societyId,
+          meetingId: meeting._id,
+          title: `${meeting.title} agenda`,
+          status: "Draft",
+          createdAtISO: meeting.scheduledAt,
+          updatedAtISO: meeting.updatedAtISO ?? meeting.scheduledAt,
+        }));
     case "attestations:missingForYear":
       return directors.filter((director) => director._id === "static_director_sam");
     case "bylawRules:getActive":
@@ -4495,6 +4564,18 @@ class StaticDemoDexieStore {
 
   queryResult(name: string, args: StaticArgs) {
     switch (name) {
+      case "agendas:getForMeeting":
+        return this.agendaForMeeting(args?.meetingId);
+      case "agendas:get": {
+        const meetingId = String(args?.agendaId ?? "").replace(/^static_agenda_/, "");
+        return this.agendaForMeeting(meetingId);
+      }
+      case "agendas:listForMeeting": {
+        const record = this.agendaForMeeting(args?.meetingId);
+        return record ? [record.agenda] : [];
+      }
+      case "agendas:listForSociety":
+        return scopedRows(this.cache.meetings, args).map((meeting) => this.agendaSummaryForMeeting(meeting));
       case "meetings:get":
         return byId(this.cache.meetings, args?.id) ?? this.cache.meetings[0] ?? null;
       case "meetings:list":
@@ -4511,6 +4592,16 @@ class StaticDemoDexieStore {
     if (name === "meetings:update") {
       const updated = this.patchRow("meetings", args?.id, args?.patch ?? {});
       return updated?._id ?? null;
+    }
+
+    if (name === "agendas:syncForMeeting") {
+      const items = Array.isArray(args?.items) ? args.items : [];
+      const agendaJson = JSON.stringify(items.map((item: any) => ({
+        title: String(item?.title ?? "").trim(),
+        depth: item?.depth === 1 ? 1 : 0,
+      })).filter((item: any) => item.title));
+      const updated = this.patchRow("meetings", args?.meetingId, { agendaJson });
+      return updated ? `static_agenda_${updated._id}` : null;
     }
 
     if (name === "minutes:update") {
@@ -4535,6 +4626,35 @@ class StaticDemoDexieStore {
     }
 
     return undefined;
+  }
+
+  private agendaSummaryForMeeting(meeting: any) {
+    return {
+      _id: `static_agenda_${meeting._id}`,
+      societyId: meeting.societyId,
+      meetingId: meeting._id,
+      title: `${meeting.title} agenda`,
+      status: "Draft",
+      createdAtISO: meeting.scheduledAt,
+      updatedAtISO: meeting.updatedAtISO ?? meeting.scheduledAt,
+    };
+  }
+
+  private agendaForMeeting(meetingId: string | undefined) {
+    const meeting = byId(this.cache.meetings, meetingId);
+    if (!meeting) return null;
+    const items = parseStaticAgendaItems(meeting.agendaJson).map((entry, order) => ({
+      _id: `static_agenda_item_${meeting._id}_${order}`,
+      societyId: meeting.societyId,
+      agendaId: `static_agenda_${meeting._id}`,
+      order,
+      type: staticAgendaItemType(entry.title),
+      title: entry.title,
+      depth: entry.depth,
+      createdAtISO: meeting.scheduledAt,
+    }));
+    if (items.length === 0) return null;
+    return { agenda: this.agendaSummaryForMeeting(meeting), items };
   }
 
   private async hydrate(seed: Record<StaticDemoTableName, any[]>) {

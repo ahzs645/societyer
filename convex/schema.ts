@@ -3400,6 +3400,7 @@ export default defineSchema({
     order: v.number(),
     type: v.string(), // discussion | motion | report | break | executive_session
     title: v.string(),
+    depth: v.optional(v.union(v.literal(0), v.literal(1))),
     details: v.optional(v.string()),
     presenter: v.optional(v.string()),
     timeAllottedMinutes: v.optional(v.number()),

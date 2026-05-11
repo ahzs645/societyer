@@ -200,7 +200,7 @@ export function AgendaBuilderPage() {
                 }}
               >
                 <option value="">
-                  <BookOpen size={12} /> Add from motion library…
+                  Add from motion library…
                 </option>
                 {(templates ?? []).map((t: any) => (
                   <option key={t._id} value={t._id}>

@@ -124,7 +124,8 @@ export const createFromMeeting = mutation({
       .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
       .first();
     const motions = minutes?.motions ?? [];
-    const items = parseAgenda(meeting.agendaJson).map((entry, index) => {
+    const agenda = await getCanonicalAgendaEntries(ctx, meetingId, meeting.agendaJson);
+    const items = agenda.map((entry, index) => {
       const motion = motions.find((candidate: any) => candidate.sectionIndex === index);
       return {
         title: entry.title,
@@ -258,4 +259,28 @@ function parseAgenda(raw: string | undefined) {
       .map((title) => ({ title: title.trim(), depth: 0 as const }))
       .filter((entry) => entry.title);
   }
+}
+
+async function getCanonicalAgendaEntries(ctx: any, meetingId: any, fallbackAgendaJson: string | undefined) {
+  const agendas = await ctx.db
+    .query("agendas")
+    .withIndex("by_meeting", (q: any) => q.eq("meetingId", meetingId))
+    .collect();
+  agendas.sort((a: any, b: any) => a.createdAtISO.localeCompare(b.createdAtISO));
+  const agenda = agendas[0];
+  if (agenda) {
+    const items = await ctx.db
+      .query("agendaItems")
+      .withIndex("by_agenda", (q: any) => q.eq("agendaId", agenda._id))
+      .collect();
+    items.sort((a: any, b: any) => a.order - b.order);
+    const entries = items
+      .map((item: any) => ({
+        title: String(item.title ?? "").trim(),
+        depth: item.depth === 1 ? 1 as const : 0 as const,
+      }))
+      .filter((entry: any) => entry.title);
+    if (entries.length) return entries;
+  }
+  return parseAgenda(fallbackAgendaJson);
 }

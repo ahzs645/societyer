@@ -13,6 +13,26 @@ export const listForMeeting = query({
   },
 });
 
+export const getForMeeting = query({
+  args: { meetingId: v.id("meetings") },
+  returns: v.any(),
+  handler: async (ctx, { meetingId }) => {
+    const agendas = await ctx.db
+      .query("agendas")
+      .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
+      .collect();
+    agendas.sort((a, b) => a.createdAtISO.localeCompare(b.createdAtISO));
+    const agenda = agendas[0] ?? null;
+    if (!agenda) return null;
+    const items = await ctx.db
+      .query("agendaItems")
+      .withIndex("by_agenda", (q) => q.eq("agendaId", agenda._id))
+      .collect();
+    items.sort((a, b) => a.order - b.order);
+    return { agenda, items };
+  },
+});
+
 export const get = query({
   args: { agendaId: v.id("agendas") },
   returns: v.any(),
@@ -96,6 +116,7 @@ export const addItem = mutation({
     title: v.string(),
     details: v.optional(v.string()),
     presenter: v.optional(v.string()),
+    depth: v.optional(v.union(v.literal(0), v.literal(1))),
     timeAllottedMinutes: v.optional(v.number()),
     motionTemplateId: v.optional(v.id("motionTemplates")),
     motionBacklogId: v.optional(v.id("motionBacklog")),
@@ -132,6 +153,7 @@ export const addItem = mutation({
       title: args.title,
       details: args.details,
       presenter: args.presenter,
+      depth: args.depth,
       timeAllottedMinutes: args.timeAllottedMinutes,
       motionTemplateId: args.motionTemplateId,
       motionBacklogId: args.motionBacklogId,
@@ -147,6 +169,7 @@ export const updateItem = mutation({
     title: v.optional(v.string()),
     details: v.optional(v.string()),
     presenter: v.optional(v.string()),
+    depth: v.optional(v.union(v.literal(0), v.literal(1))),
     timeAllottedMinutes: v.optional(v.number()),
     motionText: v.optional(v.string()),
     outcome: v.optional(v.string()),
@@ -159,6 +182,115 @@ export const updateItem = mutation({
     return itemId;
   },
 });
+
+export const syncForMeeting = mutation({
+  args: {
+    societyId: v.id("societies"),
+    meetingId: v.id("meetings"),
+    title: v.optional(v.string()),
+    items: v.array(v.object({
+      title: v.string(),
+      depth: v.optional(v.union(v.literal(0), v.literal(1))),
+      type: v.optional(v.string()),
+      details: v.optional(v.string()),
+      presenter: v.optional(v.string()),
+      motionText: v.optional(v.string()),
+    })),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const meeting = await ctx.db.get(args.meetingId);
+    if (!meeting) throw new Error("Meeting not found");
+    if (meeting.societyId !== args.societyId) throw new Error("Meeting belongs to a different society");
+
+    const now = new Date().toISOString();
+    const existingAgendas = await ctx.db
+      .query("agendas")
+      .withIndex("by_meeting", (q) => q.eq("meetingId", args.meetingId))
+      .collect();
+    existingAgendas.sort((a, b) => a.createdAtISO.localeCompare(b.createdAtISO));
+
+    const agendaId = existingAgendas[0]?._id ?? await ctx.db.insert("agendas", {
+      societyId: args.societyId,
+      meetingId: args.meetingId,
+      title: args.title || `${meeting.title} agenda`,
+      status: "Draft",
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+
+    await ctx.db.patch(agendaId, {
+      title: args.title || existingAgendas[0]?.title || `${meeting.title} agenda`,
+      updatedAtISO: now,
+    });
+
+    const existingItems = await ctx.db
+      .query("agendaItems")
+      .withIndex("by_agenda", (q) => q.eq("agendaId", agendaId))
+      .collect();
+    existingItems.sort((a, b) => a.order - b.order);
+
+    const unusedExisting = new Set(existingItems.map((item) => String(item._id)));
+    const byTitle = new Map<string, any[]>();
+    for (const item of existingItems) {
+      const key = normalizeTitle(item.title);
+      if (!key) continue;
+      const rows = byTitle.get(key) ?? [];
+      rows.push(item);
+      byTitle.set(key, rows);
+    }
+
+    const usedIds = new Set<string>();
+    for (let order = 0; order < args.items.length; order++) {
+      const item = args.items[order];
+      const title = item.title.trim();
+      if (!title) continue;
+      const key = normalizeTitle(title);
+      const match = (byTitle.get(key) ?? []).find((candidate) => !usedIds.has(String(candidate._id)));
+      const payload: Record<string, unknown> = {
+        societyId: args.societyId,
+        agendaId,
+        order,
+        type: item.type || inferAgendaItemType(title),
+        title,
+        depth: item.depth === 1 ? 1 : 0,
+        createdAtISO: now,
+      };
+      if (item.details !== undefined) payload.details = item.details;
+      if (item.presenter !== undefined) payload.presenter = item.presenter;
+      if (item.motionText !== undefined) payload.motionText = item.motionText;
+
+      if (match) {
+        usedIds.add(String(match._id));
+        unusedExisting.delete(String(match._id));
+        const { createdAtISO: _createdAtISO, ...patch } = payload;
+        await ctx.db.patch(match._id, patch);
+      } else {
+        const id = await ctx.db.insert("agendaItems", payload as any);
+        usedIds.add(String(id));
+      }
+    }
+
+    for (const itemId of unusedExisting) {
+      await ctx.db.delete(itemId as any);
+    }
+
+    return agendaId;
+  },
+});
+
+function normalizeTitle(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function inferAgendaItemType(title: string) {
+  const lower = title.toLowerCase();
+  if (lower.includes("motion") || lower.includes("adopt") || lower.includes("approve")) return "motion";
+  if (lower.includes("report") || lower.includes("financial")) return "report";
+  if (lower.includes("break")) return "break";
+  if (lower.includes("camera") || lower.includes("closed") || lower.includes("executive")) return "executive_session";
+  return "discussion";
+}
 
 export const removeItem = mutation({
   args: { itemId: v.id("agendaItems") },

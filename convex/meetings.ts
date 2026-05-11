@@ -120,6 +120,43 @@ export const create = mutation({
       quorumComputedAtISO:
         args.quorumComputedAtISO ?? snapshot.quorumComputedAtISO,
     });
+    if (templateItems.length > 0 || args.agendaJson) {
+      const agendaId = await ctx.db.insert("agendas", {
+        societyId: args.societyId,
+        meetingId,
+        title: `${args.title} agenda`,
+        status: "Draft",
+        createdAtISO: new Date().toISOString(),
+        updatedAtISO: new Date().toISOString(),
+      });
+      const initialAgendaItems = templateItems.length
+        ? templateItems.map((item) => ({
+            title: resolveTemplateText(item.title, templateContext),
+            depth: item.depth,
+            type: item.sectionType ?? inferAgendaSectionType(item.title),
+            details: item.details ? resolveTemplateText(item.details, templateContext) : undefined,
+            presenter: item.presenter || undefined,
+            motionTemplateId: item.motionTemplateId,
+            motionText: item.motionText ? resolveTemplateText(item.motionText, templateContext) : undefined,
+          }))
+        : normalizeAgendaJsonItems(args.agendaJson);
+      for (let order = 0; order < initialAgendaItems.length; order++) {
+        const item = initialAgendaItems[order];
+        await ctx.db.insert("agendaItems", {
+          societyId: args.societyId,
+          agendaId,
+          order,
+          type: item.type ?? inferAgendaSectionType(item.title),
+          title: item.title,
+          depth: item.depth,
+          details: item.details,
+          presenter: item.presenter,
+          motionTemplateId: item.motionTemplateId,
+          motionText: item.motionText,
+          createdAtISO: new Date().toISOString(),
+        });
+      }
+    }
     if (template && templateItems.length > 0) {
       const attendees = Array.isArray(args.attendeeIds) ? args.attendeeIds.map(String) : [];
       const quorumRequired = args.quorumRequired ?? snapshot.quorumRequired;
@@ -231,6 +268,34 @@ function normalizeTemplateItems(items: any[]): TemplateItem[] {
     if (depth === 0) hasRoot = true;
   }
   return normalized;
+}
+
+function normalizeAgendaJsonItems(agendaJson?: string) {
+  if (!agendaJson) return [];
+  try {
+    const parsed = JSON.parse(agendaJson);
+    const values = Array.isArray(parsed) ? parsed : [];
+    const items: Array<{ title: string; depth: 0 | 1; type?: string; details?: string; presenter?: string; motionTemplateId?: any; motionText?: string }> = [];
+    let hasRoot = false;
+    for (const value of values) {
+      const title = typeof value === "string" ? value.trim() : String(value?.title ?? "").trim();
+      if (!title) continue;
+      const depth: 0 | 1 = typeof value === "object" && value?.depth === 1 && hasRoot ? 1 : 0;
+      items.push({
+        title,
+        depth,
+        type: typeof value === "object" ? value?.type ?? value?.sectionType : undefined,
+        details: typeof value === "object" ? value?.details : undefined,
+        presenter: typeof value === "object" ? value?.presenter : undefined,
+        motionTemplateId: typeof value === "object" ? value?.motionTemplateId : undefined,
+        motionText: typeof value === "object" ? value?.motionText : undefined,
+      });
+      if (depth === 0) hasRoot = true;
+    }
+    return items;
+  } catch {
+    return [];
+  }
 }
 
 async function buildTemplateMotions(ctx: any, items: TemplateItem[], templateContext: Record<string, string>) {

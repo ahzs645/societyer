@@ -46,7 +46,6 @@ import {
   inferredPackageReviewStatus,
   isImportTranscriptMetadata,
   namesFromDiscussion,
-  parseAgenda,
   parseAgendaItems,
   parseDocumentMetadata,
   type AgendaItemEntry,
@@ -150,6 +149,20 @@ function bytesToBase64(bytes: Uint8Array) {
   return btoa(binary).replace(/.{1,76}/g, "$&\r\n").trim();
 }
 
+function agendaEntriesFromRecord(record: any): AgendaItemEntry[] | null {
+  if (!record?.items?.length) return null;
+  const entries: AgendaItemEntry[] = [];
+  let hasRoot = false;
+  for (const item of record.items) {
+    const title = String(item?.title ?? "").trim();
+    if (!title) continue;
+    const depth: 0 | 1 = item?.depth === 1 && hasRoot ? 1 : 0;
+    entries.push({ title, depth });
+    if (depth === 0) hasRoot = true;
+  }
+  return entries.length ? entries : null;
+}
+
 function buildEmlMessage({
   subject,
   body,
@@ -193,6 +206,7 @@ export function MeetingDetailPage() {
   const actingUserId = useCurrentUserId() ?? undefined;
   const meeting = useQuery(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
   const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const agendaRecord = useQuery(api.agendas.getForMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
   const meetingPackage = useQuery(api.meetingMaterials.packageForMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
   const sourceDocumentIds = ((minutes as any)?.sourceDocumentIds ?? []) as Id<"documents">[];
   const sourceDocuments = useQuery(
@@ -231,6 +245,7 @@ export function MeetingDetailPage() {
   const backfillMeetingQuorum = useMutation(api.meetings.backfillQuorumSnapshot);
   const updateMinutes = useMutation(api.minutes.update);
   const createMinutes = useMutation(api.minutes.create);
+  const syncAgendaForMeeting = useMutation(api.agendas.syncForMeeting);
   const updateTask = useMutation(api.tasks.update);
   const createTask = useMutation(api.tasks.create);
   const societyTasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
@@ -328,8 +343,8 @@ export function MeetingDetailPage() {
   if (society === null) return <SeedPrompt />;
   if (!meeting) return <div className="page">Loading…</div>;
 
-  const agendaTree = parseAgendaItems(meeting.agendaJson);
-  const agenda = parseAgenda(meeting.agendaJson);
+  const agendaTree = agendaEntriesFromRecord(agendaRecord) ?? parseAgendaItems(meeting.agendaJson);
+  const agenda = agendaTree.map((entry) => entry.title);
   const businessMotions = ((minutes?.motions ?? []) as Motion[]).filter((motion) => !isAdjournmentMotion(motion));
   const minutesSourceExternalIds = sourceExternalIdsForMinutes(minutes);
   const linkedSourceCount = (sourceDocuments ?? []).length || minutesSourceExternalIds.length;
@@ -712,6 +727,16 @@ export function MeetingDetailPage() {
       nextAgenda.push({ title, depth });
       if (depth === 0) hasRoot = true;
     }
+    await syncAgendaForMeeting({
+      societyId: meeting.societyId,
+      meetingId: meeting._id,
+      title: agendaRecord?.agenda?.title || `${meeting.title} agenda`,
+      items: nextAgenda.map((entry) => ({
+        title: entry.title,
+        depth: entry.depth,
+        type: inferAgendaSectionType(entry.title),
+      })),
+    });
     await updateMeeting({
       id: meeting._id,
       patch: { agendaJson: JSON.stringify(nextAgenda) },
@@ -763,6 +788,16 @@ export function MeetingDetailPage() {
     // on the section so the editor and exports can render sub-numbering.
     const next = cleaned;
 
+    await syncAgendaForMeeting({
+      societyId: meeting.societyId,
+      meetingId: meeting._id,
+      title: agendaRecord?.agenda?.title || `${meeting.title} agenda`,
+      items: cleaned.map((entry) => ({
+        title: entry.title,
+        depth: entry.depth,
+        type: inferAgendaSectionType(entry.title),
+      })),
+    });
     await updateMeeting({
       id: meeting._id,
       patch: {
@@ -1523,7 +1558,7 @@ export function MeetingDetailPage() {
         {activeTab === "minutes" && (
           <MeetingMinutesColumn
             minutes={minutes}
-            agenda={agenda}
+            agenda={agendaTree.map((entry) => entry.title)}
             agendaTree={agendaTree}
             agendaEdit={agendaEdit}
             setAgendaEdit={setAgendaEdit}
@@ -1829,6 +1864,7 @@ export function MeetingMinutesPreviewPage() {
   const society = useSociety();
   const meeting = useQuery(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
   const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const agendaRecord = useQuery(api.agendas.getForMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
   const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", false));
   const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
@@ -1861,8 +1897,7 @@ export function MeetingMinutesPreviewPage() {
   if (society === null) return <SeedPrompt />;
   if (!minutes) return <div className="page">No minutes recorded for this meeting.</div>;
 
-  const agendaTree = parseAgendaItems(meeting.agendaJson);
-  const agenda = parseAgenda(meeting.agendaJson);
+  const agendaTree = agendaEntriesFromRecord(agendaRecord) ?? parseAgendaItems(meeting.agendaJson);
   const quorumSnapshot = getQuorumSnapshot(minutes, meeting);
   const selectedMinutesExportStyle =
     MINUTES_EXPORT_STYLES.find((style) => style.id === minutesExportStyle) ??
