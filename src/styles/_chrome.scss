@@ -1008,10 +1008,13 @@
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
-.society-doc-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
-  gap: var(--s-3);
+.society-doc-table-wrap {
+  margin: 0;
+}
+.society-doc-table th:nth-child(2),
+.society-doc-table td:nth-child(2) {
+  width: 1px;
+  white-space: nowrap;
 }
 @media (max-width: 1100px) {
   .society-layout { grid-template-columns: 1fr; }

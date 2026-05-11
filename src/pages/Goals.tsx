@@ -9,7 +9,7 @@ import { Progress, Segmented } from "../components/primitives";
 import { RecordBoard } from "../components/RecordBoard";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
-import { Plus, Target } from "lucide-react";
+import { ListTodo, Plus, Target } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { patchInList } from "../lib/optimistic";
 
@@ -19,6 +19,7 @@ const CATEGORIES = ["Strategic", "Operational", "Program", "Fundraising", "Gover
 export function GoalsPage() {
   const society = useSociety();
   const goals = useQuery(api.goals.list, society ? { societyId: society._id } : "skip");
+  const tasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
   const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.goals.create);
   const update = useMutation(api.goals.update).withOptimisticUpdate(
@@ -130,13 +131,17 @@ export function GoalsPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 280px), 1fr))", gap: 16 }}>
         {filtered.map((g: any) => {
           const committee = (committees ?? []).find((c: any) => c._id === g.committeeId);
+          const linkedTasks = (tasks ?? []).filter((t: any) => t.goalId === g._id);
+          const openTasks = linkedTasks.filter((t: any) => t.status !== "Done");
           const total = g.milestones.length;
           const done = g.milestones.filter((m: any) => m.done).length;
           return (
-            <Link key={g._id} to={`/app/goals/${g._id}`} className="card" style={{ display: "block" }}>
+            <div key={g._id} className="card">
               <div className="card__head">
                 <Target size={14} className="muted" />
-                <h2 className="card__title" style={{ marginRight: "auto" }}>{g.title}</h2>
+                <h2 className="card__title" style={{ marginRight: "auto" }}>
+                  <Link to={`/app/goals/${g._id}`}>{g.title}</Link>
+                </h2>
                 <Badge tone={goalTone(g.status)}>{labelStatus(g.status)}</Badge>
               </div>
               <div className="card__body col" style={{ gap: 10 }}>
@@ -158,8 +163,23 @@ export function GoalsPage() {
                   <span>{done}/{total} milestones</span>
                   <span style={{ marginLeft: "auto" }}>Target {formatDate(g.targetDate)}</span>
                 </div>
+                <div className="row" style={{ gap: 8, alignItems: "center" }}>
+                  <Link
+                    to={`/app/tasks?goalId=${encodeURIComponent(String(g._id))}`}
+                    className="badge badge--info row"
+                    style={{ gap: 4 }}
+                  >
+                    <ListTodo size={12} />
+                    {openTasks.length} open task{openTasks.length === 1 ? "" : "s"}
+                  </Link>
+                  {linkedTasks.length > openTasks.length && (
+                    <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                      {linkedTasks.length - openTasks.length} done
+                    </span>
+                  )}
+                </div>
               </div>
-            </Link>
+            </div>
           );
         })}
         {filtered.length === 0 && (

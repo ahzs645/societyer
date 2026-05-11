@@ -170,7 +170,7 @@ export function AgendaBuilderPage() {
   const finalized = draftStatus === "Finalized";
 
   return (
-    <div className="page">
+    <div className="page agenda-builder">
       <PageHeader
         title="Agenda builder"
         icon={<ClipboardList size={16} />}
@@ -206,38 +206,41 @@ export function AgendaBuilderPage() {
         </div>
       </div>
 
-      <div className="card">
-        <div className="card__head">
-          <h2 className="card__title">Your agendas</h2>
-        </div>
-        <div className="card__body col" style={{ gap: 4 }}>
-          {(agendas ?? []).length === 0 && <div className="muted">No agendas yet.</div>}
-          {(agendas ?? []).map((a: any) => {
-            const meeting = meetingById.get(a.meetingId);
-            const active = a._id === selectedAgendaId;
-            return (
-              <button
-                key={a._id}
-                onClick={() => setSelectedAgendaId(a._id)}
-                className="btn"
-                style={{
-                  justifyContent: "space-between",
-                  background: active ? "var(--bg-subtle)" : undefined,
-                }}
-              >
-                <span>
-                  <strong>{a.title}</strong>
-                  {meeting && <span className="muted"> — {formatDate(meeting.scheduledAt)}</span>}
-                </span>
-                <span className="muted">{a.status}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <div className="agenda-builder__workspace">
+        <aside className="agenda-builder__sidebar">
+          <div className="card">
+            <div className="card__head">
+              <h2 className="card__title">Your agendas</h2>
+            </div>
+            <div className="card__body col" style={{ gap: 4 }}>
+              {(agendas ?? []).length === 0 && <div className="muted">No agendas yet.</div>}
+              {(agendas ?? []).map((a: any) => {
+                const meeting = meetingById.get(a.meetingId);
+                const active = a._id === selectedAgendaId;
+                return (
+                  <button
+                    key={a._id}
+                    onClick={() => setSelectedAgendaId(a._id)}
+                    className="btn agenda-builder__agenda-button"
+                    style={{
+                      background: active ? "var(--bg-subtle)" : undefined,
+                    }}
+                  >
+                    <span>
+                      <strong>{a.title}</strong>
+                      {meeting && <span className="muted"> — {formatDate(meeting.scheduledAt)}</span>}
+                    </span>
+                    <span className="muted">{a.status}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </aside>
 
-      {selected && (
-        <div className="card">
+        <main className="agenda-builder__main">
+          {selected ? (
+            <div className="card">
           <div className="card__head">
             <h2 className="card__title">{selected.agenda.title}</h2>
             <span className="card__subtitle">
@@ -409,8 +412,16 @@ export function AgendaBuilderPage() {
               ))}
             </div>
           </div>
-        </div>
-      )}
+            </div>
+          ) : (
+            <div className="card">
+              <div className="card__body">
+                <div className="muted">Select an agenda to edit it.</div>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

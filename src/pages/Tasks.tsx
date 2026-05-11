@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -41,9 +41,13 @@ export function TasksPage() {
   const currentUserId = useCurrentUserId();
   const confirm = useConfirm();
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedGoalId = searchParams.get("goalId") ?? "";
+  const openNewFromUrl = searchParams.get("new") === "1";
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [q, setQ] = useState("");
   const [filterCommittee, setFilterCommittee] = useState<string>("");
+  const [filterGoal, setFilterGoal] = useState<string>(requestedGoalId);
   const [filterLink, setFilterLink] = useState<string>("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
@@ -53,6 +57,7 @@ export function TasksPage() {
   const cardMenuRef = useRef<HTMLDivElement | null>(null);
 
   const committeeById = useMemo(() => new Map<string, any>((committees ?? []).map((c: any) => [c._id, c])), [committees]);
+  const goalById = useMemo(() => new Map<string, any>((goals ?? []).map((g: any) => [g._id, g])), [goals]);
   const userById = useMemo(() => new Map<string, any>((users ?? []).map((u: any) => [u._id, u])), [users]);
   const filingById = useMemo(() => new Map<string, any>((filings ?? []).map((f: any) => [f._id, f])), [filings]);
   const workflowById = useMemo(() => new Map<string, any>((workflows ?? []).map((w: any) => [w._id, w])), [workflows]);
@@ -64,10 +69,12 @@ export function TasksPage() {
     const ql = q.toLowerCase();
     return base.filter((t: any) => {
       if (filterCommittee && t.committeeId !== filterCommittee) return false;
+      if (filterGoal && t.goalId !== filterGoal) return false;
       if (filterLink && !matchesLinkFilter(t, filterLink)) return false;
       if (!ql) return true;
       const responsibleNames = (t.responsibleUserIds ?? []).map((id: string) => userById.get(id)?.displayName).filter(Boolean).join(" ");
       const linkedText = [
+        goalById.get(t.goalId)?.title,
         filingById.get(t.filingId)?.kind,
         workflowById.get(t.workflowId)?.name,
         documentById.get(t.documentId)?.title,
@@ -80,12 +87,9 @@ export function TasksPage() {
         linkedText.toLowerCase().includes(ql) ||
         (t.tags ?? []).join(" ").toLowerCase().includes(ql);
     });
-  }, [tasks, q, filterCommittee, filterLink, userById, filingById, workflowById, documentById, commitmentById]);
+  }, [tasks, q, filterCommittee, filterGoal, filterLink, userById, goalById, filingById, workflowById, documentById, commitmentById]);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
-  if (society === null) return <SeedPrompt />;
-
-  const openNew = () => {
+  const openNew = useCallback(() => {
     setForm({
       title: "",
       status: "Todo",
@@ -94,6 +98,7 @@ export function TasksPage() {
       dueDate: "",
       tags: [],
       committeeId: filterCommittee || undefined,
+      goalId: filterGoal || undefined,
       responsibleUserId: "",
       filingId: "",
       workflowId: "",
@@ -103,7 +108,35 @@ export function TasksPage() {
       completionNote: "",
     });
     setOpen(true);
+  }, [filterCommittee, filterGoal]);
+
+  useEffect(() => {
+    setFilterGoal(requestedGoalId);
+  }, [requestedGoalId]);
+
+  useEffect(() => {
+    if (!openNewFromUrl || open || society === undefined || society === null) return;
+    openNew();
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("new");
+      return next;
+    }, { replace: true });
+  }, [openNewFromUrl, open, openNew, setSearchParams, society]);
+
+  const changeGoalFilter = (goalId: string) => {
+    setFilterGoal(goalId);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (goalId) next.set("goalId", goalId);
+      else next.delete("goalId");
+      next.delete("new");
+      return next;
+    }, { replace: true });
   };
+
+  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === null) return <SeedPrompt />;
 
   const openEdit = (task: any) => {
     setForm({
@@ -336,6 +369,15 @@ export function TasksPage() {
           options={(committees ?? []).map((c: any) => ({ value: c._id, label: c.name }))}
         />
         <Select
+          value={filterGoal}
+          onChange={changeGoalFilter}
+          clearable
+          clearLabel="All goals"
+          placeholder="All goals"
+          style={{ width: 220, maxWidth: "100%" }}
+          options={(goals ?? []).map((g: any) => ({ value: g._id, label: g.title }))}
+        />
+        <Select
           value={filterLink}
           onChange={setFilterLink}
           clearable
@@ -344,6 +386,7 @@ export function TasksPage() {
           style={{ width: 180, maxWidth: "100%" }}
           options={[
             { value: "linked", label: "Any linked record" },
+            { value: "goal", label: "Goal linked" },
             { value: "filing", label: "Filing linked" },
             { value: "workflow", label: "Workflow linked" },
             { value: "document", label: "Document linked" },
@@ -377,6 +420,7 @@ export function TasksPage() {
           })}
           renderCard={(t: any) => {
             const committee = committeeById.get(t.committeeId);
+            const goal = goalById.get(t.goalId);
             const responsible = userNames(t.responsibleUserIds, userById) || t.assignee;
             const overdue = t.dueDate && new Date(t.dueDate).getTime() < Date.now() && t.status !== "Done";
             return (
@@ -396,6 +440,7 @@ export function TasksPage() {
                       </span>
                     </>
                   )}
+                  {goal && <span>· {goal.title}</span>}
                   {(t.filingId || t.workflowId || t.documentId || t.commitmentId || t.eventId) && <span>· linked</span>}
                   {t.dueDate && (
                     <span style={{ color: overdue ? "var(--danger)" : undefined, marginLeft: "auto" }}>
@@ -472,6 +517,7 @@ export function TasksPage() {
               <tbody>
                 {filtered.map((t: any) => {
                   const committee = committeeById.get(t.committeeId);
+                  const goal = goalById.get(t.goalId);
                   const responsible = userNames(t.responsibleUserIds, userById) || t.assignee;
                   return (
                     <tr key={t._id} className={selectedIds.has(t._id) ? "is-selected" : undefined}>
@@ -497,6 +543,7 @@ export function TasksPage() {
                     <td>
                       <LinkedTaskRecords
                         task={t}
+                        goal={goal}
                         filingById={filingById}
                         workflowById={workflowById}
                         documentById={documentById}
@@ -709,7 +756,8 @@ function userNames(ids: string[] | undefined, userById: Map<string, any>) {
 }
 
 function matchesLinkFilter(task: any, filter: string) {
-  if (filter === "linked") return Boolean(task.filingId || task.workflowId || task.documentId || task.commitmentId || task.eventId);
+  if (filter === "linked") return Boolean(task.goalId || task.filingId || task.workflowId || task.documentId || task.commitmentId || task.eventId);
+  if (filter === "goal") return Boolean(task.goalId);
   if (filter === "filing") return Boolean(task.filingId);
   if (filter === "workflow") return Boolean(task.workflowId);
   if (filter === "document") return Boolean(task.documentId);
@@ -724,12 +772,14 @@ function cleanPatch<T extends Record<string, any>>(source: T) {
 
 function LinkedTaskRecords({
   task,
+  goal,
   filingById,
   workflowById,
   documentById,
   commitmentById,
 }: {
   task: any;
+  goal?: any;
   filingById: Map<string, any>;
   workflowById: Map<string, any>;
   documentById: Map<string, any>;
@@ -739,9 +789,10 @@ function LinkedTaskRecords({
   const workflow = task.workflowId ? workflowById.get(task.workflowId) : null;
   const document = task.documentId ? documentById.get(task.documentId) : null;
   const commitment = task.commitmentId ? commitmentById.get(task.commitmentId) : null;
-  if (!filing && !workflow && !document && !commitment && !task.eventId) return <span className="muted">—</span>;
+  if (!goal && !filing && !workflow && !document && !commitment && !task.eventId) return <span className="muted">—</span>;
   return (
     <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+      {goal && <Link to={`/app/goals/${goal._id}`}><Badge tone="info">{goal.title}</Badge></Link>}
       {filing && <Link to="/app/filings"><Badge tone="orange">{filing.kind}</Badge></Link>}
       {workflow && <Link to={`/app/workflows/${workflow._id}`}><Badge tone="purple">{workflow.name}</Badge></Link>}
       {document && <Link to="/app/documents"><Badge>{document.title}</Badge></Link>}

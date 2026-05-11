@@ -21,6 +21,7 @@ export function MotionBacklogPage() {
   const society = useSociety();
   const toast = useToast();
   const [form, setForm] = useState(EMPTY_FORM);
+  const [isAddingBacklogMotion, setIsAddingBacklogMotion] = useState(false);
   const [agendaTargets, setAgendaTargets] = useState<Record<string, string>>({});
   const [minutesMeetingId, setMinutesMeetingId] = useState("");
 
@@ -57,6 +58,7 @@ export function MotionBacklogPage() {
       notes: form.notes.trim() || undefined,
     });
     setForm(EMPTY_FORM);
+    setIsAddingBacklogMotion(false);
     toast.success("Motion added to backlog");
   };
 
@@ -114,62 +116,72 @@ export function MotionBacklogPage() {
         <div className="col" style={{ gap: 16 }}>
           <div className="card">
             <div className="card__head">
-              <h2 className="card__title">New backlog motion</h2>
-            </div>
-            <div className="card__body col" style={{ gap: 12 }}>
-              <Field label="Title">
-                <input
-                  className="input"
-                  value={form.title}
-                  onChange={(event) => setForm({ ...form, title: event.target.value })}
-                  placeholder="Adopt PIPA privacy policy"
-                />
-              </Field>
-              <Field label="Motion text">
-                <textarea
-                  className="textarea"
-                  rows={5}
-                  value={form.motionText}
-                  onChange={(event) => setForm({ ...form, motionText: event.target.value })}
-                  placeholder="BE IT RESOLVED THAT..."
-                />
-              </Field>
-              <div className="two-col" style={{ gap: 12 }}>
-                <Field label="Category">
-                  <select className="input" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>
-                    {["privacy", "governance", "finance", "membership", "operations", "bylaws", "other"].map((category) => (
-                      <option key={category} value={category}>{formatLabel(category)}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Priority">
-                  <select className="input" value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>
-                    <option value="high">High</option>
-                    <option value="normal">Normal</option>
-                    <option value="low">Low</option>
-                  </select>
-                </Field>
-              </div>
-              <Field label="Notes">
-                <input
-                  className="input"
-                  value={form.notes}
-                  onChange={(event) => setForm({ ...form, notes: event.target.value })}
-                  placeholder="Threshold, attachment, or setup note"
-                />
-              </Field>
-              <button className="btn btn--accent" onClick={save}>
-                <Plus size={14} /> Add to backlog
-              </button>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card__head">
               <h2 className="card__title">Backlog</h2>
               <span className="card__subtitle">{(backlog ?? []).length} motion{(backlog ?? []).length === 1 ? "" : "s"}</span>
+              <button className="btn-action btn-action--primary motion-backlog__new" onClick={() => setIsAddingBacklogMotion((value) => !value)}>
+                <Plus size={12} /> {isAddingBacklogMotion ? "Close" : "New backlog motion"}
+              </button>
             </div>
             <div className="card__body col" style={{ gap: 10 }}>
+              {isAddingBacklogMotion && (
+                <div className="motion-backlog__composer col" style={{ gap: 12 }}>
+                  <Field label="Title">
+                    <input
+                      className="input"
+                      value={form.title}
+                      onChange={(event) => setForm({ ...form, title: event.target.value })}
+                      placeholder="Adopt PIPA privacy policy"
+                    />
+                  </Field>
+                  <Field label="Motion text">
+                    <textarea
+                      className="textarea"
+                      rows={5}
+                      value={form.motionText}
+                      onChange={(event) => setForm({ ...form, motionText: event.target.value })}
+                      placeholder="BE IT RESOLVED THAT..."
+                    />
+                  </Field>
+                  <div className="two-col" style={{ gap: 12 }}>
+                    <Field label="Category">
+                      <select className="input" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>
+                        {["privacy", "governance", "finance", "membership", "operations", "bylaws", "other"].map((category) => (
+                          <option key={category} value={category}>{formatLabel(category)}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Priority">
+                      <select className="input" value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>
+                        <option value="high">High</option>
+                        <option value="normal">Normal</option>
+                        <option value="low">Low</option>
+                      </select>
+                    </Field>
+                  </div>
+                  <Field label="Notes">
+                    <input
+                      className="input"
+                      value={form.notes}
+                      onChange={(event) => setForm({ ...form, notes: event.target.value })}
+                      placeholder="Threshold, attachment, or setup note"
+                    />
+                  </Field>
+                  <div className="motion-backlog__composer-actions">
+                    <button className="btn btn--accent" onClick={save}>
+                      <Plus size={14} /> Add to backlog
+                    </button>
+                    <button
+                      className="btn btn--ghost"
+                      onClick={() => {
+                        setForm(EMPTY_FORM);
+                        setIsAddingBacklogMotion(false);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
               {(backlog ?? []).length === 0 ? (
                 <div className="empty-state empty-state--sm">
                   <BookOpen size={18} />

@@ -309,10 +309,24 @@ export function SocietyPage() {
                 {importingGovernance ? "Checking…" : "Auto-fill missing"}
               </button>
             </div>
-            <div className="card__body society-doc-grid">
-              <DocBadge label="Constitution" present={!!society.constitutionDocId} />
-              <DocBadge label="Bylaws" present={!!society.bylawsDocId} />
-              <DocBadge label="PIPA policy" present={!!society.privacyPolicyDocId} />
+            <div className="card__body">
+              <div className="table-wrap society-doc-table-wrap">
+                <table className="table society-doc-table">
+                  <thead>
+                    <tr>
+                      <th>Document</th>
+                      <th>Status</th>
+                      <th>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <DocTableRow label="Constitution" present={!!society.constitutionDocId} />
+                    <DocTableRow label="Bylaws" present={!!society.bylawsDocId} />
+                    <DocTableRow label="PIPA policy" present={!!society.privacyPolicyDocId} />
+                    <DocTableRow label="Hyperpolicy" present={false} />
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
@@ -377,17 +391,19 @@ function AddressSummary({ label, row, fallback, hint }: { label: string; row?: a
   );
 }
 
-function DocBadge({ label, present }: { label: string; present: boolean }) {
+function DocTableRow({ label, present }: { label: string; present: boolean }) {
   return (
-    <div className="panel" style={{ padding: 12 }}>
-      <div className="row" style={{ gap: 8, marginBottom: 4 }}>
-        <Badge tone={present ? "success" : "warn"}>{present ? "On file" : "Missing"}</Badge>
+    <tr>
+      <td>
         <strong>{label}</strong>
-      </div>
-      <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-        {present ? "Linked to documents" : "No linked document"}
-      </div>
-    </div>
+      </td>
+      <td>
+        <Badge tone={present ? "success" : "warn"}>{present ? "On file" : "Missing"}</Badge>
+      </td>
+      <td className={present ? "table__cell--muted" : undefined}>
+        {present ? "—" : "No linked document"}
+      </td>
+    </tr>
   );
 }
 

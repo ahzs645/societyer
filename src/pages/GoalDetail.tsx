@@ -8,7 +8,7 @@ import { Badge } from "../components/ui";
 import { Progress } from "../components/primitives";
 import { Select } from "../components/Select";
 import { Checkbox } from "../components/Controls";
-import { ArrowLeft, Target } from "lucide-react";
+import { ArrowLeft, ListTodo, Plus, Target } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { goalTone, labelStatus } from "./Goals";
 
@@ -41,6 +41,12 @@ export function GoalDetailPage() {
           <>
             <Badge>{goal.category}</Badge>
             <Badge tone={goalTone(goal.status)}>{labelStatus(goal.status)}</Badge>
+            <Link to={`/app/tasks?goalId=${encodeURIComponent(String(goal._id))}`} className="btn-action">
+              <ListTodo size={12} /> Tasks
+            </Link>
+            <Link to={`/app/tasks?goalId=${encodeURIComponent(String(goal._id))}&new=1`} className="btn-action btn-action--primary">
+              <Plus size={12} /> New task
+            </Link>
           </>
         }
       />
@@ -108,14 +114,21 @@ export function GoalDetailPage() {
           )}
 
           <div className="card">
-            <div className="card__head"><h2 className="card__title">Linked tasks</h2></div>
+            <div className="card__head">
+              <h2 className="card__title">Linked tasks</h2>
+              <Link to={`/app/tasks?goalId=${encodeURIComponent(String(goal._id))}`} className="card__subtitle row" style={{ marginLeft: "auto" }}>
+                All tasks <ListTodo size={12} />
+              </Link>
+            </div>
             <table className="table">
               <thead><tr><th /><th>Title</th><th>Assignee</th><th>Status</th><th>Due</th></tr></thead>
               <tbody>
                 {tasks.map((t: any) => (
                   <tr key={t._id}>
                     <td><span className={`priority-dot priority-${t.priority}`} /></td>
-                    <td>{t.title}</td>
+                    <td>
+                      <Link to={`/app/tasks?goalId=${encodeURIComponent(String(goal._id))}`}>{t.title}</Link>
+                    </td>
                     <td>{t.assignee ?? "—"}</td>
                     <td><Badge tone={t.status === "Done" ? "success" : t.status === "Blocked" ? "danger" : "info"}>{t.status}</Badge></td>
                     <td className="table__cell--mono">{t.dueDate ? formatDate(t.dueDate) : "—"}</td>
