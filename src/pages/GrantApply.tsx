@@ -7,7 +7,6 @@ import { useToast } from "../components/Toast";
 import { ErrorSummary, Field, InspectorNote, type ErrorSummaryItem } from "../components/ui";
 import { PIPA_INTAKE_NOTICE } from "../lib/legalCopy";
 import { ArrowLeft, BadgeDollarSign } from "lucide-react";
-import { Select } from "../components/Select";
 
 const FIELD_IDS = {
   applicantName: "grant-applicant-name",
@@ -159,16 +158,14 @@ export function GrantApplyPage() {
               </InspectorNote>
               {context.grants.length > 0 && (
                 <Field label="Program or opportunity">
-                  <Select value={form.grantId} onChange={value => setForm({
-  ...form,
-  grantId: value
-})} options={[{
-  value: "",
-  label: "General funding intake"
-}, ...context.grants.map(grant => ({
-  value: grant._id,
-  label: grant.title
-}))]} className="input" />
+                  <select className="input" value={form.grantId} onChange={(e) => setForm({ ...form, grantId: e.target.value })}>
+                    <option value="">General funding intake</option>
+                    {context.grants.map((grant) => (
+                      <option key={grant._id} value={grant._id}>
+                        {grant.title}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
               )}
               {selectedGrant?.publicDescription && (

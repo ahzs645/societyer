@@ -25,7 +25,6 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
-import { Select } from "../components/Select";
 
 const triggerLabel = (trigger: any) =>
   trigger?.kind === "cron"
@@ -331,24 +330,34 @@ export function WorkflowsPage() {
         {form && (
           <>
             <Field label="Recipe">
-              <Select value={form.recipe} onChange={value => {
-  const next = catalog?.find((c: any) => c.key === value);
-  const defaultTriggerKind = next?.config?.defaultTriggerKind;
-  const triggerKind = defaultTriggerKind === "date_offset" || defaultTriggerKind === "cron" || defaultTriggerKind === "manual" ? defaultTriggerKind : next?.provider === "n8n" ? "manual" : form.triggerKind;
-  setForm({
-    ...form,
-    recipe: value,
-    name: next?.label ?? form.name,
-    provider: next?.provider ?? "internal",
-    triggerKind,
-    cron: triggerKind === "cron" ? form.cron || "0 8 * * 1" : "",
-    daysBefore: next?.config?.daysBefore ? String(next.config.daysBefore) : form.daysBefore,
-    anchor: next?.config?.anchor ?? form.anchor
-  });
-}} options={[...(catalog ?? []).map(c => ({
-  value: c.key,
-  label: c.label
-}))]} className="input" />
+              <select
+                className="input"
+                value={form.recipe}
+                onChange={(e) => {
+                  const next = catalog?.find((c: any) => c.key === e.target.value);
+                  const defaultTriggerKind = next?.config?.defaultTriggerKind;
+                  const triggerKind =
+                    defaultTriggerKind === "date_offset" || defaultTriggerKind === "cron" || defaultTriggerKind === "manual"
+                      ? defaultTriggerKind
+                      : next?.provider === "n8n"
+                        ? "manual"
+                        : form.triggerKind;
+                  setForm({
+                    ...form,
+                    recipe: e.target.value,
+                    name: next?.label ?? form.name,
+                    provider: next?.provider ?? "internal",
+                    triggerKind,
+                    cron: triggerKind === "cron" ? (form.cron || "0 8 * * 1") : "",
+                    daysBefore: next?.config?.daysBefore ? String(next.config.daysBefore) : form.daysBefore,
+                    anchor: next?.config?.anchor ?? form.anchor,
+                  });
+                }}
+              >
+                {(catalog ?? []).map((c) => (
+                  <option key={c.key} value={c.key}>{c.label}</option>
+                ))}
+              </select>
             </Field>
             {catalog?.find((c) => c.key === form.recipe)?.description && (
               <div className="muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
@@ -375,19 +384,15 @@ export function WorkflowsPage() {
               <input className="input" value={form.provider ?? "internal"} readOnly />
             </Field>
             <Field label="Trigger">
-              <Select value={form.triggerKind} onChange={value => setForm({
-  ...form,
-  triggerKind: value as TriggerKind
-})} options={[{
-  value: "cron",
-  label: "Scheduled (cron)"
-}, {
-  value: "date_offset",
-  label: "Days before a date"
-}, {
-  value: "manual",
-  label: "Manual only"
-}]} className="input" />
+              <select
+                className="input"
+                value={form.triggerKind}
+                onChange={(e) => setForm({ ...form, triggerKind: e.target.value as TriggerKind })}
+              >
+                <option value="cron">Scheduled (cron)</option>
+                <option value="date_offset">Days before a date</option>
+                <option value="manual">Manual only</option>
+              </select>
             </Field>
             {form.triggerKind === "cron" && (
               <Field label="Cron expression">
@@ -402,19 +407,15 @@ export function WorkflowsPage() {
             {form.triggerKind === "date_offset" && (
               <>
                 <Field label="Anchor">
-                  <Select value={form.anchor} onChange={value => setForm({
-  ...form,
-  anchor: value
-})} options={[{
-  value: "insurancePolicies.renewalDate",
-  label: "Insurance renewal date"
-}, {
-  value: "meetings.scheduledAt",
-  label: "Meeting scheduled date"
-}, {
-  value: "filings.dueDate",
-  label: "Filing due date"
-}]} className="input" />
+                  <select
+                    className="input"
+                    value={form.anchor}
+                    onChange={(e) => setForm({ ...form, anchor: e.target.value })}
+                  >
+                    <option value="insurancePolicies.renewalDate">Insurance renewal date</option>
+                    <option value="meetings.scheduledAt">Meeting scheduled date</option>
+                    <option value="filings.dueDate">Filing due date</option>
+                  </select>
                 </Field>
                 <Field label="Days before">
                   <input

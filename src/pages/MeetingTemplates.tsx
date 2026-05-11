@@ -7,7 +7,6 @@ import { PageHeader, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { ArrowLeft, BookOpen, ChevronDown, Copy, MinusCircle, Pencil, Plus, Save, Sparkles, Star, Trash2, X } from "lucide-react";
-import { Select } from "../components/Select";
 
 type TemplateItemDraft = {
   title: string;
@@ -488,12 +487,14 @@ export function MeetingTemplateBuilderPage() {
                             aria-label="Agenda item title"
                           />
                           <span className="meeting-template-section-item__type">
-                            <Select value={item.sectionType} onChange={value => updateItem(index, {
-  sectionType: value
-})} options={[...SECTION_TYPES.map(type => ({
-  value: type,
-  label: formatLabel(type)
-}))]} className="input" aria-label="Section type" />
+                            <select
+                              className="input"
+                              value={item.sectionType}
+                              onChange={(event) => updateItem(index, { sectionType: event.target.value })}
+                              aria-label="Section type"
+                            >
+                              {SECTION_TYPES.map((type) => <option key={type} value={type}>{formatLabel(type)}</option>)}
+                            </select>
                           </span>
                           <span className="meeting-minutes-section-item__title-presenter">
                             <input
@@ -539,23 +540,19 @@ export function MeetingTemplateBuilderPage() {
                         {activeItemTab === "details" && (
                           <div className="meeting-minutes-section-editor__panel meeting-template-section-editor__panel">
                             <Field label="Agenda level">
-                              <Select value={String(item.depth)} onChange={value => updateItem(index, {
-  depth: Number(value) === 1 ? 1 : 0
-})} options={[{
-  value: "0",
-  label: "Root item"
-}, {
-  value: "1",
-  label: "Sub-item"
-}]} className="input" />
+                              <select
+                                className="input"
+                                value={item.depth}
+                                onChange={(event) => updateItem(index, { depth: Number(event.target.value) === 1 ? 1 : 0 })}
+                              >
+                                <option value={0}>Root item</option>
+                                <option value={1}>Sub-item</option>
+                              </select>
                             </Field>
                             <Field label="Section type">
-                              <Select value={item.sectionType} onChange={value => updateItem(index, {
-  sectionType: value
-})} options={[...SECTION_TYPES.map(type => ({
-  value: type,
-  label: formatLabel(type)
-}))]} className="input" />
+                              <select className="input" value={item.sectionType} onChange={(event) => updateItem(index, { sectionType: event.target.value })}>
+                                {SECTION_TYPES.map((type) => <option key={type} value={type}>{formatLabel(type)}</option>)}
+                              </select>
                             </Field>
                             <Field label="Presenter or role">
                               <input className="input" value={item.presenter} onChange={(event) => updateItem(index, { presenter: event.target.value })} placeholder="Chair, secretary, treasurer..." />
@@ -574,20 +571,21 @@ export function MeetingTemplateBuilderPage() {
                         {activeItemTab === "motion" && (
                           <div className="meeting-minutes-section-editor__panel">
                             <Field label="Library motion">
-                              <Select value={item.motionTemplateId} onChange={value => {
-  const motion = motionById.get(value);
-  updateItem(index, {
-    motionTemplateId: value,
-    motionText: motion?.body ?? item.motionText,
-    sectionType: value ? "motion" : item.sectionType
-  });
-}} options={[{
-  value: "",
-  label: "No library motion"
-}, ...(motions ?? []).map((motion: any) => ({
-  value: String(motion._id),
-  label: motion.title
-}))]} className="input" />
+                              <select
+                                className="input"
+                                value={item.motionTemplateId}
+                                onChange={(event) => {
+                                  const motion = motionById.get(event.target.value);
+                                  updateItem(index, {
+                                    motionTemplateId: event.target.value,
+                                    motionText: motion?.body ?? item.motionText,
+                                    sectionType: event.target.value ? "motion" : item.sectionType,
+                                  });
+                                }}
+                              >
+                                <option value="">No library motion</option>
+                                {(motions ?? []).map((motion: any) => <option key={motion._id} value={String(motion._id)}>{motion.title}</option>)}
+                              </select>
                             </Field>
                             <Field label="Motion text">
                               <textarea
@@ -635,13 +633,9 @@ export function MeetingTemplateBuilderPage() {
               <input className="input" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Regular monthly board meeting" />
             </Field>
             <Field label="Meeting type">
-              <Select value={draft.meetingType} onChange={value => setDraft({
-  ...draft,
-  meetingType: value
-})} options={[...MEETING_TYPES.map(type => ({
-  value: type,
-  label: type
-}))]} className="input" />
+              <select className="input" value={draft.meetingType} onChange={(event) => setDraft({ ...draft, meetingType: event.target.value })}>
+                {MEETING_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+              </select>
             </Field>
             <Field label="Description">
               <textarea className="textarea" rows={4} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="Used for recurring board meetings" />

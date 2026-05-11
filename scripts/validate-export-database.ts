@@ -10,8 +10,8 @@ const api = anyApi as any;
 const societyIdArg = argValue("--society-id");
 const societyNameArg = argValue("--society-name");
 const url =
-  process.env.CONVEX_SELF_HOSTED_URL ??
   process.env.VITE_CONVEX_URL ??
+  process.env.CONVEX_SELF_HOSTED_URL ??
   process.env.CONVEX_URL;
 
 if (!url) {

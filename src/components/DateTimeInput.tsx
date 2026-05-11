@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Calendar as CalIcon, ChevronLeft, ChevronRight, Clock, X } from "lucide-react";
-import { Select } from "./Select";
 
 type Props = {
   /** ISO-ish "YYYY-MM-DDTHH:mm" (matches native datetime-local). Empty string for no value. */
@@ -229,26 +228,33 @@ export function DateTimeInput({
               </div>
               <div className="calendar__time">
                 <Clock size={12} />
-                <Select value={String(currentHourDisplay)} onChange={value => handleHourChange(Number(value))} options={[...hourOptions.map(h => ({
-  value: String(h),
-  label: String(h).padStart(2, "0")
-}))]} className="calendar__time-select" />
+                <select
+                  className="calendar__time-select"
+                  value={currentHourDisplay}
+                  onChange={(e) => handleHourChange(Number(e.target.value))}
+                >
+                  {hourOptions.map((h) => <option key={h} value={h}>{String(h).padStart(2, "0")}</option>)}
+                </select>
                 <span>:</span>
-                <Select value={String(mm)} onChange={value => setTime(hh, Number(value))} options={[...minuteOptions.map(m => ({
-  value: String(m),
-  label: String(m).padStart(2, "0")
-}))]} className="calendar__time-select" />
+                <select
+                  className="calendar__time-select"
+                  value={mm}
+                  onChange={(e) => setTime(hh, Number(e.target.value))}
+                >
+                  {minuteOptions.map((m) => <option key={m} value={m}>{String(m).padStart(2, "0")}</option>)}
+                </select>
                 {clock === 12 && (
-                  <Select value={isPM ? "PM" : "AM"} onChange={value => {
-  const base = hh % 12;
-  setTime(value === "PM" ? base + 12 : base, mm);
-}} options={[{
-  value: "",
-  label: "AM"
-}, {
-  value: "",
-  label: "PM"
-}]} className="calendar__time-select" />
+                  <select
+                    className="calendar__time-select"
+                    value={isPM ? "PM" : "AM"}
+                    onChange={(e) => {
+                      const base = hh % 12;
+                      setTime(e.target.value === "PM" ? base + 12 : base, mm);
+                    }}
+                  >
+                    <option>AM</option>
+                    <option>PM</option>
+                  </select>
                 )}
               </div>
               <div className="calendar__foot">

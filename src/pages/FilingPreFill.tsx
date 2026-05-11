@@ -6,7 +6,6 @@ import { SeedPrompt, PageHeader } from "./_helpers";
 import { Field, Badge } from "../components/ui";
 import { FileCog, Copy, FileDown } from "lucide-react";
 import { exportWordDoc, escapeHtml } from "../lib/exportWord";
-import { Select } from "../components/Select";
 
 const SOCIETIES_KINDS = [
   { id: "AnnualReport", label: "Annual Report ($40)" },
@@ -79,23 +78,19 @@ export function FilingPreFillPage() {
         <div className="card__body">
           <div className="row" style={{ gap: 12 }}>
             <Field label="Provider">
-              <Select value={provider} onChange={value => {
-  const p = value as "societies" | "cra";
-  setProvider(p);
-  setKind((p === "societies" ? SOCIETIES_KINDS : CRA_KINDS)[0].id);
-}} options={[{
-  value: "societies",
-  label: "BC Societies Online"
-}, {
-  value: "cra",
-  label: "CRA"
-}]} className="input" />
+              <select className="input" value={provider} onChange={(e) => {
+                const p = e.target.value as "societies" | "cra";
+                setProvider(p);
+                setKind((p === "societies" ? SOCIETIES_KINDS : CRA_KINDS)[0].id);
+              }}>
+                <option value="societies">BC Societies Online</option>
+                <option value="cra">CRA</option>
+              </select>
             </Field>
             <Field label="Form">
-              <Select value={kind} onChange={value => setKind(value)} options={[...kinds.map(k => ({
-  value: k.id,
-  label: k.label
-}))]} className="input" />
+              <select className="input" value={kind} onChange={(e) => setKind(e.target.value)}>
+                {kinds.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+              </select>
             </Field>
             {provider === "cra" && (
               <Field label="Fiscal year">

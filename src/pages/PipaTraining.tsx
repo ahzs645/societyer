@@ -16,7 +16,6 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
-import { Select } from "../components/Select";
 
 /**
  * PIPA + CASL training records. The record table shows the date
@@ -153,34 +152,14 @@ export function PipaTrainingPage() {
             <Field label="Email"><input className="input" value={form.participantEmail ?? ""} onChange={(e) => setForm({ ...form, participantEmail: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Role">
-                <Select value={form.role} onChange={value => setForm({
-  ...form,
-  role: value
-})} options={[{
-  value: "",
-  label: "Director"
-}, {
-  value: "",
-  label: "Staff"
-}, {
-  value: "",
-  label: "Volunteer"
-}]} className="input" />
+                <select className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                  <option>Director</option><option>Staff</option><option>Volunteer</option>
+                </select>
               </Field>
               <Field label="Topic">
-                <Select value={form.topic} onChange={value => setForm({
-  ...form,
-  topic: value
-})} options={[{
-  value: "",
-  label: "PIPA"
-}, {
-  value: "",
-  label: "CASL"
-}, {
-  value: "",
-  label: "Privacy-refresh"
-}]} className="input" />
+                <select className="input" value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })}>
+                  <option>PIPA</option><option>CASL</option><option>Privacy-refresh</option>
+                </select>
               </Field>
             </div>
             <div className="row" style={{ gap: 12 }}>

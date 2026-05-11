@@ -9,7 +9,6 @@ import { Info, RefreshCw, Save, Scale } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
 import { LegalGuideTrackList } from "../components/LegalGuide";
-import { Select } from "../components/Select";
 import {
   getJurisdictionGuidePack,
   getLegalGuideRules,
@@ -268,16 +267,18 @@ export function BylawRulesPage() {
                   />
                 </Field>
                 <Field label="Quorum model">
-                  <Select value={form.quorumType} onChange={value => setForm({
-  ...form,
-  quorumType: value
-})} options={[{
-  value: "fixed",
-  label: "Fixed count"
-}, {
-  value: "percentage",
-  label: "Percentage of eligible voters"
-}]} className="input" />
+                  <select
+                    className="input"
+                    value={form.quorumType}
+                    onChange={(e) =>
+                      setForm({ ...form, quorumType: e.target.value })
+                    }
+                  >
+                    <option value="fixed">Fixed count</option>
+                    <option value="percentage">
+                      Percentage of eligible voters
+                    </option>
+                  </select>
                 </Field>
                 <Field
                   label={

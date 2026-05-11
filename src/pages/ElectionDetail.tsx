@@ -9,7 +9,6 @@ import { Badge, Field } from "../components/ui";
 import { Vote, ArrowLeft, ShieldCheck, CheckCircle2, Lock } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { isBetterAuthMode } from "../lib/authMode";
-import { Select } from "../components/Select";
 
 export function ElectionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -323,16 +322,20 @@ export function ElectionDetailPage() {
                     />
                   </Field>
                   <Field label="Ballot question">
-                    <Select value={nominationDraft.questionId} onChange={value => setNominationDraft({
-  ...nominationDraft,
-  questionId: value
-})} options={[{
-  value: "",
-  label: "Any ballot question"
-}, ...electionBundle.questions.map((question: any) => ({
-  value: question._id,
-  label: question.title
-}))]} className="input" />
+                    <select
+                      className="input"
+                      value={nominationDraft.questionId}
+                      onChange={(e) =>
+                        setNominationDraft({ ...nominationDraft, questionId: e.target.value })
+                      }
+                    >
+                      <option value="">Any ballot question</option>
+                      {electionBundle.questions.map((question: any) => (
+                        <option key={question._id} value={question._id}>
+                          {question.title}
+                        </option>
+                      ))}
+                    </select>
                   </Field>
                   <Field label="Candidate statement">
                     <textarea
@@ -552,16 +555,20 @@ export function ElectionDetailPage() {
                   />
                 </Field>
                 <Field label="Evidence document">
-                  <Select value={adminDraft.evidenceDocumentId} onChange={value => setAdminDraft({
-  ...adminDraft,
-  evidenceDocumentId: value
-})} options={[{
-  value: "",
-  label: "No evidence document"
-}, ...(documents ?? []).map(document => ({
-  value: document._id,
-  label: document.title
-}))]} className="input" />
+                  <select
+                    className="input"
+                    value={adminDraft.evidenceDocumentId}
+                    onChange={(e) =>
+                      setAdminDraft({ ...adminDraft, evidenceDocumentId: e.target.value })
+                    }
+                  >
+                    <option value="">No evidence document</option>
+                    {(documents ?? []).map((document) => (
+                      <option key={document._id} value={document._id}>
+                        {document.title}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
                 <button className="btn btn--accent" onClick={saveAdminSettings}>
                   Save election settings

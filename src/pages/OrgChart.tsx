@@ -7,7 +7,6 @@ import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge } from "../components/ui";
 import { Briefcase, HandHeart, Network, UserCog, UsersRound, X } from "lucide-react";
-import { Select } from "../components/Select";
 
 type OrgPerson = {
   type: "director" | "employee" | "volunteer";
@@ -233,13 +232,17 @@ function OrgPersonCard({
           <span>{person.role || "Unassigned role"}</span>
         </Link>
         <div className="org-card__manager">
-          <Select value={selected} onChange={value => onSaveManager(person, value)} options={[{
-  value: "",
-  label: "No manager assigned"
-}, ...managerOptions.map(option => ({
-  value: option.value,
-  label: option.label
-}))]} className="input" aria-label={`Manager for ${person.name}`} />
+          <select
+            className="input"
+            value={selected}
+            aria-label={`Manager for ${person.name}`}
+            onChange={(event) => onSaveManager(person, event.target.value)}
+          >
+            <option value="">No manager assigned</option>
+            {managerOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
           {selected && (
             <button className="btn-action btn-action--icon" type="button" aria-label={`Clear manager for ${person.name}`} onClick={() => onSaveManager(person, "")}>
               <X size={12} />

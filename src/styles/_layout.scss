@@ -111,7 +111,8 @@
 .sidebar__label {
   flex: 1;
   min-width: 0;
-  line-height: 1.2;
+  line-height: 1.3;
+  padding-block: 1px;
   overflow: hidden;
   text-overflow: ellipsis;
 }

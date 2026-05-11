@@ -523,24 +523,27 @@ export function MembershipPage() {
         {feeDraft && (
           <div>
             <Field label="Linked plan">
-              <Select value={feeDraft.planId ?? ""} onChange={value => {
-  const plan = (plans ?? []).find(p => p._id === value);
-  setFeeDraft({
-    ...feeDraft,
-    planId: value,
-    label: plan?.name ?? feeDraft.label,
-    membershipClass: plan?.membershipClass ?? feeDraft.membershipClass,
-    priceDollars: plan ? centsToDollarInput(plan.priceCents) : feeDraft.priceDollars,
-    currency: plan?.currency ?? feeDraft.currency,
-    interval: plan?.interval ?? feeDraft.interval
-  });
-}} options={[{
-  value: "",
-  label: "Standalone fee period"
-}, ...(plans ?? []).map(plan => ({
-  value: plan._id,
-  label: plan.name
-}))]} className="input" />
+              <select
+                className="input"
+                value={feeDraft.planId ?? ""}
+                onChange={(e) => {
+                  const plan = (plans ?? []).find((p) => p._id === e.target.value);
+                  setFeeDraft({
+                    ...feeDraft,
+                    planId: e.target.value,
+                    label: plan?.name ?? feeDraft.label,
+                    membershipClass: plan?.membershipClass ?? feeDraft.membershipClass,
+                    priceDollars: plan ? centsToDollarInput(plan.priceCents) : feeDraft.priceDollars,
+                    currency: plan?.currency ?? feeDraft.currency,
+                    interval: plan?.interval ?? feeDraft.interval,
+                  });
+                }}
+              >
+                <option value="">Standalone fee period</option>
+                {(plans ?? []).map((plan) => (
+                  <option key={plan._id} value={plan._id}>{plan.name}</option>
+                ))}
+              </select>
             </Field>
             <Field label="Fee label">
               <input

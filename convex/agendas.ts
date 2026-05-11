@@ -394,25 +394,27 @@ export const startMinutesFromAgenda = mutation({
     }
 
     const attendees = Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds.map(String) : [];
-    const id = await ctx.db.insert("minutes", {
+    const minutesPayload: Record<string, unknown> = {
       societyId: meeting.societyId,
       meetingId: meeting._id,
       heldAt: meeting.scheduledAt,
       attendees,
       absent: [],
       quorumMet: meeting.quorumRequired == null ? false : attendees.length >= meeting.quorumRequired,
-      quorumRequired: meeting.quorumRequired,
-      bylawRuleSetId: meeting.bylawRuleSetId,
-      quorumRuleVersion: meeting.quorumRuleVersion,
-      quorumRuleEffectiveFromISO: meeting.quorumRuleEffectiveFromISO,
-      quorumSourceLabel: meeting.quorumSourceLabel,
-      quorumComputedAtISO: meeting.quorumComputedAtISO,
       discussion: "",
       sections: items.map(sectionFromAgendaItem),
       motions: motionsFromAgendaItems(items),
       decisions: [],
       actionItems: [],
-    });
+    };
+    if (meeting.quorumRequired !== undefined) minutesPayload.quorumRequired = meeting.quorumRequired;
+    if (meeting.bylawRuleSetId !== undefined) minutesPayload.bylawRuleSetId = meeting.bylawRuleSetId;
+    if (meeting.quorumRuleVersion !== undefined) minutesPayload.quorumRuleVersion = meeting.quorumRuleVersion;
+    if (meeting.quorumRuleEffectiveFromISO !== undefined) minutesPayload.quorumRuleEffectiveFromISO = meeting.quorumRuleEffectiveFromISO;
+    if (meeting.quorumSourceLabel !== undefined) minutesPayload.quorumSourceLabel = meeting.quorumSourceLabel;
+    if (meeting.quorumComputedAtISO !== undefined) minutesPayload.quorumComputedAtISO = meeting.quorumComputedAtISO;
+
+    const id = await ctx.db.insert("minutes", minutesPayload as any);
     await ctx.db.patch(meeting._id, {
       minutesId: id,
       agendaJson: JSON.stringify(items.map((item) => ({ title: item.title, depth: item.depth === 1 ? 1 : 0 }))),
@@ -463,26 +465,35 @@ function normalizeAgendaJsonItems(agendaJson?: string) {
 
 function sectionFromAgendaItem(item: any) {
   const depth: 0 | 1 = item.depth === 1 ? 1 : 0;
-  return {
+  const section: Record<string, unknown> = {
     title: item.title,
     type: item.type || inferAgendaItemType(item.title),
-    presenter: item.presenter,
     discussion: item.details ?? "",
     decisions: [],
     actionItems: [],
     depth,
   };
+  if (item.presenter !== undefined) section.presenter = item.presenter;
+  if (item.motionText !== undefined) section.motionText = item.motionText;
+  if (item.motionTemplateId !== undefined) section.motionTemplateId = item.motionTemplateId;
+  if (item.motionBacklogId !== undefined) section.motionBacklogId = item.motionBacklogId;
+  return section;
 }
 
 function motionsFromAgendaItems(items: any[]) {
   return items
-    .map((item, index) => ({
-      text: String(item.motionText ?? "").trim(),
-      outcome: "Pending",
-      resolutionType: "Ordinary",
-      sectionIndex: index,
-      sectionTitle: item.title,
-    }))
+    .map((item, index) => {
+      const motion: Record<string, unknown> = {
+        text: String(item.motionText ?? "").trim(),
+        outcome: "Pending",
+        resolutionType: "Ordinary",
+        sectionIndex: index,
+        sectionTitle: item.title,
+      };
+      if (item.motionTemplateId !== undefined) motion.motionTemplateId = item.motionTemplateId;
+      if (item.motionBacklogId !== undefined) motion.motionBacklogId = item.motionBacklogId;
+      return motion;
+    })
     .filter((motion) => motion.text);
 }
 
@@ -506,35 +517,47 @@ async function syncMeetingAndMinutesFromAgenda(ctx: any, meeting: any, items: an
   const nextSections = items.map((item) => {
     const existing = byTitle.get(normalizeTitle(item.title));
     const base = sectionFromAgendaItem(item);
-    return existing
-      ? {
-          ...existing,
-          title: item.title,
-          type: item.type || existing.type || base.type,
-          presenter: item.presenter ?? existing.presenter,
-          discussion: existing.discussion || item.details || "",
-          depth: item.depth === 1 ? 1 : 0,
-        }
-      : base;
+    if (!existing) return base;
+    const merged: Record<string, unknown> = {
+      title: item.title,
+      type: item.type || existing.type || base.type,
+      discussion: existing.discussion || item.details || "",
+      depth: item.depth === 1 ? 1 : 0,
+    };
+    if (existing.reportSubmitted !== undefined) merged.reportSubmitted = existing.reportSubmitted;
+    if (Array.isArray(existing.decisions)) merged.decisions = existing.decisions;
+    else merged.decisions = [];
+    if (Array.isArray(existing.actionItems)) merged.actionItems = existing.actionItems.map(cleanActionItem);
+    else merged.actionItems = [];
+    if (Array.isArray(existing.linkedTaskIds)) merged.linkedTaskIds = existing.linkedTaskIds;
+    if (item.presenter !== undefined) merged.presenter = item.presenter;
+    else if (existing.presenter !== undefined) merged.presenter = existing.presenter;
+    if (item.motionText !== undefined) merged.motionText = item.motionText;
+    else if (existing.motionText !== undefined) merged.motionText = existing.motionText;
+    if (item.motionTemplateId !== undefined) merged.motionTemplateId = item.motionTemplateId;
+    else if (existing.motionTemplateId !== undefined) merged.motionTemplateId = existing.motionTemplateId;
+    if (item.motionBacklogId !== undefined) merged.motionBacklogId = item.motionBacklogId;
+    else if (existing.motionBacklogId !== undefined) merged.motionBacklogId = existing.motionBacklogId;
+    return merged;
   });
   const nextTitles = new Set(items.map((item) => normalizeTitle(item.title)));
   for (const section of existingSections) {
     const key = normalizeTitle(section?.title ?? "");
     if (key && nextTitles.has(key)) continue;
-    if (sectionHasDetails(section)) nextSections.push(section);
+    if (sectionHasDetails(section)) nextSections.push(cleanMinutesSection(section));
   }
 
-  const existingMotions = Array.isArray(minutes.motions) ? minutes.motions : [];
+  const existingMotions = Array.isArray(minutes.motions) ? minutes.motions.map(cleanMotion) : [];
   const agendaMotions = motionsFromAgendaItems(items);
-  const agendaMotionKeys = new Set(agendaMotions.map((motion) => normalizeTitle(motion.text)));
+  const agendaMotionKeys = new Set(agendaMotions.map((motion) => normalizeTitle(String(motion.text ?? ""))));
   const existingMotionByText = new Map<string, any>();
   for (const motion of existingMotions) {
     const key = normalizeTitle(motion?.text ?? "");
     if (key && !existingMotionByText.has(key)) existingMotionByText.set(key, motion);
   }
   const mergedAgendaMotions = agendaMotions.map((motion) => {
-    const existing = existingMotionByText.get(normalizeTitle(motion.text));
-    return existing ? { ...existing, sectionIndex: motion.sectionIndex, sectionTitle: motion.sectionTitle } : motion;
+    const existing = existingMotionByText.get(normalizeTitle(String(motion.text ?? "")));
+    return existing ? cleanMotion({ ...existing, sectionIndex: motion.sectionIndex, sectionTitle: motion.sectionTitle }) : cleanMotion(motion);
   });
   const preservedMotions = existingMotions.filter((motion: any) => {
     const key = normalizeTitle(motion?.text ?? "");
@@ -542,9 +565,58 @@ async function syncMeetingAndMinutesFromAgenda(ctx: any, meeting: any, items: an
   });
   await ctx.db.patch(minutes._id, {
     sections: nextSections,
-    motions: [...mergedAgendaMotions, ...preservedMotions],
-    updatedAtISO: now,
+    motions: [...mergedAgendaMotions, ...preservedMotions.map(cleanMotion)],
   });
+}
+
+function cleanMinutesSection(section: any) {
+  const clean: Record<string, unknown> = {
+    title: String(section?.title ?? ""),
+    depth: section?.depth === 1 ? 1 : 0,
+  };
+  if (section?.type !== undefined) clean.type = section.type;
+  if (section?.presenter !== undefined) clean.presenter = section.presenter;
+  if (section?.discussion !== undefined) clean.discussion = section.discussion;
+  if (section?.motionText !== undefined) clean.motionText = section.motionText;
+  if (section?.motionTemplateId !== undefined) clean.motionTemplateId = section.motionTemplateId;
+  if (section?.motionBacklogId !== undefined) clean.motionBacklogId = section.motionBacklogId;
+  if (section?.reportSubmitted !== undefined) clean.reportSubmitted = section.reportSubmitted;
+  if (Array.isArray(section?.decisions)) clean.decisions = section.decisions.map(String);
+  if (Array.isArray(section?.actionItems)) clean.actionItems = section.actionItems.map(cleanActionItem);
+  if (Array.isArray(section?.linkedTaskIds)) clean.linkedTaskIds = section.linkedTaskIds;
+  return clean;
+}
+
+function cleanActionItem(actionItem: any) {
+  const clean: Record<string, unknown> = {
+    text: String(actionItem?.text ?? ""),
+    done: !!actionItem?.done,
+  };
+  if (actionItem?.assignee !== undefined) clean.assignee = actionItem.assignee;
+  if (actionItem?.dueDate !== undefined) clean.dueDate = actionItem.dueDate;
+  return clean;
+}
+
+function cleanMotion(motion: any) {
+  const clean: Record<string, unknown> = {
+    text: String(motion?.text ?? ""),
+    outcome: String(motion?.outcome ?? "Pending"),
+  };
+  if (motion?.movedBy !== undefined) clean.movedBy = motion.movedBy;
+  if (motion?.movedByMemberId !== undefined) clean.movedByMemberId = motion.movedByMemberId;
+  if (motion?.movedByDirectorId !== undefined) clean.movedByDirectorId = motion.movedByDirectorId;
+  if (motion?.secondedBy !== undefined) clean.secondedBy = motion.secondedBy;
+  if (motion?.secondedByMemberId !== undefined) clean.secondedByMemberId = motion.secondedByMemberId;
+  if (motion?.secondedByDirectorId !== undefined) clean.secondedByDirectorId = motion.secondedByDirectorId;
+  if (motion?.votesFor !== undefined) clean.votesFor = motion.votesFor;
+  if (motion?.votesAgainst !== undefined) clean.votesAgainst = motion.votesAgainst;
+  if (motion?.abstentions !== undefined) clean.abstentions = motion.abstentions;
+  if (motion?.resolutionType !== undefined) clean.resolutionType = motion.resolutionType;
+  if (motion?.sectionIndex !== undefined) clean.sectionIndex = motion.sectionIndex;
+  if (motion?.sectionTitle !== undefined) clean.sectionTitle = motion.sectionTitle;
+  if (motion?.motionTemplateId !== undefined) clean.motionTemplateId = motion.motionTemplateId;
+  if (motion?.motionBacklogId !== undefined) clean.motionBacklogId = motion.motionBacklogId;
+  return clean;
 }
 
 function sectionHasDetails(section: any) {

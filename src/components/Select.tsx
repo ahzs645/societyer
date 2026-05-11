@@ -51,7 +51,6 @@ type SelectProps<T extends string> = {
   /** External anchor rect for triggerless mode (pageX/Y coords). */
   anchorRect?: { top: number; bottom: number; left: number; width: number };
   style?: React.CSSProperties;
-  onKeyDown?: React.KeyboardEventHandler<HTMLButtonElement>;
   id?: string;
   "aria-describedby"?: string;
   "aria-invalid"?: boolean;
@@ -74,7 +73,6 @@ export function Select<T extends string>({
   triggerless = false,
   anchorRect,
   style,
-  onKeyDown,
   id,
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
@@ -225,10 +223,7 @@ export function Select<T extends string>({
           className={triggerClass}
           id={id}
           onClick={() => !disabled && setOpen((o) => !o)}
-          onKeyDown={(event) => {
-            onKeyDown?.(event);
-            if (!event.defaultPrevented) onTriggerKey(event);
-          }}
+          onKeyDown={onTriggerKey}
           disabled={disabled}
           aria-haspopup="listbox"
           aria-expanded={open}

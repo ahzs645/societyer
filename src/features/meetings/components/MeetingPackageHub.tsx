@@ -28,7 +28,6 @@ import {
   syncLabel,
   syncTone,
 } from "../lib/meetingMaterialAccess";
-import { Select } from "../../../components/Select";
 import {
   Detail,
   packageReviewLabel,
@@ -333,18 +332,19 @@ export function MeetingPackageHub({
 
                   <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     {linkableTasks.length > 0 ? (
-                      <Select value={pickerValue} onChange={value => {
-  void handlePick(value);
-}} options={[{
-  value: "",
-  label: "Link existing task…"
-}, ...linkableTasks.map((task: any) => ({
-  value: task._id,
-  label: [task.title, task.priority ? ` · ${task.priority}` : ""].join(" ")
-}))]} className="input" style={{
-  flex: 1,
-  minWidth: 200
-}} />
+                      <select
+                        className="input"
+                        style={{ flex: 1, minWidth: 200 }}
+                        value={pickerValue}
+                        onChange={(event) => { void handlePick(event.target.value); }}
+                      >
+                        <option value="">Link existing task…</option>
+                        {linkableTasks.map((task: any) => (
+                          <option key={task._id} value={task._id}>
+                            {task.title}{task.priority ? ` · ${task.priority}` : ""}
+                          </option>
+                        ))}
+                      </select>
                     ) : (
                       <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>No unlinked tasks available.</span>
                     )}
@@ -374,24 +374,28 @@ export function MeetingPackageHub({
                         autoFocus
                       />
                       <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                        <Select value={taskDraft.priority} onChange={value => setTaskDraft({
-  ...taskDraft,
-  priority: value
-})} options={[...TASK_PRIORITIES.map(priority => ({
-  value: priority,
-  label: priority
-}))]} className="input" style={{
-  width: 130
-}} aria-label="Priority" />
-                        <Select value={taskDraft.status} onChange={value => setTaskDraft({
-  ...taskDraft,
-  status: value
-})} options={[...TASK_STATUS_ITEMS.map(status => ({
-  value: status.id,
-  label: status.label
-}))]} className="input" style={{
-  width: 140
-}} aria-label="Status" />
+                        <select
+                          className="input"
+                          style={{ width: 130 }}
+                          value={taskDraft.priority}
+                          onChange={(event) => setTaskDraft({ ...taskDraft, priority: event.target.value })}
+                          aria-label="Priority"
+                        >
+                          {TASK_PRIORITIES.map((priority) => (
+                            <option key={priority} value={priority}>{priority}</option>
+                          ))}
+                        </select>
+                        <select
+                          className="input"
+                          style={{ width: 140 }}
+                          value={taskDraft.status}
+                          onChange={(event) => setTaskDraft({ ...taskDraft, status: event.target.value })}
+                          aria-label="Status"
+                        >
+                          {TASK_STATUS_ITEMS.map((status) => (
+                            <option key={status.id} value={status.id}>{status.label}</option>
+                          ))}
+                        </select>
                         <input
                           className="input"
                           type="date"

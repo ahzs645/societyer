@@ -9,7 +9,6 @@ import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { Plus, Users, Trash2, Tag } from "lucide-react";
 import { dollarInputToCents, formatDate, money, initials } from "../lib/format";
-import { Select } from "../components/Select";
 
 const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
   FullTime: "Full-time",
@@ -137,22 +136,9 @@ export function EmployeesPage() {
             <Field label="Role"><input className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Type">
-                <Select value={form.employmentType} onChange={value => setForm({
-  ...form,
-  employmentType: value
-})} options={[{
-  value: "",
-  label: "FullTime"
-}, {
-  value: "",
-  label: "PartTime"
-}, {
-  value: "",
-  label: "Casual"
-}, {
-  value: "",
-  label: "Contractor"
-}]} className="input" />
+                <select className="input" value={form.employmentType} onChange={(e) => setForm({ ...form, employmentType: e.target.value })}>
+                  <option>FullTime</option><option>PartTime</option><option>Casual</option><option>Contractor</option>
+                </select>
               </Field>
               <Field label="Start"><input className="input" type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></Field>
               <Field label="End"><input className="input" type="date" value={form.endDate ?? ""} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></Field>

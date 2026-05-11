@@ -10,7 +10,6 @@ import { Mail, Plus, Send, Settings2 } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { formatDateTime } from "../lib/format";
-import { Select } from "../components/Select";
 
 type AudiencePreset =
   | "all_members"
@@ -634,65 +633,31 @@ export function CommunicationsPage() {
             <Field label="Slug"><input className="input" value={templateDraft.slug} onChange={(e) => setTemplateDraft({ ...templateDraft, slug: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Kind">
-                <Select value={templateDraft.kind} onChange={value => setTemplateDraft({
-  ...templateDraft,
-  kind: value
-})} options={[{
-  value: "notice",
-  label: "Notice"
-}, {
-  value: "renewal",
-  label: "Renewal"
-}, {
-  value: "digest",
-  label: "Digest"
-}, {
-  value: "newsletter",
-  label: "Newsletter"
-}]} className="input" />
+                <select className="input" value={templateDraft.kind} onChange={(e) => setTemplateDraft({ ...templateDraft, kind: e.target.value })}>
+                  <option value="notice">Notice</option>
+                  <option value="renewal">Renewal</option>
+                  <option value="digest">Digest</option>
+                  <option value="newsletter">Newsletter</option>
+                </select>
               </Field>
               <Field label="Channel">
-                <Select value={templateDraft.channel} onChange={value => setTemplateDraft({
-  ...templateDraft,
-  channel: value
-})} options={[{
-  value: "email",
-  label: "Email"
-}, {
-  value: "inApp",
-  label: "In-app"
-}, {
-  value: "sms",
-  label: "SMS"
-}, {
-  value: "mail",
-  label: "Postal mail"
-}, {
-  value: "manual",
-  label: "Manual delivery"
-}]} className="input" />
+                <select className="input" value={templateDraft.channel} onChange={(e) => setTemplateDraft({ ...templateDraft, channel: e.target.value })}>
+                  <option value="email">Email</option>
+                  <option value="inApp">In-app</option>
+                  <option value="sms">SMS</option>
+                  <option value="mail">Postal mail</option>
+                  <option value="manual">Manual delivery</option>
+                </select>
               </Field>
             </div>
             <Field label="Audience">
-              <Select value={templateDraft.audience} onChange={value => setTemplateDraft({
-  ...templateDraft,
-  audience: value
-})} options={[{
-  value: "all_members",
-  label: "All members"
-}, {
-  value: "voting_members",
-  label: "Voting members"
-}, {
-  value: "directors",
-  label: "Directors"
-}, {
-  value: "overdue_subscribers",
-  label: "Overdue subscribers"
-}, {
-  value: "volunteers",
-  label: "Volunteers"
-}]} className="input" />
+              <select className="input" value={templateDraft.audience} onChange={(e) => setTemplateDraft({ ...templateDraft, audience: e.target.value })}>
+                <option value="all_members">All members</option>
+                <option value="voting_members">Voting members</option>
+                <option value="directors">Directors</option>
+                <option value="overdue_subscribers">Overdue subscribers</option>
+                <option value="volunteers">Volunteers</option>
+              </select>
             </Field>
             <Field label="Subject"><input className="input" value={templateDraft.subject} onChange={(e) => setTemplateDraft({ ...templateDraft, subject: e.target.value })} /></Field>
             <Field label="Body"><textarea className="textarea" rows={10} value={templateDraft.bodyText} onChange={(e) => setTemplateDraft({ ...templateDraft, bodyText: e.target.value })} /></Field>
@@ -735,53 +700,27 @@ export function CommunicationsPage() {
             <Field label="Name"><input className="input" value={segmentDraft.name} onChange={(e) => setSegmentDraft({ ...segmentDraft, name: e.target.value })} /></Field>
             <Field label="Description"><textarea className="textarea" rows={4} value={segmentDraft.description ?? ""} onChange={(e) => setSegmentDraft({ ...segmentDraft, description: e.target.value })} /></Field>
             <Field label="Base audience">
-              <Select value={segmentDraft.includeAudience} onChange={value => setSegmentDraft({
-  ...segmentDraft,
-  includeAudience: value
-})} options={[{
-  value: "all_members",
-  label: "All members"
-}, {
-  value: "voting_members",
-  label: "Voting members"
-}, {
-  value: "directors",
-  label: "Directors"
-}, {
-  value: "overdue_subscribers",
-  label: "Overdue subscribers"
-}, {
-  value: "volunteers",
-  label: "Volunteers"
-}, {
-  value: "custom",
-  label: "Custom member subset"
-}]} className="input" />
+              <select className="input" value={segmentDraft.includeAudience} onChange={(e) => setSegmentDraft({ ...segmentDraft, includeAudience: e.target.value })}>
+                <option value="all_members">All members</option>
+                <option value="voting_members">Voting members</option>
+                <option value="directors">Directors</option>
+                <option value="overdue_subscribers">Overdue subscribers</option>
+                <option value="volunteers">Volunteers</option>
+                <option value="custom">Custom member subset</option>
+              </select>
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Member status">
-                <Select value={segmentDraft.memberStatus ?? ""} onChange={value => setSegmentDraft({
-  ...segmentDraft,
-  memberStatus: value
-})} options={[{
-  value: "",
-  label: "Any"
-}, ...memberStatusOptions.map(value => ({
-  value: value,
-  label: value
-}))]} className="input" />
+                <select className="input" value={segmentDraft.memberStatus ?? ""} onChange={(e) => setSegmentDraft({ ...segmentDraft, memberStatus: e.target.value })}>
+                  <option value="">Any</option>
+                  {memberStatusOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
               </Field>
               <Field label="Member class">
-                <Select value={segmentDraft.membershipClass ?? ""} onChange={value => setSegmentDraft({
-  ...segmentDraft,
-  membershipClass: value
-})} options={[{
-  value: "",
-  label: "Any"
-}, ...memberClassOptions.map(value => ({
-  value: value,
-  label: value
-}))]} className="input" />
+                <select className="input" value={segmentDraft.membershipClass ?? ""} onChange={(e) => setSegmentDraft({ ...segmentDraft, membershipClass: e.target.value })}>
+                  <option value="">Any</option>
+                  {memberClassOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
               </Field>
             </div>
             <Field label="Volunteer status">
@@ -837,19 +776,11 @@ export function CommunicationsPage() {
             <label className="checkbox"><input type="checkbox" checked={prefDraft.smsEnabled} onChange={(e) => setPrefDraft({ ...prefDraft, smsEnabled: e.target.checked })} /> SMS allowed</label>
             <label className="checkbox"><input type="checkbox" checked={prefDraft.mailEnabled} onChange={(e) => setPrefDraft({ ...prefDraft, mailEnabled: e.target.checked })} /> Postal mail allowed</label>
             <Field label="Preferred channel">
-              <Select value={prefDraft.preferredChannel} onChange={value => setPrefDraft({
-  ...prefDraft,
-  preferredChannel: value
-})} options={[{
-  value: "email",
-  label: "Email"
-}, {
-  value: "sms",
-  label: "SMS"
-}, {
-  value: "mail",
-  label: "Postal mail"
-}]} className="input" />
+              <select className="input" value={prefDraft.preferredChannel} onChange={(e) => setPrefDraft({ ...prefDraft, preferredChannel: e.target.value })}>
+                <option value="email">Email</option>
+                <option value="sms">SMS</option>
+                <option value="mail">Postal mail</option>
+              </select>
             </Field>
           </div>
         )}
@@ -909,160 +840,134 @@ export function CommunicationsPage() {
         {sendDraft && (
           <div>
             <Field label="Template">
-              <Select value={sendDraft.templateId} onChange={value => {
-  const next = (templates ?? []).find(template => String(template._id) === value);
-  const nextAudience = parseAudienceValue(next?.audience ?? sendDraft.audiencePreset ?? "all_members");
-  setSendDraft({
-    ...sendDraft,
-    templateId: value,
-    audiencePreset: nextAudience.preset,
-    audienceTarget: nextAudience.target,
-    kind: next?.kind ?? sendDraft.kind,
-    channel: next?.channel ?? sendDraft.channel,
-    subject: next?.subject ?? sendDraft.subject,
-    bodyText: next?.bodyText ?? sendDraft.bodyText
-  });
-}} options={[{
-  value: "",
-  label: "No template"
-}, ...templateOptions.map(option => ({
-  value: option.value,
-  label: option.label
-}))]} className="input" />
+              <select
+                className="input"
+                value={sendDraft.templateId}
+                onChange={(e) => {
+                const next = (templates ?? []).find((template) => String(template._id) === e.target.value);
+                  const nextAudience = parseAudienceValue(next?.audience ?? sendDraft.audiencePreset ?? "all_members");
+                  setSendDraft({
+                    ...sendDraft,
+                    templateId: e.target.value,
+                    audiencePreset: nextAudience.preset,
+                    audienceTarget: nextAudience.target,
+                    kind: next?.kind ?? sendDraft.kind,
+                    channel: next?.channel ?? sendDraft.channel,
+                    subject: next?.subject ?? sendDraft.subject,
+                    bodyText: next?.bodyText ?? sendDraft.bodyText,
+                  });
+                }}
+              >
+                <option value="">No template</option>
+                {templateOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Audience">
-                <Select value={sendDraft.audiencePreset} onChange={value => setSendDraft({
-  ...sendDraft,
-  audiencePreset: value,
-  audienceTarget: ""
-})} options={[{
-  value: "all_members",
-  label: "All members"
-}, {
-  value: "voting_members",
-  label: "Voting members"
-}, {
-  value: "directors",
-  label: "Directors"
-}, {
-  value: "overdue_subscribers",
-  label: "Overdue subscribers"
-}, {
-  value: "volunteers",
-  label: "Volunteers"
-}, {
-  value: "segment",
-  label: "Saved segment"
-}, {
-  value: "committee",
-  label: "Committee"
-}, {
-  value: "member_class",
-  label: "Member class"
-}, {
-  value: "member_status",
-  label: "Member status"
-}]} className="input" />
+                <select
+                  className="input"
+                  value={sendDraft.audiencePreset}
+                  onChange={(e) =>
+                    setSendDraft({
+                      ...sendDraft,
+                      audiencePreset: e.target.value,
+                      audienceTarget: "",
+                    })
+                  }
+                >
+                  <option value="all_members">All members</option>
+                  <option value="voting_members">Voting members</option>
+                  <option value="directors">Directors</option>
+                  <option value="overdue_subscribers">Overdue subscribers</option>
+                  <option value="volunteers">Volunteers</option>
+                  <option value="segment">Saved segment</option>
+                  <option value="committee">Committee</option>
+                  <option value="member_class">Member class</option>
+                  <option value="member_status">Member status</option>
+                </select>
               </Field>
               <Field label="Channel">
-                <Select value={sendDraft.channel} onChange={value => setSendDraft({
-  ...sendDraft,
-  channel: value
-})} options={[{
-  value: "email",
-  label: "Email"
-}, {
-  value: "inApp",
-  label: "In-app"
-}, {
-  value: "sms",
-  label: "SMS"
-}, {
-  value: "mail",
-  label: "Postal mail"
-}, {
-  value: "postal",
-  label: "Postal queue"
-}, {
-  value: "manual",
-  label: "Manual delivery"
-}]} className="input" />
+                <select className="input" value={sendDraft.channel} onChange={(e) => setSendDraft({ ...sendDraft, channel: e.target.value })}>
+                  <option value="email">Email</option>
+                  <option value="inApp">In-app</option>
+                  <option value="sms">SMS</option>
+                  <option value="mail">Postal mail</option>
+                  <option value="postal">Postal queue</option>
+                  <option value="manual">Manual delivery</option>
+                </select>
               </Field>
             </div>
             {sendDraft.audiencePreset === "committee" && (
               <Field label="Committee">
-                <Select value={sendDraft.audienceTarget} onChange={value => setSendDraft({
-  ...sendDraft,
-  audienceTarget: value
-})} options={[{
-  value: "",
-  label: "Select committee"
-}, ...(committees ?? []).map(committee => ({
-  value: String(committee._id),
-  label: committee.name
-}))]} className="input" />
+                <select
+                  className="input"
+                  value={sendDraft.audienceTarget}
+                  onChange={(e) => setSendDraft({ ...sendDraft, audienceTarget: e.target.value })}
+                >
+                  <option value="">Select committee</option>
+                  {(committees ?? []).map((committee) => (
+                    <option key={committee._id} value={String(committee._id)}>
+                      {committee.name}
+                    </option>
+                  ))}
+                </select>
               </Field>
             )}
             {sendDraft.audiencePreset === "segment" && (
               <Field label="Saved segment">
-                <Select value={sendDraft.audienceTarget} onChange={value => setSendDraft({
-  ...sendDraft,
-  audienceTarget: value
-})} options={[{
-  value: "",
-  label: "Select segment"
-}, ...segmentOptions.map(option => ({
-  value: option.value,
-  label: option.label
-}))]} className="input" />
+                <select
+                  className="input"
+                  value={sendDraft.audienceTarget}
+                  onChange={(e) => setSendDraft({ ...sendDraft, audienceTarget: e.target.value })}
+                >
+                  <option value="">Select segment</option>
+                  {segmentOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </Field>
             )}
             {sendDraft.audiencePreset === "member_class" && (
               <Field label="Member class">
-                <Select value={sendDraft.audienceTarget} onChange={value => setSendDraft({
-  ...sendDraft,
-  audienceTarget: value
-})} options={[{
-  value: "",
-  label: "Select class"
-}, ...memberClassOptions.map(value => ({
-  value: value,
-  label: value
-}))]} className="input" />
+                <select
+                  className="input"
+                  value={sendDraft.audienceTarget}
+                  onChange={(e) => setSendDraft({ ...sendDraft, audienceTarget: e.target.value })}
+                >
+                  <option value="">Select class</option>
+                  {memberClassOptions.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
               </Field>
             )}
             {sendDraft.audiencePreset === "member_status" && (
               <Field label="Member status">
-                <Select value={sendDraft.audienceTarget} onChange={value => setSendDraft({
-  ...sendDraft,
-  audienceTarget: value
-})} options={[{
-  value: "",
-  label: "Select status"
-}, ...memberStatusOptions.map(value => ({
-  value: value,
-  label: value
-}))]} className="input" />
+                <select
+                  className="input"
+                  value={sendDraft.audienceTarget}
+                  onChange={(e) => setSendDraft({ ...sendDraft, audienceTarget: e.target.value })}
+                >
+                  <option value="">Select status</option>
+                  {memberStatusOptions.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
               </Field>
             )}
             <Field label="Kind">
-              <Select value={sendDraft.kind} onChange={value => setSendDraft({
-  ...sendDraft,
-  kind: value
-})} options={[{
-  value: "notice",
-  label: "Notice"
-}, {
-  value: "renewal",
-  label: "Renewal"
-}, {
-  value: "digest",
-  label: "Digest"
-}, {
-  value: "newsletter",
-  label: "Newsletter"
-}]} className="input" />
+              <select className="input" value={sendDraft.kind} onChange={(e) => setSendDraft({ ...sendDraft, kind: e.target.value })}>
+                <option value="notice">Notice</option>
+                <option value="renewal">Renewal</option>
+                <option value="digest">Digest</option>
+                <option value="newsletter">Newsletter</option>
+              </select>
             </Field>
             <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
               Estimated recipients: {audiencePreview ?? 0}

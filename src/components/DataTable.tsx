@@ -29,7 +29,6 @@ import { useUIStore } from "../lib/store";
 import { cellToText, copyAsTsv } from "../lib/clipboard";
 import { useToast } from "./Toast";
 import { api } from "../lib/convexApi";
-import { Select } from "./Select";
 
 const EMPTY_ARR: string[] = [];
 
@@ -965,10 +964,14 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
           </div>
           <label className="table-pagination__size">
             <span>Rows</span>
-            <Select value={String(pageSize)} onChange={value => setPageSize(Number(value))} options={[...effectivePageSizeOptions.map(size => ({
-  value: String(size),
-  label: String(size)
-}))]} />
+            <select
+              value={pageSize}
+              onChange={(event) => setPageSize(Number(event.target.value))}
+            >
+              {effectivePageSizeOptions.map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
           </label>
           <div className="table-pagination__controls" aria-label={`${label} pagination`}>
             <button
@@ -1345,22 +1348,22 @@ function EditableCell<T>({
             onCommit={commit}
           >
             {config.type === "select" ? (
-              <Select value={value} onChange={value => setValue(value)} options={[{
-  value: "",
-  label: "—"
-}, ...options.map(opt => ({
-  value: opt,
-  label: opt
-}))]} className="editable-cell__input" disabled={saving} onKeyDown={e => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    commit();
-  }
-  if (e.key === "Escape") {
-    e.preventDefault();
-    close();
-  }
-}} />
+              <select
+                className="editable-cell__input"
+                autoFocus
+                value={value}
+                disabled={saving}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); commit(); }
+                  if (e.key === "Escape") { e.preventDefault(); close(); }
+                }}
+              >
+                <option value="">—</option>
+                {options.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
             ) : (
               <input
                 className="editable-cell__input"

@@ -711,10 +711,13 @@
   color: var(--text-tertiary);
   cursor: default;
   display: inline-flex;
+  flex: 0 0 auto;
   font-size: var(--fs-sm);
   gap: var(--s-1);
   height: 22px;
+  line-height: 1;
   padding: 0 var(--s-2);
+  white-space: nowrap;
 }
 .settings-shell__tab.is-active {
   background: var(--bg-transparent-light);
@@ -748,8 +751,28 @@
     margin-left: 0;
   }
   .settings-shell__tabs {
+    display: flex;
     max-width: 100%;
+    min-width: 0;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 4px;
+    scroll-padding-inline: 4px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .settings-shell__tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .settings-shell__tab {
+    height: 34px;
+    min-width: max-content;
+    padding: 0 var(--s-3);
+    scroll-snap-align: start;
+  }
+  .settings-shell__tab-icon,
+  .settings-shell__tab > span:last-child {
+    flex: 0 0 auto;
   }
 }
 

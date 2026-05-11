@@ -18,7 +18,6 @@ import { useSociety } from "../hooks/useSociety";
 import { Badge } from "../components/ui";
 import { PageHeader, SeedPrompt } from "./_helpers";
 import { formatDate, relative } from "../lib/format";
-import { Select } from "../components/Select";
 
 type CycleItem = {
   id: string;
@@ -101,10 +100,11 @@ export function AnnualCyclePage() {
         iconColor="orange"
         subtitle="A guided compliance view that pulls AGM, filings, financials, records, and ongoing governance into one workflow."
         actions={
-          <Select value={String(year)} onChange={value => setYear(Number(value))} options={[...years.map(option => ({
-  value: String(option),
-  label: String(option)
-}))]} className="input" />
+          <select className="input" value={year} onChange={(event) => setYear(Number(event.target.value))}>
+            {years.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
         }
       />
 

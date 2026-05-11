@@ -8,7 +8,6 @@ import { BookOpen, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { Field } from "../components/ui";
 import { Checkbox } from "../components/Controls";
-import { Select } from "../components/Select";
 
 const CATEGORIES = [
   "governance",
@@ -149,13 +148,19 @@ export function MotionLibraryPage() {
             </Field>
             <div className="motion-library__form-row">
               <Field label="Category">
-                <Select value={form.category} onChange={value => setForm(f => ({
-  ...f,
-  category: value
-}))} options={[...CATEGORIES.map(c => ({
-  value: c,
-  label: formatCategory(c)
-}))]} className="input" />
+                <select
+                  className="input"
+                  value={form.category}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, category: e.target.value }))
+                  }
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {formatCategory(c)}
+                    </option>
+                  ))}
+                </select>
               </Field>
               <div className="motion-library__checkbox">
                 <Checkbox
@@ -216,13 +221,18 @@ export function MotionLibraryPage() {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search templates"
               />
-              <Select value={filter} onChange={value => setFilter(value)} options={[{
-  value: "all",
-  label: "All categories"
-}, ...CATEGORIES.map(c => ({
-  value: c,
-  label: formatCategory(c)
-}))]} className="input" />
+              <select
+                className="input"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              >
+                <option value="all">All categories</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {formatCategory(c)}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {(templates ?? []).length === 0 ? (

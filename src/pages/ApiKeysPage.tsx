@@ -18,7 +18,6 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
-import { Select } from "../components/Select";
 
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
@@ -322,13 +321,11 @@ export function ApiKeysPage() {
         }
       >
         <Field label="Client">
-          <Select value={tokenForm.clientId} onChange={value => setTokenForm({
-  ...tokenForm,
-  clientId: value
-})} options={[...(clients ?? []).map((c: any) => ({
-  value: c._id,
-  label: c.name
-}))]} className="input" />
+          <select className="input" value={tokenForm.clientId} onChange={(e) => setTokenForm({ ...tokenForm, clientId: e.target.value })}>
+            {(clients ?? []).map((c: any) => (
+              <option key={c._id} value={c._id}>{c.name}</option>
+            ))}
+          </select>
         </Field>
         <Field label="Name">
           <input className="input" value={tokenForm.name} onChange={(e) => setTokenForm({ ...tokenForm, name: e.target.value })} />

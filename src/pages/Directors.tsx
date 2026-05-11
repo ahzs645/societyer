@@ -260,16 +260,19 @@ export function DirectorsPage() {
               />
             </Field>
             <Field label="Linked member">
-              <Select value={selected.memberId ?? ""} onChange={value => setSelected({
-  ...selected,
-  memberId: value || undefined
-})} options={[{
-  value: "",
-  label: "No linked member"
-}, ...(members ?? []).map((member: any) => ({
-  value: member._id,
-  label: [member.firstName, member.lastName, member.email ? ` · ${member.email}` : ""].join(" ")
-}))]} className="input" />
+              <select
+                className="input"
+                value={selected.memberId ?? ""}
+                onChange={(event) => setSelected({ ...selected, memberId: event.target.value || undefined })}
+              >
+                <option value="">No linked member</option>
+                {(members ?? []).map((member: any) => (
+                  <option key={member._id} value={member._id}>
+                    {member.firstName} {member.lastName}
+                    {member.email ? ` · ${member.email}` : ""}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="Position">
               <Select

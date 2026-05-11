@@ -15,7 +15,6 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
-import { Select } from "../components/Select";
 
 /**
  * Auditor appointments. Metadata-driven table — the page still owns the
@@ -136,46 +135,23 @@ export function AuditorsPage() {
             <Field label="Firm name"><input className="input" value={form.firmName} onChange={(e) => setForm({ ...form, firmName: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Engagement">
-                <Select value={form.engagementType} onChange={value => setForm({
-  ...form,
-  engagementType: value
-})} options={[{
-  value: "",
-  label: "Audit"
-}, {
-  value: "",
-  label: "ReviewEngagement"
-}, {
-  value: "",
-  label: "CompilationEngagement"
-}]} className="input" />
+                <select className="input" value={form.engagementType} onChange={(e) => setForm({ ...form, engagementType: e.target.value })}>
+                  <option>Audit</option><option>ReviewEngagement</option><option>CompilationEngagement</option>
+                </select>
               </Field>
               <Field label="Fiscal year"><input className="input" value={form.fiscalYear} onChange={(e) => setForm({ ...form, fiscalYear: e.target.value })} /></Field>
               <Field label="Appointed by">
-                <Select value={form.appointedBy} onChange={value => setForm({
-  ...form,
-  appointedBy: value
-})} options={[{
-  value: "",
-  label: "Directors"
-}, {
-  value: "",
-  label: "Members"
-}]} className="input" />
+                <select className="input" value={form.appointedBy} onChange={(e) => setForm({ ...form, appointedBy: e.target.value })}>
+                  <option>Directors</option><option>Members</option>
+                </select>
               </Field>
             </div>
             <Field label="Appointed on"><input className="input" type="date" value={form.appointedAtISO} onChange={(e) => setForm({ ...form, appointedAtISO: e.target.value })} /></Field>
             <Field label="Engagement letter">
-              <Select value={form.engagementLetterDocId ?? ""} onChange={value => setForm({
-  ...form,
-  engagementLetterDocId: value || undefined
-})} options={[{
-  value: "",
-  label: "— none —"
-}, ...(documents ?? []).map((d: any) => ({
-  value: d._id,
-  label: d.title
-}))]} className="input" />
+              <select className="input" value={form.engagementLetterDocId ?? ""} onChange={(e) => setForm({ ...form, engagementLetterDocId: e.target.value || undefined })}>
+                <option value="">— none —</option>
+                {(documents ?? []).map((d: any) => <option key={d._id} value={d._id}>{d.title}</option>)}
+              </select>
             </Field>
             <label className="checkbox">
               <input type="checkbox" checked={form.independenceAttested} onChange={(e) => setForm({ ...form, independenceAttested: e.target.checked })} /> Firm has confirmed independence from the society

@@ -1959,6 +1959,9 @@ export default defineSchema({
           type: v.optional(v.string()), // discussion | motion | report | break | executive_session | other
           presenter: v.optional(v.string()),
           discussion: v.optional(v.string()),
+          motionText: v.optional(v.string()),
+          motionTemplateId: v.optional(v.id("motionTemplates")),
+          motionBacklogId: v.optional(v.id("motionBacklog")),
           reportSubmitted: v.optional(v.boolean()),
           decisions: v.optional(v.array(v.string())),
           actionItems: v.optional(
@@ -1994,6 +1997,8 @@ export default defineSchema({
         resolutionType: v.optional(v.string()), // Ordinary | Special | Unanimous
         sectionIndex: v.optional(v.number()),
         sectionTitle: v.optional(v.string()),
+        motionTemplateId: v.optional(v.id("motionTemplates")),
+        motionBacklogId: v.optional(v.id("motionBacklog")),
       }),
     ),
     decisions: v.array(v.string()),

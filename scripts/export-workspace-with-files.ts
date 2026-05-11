@@ -37,7 +37,7 @@ type AttachmentResult = Attachment & {
 };
 
 const api = anyApi as any;
-const url = process.env.CONVEX_SELF_HOSTED_URL ?? process.env.VITE_CONVEX_URL ?? process.env.CONVEX_URL;
+const url = process.env.VITE_CONVEX_URL ?? process.env.CONVEX_SELF_HOSTED_URL ?? process.env.CONVEX_URL;
 if (!url) {
   throw new Error("Set VITE_CONVEX_URL, CONVEX_SELF_HOSTED_URL, or CONVEX_URL before exporting.");
 }

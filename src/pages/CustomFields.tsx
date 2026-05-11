@@ -17,7 +17,6 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
-import { Select } from "../components/Select";
 
 const FIELD_KINDS = [
   { value: "text", label: "Text" },
@@ -290,13 +289,18 @@ export function CustomFieldsPage() {
         {draft && (
           <div>
             <Field label="Category">
-              <Select value={draft.entityType} onChange={value => setDraft({
-  ...draft,
-  entityType: value
-})} options={[...Object.entries(ENTITY_LABELS).map(([k, v]) => ({
-  value: k,
-  label: v
-}))]} className="input" disabled={Boolean(draft._id)} />
+              <select
+                className="input"
+                value={draft.entityType}
+                disabled={Boolean(draft._id)}
+                onChange={(e) => setDraft({ ...draft, entityType: e.target.value })}
+              >
+                {Object.entries(ENTITY_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="Label">
               <input
@@ -318,13 +322,17 @@ export function CustomFieldsPage() {
               </div>
             </Field>
             <Field label="Kind">
-              <Select value={draft.kind} onChange={value => setDraft({
-  ...draft,
-  kind: value
-})} options={[...FIELD_KINDS.map(k => ({
-  value: k.value,
-  label: k.label
-}))]} className="input" />
+              <select
+                className="input"
+                value={draft.kind}
+                onChange={(e) => setDraft({ ...draft, kind: e.target.value })}
+              >
+                {FIELD_KINDS.map((k) => (
+                  <option key={k.value} value={k.value}>
+                    {k.label}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="Description">
               <textarea

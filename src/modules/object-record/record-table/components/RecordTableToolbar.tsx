@@ -20,7 +20,6 @@ import {
 } from "../state/recordTableStore";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { RecordTableSortPopover } from "./RecordTableSortPopover";
-import { Select } from "../../../../components/Select";
 
 /**
  * Compact search bar + column toggle + view switcher. Sits above the table
@@ -306,13 +305,21 @@ export function RecordTableToolbar({
                   <label className="record-table__menu-label" htmlFor="record-table-kanban-field">
                     Kanban field
                   </label>
-                  <Select value={kanbanFieldMetadataId ?? ""} onChange={value => handle.get().setKanbanFieldMetadataId(value || undefined)} options={[{
-  value: "",
-  label: "Choose field..."
-}, ...selectableKanbanFields.map(column => ({
-  value: column.fieldMetadataId,
-  label: column.field.label
-}))]} id="record-table-kanban-field" className="record-table__menu-select" />
+                  <select
+                    id="record-table-kanban-field"
+                    className="record-table__menu-select"
+                    value={kanbanFieldMetadataId ?? ""}
+                    onChange={(event) =>
+                      handle.get().setKanbanFieldMetadataId(event.target.value || undefined)
+                    }
+                  >
+                    <option value="">Choose field...</option>
+                    {selectableKanbanFields.map((column) => (
+                      <option key={column.fieldMetadataId} value={column.fieldMetadataId}>
+                        {column.field.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
 
@@ -321,13 +328,21 @@ export function RecordTableToolbar({
                   <label className="record-table__menu-label" htmlFor="record-table-calendar-field">
                     Calendar field
                   </label>
-                  <Select value={calendarFieldMetadataId ?? ""} onChange={value => handle.get().setCalendarFieldMetadataId(value || undefined)} options={[{
-  value: "",
-  label: "Choose date field..."
-}, ...selectableCalendarFields.map(column => ({
-  value: column.fieldMetadataId,
-  label: column.field.label
-}))]} id="record-table-calendar-field" className="record-table__menu-select" />
+                  <select
+                    id="record-table-calendar-field"
+                    className="record-table__menu-select"
+                    value={calendarFieldMetadataId ?? ""}
+                    onChange={(event) =>
+                      handle.get().setCalendarFieldMetadataId(event.target.value || undefined)
+                    }
+                  >
+                    <option value="">Choose date field...</option>
+                    {selectableCalendarFields.map((column) => (
+                      <option key={column.fieldMetadataId} value={column.fieldMetadataId}>
+                        {column.field.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
             </div>

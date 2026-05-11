@@ -12,7 +12,6 @@ import { useToast } from "../components/Toast";
 import { BookOpen, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
-import { Select } from "../components/Select";
 
 export function MinuteBookPage() {
   const society = useSociety();
@@ -388,13 +387,10 @@ function LinkedList({ title, rows, getTitle, getMeta }: any) {
 function RecordSelect({ label, value, rows, onChange, getLabel }: any) {
   return (
     <Field label={label}>
-      <Select value={value ?? ""} onChange={value => onChange(value || undefined)} options={[{
-  value: "",
-  label: ["No", label.toLowerCase()].join(" ")
-}, ...rows.map((row: any) => ({
-  value: row._id,
-  label: getLabel(row)
-}))]} className="input" />
+      <select className="input" value={value ?? ""} onChange={(e) => onChange(e.target.value || undefined)}>
+        <option value="">No {label.toLowerCase()}</option>
+        {rows.map((row: any) => <option key={row._id} value={row._id}>{getLabel(row)}</option>)}
+      </select>
     </Field>
   );
 }

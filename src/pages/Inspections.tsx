@@ -9,7 +9,6 @@ import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { Plus, Eye, Trash2, Tag } from "lucide-react";
 import { dollarInputToCents, formatDate, money } from "../lib/format";
-import { Select } from "../components/Select";
 
 const FIELDS: FilterField<any>[] = [
   { id: "inspector", label: "Inspector", icon: <Tag size={14} />, match: (r, q) => r.inspectorName.toLowerCase().includes(q.toLowerCase()) },
@@ -128,30 +127,18 @@ export function InspectionsPage() {
               <textarea className="textarea" value={form.recordsRequested} onChange={(e) => setForm({ ...form, recordsRequested: e.target.value })} />
             </Field>
             <Field label="Related document (optional)">
-              <Select value={form.documentId ?? ""} onChange={value => setForm({
-  ...form,
-  documentId: value || undefined
-})} options={[{
-  value: "",
-  label: "— none —"
-}, ...(documents ?? []).map((d: any) => ({
-  value: d._id,
-  label: d.title
-}))]} className="input" />
+              <select className="input" value={form.documentId ?? ""} onChange={(e) => setForm({ ...form, documentId: e.target.value || undefined })}>
+                <option value="">— none —</option>
+                {(documents ?? []).map((d: any) => <option key={d._id} value={d._id}>{d.title}</option>)}
+              </select>
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Date"><input className="input" type="date" value={form.inspectedAtISO} onChange={(e) => setForm({ ...form, inspectedAtISO: e.target.value })} /></Field>
               <Field label="Delivery">
-                <Select value={form.deliveryMethod} onChange={value => setForm({
-  ...form,
-  deliveryMethod: value
-})} options={[{
-  value: "in-person",
-  label: "In-person"
-}, {
-  value: "electronic",
-  label: "Electronic"
-}]} className="input" />
+                <select className="input" value={form.deliveryMethod} onChange={(e) => setForm({ ...form, deliveryMethod: e.target.value })}>
+                  <option value="in-person">In-person</option>
+                  <option value="electronic">Electronic</option>
+                </select>
               </Field>
             </div>
             <div className="row" style={{ gap: 12 }}>

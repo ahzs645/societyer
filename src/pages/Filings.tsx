@@ -306,19 +306,11 @@ export function FilingsPage() {
             )}
             <Field label="Filed date"><input className="input" type="date" value={completeDraft.filedAt} onChange={(e) => setCompleteDraft({ ...completeDraft, filedAt: e.target.value })} /></Field>
             <Field label="Submission method">
-              <Select value={completeDraft.submissionMethod ?? ""} onChange={value => setCompleteDraft({
-  ...completeDraft,
-  submissionMethod: value
-})} options={[{
-  value: "ManualPortal",
-  label: "Manual portal"
-}, {
-  value: "BotAssisted",
-  label: "Bot-assisted"
-}, {
-  value: "CRAOnline",
-  label: "CRA online"
-}]} className="input" />
+              <select className="input" value={completeDraft.submissionMethod ?? ""} onChange={(e) => setCompleteDraft({ ...completeDraft, submissionMethod: e.target.value })}>
+                <option value="ManualPortal">Manual portal</option>
+                <option value="BotAssisted">Bot-assisted</option>
+                <option value="CRAOnline">CRA online</option>
+              </select>
             </Field>
             <Field label="Submission checklist" hint="One step per line">
               <textarea
@@ -344,28 +336,24 @@ export function FilingsPage() {
               />
             </Field>
             <Field label="Staged packet / pre-fill document">
-              <Select value={completeDraft.stagedPacketDocumentId ?? ""} onChange={value => setCompleteDraft({
-  ...completeDraft,
-  stagedPacketDocumentId: value
-})} options={[{
-  value: "",
-  label: "None"
-}, ...(documents ?? []).map(document => ({
-  value: document._id,
-  label: document.title
-}))]} className="input" />
+              <select className="input" value={completeDraft.stagedPacketDocumentId ?? ""} onChange={(e) => setCompleteDraft({ ...completeDraft, stagedPacketDocumentId: e.target.value })}>
+                <option value="">None</option>
+                {(documents ?? []).map((document) => (
+                  <option key={document._id} value={document._id}>
+                    {document.title}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="Receipt / evidence document">
-              <Select value={completeDraft.receiptDocumentId ?? ""} onChange={value => setCompleteDraft({
-  ...completeDraft,
-  receiptDocumentId: value
-})} options={[{
-  value: "",
-  label: "None"
-}, ...(documents ?? []).map(document => ({
-  value: document._id,
-  label: document.title
-}))]} className="input" />
+              <select className="input" value={completeDraft.receiptDocumentId ?? ""} onChange={(e) => setCompleteDraft({ ...completeDraft, receiptDocumentId: e.target.value })}>
+                <option value="">None</option>
+                {(documents ?? []).map((document) => (
+                  <option key={document._id} value={document._id}>
+                    {document.title}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="Evidence notes">
               <textarea className="textarea" value={completeDraft.evidenceNotes ?? ""} onChange={(e) => setCompleteDraft({ ...completeDraft, evidenceNotes: e.target.value })} />

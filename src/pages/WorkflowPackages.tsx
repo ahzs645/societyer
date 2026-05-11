@@ -12,7 +12,6 @@ import { useToast } from "../components/Toast";
 import { FileJson, Plus, Trash2, Workflow } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
-import { Select } from "../components/Select";
 
 export function WorkflowPackagesPage() {
   const society = useSociety();
@@ -219,28 +218,16 @@ export function WorkflowPackagesPage() {
             </div>
             <Field label="Effective date"><DatePicker value={draft.effectiveDate ?? ""} onChange={(value) => setDraft({ ...draft, effectiveDate: value })} /></Field>
             <Field label="Workflow">
-              <Select value={draft.workflowId ?? ""} onChange={value => setDraft({
-  ...draft,
-  workflowId: value || undefined
-})} options={[{
-  value: "",
-  label: "No workflow"
-}, ...(workflows ?? []).map((workflow: any) => ({
-  value: workflow._id,
-  label: workflow.name
-}))]} className="input" />
+              <select className="input" value={draft.workflowId ?? ""} onChange={(e) => setDraft({ ...draft, workflowId: e.target.value || undefined })}>
+                <option value="">No workflow</option>
+                {(workflows ?? []).map((workflow: any) => <option key={workflow._id} value={workflow._id}>{workflow.name}</option>)}
+              </select>
             </Field>
             <Field label="Supporting document">
-              <Select value={draft.supportingDocumentId ?? ""} onChange={value => setDraft({
-  ...draft,
-  supportingDocumentId: value || undefined
-})} options={[{
-  value: "",
-  label: "No supporting document"
-}, ...(documents ?? []).map((doc: any) => ({
-  value: doc._id,
-  label: doc.title
-}))]} className="input" />
+              <select className="input" value={draft.supportingDocumentId ?? ""} onChange={(e) => setDraft({ ...draft, supportingDocumentId: e.target.value || undefined })}>
+                <option value="">No supporting document</option>
+                {(documents ?? []).map((doc: any) => <option key={doc._id} value={doc._id}>{doc.title}</option>)}
+              </select>
             </Field>
             <Field label="Parts"><input className="input" value={draft.partsText ?? ""} onChange={(e) => setDraft({ ...draft, partsText: e.target.value })} placeholder="Resolution, filing, receipt" /></Field>
             <Field label="Signer roster"><input className="input" value={draft.signerRosterText ?? ""} onChange={(e) => setDraft({ ...draft, signerRosterText: e.target.value })} /></Field>
