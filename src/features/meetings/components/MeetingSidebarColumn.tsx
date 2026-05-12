@@ -131,7 +131,9 @@ export function MeetingSidebarColumn({
             <div className="card__body col">
               <Detail label="Type"><Badge tone={meeting.type === "AGM" ? "accent" : "info"}>{meeting.type}</Badge></Detail>
               <Detail label="Scheduled">{formatDateTime(meeting.scheduledAt)}</Detail>
-              <Detail label="Location">{meeting.location ?? "—"}</Detail>
+              <Detail label="Location">
+                <span className="meeting-detail-location-value">{meeting.location ?? "—"}</span>
+              </Detail>
               <Detail label="Electronic">{meeting.electronic ? "Yes" : "No"}</Detail>
               <Detail label="Notice sent">{meeting.noticeSentAt ?? "—"}</Detail>
               <Detail label="Quorum required">{quorumSnapshot.required ?? meeting.quorumRequired ?? "—"}</Detail>

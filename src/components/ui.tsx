@@ -355,6 +355,7 @@ export function SettingsShell({
   routeKey,
   tabs,
   activeTab,
+  onTabChange,
   actions,
   children,
 }: {
@@ -368,6 +369,7 @@ export function SettingsShell({
   routeKey?: string;
   tabs?: { id: string; label: ReactNode; icon?: ReactNode }[];
   activeTab?: string;
+  onTabChange?: (id: string) => void;
   actions?: ReactNode;
   children: ReactNode;
 }) {
@@ -403,7 +405,8 @@ export function SettingsShell({
                 type="button"
                 role="tab"
                 aria-selected={tab.id === activeTab}
-                className={`settings-shell__tab${tab.id === activeTab ? " is-active" : ""}`}
+                className={`settings-shell__tab${tab.id === activeTab ? " is-active" : ""}${onTabChange ? " is-clickable" : ""}`}
+                onClick={() => onTabChange?.(tab.id)}
               >
                 {tab.icon && <span className="settings-shell__tab-icon">{tab.icon}</span>}
                 <span>{tab.label}</span>

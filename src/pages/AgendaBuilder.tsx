@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, SeedPrompt } from "./_helpers";
-import { ArrowDown, ArrowUp, ClipboardList, IndentDecrease, IndentIncrease, ListChecks, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ClipboardList, ExternalLink, IndentDecrease, IndentIncrease, Plus, Save, Trash2 } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
 import { Select } from "../components/Select";
@@ -138,33 +139,32 @@ export function AgendaBuilderPage() {
 
   const saveSelectedAgenda = async () => {
     if (!selected || !society) return;
+    const items = draftItems
+      .map((item) => ({
+        title: item.title.trim(),
+        depth: item.depth,
+        type: item.type,
+        presenter: item.presenter.trim() || undefined,
+        details: item.details.trim() || undefined,
+        timeAllottedMinutes: item.timeAllottedMinutes ? Number(item.timeAllottedMinutes) : undefined,
+        motionTemplateId: item.motionTemplateId ? item.motionTemplateId as Id<"motionTemplates"> : undefined,
+        motionBacklogId: item.motionBacklogId ? item.motionBacklogId as Id<"motionBacklog"> : undefined,
+        motionText: item.motionText.trim() || undefined,
+      }))
+      .filter((item) => item.title);
     await syncAgenda({
       societyId: society._id,
       meetingId: selected.agenda.meetingId,
       title: selected.agenda.title,
       status: draftStatus,
-      items: draftItems
-        .map((item) => ({
-          title: item.title.trim(),
-          depth: item.depth,
-          type: item.type,
-          presenter: item.presenter.trim() || undefined,
-          details: item.details.trim() || undefined,
-          timeAllottedMinutes: item.timeAllottedMinutes ? Number(item.timeAllottedMinutes) : undefined,
-          motionTemplateId: item.motionTemplateId ? item.motionTemplateId as Id<"motionTemplates"> : undefined,
-          motionBacklogId: item.motionBacklogId ? item.motionBacklogId as Id<"motionBacklog"> : undefined,
-          motionText: item.motionText.trim() || undefined,
-        }))
-        .filter((item) => item.title),
+      items,
     });
+    if (items.length > 0) {
+      const result = await startMinutesFromAgenda({ agendaId: selected.agenda._id });
+      toast.success(result.reused ? "Agenda saved; meeting minutes record is ready" : "Agenda saved; minutes record created");
+      return;
+    }
     toast.success("Agenda saved");
-  };
-
-  const startMinutes = async () => {
-    if (!selected) return;
-    await saveSelectedAgenda();
-    const result = await startMinutesFromAgenda({ agendaId: selected.agenda._id });
-    toast.success(result.reused ? "Minutes already exist" : "Minutes started from agenda");
   };
 
   const finalized = draftStatus === "Finalized";
@@ -175,7 +175,7 @@ export function AgendaBuilderPage() {
         title="Agenda builder"
         icon={<ClipboardList size={16} />}
         iconColor="orange"
-        subtitle="Draft board-meeting agendas, add motions from the library, and lock before sending notice."
+        subtitle="Draft agendas against meeting records. Saving an agenda with items creates or updates the matching minutes record."
       />
 
       <div className="card">
@@ -251,9 +251,9 @@ export function AgendaBuilderPage() {
   value: status,
   label: status
 }))]} className="input" />
-              <button className="btn" onClick={startMinutes}>
-                <ListChecks size={12} /> Start minutes
-              </button>
+              <Link className="btn" to={`/app/meetings/${selected.agenda.meetingId}?tab=minutes`}>
+                <ExternalLink size={12} /> Open meeting
+              </Link>
               <button className="btn btn--accent" onClick={saveSelectedAgenda}>
                 <Save size={12} /> Save agenda
               </button>

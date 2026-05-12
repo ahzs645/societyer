@@ -1377,7 +1377,17 @@ export function MeetingDetailPage() {
       </Link>
       <PageHeader
         title={meeting.title}
-        subtitle={`${meeting.type} · ${formatDateTime(meeting.scheduledAt)} · ${meeting.location ?? "—"}`}
+        subtitle={
+          <span className="meeting-detail-subtitle">
+            <span>{meeting.type}</span>
+            <span aria-hidden="true">·</span>
+            <span>{formatDateTime(meeting.scheduledAt)}</span>
+            <span aria-hidden="true">·</span>
+            <span className="meeting-detail-subtitle__location" title={meeting.location ?? "No location recorded"}>
+              {meeting.location ?? "—"}
+            </span>
+          </span>
+        }
         actions={
           <>
             <Badge tone={meeting.status === "Held" ? "success" : meeting.status === "Cancelled" ? "danger" : "warn"}>
@@ -1502,7 +1512,7 @@ export function MeetingDetailPage() {
         onChange={setActiveTab}
         items={[
           { id: "overview", label: "Overview", icon: <ClipboardCheck size={12} /> },
-          { id: "minutes", label: "Minutes", icon: <FileText size={12} /> },
+          { id: "minutes", label: "Agenda & minutes", icon: <FileText size={12} /> },
           { id: "motions", label: "Motions", count: businessMotions.length, icon: <Gavel size={12} /> },
           { id: "package", label: "Package", count: packageMaterials.length, icon: <PackageCheck size={12} /> },
           { id: "export", label: "Export", icon: <Settings2 size={12} /> },

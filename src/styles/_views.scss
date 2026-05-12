@@ -2390,6 +2390,29 @@
   gap: var(--s-2);
   margin-bottom: var(--s-3);
 }
+.meeting-detail-subtitle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: min(72ch, 100%);
+  min-width: 0;
+  vertical-align: top;
+}
+.meeting-detail-subtitle__location {
+  min-width: 0;
+  max-width: clamp(140px, 28vw, 360px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+.meeting-detail-location-value {
+  display: block;
+  max-width: 34ch;
+  text-align: right;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
 .meeting-detail-summary > div {
   min-width: 0;
   padding: var(--s-3);
@@ -2762,6 +2785,16 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 @media (max-width: 760px) {
   .meeting-detail-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .meeting-detail-subtitle {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .meeting-detail-subtitle__location {
+    max-width: 100%;
+  }
+  .meeting-detail-location-value {
+    max-width: 100%;
   }
   .meeting-overview-grid,
   .meeting-minutes-layout,

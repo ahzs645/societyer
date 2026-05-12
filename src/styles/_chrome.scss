@@ -316,6 +316,10 @@
 .btn--primary:hover {
   background: #1a1a1a;
 }
+.btn--primary:disabled:hover {
+  background: var(--bg-inverse);
+  border-color: var(--bg-inverse);
+}
 .btn--accent {
   background: var(--accent);
   border-color: var(--accent);
@@ -327,6 +331,11 @@
 .btn--accent:hover {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
+}
+.btn--accent:disabled:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-on);
 }
 .btn--ghost {
   background: transparent;
@@ -346,6 +355,10 @@
   background: var(--red-10);
   border-color: var(--red-10);
 }
+.btn--danger:disabled:hover {
+  background: var(--red-9);
+  border-color: var(--red-9);
+}
 .btn--warn {
   background: var(--orange-9);
   border-color: var(--orange-9);
@@ -354,6 +367,10 @@
 .btn--warn:hover {
   background: var(--orange-10);
   border-color: var(--orange-10);
+}
+.btn--warn:disabled:hover {
+  background: var(--orange-9);
+  border-color: var(--orange-9);
 }
 .btn__icon {
   display: inline-grid;
@@ -722,6 +739,9 @@
 .settings-shell__tab.is-active {
   background: var(--bg-transparent-light);
   color: var(--text-primary);
+}
+.settings-shell__tab.is-clickable {
+  cursor: pointer;
 }
 .settings-shell__tab-icon {
   display: inline-grid;

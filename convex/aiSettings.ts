@@ -78,7 +78,7 @@ export const upsert = mutation({
       const existing = await ctx.db.get(args.id);
       if (!existing || existing.societyId !== args.societyId) throw new Error("AI provider setting not found.");
       if (existing.scope === "personal" && existing.userId !== args.actingUserId) throw new Error("Cannot edit another user's AI provider setting.");
-      await ctx.db.patch(args.id, patch);
+      await ctx.db.patch(args.id, args.secretVaultItemId ? patch : { ...patch, secretVaultItemId: existing.secretVaultItemId });
       return args.id;
     }
     const id = await ctx.db.insert("aiProviderSettings", {

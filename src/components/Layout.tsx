@@ -81,6 +81,7 @@ import { CommandPalette } from "./CommandPalette";
 import { DraftMinutesPicker } from "./DraftMinutesPicker";
 import { ShortcutHelp } from "./ShortcutHelp";
 import { NotificationBell } from "./NotificationBell";
+import { GlobalAiAssistant, openGlobalAiAssistant } from "../features/ai/GlobalAiAssistant";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { setStoredUserId } from "../hooks/useCurrentUser";
 import { setStoredSocietyId, useSocietySelection } from "../hooks/useSociety";
@@ -1061,6 +1062,14 @@ export function Layout() {
               <NotificationBellSafe />
               <button
                 className="sidebar__icon-btn"
+                onClick={openGlobalAiAssistant}
+                title="AI assistant"
+                aria-label="AI assistant"
+              >
+                <Bot size={14} />
+              </button>
+              <button
+                className="sidebar__icon-btn"
                 onClick={() => window.dispatchEvent(new Event("kbar:open"))}
                 title={`${t("common.search")} (/ or ⌘K)`}
                 aria-label={t("common.search")}
@@ -1477,6 +1486,7 @@ export function Layout() {
             </div>
           </div>
         </div>
+        <GlobalAiAssistant />
         {isMobileNav && (
           <nav className="bottom-nav" aria-label={t("sidebar.navigation")}>
             {/* Icon size 16px matches twenty's icon.size.md — the CSS also

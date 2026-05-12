@@ -31,6 +31,7 @@ function DinnerTableIcon({ size = 12 }: { size?: number }) {
 }
 import { Badge, Field } from "./ui";
 import { NameAutocomplete } from "./NameAutocomplete";
+import { Select, type SelectOption } from "./Select";
 
 export type Motion = {
   text: string;
@@ -61,6 +62,13 @@ export type MotionAgendaSection = {
   discussion?: string;
   decisions?: string[];
 };
+
+const RESOLUTION_TYPE_OPTIONS: SelectOption<string>[] = [
+  { value: "Ordinary", label: "Ordinary (simple majority)" },
+  { value: "Special", label: "Special (>= 2/3)" },
+  { value: "Unanimous", label: "Unanimous" },
+  { value: "Procedural", label: "Procedural" },
+];
 
 export function isAdjournmentMotion(motion: Pick<Motion, "text" | "sectionTitle" | "resolutionType">) {
   const text = `${motion.text ?? ""} ${motion.sectionTitle ?? ""} ${motion.resolutionType ?? ""}`.toLowerCase();
@@ -318,17 +326,11 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
           </div>
           <div className="row" style={{ gap: 12 }}>
             <Field label="Resolution type">
-              <select
-                className="input"
+              <Select
                 value={draft.resolutionType ?? "Ordinary"}
-                onChange={(e) =>
-                  setDraft({ ...draft, resolutionType: e.target.value })
-                }
-              >
-                <option value="Ordinary">Ordinary (simple majority)</option>
-                <option value="Special">Special (≥ 2⁄3)</option>
-                <option value="Unanimous">Unanimous</option>
-              </select>
+                onChange={(resolutionType) => setDraft({ ...draft, resolutionType })}
+                options={RESOLUTION_TYPE_OPTIONS}
+              />
             </Field>
             <Field label="Outcome">
               <OutcomePicker value={draft.outcome} onChange={(v) => setDraft({ ...draft, outcome: v })} />
@@ -336,18 +338,11 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
           </div>
           {agendaSections.length > 0 && (
             <Field label="Agenda item">
-              <select
-                className="input"
+              <Select
                 value={draft.sectionIndex == null ? "" : String(draft.sectionIndex)}
-                onChange={(event) => setDraft((current) => ({ ...current, ...motionSectionPatch(event.target.value, agendaSections) }))}
-              >
-                <option value="">Unassigned</option>
-                {agendaSections.map((section, index) => (
-                  <option key={index} value={index}>
-                    {index + 1}. {agendaSectionTitle(section) || "Untitled section"}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => setDraft((current) => ({ ...current, ...motionSectionPatch(value, agendaSections) }))}
+                options={agendaSectionOptions(agendaSections)}
+              />
             </Field>
           )}
           <div className="row" style={{ gap: 12, alignItems: "flex-end" }}>
@@ -575,15 +570,11 @@ function MotionRow({
           </div>
           <div className="row" style={{ gap: 12 }}>
             <Field label="Resolution type">
-              <select
-                className="input"
+              <Select
                 value={motion.resolutionType ?? "Ordinary"}
-                onChange={(event) => onPatch({ resolutionType: event.target.value })}
-              >
-                <option value="Ordinary">Ordinary (simple majority)</option>
-                <option value="Special">Special (≥ 2⁄3)</option>
-                <option value="Unanimous">Unanimous</option>
-              </select>
+                onChange={(resolutionType) => onPatch({ resolutionType })}
+                options={RESOLUTION_TYPE_OPTIONS}
+              />
             </Field>
             <Field label="Outcome">
               <OutcomePicker value={motion.outcome} onChange={(v) => onPatch({ outcome: v })} />
@@ -591,18 +582,11 @@ function MotionRow({
           </div>
           {agendaSections.length > 0 && (
             <Field label="Agenda item">
-              <select
-                className="input"
+              <Select
                 value={selectedAgendaIndex == null ? "" : String(selectedAgendaIndex)}
-                onChange={(event) => onPatch(motionSectionPatch(event.target.value, agendaSections))}
-              >
-                <option value="">Unassigned</option>
-                {agendaSections.map((section, index) => (
-                  <option key={index} value={index}>
-                    {index + 1}. {agendaSectionTitle(section) || "Untitled section"}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => onPatch(motionSectionPatch(value, agendaSections))}
+                options={agendaSectionOptions(agendaSections)}
+              />
             </Field>
           )}
           <div className="row" style={{ gap: 12, alignItems: "flex-end" }}>
@@ -696,6 +680,16 @@ function motionBelongsToAgendaSection(motion: Motion, section: string | MotionAg
 
 function agendaSectionTitle(section: string | MotionAgendaSection | undefined) {
   return typeof section === "string" ? section : section?.title ?? "";
+}
+
+function agendaSectionOptions(agendaSections: Array<string | MotionAgendaSection>): SelectOption<string>[] {
+  return [
+    { value: "", label: "Unassigned" },
+    ...agendaSections.map((section, index) => ({
+      value: String(index),
+      label: `${index + 1}. ${agendaSectionTitle(section) || "Untitled section"}`,
+    })),
+  ];
 }
 
 function agendaSectionSearchText(section: string | MotionAgendaSection) {

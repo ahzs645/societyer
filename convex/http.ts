@@ -2,7 +2,7 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { createOpenAI } from "@ai-sdk/openai";
-import { streamText } from "ai";
+import { generateText, streamText } from "ai";
 
 const http = httpRouter();
 const WEBHOOK_TOLERANCE_MS = 5 * 60 * 1000;
@@ -77,6 +77,19 @@ http.route({
             text += chunk;
             controller.enqueue(encoder.encode(sse({ text: chunk }, "token")));
           }
+          if (!text.trim()) {
+            const retry = await generateText({
+              model: runtimeConfig.model,
+              system: context.systemPrompt,
+              messages: history
+                .filter((message: any) => message.role === "user" || message.role === "assistant")
+                .slice(-16)
+                .map((message: any) => ({ role: message.role, content: message.content })),
+            } as any);
+            text = retry.text ?? "";
+            if (text) controller.enqueue(encoder.encode(sse({ text }, "token")));
+          }
+          if (!text.trim()) throw new Error("The model returned an empty response.");
           const messageId = await ctx.runMutation((internal as any).aiChat._appendMessage, {
             societyId,
             threadId,
@@ -136,9 +149,14 @@ async function resolveAiRuntimeConfig(ctx: any, societyId: any, actingUserId: an
   const modelId = requestedModelId ?? effective?.modelId ?? env("SOCIETYER_AI_MODEL") ?? (provider === "openrouter" ? "openai/gpt-4.1-mini" : "gpt-4.1-mini");
   const baseURL = effective?.baseUrl || (provider === "openrouter" ? OPENROUTER_BASE_URL : undefined);
   const openai = apiKey ? createOpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) }) : null;
+  const model = openai
+    ? provider === "openrouter" || provider === "openai-compatible"
+      ? openai.chat(modelId)
+      : openai(modelId)
+    : null;
   return {
     modelId,
-    model: openai ? openai(modelId) : null,
+    model,
   };
 }
 

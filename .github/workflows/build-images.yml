@@ -1,9 +1,8 @@
 name: Build and push container images
 
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+  release:
+    types: [published]
 
 env:
   REGISTRY: ghcr.io
@@ -43,9 +42,7 @@ jobs:
       - name: Generate image tags
         id: tags
         run: |
-          TIMESTAMP=$(date +%s)
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          echo "version_tag=main-${TIMESTAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "version_tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v6
         with:

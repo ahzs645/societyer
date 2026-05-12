@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { Bot, BrainCircuit, CheckCircle2, History, KeyRound, ListTree, MessageSquare, Play, RefreshCw, Save, Search, ShieldCheck, SlidersHorizontal, Trash2, Wrench, XCircle } from "lucide-react";
 import { api } from "@/lib/convexApi";
@@ -7,6 +7,7 @@ import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt } from "./_helpers";
 import { Badge, Field, SettingsShell } from "../components/ui";
 import { useToast } from "../components/Toast";
+import { streamChatMessage } from "../lib/aiChatStream";
 
 type AgentDefinition = {
   key: string;
@@ -64,6 +65,8 @@ type AiModelCatalog = {
   categories?: Record<string, AiModelInfo[]>;
 };
 
+type AiAgentSection = "chat" | "tools" | "skills" | "catalog" | "runs";
+
 export function AiAgentsPage() {
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
@@ -103,6 +106,7 @@ export function AiAgentsPage() {
   const [chatBusy, setChatBusy] = useState(false);
   const [setupBusy, setSetupBusy] = useState(false);
   const [modelBusy, setModelBusy] = useState(false);
+  const [activeSection, setActiveSection] = useState<AiAgentSection>("chat");
   const [lastResult, setLastResult] = useState<any | null>(null);
   const [aiSetup, setAiSetup] = useState({
     scope: "personal",
@@ -146,6 +150,28 @@ export function AiAgentsPage() {
   const isOpenRouter = aiSetup.provider === "openrouter";
   const setupFingerprint = `${aiSetup.provider}|${aiSetup.apiKey.trim()}|${aiSetup.baseUrl.trim()}`;
   const setupValidated = Boolean(validation?.ok && validation.fingerprint === setupFingerprint);
+  const savedProviderReady = Boolean(
+    effectiveProvider?.status === "active" &&
+      effectiveProvider?.hasSecret &&
+      effectiveProvider.scope === aiSetup.scope &&
+      effectiveProvider.provider === aiSetup.provider &&
+      !aiSetup.apiKey.trim(),
+  );
+  const setupEditable = setupValidated || savedProviderReady;
+
+  useEffect(() => {
+    if (!effectiveProvider || aiSetup.apiKey.trim() || validation) return;
+    setAiSetup((draft) => ({
+      ...draft,
+      scope: effectiveProvider.scope ?? draft.scope,
+      provider: effectiveProvider.provider ?? draft.provider,
+      label: effectiveProvider.label ?? providerLabel(effectiveProvider.provider ?? draft.provider),
+      baseUrl: effectiveProvider.baseUrl ?? "",
+      modelId: effectiveProvider.modelId ?? draft.modelId,
+      temperature: String(effectiveProvider.temperature ?? draft.temperature),
+      maxSteps: String(effectiveProvider.maxSteps ?? draft.maxSteps),
+    }));
+  }, [effectiveProvider?._id, effectiveProvider?.modelId, effectiveProvider?.temperature, effectiveProvider?.maxSteps]);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -251,38 +277,41 @@ export function AiAgentsPage() {
   };
 
   const saveValidatedProvider = async () => {
-    if (!society || !setupValidated) return;
+    if (!society || !setupEditable) return;
     setSetupBusy(true);
     try {
-      const secretId = await createSecret({
-        societyId: society._id,
-        actingUserId,
-        name: `${aiSetup.scope === "workspace" ? "Workspace" : "Personal"} AI provider key - ${aiSetup.label || providerLabel(aiSetup.provider)}`,
-        service: `Societyer AI:${aiSetup.provider}`,
-        credentialType: "api_key",
-        ownerRole: aiSetup.scope === "workspace" ? "Workspace AI" : "Personal AI",
-        storageMode: "stored_encrypted",
-        secretValue: aiSetup.apiKey.trim(),
-        revealPolicy: aiSetup.scope === "workspace" ? "owner_admin" : "owner_admin_custodian",
-        status: "Active",
-        sensitivity: "high",
-        accessLevel: "restricted",
-        sourceExternalIds: ["societyer-ai-provider"],
-        notes: `Validated ${aiSetup.provider} key for ${aiSetup.modelId}.`,
-      });
+      const secretId = aiSetup.apiKey.trim()
+        ? await createSecret({
+            societyId: society._id,
+            actingUserId,
+            name: `${aiSetup.scope === "workspace" ? "Workspace" : "Personal"} AI provider key - ${aiSetup.label || providerLabel(aiSetup.provider)}`,
+            service: `Societyer AI:${aiSetup.provider}`,
+            credentialType: "api_key",
+            ownerRole: aiSetup.scope === "workspace" ? "Workspace AI" : "Personal AI",
+            storageMode: "stored_encrypted",
+            secretValue: aiSetup.apiKey.trim(),
+            revealPolicy: aiSetup.scope === "workspace" ? "owner_admin" : "owner_admin_custodian",
+            status: "Active",
+            sensitivity: "high",
+            accessLevel: "restricted",
+            sourceExternalIds: ["societyer-ai-provider"],
+            notes: `Validated ${aiSetup.provider} key for ${aiSetup.modelId}.`,
+          })
+        : undefined;
       await upsertAiSetting({
         societyId: society._id,
         actingUserId,
+        id: savedProviderReady ? effectiveProvider._id : undefined,
         scope: aiSetup.scope,
         provider: aiSetup.provider,
         label: aiSetup.label || providerLabel(aiSetup.provider),
         modelId: aiSetup.modelId,
         baseUrl: aiSetup.provider === "openai-compatible" ? aiSetup.baseUrl : undefined,
-        secretVaultItemId: secretId,
+        secretVaultItemId: secretId as any,
         temperature: Number(aiSetup.temperature),
         maxSteps: Number(aiSetup.maxSteps),
         validationStatus: "ok",
-        validationMessage: validation.message,
+        validationMessage: validation?.message ?? "Updated settings using the saved provider key.",
       });
       setAiSetup((draft) => ({ ...draft, apiKey: "" }));
       setValidation(null);
@@ -333,8 +362,11 @@ export function AiAgentsPage() {
           { id: "catalog", label: "Catalog", icon: <ListTree size={14} /> },
           { id: "runs", label: "Runs", icon: <History size={14} /> },
         ]}
-        activeTab="chat"
+        activeTab={activeSection}
+        onTabChange={(section) => setActiveSection(section as AiAgentSection)}
       >
+        {activeSection === "chat" && (
+          <>
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card__head">
             <h2 className="card__title">AI setup</h2>
@@ -349,9 +381,9 @@ export function AiAgentsPage() {
               {effectiveProvider?.validationStatus && <Badge tone="success">{effectiveProvider.validationStatus}</Badge>}
             </div>
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-              <Badge tone={aiSetup.apiKey.trim() ? "success" : "neutral"}>1. Add key</Badge>
-              <Badge tone={setupValidated ? "success" : "neutral"}>2. Choose model</Badge>
-              <Badge tone={setupValidated && aiSetup.modelId.trim() ? "info" : "neutral"}>3. Save</Badge>
+              <Badge tone={aiSetup.apiKey.trim() || savedProviderReady ? "success" : "neutral"}>1. Add key</Badge>
+              <Badge tone={setupEditable ? "success" : "neutral"}>2. Choose model</Badge>
+              <Badge tone={setupEditable && aiSetup.modelId.trim() ? "info" : "neutral"}>3. Save</Badge>
             </div>
             <div className="settings-pair">
               <Field label="Scope">
@@ -408,7 +440,7 @@ export function AiAgentsPage() {
                   setValidation(null);
                   setModelCatalog(null);
                 }}
-                placeholder={isOpenRouter ? "sk-or-v1-..." : "sk-..."}
+                placeholder={savedProviderReady ? "Leave blank to keep saved key" : isOpenRouter ? "sk-or-v1-..." : "sk-..."}
               />
             </Field>
             {validation && (
@@ -423,13 +455,13 @@ export function AiAgentsPage() {
             <div style={{ height: 1, background: "var(--border)" }} />
             <div className="settings-pair">
               <Field label="Label">
-                <input className="input" value={aiSetup.label} onChange={(event) => setAiSetup((draft) => ({ ...draft, label: event.target.value }))} disabled={!setupValidated} />
+                <input className="input" value={aiSetup.label} onChange={(event) => setAiSetup((draft) => ({ ...draft, label: event.target.value }))} disabled={!setupEditable} />
               </Field>
               <Field label="Selected model">
-                <input className="input" value={aiSetup.modelId} onChange={(event) => setAiSetup((draft) => ({ ...draft, modelId: event.target.value }))} placeholder="gpt-4.1-mini" disabled={!setupValidated} />
+                <input className="input" value={aiSetup.modelId} onChange={(event) => setAiSetup((draft) => ({ ...draft, modelId: event.target.value }))} placeholder="gpt-4.1-mini" disabled={!setupEditable} />
               </Field>
             </div>
-            {isOpenRouter && setupValidated && (
+            {isOpenRouter && setupEditable && (
               <ModelSelector
                 catalog={modelCatalog}
                 busy={modelBusy}
@@ -443,18 +475,18 @@ export function AiAgentsPage() {
                 onSelect={(modelId) => setAiSetup((draft) => ({ ...draft, modelId }))}
               />
             )}
-            {!setupValidated && (
+            {!setupEditable && (
               <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>Validate a provider key before choosing a model or saving settings.</span>
             )}
             <div className="settings-pair">
               <Field label="Temperature">
-                <input className="input" type="number" min="0" max="2" step="0.1" value={aiSetup.temperature} onChange={(event) => setAiSetup((draft) => ({ ...draft, temperature: event.target.value }))} disabled={!setupValidated} />
+                <input className="input" type="number" min="0" max="2" step="0.1" value={aiSetup.temperature} onChange={(event) => setAiSetup((draft) => ({ ...draft, temperature: event.target.value }))} disabled={!setupEditable} />
               </Field>
               <Field label="Max tool steps">
-                <input className="input" type="number" min="1" max="12" step="1" value={aiSetup.maxSteps} onChange={(event) => setAiSetup((draft) => ({ ...draft, maxSteps: event.target.value }))} disabled={!setupValidated} />
+                <input className="input" type="number" min="1" max="12" step="1" value={aiSetup.maxSteps} onChange={(event) => setAiSetup((draft) => ({ ...draft, maxSteps: event.target.value }))} disabled={!setupEditable} />
               </Field>
             </div>
-            <button className="btn btn--accent" disabled={setupBusy || !setupValidated || !aiSetup.modelId.trim()} onClick={saveValidatedProvider}>
+            <button className="btn btn--accent" disabled={setupBusy || !setupEditable || !aiSetup.modelId.trim()} onClick={saveValidatedProvider}>
               <SlidersHorizontal size={12} /> {setupBusy ? "Saving..." : "Save AI provider"}
             </button>
           </div>
@@ -571,7 +603,11 @@ export function AiAgentsPage() {
             )}
           </div>
         </div>
+          </>
+        )}
 
+        {activeSection === "tools" && (
+          <>
         <div className="settings-pair" style={{ marginBottom: 16 }}>
           <div className="card">
             <div className="card__head">
@@ -706,8 +742,10 @@ export function AiAgentsPage() {
             </div>
           </div>
         )}
+          </>
+        )}
 
-        <div className="settings-pair" style={{ marginBottom: 16 }}>
+        {activeSection === "skills" && (
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Skill router</h2>
@@ -786,7 +824,9 @@ export function AiAgentsPage() {
               </div>
             </div>
           </div>
+        )}
 
+        {activeSection === "catalog" && (
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Permissioned tool catalog</h2>
@@ -807,9 +847,10 @@ export function AiAgentsPage() {
               ))}
             </div>
           </div>
-        </div>
+        )}
 
-        <div className="card">
+        {activeSection === "runs" && (
+          <div className="card">
           <div className="card__head">
             <h2 className="card__title">Recent runs</h2>
             <span className="card__subtitle">Run records are also mirrored into the main audit log.</span>
@@ -845,6 +886,7 @@ export function AiAgentsPage() {
             )}
           </div>
         </div>
+        )}
       </SettingsShell>
     </div>
   );
@@ -992,65 +1034,4 @@ function priceLabel(model: AiModelInfo) {
   const completion = Number(model.completionPrice);
   if (!Number.isFinite(prompt) || !Number.isFinite(completion)) return "";
   return `$${(prompt * 1_000_000).toFixed(2)}/$${(completion * 1_000_000).toFixed(2)} per 1M`;
-}
-
-async function streamChatMessage({
-  societyId,
-  threadId,
-  content,
-  actingUserId,
-  browsingContext,
-  onToken,
-}: {
-  societyId: string;
-  threadId?: string;
-  content: string;
-  actingUserId?: string;
-  browsingContext?: unknown;
-  onToken: (token: string) => void;
-}) {
-  const response = await fetch(`${convexSiteUrl()}/ai-chat/stream`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ societyId, threadId, content, actingUserId, browsingContext }),
-  });
-  if (!response.ok || !response.body) throw new Error(`Stream failed with ${response.status}`);
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let result: any = { threadId, provider: "sse" };
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const parts = buffer.split("\n\n");
-    buffer = parts.pop() ?? "";
-    for (const part of parts) {
-      const event = parseSseEvent(part);
-      if (!event) continue;
-      if (event.event === "token" && typeof event.data?.text === "string") onToken(event.data.text);
-      if (event.event === "ready") result = { ...result, ...event.data, provider: "sse" };
-      if (event.event === "done") result = { ...result, ...event.data, provider: "sse" };
-      if (event.event === "error") throw new Error(event.data?.error ?? "Streaming failed");
-    }
-  }
-  return result;
-}
-
-function parseSseEvent(chunk: string) {
-  const lines = chunk.split("\n");
-  const event = lines.find((line) => line.startsWith("event:"))?.slice("event:".length).trim();
-  const data = lines
-    .filter((line) => line.startsWith("data:"))
-    .map((line) => line.slice("data:".length).trim())
-    .join("\n");
-  if (!data) return null;
-  return { event, data: JSON.parse(data) };
-}
-
-function convexSiteUrl() {
-  const apiUrl = String(import.meta.env.VITE_CONVEX_URL ?? "");
-  if (apiUrl.includes(":3220")) return apiUrl.replace(":3220", ":3221");
-  if (apiUrl.includes(":3210")) return apiUrl.replace(":3210", ":3211");
-  return apiUrl.replace(/\/+$/, "");
 }

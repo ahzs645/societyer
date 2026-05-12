@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { action } from "./lib/untypedServer";
 import { api, internal } from "./_generated/api";
 import { createOpenAI } from "@ai-sdk/openai";
-import { stepCountIs, streamText, tool } from "ai";
+import { generateText, stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
 
 function env(name: string): string | undefined {
@@ -96,21 +96,43 @@ export const sendChatMessage = action({
     let provider = "vercel_ai_sdk";
     try {
       if (!runtimeConfig.model) throw new Error("No AI provider key is configured.");
+      const modelMessages = history
+        .filter((message: any) => message.role === "user" || message.role === "assistant")
+        .slice(-16)
+        .map((message: any) => ({
+          role: message.role,
+          content: message.content,
+        }));
       const result = streamText({
         model: runtimeConfig.model,
         system: context.systemPrompt,
-        messages: history
-          .filter((message: any) => message.role === "user" || message.role === "assistant")
-          .slice(-16)
-          .map((message: any) => ({
-            role: message.role,
-            content: message.content,
-          })),
+        messages: modelMessages,
         tools,
         stopWhen: stepCountIs(6),
       } as any);
       for await (const chunk of result.textStream) assistantText += chunk;
       usage = await (result as any).usage?.catch?.(() => undefined);
+      if (!assistantText.trim()) {
+        provider = "vercel_ai_sdk_no_tools_retry";
+        const retry = streamText({
+          model: runtimeConfig.model,
+          system: context.systemPrompt,
+          messages: modelMessages,
+        } as any);
+        for await (const chunk of retry.textStream) assistantText += chunk;
+        usage = await (retry as any).usage?.catch?.(() => usage);
+      }
+      if (!assistantText.trim()) {
+        provider = "vercel_ai_sdk_generate_text_retry";
+        const retry = await generateText({
+          model: runtimeConfig.model,
+          system: context.systemPrompt,
+          messages: modelMessages,
+        } as any);
+        assistantText = retry.text ?? "";
+        usage = (retry as any).usage ?? usage;
+      }
+      if (!assistantText.trim()) throw new Error("The model returned an empty response.");
     } catch (error: any) {
       provider = "deterministic_fallback";
       assistantText = fallbackResponse({
@@ -150,10 +172,15 @@ async function resolveAiRuntimeConfig(ctx: any, societyId: any, actingUserId: an
   const modelId = requestedModelId ?? effective?.modelId ?? env("SOCIETYER_AI_MODEL") ?? (provider === "openrouter" ? "openai/gpt-4.1-mini" : "gpt-4.1-mini");
   const baseURL = effective?.baseUrl || (provider === "openrouter" ? OPENROUTER_BASE_URL : undefined);
   const openai = apiKey ? createOpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) }) : null;
+  const model = openai
+    ? provider === "openrouter" || provider === "openai-compatible"
+      ? openai.chat(modelId)
+      : openai(modelId)
+    : null;
   return {
     provider,
     modelId,
-    model: openai ? openai(modelId) : null,
+    model,
     configuredFrom: secret?.value ? effective.scope : apiKey ? "environment" : "missing",
   };
 }
