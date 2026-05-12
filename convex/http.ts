@@ -30,7 +30,17 @@ http.route({
       return new Response("Missing societyId or content", { status: 400 });
     }
     const actingUserId = body.actingUserId || undefined;
-    const runtimeConfig = await resolveAiRuntimeConfig(ctx, societyId, actingUserId, body.modelId);
+    let lockedModelId: string | undefined;
+    if (body.threadId) {
+      const existingThread = await ctx.runQuery((api as any).aiChat.getThread, { threadId: body.threadId });
+      lockedModelId = existingThread?.modelId ?? undefined;
+    }
+    const runtimeConfig = await resolveAiRuntimeConfig(
+      ctx,
+      societyId,
+      actingUserId,
+      lockedModelId ?? body.modelId,
+    );
     const modelId = runtimeConfig.modelId;
     const threadId =
       body.threadId ??

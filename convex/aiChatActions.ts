@@ -24,7 +24,18 @@ export const sendChatMessage = action({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    const runtimeConfig = await resolveAiRuntimeConfig(ctx, args.societyId, args.actingUserId, args.modelId);
+    // If continuing an existing thread, the thread's locked modelId wins over the caller's hint.
+    let lockedModelId: string | undefined;
+    if (args.threadId) {
+      const existingThread = await ctx.runQuery((api as any).aiChat.getThread, { threadId: args.threadId });
+      lockedModelId = existingThread?.modelId ?? undefined;
+    }
+    const runtimeConfig = await resolveAiRuntimeConfig(
+      ctx,
+      args.societyId,
+      args.actingUserId,
+      lockedModelId ?? args.modelId,
+    );
     const modelId = runtimeConfig.modelId;
     const threadId =
       args.threadId ??

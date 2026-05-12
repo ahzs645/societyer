@@ -28,6 +28,14 @@ export const messagesForThread = query({
       .collect(),
 });
 
+export const getThread = query({
+  args: {
+    threadId: v.id("aiChatThreads"),
+  },
+  returns: v.any(),
+  handler: async (ctx, { threadId }) => ctx.db.get(threadId),
+});
+
 export const createThread = mutation({
   args: {
     societyId: v.id("societies"),
@@ -61,6 +69,41 @@ export const archiveThread = mutation({
   returns: v.any(),
   handler: async (ctx, { threadId }) => {
     await ctx.db.patch(threadId, { status: "archived", updatedAtISO: new Date().toISOString() });
+    return threadId;
+  },
+});
+
+export const renameThread = mutation({
+  args: {
+    threadId: v.id("aiChatThreads"),
+    title: v.string(),
+  },
+  returns: v.any(),
+  handler: async (ctx, { threadId, title }) => {
+    const trimmed = title.trim();
+    if (!trimmed) return threadId;
+    await ctx.db.patch(threadId, {
+      title: trimmed.slice(0, 200),
+      updatedAtISO: new Date().toISOString(),
+    });
+    return threadId;
+  },
+});
+
+export const deleteThread = mutation({
+  args: {
+    threadId: v.id("aiChatThreads"),
+  },
+  returns: v.any(),
+  handler: async (ctx, { threadId }) => {
+    const messages = await ctx.db
+      .query("aiMessages")
+      .withIndex("by_thread", (q: any) => q.eq("threadId", threadId))
+      .collect();
+    for (const message of messages) {
+      await ctx.db.delete(message._id);
+    }
+    await ctx.db.delete(threadId);
     return threadId;
   },
 });

@@ -4,6 +4,7 @@ export async function streamChatMessage({
   content,
   actingUserId,
   browsingContext,
+  modelId,
   onToken,
 }: {
   societyId: string;
@@ -11,12 +12,13 @@ export async function streamChatMessage({
   content: string;
   actingUserId?: string;
   browsingContext?: unknown;
+  modelId?: string;
   onToken: (token: string) => void;
 }) {
   const response = await fetch(`${convexSiteUrl()}/ai-chat/stream`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ societyId, threadId, content, actingUserId, browsingContext }),
+    body: JSON.stringify({ societyId, threadId, content, actingUserId, browsingContext, modelId }),
   });
   if (!response.ok || !response.body) throw new Error(`Stream failed with ${response.status}`);
 
