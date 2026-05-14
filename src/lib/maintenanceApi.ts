@@ -7,13 +7,17 @@ type ResetResult = { ok: boolean };
 
 export async function seedDemoSociety(): Promise<SeedResult> {
   if (isStaticDemoRuntime()) {
+    await reseedStaticDemoData();
     return { societyId: STATIC_DEMO_SOCIETY_ID as Id<"societies"> };
   }
   return postMaintenance<SeedResult>("seed");
 }
 
 export async function resetDemoData(): Promise<ResetResult> {
-  if (isStaticDemoRuntime()) return { ok: true };
+  if (isStaticDemoRuntime()) {
+    await reseedStaticDemoData();
+    return { ok: true };
+  }
   return postMaintenance<ResetResult>("reset");
 }
 
@@ -39,4 +43,9 @@ async function postMaintenance<T>(operation: "seed" | "reset"): Promise<T> {
   }
 
   return (await response.json()) as T;
+}
+
+async function reseedStaticDemoData() {
+  const { reseedStaticDemoData: reseed } = await import("./staticConvex");
+  await reseed();
 }

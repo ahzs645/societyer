@@ -3501,7 +3501,7 @@ function staticSanitizeExportRow(row: any) {
   return copy;
 }
 
-function queryResult(name: string, args: StaticArgs) {
+function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null) {
   switch (name) {
     case "activity:list":
       return tables.activity.slice(0, args?.limit ?? tables.activity.length);
@@ -3915,7 +3915,7 @@ function queryResult(name: string, args: StaticArgs) {
     case "grantSources:candidates":
       return tables.grantOpportunityCandidates;
     case "members:get":
-      return byId(members, args?.id);
+      return store?.getRow("members", args?.id) ?? byId(members, args?.id);
     case "meetings:get":
       return byId(meetings, args?.id) ?? meetings[0];
     case "meetingMaterials:packageForMeeting":
@@ -3977,7 +3977,7 @@ function queryResult(name: string, args: StaticArgs) {
     case "orgChartAssignments:list":
       return tables.orgChartAssignments;
     case "users:get":
-      return byId(users, args?.id) ?? users[0];
+      return store?.getRow("users", args?.id) ?? byId(users, args?.id) ?? users[0];
     case "volunteers:applications":
       return tables.volunteerApplications;
     case "volunteers:screenings":
@@ -3999,15 +3999,16 @@ function queryResult(name: string, args: StaticArgs) {
   }
 
   const [moduleName, exportName] = name.split(":");
-  if (moduleName === "society" && exportName === "get") return society;
-  if (moduleName === "society" && exportName === "list") return [society];
-  if (exportName === "list") return scopedRows(tables[moduleName] ?? [], args);
-  if (exportName === "get") return byId(tables[moduleName] ?? [], args?.id);
+  const tableName = staticTableNameForModule(moduleName);
+  if (moduleName === "society" && exportName === "get") return store?.getRow("societies", args?.id ?? SOCIETY_ID) ?? society;
+  if (moduleName === "society" && exportName === "list") return store?.listRows("societies", args) ?? [society];
+  if (exportName === "list") return store?.listRows(tableName, args) ?? scopedRows(tables[tableName] ?? [], args);
+  if (exportName === "get") return store?.getRow(tableName, args?.id) ?? byId(tables[tableName] ?? [], args?.id);
   return [];
 }
 
 function mutableQueryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null) {
-  return store?.queryResult(name, args) ?? queryResult(name, args);
+  return store?.queryResult(name, args) ?? queryResult(name, args, store);
 }
 
 function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null) {
@@ -4269,8 +4270,14 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       updated: [],
     };
   }
-  if (name === "seed:run") return { societyId: SOCIETY_ID };
-  if (name === "seed:reset") return { ok: true };
+  if (name === "seed:run") {
+    void store?.reseed();
+    return { societyId: SOCIETY_ID };
+  }
+  if (name === "seed:reset") {
+    void store?.reseed();
+    return { ok: true };
+  }
   if (name === "users:resolveAuthSession") return { userId: USER_OWNER_ID };
   if (name === "paperless:testConnection") {
     return {
@@ -4512,8 +4519,29 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     }
     return { sourceId: source._id, installed: true };
   }
-  if (name.endsWith(":create") || name.includes(":upsert") || name.includes(":issue")) {
-    return args?.id ?? `static_${Date.now()}`;
+  const [moduleName, exportName] = name.split(":");
+  if (exportName && /^(create|update|upsert|issue|setStatus|remove)/.test(exportName)) {
+    const tableName = staticMutationTableName(moduleName, exportName);
+    if (exportName.startsWith("remove")) {
+      store?.removeRow(tableName, args?.id);
+      return null;
+    }
+    const id = args?.id ?? `static_${moduleName}_${Date.now()}`;
+    const existing = store?.getRow(tableName, id) ?? {};
+    const patch = args?.patch && typeof args.patch === "object" ? args.patch : {};
+    const row = {
+      ...existing,
+      ...args,
+      ...patch,
+      _id: id,
+      societyId: args?.societyId ?? existing.societyId ?? SOCIETY_ID,
+      updatedAtISO: new Date().toISOString(),
+      createdAtISO: existing.createdAtISO ?? args?.createdAtISO ?? new Date().toISOString(),
+    };
+    delete row.id;
+    delete row.patch;
+    store?.upsertRow(tableName, row);
+    return id;
   }
   return null;
 }
@@ -4531,11 +4559,17 @@ function staticAgentOutput(agent: any, input: string) {
   ].join("\n");
 }
 
-type StaticDemoTableName = "meetings" | "minutes";
+type StaticDemoSeed = Record<string, any[]>;
+
+const STATIC_DEMO_SEED: StaticDemoSeed = {
+  ...tables,
+  societies: [society],
+};
 
 class StaticDemoDexieDatabase extends Dexie {
   meetings!: Table<any, string>;
   minutes!: Table<any, string>;
+  records!: Table<any, string>;
 
   constructor() {
     super("societyer-static-demo");
@@ -4543,19 +4577,23 @@ class StaticDemoDexieDatabase extends Dexie {
       meetings: "_id, societyId, scheduledAt, status",
       minutes: "_id, meetingId, societyId, heldAt, status",
     });
+    this.version(2).stores({
+      meetings: "_id, societyId, scheduledAt, status",
+      minutes: "_id, meetingId, societyId, heldAt, status",
+      records: "&key, table, id, societyId",
+    });
   }
 }
 
 class StaticDemoDexieStore {
   private db: StaticDemoDexieDatabase | null = null;
-  private cache: Record<StaticDemoTableName, any[]>;
+  private cache: StaticDemoSeed;
+  private seed: StaticDemoSeed;
   private listeners = new Set<() => void>();
 
-  constructor(seed: Record<StaticDemoTableName, any[]>) {
-    this.cache = {
-      meetings: cloneStaticRows(seed.meetings),
-      minutes: cloneStaticRows(seed.minutes),
-    };
+  constructor(seed: StaticDemoSeed) {
+    this.seed = cloneStaticSeed(seed);
+    this.cache = cloneStaticSeed(seed);
 
     if (typeof window === "undefined" || !("indexedDB" in window)) return;
 
@@ -4587,13 +4625,13 @@ class StaticDemoDexieStore {
       case "agendas:listForSociety":
         return scopedRows(this.cache.meetings, args).map((meeting) => this.agendaSummaryForMeeting(meeting));
       case "meetings:get":
-        return byId(this.cache.meetings, args?.id) ?? this.cache.meetings[0] ?? null;
+        return this.getRow("meetings", args?.id) ?? this.listRows("meetings", args)[0] ?? null;
       case "meetings:list":
-        return scopedRows(this.cache.meetings, args);
+        return this.listRows("meetings", args);
       case "minutes:getByMeeting":
-        return this.cache.minutes.find((row) => row.meetingId === args?.meetingId) ?? null;
+        return this.rows("minutes").find((row) => row.meetingId === args?.meetingId) ?? null;
       case "minutes:get":
-        return byId(this.cache.minutes, args?.id);
+        return this.getRow("minutes", args?.id);
     }
     return undefined;
   }
@@ -4694,13 +4732,54 @@ class StaticDemoDexieStore {
         updatedAtISO: new Date(now).toISOString(),
         ...args,
       };
-      this.cache.minutes = upsertStaticRow(this.cache.minutes, row);
-      void this.db?.minutes.put(cloneStaticRow(row));
+      this.upsertRow("minutes", row);
       this.notify();
       return row._id;
     }
 
     return undefined;
+  }
+
+  listRows(table: string, args?: StaticArgs) {
+    return scopedRows(this.rows(table), args);
+  }
+
+  getRow(table: string, id: string | undefined) {
+    return byId(this.rows(table), id);
+  }
+
+  upsertRow(table: string, row: any) {
+    if (!row?._id) return null;
+    this.cache[table] = upsertStaticRow(this.rows(table), row);
+    this.persistRow(table, row);
+    this.notify();
+    return row;
+  }
+
+  removeRow(table: string, id: string | undefined) {
+    if (!id) return null;
+    const previous = this.getRow(table, id);
+    this.cache[table] = this.rows(table).filter((row) => row._id !== id);
+    void this.db?.records.delete(staticRecordKey(table, id));
+    if (table === "meetings" || table === "minutes") void this.db?.[table].delete(id);
+    this.notify();
+    return previous;
+  }
+
+  async reseed() {
+    this.cache = cloneStaticSeed(this.seed);
+    if (!this.db) {
+      this.notify();
+      return;
+    }
+    await this.db.open();
+    await Promise.all([
+      this.db.records.clear(),
+      this.db.meetings.clear(),
+      this.db.minutes.clear(),
+    ]);
+    await this.writeSeed(this.seed);
+    this.notify();
   }
 
   private agendaSummaryForMeeting(meeting: any) {
@@ -4732,41 +4811,76 @@ class StaticDemoDexieStore {
     return { agenda: this.agendaSummaryForMeeting(meeting), items };
   }
 
-  private async hydrate(seed: Record<StaticDemoTableName, any[]>) {
+  private async hydrate(seed: StaticDemoSeed) {
     if (!this.db) return;
 
     await this.db.open();
-    const [meetingCount, minuteCount] = await Promise.all([
-      this.db.meetings.count(),
-      this.db.minutes.count(),
-    ]);
+    if ((await this.db.records.count()) === 0) {
+      const [legacyMeetings, legacyMinutes] = await Promise.all([
+        this.db.meetings.toArray(),
+        this.db.minutes.toArray(),
+      ]);
+      await this.writeSeed({
+        ...seed,
+        meetings: legacyMeetings.length ? legacyMeetings : seed.meetings,
+        minutes: legacyMinutes.length ? legacyMinutes : seed.minutes,
+      });
+    } else {
+      await this.putMissingSeedRows(seed);
+    }
 
-    if (meetingCount === 0) await this.db.meetings.bulkPut(cloneStaticRows(seed.meetings));
-    else await putMissingStaticRows(this.db.meetings, seed.meetings);
-    if (minuteCount === 0) await this.db.minutes.bulkPut(cloneStaticRows(seed.minutes));
-    else await putMissingStaticRows(this.db.minutes, seed.minutes);
+    const localRecords = await this.db.records.toArray();
+    const next = cloneStaticSeed(seed);
+    for (const record of localRecords) {
+      if (!record?.table || !record?.value?._id) continue;
+      next[record.table] = upsertStaticRow(next[record.table] ?? [], record.value);
+    }
 
-    const [localMeetings, localMinutes] = await Promise.all([
-      this.db.meetings.toArray(),
-      this.db.minutes.toArray(),
-    ]);
-
-    this.cache = {
-      meetings: localMeetings.length ? localMeetings : cloneStaticRows(seed.meetings),
-      minutes: localMinutes.length ? localMinutes : cloneStaticRows(seed.minutes),
-    };
+    this.cache = next;
     this.notify();
   }
 
-  private patchRow(table: StaticDemoTableName, id: string | undefined, patch: Record<string, any>) {
+  private async writeSeed(seed: StaticDemoSeed) {
+    if (!this.db) return;
+    const records = Object.entries(seed).flatMap(([table, rows]) =>
+      rows.filter((row) => row?._id).map((row) => staticRecord(table, row)),
+    );
+    if (records.length) await this.db.records.bulkPut(records);
+    await Promise.all([
+      seed.meetings?.length ? this.db.meetings.bulkPut(cloneStaticRows(seed.meetings)) : Promise.resolve(),
+      seed.minutes?.length ? this.db.minutes.bulkPut(cloneStaticRows(seed.minutes)) : Promise.resolve(),
+    ]);
+  }
+
+  private async putMissingSeedRows(seed: StaticDemoSeed) {
+    if (!this.db) return;
+    const missing: any[] = [];
+    for (const [table, rows] of Object.entries(seed)) {
+      for (const row of rows) {
+        if (!row?._id) continue;
+        if (!(await this.db.records.get(staticRecordKey(table, row._id)))) missing.push(staticRecord(table, row));
+      }
+    }
+    if (missing.length) await this.db.records.bulkPut(missing);
+  }
+
+  private rows(table: string) {
+    return this.cache[table] ?? [];
+  }
+
+  private patchRow(table: string, id: string | undefined, patch: Record<string, any>) {
     if (!id) return null;
-    const existing = this.cache[table].find((row) => row._id === id);
+    const existing = this.rows(table).find((row) => row._id === id);
     if (!existing) return null;
     const updated = { ...existing, ...patch, updatedAtISO: new Date().toISOString() };
-    this.cache[table] = upsertStaticRow(this.cache[table], updated);
-    void this.db?.[table].put(cloneStaticRow(updated));
+    this.upsertRow(table, updated);
     this.notify();
     return updated;
+  }
+
+  private persistRow(table: string, row: any) {
+    void this.db?.records.put(staticRecord(table, row));
+    if (table === "meetings" || table === "minutes") void this.db?.[table].put(cloneStaticRow(row));
   }
 
   private notify() {
@@ -4780,6 +4894,44 @@ function cloneStaticRow<T>(row: T): T {
 
 function cloneStaticRows<T>(rows: T[]): T[] {
   return rows.map((row) => cloneStaticRow(row));
+}
+
+function cloneStaticSeed(seed: StaticDemoSeed): StaticDemoSeed {
+  return Object.fromEntries(Object.entries(seed).map(([table, rows]) => [table, cloneStaticRows(rows)]));
+}
+
+function staticRecordKey(table: string, id: string) {
+  return `${table}:${id}`;
+}
+
+function staticRecord(table: string, row: any) {
+  return {
+    key: staticRecordKey(table, row._id),
+    table,
+    id: row._id,
+    societyId: row.societyId,
+    value: cloneStaticRow(row),
+  };
+}
+
+function staticTableNameForModule(moduleName: string) {
+  if (moduleName === "society") return "societies";
+  return moduleName;
+}
+
+function staticMutationTableName(moduleName: string, exportName: string) {
+  if (moduleName === "society") return "societies";
+  if (moduleName === "organizationDetails" && exportName.includes("Address")) return "organizationAddresses";
+  if (moduleName === "organizationDetails" && exportName.includes("Registration")) return "organizationRegistrations";
+  if (moduleName === "organizationDetails" && exportName.includes("Identifier")) return "organizationIdentifiers";
+  if (moduleName === "volunteers" && exportName.includes("Screening")) return "volunteerScreenings";
+  if (moduleName === "volunteers" && exportName.includes("Application")) return "volunteerApplications";
+  if (moduleName === "fundingSources" && exportName.includes("Event")) return "fundingSourceEvents";
+  if (moduleName === "fundingSources") return "fundingSources";
+  if (moduleName === "financialHub" && exportName.includes("Budget")) return "budgets";
+  if (moduleName === "financialHub" && exportName.includes("OperatingSubscription")) return "operatingSubscriptions";
+  if (moduleName === "transparency") return "transparency";
+  return staticTableNameForModule(moduleName);
 }
 
 function upsertStaticRow(rows: any[], row: any) {
@@ -4861,7 +5013,7 @@ function staticModel(
 }
 
 export class StaticConvexClient {
-  private store = new StaticDemoDexieStore({ meetings, minutes });
+  private store = new StaticDemoDexieStore(STATIC_DEMO_SEED);
 
   get url() {
     return "static://societyer-demo";
@@ -4932,6 +5084,14 @@ export class StaticConvexClient {
       error: () => undefined,
     };
   }
+
+  reseedStaticDemo() {
+    return this.store.reseed();
+  }
 }
 
 export const staticConvex = new StaticConvexClient();
+
+export function reseedStaticDemoData() {
+  return staticConvex.reseedStaticDemo();
+}
