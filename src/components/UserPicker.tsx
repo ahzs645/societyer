@@ -8,7 +8,7 @@ import {
   setStoredUserId,
 } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
-import { ChevronDown, LogOut, User } from "lucide-react";
+import { ChevronDown, LogOut } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 
@@ -86,8 +86,7 @@ export function UserPicker() {
         }}
       >
         <div className="row" style={{ gap: 8, alignItems: "center" }}>
-          <User size={12} />
-          <span style={{ fontWeight: 500, flex: 1 }}>
+          <span style={{ fontWeight: 500, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {current?.displayName ?? auth.session?.user.name ?? auth.session?.user.email}
           </span>
           {current?.role && (
@@ -133,8 +132,7 @@ export function UserPicker() {
         onClick={() => setOpen((v) => !v)}
         title="Switch acting user"
       >
-        <User size={12} />
-        <span style={{ fontWeight: 500, flex: 1, textAlign: "left" }}>
+        <span style={{ fontWeight: 500, flex: 1, minWidth: 0, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {current?.displayName ?? (users && users.length === 0 ? "No users" : "Pick user")}
         </span>
         {current && (

@@ -1,41 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
-
-type Shortcut = {
-  keys: string[];
-  label: string;
-};
-
-type Section = {
-  label: string;
-  items: Shortcut[];
-};
-
-const SECTIONS: Section[] = [
-  {
-    label: "Navigation",
-    items: [
-      { keys: ["⌘", "K"], label: "Open command palette" },
-      { keys: ["⌘", "\\"], label: "Toggle sidebar" },
-      { keys: ["?"], label: "Show this help" },
-    ],
-  },
-  {
-    label: "In drawers & dialogs",
-    items: [
-      { keys: ["Esc"], label: "Close drawer or modal" },
-      { keys: ["Tab"], label: "Move focus forward" },
-      { keys: ["Shift", "Tab"], label: "Move focus backward" },
-    ],
-  },
-  {
-    label: "Tables",
-    items: [
-      { keys: ["Enter"], label: "Open the focused row" },
-      { keys: ["Click"], label: "Open the row detail" },
-    ],
-  },
-];
+import { SHORTCUT_SECTIONS } from "../lib/shortcutsRegistry";
 
 function isTypingTarget(el: EventTarget | null) {
   if (!(el instanceof HTMLElement)) return false;
@@ -66,12 +31,12 @@ export function ShortcutHelp() {
       size="md"
     >
       <div className="shortcut-help">
-        {SECTIONS.map((section) => (
-          <section key={section.label} className="shortcut-help__section">
+        {SHORTCUT_SECTIONS.map((section) => (
+          <section key={section.id} className="shortcut-help__section">
             <div className="shortcut-help__section-label">{section.label}</div>
             <ul className="shortcut-help__list">
-              {section.items.map((item) => (
-                <li key={item.label} className="shortcut-help__row">
+              {section.items.map((item, itemIndex) => (
+                <li key={`${item.label}-${itemIndex}`} className="shortcut-help__row">
                   <span className="shortcut-help__label">{item.label}</span>
                   <span className="shortcut-help__keys">
                     {item.keys.map((k, i) => (

@@ -97,7 +97,7 @@ import { useThemePreference } from "../hooks/useThemePreference";
 import type { ThemePreference } from "../lib/theme";
 import { mobileSidebarMediaQuery } from "../lib/breakpoints";
 import { DEFAULT_PINNED_ROUTES } from "../lib/navConfig";
-import { useUIStore } from "../lib/store";
+import { useUIStore, type PinnedView } from "../lib/store";
 
 function NotificationBellSafe() {
   return (
@@ -156,6 +156,14 @@ function CommandPaletteSafe() {
   return (
     <ErrorBoundary label="CommandPalette" fallback={null}>
       <CommandPalette />
+    </ErrorBoundary>
+  );
+}
+
+function GlobalAiAssistantSafe() {
+  return (
+    <ErrorBoundary label="GlobalAiAssistant" fallback={null}>
+      <GlobalAiAssistant />
     </ErrorBoundary>
   );
 }
@@ -572,10 +580,12 @@ const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
 };
 
 type SidebarContextMenu = {
-  item: NavItem;
+  ref: FavoriteRef;
   label: string;
   top: number;
   left: number;
+  /** Target URL for "Open in new tab"; omitted for commands (which have no URL). */
+  openInNewTabTarget?: string;
 };
 
 function getSidebarMenuPosition(x: number, y: number) {
@@ -691,6 +701,7 @@ export function Layout() {
   // intact. Views are appended on first appearance and removed when they
   // disappear from the zustand store.
   const pinnedViews = useUIStore((s) => s.pinnedViews);
+  const unpinView = useUIStore((s) => s.unpinView);
   useEffect(() => {
     setFavoritesOrder((prev) => {
       const seen = new Set(prev.map(favoriteRefKey));
@@ -904,11 +915,19 @@ export function Layout() {
     }
   };
 
-  const togglePinnedRoute = (item: NavItem) => {
-    setPinnedRoutes((prev) => {
-      if (prev.includes(item.to)) return prev.filter((route) => route !== item.to);
-      return normalizePinnedRoutes([...prev, item.to]);
-    });
+  const togglePinnedFavorite = (ref: FavoriteRef) => {
+    if (ref.kind === "route") {
+      setPinnedRoutes((prev) => {
+        if (prev.includes(ref.id)) return prev.filter((route) => route !== ref.id);
+        return normalizePinnedRoutes([...prev, ref.id]);
+      });
+    } else if (ref.kind === "command") {
+      // From this menu we only ever see already-pinned commands (the menu is
+      // only triggered from the favorites bar), so this is effectively unpin.
+      setPinnedCommandIds((prev) => prev.filter((id) => id !== ref.id));
+    } else {
+      unpinView(ref.viewsKey, ref.viewId);
+    }
     setNavContextMenu(null);
   };
 
@@ -988,33 +1007,108 @@ export function Layout() {
     });
   };
 
-  const openNavContextMenu = (item: NavItem, x: number, y: number) => {
+  const openFavoriteContextMenu = (
+    ref: FavoriteRef,
+    label: string,
+    openInNewTabTarget: string | undefined,
+    x: number,
+    y: number,
+  ) => {
     const position = getSidebarMenuPosition(x, y);
     setNavContextMenu({
-      item,
-      label: getNavItemLabel(item),
+      ref,
+      label,
       top: position.top,
       left: position.left,
+      openInNewTabTarget,
     });
     setWorkspaceOpen(false);
   };
 
+  const isContextMenuKey = (event: ReactKeyboardEvent<HTMLElement>) =>
+    event.key === "ContextMenu" || (event.shiftKey && event.key === "F10");
+
   const handleNavItemContextMenu = (event: ReactMouseEvent<HTMLElement>, item: NavItem) => {
     event.preventDefault();
     event.stopPropagation();
-    openNavContextMenu(item, event.clientX, event.clientY);
+    openFavoriteContextMenu(
+      { kind: "route", id: item.to },
+      getNavItemLabel(item),
+      item.to,
+      event.clientX,
+      event.clientY,
+    );
   };
 
   const handleNavItemKeyDown = (event: ReactKeyboardEvent<HTMLElement>, item: NavItem) => {
-    if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+    if (!isContextMenuKey(event)) return;
     event.preventDefault();
     const rect = event.currentTarget.getBoundingClientRect();
-    openNavContextMenu(item, rect.left + 28, rect.bottom - 2);
+    openFavoriteContextMenu(
+      { kind: "route", id: item.to },
+      getNavItemLabel(item),
+      item.to,
+      rect.left + 28,
+      rect.bottom - 2,
+    );
   };
 
-  const openNavItemInNewTab = (item: NavItem) => {
-    window.open(item.to, "_blank", "noopener,noreferrer");
-    setNavContextMenu(null);
+  const handleCommandContextMenu = (
+    event: ReactMouseEvent<HTMLElement>,
+    commandId: string,
+    label: string,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openFavoriteContextMenu(
+      { kind: "command", id: commandId },
+      label,
+      undefined,
+      event.clientX,
+      event.clientY,
+    );
+  };
+
+  const handleCommandKeyDown = (
+    event: ReactKeyboardEvent<HTMLElement>,
+    commandId: string,
+    label: string,
+  ) => {
+    if (!isContextMenuKey(event)) return;
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    openFavoriteContextMenu(
+      { kind: "command", id: commandId },
+      label,
+      undefined,
+      rect.left + 28,
+      rect.bottom - 2,
+    );
+  };
+
+  const handleViewContextMenu = (event: ReactMouseEvent<HTMLElement>, view: PinnedView) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openFavoriteContextMenu(
+      { kind: "view", viewsKey: view.viewsKey, viewId: view.viewId },
+      view.label,
+      `${view.to}?view=${view.viewId}`,
+      event.clientX,
+      event.clientY,
+    );
+  };
+
+  const handleViewKeyDown = (event: ReactKeyboardEvent<HTMLElement>, view: PinnedView) => {
+    if (!isContextMenuKey(event)) return;
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    openFavoriteContextMenu(
+      { kind: "view", viewsKey: view.viewsKey, viewId: view.viewId },
+      view.label,
+      `${view.to}?view=${view.viewId}`,
+      rect.left + 28,
+      rect.bottom - 2,
+    );
   };
 
   return (
@@ -1201,12 +1295,15 @@ export function Layout() {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
                         navigate(target);
+                        return;
                       }
+                      handleViewKeyDown(event, view);
                     }}
                     onDragStart={onFavoriteDragStart(index)}
                     onDragOver={onFavoriteDragOver(index)}
                     onDrop={onFavoriteDrop}
                     onDragEnd={onFavoriteDragEnd}
+                    onContextMenu={(event) => handleViewContextMenu(event, view)}
                   >
                     <span className="sidebar__nav-icon" aria-hidden="true">
                       <Pin size={12} />
@@ -1230,7 +1327,9 @@ export function Layout() {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
                       void command.run();
+                      return;
                     }
+                    handleCommandKeyDown(event, command.id, command.label);
                   }}
                   title={collapsed ? command.label : undefined}
                   aria-label={command.label}
@@ -1239,6 +1338,7 @@ export function Layout() {
                   onDragOver={onFavoriteDragOver(index)}
                   onDrop={onFavoriteDrop}
                   onDragEnd={onFavoriteDragEnd}
+                  onContextMenu={(event) => handleCommandContextMenu(event, command.id, command.label)}
                 >
                   <TintedIconTile tone="gray" size="sm" className="sidebar__icon-chip">
                     <Icon size={14} />
@@ -1397,77 +1497,87 @@ export function Layout() {
         )}
 
         {navContextMenu && createPortal(
-          <div
-            ref={navContextMenuRef}
-            className="menu menu--actions sidebar-context-menu"
-            role="menu"
-            style={{
-              top: navContextMenu.top,
-              left: navContextMenu.left,
-              width: SIDEBAR_MENU_WIDTH,
-            }}
-          >
-            <div className="menu__section">
-              <MenuSectionLabel>{navContextMenu.label}</MenuSectionLabel>
-              <MenuRow
-                role="menuitem"
-                icon={pinnedRouteSet.has(navContextMenu.item.to) ? <PinOff size={14} /> : <Pin size={14} />}
-                label={
-                  pinnedRouteSet.has(navContextMenu.item.to)
-                    ? t("sidebar.unpinFromFavorites")
-                    : t("sidebar.pinToFavorites")
-                }
-                onClick={() => togglePinnedRoute(navContextMenu.item)}
-              />
-              {(() => {
-                // Move up / Move down only show for pinned items, and only
-                // in directions that lead somewhere. Resolved against the
-                // unified favorites order so a pinned route can be moved
-                // past a pinned action that's adjacent to it.
-                const orderIndex = favoritesOrder.findIndex(
-                  (ref) => ref.kind === "route" && ref.id === navContextMenu.item.to,
-                );
-                if (orderIndex < 0) return null;
-                const canMoveUp = orderIndex > 0;
-                const canMoveDown = orderIndex < favoritesOrder.length - 1;
-                if (!canMoveUp && !canMoveDown) return null;
-                return (
-                  <>
-                    <div className="menu__separator" />
-                    {canMoveUp && (
+          (() => {
+            const ref = navContextMenu.ref;
+            const isPinned =
+              ref.kind === "route"
+                ? pinnedRouteSet.has(ref.id)
+                : ref.kind === "command"
+                  ? pinnedCommandIds.includes(ref.id)
+                  : pinnedViews.some((v) => v.viewsKey === ref.viewsKey && v.viewId === ref.viewId);
+            const orderIndex = favoritesOrder.findIndex(
+              (entry) => favoriteRefKey(entry) === favoriteRefKey(ref),
+            );
+            const canMoveUp = orderIndex > 0;
+            const canMoveDown = orderIndex >= 0 && orderIndex < favoritesOrder.length - 1;
+            const openTarget = navContextMenu.openInNewTabTarget;
+
+            return (
+              <div
+                ref={navContextMenuRef}
+                className="menu menu--actions sidebar-context-menu"
+                role="menu"
+                style={{
+                  top: navContextMenu.top,
+                  left: navContextMenu.left,
+                  width: SIDEBAR_MENU_WIDTH,
+                }}
+              >
+                <div className="menu__section">
+                  <MenuSectionLabel>{navContextMenu.label}</MenuSectionLabel>
+                  <MenuRow
+                    role="menuitem"
+                    icon={isPinned ? <PinOff size={14} /> : <Pin size={14} />}
+                    label={
+                      isPinned ? t("sidebar.unpinFromFavorites") : t("sidebar.pinToFavorites")
+                    }
+                    onClick={() => togglePinnedFavorite(ref)}
+                  />
+                  {(canMoveUp || canMoveDown) && (
+                    <>
+                      <div className="menu__separator" />
+                      {canMoveUp && (
+                        <MenuRow
+                          role="menuitem"
+                          icon={<ArrowUp size={14} />}
+                          label="Move up"
+                          onClick={() => {
+                            moveFavoriteByIndex(orderIndex, -1);
+                            setNavContextMenu(null);
+                          }}
+                        />
+                      )}
+                      {canMoveDown && (
+                        <MenuRow
+                          role="menuitem"
+                          icon={<ArrowDown size={14} />}
+                          label="Move down"
+                          onClick={() => {
+                            moveFavoriteByIndex(orderIndex, 1);
+                            setNavContextMenu(null);
+                          }}
+                        />
+                      )}
+                    </>
+                  )}
+                  {openTarget && (
+                    <>
+                      <div className="menu__separator" />
                       <MenuRow
                         role="menuitem"
-                        icon={<ArrowUp size={14} />}
-                        label="Move up"
+                        icon={<ExternalLink size={14} />}
+                        label={t("sidebar.openInNewTab")}
                         onClick={() => {
-                          moveFavoriteByIndex(orderIndex, -1);
+                          window.open(openTarget, "_blank", "noopener,noreferrer");
                           setNavContextMenu(null);
                         }}
                       />
-                    )}
-                    {canMoveDown && (
-                      <MenuRow
-                        role="menuitem"
-                        icon={<ArrowDown size={14} />}
-                        label="Move down"
-                        onClick={() => {
-                          moveFavoriteByIndex(orderIndex, 1);
-                          setNavContextMenu(null);
-                        }}
-                      />
-                    )}
-                  </>
-                );
-              })()}
-              <div className="menu__separator" />
-              <MenuRow
-                role="menuitem"
-                icon={<ExternalLink size={14} />}
-                label={t("sidebar.openInNewTab")}
-                onClick={() => openNavItemInNewTab(navContextMenu.item)}
-              />
-            </div>
-          </div>,
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })(),
           document.body,
         )}
 
@@ -1486,7 +1596,7 @@ export function Layout() {
             </div>
           </div>
         </div>
-        <GlobalAiAssistant />
+        <GlobalAiAssistantSafe />
         {isMobileNav && (
           <nav className="bottom-nav" aria-label={t("sidebar.navigation")}>
             {/* Icon size 16px matches twenty's icon.size.md — the CSS also
