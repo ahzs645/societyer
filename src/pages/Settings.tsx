@@ -13,6 +13,7 @@ import { getAuthMode } from "../lib/authMode";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
 import { maintenanceErrorMessage, resetDemoData, seedDemoSociety } from "../lib/maintenanceApi";
 import { useThemePreference } from "../hooks/useThemePreference";
+import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
 import { useTranslation } from "react-i18next";
 import type { ThemePreference } from "../lib/theme";
 import {
@@ -34,6 +35,8 @@ export function SettingsPage() {
   const confirm = useConfirm();
   const toast = useToast();
   const { preference: theme, resolvedTheme, setPreference: setTheme } = useThemePreference();
+  const { hidden: operationsDeskHidden, setHidden: setOperationsDeskHidden } =
+    useOperationsDeskVisibility();
   const [moduleSettings, setModuleSettings] = useState(() => normalizeModuleSettings(undefined));
   const [savingModule, setSavingModule] = useState<ModuleKey | null>(null);
   const [maintenanceBusy, setMaintenanceBusy] = useState<"seed" | "reset" | null>(null);
@@ -125,13 +128,19 @@ export function SettingsPage() {
 
         <div className="card">
           <div className="card__head"><h2 className="card__title">{t("settings.appearanceTitle")}</h2></div>
-          <div className="card__body row" style={{ gap: 8 }}>
+          <div className="card__body col" style={{ gap: 16 }}>
             <RadioGroup<ThemePreference>
               name="appearance-theme"
               value={theme}
               onChange={setTheme}
               options={themeOptions}
               direction="horizontal"
+            />
+            <Toggle
+              checked={!operationsDeskHidden}
+              onChange={(checked) => setOperationsDeskHidden(!checked)}
+              label={t("sidebar.showOperationsDesk")}
+              hint={t("sidebar.showOperationsDeskHint")}
             />
           </div>
         </div>

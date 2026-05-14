@@ -7,25 +7,15 @@ function DinnerTableIcon({ size = 12 }: { size?: number }) {
       xmlns="http://www.w3.org/2000/svg"
       width={size}
       height={size}
-      viewBox="0 0 22 14.61"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
+      viewBox="0 0 26 26"
+      fill="currentColor"
       aria-hidden="true"
     >
-      <path d="M21 1H1" />
-      <path
-        d="M3.01,1.92v11.78c0,1.22,1.9,1.22,1.9,0V1.92c0-1.22-1.9-1.22-1.9,0Z"
-        fill="currentColor"
-        stroke="none"
-      />
-      <path
-        d="M17.05,1.92c0,3.93,0,7.85,0,11.78s1.9,1.22,1.9,0c0-3.93,0-7.85,0-11.78s-1.9-1.22-1.9,0Z"
-        fill="currentColor"
-        stroke="none"
-      />
+      <path d="M25.484,7.114l-4.278-3.917C21.034,3.069,20.825,3,20.61,3H5.38C5.165,3,4.956,3.069,4.783,3.197l-4.38,4C0.403,7.197,0,7.453,0,8v2c0,0.551,0.449,1,1,1h24c0.551,0,1-0.449,1-1V8C26,7.469,25.484,7.114,25.484,7.114z" />
+      <path d="M2,23c-0.551,0-1-0.449-1-1V10h3v12c0,0.551-0.449,1-1,1H2z" />
+      <path d="M23,23c-0.551,0-1-0.449-1-1V10h3v12c0,0.551-0.449,1-1,1H23z" />
+      <path d="M20,18c-0.551,0-1-0.449-1-1v-5h2v5C21,17.551,20.551,18,20,18L20,18z" />
+      <path d="M6,18c-0.551,0-1-0.449-1-1v-5h2v5C7,17.551,6.551,18,6,18L6,18z" />
     </svg>
   );
 }

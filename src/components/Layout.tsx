@@ -28,6 +28,7 @@ import {
   Bell,
   ShieldCheck,
   Eye,
+  EyeOff,
   Archive,
   UserCheck,
   Calculator,
@@ -94,6 +95,7 @@ import { useStaticCommands } from "../lib/useStaticCommands";
 import { useTranslation } from "react-i18next";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { useThemePreference } from "../hooks/useThemePreference";
+import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
 import type { ThemePreference } from "../lib/theme";
 import { mobileSidebarMediaQuery } from "../lib/breakpoints";
 import { DEFAULT_PINNED_ROUTES } from "../lib/navConfig";
@@ -641,11 +643,17 @@ export function Layout() {
     maxHeight: number;
   } | null>(null);
   const [navContextMenu, setNavContextMenu] = useState<SidebarContextMenu | null>(null);
+  const { hidden: operationsDeskHidden, setHidden: setOperationsDeskHidden } =
+    useOperationsDeskVisibility();
+  const [operationsDeskMenu, setOperationsDeskMenu] = useState<
+    { top: number; left: number } | null
+  >(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
   const mainRef = useRef<HTMLDivElement | null>(null);
   const workspaceButtonRef = useRef<HTMLButtonElement | null>(null);
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const navContextMenuRef = useRef<HTMLDivElement | null>(null);
+  const operationsDeskMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (isStaticDemoRuntime()) return;
@@ -860,6 +868,28 @@ export function Layout() {
       window.removeEventListener("scroll", close, true);
     };
   }, [navContextMenu]);
+
+  useEffect(() => {
+    if (!operationsDeskMenu) return;
+    const onDown = (event: MouseEvent) => {
+      if (operationsDeskMenuRef.current?.contains(event.target as Node)) return;
+      setOperationsDeskMenu(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOperationsDeskMenu(null);
+    };
+    const close = () => setOperationsDeskMenu(null);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [operationsDeskMenu]);
 
   const counts = useQuery(api.dashboard.navCounts, society ? { societyId: society._id } : "skip");
   const pinnedRouteSet = useMemo(() => new Set(pinnedRoutes), [pinnedRoutes]);
@@ -1111,6 +1141,14 @@ export function Layout() {
     );
   };
 
+  const handleOperationsDeskContextMenu = (event: ReactMouseEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setOperationsDeskMenu(getSidebarMenuPosition(event.clientX, event.clientY));
+    setWorkspaceOpen(false);
+    setNavContextMenu(null);
+  };
+
   return (
     <InspectorProvider>
       <CommandPaletteSafe />
@@ -1180,39 +1218,42 @@ export function Layout() {
               </button>
             </div>
           </div>
-          <div className={`sidebar__spotlight${spotlightCollapsed ? " is-collapsed" : ""}`}>
-            <button
-              type="button"
-              className="sidebar__spotlight-toggle"
-              onClick={() => setSpotlightCollapsed((v) => !v)}
-              aria-expanded={!spotlightCollapsed}
-            >
-              <span className="sidebar__spotlight-label">{t("sidebar.operationsDesk")}</span>
-              <ChevronDown size={12} className="sidebar__spotlight-chevron" />
-            </button>
-            {!spotlightCollapsed && (
-              <>
-                <NavLink
-                  to="/app/tasks"
-                  className={({ isActive }) =>
-                    `sidebar__spotlight-meta sidebar__spotlight-meta--link${isActive ? " is-active" : ""}`
-                  }
-                >
-                  <span>{t("sidebar.openTasks")}</span>
-                  <Pill size="sm">{counts?.openTasks ?? 0}</Pill>
-                </NavLink>
-                <NavLink
-                  to="/app/deadlines"
-                  className={({ isActive }) =>
-                    `sidebar__spotlight-meta sidebar__spotlight-meta--link${isActive ? " is-active" : ""}`
-                  }
-                >
-                  <span>{t("sidebar.upcomingDeadlines")}</span>
-                  <Pill size="sm">{counts?.openDeadlines ?? 0}</Pill>
-                </NavLink>
-              </>
-            )}
-          </div>
+          {!operationsDeskHidden && (
+            <div className={`sidebar__spotlight${spotlightCollapsed ? " is-collapsed" : ""}`}>
+              <button
+                type="button"
+                className="sidebar__spotlight-toggle"
+                onClick={() => setSpotlightCollapsed((v) => !v)}
+                onContextMenu={handleOperationsDeskContextMenu}
+                aria-expanded={!spotlightCollapsed}
+              >
+                <span className="sidebar__spotlight-label">{t("sidebar.operationsDesk")}</span>
+                <ChevronDown size={12} className="sidebar__spotlight-chevron" />
+              </button>
+              {!spotlightCollapsed && (
+                <>
+                  <NavLink
+                    to="/app/tasks"
+                    className={({ isActive }) =>
+                      `sidebar__spotlight-meta sidebar__spotlight-meta--link${isActive ? " is-active" : ""}`
+                    }
+                  >
+                    <span>{t("sidebar.openTasks")}</span>
+                    <Pill size="sm">{counts?.openTasks ?? 0}</Pill>
+                  </NavLink>
+                  <NavLink
+                    to="/app/deadlines"
+                    className={({ isActive }) =>
+                      `sidebar__spotlight-meta sidebar__spotlight-meta--link${isActive ? " is-active" : ""}`
+                    }
+                  >
+                    <span>{t("sidebar.upcomingDeadlines")}</span>
+                    <Pill size="sm">{counts?.openDeadlines ?? 0}</Pill>
+                  </NavLink>
+                </>
+              )}
+            </div>
+          )}
 
           <nav className="sidebar__nav">
             <div className="sidebar__section sidebar__section--compact">
@@ -1578,6 +1619,33 @@ export function Layout() {
               </div>
             );
           })(),
+          document.body,
+        )}
+
+        {operationsDeskMenu && createPortal(
+          <div
+            ref={operationsDeskMenuRef}
+            className="menu menu--actions sidebar-context-menu"
+            role="menu"
+            style={{
+              top: operationsDeskMenu.top,
+              left: operationsDeskMenu.left,
+              width: SIDEBAR_MENU_WIDTH,
+            }}
+          >
+            <div className="menu__section">
+              <MenuSectionLabel>{t("sidebar.operationsDesk")}</MenuSectionLabel>
+              <MenuRow
+                role="menuitem"
+                icon={<EyeOff size={14} />}
+                label={t("sidebar.hideOperationsDesk")}
+                onClick={() => {
+                  setOperationsDeskHidden(true);
+                  setOperationsDeskMenu(null);
+                }}
+              />
+            </div>
+          </div>,
           document.body,
         )}
 
