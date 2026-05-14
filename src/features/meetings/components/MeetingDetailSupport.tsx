@@ -42,11 +42,11 @@ export function AttendanceDetails({
       <div className="attendance-list">
         {rows.map((row, index) => (
           <div key={`${row.status}-${row.name}-${index}`} className="attendance-list__item">
-            <Badge tone={row.status === "Present" ? "success" : "neutral"}>{row.status}</Badge>
             <div className="attendance-list__person">
               <LinkedPersonName name={row.name} people={people} />
               {row.role && <span className="muted">{row.role}</span>}
             </div>
+            <Badge tone={row.status === "Present" ? "success" : "neutral"}>{row.status}</Badge>
           </div>
         ))}
       </div>
@@ -220,15 +220,14 @@ function LinkedPersonName({ name, people }: { name: string; people: PersonLinkCa
     [person.name, ...person.aliases].some((candidate) => normalizePersonName(candidate) === key),
   );
   if (!match) return <span>{name}</span>;
+  // Link styling already conveys "this name resolves to a record" — no badge needed.
   return (
-    <span
-      className="row"
-      style={{ gap: 4, flexWrap: "wrap" }}
+    <Link
+      to={match.kind === "director" ? "/app/directors" : "/app/members"}
       title={[match.role, match.status].filter(Boolean).join(" · ") || undefined}
     >
-      <Link to={match.kind === "director" ? "/app/directors" : "/app/members"}>{name}</Link>
-      <Badge tone="success">Linked</Badge>
-    </span>
+      {name}
+    </Link>
   );
 }
 

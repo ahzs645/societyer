@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type DragEvent as ReactDragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, ExternalLink, FileText, GripVertical, IndentDecrease, IndentIncrease, ListChecks, Mic, MinusCircle, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, ExternalLink, FileText, GripVertical, IndentDecrease, IndentIncrease, ListChecks, Mic, MinusCircle, MoreHorizontal, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
 import { Badge, Field, MenuRow } from "../../../components/ui";
 import { useConfirm } from "../../../components/Modal";
 import { Checkbox } from "../../../components/Controls";
@@ -414,6 +414,142 @@ export function MeetingMinutesColumn({
     }
     writeAgendaItems(next);
   };
+
+  // Drag-to-reorder for root agenda items. Children travel with their parent
+  // (via groupSizeAt); child rows themselves aren't independently draggable —
+  // they reorder via Tab/Shift-Tab or Alt+ArrowUp/Down inside their parent.
+  const agendaDragSourceRef = useRef(false);
+  const [agendaDragIndex, setAgendaDragIndex] = useState<number | null>(null);
+  const [agendaDropIndex, setAgendaDropIndex] = useState<number | null>(null);
+
+  const reorderAgendaRoot = (fromIndex: number, toIndex: number) => {
+    const list = agendaItems;
+    if (!list[fromIndex] || list[fromIndex].depth !== 0) return;
+    const groupSize = groupSizeAt(fromIndex, list);
+    // No-op when dropping back into the same slot or onto the slot right after
+    // (which is the same position once the source is removed).
+    if (toIndex === fromIndex || toIndex === fromIndex + groupSize) return;
+    const next = list.slice();
+    const removed = next.splice(fromIndex, groupSize);
+    let insertAt = toIndex;
+    if (toIndex > fromIndex) insertAt -= groupSize;
+    next.splice(Math.max(0, Math.min(insertAt, next.length)), 0, ...removed);
+    pendingFocusIndex.current = Math.min(insertAt, next.length - 1);
+    writeAgendaItems(next);
+  };
+
+  const onAgendaDragStart = (index: number) => (event: ReactDragEvent) => {
+    // Only the grip mousedown sets the source flag — clicking inside the input
+    // shouldn't trigger a drag, even though the row is `draggable`.
+    if (!agendaDragSourceRef.current || agendaItems[index]?.depth !== 0) {
+      event.preventDefault();
+      return;
+    }
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(index));
+    setAgendaDragIndex(index);
+  };
+
+  const onAgendaDragOver = (rowIndex: number) => (event: ReactDragEvent) => {
+    if (agendaDragIndex === null) return;
+    if (agendaItems[rowIndex]?.depth !== 0) return; // only land on root rows
+    event.preventDefault();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const isTopHalf = event.clientY < rect.top + rect.height / 2;
+    const dropIndex = isTopHalf
+      ? rowIndex
+      : rowIndex + groupSizeAt(rowIndex, agendaItems);
+    const sourceGroup = groupSizeAt(agendaDragIndex, agendaItems);
+    if (dropIndex === agendaDragIndex || dropIndex === agendaDragIndex + sourceGroup) {
+      if (agendaDropIndex !== null) setAgendaDropIndex(null);
+      return;
+    }
+    if (agendaDropIndex !== dropIndex) setAgendaDropIndex(dropIndex);
+  };
+
+  const onAgendaDrop = (event: ReactDragEvent) => {
+    event.preventDefault();
+    const from = agendaDragIndex;
+    const to = agendaDropIndex;
+    setAgendaDragIndex(null);
+    setAgendaDropIndex(null);
+    agendaDragSourceRef.current = false;
+    if (from === null || to === null) return;
+    reorderAgendaRoot(from, to);
+  };
+
+  const onAgendaDragEnd = () => {
+    setAgendaDragIndex(null);
+    setAgendaDropIndex(null);
+    agendaDragSourceRef.current = false;
+  };
+
+  // Per-row overflow menu — replaces the inline outdent/indent/remove buttons
+  // with a single "More" button that opens a menu with Move up / Move down /
+  // Indent or Outdent / Remove. Keeps the row chrome quiet.
+  const [agendaItemMenu, setAgendaItemMenu] = useState<
+    { index: number; top: number; left: number } | null
+  >(null);
+  const agendaItemMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const closeAgendaItemMenu = () => setAgendaItemMenu(null);
+
+  useEffect(() => {
+    if (!agendaItemMenu) return;
+    const onDown = (event: MouseEvent) => {
+      if (agendaItemMenuRef.current?.contains(event.target as Node)) return;
+      closeAgendaItemMenu();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeAgendaItemMenu();
+    };
+    const close = () => closeAgendaItemMenu();
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [agendaItemMenu]);
+
+  const canMoveAgendaUp = (index: number) => {
+    const item = agendaItems[index];
+    if (!item) return false;
+    if (item.depth === 0) {
+      let prev = index - 1;
+      while (prev >= 0 && agendaItems[prev].depth === 1) prev -= 1;
+      return prev >= 0;
+    }
+    return index > 0 && agendaItems[index - 1]?.depth === 1;
+  };
+
+  const canMoveAgendaDown = (index: number) => {
+    const item = agendaItems[index];
+    if (!item) return false;
+    if (item.depth === 0) {
+      const groupSize = groupSizeAt(index, agendaItems);
+      return index + groupSize < agendaItems.length;
+    }
+    return index + 1 < agendaItems.length && agendaItems[index + 1]?.depth === 1;
+  };
+
+  const openAgendaItemMenu = (index: number, anchor: HTMLElement) => {
+    const rect = anchor.getBoundingClientRect();
+    const gap = 4;
+    const menuWidth = 200;
+    const margin = 8;
+    let left = rect.right - menuWidth;
+    if (left < margin) left = margin;
+    if (left + menuWidth > window.innerWidth - margin) {
+      left = window.innerWidth - menuWidth - margin;
+    }
+    setAgendaItemMenu({ index, top: rect.bottom + gap, left });
+  };
+
   const [openSectionIndexes, setOpenSectionIndexes] = useState<Set<number>>(() => new Set([0, 1]));
   const motionPeople = useMemo(() => personLinkCandidates(members, directors), [members, directors]);
   const assigneeOptions = useMemo(
@@ -1301,15 +1437,33 @@ export function MeetingMinutesColumn({
                     : item.depth === 1
                       ? "Sub-item"
                       : "Agenda item";
-                  const canIndent = item.depth === 0 && agendaItems.slice(0, index).some((entry) => entry.depth === 0);
-                  const canOutdent = item.depth === 1;
+                  const isRoot = item.depth === 0;
+                  const isDragging = agendaDragIndex === index;
+                  const isDropTarget = agendaDropIndex === index;
                   return (
                     <div
-                      className={`meeting-minutes-agenda-editor__row${canRemove ? "" : " is-locked"}${item.depth === 1 ? " meeting-minutes-agenda-editor__row--child" : ""}`}
+                      className={`meeting-minutes-agenda-editor__row${canRemove ? "" : " is-locked"}${item.depth === 1 ? " meeting-minutes-agenda-editor__row--child" : ""}${isDragging ? " is-dragging" : ""}${isDropTarget ? " is-drop-above" : ""}`}
                       key={index}
+                      draggable={isRoot}
+                      onDragStart={onAgendaDragStart(index)}
+                      onDragOver={onAgendaDragOver(index)}
+                      onDrop={onAgendaDrop}
+                      onDragEnd={onAgendaDragEnd}
                     >
-                      <span className="meeting-minutes-agenda-editor__index" aria-hidden="true">
-                        {itemLabel}
+                      <span
+                        className={`meeting-minutes-agenda-editor__index${isRoot ? " is-drag-handle" : ""}`}
+                        aria-label={isRoot ? `Drag item ${itemLabel} to reorder` : undefined}
+                        title={isRoot ? "Drag to reorder" : undefined}
+                        onMouseDown={isRoot ? () => { agendaDragSourceRef.current = true; } : undefined}
+                      >
+                        {isRoot && (
+                          <GripVertical
+                            size={10}
+                            className="meeting-minutes-agenda-editor__grip"
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span aria-hidden="true">{itemLabel}</span>
                       </span>
                       <input
                         ref={(el) => { agendaInputRefs.current[index] = el; }}
@@ -1371,40 +1525,17 @@ export function MeetingMinutesColumn({
                         }}
                         placeholder={placeholder}
                       />
-                      <div className="meeting-minutes-agenda-editor__hierarchy-actions" aria-label="Agenda item hierarchy">
-                        <button
-                          className="btn-action btn-action--icon"
-                          type="button"
-                          tabIndex={-1}
-                          title="Outdent item"
-                          aria-label="Outdent item"
-                          disabled={!canOutdent}
-                          onClick={() => outdentAgendaItem(index)}
-                        >
-                          <IndentDecrease size={12} />
-                        </button>
-                        <button
-                          className="btn-action btn-action--icon"
-                          type="button"
-                          tabIndex={-1}
-                          title="Indent item"
-                          aria-label="Indent item"
-                          disabled={!canIndent}
-                          onClick={() => indentAgendaItem(index)}
-                        >
-                          <IndentIncrease size={12} />
-                        </button>
-                      </div>
                       <button
-                        className="btn-action btn-action--icon meeting-minutes-agenda-editor__remove"
+                        className="btn-action btn-action--icon meeting-minutes-agenda-editor__more"
                         type="button"
                         tabIndex={-1}
-                        title={canRemove ? "Remove item" : "This item has notes, decisions, or actions. Clear those before removing it from the agenda."}
-                        aria-label={canRemove ? "Remove item" : "Cannot remove item with recorded section details"}
-                        disabled={!canRemove}
-                        onClick={() => removeAgendaItem(index)}
+                        title="More actions"
+                        aria-label="More actions for this item"
+                        aria-haspopup="menu"
+                        aria-expanded={agendaItemMenu?.index === index}
+                        onClick={(event) => openAgendaItemMenu(index, event.currentTarget)}
                       >
-                        <MinusCircle size={12} />
+                        <MoreHorizontal size={12} />
                       </button>
                     </div>
                   );
@@ -1983,6 +2114,91 @@ export function MeetingMinutesColumn({
         )}
       </div>
       {isMobileSectionEditor && sectionEditIndex !== null && sectionDraft && renderSectionEditor("mobile")}
+      {agendaItemMenu && (() => {
+        const i = agendaItemMenu.index;
+        const item = agendaItems[i];
+        if (!item) return null;
+        const isRoot = item.depth === 0;
+        // canIndent/canOutdent mirror the original inline-button gating so we
+        // don't permit illegal moves through the menu either.
+        const canIndent = isRoot && agendaItems.slice(0, i).some((entry) => entry.depth === 0);
+        const canOutdent = !isRoot;
+        const trimmed = item.title.trim();
+        const isEmpty = !trimmed;
+        const isNew = newAgendaIndices.has(i);
+        const linkedSectionDetailed = trimmed
+          ? detailedSectionTitles.has(trimmed.toLowerCase())
+          : false;
+        const canRemove = isEmpty || isNew || !linkedSectionDetailed;
+        return createPortal(
+          <div
+            ref={agendaItemMenuRef}
+            className="menu menu--actions"
+            role="menu"
+            style={{ position: "fixed", top: agendaItemMenu.top, left: agendaItemMenu.left, width: 200, zIndex: 1000 }}
+          >
+            <div className="menu__section">
+              <MenuRow
+                role="menuitem"
+                icon={<ArrowUp size={14} />}
+                label="Move up"
+                disabled={!canMoveAgendaUp(i)}
+                onClick={() => {
+                  closeAgendaItemMenu();
+                  moveAgendaItem(i, -1);
+                }}
+              />
+              <MenuRow
+                role="menuitem"
+                icon={<ArrowDown size={14} />}
+                label="Move down"
+                disabled={!canMoveAgendaDown(i)}
+                onClick={() => {
+                  closeAgendaItemMenu();
+                  moveAgendaItem(i, 1);
+                }}
+              />
+              <div className="menu__separator" />
+              {isRoot ? (
+                <MenuRow
+                  role="menuitem"
+                  icon={<IndentIncrease size={14} />}
+                  label="Make sub-item"
+                  disabled={!canIndent}
+                  onClick={() => {
+                    closeAgendaItemMenu();
+                    indentAgendaItem(i);
+                  }}
+                />
+              ) : (
+                <MenuRow
+                  role="menuitem"
+                  icon={<IndentDecrease size={14} />}
+                  label="Promote to top level"
+                  disabled={!canOutdent}
+                  onClick={() => {
+                    closeAgendaItemMenu();
+                    outdentAgendaItem(i);
+                  }}
+                />
+              )}
+              <div className="menu__separator" />
+              <MenuRow
+                role="menuitem"
+                icon={<Trash2 size={14} />}
+                label="Remove item"
+                destructive
+                disabled={!canRemove}
+                onClick={() => {
+                  closeAgendaItemMenu();
+                  removeAgendaItem(i);
+                }}
+              />
+            </div>
+          </div>,
+          document.body,
+        );
+      })()}
       {sectionContextMenu && (() => {
         const i = sectionContextMenu.sectionIndex;
         const section = sections[i];

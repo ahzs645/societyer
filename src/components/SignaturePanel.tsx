@@ -153,7 +153,7 @@ export function SignaturePanel({
               onChange={setTypedName}
               options={nameOptions}
               excludeOptions={signedNames}
-              placeholder={signerScope === "directors" ? "Start typing a director" : "FirstName LastName"}
+              placeholder={signerScope === "directors" ? "Director name…" : "First Last"}
             />
           </Field>
           <button

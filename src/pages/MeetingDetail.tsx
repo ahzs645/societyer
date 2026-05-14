@@ -1377,17 +1377,6 @@ export function MeetingDetailPage() {
       </Link>
       <PageHeader
         title={meeting.title}
-        subtitle={
-          <span className="meeting-detail-subtitle">
-            <span>{meeting.type}</span>
-            <span aria-hidden="true">·</span>
-            <span>{formatDateTime(meeting.scheduledAt)}</span>
-            <span aria-hidden="true">·</span>
-            <span className="meeting-detail-subtitle__location" title={meeting.location ?? "No location recorded"}>
-              {meeting.location ?? "—"}
-            </span>
-          </span>
-        }
         actions={
           <>
             <Badge tone={meeting.status === "Held" ? "success" : meeting.status === "Cancelled" ? "danger" : "warn"}>
