@@ -128,7 +128,7 @@ export function SettingsPage() {
 
         <div className="card">
           <div className="card__head"><h2 className="card__title">{t("settings.appearanceTitle")}</h2></div>
-          <div className="card__body col" style={{ gap: 16 }}>
+          <div className="card__body row" style={{ gap: 8 }}>
             <RadioGroup<ThemePreference>
               name="appearance-theme"
               value={theme}
@@ -136,13 +136,22 @@ export function SettingsPage() {
               options={themeOptions}
               direction="horizontal"
             />
-            <Toggle
-              checked={!operationsDeskHidden}
-              onChange={(checked) => setOperationsDeskHidden(!checked)}
-              label={t("sidebar.showOperationsDesk")}
-              hint={t("sidebar.showOperationsDeskHint")}
-            />
           </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">Sidebar</h2>
+          <span className="card__subtitle">Choose which sidebar sections show in your workspace.</span>
+        </div>
+        <div className="card__body col" style={{ gap: 12 }}>
+          <Toggle
+            checked={!operationsDeskHidden}
+            onChange={(checked) => setOperationsDeskHidden(!checked)}
+            label={t("sidebar.showOperationsDesk")}
+            hint={t("sidebar.showOperationsDeskHint")}
+          />
         </div>
       </div>
 

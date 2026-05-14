@@ -80,6 +80,7 @@ import { api } from "@/lib/convexApi";
 import { DemoBanner } from "./DemoBanner";
 import { CommandPalette } from "./CommandPalette";
 import { DraftMinutesPicker } from "./DraftMinutesPicker";
+import { GlobalTaskCreate } from "./GlobalTaskCreate";
 import { ShortcutHelp } from "./ShortcutHelp";
 import { NotificationBell } from "./NotificationBell";
 import { GlobalAiAssistant, openGlobalAiAssistant } from "../features/ai/GlobalAiAssistant";
@@ -1153,6 +1154,7 @@ export function Layout() {
     <InspectorProvider>
       <CommandPaletteSafe />
       <DraftMinutesPicker />
+      <GlobalTaskCreate />
       <ShortcutHelp />
       <div className={shellClassName}>
         {isMobileNav && mobileSidebarOpen && (

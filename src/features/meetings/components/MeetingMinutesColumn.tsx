@@ -2174,7 +2174,7 @@ export function MeetingMinutesColumn({
                 <MenuRow
                   role="menuitem"
                   icon={<IndentDecrease size={14} />}
-                  label="Promote to top level"
+                  label="Promote item"
                   disabled={!canOutdent}
                   onClick={() => {
                     closeAgendaItemMenu();
