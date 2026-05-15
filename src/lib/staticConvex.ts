@@ -2320,6 +2320,32 @@ const tables: Record<string, any[]> = {
   ],
   assets: [
     {
+      _id: "static_asset_chocolate_milk",
+      societyId: SOCIETY_ID,
+      assetTag: "CON-0001",
+      preferredLabelType: "qr",
+      name: "Chocolate milk flats",
+      category: "Consumable",
+      supplier: "Campus Food Services",
+      purchaseDate: "2026-04-28",
+      purchaseValueCents: 4320,
+      quantityOnHand: 1,
+      quantityUnit: "flats",
+      currency: "CAD",
+      location: "Program room fridge",
+      condition: "Good",
+      status: "Available",
+      custodianType: "location",
+      custodianName: "Program room",
+      responsiblePersonName: "Jordan Lee",
+      capitalized: false,
+      sourceDocumentIds: [],
+      disposalDocumentIds: [],
+      notes: "Demo consumable for stock intake tracking.",
+      createdAtISO: "2026-04-28T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+    {
       _id: "static_asset_projector",
       societyId: SOCIETY_ID,
       assetTag: "AST-0001",
@@ -4703,6 +4729,56 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       }
     }
     return { sourceId: source._id, installed: true };
+  }
+  if (name === "society:updateInventorySettings") {
+    const societyId = args?.societyId ?? SOCIETY_ID;
+    const existing = store?.getRow("societies", societyId) ?? society;
+    store?.upsertRow("societies", {
+      ...existing,
+      _id: societyId,
+      consumableIntakeCountPromptEnabled: Boolean(args?.consumableIntakeCountPromptEnabled),
+      updatedAt: Date.now(),
+    });
+    return societyId;
+  }
+  if (name === "assets:addConsumableStock") {
+    const asset = store?.getRow("assets", args?.assetId) ?? byId(tables.assets, args?.assetId);
+    if (!asset) return null;
+    if (asset.category !== "Consumable") throw new Error("Stock intake can only be recorded for consumable items.");
+    const observedQuantityBefore = Number(args?.observedQuantityBefore);
+    const quantityAdded = Number(args?.quantityAdded);
+    if (!Number.isFinite(observedQuantityBefore) || observedQuantityBefore < 0 || !Number.isFinite(quantityAdded) || quantityAdded < 0) {
+      throw new Error("Consumable quantities cannot be negative.");
+    }
+    const now = new Date().toISOString();
+    const quantityAfter = observedQuantityBefore + quantityAdded;
+    const event = {
+      _id: `static_asset_event_stock_intake_${Date.now()}`,
+      societyId: asset.societyId,
+      assetId: asset._id,
+      eventType: "stock_intake",
+      happenedAtISO: now,
+      condition: asset.condition,
+      observedQuantityBefore,
+      quantityAdded,
+      quantityAfter,
+      documentIds: [],
+      notes: args?.notes,
+      createdAtISO: now,
+    };
+    store?.upsertRow("assetEvents", event);
+    store?.upsertRow("assets", { ...asset, quantityOnHand: quantityAfter, updatedAtISO: now });
+    store?.upsertRow("activity", {
+      _id: `static_activity_asset_stock_intake_${Date.now()}`,
+      societyId: asset.societyId,
+      actor: "You",
+      entityType: "asset",
+      entityId: asset._id,
+      action: "stock_intake",
+      summary: `Added ${quantityAdded} ${asset.quantityUnit ?? "unit"}${quantityAdded === 1 ? "" : "s"} to ${asset.assetTag}; ${quantityAfter} now on hand`,
+      createdAtISO: now,
+    });
+    return event._id;
   }
   if (name === "assets:recordEvent") {
     const asset = store?.getRow("assets", args?.assetId) ?? byId(tables.assets, args?.assetId);

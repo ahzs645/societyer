@@ -10,6 +10,8 @@ const assetPatch = v.object({
   supplier: v.optional(v.string()),
   purchaseDate: v.optional(v.string()),
   purchaseValueCents: v.optional(v.number()),
+  quantityOnHand: v.optional(v.number()),
+  quantityUnit: v.optional(v.string()),
   currency: v.optional(v.string()),
   fundingSource: v.optional(v.string()),
   grantId: v.optional(v.id("grants")),
@@ -54,6 +56,9 @@ const eventInput = v.object({
   responsiblePersonName: v.optional(v.string()),
   location: v.optional(v.string()),
   condition: v.optional(v.string()),
+  observedQuantityBefore: v.optional(v.number()),
+  quantityAdded: v.optional(v.number()),
+  quantityAfter: v.optional(v.number()),
   expectedReturnDate: v.optional(v.string()),
   acceptanceSignature: v.optional(v.string()),
   documentIds: v.optional(v.array(v.id("documents"))),
@@ -149,6 +154,8 @@ export const create = mutation({
     supplier: v.optional(v.string()),
     purchaseDate: v.optional(v.string()),
     purchaseValueCents: v.optional(v.number()),
+    quantityOnHand: v.optional(v.number()),
+    quantityUnit: v.optional(v.string()),
     currency: v.optional(v.string()),
     fundingSource: v.optional(v.string()),
     grantId: v.optional(v.id("grants")),
@@ -199,6 +206,7 @@ export const create = mutation({
       responsiblePersonName: args.responsiblePersonName,
       location: args.location,
       condition: args.condition,
+      quantityAfter: args.quantityOnHand,
       documentIds: args.sourceDocumentIds ?? [],
       notes: args.notes,
       createdAtISO: now,
@@ -222,6 +230,55 @@ export const update = mutation({
   handler: async (ctx, { id, patch }) => {
     await ctx.db.patch(id, { ...patch, updatedAtISO: new Date().toISOString() });
     return id;
+  },
+});
+
+export const addConsumableStock = mutation({
+  args: {
+    assetId: v.id("assets"),
+    observedQuantityBefore: v.number(),
+    quantityAdded: v.number(),
+    notes: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, { assetId, observedQuantityBefore, quantityAdded, notes }) => {
+    if (observedQuantityBefore < 0 || quantityAdded < 0) {
+      throw new Error("Consumable quantities cannot be negative.");
+    }
+    const asset = await ctx.db.get(assetId);
+    if (!asset) return null;
+    if (asset.category !== "Consumable") {
+      throw new Error("Stock intake can only be recorded for consumable items.");
+    }
+    const now = new Date().toISOString();
+    const quantityAfter = observedQuantityBefore + quantityAdded;
+    const eventId = await ctx.db.insert("assetEvents", {
+      societyId: asset.societyId,
+      assetId,
+      eventType: "stock_intake",
+      happenedAtISO: now,
+      condition: asset.condition,
+      observedQuantityBefore,
+      quantityAdded,
+      quantityAfter,
+      documentIds: [],
+      notes,
+      createdAtISO: now,
+    });
+    await ctx.db.patch(assetId, {
+      quantityOnHand: quantityAfter,
+      updatedAtISO: now,
+    });
+    await ctx.db.insert("activity", {
+      societyId: asset.societyId,
+      actor: "You",
+      entityType: "asset",
+      entityId: assetId,
+      action: "stock_intake",
+      summary: `Added ${quantityAdded} ${asset.quantityUnit ?? "unit"}${quantityAdded === 1 ? "" : "s"} to ${asset.assetTag}; ${quantityAfter} now on hand`,
+      createdAtISO: now,
+    });
+    return eventId;
   },
 });
 

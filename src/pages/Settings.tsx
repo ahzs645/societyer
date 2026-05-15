@@ -30,18 +30,22 @@ export function SettingsPage() {
   const [demo, setDemo] = useState(isDemoMode());
   const authMode = getAuthMode();
   const updateModules = useMutation(api.society.updateModules);
+  const updateInventorySettings = useMutation(api.society.updateInventorySettings);
   const seedSharedViews = useMutation(api.views.seedGovernanceDataTableViews);
   const confirm = useConfirm();
   const toast = useToast();
   const { preference: theme, resolvedTheme, setPreference: setTheme } = useThemePreference();
   const [moduleSettings, setModuleSettings] = useState(() => normalizeModuleSettings(undefined));
   const [savingModule, setSavingModule] = useState<ModuleKey | null>(null);
+  const [inventoryPromptEnabled, setInventoryPromptEnabled] = useState(false);
+  const [savingInventorySettings, setSavingInventorySettings] = useState(false);
   const [maintenanceBusy, setMaintenanceBusy] = useState<"seed" | "reset" | null>(null);
   const [sharedViewsBusy, setSharedViewsBusy] = useState(false);
 
   useEffect(() => {
     if (!society) return;
     setModuleSettings(normalizeModuleSettings(society));
+    setInventoryPromptEnabled(Boolean(society.consumableIntakeCountPromptEnabled));
   }, [society]);
 
   const modulesByCategory = useMemo(
@@ -94,6 +98,23 @@ export function SettingsPage() {
       toast.error(`Couldn't update ${MODULES_BY_KEY[key].label.toLowerCase()}`);
     } finally {
       setSavingModule(null);
+    }
+  };
+
+  const toggleConsumablePrompt = async (checked: boolean) => {
+    setInventoryPromptEnabled(checked);
+    setSavingInventorySettings(true);
+    try {
+      await updateInventorySettings({
+        societyId: society._id,
+        consumableIntakeCountPromptEnabled: checked,
+      });
+      toast.success(`Consumable count prompt ${checked ? "enabled" : "disabled"}`);
+    } catch (error) {
+      setInventoryPromptEnabled(Boolean(society.consumableIntakeCountPromptEnabled));
+      toast.error("Couldn't update inventory settings");
+    } finally {
+      setSavingInventorySettings(false);
     }
   };
 
@@ -181,6 +202,22 @@ export function SettingsPage() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">Inventory</h2>
+          <span className="card__subtitle">Controls for asset and consumable workflows.</span>
+        </div>
+        <div className="card__body col" style={{ gap: 12 }}>
+          <Toggle
+            checked={inventoryPromptEnabled}
+            onChange={toggleConsumablePrompt}
+            disabled={savingInventorySettings}
+            label="Prompt for current count when adding consumables"
+            hint="When adding stock to a consumable item, ask how many are left first, then add the new amount to that observed count."
+          />
         </div>
       </div>
 

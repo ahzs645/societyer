@@ -247,6 +247,21 @@ export const updateModules = mutation({
   },
 });
 
+export const updateInventorySettings = mutation({
+  args: {
+    societyId: v.id("societies"),
+    consumableIntakeCountPromptEnabled: v.boolean(),
+  },
+  returns: v.id("societies"),
+  handler: async (ctx, { societyId, consumableIntakeCountPromptEnabled }) => {
+    await ctx.db.patch(societyId, {
+      consumableIntakeCountPromptEnabled,
+      updatedAt: Date.now(),
+    });
+    return societyId;
+  },
+});
+
 function blankToUndefined(value?: string) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;

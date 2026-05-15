@@ -6,6 +6,7 @@ import {
   CalendarCheck,
   CheckCircle2,
   ClipboardCheck,
+  ClipboardList,
   Download,
   FileSpreadsheet,
   Package,
@@ -69,10 +70,13 @@ export function AssetsPage() {
   const transactions = useQuery(api.financialHub.transactions, society ? { societyId: society._id, limit: 200 } : "skip");
   const create = useMutation(api.assets.create);
   const update = useMutation(api.assets.update);
+  const addConsumableStock = useMutation(api.assets.addConsumableStock);
   const remove = useMutation(api.assets.remove);
   const startVerificationRun = useMutation(api.assets.startVerificationRun);
-  const [drawer, setDrawer] = useState<"new" | "edit" | "import" | "verify" | null>(null);
+  const [drawer, setDrawer] = useState<"new" | "edit" | "import" | "verify" | "stock" | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [stockAsset, setStockAsset] = useState<any>(null);
+  const [stockForm, setStockForm] = useState({ observedQuantityBefore: "", quantityAdded: "", notes: "" });
   const [form, setForm] = useState<any>(null);
   const [csvInput, setCsvInput] = useState("");
   const [verificationTitle, setVerificationTitle] = useState(`Physical inventory ${todayDate()}`);
@@ -130,6 +134,31 @@ export function AssetsPage() {
     toast.success("Verification run started");
     setDrawer(null);
     if (id) navigate(`/app/assets/verification/${id}`);
+  };
+
+  const openStockIntake = (row: any) => {
+    setStockAsset(row);
+    setStockForm({ observedQuantityBefore: row.quantityOnHand?.toString?.() ?? "", quantityAdded: "", notes: "" });
+    setDrawer("stock");
+  };
+
+  const saveStockIntake = async () => {
+    if (!stockAsset) return;
+    const observedQuantityBefore = Number(stockForm.observedQuantityBefore);
+    const quantityAdded = Number(stockForm.quantityAdded);
+    if (!Number.isFinite(observedQuantityBefore) || observedQuantityBefore < 0 || !Number.isFinite(quantityAdded) || quantityAdded < 0) {
+      toast.error("Enter non-negative counts for remaining and added quantities.");
+      return;
+    }
+    await addConsumableStock({
+      assetId: stockAsset._id,
+      observedQuantityBefore,
+      quantityAdded,
+      notes: stockForm.notes || undefined,
+    });
+    toast.success(`Stock updated to ${observedQuantityBefore + quantityAdded}`);
+    setDrawer(null);
+    setStockAsset(null);
   };
 
   return (
@@ -202,12 +231,18 @@ export function AssetsPage() {
           { id: "status", header: "Status", sortable: true, accessor: (row) => row.status, render: (row) => <StatusBadge status={row.status} /> },
           { id: "custodian", header: "Custody", accessor: (row) => row.custodianName, render: (row) => <CustodyCell row={row} /> },
           { id: "location", header: "Location", sortable: true, accessor: (row) => row.location },
+          { id: "quantity", header: "On hand", sortable: true, align: "right", accessor: (row) => row.quantityOnHand ?? 0, render: (row) => row.category === "Consumable" ? <span className="mono">{formatQuantity(row.quantityOnHand, row.quantityUnit)}</span> : <span className="muted">—</span> },
           { id: "value", header: "Value", sortable: true, align: "right", accessor: (row) => row.bookValueCents ?? row.purchaseValueCents ?? 0, render: (row) => <span className="mono">{money(row.bookValueCents ?? row.purchaseValueCents, row.currency)}</span> },
           { id: "maintenance", header: "Maintenance", sortable: true, accessor: (row) => row.nextMaintenanceDate, render: (row) => <DueDate date={row.nextMaintenanceDate} /> },
           { id: "purchaseEvidence", header: "Purchase evidence", accessor: (row) => row.receiptDocumentId || row.purchaseTransactionId, render: (row) => <EvidenceCell row={row} documents={documents ?? []} transactions={transactions ?? []} /> },
         ]}
         renderRowActions={(row) => (
           <>
+            {row.category === "Consumable" && society.consumableIntakeCountPromptEnabled && (
+              <button className="btn btn--ghost btn--sm" onClick={() => openStockIntake(row)}>
+                <ClipboardList size={12} /> Add stock
+              </button>
+            )}
             <button className="btn btn--ghost btn--sm" onClick={() => openEdit(row)}>
               <Pencil size={12} /> Edit
             </button>
@@ -231,6 +266,33 @@ export function AssetsPage() {
         }
       >
         {form && <AssetForm form={form} setForm={setForm} documents={documents ?? []} transactions={transactions ?? []} />}
+      </Drawer>
+
+      <Drawer
+        open={drawer === "stock"}
+        onClose={() => setDrawer(null)}
+        title={stockAsset ? `Add stock: ${stockAsset.name}` : "Add consumable stock"}
+        footer={
+          <>
+            <button className="btn" onClick={() => setDrawer(null)}>Cancel</button>
+            <button className="btn btn--accent" onClick={saveStockIntake}>Update stock</button>
+          </>
+        }
+      >
+        <div className="form-grid">
+          <Field label="Current amount left" hint="Count what is still on hand before adding the new stock.">
+            <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={stockForm.observedQuantityBefore} onChange={(event) => setStockForm({ ...stockForm, observedQuantityBefore: event.target.value })} />
+          </Field>
+          <Field label="Amount being added">
+            <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={stockForm.quantityAdded} onChange={(event) => setStockForm({ ...stockForm, quantityAdded: event.target.value })} />
+          </Field>
+          <Field label="Resulting total">
+            <input className="input" readOnly value={stockTotalPreview(stockForm)} />
+          </Field>
+          <Field label="Notes">
+            <textarea className="textarea" rows={3} value={stockForm.notes} onChange={(event) => setStockForm({ ...stockForm, notes: event.target.value })} />
+          </Field>
+        </div>
       </Drawer>
 
       <Drawer
@@ -360,6 +422,7 @@ export function AssetDetailPage() {
             <div><dt>Category</dt><dd>{asset.category}</dd></div>
             <div><dt>Serial</dt><dd className="mono">{asset.serialNumber || "—"}</dd></div>
             <div><dt>Condition</dt><dd>{asset.condition}</dd></div>
+            <div><dt>Quantity on hand</dt><dd>{asset.category === "Consumable" ? formatQuantity(asset.quantityOnHand, asset.quantityUnit) : "—"}</dd></div>
             <div><dt>Location</dt><dd>{asset.location || "—"}</dd></div>
             <div><dt>Responsible person</dt><dd>{asset.responsiblePersonName || "—"}</dd></div>
             <div><dt>Custodian</dt><dd>{asset.custodianName || "—"}</dd></div>
@@ -420,6 +483,7 @@ export function AssetDetailPage() {
           { id: "eventType", header: "Event", accessor: (row) => row.eventType, render: (row) => <span className="cell-tag">{row.eventType}</span> },
           { id: "custody", header: "Custody", accessor: (row) => row.toCustodianName, render: (row) => row.toCustodianName || row.location || "—" },
           { id: "condition", header: "Condition", accessor: (row) => row.condition },
+          { id: "quantity", header: "Quantity", accessor: (row) => row.quantityAfter ?? row.quantityAdded, render: (row) => row.quantityAfter == null ? "—" : `${row.observedQuantityBefore ?? "—"} + ${row.quantityAdded ?? "—"} = ${row.quantityAfter}` },
           { id: "notes", header: "Notes", accessor: (row) => row.notes },
         ]}
       />
@@ -522,6 +586,12 @@ function AssetForm({
       <Field label="Supplier"><input className="input" value={form.supplier ?? ""} onChange={(event) => setForm({ ...form, supplier: event.target.value })} /></Field>
       <Field label="Purchase date"><input className="input" type="date" value={form.purchaseDate ?? ""} onChange={(event) => setForm({ ...form, purchaseDate: event.target.value })} /></Field>
       <Field label="Purchase value"><input className="input" inputMode="decimal" value={form.purchaseValue ?? ""} onChange={(event) => setForm({ ...form, purchaseValue: event.target.value })} /></Field>
+      {form.category === "Consumable" && (
+        <>
+          <Field label="Quantity on hand"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.quantityOnHand ?? ""} onChange={(event) => setForm({ ...form, quantityOnHand: event.target.value })} /></Field>
+          <Field label="Quantity unit"><input className="input" placeholder="flats, cases, units..." value={form.quantityUnit ?? ""} onChange={(event) => setForm({ ...form, quantityUnit: event.target.value })} /></Field>
+        </>
+      )}
       <Field label="Book value"><input className="input" inputMode="decimal" value={form.bookValue ?? ""} onChange={(event) => setForm({ ...form, bookValue: event.target.value })} /></Field>
       <Field label="Purchase receipt"><select className="input" value={form.receiptDocumentId ?? ""} onChange={(event) => setForm({ ...form, receiptDocumentId: event.target.value })}><option value="">No receipt linked</option>{receiptDocuments.map((doc) => <option key={doc._id} value={doc._id}>{doc.title}</option>)}</select></Field>
       <Field label="Finance transaction"><select className="input" value={form.purchaseTransactionId ?? ""} onChange={(event) => setForm({ ...form, purchaseTransactionId: event.target.value })}><option value="">No transaction linked</option>{purchaseTransactions.map((txn) => <option key={txn._id} value={txn._id}>{txn.date} · {txn.description} · {money(Math.abs(txn.amountCents))}</option>)}</select></Field>
@@ -636,6 +706,18 @@ function StatusBadge({ status }: { status?: string }) {
 function DueDate({ date }: { date?: string }) {
   if (!date) return <span className="muted">Not scheduled</span>;
   return <Badge tone={isDue(date, 0) ? "danger" : isDue(date, 30) ? "warn" : "neutral"}>{formatDate(date)}</Badge>;
+}
+
+function formatQuantity(quantity?: number | null, unit?: string | null) {
+  if (quantity == null) return "—";
+  return `${quantity.toLocaleString("en-CA")}${unit ? ` ${unit}` : ""}`;
+}
+
+function stockTotalPreview(form: { observedQuantityBefore: string; quantityAdded: string }) {
+  const observed = Number(form.observedQuantityBefore);
+  const added = Number(form.quantityAdded);
+  if (!Number.isFinite(observed) || !Number.isFinite(added)) return "";
+  return String(observed + added);
 }
 
 function Stat({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: "info" | "warn" | "danger" }) {
