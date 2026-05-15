@@ -149,7 +149,7 @@ export function CustomFieldsPage() {
         description="Add extra fields to any person category (members, directors, volunteers, employees). Saved values appear on each person's detail and can be pulled into PDF mapping."
         tabs={[
           { id: "definitions", label: "Definitions", icon: <Sliders size={14} /> },
-          { id: "mapping", label: "Mapping", icon: <Link2 size={14} /> },
+          { id: "mapping", label: "Link map", icon: <Link2 size={14} /> },
         ]}
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -379,6 +379,7 @@ type LinkAuditItem = {
   fieldType: string;
   target: string;
   reason: string;
+  fix: string;
   priority: "high" | "medium" | "low";
 };
 
@@ -386,6 +387,13 @@ type LinkAudit = {
   opportunities: LinkAuditItem[];
   alreadyLinked: LinkAuditItem[];
   customCandidates: LinkAuditItem[];
+  targetCoverage: LinkTargetCoverageItem[];
+};
+
+type LinkTargetCoverageItem = {
+  target: string;
+  count: number;
+  highPriorityCount: number;
 };
 
 const LINK_TARGET_HINTS = [
@@ -411,6 +419,7 @@ const SCHEMA_LINK_CANDIDATES: LinkAuditItem[] = [
     fieldType: "string[]",
     target: "Members / Directors / Users",
     reason: "Attendance stores string IDs while related people already exist as member, director, and user records.",
+    fix: "Resolve attendee names/emails into meetingAttendanceRecords and render people as relation chips.",
     priority: "high",
   },
   {
@@ -421,6 +430,7 @@ const SCHEMA_LINK_CANDIDATES: LinkAuditItem[] = [
     fieldType: "text",
     target: "Members / Directors / Users",
     reason: "Minutes preserve names for participants and officers; these can be resolved to people records when matches exist.",
+    fix: "Reuse the person-link resolver for minute participants, movers, seconders, chair, and absences.",
     priority: "high",
   },
   {
@@ -431,6 +441,7 @@ const SCHEMA_LINK_CANDIDATES: LinkAuditItem[] = [
     fieldType: "text",
     target: "Users / Directors / Members",
     reason: "Tasks already support responsibleUserIds, but the visible assignee field can still be plain text.",
+    fix: "Prefer responsibleUserIds in the task table and add a relation-aware display for assigned people.",
     priority: "high",
   },
   {
@@ -441,6 +452,7 @@ const SCHEMA_LINK_CANDIDATES: LinkAuditItem[] = [
     fieldType: "text",
     target: "Users / Directors",
     reason: "Goal ownership is stored as a name even when a matching person record may exist.",
+    fix: "Add ownerUserId/ownerDirectorId or resolve ownerName into a ranked link candidate.",
     priority: "medium",
   },
   {
@@ -451,6 +463,7 @@ const SCHEMA_LINK_CANDIDATES: LinkAuditItem[] = [
     fieldType: "polymorphic string",
     target: "Record lookup",
     reason: "Polymorphic references can resolve to record links when entityType names a known object.",
+    fix: "Render entityType + entityId through a polymorphic record-link component.",
     priority: "high",
   },
   {
@@ -461,6 +474,7 @@ const SCHEMA_LINK_CANDIDATES: LinkAuditItem[] = [
     fieldType: "polymorphic string",
     target: "Record lookup",
     reason: "Evidence points at records through table/id strings but is not surfaced as a generic relation.",
+    fix: "Use sourceEvidence as the canonical backlink table and expose target/source document chips everywhere.",
     priority: "high",
   },
   {
@@ -471,6 +485,7 @@ const SCHEMA_LINK_CANDIDATES: LinkAuditItem[] = [
     fieldType: "polymorphic string",
     target: "Directors / Employees / Volunteers",
     reason: "Reporting relationships store typed string references that can render as person links.",
+    fix: "Render subject and manager references with typed person links instead of plain labels.",
     priority: "medium",
   },
   {
@@ -481,6 +496,7 @@ const SCHEMA_LINK_CANDIDATES: LinkAuditItem[] = [
     fieldType: "polymorphic string",
     target: "Members / Directors / Committees",
     reason: "Material access grants have a type discriminator and subject ID but no generic linked chip.",
+    fix: "Route material access grants through the same polymorphic record-link display.",
     priority: "medium",
   },
   {
@@ -491,6 +507,7 @@ const SCHEMA_LINK_CANDIDATES: LinkAuditItem[] = [
     fieldType: "external string",
     target: "Cached Wave resources",
     reason: "External finance identifiers can link to cached provider resources when the external ID matches.",
+    fix: "Promote matched external IDs into relation candidates beside reconciliation suggestions.",
     priority: "medium",
   },
   {
@@ -501,6 +518,62 @@ const SCHEMA_LINK_CANDIDATES: LinkAuditItem[] = [
     fieldType: "staged metadata",
     target: "Policies / Filings / Meetings / Grants",
     reason: "Import review detects likely destinations, but document-to-record linking is still mostly advisory.",
+    fix: "Have import-session link insights return concrete candidate records and an apply action.",
+    priority: "high",
+  },
+  {
+    id: "schema:proxies:meetingAndMembers",
+    source: "Proxies",
+    field: "meetingId / grantorMemberId / proxyHolderMemberId",
+    label: "Proxy links",
+    fieldType: "Convex IDs",
+    target: "Meetings / Members",
+    reason: "Proxy rows already store meeting and member IDs, but the generic metadata mostly shows projected text.",
+    fix: "Declare these fields as RELATION metadata and render them as navigable chips.",
+    priority: "high",
+  },
+  {
+    id: "schema:training:participantAndDocument",
+    source: "PIPA training",
+    field: "participantUserId / participantMemberId / documentId",
+    label: "Training participant",
+    fieldType: "Convex IDs",
+    target: "Users / Members / Documents",
+    reason: "Training completion records can point to both the person and evidence document.",
+    fix: "Add relation fields for participant and evidence document in the training record view.",
+    priority: "high",
+  },
+  {
+    id: "schema:secrets:usersAndEvidence",
+    source: "Secrets",
+    field: "custodianUserId / authorizedUserIds / sourceDocumentIds",
+    label: "Secret custody",
+    fieldType: "Convex IDs",
+    target: "Users / Documents",
+    reason: "Vault items store custodians, authorized users, and source documents that should be inspectable as links.",
+    fix: "Render custody and source arrays through relation-aware array chips.",
+    priority: "high",
+  },
+  {
+    id: "schema:publications:document",
+    source: "Transparency",
+    field: "documentId",
+    label: "Published document",
+    fieldType: "Convex ID",
+    target: "Documents",
+    reason: "Publications can be backed by an internal document record but also expose an external URL.",
+    fix: "Show both the external URL and internal document relation where present.",
+    priority: "medium",
+  },
+  {
+    id: "schema:legalTemplates:documentsAndFields",
+    source: "Legal operations",
+    field: "templateDocumentId / requiredDataFieldIds",
+    label: "Template dependencies",
+    fieldType: "Convex IDs",
+    target: "Documents / Data fields",
+    reason: "Templates link to source documents and generated data fields, but this dependency graph is not visible generically.",
+    fix: "Expose template document and data-field relations in record metadata.",
     priority: "high",
   },
 ];
@@ -523,6 +596,22 @@ function LinkAuditPanel({ audit }: { audit: LinkAudit }) {
         <LinkAuditStat icon={<Database size={14} />} label="Custom candidates" value={audit.customCandidates.length} />
         <LinkAuditStat icon={<Link2 size={14} />} label="Already linked" value={audit.alreadyLinked.length} />
       </div>
+
+      <section className="link-audit__section">
+        <div className="link-audit__section-head">
+          <h2>Target item types</h2>
+          <span>{audit.targetCoverage.length}</span>
+        </div>
+        <div className="link-audit-targets" aria-label="Link target item types">
+          {audit.targetCoverage.map((item) => (
+            <div className="link-audit-target" key={item.target}>
+              <span>{item.target}</span>
+              <strong>{item.count}</strong>
+              {item.highPriorityCount > 0 && <em>{item.highPriorityCount} high</em>}
+            </div>
+          ))}
+        </div>
+      </section>
 
       <section className="link-audit__section">
         <div className="link-audit__section-head">
@@ -588,7 +677,12 @@ function LinkAuditRow({ item, compact = false }: { item: LinkAuditItem; compact?
           <span>{item.source}</span>
           <code>{item.field}</code>
         </div>
-        {!compact && <div className="link-audit-row__reason">{item.reason}</div>}
+        {!compact && (
+          <>
+            <div className="link-audit-row__reason">{item.reason}</div>
+            <div className="link-audit-row__fix">{item.fix}</div>
+          </>
+        )}
       </div>
       <div className="link-audit-row__meta">
         <span className={`link-audit-row__priority link-audit-row__priority--${item.priority}`}>{item.priority}</span>
@@ -622,6 +716,7 @@ function buildLinkAudit(customFields: any[]): LinkAudit {
     opportunities: [...SCHEMA_LINK_CANDIDATES, ...seededCandidates, ...customCandidates].sort(sortAuditItems),
     alreadyLinked: alreadyLinked.sort((a, b) => a.source.localeCompare(b.source) || a.field.localeCompare(b.field)),
     customCandidates: customCandidates.sort(sortAuditItems),
+    targetCoverage: buildTargetCoverage([...SCHEMA_LINK_CANDIDATES, ...seededCandidates, ...customCandidates]),
   };
 }
 
@@ -639,6 +734,7 @@ function auditSeedField(object: (typeof RECORD_TABLE_OBJECTS)[number], field: (t
       fieldType: field.fieldType,
       target: target ?? relationTarget(field.config) ?? "Configured target",
       reason: "Declared as a link or relation in record metadata.",
+      fix: "No action needed for metadata; improve display if this still renders as a raw ID.",
       priority: "low",
     };
   }
@@ -655,6 +751,9 @@ function auditSeedField(object: (typeof RECORD_TABLE_OBJECTS)[number], field: (t
     reason: hasIdShape
       ? "The field stores an identifier shape but is rendered as plain data."
       : "The field name or label matches another record type but is not declared as a relation.",
+    fix: hasIdShape
+      ? "Declare this as RELATION metadata with a target object, or add a polymorphic record-link renderer."
+      : "Add a relation field or surface ranked link suggestions beside this field.",
     priority: hasIdShape ? "high" : field.isReadOnly ? "medium" : "low",
   };
 }
@@ -672,8 +771,24 @@ function auditCustomField(field: any): LinkAuditItem | null {
     fieldType: field.kind,
     target,
     reason: "The custom field reads like a reference but custom fields only store scalar values today.",
+    fix: "Convert this custom field to a relation-capable field type or add a companion linked-record field.",
     priority: /id|document|member|director|user/i.test(text) ? "high" : "medium",
   };
+}
+
+function buildTargetCoverage(items: LinkAuditItem[]): LinkTargetCoverageItem[] {
+  const coverage = new Map<string, LinkTargetCoverageItem>();
+  for (const item of items) {
+    for (const target of item.target.split("/").map((part) => part.trim()).filter(Boolean)) {
+      const current = coverage.get(target) ?? { target, count: 0, highPriorityCount: 0 };
+      current.count += 1;
+      if (item.priority === "high") current.highPriorityCount += 1;
+      coverage.set(target, current);
+    }
+  }
+  return [...coverage.values()].sort(
+    (a, b) => b.highPriorityCount - a.highPriorityCount || b.count - a.count || a.target.localeCompare(b.target),
+  );
 }
 
 function inferTarget(text: string) {
