@@ -1015,6 +1015,24 @@ const documents = [
     tags: ["finance", "AGM", "public"],
     public: true,
   },
+  {
+    _id: "static_document_projector_receipt",
+    societyId: SOCIETY_ID,
+    title: "Receipt - Epson community projector",
+    kind: "Receipt",
+    category: "Receipt",
+    status: "Verified",
+    fileName: "receipt-epson-community-projector.pdf",
+    mimeType: "application/pdf",
+    retentionYears: 7,
+    createdAtISO: "2025-09-12T18:05:00.000Z",
+    lastOpenedAtISO: "2026-05-01T18:00:00.000Z",
+    reviewStatus: "approved",
+    librarySection: "finance",
+    flaggedForDeletion: false,
+    tags: ["receipt", "asset", "projector", "finance"],
+    public: false,
+  },
 ];
 
 const meetingMaterials = [
@@ -1517,6 +1535,21 @@ const financialTransactions = [
     categoryAccountExternalId: "cat_facilities",
     counterparty: "Riverside Hall",
     counterpartyExternalId: "vendor_city",
+    counterpartyResourceType: "vendor",
+  },
+  {
+    _id: "static_tx_projector",
+    societyId: SOCIETY_ID,
+    connectionId: FINANCIAL_CONNECTION_ID,
+    accountId: CASH_ACCOUNT_ID,
+    externalId: "tx-projector",
+    date: "2025-09-12",
+    description: "Epson community projector",
+    amountCents: -92000,
+    category: "Program equipment",
+    categoryAccountExternalId: "cat_program_equipment",
+    counterparty: "Harbour Office Supply",
+    counterpartyExternalId: "vendor_harbour_office",
     counterpartyResourceType: "vendor",
   },
 ];
@@ -2285,6 +2318,130 @@ const tables: Record<string, any[]> = {
       status: "Active",
     },
   ],
+  assets: [
+    {
+      _id: "static_asset_projector",
+      societyId: SOCIETY_ID,
+      assetTag: "AST-0001",
+      preferredLabelType: "qr",
+      name: "Epson community projector",
+      category: "Program equipment",
+      serialNumber: "EP-DEMO-4421",
+      supplier: "Harbour Office Supply",
+      purchaseDate: "2025-09-12",
+      purchaseValueCents: 92000,
+      currency: "CAD",
+      fundingSource: "Neighbourhood resilience grant",
+      grantRestrictions: "Must be used for public workshops until 2028-03-31.",
+      retentionUntil: "2028-03-31",
+      disposalRules: "Board approval required before sale, donation, or disposal.",
+      location: "Records office equipment cabinet",
+      condition: "Good",
+      status: "Available",
+      custodianType: "location",
+      custodianName: "Records office",
+      responsiblePersonName: "Jordan Lee",
+      insurancePolicyId: "static_insurance",
+      insuranceNotes: "Covered under property/casualty schedule subject to deductible.",
+      capitalized: false,
+      bookValueCents: 69000,
+      purchaseTransactionId: "static_tx_projector",
+      receiptDocumentId: "static_document_projector_receipt",
+      sourceDocumentIds: ["static_document_projector_receipt", "static_document_financials"],
+      warrantyExpiresAt: "2027-09-12",
+      nextMaintenanceDate: "2026-06-15",
+      nextVerificationDate: "2026-08-31",
+      disposalDocumentIds: [],
+      notes: "Demo asset used for workshop room bookings.",
+      createdAtISO: "2025-09-12T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+    {
+      _id: "static_asset_laptop",
+      societyId: SOCIETY_ID,
+      assetTag: "AST-0002",
+      preferredLabelType: "code128",
+      name: "Treasurer laptop",
+      category: "IT",
+      serialNumber: "MBP-DEMO-2026",
+      supplier: "Apple Canada",
+      purchaseDate: "2026-01-20",
+      purchaseValueCents: 210000,
+      currency: "CAD",
+      fundingSource: "Operating reserve",
+      location: "With treasurer",
+      condition: "Good",
+      status: "Checked out",
+      custodianType: "director",
+      custodianName: "Jordan Lee",
+      responsiblePersonName: "Jordan Lee",
+      expectedReturnDate: "2026-06-30",
+      insurancePolicyId: "static_insurance",
+      capitalized: true,
+      depreciationMethod: "Straight line",
+      usefulLifeMonths: 36,
+      bookValueCents: 198333,
+      sourceDocumentIds: ["static_document_financials"],
+      warrantyExpiresAt: "2027-01-20",
+      nextMaintenanceDate: "2026-07-15",
+      nextVerificationDate: "2026-08-31",
+      disposalDocumentIds: [],
+      notes: "Used for finance, Wave sync review, and board packages.",
+      createdAtISO: "2026-01-20T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+  ],
+  assetEvents: [
+    {
+      _id: "static_asset_event_projector_intake",
+      societyId: SOCIETY_ID,
+      assetId: "static_asset_projector",
+      eventType: "intake",
+      happenedAtISO: "2025-09-12T18:00:00.000Z",
+      actorName: "Jordan Lee",
+      toCustodianType: "location",
+      toCustodianName: "Records office",
+      responsiblePersonName: "Jordan Lee",
+      location: "Records office equipment cabinet",
+      condition: "Good",
+      documentIds: ["static_document_projector_receipt", "static_document_financials"],
+      notes: "Imported from grant purchase record.",
+      createdAtISO: "2025-09-12T18:00:00.000Z",
+    },
+    {
+      _id: "static_asset_event_laptop_checkout",
+      societyId: SOCIETY_ID,
+      assetId: "static_asset_laptop",
+      eventType: "checkout",
+      happenedAtISO: "2026-01-20T18:30:00.000Z",
+      actorName: "Mina Patel",
+      toCustodianType: "director",
+      toCustodianName: "Jordan Lee",
+      responsiblePersonName: "Jordan Lee",
+      location: "With treasurer",
+      condition: "Good",
+      expectedReturnDate: "2026-06-30",
+      documentIds: [],
+      notes: "Treasurer accepted custody for board finance work.",
+      createdAtISO: "2026-01-20T18:30:00.000Z",
+    },
+  ],
+  assetMaintenance: [
+    {
+      _id: "static_asset_maintenance_projector",
+      societyId: SOCIETY_ID,
+      assetId: "static_asset_projector",
+      title: "Projector lamp and cable check",
+      kind: "maintenance",
+      dueDate: "2026-06-15",
+      status: "Scheduled",
+      notes: "Check before summer workshop series.",
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+  ],
+  assetVerificationRuns: [],
+  assetVerificationItems: [],
   meetings,
   memberProposals: [],
   memberSubscriptions,
@@ -3344,6 +3501,11 @@ const STATIC_EXPORT_TABLES = [
   "bylawRuleSets",
   "goals",
   "tasks",
+  "assets",
+  "assetEvents",
+  "assetMaintenance",
+  "assetVerificationRuns",
+  "assetVerificationItems",
   "minuteBookItems",
   "activity",
   "notes",
@@ -3501,7 +3663,7 @@ function staticSanitizeExportRow(row: any) {
   return copy;
 }
 
-function queryResult(name: string, args: StaticArgs) {
+function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null) {
   switch (name) {
     case "activity:list":
       return tables.activity.slice(0, args?.limit ?? tables.activity.length);
@@ -3524,6 +3686,29 @@ function queryResult(name: string, args: StaticArgs) {
       });
       return { role: "Owner", categories: Object.keys(catalog), catalog, tools: aiToolCatalog };
     }
+    case "assets:bundle": {
+      const asset = store?.getRow("assets", args?.id) ?? byId(tables.assets, args?.id);
+      if (!asset) return null;
+      return {
+        asset,
+        events: (store?.listRows("assetEvents", { societyId: asset.societyId }) ?? tables.assetEvents)
+          .filter((row: any) => row.assetId === asset._id)
+          .sort((a: any, b: any) => b.happenedAtISO.localeCompare(a.happenedAtISO)),
+        maintenance: (store?.listRows("assetMaintenance", { societyId: asset.societyId }) ?? tables.assetMaintenance)
+          .filter((row: any) => row.assetId === asset._id),
+      };
+    }
+    case "assets:events":
+      return (store?.listRows("assetEvents", args) ?? tables.assetEvents)
+        .filter((row: any) => row.assetId === args?.assetId)
+        .sort((a: any, b: any) => b.happenedAtISO.localeCompare(a.happenedAtISO));
+    case "assets:maintenance":
+      return store?.listRows("assetMaintenance", args) ?? scopedRows(tables.assetMaintenance, args);
+    case "assets:verificationRuns":
+      return store?.listRows("assetVerificationRuns", args) ?? scopedRows(tables.assetVerificationRuns, args);
+    case "assets:verificationItems":
+      return (store?.listRows("assetVerificationItems", args) ?? tables.assetVerificationItems)
+        .filter((row: any) => row.runId === args?.runId);
     case "aiAgents:getChatContext": {
       const catalog: Record<string, any[]> = {};
       aiToolCatalog.forEach((tool) => {
@@ -3915,7 +4100,7 @@ function queryResult(name: string, args: StaticArgs) {
     case "grantSources:candidates":
       return tables.grantOpportunityCandidates;
     case "members:get":
-      return byId(members, args?.id);
+      return store?.getRow("members", args?.id) ?? byId(members, args?.id);
     case "meetings:get":
       return byId(meetings, args?.id) ?? meetings[0];
     case "meetingMaterials:packageForMeeting":
@@ -3977,7 +4162,7 @@ function queryResult(name: string, args: StaticArgs) {
     case "orgChartAssignments:list":
       return tables.orgChartAssignments;
     case "users:get":
-      return byId(users, args?.id) ?? users[0];
+      return store?.getRow("users", args?.id) ?? byId(users, args?.id) ?? users[0];
     case "volunteers:applications":
       return tables.volunteerApplications;
     case "volunteers:screenings":
@@ -3999,15 +4184,16 @@ function queryResult(name: string, args: StaticArgs) {
   }
 
   const [moduleName, exportName] = name.split(":");
-  if (moduleName === "society" && exportName === "get") return society;
-  if (moduleName === "society" && exportName === "list") return [society];
-  if (exportName === "list") return scopedRows(tables[moduleName] ?? [], args);
-  if (exportName === "get") return byId(tables[moduleName] ?? [], args?.id);
+  const tableName = staticTableNameForModule(moduleName);
+  if (moduleName === "society" && exportName === "get") return store?.getRow("societies", args?.id ?? SOCIETY_ID) ?? society;
+  if (moduleName === "society" && exportName === "list") return store?.listRows("societies", args) ?? [society];
+  if (exportName === "list") return store?.listRows(tableName, args) ?? scopedRows(tables[tableName] ?? [], args);
+  if (exportName === "get") return store?.getRow(tableName, args?.id) ?? byId(tables[tableName] ?? [], args?.id);
   return [];
 }
 
 function mutableQueryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null) {
-  return store?.queryResult(name, args) ?? queryResult(name, args);
+  return store?.queryResult(name, args) ?? queryResult(name, args, store);
 }
 
 function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null) {
@@ -4269,8 +4455,14 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       updated: [],
     };
   }
-  if (name === "seed:run") return { societyId: SOCIETY_ID };
-  if (name === "seed:reset") return { ok: true };
+  if (name === "seed:run") {
+    void store?.reseed();
+    return { societyId: SOCIETY_ID };
+  }
+  if (name === "seed:reset") {
+    void store?.reseed();
+    return { ok: true };
+  }
   if (name === "users:resolveAuthSession") return { userId: USER_OWNER_ID };
   if (name === "paperless:testConnection") {
     return {
@@ -4512,8 +4704,165 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     }
     return { sourceId: source._id, installed: true };
   }
-  if (name.endsWith(":create") || name.includes(":upsert") || name.includes(":issue")) {
-    return args?.id ?? `static_${Date.now()}`;
+  if (name === "assets:recordEvent") {
+    const asset = store?.getRow("assets", args?.assetId) ?? byId(tables.assets, args?.assetId);
+    if (!asset) return null;
+    const now = new Date().toISOString();
+    const event = {
+      _id: `static_asset_event_${Date.now()}`,
+      societyId: asset.societyId,
+      assetId: asset._id,
+      eventType: args?.event?.eventType ?? "note",
+      happenedAtISO: now,
+      actorName: args?.event?.actorName,
+      fromCustodianName: asset.custodianName,
+      toCustodianType: args?.event?.toCustodianType,
+      toCustodianName: args?.event?.toCustodianName,
+      responsiblePersonName: args?.event?.responsiblePersonName,
+      location: args?.event?.location,
+      condition: args?.event?.condition,
+      expectedReturnDate: args?.event?.expectedReturnDate,
+      acceptanceSignature: args?.event?.acceptanceSignature,
+      documentIds: args?.event?.documentIds ?? [],
+      notes: args?.event?.notes,
+      createdAtISO: now,
+    };
+    store?.upsertRow("assetEvents", event);
+    const patch: any = { updatedAtISO: now };
+    if (event.eventType === "checkout" || event.eventType === "transfer") {
+      patch.status = "Checked out";
+      patch.custodianType = event.toCustodianType;
+      patch.custodianName = event.toCustodianName;
+      patch.responsiblePersonName = event.responsiblePersonName || event.toCustodianName;
+      patch.expectedReturnDate = event.expectedReturnDate;
+    }
+    if (event.eventType === "checkin") {
+      patch.status = "Available";
+      patch.custodianType = "location";
+      patch.custodianName = event.location;
+      patch.expectedReturnDate = undefined;
+    }
+    if (event.location) patch.location = event.location;
+    if (event.condition) patch.condition = event.condition;
+    store?.upsertRow("assets", { ...asset, ...patch });
+    return event._id;
+  }
+  if (name === "assets:scheduleMaintenance") {
+    const asset = store?.getRow("assets", args?.assetId) ?? byId(tables.assets, args?.assetId);
+    if (!asset) return null;
+    const now = new Date().toISOString();
+    const row = {
+      _id: `static_asset_maintenance_${Date.now()}`,
+      societyId: asset.societyId,
+      assetId: asset._id,
+      title: args?.title,
+      kind: args?.kind,
+      dueDate: args?.dueDate,
+      status: "Scheduled",
+      notes: args?.notes,
+      createdAtISO: now,
+      updatedAtISO: now,
+    };
+    store?.upsertRow("assetMaintenance", row);
+    store?.upsertRow("assets", { ...asset, nextMaintenanceDate: args?.dueDate, updatedAtISO: now });
+    return row._id;
+  }
+  if (name === "assets:completeMaintenance") {
+    const row = store?.getRow("assetMaintenance", args?.id) ?? byId(tables.assetMaintenance, args?.id);
+    if (!row) return null;
+    const now = new Date().toISOString();
+    store?.upsertRow("assetMaintenance", { ...row, status: "Completed", completedAtISO: args?.completedAtISO ?? now, notes: args?.notes ?? row.notes, updatedAtISO: now });
+    return args?.id;
+  }
+  if (name === "assets:startVerificationRun") {
+    const now = new Date().toISOString();
+    const assets = store?.listRows("assets", args) ?? scopedRows(tables.assets, args);
+    const runId = `static_asset_verification_${Date.now()}`;
+    store?.upsertRow("assetVerificationRuns", {
+      _id: runId,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      title: args?.title,
+      status: "Open",
+      startedAtISO: now,
+      reviewerName: args?.reviewerName,
+      notes: args?.notes,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    assets.forEach((asset: any) => {
+      store?.upsertRow("assetVerificationItems", {
+        _id: `static_asset_verification_item_${asset._id}_${Date.now()}`,
+        societyId: asset.societyId,
+        runId,
+        assetId: asset._id,
+        status: "pending",
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    });
+    return runId;
+  }
+  if (name === "assets:verifyAsset") {
+    const item = store?.getRow("assetVerificationItems", args?.itemId) ?? byId(tables.assetVerificationItems, args?.itemId);
+    if (!item) return null;
+    const now = new Date().toISOString();
+    store?.upsertRow("assetVerificationItems", {
+      ...item,
+      status: args?.status,
+      verifiedAtISO: now,
+      verifiedByName: args?.verifiedByName,
+      observedLocation: args?.observedLocation,
+      observedCondition: args?.observedCondition,
+      notes: args?.notes,
+      updatedAtISO: now,
+    });
+    return args?.itemId;
+  }
+  if (name === "assets:completeVerificationRun") {
+    const run = store?.getRow("assetVerificationRuns", args?.id) ?? byId(tables.assetVerificationRuns, args?.id);
+    if (!run) return null;
+    const now = new Date().toISOString();
+    store?.upsertRow("assetVerificationRuns", { ...run, status: "Completed", completedAtISO: now, updatedAtISO: now });
+    return args?.id;
+  }
+  if (name === "assets:dispose") {
+    const asset = store?.getRow("assets", args?.assetId) ?? byId(tables.assets, args?.assetId);
+    if (!asset) return null;
+    store?.upsertRow("assets", {
+      ...asset,
+      status: "Disposed",
+      disposedAt: args?.disposedAt,
+      disposalMethod: args?.disposalMethod,
+      disposalReason: args?.disposalReason,
+      disposalValueCents: args?.disposalValueCents,
+      notes: args?.notes ?? asset.notes,
+      updatedAtISO: new Date().toISOString(),
+    });
+    return args?.assetId;
+  }
+  const [moduleName, exportName] = name.split(":");
+  if (exportName && /^(create|update|upsert|issue|setStatus|remove)/.test(exportName)) {
+    const tableName = staticMutationTableName(moduleName, exportName);
+    if (exportName.startsWith("remove")) {
+      store?.removeRow(tableName, args?.id);
+      return null;
+    }
+    const id = args?.id ?? `static_${moduleName}_${Date.now()}`;
+    const existing = store?.getRow(tableName, id) ?? {};
+    const patch = args?.patch && typeof args.patch === "object" ? args.patch : {};
+    const row = {
+      ...existing,
+      ...args,
+      ...patch,
+      _id: id,
+      societyId: args?.societyId ?? existing.societyId ?? SOCIETY_ID,
+      updatedAtISO: new Date().toISOString(),
+      createdAtISO: existing.createdAtISO ?? args?.createdAtISO ?? new Date().toISOString(),
+    };
+    delete row.id;
+    delete row.patch;
+    store?.upsertRow(tableName, row);
+    return id;
   }
   return null;
 }
@@ -4531,11 +4880,17 @@ function staticAgentOutput(agent: any, input: string) {
   ].join("\n");
 }
 
-type StaticDemoTableName = "meetings" | "minutes";
+type StaticDemoSeed = Record<string, any[]>;
+
+const STATIC_DEMO_SEED: StaticDemoSeed = {
+  ...tables,
+  societies: [society],
+};
 
 class StaticDemoDexieDatabase extends Dexie {
   meetings!: Table<any, string>;
   minutes!: Table<any, string>;
+  records!: Table<any, string>;
 
   constructor() {
     super("societyer-static-demo");
@@ -4543,19 +4898,23 @@ class StaticDemoDexieDatabase extends Dexie {
       meetings: "_id, societyId, scheduledAt, status",
       minutes: "_id, meetingId, societyId, heldAt, status",
     });
+    this.version(2).stores({
+      meetings: "_id, societyId, scheduledAt, status",
+      minutes: "_id, meetingId, societyId, heldAt, status",
+      records: "&key, table, id, societyId",
+    });
   }
 }
 
 class StaticDemoDexieStore {
   private db: StaticDemoDexieDatabase | null = null;
-  private cache: Record<StaticDemoTableName, any[]>;
+  private cache: StaticDemoSeed;
+  private seed: StaticDemoSeed;
   private listeners = new Set<() => void>();
 
-  constructor(seed: Record<StaticDemoTableName, any[]>) {
-    this.cache = {
-      meetings: cloneStaticRows(seed.meetings),
-      minutes: cloneStaticRows(seed.minutes),
-    };
+  constructor(seed: StaticDemoSeed) {
+    this.seed = cloneStaticSeed(seed);
+    this.cache = cloneStaticSeed(seed);
 
     if (typeof window === "undefined" || !("indexedDB" in window)) return;
 
@@ -4587,13 +4946,13 @@ class StaticDemoDexieStore {
       case "agendas:listForSociety":
         return scopedRows(this.cache.meetings, args).map((meeting) => this.agendaSummaryForMeeting(meeting));
       case "meetings:get":
-        return byId(this.cache.meetings, args?.id) ?? this.cache.meetings[0] ?? null;
+        return this.getRow("meetings", args?.id) ?? this.listRows("meetings", args)[0] ?? null;
       case "meetings:list":
-        return scopedRows(this.cache.meetings, args);
+        return this.listRows("meetings", args);
       case "minutes:getByMeeting":
-        return this.cache.minutes.find((row) => row.meetingId === args?.meetingId) ?? null;
+        return this.rows("minutes").find((row) => row.meetingId === args?.meetingId) ?? null;
       case "minutes:get":
-        return byId(this.cache.minutes, args?.id);
+        return this.getRow("minutes", args?.id);
     }
     return undefined;
   }
@@ -4694,13 +5053,54 @@ class StaticDemoDexieStore {
         updatedAtISO: new Date(now).toISOString(),
         ...args,
       };
-      this.cache.minutes = upsertStaticRow(this.cache.minutes, row);
-      void this.db?.minutes.put(cloneStaticRow(row));
+      this.upsertRow("minutes", row);
       this.notify();
       return row._id;
     }
 
     return undefined;
+  }
+
+  listRows(table: string, args?: StaticArgs) {
+    return scopedRows(this.rows(table), args);
+  }
+
+  getRow(table: string, id: string | undefined) {
+    return byId(this.rows(table), id);
+  }
+
+  upsertRow(table: string, row: any) {
+    if (!row?._id) return null;
+    this.cache[table] = upsertStaticRow(this.rows(table), row);
+    this.persistRow(table, row);
+    this.notify();
+    return row;
+  }
+
+  removeRow(table: string, id: string | undefined) {
+    if (!id) return null;
+    const previous = this.getRow(table, id);
+    this.cache[table] = this.rows(table).filter((row) => row._id !== id);
+    void this.db?.records.delete(staticRecordKey(table, id));
+    if (table === "meetings" || table === "minutes") void this.db?.[table].delete(id);
+    this.notify();
+    return previous;
+  }
+
+  async reseed() {
+    this.cache = cloneStaticSeed(this.seed);
+    if (!this.db) {
+      this.notify();
+      return;
+    }
+    await this.db.open();
+    await Promise.all([
+      this.db.records.clear(),
+      this.db.meetings.clear(),
+      this.db.minutes.clear(),
+    ]);
+    await this.writeSeed(this.seed);
+    this.notify();
   }
 
   private agendaSummaryForMeeting(meeting: any) {
@@ -4732,41 +5132,76 @@ class StaticDemoDexieStore {
     return { agenda: this.agendaSummaryForMeeting(meeting), items };
   }
 
-  private async hydrate(seed: Record<StaticDemoTableName, any[]>) {
+  private async hydrate(seed: StaticDemoSeed) {
     if (!this.db) return;
 
     await this.db.open();
-    const [meetingCount, minuteCount] = await Promise.all([
-      this.db.meetings.count(),
-      this.db.minutes.count(),
-    ]);
+    if ((await this.db.records.count()) === 0) {
+      const [legacyMeetings, legacyMinutes] = await Promise.all([
+        this.db.meetings.toArray(),
+        this.db.minutes.toArray(),
+      ]);
+      await this.writeSeed({
+        ...seed,
+        meetings: legacyMeetings.length ? legacyMeetings : seed.meetings,
+        minutes: legacyMinutes.length ? legacyMinutes : seed.minutes,
+      });
+    } else {
+      await this.putMissingSeedRows(seed);
+    }
 
-    if (meetingCount === 0) await this.db.meetings.bulkPut(cloneStaticRows(seed.meetings));
-    else await putMissingStaticRows(this.db.meetings, seed.meetings);
-    if (minuteCount === 0) await this.db.minutes.bulkPut(cloneStaticRows(seed.minutes));
-    else await putMissingStaticRows(this.db.minutes, seed.minutes);
+    const localRecords = await this.db.records.toArray();
+    const next = cloneStaticSeed(seed);
+    for (const record of localRecords) {
+      if (!record?.table || !record?.value?._id) continue;
+      next[record.table] = upsertStaticRow(next[record.table] ?? [], record.value);
+    }
 
-    const [localMeetings, localMinutes] = await Promise.all([
-      this.db.meetings.toArray(),
-      this.db.minutes.toArray(),
-    ]);
-
-    this.cache = {
-      meetings: localMeetings.length ? localMeetings : cloneStaticRows(seed.meetings),
-      minutes: localMinutes.length ? localMinutes : cloneStaticRows(seed.minutes),
-    };
+    this.cache = next;
     this.notify();
   }
 
-  private patchRow(table: StaticDemoTableName, id: string | undefined, patch: Record<string, any>) {
+  private async writeSeed(seed: StaticDemoSeed) {
+    if (!this.db) return;
+    const records = Object.entries(seed).flatMap(([table, rows]) =>
+      rows.filter((row) => row?._id).map((row) => staticRecord(table, row)),
+    );
+    if (records.length) await this.db.records.bulkPut(records);
+    await Promise.all([
+      seed.meetings?.length ? this.db.meetings.bulkPut(cloneStaticRows(seed.meetings)) : Promise.resolve(),
+      seed.minutes?.length ? this.db.minutes.bulkPut(cloneStaticRows(seed.minutes)) : Promise.resolve(),
+    ]);
+  }
+
+  private async putMissingSeedRows(seed: StaticDemoSeed) {
+    if (!this.db) return;
+    const missing: any[] = [];
+    for (const [table, rows] of Object.entries(seed)) {
+      for (const row of rows) {
+        if (!row?._id) continue;
+        if (!(await this.db.records.get(staticRecordKey(table, row._id)))) missing.push(staticRecord(table, row));
+      }
+    }
+    if (missing.length) await this.db.records.bulkPut(missing);
+  }
+
+  private rows(table: string) {
+    return this.cache[table] ?? [];
+  }
+
+  private patchRow(table: string, id: string | undefined, patch: Record<string, any>) {
     if (!id) return null;
-    const existing = this.cache[table].find((row) => row._id === id);
+    const existing = this.rows(table).find((row) => row._id === id);
     if (!existing) return null;
     const updated = { ...existing, ...patch, updatedAtISO: new Date().toISOString() };
-    this.cache[table] = upsertStaticRow(this.cache[table], updated);
-    void this.db?.[table].put(cloneStaticRow(updated));
+    this.upsertRow(table, updated);
     this.notify();
     return updated;
+  }
+
+  private persistRow(table: string, row: any) {
+    void this.db?.records.put(staticRecord(table, row));
+    if (table === "meetings" || table === "minutes") void this.db?.[table].put(cloneStaticRow(row));
   }
 
   private notify() {
@@ -4780,6 +5215,44 @@ function cloneStaticRow<T>(row: T): T {
 
 function cloneStaticRows<T>(rows: T[]): T[] {
   return rows.map((row) => cloneStaticRow(row));
+}
+
+function cloneStaticSeed(seed: StaticDemoSeed): StaticDemoSeed {
+  return Object.fromEntries(Object.entries(seed).map(([table, rows]) => [table, cloneStaticRows(rows)]));
+}
+
+function staticRecordKey(table: string, id: string) {
+  return `${table}:${id}`;
+}
+
+function staticRecord(table: string, row: any) {
+  return {
+    key: staticRecordKey(table, row._id),
+    table,
+    id: row._id,
+    societyId: row.societyId,
+    value: cloneStaticRow(row),
+  };
+}
+
+function staticTableNameForModule(moduleName: string) {
+  if (moduleName === "society") return "societies";
+  return moduleName;
+}
+
+function staticMutationTableName(moduleName: string, exportName: string) {
+  if (moduleName === "society") return "societies";
+  if (moduleName === "organizationDetails" && exportName.includes("Address")) return "organizationAddresses";
+  if (moduleName === "organizationDetails" && exportName.includes("Registration")) return "organizationRegistrations";
+  if (moduleName === "organizationDetails" && exportName.includes("Identifier")) return "organizationIdentifiers";
+  if (moduleName === "volunteers" && exportName.includes("Screening")) return "volunteerScreenings";
+  if (moduleName === "volunteers" && exportName.includes("Application")) return "volunteerApplications";
+  if (moduleName === "fundingSources" && exportName.includes("Event")) return "fundingSourceEvents";
+  if (moduleName === "fundingSources") return "fundingSources";
+  if (moduleName === "financialHub" && exportName.includes("Budget")) return "budgets";
+  if (moduleName === "financialHub" && exportName.includes("OperatingSubscription")) return "operatingSubscriptions";
+  if (moduleName === "transparency") return "transparency";
+  return staticTableNameForModule(moduleName);
 }
 
 function upsertStaticRow(rows: any[], row: any) {
@@ -4861,7 +5334,7 @@ function staticModel(
 }
 
 export class StaticConvexClient {
-  private store = new StaticDemoDexieStore({ meetings, minutes });
+  private store = new StaticDemoDexieStore(STATIC_DEMO_SEED);
 
   get url() {
     return "static://societyer-demo";
@@ -4932,6 +5405,14 @@ export class StaticConvexClient {
       error: () => undefined,
     };
   }
+
+  reseedStaticDemo() {
+    return this.store.reseed();
+  }
 }
 
 export const staticConvex = new StaticConvexClient();
+
+export function reseedStaticDemoData() {
+  return staticConvex.reseedStaticDemo();
+}

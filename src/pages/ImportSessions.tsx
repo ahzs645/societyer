@@ -15,6 +15,7 @@ import {
   FileText,
   FolderOpen,
   History,
+  Link2,
   ListChecks,
   Pencil,
   Plus,
@@ -24,8 +25,14 @@ import {
   X,
 } from "lucide-react";
 
-type FilterStatus = "all" | "Pending" | "Approved" | "Rejected" | "risk";
+type FilterStatus = "all" | "Pending" | "Approved" | "Rejected" | "risk" | "links";
 type SessionTrack = "active" | "completed";
+type LinkInsight = {
+  key: string;
+  label: string;
+  detail: string;
+  resolved: boolean;
+};
 
 const STATUS_ITEMS: { id: FilterStatus; label: string }[] = [
   { id: "all", label: "All" },
@@ -33,6 +40,7 @@ const STATUS_ITEMS: { id: FilterStatus; label: string }[] = [
   { id: "Approved", label: "Approved" },
   { id: "Rejected", label: "Rejected" },
   { id: "risk", label: "Review flags" },
+  { id: "links", label: "Link gaps" },
 ];
 
 const KIND_LABELS: Record<string, string> = {
@@ -167,12 +175,19 @@ export function ImportSessionsPage() {
   const targets = useMemo<string[]>(() => {
     return Array.from(new Set<string>(records.map((record: any) => String(record.targetModule)))).sort();
   }, [records]);
+  const linkGapCount = useMemo(() => {
+    return records.filter((record: any) => hasOpenLinkInsight(record)).length;
+  }, [records]);
   const filteredRecords = useMemo(() => {
     const query = searchText.trim().toLowerCase();
     return records.filter((record: any) => {
       const statusMatch =
         statusFilter === "all" ||
-        (statusFilter === "risk" ? (record.riskFlags ?? []).length > 0 : record.status === statusFilter);
+        (statusFilter === "risk"
+          ? (record.riskFlags ?? []).length > 0
+          : statusFilter === "links"
+            ? hasOpenLinkInsight(record)
+            : record.status === statusFilter);
       const kindMatch = kindFilter === "all" || record.recordKind === kindFilter;
       const targetMatch = targetFilter === "all" || record.targetModule === targetFilter;
       const searchMatch = !query || [
@@ -430,6 +445,7 @@ export function ImportSessionsPage() {
         <Stat label="Completed" value={String(completedSessions.length)} icon={<Archive size={14} />} sub="hidden from active track" />
         <Stat label="Candidates" value={String(session?.summary?.total ?? 0)} icon={<ListChecks size={14} />} sub="records in selected session" />
         <Stat label="Review flags" value={String(session?.summary?.riskCount ?? 0)} icon={<ShieldAlert size={14} />} sub="restricted, OCR, or cleanup risks" />
+        <Stat label="Link gaps" value={String(linkGapCount)} icon={<Link2 size={14} />} sub="records with likely missing links" />
       </div>
 
       {sourceFilter && (
@@ -647,6 +663,7 @@ export function ImportSessionsPage() {
                       <th>Target</th>
                       <th>Status</th>
                       <th>Flags</th>
+                      <th>Link review</th>
                       <th>Applied</th>
                       <th aria-label="Actions" />
                     </tr>
@@ -676,6 +693,7 @@ export function ImportSessionsPage() {
                             ))}
                           </div>
                         </td>
+                        <td><LinkReviewBadges record={record} /></td>
                         <td>
                           <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
                             {record.importedTargets?.orgHistory && <Badge tone="success">History</Badge>}
@@ -811,6 +829,7 @@ function RecordDrawer({
             </Field>
           </div>
           {renderPayloadEditor(form, onChange)}
+          <LinkReviewPanel record={form} />
           <Field label="Source external IDs" hint="Comma-separated Paperless, BC Registry, local, or external IDs used for provenance.">
             <input className="input" value={form.sourceExternalIdsText} onChange={(event) => onChange({ ...form, sourceExternalIdsText: event.target.value })} />
           </Field>
@@ -888,6 +907,159 @@ function InsuranceRecordSummary({ record, compact = false }: { record: any; comp
       )}
     </div>
   );
+}
+
+function LinkReviewBadges({ record }: { record: any }) {
+  const insights = linkInsightsFor(record);
+  if (!insights.length) return <span className="muted">-</span>;
+  const open = insights.filter((insight) => !insight.resolved);
+  const resolved = insights.length - open.length;
+  return (
+    <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
+      {open.slice(0, 2).map((insight) => (
+        <Badge key={insight.key} tone="warn">{insight.label}</Badge>
+      ))}
+      {open.length > 2 && <Badge tone="warn">+{open.length - 2}</Badge>}
+      {open.length === 0 && resolved > 0 && <Badge tone="success">Linked</Badge>}
+    </div>
+  );
+}
+
+function LinkReviewPanel({ record }: { record: any }) {
+  const insights = linkInsightsFor(record);
+  if (!insights.length) return null;
+  const open = insights.filter((insight) => !insight.resolved);
+  return (
+    <InspectorNote
+      tone={open.length ? "warn" : "info"}
+      title={open.length ? "Likely links to review" : "Link review looks complete"}
+    >
+      <div className="col" style={{ gap: 8 }}>
+        {insights.map((insight) => (
+          <div key={insight.key} className="row" style={{ gap: 8, alignItems: "flex-start" }}>
+            <Badge tone={insight.resolved ? "success" : "warn"}>
+              {insight.resolved ? "Linked" : "Review"}
+            </Badge>
+            <div>
+              <strong>{insight.label}</strong>
+              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{insight.detail}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </InspectorNote>
+  );
+}
+
+function hasOpenLinkInsight(record: any) {
+  return linkInsightsFor(record).some((insight) => !insight.resolved);
+}
+
+function linkInsightsFor(record: any): LinkInsight[] {
+  const payload = record?.payload ?? {};
+  const importedTargets = record?.importedTargets ?? {};
+  const sourceExternalIds = uniqueStrings([
+    ...(Array.isArray(record?.sourceExternalIds) ? record.sourceExternalIds : []),
+    ...(Array.isArray(payload?.sourceExternalIds) ? payload.sourceExternalIds : []),
+  ]);
+  const insights: LinkInsight[] = [];
+  const add = (insight: LinkInsight) => {
+    if (!insights.some((item) => item.key === insight.key)) insights.push(insight);
+  };
+
+  if (sourceExternalIds.length > 0) {
+    add({
+      key: "source-evidence",
+      label: "Source evidence",
+      detail: `${sourceExternalIds.length} source ID${sourceExternalIds.length === 1 ? "" : "s"} should stay linked to the created record or document.`,
+      resolved: Boolean(importedTargets.documents || importedTargets.sections || importedTargets.meetings || importedTargets.orgHistory),
+    });
+  }
+
+  if (["motion", "meetingMinutes", "meetingAttendance", "motionEvidence"].includes(record?.recordKind)) {
+    const meetingLabel = firstString(payload.meetingTitle, payload.title, payload.meetingDate, payload.scheduledAt);
+    if (meetingLabel) {
+      add({
+        key: "meeting",
+        label: "Meeting",
+        detail: `Looks related to ${meetingLabel}. Link it to a meeting/minutes record when applying or reviewing.`,
+        resolved: Boolean(importedTargets.meetings || payload.meetingId || payload.minutesId),
+      });
+    }
+  }
+
+  const personLabel = firstString(
+    payload.personName,
+    payload.fullName,
+    payload.participantName,
+    payload.employeeName,
+    payload.volunteerName,
+    payload.movedByName,
+    payload.secondedByName,
+    payload.name,
+    payload.email,
+  );
+  if (personLabel && [
+    "boardTerm",
+    "boardRoleAssignment",
+    "boardRoleChange",
+    "signingAuthority",
+    "meetingAttendance",
+    "pipaTraining",
+    "employee",
+    "volunteer",
+    "legalSigner",
+    "roleHolder",
+    "rightsholdingTransfer",
+  ].includes(record?.recordKind)) {
+    add({
+      key: "person",
+      label: "Person record",
+      detail: `Candidate person value: ${personLabel}. Check whether this should link to an existing member, director, volunteer, or employee.`,
+      resolved: Boolean(payload.personId || payload.memberId || payload.directorId || payload.employeeId || payload.volunteerId || payload.roleHolderId),
+    });
+  }
+
+  if (record?.recordKind === "deadline" && firstString(payload.filingKind, payload.filingTitle, payload.kind, payload.title)) {
+    add({
+      key: "filing",
+      label: "Filing",
+      detail: "This deadline looks filing-related and may need a linked filing record.",
+      resolved: Boolean(payload.linkedFilingId || payload.filingId),
+    });
+  }
+
+  if (["budget", "budgetSnapshot", "financialStatement", "financialStatementImport", "treasurerReport"].includes(record?.recordKind)) {
+    const fiscalYear = firstString(payload.fiscalYear, payload.year, payload.periodLabel, payload.periodEnd);
+    if (fiscalYear) {
+      add({
+        key: "fiscal-year",
+        label: "Fiscal year",
+        detail: `Financial period found: ${fiscalYear}. Check whether it should connect to financial statements or a fiscal-year detail record.`,
+        resolved: Boolean(payload.fiscalYearId || payload.financialStatementId || importedTargets.sections),
+      });
+    }
+  }
+
+  if (record?.recordKind === "insurancePolicy" && firstString(payload.policySeriesKey, payload.policyNumber, payload.insurer)) {
+    add({
+      key: "policy-series",
+      label: "Policy series",
+      detail: `Policy identifiers found: ${[payload.policySeriesKey, payload.policyNumber, payload.insurer].filter(Boolean).join(" · ")}.`,
+      resolved: Boolean(payload.policyId || payload.insurancePolicyId || importedTargets.sections),
+    });
+  }
+
+  if (record?.recordKind === "grant" && firstString(payload.funder, payload.program, payload.linkedFinancialAccountId)) {
+    add({
+      key: "grant-source",
+      label: "Grant source",
+      detail: `Grant source fields found: ${[payload.funder, payload.program].filter(Boolean).join(" · ") || "financial account"}.`,
+      resolved: Boolean(payload.grantSourceId || payload.linkedFinancialAccountId || importedTargets.sections),
+    });
+  }
+
+  return insights;
 }
 
 function isImportReadyInsuranceRecord(record: any) {
@@ -1151,6 +1323,18 @@ function ConfidenceBadge({ confidence }: { confidence?: string }) {
   if (confidence === "High") return <Badge tone="success">High</Badge>;
   if (confidence === "Medium") return <Badge tone="info">Medium</Badge>;
   return <Badge tone="warn">Review</Badge>;
+}
+
+function firstString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return "";
+}
+
+function uniqueStrings(values: unknown[]) {
+  return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)));
 }
 
 function isActiveImportSession(session: any) {

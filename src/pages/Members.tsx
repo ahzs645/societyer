@@ -17,6 +17,7 @@ import { rowsToCsv } from "../lib/csv";
 import { BulkEditPanel } from "../components/BulkEditPanel";
 import { MergeRecordsModal } from "../components/MergeRecordsModal";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import { StructuredAddressTextFields } from "../components/StructuredAddressFields";
 import {
   RecordTable,
   RecordTableScope,
@@ -310,7 +311,7 @@ export function MembersPage() {
               />
             </Field>
             <Field label="Phone"><input className="input" value={selected.phone ?? ""} onChange={(e) => setSelected({ ...selected, phone: e.target.value })} /></Field>
-            <Field label="Address"><textarea className="textarea" value={selected.address ?? ""} onChange={(e) => setSelected({ ...selected, address: e.target.value })} /></Field>
+            <StructuredAddressTextFields value={selected.address ?? ""} onChange={(address) => setSelected({ ...selected, address })} />
             <div className="row" style={{ gap: 12 }}>
               <Field label="Class">
                 <Select

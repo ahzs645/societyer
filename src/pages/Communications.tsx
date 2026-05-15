@@ -10,6 +10,7 @@ import { Mail, Plus, Send, Settings2 } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { formatDateTime } from "../lib/format";
+import { StructuredAddressTextFields } from "../components/StructuredAddressFields";
 
 type AudiencePreset =
   | "all_members"
@@ -769,7 +770,7 @@ export function CommunicationsPage() {
           <div>
             <Field label="Email"><input className="input" value={prefDraft.email ?? ""} onChange={(e) => setPrefDraft({ ...prefDraft, email: e.target.value })} /></Field>
             <Field label="Phone"><input className="input" value={prefDraft.phone ?? ""} onChange={(e) => setPrefDraft({ ...prefDraft, phone: e.target.value })} /></Field>
-            <Field label="Postal address"><textarea className="textarea" rows={4} value={prefDraft.postalAddress ?? ""} onChange={(e) => setPrefDraft({ ...prefDraft, postalAddress: e.target.value })} /></Field>
+            <StructuredAddressTextFields value={prefDraft.postalAddress ?? ""} onChange={(postalAddress) => setPrefDraft({ ...prefDraft, postalAddress })} />
             <label className="checkbox"><input type="checkbox" checked={prefDraft.transactionalEmailEnabled} onChange={(e) => setPrefDraft({ ...prefDraft, transactionalEmailEnabled: e.target.checked })} /> Transactional email allowed</label>
             <label className="checkbox"><input type="checkbox" checked={prefDraft.noticeEmailEnabled} onChange={(e) => setPrefDraft({ ...prefDraft, noticeEmailEnabled: e.target.checked })} /> Formal notices allowed</label>
             <label className="checkbox"><input type="checkbox" checked={prefDraft.newsletterEmailEnabled} onChange={(e) => setPrefDraft({ ...prefDraft, newsletterEmailEnabled: e.target.checked })} /> Newsletter / CASL marketing consent</label>

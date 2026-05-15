@@ -45,6 +45,7 @@ type NodePreview = {
 };
 
 type RecipeKey =
+  | "workspace_onboarding"
   | "agm_prep"
   | "insurance_renewal"
   | "annual_report_filing"
@@ -147,6 +148,7 @@ const UNBC_KEY_ACCESS_INTAKE_FIELDS = [
 ];
 
 const RECIPE_LABELS: Record<RecipeKey, string> = {
+  workspace_onboarding: "Workspace onboarding",
   agm_prep: "AGM prep",
   insurance_renewal: "Insurance renewal reminder",
   annual_report_filing: "Annual report filing",
@@ -160,6 +162,8 @@ const RECIPE_LABELS: Record<RecipeKey, string> = {
 };
 
 const RECIPE_DESCRIPTIONS: Record<RecipeKey, string> = {
+  workspace_onboarding:
+    "Starts a new society workspace with the essentials, then leaves registry verification and advanced setup as optional follow-up work.",
   agm_prep:
     "T-minus reminders before an AGM — draft agenda, queue notice-of-meeting, confirm quorum threshold.",
   insurance_renewal:
@@ -183,6 +187,7 @@ const RECIPE_DESCRIPTIONS: Record<RecipeKey, string> = {
 };
 
 const RECIPE_PROVIDERS: Record<RecipeKey, WorkflowProvider> = {
+  workspace_onboarding: "internal",
   agm_prep: "internal",
   insurance_renewal: "internal",
   annual_report_filing: "internal",
@@ -196,6 +201,14 @@ const RECIPE_PROVIDERS: Record<RecipeKey, WorkflowProvider> = {
 };
 
 const RECIPE_STEPS: Record<RecipeKey, RecipeStep[]> = {
+  workspace_onboarding: [
+    { key: "profile", label: "Create society profile" },
+    { key: "registry_optional", label: "Optionally verify BC Registry access" },
+    { key: "locations", label: "Set registered locations" },
+    { key: "documents", label: "Add governance documents" },
+    { key: "people", label: "Add people and workspace access" },
+    { key: "optional_setup", label: "Choose optional setup areas to finish later" },
+  ],
   agm_prep: [
     { key: "collect_rosters", label: "Collect active members and director roster" },
     { key: "draft_agenda", label: "Draft agenda from bylaw-required items" },
@@ -387,6 +400,50 @@ const CSJ_ORIENTATION_EMAIL_DEFAULTS = {
 };
 
 const RECIPE_NODE_PREVIEWS: Partial<Record<RecipeKey, NodePreview[]>> = {
+  workspace_onboarding: [
+    {
+      key: "profile",
+      type: "form",
+      label: "Society profile",
+      description: "Legal name, incorporation number/date, fiscal year end, jurisdiction, purposes, charity/member-funded flags, and official email.",
+      status: "ready",
+    },
+    {
+      key: "registry_optional",
+      type: "form",
+      label: "Registry verification",
+      description: "Optional check for registry status, last annual report, filing history, key custody, authorized filers, and BC Registry connector setup.",
+      status: "draft",
+    },
+    {
+      key: "locations",
+      type: "form",
+      label: "Registered locations",
+      description: "Registered office, mailing address, and records location only when records are kept somewhere else.",
+      status: "ready",
+    },
+    {
+      key: "documents",
+      type: "document_create",
+      label: "Governance documents",
+      description: "Start with constitution, bylaws, certificate or registry summary, statement of directors/registered office, and latest annual report if available.",
+      status: "ready",
+    },
+    {
+      key: "people",
+      type: "form",
+      label: "People",
+      description: "Add directors, known officers, privacy officer, workspace users, and signing authorities if known.",
+      status: "ready",
+    },
+    {
+      key: "optional_setup",
+      type: "manual_trigger",
+      label: "Optional setup",
+      description: "Skip or choose later: annual calendar, member register, finance controls, privacy program, insurance/risk, integrations, and board adoption packet.",
+      status: "draft",
+    },
+  ],
   agm_date_deadlines: [
     {
       key: "agm_date_set",
@@ -2527,6 +2584,17 @@ async function handleStep(
   node?: NodePreview,
   actingUserId?: any,
 ): Promise<string | { note?: string; output?: any } | undefined> {
+  if (wf.recipe === "workspace_onboarding") {
+    const notes = [
+      "Created the society profile.",
+      "Registry verification left as an optional follow-up.",
+      "Opened registered-location follow-up work.",
+      "Opened governance-document follow-up work.",
+      "Opened people and access follow-up work.",
+      "Advanced setup left as optional follow-up work.",
+    ];
+    return notes[stepIndex];
+  }
   if (node?.type === "ai_agent") {
     const cfg = node.config ?? {};
     const agentKey = String(cfg.agentKey ?? "compliance_analyst");
@@ -2651,6 +2719,29 @@ function intakeFieldsForRecipe(fields: string[]) {
 }
 
 function configForRecipe(recipe: RecipeKey) {
+  if (recipe === "workspace_onboarding") {
+    return {
+      defaultTriggerKind: "manual",
+      requiredProfileFields: [
+        "name",
+        "incorporationNumber",
+        "incorporationDate",
+        "fiscalYearEnd",
+        "jurisdictionCode",
+        "registeredOfficeAddress",
+        "mailingAddress",
+        "privacyOfficerName",
+        "privacyOfficerEmail",
+      ],
+      taskTemplateKeys: [
+        "registry_verification_optional",
+        "confirm_registered_locations",
+        "import_governance_documents",
+        "set_people_and_access",
+        "optional_advanced_setup",
+      ],
+    };
+  }
   if (recipe === "agm_date_deadlines") {
     return {
       workflowTemplateKey: "agm_date_deadlines",

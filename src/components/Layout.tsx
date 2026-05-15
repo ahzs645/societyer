@@ -63,6 +63,7 @@ import {
   Sun,
   Bot,
   Plug,
+  Plus,
 } from "lucide-react";
 import {
   ComponentType,
@@ -355,6 +356,7 @@ const NAV_GROUPS: NavGroup[] = [
       navItem("/app/financials"),
       navItem("/app/finance-imports"),
       navItem("/app/treasurer"),
+      navItem("/app/assets"),
       navItem("/app/grants"),
       navItem("/app/reconciliation"),
       navItem("/app/receipts"),
@@ -567,6 +569,7 @@ const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   "Public transparency": "nav.transparency",
   Financials: "nav.financials",
   Treasurer: "nav.treasurer",
+  Assets: "nav.assets",
   Grants: "nav.grants",
   Reconciliation: "nav.reconciliation",
   "Donation receipts": "nav.donationReceipts",
@@ -1538,6 +1541,19 @@ export function Layout() {
                   {t("sidebar.noSocieties")}
                 </div>
               )}
+            </div>
+            <div style={{ padding: 8, borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+              <button
+                type="button"
+                className="btn btn--accent"
+                style={{ width: "100%", justifyContent: "center" }}
+                onClick={() => {
+                  setWorkspaceOpen(false);
+                  navigate("/app/society/new");
+                }}
+              >
+                <Plus size={14} /> {t("sidebar.addWorkspace")}
+              </button>
             </div>
           </div>,
           document.body,
