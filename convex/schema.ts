@@ -2793,6 +2793,131 @@ export default defineSchema({
     .index("by_document", ["documentId"])
     .index("by_commitment", ["commitmentId"]),
 
+  assets: defineTable({
+    societyId: v.id("societies"),
+    assetTag: v.string(),
+    name: v.string(),
+    category: v.string(),
+    serialNumber: v.optional(v.string()),
+    supplier: v.optional(v.string()),
+    purchaseDate: v.optional(v.string()),
+    purchaseValueCents: v.optional(v.number()),
+    currency: v.optional(v.string()),
+    fundingSource: v.optional(v.string()),
+    grantId: v.optional(v.id("grants")),
+    grantRestrictions: v.optional(v.string()),
+    retentionUntil: v.optional(v.string()),
+    disposalRules: v.optional(v.string()),
+    location: v.optional(v.string()),
+    condition: v.string(),
+    status: v.string(),
+    custodianType: v.optional(v.string()), // member | director | employee | volunteer | committee | location | other
+    custodianId: v.optional(v.string()),
+    custodianName: v.optional(v.string()),
+    responsiblePersonName: v.optional(v.string()),
+    expectedReturnDate: v.optional(v.string()),
+    insurancePolicyId: v.optional(v.id("insurancePolicies")),
+    insuranceNotes: v.optional(v.string()),
+    capitalized: v.boolean(),
+    depreciationMethod: v.optional(v.string()),
+    usefulLifeMonths: v.optional(v.number()),
+    bookValueCents: v.optional(v.number()),
+    receiptDocumentId: v.optional(v.id("documents")),
+    sourceDocumentIds: v.array(v.id("documents")),
+    warrantyExpiresAt: v.optional(v.string()),
+    nextMaintenanceDate: v.optional(v.string()),
+    nextVerificationDate: v.optional(v.string()),
+    disposedAt: v.optional(v.string()),
+    disposalMethod: v.optional(v.string()),
+    disposalReason: v.optional(v.string()),
+    disposalValueCents: v.optional(v.number()),
+    disposalApprovedMeetingId: v.optional(v.id("meetings")),
+    disposalDocumentIds: v.array(v.id("documents")),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_tag", ["societyId", "assetTag"])
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_society_category", ["societyId", "category"])
+    .index("by_grant", ["grantId"])
+    .index("by_insurance_policy", ["insurancePolicyId"]),
+
+  assetEvents: defineTable({
+    societyId: v.id("societies"),
+    assetId: v.id("assets"),
+    eventType: v.string(), // intake | checkout | checkin | transfer | maintenance | verification | disposal | note
+    happenedAtISO: v.string(),
+    actorName: v.optional(v.string()),
+    fromCustodianName: v.optional(v.string()),
+    toCustodianType: v.optional(v.string()),
+    toCustodianId: v.optional(v.string()),
+    toCustodianName: v.optional(v.string()),
+    responsiblePersonName: v.optional(v.string()),
+    location: v.optional(v.string()),
+    condition: v.optional(v.string()),
+    expectedReturnDate: v.optional(v.string()),
+    acceptanceSignature: v.optional(v.string()),
+    documentIds: v.array(v.id("documents")),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_asset", ["assetId"])
+    .index("by_asset_happened", ["assetId", "happenedAtISO"])
+    .index("by_society_happened", ["societyId", "happenedAtISO"]),
+
+  assetMaintenance: defineTable({
+    societyId: v.id("societies"),
+    assetId: v.id("assets"),
+    title: v.string(),
+    kind: v.string(), // maintenance | calibration | insurance | warranty | inspection
+    dueDate: v.string(),
+    status: v.string(),
+    completedAtISO: v.optional(v.string()),
+    taskId: v.optional(v.id("tasks")),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_asset", ["assetId"])
+    .index("by_society_due", ["societyId", "dueDate"])
+    .index("by_task", ["taskId"]),
+
+  assetVerificationRuns: defineTable({
+    societyId: v.id("societies"),
+    title: v.string(),
+    status: v.string(),
+    startedAtISO: v.string(),
+    completedAtISO: v.optional(v.string()),
+    reviewerName: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  assetVerificationItems: defineTable({
+    societyId: v.id("societies"),
+    runId: v.id("assetVerificationRuns"),
+    assetId: v.id("assets"),
+    status: v.string(), // pending | verified | missing | damaged | location_mismatch
+    verifiedAtISO: v.optional(v.string()),
+    verifiedByName: v.optional(v.string()),
+    observedLocation: v.optional(v.string()),
+    observedCondition: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_run", ["runId"])
+    .index("by_asset", ["assetId"])
+    .index("by_run_status", ["runId", "status"]),
+
   complianceRemediations: defineTable({
     societyId: v.id("societies"),
     ruleId: v.string(),

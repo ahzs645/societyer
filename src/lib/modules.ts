@@ -13,6 +13,7 @@ export const MODULE_DEFAULTS = {
   secrets: true,
   transparency: true,
   reconciliation: true,
+  assets: true,
   donationReceipts: true,
   membershipBilling: true,
   employees: true,
@@ -150,6 +151,13 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     category: "Finance",
     description: "Bank-to-ledger reconciliation workflows.",
     includes: ["Reconciliation"],
+  },
+  {
+    key: "assets",
+    label: "Asset register",
+    category: "Finance",
+    description: "Asset tags, custody, maintenance, insurance, grants, verification, and disposal tracking.",
+    includes: ["Assets", "QR labels", "Physical inventory"],
   },
   {
     key: "donationReceipts",

@@ -64,6 +64,9 @@ const MeetingTemplateBuilderPage = React.lazy(() => import("./pages/MeetingTempl
 const MotionBacklogPage = React.lazy(() => import("./pages/MotionBacklog").then((m) => ({ default: m.MotionBacklogPage })));
 const MotionLibraryPage = React.lazy(() => import("./pages/MotionLibrary").then((m) => ({ default: m.MotionLibraryPage })));
 const TreasurerPage = React.lazy(() => import("./pages/Treasurer").then((m) => ({ default: m.TreasurerPage })));
+const AssetsPage = React.lazy(() => import("./pages/Assets").then((m) => ({ default: m.AssetsPage })));
+const AssetDetailPage = React.lazy(() => import("./pages/Assets").then((m) => ({ default: m.AssetDetailPage })));
+const AssetVerificationPage = React.lazy(() => import("./pages/Assets").then((m) => ({ default: m.AssetVerificationPage })));
 const MembershipPage = React.lazy(() => import("./pages/Membership").then((m) => ({ default: m.MembershipPage })));
 const InspectionsPage = React.lazy(() => import("./pages/Inspections").then((m) => ({ default: m.InspectionsPage })));
 const AttestationsPage = React.lazy(() => import("./pages/Attestations").then((m) => ({ default: m.AttestationsPage })));
@@ -336,6 +339,18 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="motion-backlog" element={<MotionBacklogPage />} />
             <Route path="motion-library" element={<MotionLibraryPage />} />
             <Route path="treasurer" element={<TreasurerPage />} />
+            <Route
+              path="assets"
+              element={withModule("assets", <AssetsPage />)}
+            />
+            <Route
+              path="assets/verification/:runId"
+              element={withModule("assets", <AssetVerificationPage />)}
+            />
+            <Route
+              path="assets/:id"
+              element={withModule("assets", <AssetDetailPage />)}
+            />
             <Route
               path="membership"
               element={withModule("membershipBilling", <MembershipPage />)}

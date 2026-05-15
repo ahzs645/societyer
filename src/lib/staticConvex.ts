@@ -2285,6 +2285,126 @@ const tables: Record<string, any[]> = {
       status: "Active",
     },
   ],
+  assets: [
+    {
+      _id: "static_asset_projector",
+      societyId: SOCIETY_ID,
+      assetTag: "AST-0001",
+      name: "Epson community projector",
+      category: "Program equipment",
+      serialNumber: "EP-DEMO-4421",
+      supplier: "Harbour Office Supply",
+      purchaseDate: "2025-09-12",
+      purchaseValueCents: 92000,
+      currency: "CAD",
+      fundingSource: "Neighbourhood resilience grant",
+      grantRestrictions: "Must be used for public workshops until 2028-03-31.",
+      retentionUntil: "2028-03-31",
+      disposalRules: "Board approval required before sale, donation, or disposal.",
+      location: "Records office equipment cabinet",
+      condition: "Good",
+      status: "Available",
+      custodianType: "location",
+      custodianName: "Records office",
+      responsiblePersonName: "Jordan Lee",
+      insurancePolicyId: "static_insurance",
+      insuranceNotes: "Covered under property/casualty schedule subject to deductible.",
+      capitalized: false,
+      bookValueCents: 69000,
+      sourceDocumentIds: ["static_document_financials"],
+      warrantyExpiresAt: "2027-09-12",
+      nextMaintenanceDate: "2026-06-15",
+      nextVerificationDate: "2026-08-31",
+      disposalDocumentIds: [],
+      notes: "Demo asset used for workshop room bookings.",
+      createdAtISO: "2025-09-12T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+    {
+      _id: "static_asset_laptop",
+      societyId: SOCIETY_ID,
+      assetTag: "AST-0002",
+      name: "Treasurer laptop",
+      category: "IT",
+      serialNumber: "MBP-DEMO-2026",
+      supplier: "Apple Canada",
+      purchaseDate: "2026-01-20",
+      purchaseValueCents: 210000,
+      currency: "CAD",
+      fundingSource: "Operating reserve",
+      location: "With treasurer",
+      condition: "Good",
+      status: "Checked out",
+      custodianType: "director",
+      custodianName: "Jordan Lee",
+      responsiblePersonName: "Jordan Lee",
+      expectedReturnDate: "2026-06-30",
+      insurancePolicyId: "static_insurance",
+      capitalized: true,
+      depreciationMethod: "Straight line",
+      usefulLifeMonths: 36,
+      bookValueCents: 198333,
+      sourceDocumentIds: ["static_document_financials"],
+      warrantyExpiresAt: "2027-01-20",
+      nextMaintenanceDate: "2026-07-15",
+      nextVerificationDate: "2026-08-31",
+      disposalDocumentIds: [],
+      notes: "Used for finance, Wave sync review, and board packages.",
+      createdAtISO: "2026-01-20T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+  ],
+  assetEvents: [
+    {
+      _id: "static_asset_event_projector_intake",
+      societyId: SOCIETY_ID,
+      assetId: "static_asset_projector",
+      eventType: "intake",
+      happenedAtISO: "2025-09-12T18:00:00.000Z",
+      actorName: "Jordan Lee",
+      toCustodianType: "location",
+      toCustodianName: "Records office",
+      responsiblePersonName: "Jordan Lee",
+      location: "Records office equipment cabinet",
+      condition: "Good",
+      documentIds: ["static_document_financials"],
+      notes: "Imported from grant purchase record.",
+      createdAtISO: "2025-09-12T18:00:00.000Z",
+    },
+    {
+      _id: "static_asset_event_laptop_checkout",
+      societyId: SOCIETY_ID,
+      assetId: "static_asset_laptop",
+      eventType: "checkout",
+      happenedAtISO: "2026-01-20T18:30:00.000Z",
+      actorName: "Mina Patel",
+      toCustodianType: "director",
+      toCustodianName: "Jordan Lee",
+      responsiblePersonName: "Jordan Lee",
+      location: "With treasurer",
+      condition: "Good",
+      expectedReturnDate: "2026-06-30",
+      documentIds: [],
+      notes: "Treasurer accepted custody for board finance work.",
+      createdAtISO: "2026-01-20T18:30:00.000Z",
+    },
+  ],
+  assetMaintenance: [
+    {
+      _id: "static_asset_maintenance_projector",
+      societyId: SOCIETY_ID,
+      assetId: "static_asset_projector",
+      title: "Projector lamp and cable check",
+      kind: "maintenance",
+      dueDate: "2026-06-15",
+      status: "Scheduled",
+      notes: "Check before summer workshop series.",
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+  ],
+  assetVerificationRuns: [],
+  assetVerificationItems: [],
   meetings,
   memberProposals: [],
   memberSubscriptions,
@@ -3344,6 +3464,11 @@ const STATIC_EXPORT_TABLES = [
   "bylawRuleSets",
   "goals",
   "tasks",
+  "assets",
+  "assetEvents",
+  "assetMaintenance",
+  "assetVerificationRuns",
+  "assetVerificationItems",
   "minuteBookItems",
   "activity",
   "notes",
@@ -3524,6 +3649,29 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
       });
       return { role: "Owner", categories: Object.keys(catalog), catalog, tools: aiToolCatalog };
     }
+    case "assets:bundle": {
+      const asset = store?.getRow("assets", args?.id) ?? byId(tables.assets, args?.id);
+      if (!asset) return null;
+      return {
+        asset,
+        events: (store?.listRows("assetEvents", { societyId: asset.societyId }) ?? tables.assetEvents)
+          .filter((row: any) => row.assetId === asset._id)
+          .sort((a: any, b: any) => b.happenedAtISO.localeCompare(a.happenedAtISO)),
+        maintenance: (store?.listRows("assetMaintenance", { societyId: asset.societyId }) ?? tables.assetMaintenance)
+          .filter((row: any) => row.assetId === asset._id),
+      };
+    }
+    case "assets:events":
+      return (store?.listRows("assetEvents", args) ?? tables.assetEvents)
+        .filter((row: any) => row.assetId === args?.assetId)
+        .sort((a: any, b: any) => b.happenedAtISO.localeCompare(a.happenedAtISO));
+    case "assets:maintenance":
+      return store?.listRows("assetMaintenance", args) ?? scopedRows(tables.assetMaintenance, args);
+    case "assets:verificationRuns":
+      return store?.listRows("assetVerificationRuns", args) ?? scopedRows(tables.assetVerificationRuns, args);
+    case "assets:verificationItems":
+      return (store?.listRows("assetVerificationItems", args) ?? tables.assetVerificationItems)
+        .filter((row: any) => row.runId === args?.runId);
     case "aiAgents:getChatContext": {
       const catalog: Record<string, any[]> = {};
       aiToolCatalog.forEach((tool) => {
@@ -4518,6 +4666,142 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       }
     }
     return { sourceId: source._id, installed: true };
+  }
+  if (name === "assets:recordEvent") {
+    const asset = store?.getRow("assets", args?.assetId) ?? byId(tables.assets, args?.assetId);
+    if (!asset) return null;
+    const now = new Date().toISOString();
+    const event = {
+      _id: `static_asset_event_${Date.now()}`,
+      societyId: asset.societyId,
+      assetId: asset._id,
+      eventType: args?.event?.eventType ?? "note",
+      happenedAtISO: now,
+      actorName: args?.event?.actorName,
+      fromCustodianName: asset.custodianName,
+      toCustodianType: args?.event?.toCustodianType,
+      toCustodianName: args?.event?.toCustodianName,
+      responsiblePersonName: args?.event?.responsiblePersonName,
+      location: args?.event?.location,
+      condition: args?.event?.condition,
+      expectedReturnDate: args?.event?.expectedReturnDate,
+      acceptanceSignature: args?.event?.acceptanceSignature,
+      documentIds: args?.event?.documentIds ?? [],
+      notes: args?.event?.notes,
+      createdAtISO: now,
+    };
+    store?.upsertRow("assetEvents", event);
+    const patch: any = { updatedAtISO: now };
+    if (event.eventType === "checkout" || event.eventType === "transfer") {
+      patch.status = "Checked out";
+      patch.custodianType = event.toCustodianType;
+      patch.custodianName = event.toCustodianName;
+      patch.responsiblePersonName = event.responsiblePersonName || event.toCustodianName;
+      patch.expectedReturnDate = event.expectedReturnDate;
+    }
+    if (event.eventType === "checkin") {
+      patch.status = "Available";
+      patch.custodianType = "location";
+      patch.custodianName = event.location;
+      patch.expectedReturnDate = undefined;
+    }
+    if (event.location) patch.location = event.location;
+    if (event.condition) patch.condition = event.condition;
+    store?.upsertRow("assets", { ...asset, ...patch });
+    return event._id;
+  }
+  if (name === "assets:scheduleMaintenance") {
+    const asset = store?.getRow("assets", args?.assetId) ?? byId(tables.assets, args?.assetId);
+    if (!asset) return null;
+    const now = new Date().toISOString();
+    const row = {
+      _id: `static_asset_maintenance_${Date.now()}`,
+      societyId: asset.societyId,
+      assetId: asset._id,
+      title: args?.title,
+      kind: args?.kind,
+      dueDate: args?.dueDate,
+      status: "Scheduled",
+      notes: args?.notes,
+      createdAtISO: now,
+      updatedAtISO: now,
+    };
+    store?.upsertRow("assetMaintenance", row);
+    store?.upsertRow("assets", { ...asset, nextMaintenanceDate: args?.dueDate, updatedAtISO: now });
+    return row._id;
+  }
+  if (name === "assets:completeMaintenance") {
+    const row = store?.getRow("assetMaintenance", args?.id) ?? byId(tables.assetMaintenance, args?.id);
+    if (!row) return null;
+    const now = new Date().toISOString();
+    store?.upsertRow("assetMaintenance", { ...row, status: "Completed", completedAtISO: args?.completedAtISO ?? now, notes: args?.notes ?? row.notes, updatedAtISO: now });
+    return args?.id;
+  }
+  if (name === "assets:startVerificationRun") {
+    const now = new Date().toISOString();
+    const assets = store?.listRows("assets", args) ?? scopedRows(tables.assets, args);
+    const runId = `static_asset_verification_${Date.now()}`;
+    store?.upsertRow("assetVerificationRuns", {
+      _id: runId,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      title: args?.title,
+      status: "Open",
+      startedAtISO: now,
+      reviewerName: args?.reviewerName,
+      notes: args?.notes,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    assets.forEach((asset: any) => {
+      store?.upsertRow("assetVerificationItems", {
+        _id: `static_asset_verification_item_${asset._id}_${Date.now()}`,
+        societyId: asset.societyId,
+        runId,
+        assetId: asset._id,
+        status: "pending",
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    });
+    return runId;
+  }
+  if (name === "assets:verifyAsset") {
+    const item = store?.getRow("assetVerificationItems", args?.itemId) ?? byId(tables.assetVerificationItems, args?.itemId);
+    if (!item) return null;
+    const now = new Date().toISOString();
+    store?.upsertRow("assetVerificationItems", {
+      ...item,
+      status: args?.status,
+      verifiedAtISO: now,
+      verifiedByName: args?.verifiedByName,
+      observedLocation: args?.observedLocation,
+      observedCondition: args?.observedCondition,
+      notes: args?.notes,
+      updatedAtISO: now,
+    });
+    return args?.itemId;
+  }
+  if (name === "assets:completeVerificationRun") {
+    const run = store?.getRow("assetVerificationRuns", args?.id) ?? byId(tables.assetVerificationRuns, args?.id);
+    if (!run) return null;
+    const now = new Date().toISOString();
+    store?.upsertRow("assetVerificationRuns", { ...run, status: "Completed", completedAtISO: now, updatedAtISO: now });
+    return args?.id;
+  }
+  if (name === "assets:dispose") {
+    const asset = store?.getRow("assets", args?.assetId) ?? byId(tables.assets, args?.assetId);
+    if (!asset) return null;
+    store?.upsertRow("assets", {
+      ...asset,
+      status: "Disposed",
+      disposedAt: args?.disposedAt,
+      disposalMethod: args?.disposalMethod,
+      disposalReason: args?.disposalReason,
+      disposalValueCents: args?.disposalValueCents,
+      notes: args?.notes ?? asset.notes,
+      updatedAtISO: new Date().toISOString(),
+    });
+    return args?.assetId;
   }
   const [moduleName, exportName] = name.split(":");
   if (exportName && /^(create|update|upsert|issue|setStatus|remove)/.test(exportName)) {
