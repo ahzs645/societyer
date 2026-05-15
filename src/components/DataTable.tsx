@@ -783,7 +783,6 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
                 style={{
                   width: columnWidths[col.id] ?? col.width,
                   textAlign: col.align,
-                  position: "relative",
                 }}
               >
                 {col.sortable ? (

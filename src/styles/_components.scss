@@ -115,10 +115,10 @@
   border-radius: var(--r-md);
   box-shadow: var(--shadow-lg);
   padding: 4px;
-  max-height: 280px;
+  max-height: min(70vh, 420px);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: hidden auto;
   animation: menuIn 0.08s ease-out;
 }
 @keyframes menuIn {

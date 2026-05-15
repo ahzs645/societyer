@@ -11,7 +11,6 @@ import { isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionP
 import { NameAutocomplete } from "../../../components/NameAutocomplete";
 import { Select } from "../../../components/Select";
 import { SignaturePanel } from "../../../components/SignaturePanel";
-import { Tooltip } from "../../../components/Tooltip";
 import {
   AttendanceDetails,
   formatSourceReferences,
@@ -1939,43 +1938,32 @@ export function MeetingMinutesColumn({
                                 {sectionSummaryMeta(section, motionMatchesBySection[index]?.length ?? 0)}
                               </span>
                               <span className="meeting-minutes-section-item__actions">
-                                <Tooltip content={agendaEdit !== null ? "Finish editing the agenda first" : "Edit agenda item"} placement="top">
-                                  <span className="meeting-minutes-section-item__action-tooltip">
-                                    <button
-                                      className="btn-action btn-action--icon"
-                                      type="button"
-                                      disabled={agendaEdit !== null}
-                                      aria-label="Edit agenda item"
-                                      onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        startSectionEdit(index);
-                                      }}
-                                    >
-                                      <Pencil size={12} />
-                                    </button>
-                                  </span>
-                                </Tooltip>
-                                <Tooltip content={agendaEdit !== null ? "Finish editing the agenda first" : "Remove section"} placement="top">
-                                  <span className="meeting-minutes-section-item__action-tooltip">
-                                    <button
-                                      className="btn-action btn-action--icon"
-                                      type="button"
-                                      // Locked while the agenda is mid-edit — saving
-                                      // the agenda would re-sync sections anyway, so
-                                      // any concurrent removal would race.
-                                      disabled={agendaEdit !== null}
-                                      aria-label="Remove section"
-                                      onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        void confirmAndRemoveSection(index);
-                                      }}
-                                    >
-                                      <MinusCircle size={12} />
-                                    </button>
-                                  </span>
-                                </Tooltip>
+                                <button
+                                  className="btn-action btn-action--icon"
+                                  type="button"
+                                  disabled={agendaEdit !== null}
+                                  aria-label="Edit agenda item"
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    startSectionEdit(index);
+                                  }}
+                                >
+                                  <Pencil size={12} />
+                                </button>
+                                <button
+                                  className="btn-action btn-action--icon"
+                                  type="button"
+                                  disabled={agendaEdit !== null}
+                                  aria-label="Remove section"
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    void confirmAndRemoveSection(index);
+                                  }}
+                                >
+                                  <MinusCircle size={12} />
+                                </button>
                               </span>
                             </summary>
 
