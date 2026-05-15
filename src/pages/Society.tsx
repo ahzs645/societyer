@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link, useNavigate } from "react-router-dom";
-import { FileDown, MapPin } from "lucide-react";
+import { Building2, CheckCircle2, FileDown, MapPin } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
@@ -78,25 +78,49 @@ export function SocietyNewPage() {
   };
 
   return (
-    <div className="page page--wide">
-      <PageHeader
-        routeKey="/app/society"
-        title="New society workspace"
-        subtitle="Create the workspace with the essentials. Registry checks and advanced setup can be skipped or finished later."
-        actions={
-          <>
+    <div className="society-create-shell">
+      <div className="society-create">
+        <aside className="society-create__intro">
+          <div className="society-create__brand">
+            <div className="society-create__logo"><Building2 size={18} /></div>
+            <span>Societyer setup</span>
+          </div>
+          <div className="society-create__copy">
+            <h1>New society workspace</h1>
+            <p>
+              Start with the society profile. Registry verification and advanced setup stay optional
+              until the workspace exists.
+            </p>
+          </div>
+          <div className="society-create__steps" aria-label="Onboarding steps">
+            {CORE_ONBOARDING_STEPS.map((step, index) => (
+              <div className="society-create__step" key={step}>
+                <span className="society-create__step-index">{index + 1}</span>
+                <span>{step}</span>
+              </div>
+            ))}
+            <div className="society-create__step society-create__step--optional">
+              <CheckCircle2 size={14} />
+              <span>Optional setup can be skipped</span>
+            </div>
+          </div>
+        </aside>
+
+        <main className="society-create__main">
+          <div className="society-create__topbar">
             <Link className="btn" to="/app/society">Cancel</Link>
             <button className="btn btn--accent" onClick={save} disabled={!canSave}>
               {saving ? "Creating..." : "Create workspace"}
             </button>
-          </>
-        }
-      />
+          </div>
 
-      <div className="society-layout">
-        <main className="society-layout__main">
-          <div className="card">
-            <div className="card__head"><h2 className="card__title">Society profile</h2></div>
+          <section className="card society-create__card">
+            <div className="card__head">
+              <div>
+                <h2 className="card__title">Society profile</h2>
+                <span className="card__subtitle">The only required field right now is the legal name.</span>
+              </div>
+            </div>
             <div className="card__body">
               <Field label="Legal name">
                 <input className="input" value={form.name} onChange={(e) => set("name", e.target.value)} />
@@ -128,9 +152,9 @@ export function SocietyNewPage() {
                 <Toggle checked={form.isMemberFunded} onChange={(v) => set("isMemberFunded", v)} label="Member-funded society" />
               </div>
             </div>
-          </div>
+          </section>
 
-          <div className="card">
+          <section className="card society-create__card">
             <div className="card__head"><h2 className="card__title">Onboarding flow</h2></div>
             <div className="card__body society-onboarding-flow">
               <div>
@@ -150,42 +174,27 @@ export function SocietyNewPage() {
                 </div>
               </div>
             </div>
-          </div>
+          </section>
         </main>
 
-        <aside className="society-layout__side">
-          <div className="card">
-            <div className="card__head"><h2 className="card__title">Locations</h2></div>
-            <div className="card__body">
-              <Field label="Registered office">
-                <textarea className="textarea" value={form.registeredOfficeAddress} onChange={(e) => set("registeredOfficeAddress", e.target.value)} />
-              </Field>
-              <Field label="Mailing address">
-                <textarea className="textarea" value={form.mailingAddress} onChange={(e) => set("mailingAddress", e.target.value)} />
-              </Field>
-            </div>
-          </div>
-          <div className="card">
-            <div className="card__head"><h2 className="card__title">Privacy officer</h2></div>
-            <div className="card__body">
-              <Field label="Name">
-                <input className="input" value={form.privacyOfficerName} onChange={(e) => set("privacyOfficerName", e.target.value)} />
-              </Field>
-              <Field label="Email">
-                <input className="input" type="email" value={form.privacyOfficerEmail} onChange={(e) => set("privacyOfficerEmail", e.target.value)} />
-              </Field>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card__head"><h2 className="card__title">After creation</h2></div>
+        <aside className="society-create__side">
+          <section className="card society-create__card">
+            <div className="card__head"><h2 className="card__title">After profile</h2></div>
             <div className="card__body">
               <p className="muted" style={{ marginTop: 0 }}>
-                Societyer will create an onboarding workflow with optional registry verification,
-                then tasks for locations, documents, people, and a single advanced setup checklist.
+                Societyer will create the workspace, switch you into it, and open an onboarding
+                workflow. Registry verification is optional; locations, documents, and people are
+                handled as follow-up tasks inside the workspace.
               </p>
+              <div className="society-create__next-list">
+                <span>Optional registry check</span>
+                <span>Registered locations</span>
+                <span>Governance documents</span>
+                <span>People and access</span>
+                <span>Advanced setup checklist</span>
+              </div>
             </div>
-          </div>
+          </section>
         </aside>
       </div>
     </div>

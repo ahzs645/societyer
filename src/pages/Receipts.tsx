@@ -11,6 +11,7 @@ import { dollarInputToCents, formatDate, money } from "../lib/format";
 import { exportWordDoc, escapeHtml } from "../lib/exportWord";
 import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
+import { StructuredAddressTextFields } from "../components/StructuredAddressFields";
 
 const FIELDS: FilterField<any>[] = [
   { id: "nonCash", label: "Type", icon: <Tag size={14} />, options: ["Cash", "Non-cash"], match: (r, q) => (r.isNonCash ? "Non-cash" : "Cash") === q },
@@ -146,7 +147,7 @@ export function ReceiptsPage() {
             <Field label="Charity registration #"><input className="input" value={form.charityNumber} onChange={(e) => setForm({ ...form, charityNumber: e.target.value })} /></Field>
             <Field label="Donor name"><input className="input" value={form.donorName} onChange={(e) => setForm({ ...form, donorName: e.target.value })} /></Field>
             <Field label="Donor email"><input className="input" value={form.donorEmail} onChange={(e) => setForm({ ...form, donorEmail: e.target.value })} /></Field>
-            <Field label="Donor address"><textarea className="textarea" value={form.donorAddress} onChange={(e) => setForm({ ...form, donorAddress: e.target.value })} /></Field>
+            <StructuredAddressTextFields value={form.donorAddress} onChange={(donorAddress) => setForm({ ...form, donorAddress })} />
             <div className="row" style={{ gap: 12 }}>
               <Field label="Amount" hint="Dollars">
                 <input

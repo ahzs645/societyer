@@ -251,6 +251,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               }
             />
             <Route
+              path="/app/society/new"
+              element={
+                <AuthGate>
+                  <SocietyNewPage />
+                </AuthGate>
+              }
+            />
+            <Route
               path="/app"
               element={
                 <AuthGate>
@@ -259,7 +267,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               }
             >
             <Route index element={<Dashboard />} />
-            <Route path="society/new" element={<SocietyNewPage />} />
             <Route path="society" element={<SocietyPage />} />
             <Route path="organization-details" element={<OrganizationDetailsPage />} />
             <Route path="role-holders" element={<RoleHoldersPage />} />

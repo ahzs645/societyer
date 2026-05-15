@@ -8,6 +8,7 @@ import { DatePicker } from "../components/DatePicker";
 import { Toggle } from "../components/Controls";
 import { OptionSelect } from "../components/OptionSelect";
 import { Select } from "../components/Select";
+import { StructuredAddressFields } from "../components/StructuredAddressFields";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Building2, KeyRound, Landmark, MapPin, Plus, Trash2 } from "lucide-react";
@@ -482,16 +483,7 @@ function AddressFields({ draft, setDraft }: any) {
         <OptionSelect label="Type" setName="addressTypes" value={draft.type ?? ""} onChange={(value) => setDraft({ ...draft, type: value })} />
         <OptionSelect label="Status" setName="addressStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} />
       </div>
-      <Field label="Street"><input className="input" value={draft.street ?? ""} onChange={(e) => setDraft({ ...draft, street: e.target.value })} /></Field>
-      <div className="row" style={{ gap: 12 }}>
-        <Field label="Unit"><input className="input" value={draft.unit ?? ""} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} /></Field>
-        <Field label="City"><input className="input" value={draft.city ?? ""} onChange={(e) => setDraft({ ...draft, city: e.target.value })} /></Field>
-      </div>
-      <div className="row" style={{ gap: 12 }}>
-        <Field label="Province/state"><input className="input" value={draft.provinceState ?? ""} onChange={(e) => setDraft({ ...draft, provinceState: e.target.value })} /></Field>
-        <Field label="Postal code"><input className="input" value={draft.postalCode ?? ""} onChange={(e) => setDraft({ ...draft, postalCode: e.target.value })} /></Field>
-        <Field label="Country"><input className="input" value={draft.country ?? ""} onChange={(e) => setDraft({ ...draft, country: e.target.value })} /></Field>
-      </div>
+      <StructuredAddressFields value={draft} onChange={(value) => setDraft({ ...draft, ...value })} />
       <div className="row" style={{ gap: 12 }}>
         <Field label="Effective from"><DatePicker value={draft.effectiveFrom ?? ""} onChange={(value) => setDraft({ ...draft, effectiveFrom: value })} /></Field>
         <Field label="Effective to"><DatePicker value={draft.effectiveTo ?? ""} onChange={(value) => setDraft({ ...draft, effectiveTo: value })} /></Field>

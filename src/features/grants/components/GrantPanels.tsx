@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ExternalLink, ListChecks, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge, Field, InspectorNote } from "../../../components/ui";
+import { StructuredAddressFields } from "../../../components/StructuredAddressFields";
 import { formatDate, money } from "../../../lib/format";
 import {
   type GrantRequirement,
@@ -1227,16 +1228,25 @@ function GrantFundedEmployeesPanel({
                   <Field label="Phone"><input className="input" inputMode="tel" value={employeeDraft.phone} onChange={(event) => setEmployeeDraft({ ...employeeDraft, phone: event.target.value })} /></Field>
                   <Field label="Birth date"><input className="input" type="date" value={employeeDraft.birthDate} onChange={(event) => setEmployeeDraft({ ...employeeDraft, birthDate: event.target.value })} /></Field>
                 </div>
-                <Field label="Home address line 1"><input className="input" value={employeeDraft.addressLine1} onChange={(event) => setEmployeeDraft({ ...employeeDraft, addressLine1: event.target.value })} /></Field>
-                <Field label="Home address line 2"><input className="input" value={employeeDraft.addressLine2} onChange={(event) => setEmployeeDraft({ ...employeeDraft, addressLine2: event.target.value })} /></Field>
-                <div className="row" style={{ gap: 8 }}>
-                  <Field label="City"><input className="input" value={employeeDraft.city} onChange={(event) => setEmployeeDraft({ ...employeeDraft, city: event.target.value })} /></Field>
-                  <Field label="Province"><input className="input" value={employeeDraft.province} onChange={(event) => setEmployeeDraft({ ...employeeDraft, province: event.target.value })} /></Field>
-                </div>
-                <div className="row" style={{ gap: 8 }}>
-                  <Field label="Postal code"><input className="input" value={employeeDraft.postalCode} onChange={(event) => setEmployeeDraft({ ...employeeDraft, postalCode: event.target.value })} /></Field>
-                  <Field label="Country"><input className="input" value={employeeDraft.country} onChange={(event) => setEmployeeDraft({ ...employeeDraft, country: event.target.value })} /></Field>
-                </div>
+                <StructuredAddressFields
+                  value={{
+                    street: employeeDraft.addressLine1,
+                    unit: employeeDraft.addressLine2,
+                    city: employeeDraft.city,
+                    provinceState: employeeDraft.province,
+                    postalCode: employeeDraft.postalCode,
+                    country: employeeDraft.country,
+                  }}
+                  onChange={(address) => setEmployeeDraft({
+                    ...employeeDraft,
+                    addressLine1: address.street ?? "",
+                    addressLine2: address.unit ?? "",
+                    city: address.city ?? "",
+                    province: address.provinceState ?? "",
+                    postalCode: address.postalCode ?? "",
+                    country: address.country ?? "",
+                  })}
+                />
                 <Field label="SIN vault record" hint="Raw SIN stays in Secrets; this links only the vault metadata record.">
                   <select className="input" value={employeeDraft.sinSecretVaultItemId} onChange={(event) => setEmployeeDraft({ ...employeeDraft, sinSecretVaultItemId: event.target.value })}>
                     <option value="">No SIN vault record linked</option>

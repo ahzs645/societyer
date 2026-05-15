@@ -11,6 +11,7 @@ import { useToast } from "../components/Toast";
 import { BookTemplate, FileSignature, Landmark, Plus, Scale, Trash2, UsersRound } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
+import { StructuredAddressFields } from "../components/StructuredAddressFields";
 
 export function RoleHoldersPage() {
   const society = useSociety();
@@ -201,11 +202,7 @@ export function RoleHoldersPage() {
               <label><input type="checkbox" checked={Boolean(draft.nonNaturalPerson)} onChange={(e) => setDraft({ ...draft, nonNaturalPerson: e.target.checked })} /> Non-natural person</label>
             </div>
             <Field label="Nature of control"><textarea className="textarea" value={draft.natureOfControl ?? ""} onChange={(e) => setDraft({ ...draft, natureOfControl: e.target.value })} /></Field>
-            <Field label="Street address"><input className="input" value={draft.street ?? ""} onChange={(e) => setDraft({ ...draft, street: e.target.value })} /></Field>
-            <div className="grid two">
-              <Field label="City"><input className="input" value={draft.city ?? ""} onChange={(e) => setDraft({ ...draft, city: e.target.value })} /></Field>
-              <Field label="Province/state"><input className="input" value={draft.provinceState ?? ""} onChange={(e) => setDraft({ ...draft, provinceState: e.target.value })} /></Field>
-            </div>
+            <StructuredAddressFields value={draft} onChange={(address) => setDraft({ ...draft, ...address })} />
             <Field label="Service address"><input className="input" value={draft.serviceStreet ?? ""} onChange={(e) => setDraft({ ...draft, serviceStreet: e.target.value })} /></Field>
             <Field label="Related shareholder/controller IDs"><input className="input" value={draft.relatedShareholderIdsText ?? ""} onChange={(e) => setDraft({ ...draft, relatedShareholderIdsText: e.target.value })} /></Field>
             <Field label="Notes"><textarea className="textarea" value={draft.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></Field>
