@@ -97,6 +97,7 @@ import { useTranslation } from "react-i18next";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { useThemePreference } from "../hooks/useThemePreference";
 import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
+import { useAiChatVisibility } from "../hooks/useAiChatVisibility";
 import type { ThemePreference } from "../lib/theme";
 import { mobileSidebarMediaQuery } from "../lib/breakpoints";
 import { DEFAULT_PINNED_ROUTES } from "../lib/navConfig";
@@ -646,6 +647,7 @@ export function Layout() {
   const [navContextMenu, setNavContextMenu] = useState<SidebarContextMenu | null>(null);
   const { hidden: operationsDeskHidden, setHidden: setOperationsDeskHidden } =
     useOperationsDeskVisibility();
+  const { hidden: aiChatHidden } = useAiChatVisibility();
   const [operationsDeskMenu, setOperationsDeskMenu] = useState<
     { top: number; left: number } | null
   >(null);
@@ -1194,14 +1196,16 @@ export function Layout() {
             </button>
             <div className="sidebar__brand-actions">
               <NotificationBellSafe />
-              <button
-                className="sidebar__icon-btn"
-                onClick={openGlobalAiAssistant}
-                title="AI assistant"
-                aria-label="AI assistant"
-              >
-                <Bot size={14} />
-              </button>
+              {!aiChatHidden && (
+                <button
+                  className="sidebar__icon-btn"
+                  onClick={openGlobalAiAssistant}
+                  title="AI assistant"
+                  aria-label="AI assistant"
+                >
+                  <Bot size={14} />
+                </button>
+              )}
               <button
                 className="sidebar__icon-btn"
                 onClick={() => window.dispatchEvent(new Event("kbar:open"))}
@@ -1666,7 +1670,7 @@ export function Layout() {
             </div>
           </div>
         </div>
-        <GlobalAiAssistantSafe />
+        {!aiChatHidden && <GlobalAiAssistantSafe />}
         {isMobileNav && (
           <nav className="bottom-nav" aria-label={t("sidebar.navigation")}>
             {/* Icon size 16px matches twenty's icon.size.md — the CSS also
