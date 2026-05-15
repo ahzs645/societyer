@@ -62,6 +62,7 @@ import {
   Sun,
   Bot,
   Plug,
+  Plus,
 } from "lucide-react";
 import {
   ComponentType,
@@ -1393,6 +1394,19 @@ export function Layout() {
                   {t("sidebar.noSocieties")}
                 </div>
               )}
+            </div>
+            <div style={{ padding: 8, borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+              <button
+                type="button"
+                className="btn btn--accent"
+                style={{ width: "100%", justifyContent: "center" }}
+                onClick={() => {
+                  setWorkspaceOpen(false);
+                  navigate("/app/society/new");
+                }}
+              >
+                <Plus size={14} /> {t("sidebar.addWorkspace")}
+              </button>
             </div>
           </div>,
           document.body,

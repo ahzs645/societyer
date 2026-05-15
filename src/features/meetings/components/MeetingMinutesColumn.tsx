@@ -332,6 +332,11 @@ export function MeetingMinutesColumn({
     });
     pendingFocusIndex.current = insertAt;
   };
+  const startFreshAgendaSection = () => {
+    pendingFocusIndex.current = 0;
+    setNewAgendaIndices(new Set([0]));
+    setAgendaEdit([{ title: "", depth: 0 }]);
+  };
   const removeAgendaItem = (index: number) => {
     const next = agendaItems.slice();
     const target = next[index];
@@ -1953,6 +1958,20 @@ export function MeetingMinutesColumn({
                   ? "Save the agenda to start the minutes record"
                   : "Add agenda items in the sidebar to start"}
               </span>
+              {!agenda.length && (
+                <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                  <button
+                    className="btn-action btn-action--icon"
+                    type="button"
+                    disabled={agendaEdit !== null}
+                    title={agendaEdit !== null ? "Use the agenda editor to add items" : "Add section"}
+                    aria-label="Add section"
+                    onClick={startFreshAgendaSection}
+                  >
+                    <Plus size={12} />
+                  </button>
+                </div>
+              )}
             </div>
             <div className="card__body col" style={{ gap: 16 }}>
               {agenda.length > 0 ? (

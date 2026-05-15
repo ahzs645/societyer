@@ -117,9 +117,11 @@ function NameInput({
 function OutcomePicker({
   value,
   onChange,
+  compact = false,
 }: {
   value: string;
   onChange: (v: Motion["outcome"]) => void;
+  compact?: boolean;
 }) {
   const opts: { id: Motion["outcome"]; label: string; tone: "success" | "danger" | "warn" | "accent" }[] = [
     { id: "Pending", label: "Pending", tone: "warn" },
@@ -128,7 +130,7 @@ function OutcomePicker({
     { id: "Tabled", label: "Tabled", tone: "warn" },
   ];
   return (
-    <div className="segmented">
+    <div className={`segmented${compact ? " segmented--compact" : ""}`}>
       {opts.map((o) => (
         <button
           key={o.id}
@@ -292,17 +294,35 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
       )}
 
       {adding && (
-        <div className="motion" style={{ borderColor: "var(--accent)" }}>
-          <Field label="Motion">
-            <textarea
-              className="textarea"
-              autoFocus
-              value={draft.text}
-              onChange={(e) => setDraft({ ...draft, text: e.target.value })}
-              placeholder="That the board approve the 2024–25 financial statements as presented."
-            />
-          </Field>
-          <div className="row" style={{ gap: 12 }}>
+        <div className="motion motion-draft" style={{ borderColor: "var(--accent)" }}>
+          <div className="motion-draft__header">
+            <div>
+              <strong>Add motion</strong>
+              <div className="muted">Record the wording first, then capture movers and outcome.</div>
+            </div>
+            <div className="motion-draft__actions">
+              <button className="btn-action" onClick={() => { setAdding(false); resetDraft(); }}>
+                <X size={12} /> Cancel
+              </button>
+              <button className="btn-action btn-action--primary" onClick={saveDraft} disabled={!draft.text.trim()}>
+                <Check size={12} /> Add
+              </button>
+            </div>
+          </div>
+
+          <div className="motion-draft__motion-field">
+            <Field label="Motion">
+              <textarea
+                className="textarea"
+                autoFocus
+                value={draft.text}
+                onChange={(e) => setDraft({ ...draft, text: e.target.value })}
+                placeholder="That the board approve the 2024–25 financial statements as presented."
+              />
+            </Field>
+          </div>
+
+          <div className="motion-draft__grid">
             <Field label="Moved by">
               <NameInput
                 nameOptions={nameOptions}
@@ -323,58 +343,60 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
                 placeholder="Optional"
               />
             </Field>
-          </div>
-          <div className="row" style={{ gap: 12 }}>
+
             <Field label="Resolution type">
               <Select
                 value={draft.resolutionType ?? "Ordinary"}
                 onChange={(resolutionType) => setDraft({ ...draft, resolutionType })}
                 options={RESOLUTION_TYPE_OPTIONS}
+                size="sm"
               />
             </Field>
+
             <Field label="Outcome">
-              <OutcomePicker value={draft.outcome} onChange={(v) => setDraft({ ...draft, outcome: v })} />
+              <OutcomePicker compact value={draft.outcome} onChange={(v) => setDraft({ ...draft, outcome: v })} />
             </Field>
-          </div>
-          {agendaSections.length > 0 && (
-            <Field label="Agenda item">
-              <Select
-                value={draft.sectionIndex == null ? "" : String(draft.sectionIndex)}
-                onChange={(value) => setDraft((current) => ({ ...current, ...motionSectionPatch(value, agendaSections) }))}
-                options={agendaSectionOptions(agendaSections)}
-              />
-            </Field>
-          )}
-          <div className="row" style={{ gap: 12, alignItems: "flex-end" }}>
-            <VoteStepper
-              label="For"
-              value={draft.votesFor ?? 0}
-              onChange={(n) => {
-                setVotesAutoFill(false);
-                setDraft((current) => ({ ...current, votesFor: n }));
-              }}
-              tone="success"
-            />
-            <VoteStepper
-              label="Against"
-              value={draft.votesAgainst ?? 0}
-              onChange={(n) => setDraft((current) => ({ ...current, votesAgainst: n }))}
-              tone="danger"
-            />
-            <VoteStepper
-              label="Abstain"
-              value={draft.abstentions ?? 0}
-              onChange={(n) => setDraft((current) => ({ ...current, abstentions: n }))}
-              tone="warn"
-            />
-          </div>
-          <div className="row" style={{ justifyContent: "flex-end", gap: 6 }}>
-            <button className="btn-action" onClick={() => { setAdding(false); resetDraft(); }}>
-              <X size={12} /> Cancel
-            </button>
-            <button className="btn-action btn-action--primary" onClick={saveDraft} disabled={!draft.text.trim()}>
-              <Check size={12} /> Add motion
-            </button>
+
+            {agendaSections.length > 0 && (
+              <Field label="Agenda item">
+                <Select
+                  value={draft.sectionIndex == null ? "" : String(draft.sectionIndex)}
+                  onChange={(value) => setDraft((current) => ({ ...current, ...motionSectionPatch(value, agendaSections) }))}
+                  options={agendaSectionOptions(agendaSections)}
+                  size="sm"
+                />
+              </Field>
+            )}
+
+            <div className="motion-draft__votes">
+              <span className="field__label">Votes</span>
+              <div className="motion-draft__vote-row">
+                <VoteStepper
+                  label="For"
+                  value={draft.votesFor ?? 0}
+                  onChange={(n) => {
+                    setVotesAutoFill(false);
+                    setDraft((current) => ({ ...current, votesFor: n }));
+                  }}
+                  tone="success"
+                  compact
+                />
+                <VoteStepper
+                  label="Against"
+                  value={draft.votesAgainst ?? 0}
+                  onChange={(n) => setDraft((current) => ({ ...current, votesAgainst: n }))}
+                  tone="danger"
+                  compact
+                />
+                <VoteStepper
+                  label="Abstain"
+                  value={draft.abstentions ?? 0}
+                  onChange={(n) => setDraft((current) => ({ ...current, abstentions: n }))}
+                  tone="warn"
+                  compact
+                />
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -750,14 +772,16 @@ function VoteStepper({
   value,
   onChange,
   tone,
+  compact = false,
 }: {
   label: string;
   value: number;
   onChange: (next: number) => void;
   tone: "success" | "danger" | "warn";
+  compact?: boolean;
 }) {
   return (
-    <div className="field vote-stepper" style={{ marginBottom: 0 }}>
+    <div className={`field vote-stepper${compact ? " vote-stepper--compact" : ""}`} style={{ marginBottom: 0 }}>
       <label className="field__label" style={{ color: `var(--${tone})` }}>{label}</label>
       <div className="row" style={{ gap: 4 }}>
         <button

@@ -1369,6 +1369,76 @@
   margin-bottom: var(--s-2);
   background: var(--bg-base);
 }
+.motion-draft {
+  display: grid;
+  gap: var(--s-2);
+  background: color-mix(in srgb, var(--accent-soft) 16%, var(--bg-base));
+}
+.motion-draft__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.motion-draft__header strong {
+  font-size: var(--fs-sm);
+}
+.motion-draft__header .muted {
+  font-size: var(--fs-xs);
+  margin-top: 2px;
+}
+.motion-draft__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.motion-draft .field,
+.motion-draft__motion-field .field {
+  margin-bottom: 0;
+}
+.motion-draft__motion-field .textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+.motion-draft__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: var(--s-2);
+  align-items: end;
+}
+.motion-draft__votes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.motion-draft__vote-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.vote-stepper--compact {
+  flex: 0 1 auto;
+  gap: 4px;
+}
+.vote-stepper--compact .field__label {
+  font-size: var(--fs-xxs);
+}
+.vote-stepper--compact .row {
+  gap: 2px !important;
+  flex-wrap: nowrap;
+}
+.vote-stepper--compact .vote-stepper__btn {
+  width: 22px !important;
+  height: 22px !important;
+}
+.vote-stepper--compact .vote-stepper__input {
+  width: 40px !important;
+  height: 22px;
+  padding: 0 3px !important;
+  font-size: var(--fs-xs);
+}
 .motion__text { font-weight: 500; margin-bottom: 4px; }
 .motion__meta { font-size: var(--fs-sm); color: var(--text-tertiary); display: flex; gap: var(--s-3); flex-wrap: wrap; }
 .motion__head {
@@ -1413,6 +1483,16 @@
 // Container-query fallback for narrow cards (sidebar squeeze, etc.) — same
 // stacked layout, applied automatically when the .motion card itself shrinks.
 @container (max-width: 700px) {
+  .motion-draft__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .motion-draft__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .motion-draft__actions {
+    justify-content: flex-end;
+  }
   .motion__head {
     flex-direction: column;
     align-items: stretch;
@@ -4154,6 +4234,17 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   color: var(--text-secondary);
   border-radius: var(--r-pill);
   font-weight: 500;
+}
+.segmented--compact {
+  padding: 2px;
+  gap: 2px;
+  border-radius: var(--r-sm);
+}
+.segmented--compact .segmented__btn {
+  min-height: 22px;
+  padding: 2px 7px;
+  border-radius: calc(var(--r-sm) - 1px);
+  font-size: var(--fs-xs);
 }
 .segmented__btn.is-active {
   background: var(--bg-panel);

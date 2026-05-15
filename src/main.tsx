@@ -15,6 +15,7 @@ import { applyThemePreference, getStoredThemePreference } from "./lib/theme";
 
 const Dashboard = React.lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
 const SocietyPage = React.lazy(() => import("./pages/Society").then((m) => ({ default: m.SocietyPage })));
+const SocietyNewPage = React.lazy(() => import("./pages/Society").then((m) => ({ default: m.SocietyNewPage })));
 const OrganizationDetailsPage = React.lazy(() => import("./pages/OrganizationDetails").then((m) => ({ default: m.OrganizationDetailsPage })));
 const OrganizationHistoryPage = React.lazy(() => import("./pages/OrganizationHistory").then((m) => ({ default: m.OrganizationHistoryPage })));
 const OrganizationHistoryBudgetPage = React.lazy(() => import("./pages/OrganizationHistory").then((m) => ({ default: m.OrganizationHistoryBudgetPage })));
@@ -258,6 +259,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               }
             >
             <Route index element={<Dashboard />} />
+            <Route path="society/new" element={<SocietyNewPage />} />
             <Route path="society" element={<SocietyPage />} />
             <Route path="organization-details" element={<OrganizationDetailsPage />} />
             <Route path="role-holders" element={<RoleHoldersPage />} />

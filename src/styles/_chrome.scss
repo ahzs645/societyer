@@ -981,6 +981,28 @@
   gap: var(--s-3) var(--s-4);
   align-items: center;
 }
+.society-onboarding-flow {
+  display: grid;
+  gap: var(--s-4);
+}
+.society-onboarding-flow__eyebrow {
+  display: block;
+  margin-bottom: var(--s-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.society-onboarding-flow__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.society-onboarding-flow__list .pill {
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.25;
+  text-align: left;
+}
 
 .society-split {
   display: grid;
