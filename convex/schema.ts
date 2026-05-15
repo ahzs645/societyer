@@ -2822,6 +2822,7 @@ export default defineSchema({
     depreciationMethod: v.optional(v.string()),
     usefulLifeMonths: v.optional(v.number()),
     bookValueCents: v.optional(v.number()),
+    purchaseTransactionId: v.optional(v.id("financialTransactions")),
     receiptDocumentId: v.optional(v.id("documents")),
     sourceDocumentIds: v.array(v.id("documents")),
     warrantyExpiresAt: v.optional(v.string()),
@@ -2842,7 +2843,9 @@ export default defineSchema({
     .index("by_society_status", ["societyId", "status"])
     .index("by_society_category", ["societyId", "category"])
     .index("by_grant", ["grantId"])
-    .index("by_insurance_policy", ["insurancePolicyId"]),
+    .index("by_insurance_policy", ["insurancePolicyId"])
+    .index("by_purchase_transaction", ["purchaseTransactionId"])
+    .index("by_receipt_document", ["receiptDocumentId"]),
 
   assetEvents: defineTable({
     societyId: v.id("societies"),
