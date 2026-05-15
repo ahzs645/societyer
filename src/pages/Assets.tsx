@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { type SelectHTMLAttributes, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import {
@@ -30,6 +30,7 @@ import { AssetQrLabel } from "../features/assets/AssetQrLabel";
 import {
   ASSET_CATEGORIES,
   ASSET_CONDITIONS,
+  ASSET_LABEL_TYPES,
   ASSET_STATUSES,
   CUSTODIAN_TYPES,
   MAINTENANCE_KINDS,
@@ -64,6 +65,8 @@ export function AssetsPage() {
   const assets = useQuery(api.assets.list, society ? { societyId: society._id } : "skip");
   const maintenance = useQuery(api.assets.maintenance, society ? { societyId: society._id } : "skip");
   const verificationRuns = useQuery(api.assets.verificationRuns, society ? { societyId: society._id } : "skip");
+  const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
+  const transactions = useQuery(api.financialHub.transactions, society ? { societyId: society._id, limit: 200 } : "skip");
   const create = useMutation(api.assets.create);
   const update = useMutation(api.assets.update);
   const remove = useMutation(api.assets.remove);
@@ -171,7 +174,7 @@ export function AssetsPage() {
       )}
 
       <DataTable
-        label="Assets"
+        label="All inventory"
         icon={<Package size={14} />}
         data={rows}
         rowKey={(row) => row._id as string}
@@ -201,6 +204,7 @@ export function AssetsPage() {
           { id: "location", header: "Location", sortable: true, accessor: (row) => row.location },
           { id: "value", header: "Value", sortable: true, align: "right", accessor: (row) => row.bookValueCents ?? row.purchaseValueCents ?? 0, render: (row) => <span className="mono">{money(row.bookValueCents ?? row.purchaseValueCents, row.currency)}</span> },
           { id: "maintenance", header: "Maintenance", sortable: true, accessor: (row) => row.nextMaintenanceDate, render: (row) => <DueDate date={row.nextMaintenanceDate} /> },
+          { id: "purchaseEvidence", header: "Purchase evidence", accessor: (row) => row.receiptDocumentId || row.purchaseTransactionId, render: (row) => <EvidenceCell row={row} documents={documents ?? []} transactions={transactions ?? []} /> },
         ]}
         renderRowActions={(row) => (
           <>
@@ -226,7 +230,7 @@ export function AssetsPage() {
           </>
         }
       >
-        {form && <AssetForm form={form} setForm={setForm} />}
+        {form && <AssetForm form={form} setForm={setForm} documents={documents ?? []} transactions={transactions ?? []} />}
       </Drawer>
 
       <Drawer
@@ -271,6 +275,9 @@ export function AssetDetailPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const bundle = useQuery(api.assets.bundle, id ? { id: id as any } : "skip");
+  const society = useSociety();
+  const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
+  const transactions = useQuery(api.financialHub.transactions, society ? { societyId: society._id, limit: 200 } : "skip");
   const update = useMutation(api.assets.update);
   const recordEvent = useMutation(api.assets.recordEvent);
   const scheduleMaintenance = useMutation(api.assets.scheduleMaintenance);
@@ -281,10 +288,17 @@ export function AssetDetailPage() {
   const [eventForm, setEventForm] = useState<any>({ eventType: "checkout", toCustodianType: "member", toCustodianName: "", responsiblePersonName: "", location: "", condition: "Good", expectedReturnDate: "", acceptanceSignature: "", notes: "" });
   const [maintenanceForm, setMaintenanceForm] = useState<any>({ title: "Asset maintenance", kind: "maintenance", dueDate: todayDate(), createTask: true, notes: "" });
   const [disposalForm, setDisposalForm] = useState<any>({ disposedAt: todayDate(), disposalMethod: "sold", disposalReason: "", disposalValue: "", notes: "" });
+  const [labelType, setLabelType] = useState("qr");
+
+  useEffect(() => {
+    if (bundle?.asset) setLabelType(bundle.asset.preferredLabelType ?? "qr");
+  }, [bundle?.asset?._id, bundle?.asset?.preferredLabelType]);
 
   if (bundle === undefined) return <div className="page">Loading...</div>;
   if (!bundle) return <div className="page"><Link className="btn" to="/app/assets"><ArrowLeft size={14} /> Assets</Link><p>Asset not found.</p></div>;
   const { asset, events, maintenance } = bundle;
+  const receiptDocument = (documents ?? []).find((doc: any) => doc._id === asset.receiptDocumentId);
+  const purchaseTransaction = (transactions ?? []).find((txn: any) => txn._id === asset.purchaseTransactionId);
 
   const openEdit = () => {
     setForm(formFromAsset(asset));
@@ -351,11 +365,18 @@ export function AssetDetailPage() {
             <div><dt>Custodian</dt><dd>{asset.custodianName || "—"}</dd></div>
             <div><dt>Purchase value</dt><dd>{money(asset.purchaseValueCents, asset.currency)}</dd></div>
             <div><dt>Book value</dt><dd>{money(asset.bookValueCents, asset.currency)}</dd></div>
+            <div><dt>Receipt</dt><dd>{receiptDocument ? <Link to={`/app/documents/${receiptDocument._id}`}>{receiptDocument.title}</Link> : "—"}</dd></div>
+            <div><dt>Purchase transaction</dt><dd>{purchaseTransaction ? `${formatDate(purchaseTransaction.date)} · ${purchaseTransaction.description} · ${money(Math.abs(purchaseTransaction.amountCents), asset.currency)}` : "—"}</dd></div>
           </dl>
         </section>
         <section className="panel">
           <div className="panel__head"><h2>QR label</h2><QrCode size={16} /></div>
-          <AssetQrLabel assetTag={asset.assetTag} name={asset.name} url={assetUrl(asset._id)} />
+          <Field label="Label type">
+            <select className="input" value={labelType} onChange={(event) => setLabelType(event.target.value)}>
+              {ASSET_LABEL_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+            </select>
+          </Field>
+          <AssetQrLabel assetTag={asset.assetTag} name={asset.name} url={assetUrl(asset._id)} labelType={labelType} />
           <button className="btn btn--sm" onClick={() => window.print()}>Print label</button>
         </section>
         <section className="panel">
@@ -404,7 +425,7 @@ export function AssetDetailPage() {
       />
 
       <Drawer open={drawer === "edit"} onClose={() => setDrawer(null)} title="Edit asset" size="wide" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" onClick={saveEdit}>Save</button></>}>
-        {form && <AssetForm form={form} setForm={setForm} />}
+        {form && <AssetForm form={form} setForm={setForm} documents={documents ?? []} transactions={transactions ?? []} />}
       </Drawer>
       <Drawer open={drawer === "custody"} onClose={() => setDrawer(null)} title="Record custody event" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" onClick={saveEvent}>Record</button></>}>
         <CustodyForm form={eventForm} setForm={setEventForm} />
@@ -467,10 +488,27 @@ export function AssetVerificationPage() {
   );
 }
 
-function AssetForm({ form, setForm }: { form: any; setForm: (form: any) => void }) {
+function AssetForm({
+  form,
+  setForm,
+  documents,
+  transactions,
+}: {
+  form: any;
+  setForm: (form: any) => void;
+  documents: any[];
+  transactions: any[];
+}) {
+  const receiptDocuments = documents.filter((doc) =>
+    doc.category === "Receipt" ||
+    doc.category === "FinancialStatement" ||
+    (doc.tags ?? []).some((tag: string) => /receipt|invoice|finance/i.test(tag)),
+  );
+  const purchaseTransactions = transactions.filter((txn) => txn.amountCents < 0);
   return (
     <div className="form-grid">
       <Field label="Asset tag" required><input className="input" value={form.assetTag ?? ""} onChange={(event) => setForm({ ...form, assetTag: event.target.value })} /></Field>
+      <Field label="Preferred label"><select className="input" value={form.preferredLabelType ?? "qr"} onChange={(event) => setForm({ ...form, preferredLabelType: event.target.value })}>{ASSET_LABEL_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></Field>
       <Field label="Name" required><input className="input" value={form.name ?? ""} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field>
       <Field label="Category"><Select value={form.category} options={ASSET_CATEGORIES} onChange={(category) => setForm({ ...form, category })} /></Field>
       <Field label="Serial number"><input className="input" value={form.serialNumber ?? ""} onChange={(event) => setForm({ ...form, serialNumber: event.target.value })} /></Field>
@@ -485,6 +523,8 @@ function AssetForm({ form, setForm }: { form: any; setForm: (form: any) => void 
       <Field label="Purchase date"><input className="input" type="date" value={form.purchaseDate ?? ""} onChange={(event) => setForm({ ...form, purchaseDate: event.target.value })} /></Field>
       <Field label="Purchase value"><input className="input" inputMode="decimal" value={form.purchaseValue ?? ""} onChange={(event) => setForm({ ...form, purchaseValue: event.target.value })} /></Field>
       <Field label="Book value"><input className="input" inputMode="decimal" value={form.bookValue ?? ""} onChange={(event) => setForm({ ...form, bookValue: event.target.value })} /></Field>
+      <Field label="Purchase receipt"><select className="input" value={form.receiptDocumentId ?? ""} onChange={(event) => setForm({ ...form, receiptDocumentId: event.target.value })}><option value="">No receipt linked</option>{receiptDocuments.map((doc) => <option key={doc._id} value={doc._id}>{doc.title}</option>)}</select></Field>
+      <Field label="Finance transaction"><select className="input" value={form.purchaseTransactionId ?? ""} onChange={(event) => setForm({ ...form, purchaseTransactionId: event.target.value })}><option value="">No transaction linked</option>{purchaseTransactions.map((txn) => <option key={txn._id} value={txn._id}>{txn.date} · {txn.description} · {money(Math.abs(txn.amountCents))}</option>)}</select></Field>
       <Field label="Capitalized"><label className="checkbox"><input type="checkbox" checked={Boolean(form.capitalized)} onChange={(event) => setForm({ ...form, capitalized: event.target.checked })} /> Track as fixed asset</label></Field>
       <Field label="Depreciation"><input className="input" value={form.depreciationMethod ?? ""} onChange={(event) => setForm({ ...form, depreciationMethod: event.target.value })} /></Field>
       <Field label="Useful life months"><input className="input" inputMode="numeric" value={form.usefulLifeMonths ?? ""} onChange={(event) => setForm({ ...form, usefulLifeMonths: event.target.value })} /></Field>
@@ -541,9 +581,18 @@ function DisposalForm({ form, setForm }: { form: any; setForm: (form: any) => vo
   );
 }
 
-function Select({ value, options, onChange }: { value?: string; options: string[]; onChange: (value: string) => void }) {
+function Select({
+  value,
+  options,
+  onChange,
+  ...props
+}: {
+  value?: string;
+  options: string[];
+  onChange: (value: string) => void;
+} & Omit<SelectHTMLAttributes<HTMLSelectElement>, "value" | "onChange">) {
   return (
-    <select className="input" value={value ?? ""} onChange={(event) => onChange(event.target.value)}>
+    <select {...props} className="input" value={value ?? ""} onChange={(event) => onChange(event.target.value)}>
       {options.map((option) => <option key={option} value={option}>{option}</option>)}
     </select>
   );
@@ -563,6 +612,18 @@ function CustodyCell({ row }: { row: any }) {
     <div>
       <strong>{row.custodianName || "Unassigned"}</strong>
       <div className="muted">{row.responsiblePersonName || row.custodianType || "No responsible person"}</div>
+    </div>
+  );
+}
+
+function EvidenceCell({ row, documents, transactions }: { row: any; documents: any[]; transactions: any[] }) {
+  const doc = documents.find((candidate) => candidate._id === row.receiptDocumentId);
+  const txn = transactions.find((candidate) => candidate._id === row.purchaseTransactionId);
+  if (!doc && !txn) return <span className="muted">No receipt linked</span>;
+  return (
+    <div>
+      {doc ? <Link to={`/app/documents/${doc._id}`}>{doc.title}</Link> : <span className="muted">No receipt document</span>}
+      {txn && <div className="muted">{formatDate(txn.date)} · {txn.description}</div>}
     </div>
   );
 }

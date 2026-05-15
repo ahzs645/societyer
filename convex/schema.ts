@@ -2796,6 +2796,7 @@ export default defineSchema({
   assets: defineTable({
     societyId: v.id("societies"),
     assetTag: v.string(),
+    preferredLabelType: v.optional(v.string()),
     name: v.string(),
     category: v.string(),
     serialNumber: v.optional(v.string()),

@@ -3,6 +3,7 @@ import { mutation, query } from "./lib/untypedServer";
 
 const assetPatch = v.object({
   assetTag: v.optional(v.string()),
+  preferredLabelType: v.optional(v.string()),
   name: v.optional(v.string()),
   category: v.optional(v.string()),
   serialNumber: v.optional(v.string()),
@@ -141,6 +142,7 @@ export const create = mutation({
   args: {
     societyId: v.id("societies"),
     assetTag: v.string(),
+    preferredLabelType: v.optional(v.string()),
     name: v.string(),
     category: v.string(),
     serialNumber: v.optional(v.string()),

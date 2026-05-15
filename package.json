@@ -58,6 +58,7 @@
     "@xyflow/react": "^12.10.2",
     "ai": "^6.0.177",
     "better-auth": "^1.6.3",
+    "bwip-js": "^4.10.1",
     "concurrently": "^9.2.1",
     "convex": "^1.17.4",
     "date-fns": "^3.6.0",

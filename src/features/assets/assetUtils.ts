@@ -5,6 +5,16 @@ export const ASSET_CONDITIONS = ["New", "Good", "Fair", "Needs repair", "Damaged
 export const ASSET_STATUSES = ["Available", "Checked out", "In maintenance", "Needs review", "Disposed", "Lost"];
 export const CUSTODIAN_TYPES = ["member", "director", "employee", "volunteer", "committee", "location", "other"];
 export const MAINTENANCE_KINDS = ["maintenance", "calibration", "insurance", "warranty", "inspection"];
+export const ASSET_LABEL_TYPES = [
+  { value: "qr", label: "QR code", payload: "Asset page URL" },
+  { value: "code128", label: "Code 128", payload: "Asset tag text" },
+  { value: "code39", label: "Code 39", payload: "Asset tag text" },
+  { value: "datamatrix", label: "Data Matrix", payload: "Asset page URL" },
+  { value: "pdf417", label: "PDF417", payload: "Asset page URL" },
+  { value: "ean13", label: "EAN-13", payload: "12 or 13 numeric digits" },
+  { value: "upca", label: "UPC-A", payload: "11 or 12 numeric digits" },
+  { value: "itf14", label: "ITF-14", payload: "13 or 14 numeric digits" },
+] as const;
 
 export function centsToInput(cents?: number | null) {
   if (cents == null) return "";
@@ -80,6 +90,7 @@ export function assetUrl(assetId: string) {
 export function formFromAsset(row: any) {
   return {
     assetTag: row.assetTag ?? "",
+    preferredLabelType: row.preferredLabelType ?? "qr",
     name: row.name ?? "",
     category: row.category ?? "Program equipment",
     serialNumber: row.serialNumber ?? "",
@@ -115,6 +126,7 @@ export function formFromAsset(row: any) {
 export function normalizeAssetForm(form: any) {
   return {
     assetTag: clean(form.assetTag),
+    preferredLabelType: clean(form.preferredLabelType) || "qr",
     name: clean(form.name),
     category: clean(form.category) || "Other",
     serialNumber: clean(form.serialNumber),
