@@ -1985,6 +1985,13 @@
 .meeting-minutes-section-item.is-dragging {
   opacity: 0.5;
 }
+.meeting-minutes-section-item.is-editing > .meeting-minutes-section-item__summary {
+  cursor: default;
+  list-style: none;
+}
+.meeting-minutes-section-item.is-editing > .meeting-minutes-section-item__summary::-webkit-details-marker {
+  display: none;
+}
 /* Drop indicators — a thin accent line above (or below, for the last row)
  * the target. Drawn outside the row's box-model via offsets so it doesn't
  * shift sibling content while dragging. */
@@ -4194,6 +4201,7 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 /* Segmented control */
 .segmented {
   display: inline-flex;
+  align-self: flex-start;
   background: var(--bg-subtle);
   border: 1px solid var(--border);
   border-radius: var(--r-pill);

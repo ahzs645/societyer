@@ -8,7 +8,7 @@ import { useConfirm } from "../../../components/Modal";
 import { Checkbox } from "../../../components/Controls";
 import { LegalGuideInline } from "../../../components/LegalGuide";
 import { Segmented } from "../../../components/primitives";
-import { isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionPerson } from "../../../components/MotionEditor";
+import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../../../components/MotionEditor";
 import { NameAutocomplete } from "../../../components/NameAutocomplete";
 import { Select } from "../../../components/Select";
 import { SignaturePanel } from "../../../components/SignaturePanel";
@@ -637,6 +637,12 @@ export function MeetingMinutesColumn({
   };
 
   const [openSectionIndexes, setOpenSectionIndexes] = useState<Set<number>>(() => new Set([0, 1]));
+  // Handle to the section-scoped MotionEditor so saveSectionEdit can flush any
+  // in-progress motion draft before persisting the section itself. Without
+  // this, hitting "Save section" while typing a new motion would silently
+  // discard the draft.
+  const sectionMotionEditorRef = useRef<MotionEditorHandle | null>(null);
+  const [hasPendingSectionMotion, setHasPendingSectionMotion] = useState(false);
   const motionPeople = useMemo(() => personLinkCandidates(members, directors), [members, directors]);
   const assigneeOptions = useMemo(
     () => Array.from(new Set(motionPeople.map((p) => p.name))).filter(Boolean).sort(),
@@ -935,6 +941,10 @@ export function MeetingMinutesColumn({
 
   const saveSectionEdit = async () => {
     if (sectionEditIndex == null || !sectionDraft) return;
+    // Flush any in-progress motion draft first so it lands in motions[] before
+    // we close the editor. commitDraft is a no-op when there's nothing to
+    // commit (empty text or no open draft), so it's safe to always call.
+    sectionMotionEditorRef.current?.commitDraft();
     const next = [...sections];
     next[sectionEditIndex] = {
       ...next[sectionEditIndex],
@@ -970,6 +980,13 @@ export function MeetingMinutesColumn({
     setSectionEditIndex(null);
     setSectionDraft(null);
   };
+
+  // Belt-and-suspenders: even though MotionEditor fires onPendingDraftChange
+  // on unmount, clear the flag here too so the button label resets the moment
+  // the section editor closes for any reason.
+  useEffect(() => {
+    if (sectionEditIndex == null) setHasPendingSectionMotion(false);
+  }, [sectionEditIndex]);
 
   const assignMotionToSection = async (motionIndex: number, targetIndexValue: string) => {
     const existingMotion = motions[motionIndex];
@@ -1178,32 +1195,25 @@ export function MeetingMinutesColumn({
 
         {sectionEditorTab === "motions" && (
           <div className="meeting-minutes-section-editor__panel">
-            <div className="meeting-minutes-motion-assignment">
-              <div className="meeting-minutes-motion-assignment__head">
-                <strong>Assigned motions</strong>
-                <span className="muted">{assignedMotionRows.length} of {motions.length}</span>
-              </div>
-              {assignedMotionRows.length ? (
-                <div className="meeting-minutes-motion-assignment__list">
-                  {assignedMotionRows.map(({ motion, motionIndex }) => (
-                    <MotionAssignmentRow
-                      key={`${motion.text}-${motionIndex}`}
-                      motion={motion}
-                      motionIndex={motionIndex}
-                      people={motionPeople}
-                      onRemove={() => assignMotionToSection(motionIndex, "")}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="muted">No motions are assigned to this agenda item yet.</div>
-              )}
-              <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                <button className="btn-action" type="button" onClick={onOpenMotions}>
-                  <Plus size={12} /> Add motion in Motions tab
-                </button>
-              </div>
-            </div>
+            {/* Embedded motion editor scoped to this agenda item — adds, edits,
+              * and votes happen inline so the user doesn't have to bounce to the
+              * top-level Motions tab. The "Assign existing motion" picklist
+              * below is still here for pulling unrelated motions into this
+              * section. */}
+            <MotionEditor
+              ref={sectionMotionEditorRef}
+              motions={motions}
+              onChange={(next) => { void saveMinuteMotions(next); }}
+              directorNames={assigneeOptions}
+              people={motionPeople}
+              agendaSections={sections.map((section: any) => ({
+                title: section.title || "Untitled section",
+                discussion: section.discussion ?? "",
+                decisions: section.decisions ?? [],
+              }))}
+              sectionScope={index}
+              onPendingDraftChange={setHasPendingSectionMotion}
+            />
             {availableMotionRows.length > 0 && (
               <details className="meeting-minutes-motion-picklist">
                 <summary>Assign existing motion to this item</summary>
@@ -1364,7 +1374,7 @@ export function MeetingMinutesColumn({
           <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
             <button className="btn-action" onClick={cancelSectionEdit}>Cancel</button>
             <button className="btn-action btn-action--primary" onClick={saveSectionEdit}>
-              <Save size={12} /> Save section
+              <Save size={12} /> {hasPendingSectionMotion ? "Save section + add motion" : "Save section"}
             </button>
           </div>
         )}
@@ -1941,13 +1951,23 @@ export function MeetingMinutesColumn({
                             && rootIndex != null
                             && rootIndex === rootGroups.length - 1
                             && dropRootIndex === rootGroups.length;
+                          const isEditingThis = sectionEditIndex === index && !!sectionDraft;
                           return (
                           <details
                             key={`${section.title ?? "section"}-${index}`}
                             id={`meeting-minutes-section-${index}`}
-                            className={`meeting-minutes-section-item${agendaPreviewRemovals.has(index) ? " meeting-minutes-section-item--pending-remove" : ""}${isChild ? " meeting-minutes-section-item--child" : ""}${isDragging ? " is-dragging" : ""}${showDropAbove ? " is-drop-above" : ""}${showDropBelow ? " is-drop-below" : ""}`}
-                            open={openSectionIndexes.has(index)}
-                            onToggle={(event) => toggleSection(index, event.currentTarget.open)}
+                            className={`meeting-minutes-section-item${agendaPreviewRemovals.has(index) ? " meeting-minutes-section-item--pending-remove" : ""}${isChild ? " meeting-minutes-section-item--child" : ""}${isDragging ? " is-dragging" : ""}${showDropAbove ? " is-drop-above" : ""}${showDropBelow ? " is-drop-below" : ""}${isEditingThis ? " is-editing" : ""}`}
+                            open={isEditingThis || openSectionIndexes.has(index)}
+                            onToggle={(event) => {
+                              // Lock the section open while the inline editor is
+                              // mounted inside it — collapsing would hide every
+                              // field the user is currently filling out.
+                              if (isEditingThis && !event.currentTarget.open) {
+                                event.currentTarget.open = true;
+                                return;
+                              }
+                              toggleSection(index, event.currentTarget.open);
+                            }}
                             draggable={reorderEnabled}
                             onDragStart={(event) => {
                               if (!reorderEnabled || rootIndex == null) {
@@ -2016,7 +2036,7 @@ export function MeetingMinutesColumn({
                                     <GripVertical size={12} />
                                   </span>
                                 )}
-                                <ChevronDown size={13} aria-hidden="true" />
+                                {!isEditingThis && <ChevronDown size={13} aria-hidden="true" />}
                                 {sectionEditIndex === index && sectionDraft && !isMobileSectionEditor ? (
                                   <span
                                     className="meeting-minutes-section-item__title-edit"
@@ -2469,39 +2489,6 @@ type SectionActionDraft = {
   dueDate: string;
   done: boolean;
 };
-
-function MotionAssignmentRow({
-  motion,
-  motionIndex,
-  people,
-  onRemove,
-}: {
-  motion: Motion;
-  motionIndex: number;
-  people: MotionPerson[];
-  onRemove: () => void | Promise<void>;
-}) {
-  return (
-    <div className="meeting-minutes-motion-assignment__row is-current">
-      <div className="meeting-minutes-motion-assignment__text">
-        <strong>{motion.text}</strong>
-        <span>
-          {motion.outcome || "Pending"}
-          {motion.movedBy ? ` · Moved by ${motionPersonDisplayName(motion.movedBy, people, { memberId: motion.movedByMemberId, directorId: motion.movedByDirectorId })}` : ""}
-          {motion.secondedBy ? ` · Seconded by ${motionPersonDisplayName(motion.secondedBy, people, { memberId: motion.secondedByMemberId, directorId: motion.secondedByDirectorId })}` : ""}
-        </span>
-      </div>
-      <button
-        className="btn-action"
-        type="button"
-        aria-label={`Remove motion ${motionIndex + 1} from this agenda item`}
-        onClick={() => onRemove()}
-      >
-        <MinusCircle size={12} /> Remove
-      </button>
-    </div>
-  );
-}
 
 type AttendancePerson = { name: string; status: "present" | "absent" };
 
