@@ -1625,7 +1625,7 @@
 }
 .meeting-minutes-agenda-editor__row {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
   gap: 6px;
   align-items: center;
   position: relative;
@@ -1634,7 +1634,7 @@
   min-width: 0;
 }
 .meeting-minutes-agenda-editor__row.is-locked {
-  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
 }
 .meeting-minutes-agenda-editor__row.is-dragging {
   opacity: 0.4;
@@ -1655,8 +1655,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  width: 32px;
+  width: 36px;
   height: 32px;
   min-width: 0;
   color: var(--text-secondary);
@@ -1665,23 +1664,29 @@
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
+  border-radius: var(--r-sm);
+  transition: background 120ms ease;
 }
 .meeting-minutes-agenda-editor__index.is-drag-handle {
   cursor: grab;
 }
+.meeting-minutes-agenda-editor__index.is-drag-handle:hover,
+.meeting-minutes-agenda-editor__index.is-drag-handle:focus-visible {
+  background: var(--bg-subtle);
+}
 .meeting-minutes-agenda-editor__index.is-drag-handle:active {
   cursor: grabbing;
 }
-.meeting-minutes-agenda-editor__grip {
-  opacity: 0.35;
-  flex-shrink: 0;
-  transition: opacity 120ms ease;
-}
-.meeting-minutes-agenda-editor__row:hover .meeting-minutes-agenda-editor__grip,
-.meeting-minutes-agenda-editor__index.is-drag-handle:focus-visible .meeting-minutes-agenda-editor__grip {
-  opacity: 0.8;
-}
 .meeting-minutes-agenda-editor__row > .btn-action--icon {
+  width: 32px;
+  height: 32px;
+}
+.meeting-minutes-agenda-editor__actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.meeting-minutes-agenda-editor__actions > .btn-action--icon {
   width: 32px;
   height: 32px;
 }
@@ -3192,20 +3197,6 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   color: var(--text-tertiary);
   text-align: center;
   font-size: var(--fs-sm);
-}
-.attendance-details {
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bg-base);
-  padding: var(--s-3);
-}
-.attendance-details__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-2);
-  font-size: var(--fs-sm);
-  margin-bottom: var(--s-2);
 }
 .attendance-list {
   display: grid;

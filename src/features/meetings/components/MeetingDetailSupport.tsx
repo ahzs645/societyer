@@ -35,22 +35,16 @@ export function AttendanceDetails({
   }
 
   return (
-    <div className="attendance-details">
-      <div className="attendance-details__head">
-        <strong>Attendance list</strong>
-        <span className="muted">{present.length} present · {absent.length} absent / regrets</span>
-      </div>
-      <div className="attendance-list">
-        {rows.map((row, index) => (
-          <div key={`${row.status}-${row.name}-${index}`} className="attendance-list__item">
-            <div className="attendance-list__person">
-              <LinkedPersonName name={row.name} people={people} />
-              {row.role && <span className="muted">{row.role}</span>}
-            </div>
-            <Badge tone={row.status === "Present" ? "success" : "neutral"}>{row.status}</Badge>
+    <div className="attendance-list">
+      {rows.map((row, index) => (
+        <div key={`${row.status}-${row.name}-${index}`} className="attendance-list__item">
+          <div className="attendance-list__person">
+            <LinkedPersonName name={row.name} people={people} />
+            {row.role && <span className="muted">{row.role}</span>}
           </div>
-        ))}
-      </div>
+          <Badge tone={row.status === "Present" ? "success" : "neutral"}>{row.status}</Badge>
+        </div>
+      ))}
     </div>
   );
 }

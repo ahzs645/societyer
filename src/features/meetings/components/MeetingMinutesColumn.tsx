@@ -387,6 +387,14 @@ export function MeetingMinutesColumn({
     while (list[index + size]?.depth === 1) size += 1;
     return size;
   };
+  /** Walk backwards from a child row to find its owning root. Returns -1 if
+   * the index isn't a child or no root precedes it. */
+  const findParentRootIndex = (index: number, list: AgendaItemEntry[]) => {
+    if (list[index]?.depth !== 1) return -1;
+    let parent = index - 1;
+    while (parent >= 0 && list[parent].depth === 1) parent -= 1;
+    return parent;
+  };
   const moveAgendaItem = (index: number, direction: -1 | 1) => {
     const item = agendaItems[index];
     if (!item) return;
@@ -420,9 +428,10 @@ export function MeetingMinutesColumn({
     writeAgendaItems(next);
   };
 
-  // Drag-to-reorder for root agenda items. Children travel with their parent
-  // (via groupSizeAt); child rows themselves aren't independently draggable —
-  // they reorder via Tab/Shift-Tab or Alt+ArrowUp/Down inside their parent.
+  // Drag-to-reorder for agenda items. Roots reorder among other roots (their
+  // children travel along via groupSizeAt). Children reorder only within their
+  // own parent's group — they can't escape upward or jump into a sibling
+  // group via drag (Tab/Shift-Tab is still the way to change depth).
   const agendaDragSourceRef = useRef(false);
   const [agendaDragIndex, setAgendaDragIndex] = useState<number | null>(null);
   const [agendaDropIndex, setAgendaDropIndex] = useState<number | null>(null);
@@ -443,10 +452,33 @@ export function MeetingMinutesColumn({
     writeAgendaItems(next);
   };
 
+  const reorderAgendaChild = (fromIndex: number, toIndex: number) => {
+    const list = agendaItems;
+    if (!list[fromIndex] || list[fromIndex].depth !== 1) return;
+    const parent = findParentRootIndex(fromIndex, list);
+    if (parent < 0) return;
+    // Valid drop slots span from just after the parent (parent + 1) through
+    // just after the last child (parent + groupSize). Anything outside that
+    // range would migrate the child into another group, which drag mustn't do.
+    const parentGroupSize = groupSizeAt(parent, list);
+    const minDrop = parent + 1;
+    const maxDrop = parent + parentGroupSize;
+    if (toIndex < minDrop || toIndex > maxDrop) return;
+    if (toIndex === fromIndex || toIndex === fromIndex + 1) return;
+    const next = list.slice();
+    const [removed] = next.splice(fromIndex, 1);
+    let insertAt = toIndex;
+    if (toIndex > fromIndex) insertAt -= 1;
+    next.splice(insertAt, 0, removed);
+    pendingFocusIndex.current = insertAt;
+    writeAgendaItems(next);
+  };
+
   const onAgendaDragStart = (index: number) => (event: ReactDragEvent) => {
     // Only the grip mousedown sets the source flag — clicking inside the input
     // shouldn't trigger a drag, even though the row is `draggable`.
-    if (!agendaDragSourceRef.current || agendaItems[index]?.depth !== 0) {
+    const depth = agendaItems[index]?.depth;
+    if (!agendaDragSourceRef.current || (depth !== 0 && depth !== 1)) {
       event.preventDefault();
       return;
     }
@@ -457,19 +489,66 @@ export function MeetingMinutesColumn({
 
   const onAgendaDragOver = (rowIndex: number) => (event: ReactDragEvent) => {
     if (agendaDragIndex === null) return;
-    if (agendaItems[rowIndex]?.depth !== 0) return; // only land on root rows
+    // Always preventDefault while a drag is active so the browser doesn't
+    // flash the "not allowed" cursor whenever we cross a row we can't drop
+    // onto. Whether the row is actually a valid drop is decided below by
+    // looking at whether we set agendaDropIndex.
     event.preventDefault();
+
+    const sourceDepth = agendaItems[agendaDragIndex]?.depth;
+    const rowDepth = agendaItems[rowIndex]?.depth;
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     const isTopHalf = event.clientY < rect.top + rect.height / 2;
-    const dropIndex = isTopHalf
-      ? rowIndex
-      : rowIndex + groupSizeAt(rowIndex, agendaItems);
-    const sourceGroup = groupSizeAt(agendaDragIndex, agendaItems);
-    if (dropIndex === agendaDragIndex || dropIndex === agendaDragIndex + sourceGroup) {
-      if (agendaDropIndex !== null) setAgendaDropIndex(null);
+
+    if (sourceDepth === 0) {
+      // Roots ride with their whole group. When the pointer is over a child
+      // row, treat it as "near that child's parent" so the drop indicator
+      // still resolves to a sensible slot instead of feeling broken.
+      let targetRoot = rowIndex;
+      let landAfter = !isTopHalf;
+      if (rowDepth === 1) {
+        const parent = findParentRootIndex(rowIndex, agendaItems);
+        if (parent < 0) return;
+        targetRoot = parent;
+        landAfter = true; // children inherit a single "after this group" slot
+      }
+      const targetGroupSize = groupSizeAt(targetRoot, agendaItems);
+      const dropIndex = landAfter ? targetRoot + targetGroupSize : targetRoot;
+      const sourceGroup = groupSizeAt(agendaDragIndex, agendaItems);
+      if (dropIndex === agendaDragIndex || dropIndex === agendaDragIndex + sourceGroup) {
+        if (agendaDropIndex !== null) setAgendaDropIndex(null);
+        return;
+      }
+      if (agendaDropIndex !== dropIndex) setAgendaDropIndex(dropIndex);
       return;
     }
-    if (agendaDropIndex !== dropIndex) setAgendaDropIndex(dropIndex);
+
+    if (sourceDepth === 1) {
+      const sourceParent = findParentRootIndex(agendaDragIndex, agendaItems);
+      if (sourceParent < 0) return;
+      // Hovering the child's own parent row → drop at the top of the group.
+      // Any other root is ignored (leaves the last valid drop slot in place).
+      if (rowDepth === 0) {
+        if (rowIndex !== sourceParent) return;
+        const dropIndex = sourceParent + 1;
+        if (dropIndex === agendaDragIndex || dropIndex === agendaDragIndex + 1) {
+          if (agendaDropIndex !== null) setAgendaDropIndex(null);
+          return;
+        }
+        if (agendaDropIndex !== dropIndex) setAgendaDropIndex(dropIndex);
+        return;
+      }
+      if (rowDepth === 1) {
+        const targetParent = findParentRootIndex(rowIndex, agendaItems);
+        if (sourceParent !== targetParent) return;
+        const dropIndex = isTopHalf ? rowIndex : rowIndex + 1;
+        if (dropIndex === agendaDragIndex || dropIndex === agendaDragIndex + 1) {
+          if (agendaDropIndex !== null) setAgendaDropIndex(null);
+          return;
+        }
+        if (agendaDropIndex !== dropIndex) setAgendaDropIndex(dropIndex);
+      }
+    }
   };
 
   const onAgendaDrop = (event: ReactDragEvent) => {
@@ -480,7 +559,9 @@ export function MeetingMinutesColumn({
     setAgendaDropIndex(null);
     agendaDragSourceRef.current = false;
     if (from === null || to === null) return;
-    reorderAgendaRoot(from, to);
+    const depth = agendaItems[from]?.depth;
+    if (depth === 0) reorderAgendaRoot(from, to);
+    else if (depth === 1) reorderAgendaChild(from, to);
   };
 
   const onAgendaDragEnd = () => {
@@ -1443,29 +1524,24 @@ export function MeetingMinutesColumn({
                   const isRoot = item.depth === 0;
                   const isDragging = agendaDragIndex === index;
                   const isDropTarget = agendaDropIndex === index;
+                  const isChild = item.depth === 1;
+                  const isDraggableRow = isRoot || isChild;
                   return (
                     <div
-                      className={`meeting-minutes-agenda-editor__row${canRemove ? "" : " is-locked"}${item.depth === 1 ? " meeting-minutes-agenda-editor__row--child" : ""}${isDragging ? " is-dragging" : ""}${isDropTarget ? " is-drop-above" : ""}`}
+                      className={`meeting-minutes-agenda-editor__row${canRemove ? "" : " is-locked"}${isChild ? " meeting-minutes-agenda-editor__row--child" : ""}${isDragging ? " is-dragging" : ""}${isDropTarget ? " is-drop-above" : ""}`}
                       key={index}
-                      draggable={isRoot}
+                      draggable={isDraggableRow}
                       onDragStart={onAgendaDragStart(index)}
                       onDragOver={onAgendaDragOver(index)}
                       onDrop={onAgendaDrop}
                       onDragEnd={onAgendaDragEnd}
                     >
                       <span
-                        className={`meeting-minutes-agenda-editor__index${isRoot ? " is-drag-handle" : ""}`}
-                        aria-label={isRoot ? `Drag item ${itemLabel} to reorder` : undefined}
-                        title={isRoot ? "Drag to reorder" : undefined}
-                        onMouseDown={isRoot ? () => { agendaDragSourceRef.current = true; } : undefined}
+                        className={`meeting-minutes-agenda-editor__index${isDraggableRow ? " is-drag-handle" : ""}`}
+                        aria-label={isDraggableRow ? `Drag item ${itemLabel} to reorder` : undefined}
+                        title={isDraggableRow ? (isChild ? "Drag to reorder within group" : "Drag to reorder") : undefined}
+                        onMouseDown={isDraggableRow ? () => { agendaDragSourceRef.current = true; } : undefined}
                       >
-                        {isRoot && (
-                          <GripVertical
-                            size={10}
-                            className="meeting-minutes-agenda-editor__grip"
-                            aria-hidden="true"
-                          />
-                        )}
                         <span aria-hidden="true">{itemLabel}</span>
                       </span>
                       <input
@@ -1528,18 +1604,78 @@ export function MeetingMinutesColumn({
                         }}
                         placeholder={placeholder}
                       />
-                      <button
-                        className="btn-action btn-action--icon meeting-minutes-agenda-editor__more"
-                        type="button"
-                        tabIndex={-1}
-                        title="More actions"
-                        aria-label="More actions for this item"
-                        aria-haspopup="menu"
-                        aria-expanded={agendaItemMenu?.index === index}
-                        onClick={(event) => openAgendaItemMenu(index, event.currentTarget)}
-                      >
-                        <MoreHorizontal size={12} />
-                      </button>
+                      {isMobileSectionEditor ? (
+                        // On phones a popover submenu is awkward to operate, so
+                        // surface the same agenda-row actions inline as direct
+                        // icon buttons. Desktop keeps the compact "…" menu.
+                        <div className="meeting-minutes-agenda-editor__actions">
+                          <button
+                            type="button"
+                            className="btn-action btn-action--icon"
+                            onClick={() => moveAgendaItem(index, -1)}
+                            disabled={!canMoveAgendaUp(index)}
+                            title="Move up"
+                            aria-label="Move up"
+                          >
+                            <ArrowUp size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-action btn-action--icon"
+                            onClick={() => moveAgendaItem(index, 1)}
+                            disabled={!canMoveAgendaDown(index)}
+                            title="Move down"
+                            aria-label="Move down"
+                          >
+                            <ArrowDown size={12} />
+                          </button>
+                          {isRoot ? (
+                            <button
+                              type="button"
+                              className="btn-action btn-action--icon"
+                              onClick={() => indentAgendaItem(index)}
+                              disabled={!agendaItems.slice(0, index).some((entry) => entry.depth === 0)}
+                              title="Make sub-item"
+                              aria-label="Make sub-item"
+                            >
+                              <IndentIncrease size={12} />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn-action btn-action--icon"
+                              onClick={() => outdentAgendaItem(index)}
+                              title="Promote item"
+                              aria-label="Promote item"
+                            >
+                              <IndentDecrease size={12} />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="btn-action btn-action--icon"
+                            onClick={() => removeAgendaItem(index)}
+                            disabled={!canRemove}
+                            title="Remove item"
+                            aria-label="Remove item"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          className="btn-action btn-action--icon meeting-minutes-agenda-editor__more"
+                          type="button"
+                          tabIndex={-1}
+                          title="More actions"
+                          aria-label="More actions for this item"
+                          aria-haspopup="menu"
+                          aria-expanded={agendaItemMenu?.index === index}
+                          onClick={(event) => openAgendaItemMenu(index, event.currentTarget)}
+                        >
+                          <MoreHorizontal size={12} />
+                        </button>
+                      )}
                     </div>
                   );
                 })}
