@@ -651,9 +651,32 @@ export function MeetingDetailPage() {
     };
   };
 
+  // True when there's anything worth putting in the export: at least one
+  // agenda item, a non-empty section, a motion, a decision, an action item,
+  // or some discussion text. Once a user deletes every agenda item, an
+  // auto-bootstrapped minutes record can still produce a "valid" but
+  // contentless preview (just attendance + quorum) — this check folds that
+  // case back into the empty state.
+  const hasExportableContent = (() => {
+    if (agendaTree.length > 0) return true;
+    if (!minutes) return false;
+    if ((minutes.discussion ?? "").trim()) return true;
+    const sections = (minutes.sections ?? []) as any[];
+    if (sections.some((section) =>
+      (section.title ?? "").trim() ||
+      (section.discussion ?? "").trim() ||
+      (section.decisions ?? []).some((d: string) => (d ?? "").trim()) ||
+      (section.actionItems ?? []).length > 0,
+    )) return true;
+    if (((minutes.motions ?? []) as any[]).length > 0) return true;
+    if (((minutes.decisions ?? []) as string[]).some((d) => (d ?? "").trim())) return true;
+    if (((minutes.actionItems ?? []) as any[]).length > 0) return true;
+    return false;
+  })();
+
   const renderExportBody = (redact?: (value: string) => string) => {
     const payload = minutesRenderPayload(redact);
-    if (!payload) return "";
+    if (!payload || !hasExportableContent) return "";
     return renderMinutesHtml({
       society: { name: society.name, incorporationNumber: society.incorporationNumber ?? null },
       meeting: {
