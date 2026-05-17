@@ -17,6 +17,7 @@ import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { ArrowLeft, Users, ListTodo, Target, Calendar, Plus, FileText, Trash2, Activity, MessageSquare } from "lucide-react";
 import { formatDateTime, formatDate, initials } from "../lib/format";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 export function CommitteeDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -383,7 +384,7 @@ export function CommitteeDetailPage() {
         {taskForm && (
           <div>
             <Field label="Title"><input className="input" value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })} /></Field>
-            <Field label="Description"><textarea className="textarea" value={taskForm.description ?? ""} onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })} /></Field>
+            <Field label="Description"><MarkdownEditor rows={4} value={taskForm.description ?? ""} onChange={(markdown) => setTaskForm({ ...taskForm, description: markdown })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Status">
                 <Select

@@ -16,6 +16,7 @@ import { formatDateTime } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { CalendarView } from "../components/CalendarView";
 import type { ToneVariant } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 const OVERLAP_WINDOW_MS = 2 * 60 * 60 * 1000; // within 2 hours counts as concurrent
 
@@ -332,7 +333,7 @@ export function MeetingsPage() {
                 onChange={(e) => setForm({ ...form, quorumRequired: e.target.value })}
               />
             </Field>
-            <Field label="Notes"><textarea className="textarea" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
             {form.type === "AGM" && (
               <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
                 Reminder: AGM notice must be sent {(formRules ?? rules)?.generalNoticeMinDays ?? noticeMinDays}–{(formRules ?? rules)?.generalNoticeMaxDays ?? noticeMaxDays} days in advance.

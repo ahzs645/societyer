@@ -1,0 +1,279 @@
+// MarkdownEditor — Milkdown/Crepe styled to match the app's textarea.
+//
+// Crepe ships with its own design language (large padding, serif headings,
+// shadow toolbars). We override the public CSS custom properties on
+// `.milkdown` and trim the geometry so the editor behaves like a regular
+// .textarea control inside our forms.
+
+.markdown-editor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  transition: border-color 0.08s ease, box-shadow 0.08s ease;
+  overflow: hidden; // keep the toolbar's top corners square against the rounded outer
+
+  &:focus-within {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  &[aria-invalid="true"] {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 3px var(--danger-soft);
+  }
+
+  &--readonly {
+    background: var(--bg-subtle);
+    color: var(--text-secondary);
+  }
+
+  // ----- Toolbar -----
+  &__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 4px 6px;
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border);
+  }
+
+  &__toolbar-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.08s ease, color 0.08s ease, border-color 0.08s ease;
+  }
+  &__toolbar-button:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  &__toolbar-button:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+  }
+  &__toolbar-button:active:not(:disabled) {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  // `.is-active` is applied while the user's selection sits inside the
+  // corresponding mark (bold / italic / …) or block (heading / list / quote).
+  // We pair the accent foreground with a soft background tint so the active
+  // affordance is obvious without screaming.
+  &__toolbar-button.is-active {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  &__toolbar-button.is-active:hover:not(:disabled) {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  &__toolbar-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  // ----- Editor body -----
+  // This is the host element Crepe mounts the .milkdown root inside. Make
+  // it the resizable region so users can drag the bottom edge to grow.
+  &__body {
+    flex: 1 1 auto;
+    overflow: auto;
+    resize: vertical;
+  }
+
+  // Style the resize handle in webkit browsers so it stays visible against
+  // the app's dark theme. Firefox doesn't expose the resizer pseudo, but it
+  // also doesn't draw a dedicated handle.
+  &__body::-webkit-resizer {
+    background:
+      linear-gradient(
+        135deg,
+        transparent 0%,
+        transparent 45%,
+        var(--text-tertiary) 45%,
+        var(--text-tertiary) 55%,
+        transparent 55%,
+        transparent 70%,
+        var(--text-tertiary) 70%,
+        var(--text-tertiary) 80%,
+        transparent 80%
+      );
+    background-color: var(--bg-subtle);
+    border-top-left-radius: var(--r-sm);
+  }
+  &__body::-webkit-scrollbar-corner {
+    background: var(--bg-subtle);
+  }
+
+  // Map Crepe theme tokens to the app palette so the embedded editor
+  // inherits the same colours used by buttons, popovers, and inputs.
+  .milkdown {
+    --crepe-color-background: transparent;
+    --crepe-color-on-background: var(--text-primary);
+    --crepe-color-surface: var(--bg-panel, var(--bg-base));
+    --crepe-color-surface-low: var(--bg-subtle);
+    --crepe-color-on-surface: var(--text-primary);
+    --crepe-color-on-surface-variant: var(--text-secondary);
+    --crepe-color-outline: var(--border);
+    --crepe-color-primary: var(--accent);
+    --crepe-color-secondary: var(--text-tertiary);
+    --crepe-color-on-secondary: var(--text-primary);
+    --crepe-color-inverse: var(--text-primary);
+    --crepe-color-on-inverse: var(--bg-base);
+    --crepe-color-inline-code: var(--danger);
+    --crepe-color-error: var(--danger);
+    --crepe-color-hover: var(--bg-hover);
+    --crepe-color-selected: var(--accent-soft);
+    --crepe-color-inline-area: var(--border);
+    --crepe-font-title: inherit;
+    --crepe-font-default: inherit;
+    --crepe-font-code: ui-monospace, "SFMono-Regular", "Menlo", "Monaco",
+      "Consolas", monospace;
+    --crepe-shadow-1: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.12));
+    --crepe-shadow-2: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.16));
+
+    background: transparent;
+    color: inherit;
+    font: inherit;
+  }
+
+  // Crepe's reset defaults to enormous padding (60px 120px) suitable for a
+  // full-page editor. Tighten it to feel like a form control.
+  .milkdown .ProseMirror {
+    padding: 10px 12px;
+    min-height: inherit;
+    outline: none;
+    word-break: break-word;
+  }
+
+  // Headings in the embedded editor — use the app's typographic scale so a
+  // pasted "# Heading" doesn't blow up the layout of a small form field.
+  .milkdown .ProseMirror h1 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 0.6em 0 0.3em;
+    line-height: 1.3;
+  }
+  .milkdown .ProseMirror h2 {
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin: 0.6em 0 0.3em;
+  }
+  .milkdown .ProseMirror h3,
+  .milkdown .ProseMirror h4,
+  .milkdown .ProseMirror h5,
+  .milkdown .ProseMirror h6 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0.5em 0 0.25em;
+  }
+
+  .milkdown .ProseMirror p {
+    margin: 0 0 0.4em;
+  }
+  .milkdown .ProseMirror p:last-child {
+    margin-bottom: 0;
+  }
+
+  .milkdown .ProseMirror ul,
+  .milkdown .ProseMirror ol {
+    margin: 0.2em 0 0.4em;
+    padding-left: 1.4em;
+  }
+  .milkdown .ProseMirror li {
+    margin: 0.1em 0;
+  }
+  .milkdown .ProseMirror li > p {
+    margin: 0;
+  }
+
+  .milkdown .ProseMirror blockquote {
+    margin: 0.3em 0;
+    padding: 0.1em 0.8em;
+    border-left: 3px solid var(--border-strong, var(--border));
+    color: var(--text-secondary);
+  }
+
+  .milkdown .ProseMirror code {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0 4px;
+    font-family: var(--crepe-font-code);
+    font-size: 0.92em;
+  }
+  .milkdown .ProseMirror pre {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 8px 10px;
+    margin: 0.3em 0;
+    overflow: auto;
+  }
+  .milkdown .ProseMirror pre code {
+    background: transparent;
+    border: 0;
+    padding: 0;
+  }
+
+  .milkdown .ProseMirror a {
+    color: var(--accent);
+    text-underline-offset: 2px;
+  }
+
+  // Placeholder uses Crepe's `data-placeholder` attribute on the empty doc.
+  .milkdown .crepe-placeholder::before {
+    color: var(--text-tertiary);
+    opacity: 1;
+  }
+}
+
+// Bubble toolbar that appears on selection — anchored relative to the
+// nearest .milkdown root. Inherits border/radius from our app tokens.
+.milkdown .milkdown-toolbar {
+  background: var(--bg-panel, var(--bg-base));
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.12));
+
+  .toolbar-item {
+    color: var(--text-secondary);
+  }
+  .toolbar-item:hover {
+    background: var(--bg-hover);
+  }
+  .toolbar-item.active svg {
+    color: var(--accent);
+    fill: var(--accent);
+  }
+  .divider {
+    background: var(--border);
+  }
+}
+
+// Block-edit slash menu (`/`) — match the command palette popover.
+.milkdown-block-handle,
+.milkdown-slash-menu {
+  background: var(--bg-panel, var(--bg-base));
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.16));
+  color: var(--text-primary);
+  font: inherit;
+}

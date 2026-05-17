@@ -17,6 +17,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { Badge, Drawer, Field } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Modal } from "../components/Modal";
 import { SeedPrompt } from "./_helpers";
 import {
@@ -437,11 +438,10 @@ export function WorkflowDetailPage() {
                     <span>{field.label}</span>
                   </label>
                 ) : field.type === "textarea" ? (
-                  <textarea
-                    className="textarea"
+                  <MarkdownEditor
                     rows={3}
                     value={intake[field.key] ?? ""}
-                    onChange={(event) => setIntake({ ...intake, [field.key]: event.target.value })}
+                    onChange={(markdown) => setIntake({ ...intake, [field.key]: markdown })}
                   />
                 ) : field.type === "person" ? (
                   <AccessPersonPicker
@@ -1532,11 +1532,10 @@ function IntakeFieldWizardModal({
               </label>
 
               <Field label="Help text">
-                <textarea
-                  className="textarea"
+                <MarkdownEditor
                   rows={3}
                   value={current.helpText ?? ""}
-                  onChange={(event) => updateCurrent({ helpText: event.target.value })}
+                  onChange={(markdown) => updateCurrent({ helpText: markdown })}
                 />
               </Field>
 

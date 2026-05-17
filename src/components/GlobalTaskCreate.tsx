@@ -1,14 +1,15 @@
 /**
- * Global quick-create task drawer. Listens for the
- * `quickaction:add-task` window event and opens a TaskCreateDrawer that
- * persists straight to the tasks board.
+ * Global quick-create task modal. Listens for the
+ * `quickaction:add-task` window event and opens a centered popup that
+ * persists straight to the tasks board — same popup style as the command
+ * palette's other quick actions (e.g. DraftMinutesPicker).
  *
  * Mounted once in Layout so the command palette's "Add task" command (and
  * any other caller) can pop this from anywhere in the app.
  */
 import { useEffect, useState } from "react";
 import { useSociety } from "../hooks/useSociety";
-import { TaskCreateDrawer } from "../features/tasks/TaskCreateDrawer";
+import { TaskCreateModal } from "../features/tasks/TaskCreateModal";
 
 export const OPEN_TASK_CREATE_EVENT = "quickaction:add-task";
 
@@ -29,7 +30,7 @@ export function GlobalTaskCreate() {
   if (!society) return null;
 
   return (
-    <TaskCreateDrawer
+    <TaskCreateModal
       open={open}
       onClose={() => setOpen(false)}
       societyId={society._id}

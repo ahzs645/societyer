@@ -38,6 +38,7 @@ import { MeetingPackageHub } from "../features/meetings/components/MeetingPackag
 import { MeetingMinutesColumn } from "../features/meetings/components/MeetingMinutesColumn";
 import { MeetingSidebarColumn } from "../features/meetings/components/MeetingSidebarColumn";
 import { Select } from "../components/Select";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import {
   addRedactionName,
   getMeetingJoinDetails,
@@ -1896,7 +1897,7 @@ export function MeetingDetailPage() {
               </Field>
             </div>
             <Field label="Instructions">
-              <textarea className="textarea" rows={3} value={joinEdit.remoteInstructions} onChange={(event) => setJoinEdit({ ...joinEdit, remoteInstructions: event.target.value })} />
+              <MarkdownEditor rows={3} value={joinEdit.remoteInstructions} onChange={(markdown) => setJoinEdit({ ...joinEdit, remoteInstructions: markdown })} />
             </Field>
           </div>
         )}

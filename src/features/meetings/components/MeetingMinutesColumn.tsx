@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, ExternalLink, FileText, GripVertical, IndentDecrease, IndentIncrease, ListChecks, Mic, MinusCircle, MoreHorizontal, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
 import { Badge, Field, MenuRow } from "../../../components/ui";
+import { MarkdownEditor, type MarkdownEditorHandle } from "../../../components/MarkdownEditor";
 import { useConfirm } from "../../../components/Modal";
 import { Checkbox } from "../../../components/Controls";
 import { LegalGuideInline } from "../../../components/LegalGuide";
@@ -185,7 +186,7 @@ export function MeetingMinutesColumn({
   }, [agendaNumberingMode]);
   const sectionTitleRef = useRef<HTMLInputElement | null>(null);
   const sectionMobileTitleRef = useRef<HTMLInputElement | null>(null);
-  const sectionDiscussionRef = useRef<HTMLTextAreaElement | null>(null);
+  const sectionDiscussionRef = useRef<MarkdownEditorHandle | null>(null);
   const focusSectionTitleOnEdit = useRef(false);
   const [isMobileSectionEditor, setIsMobileSectionEditor] = useState(false);
 
@@ -1079,14 +1080,13 @@ export function MeetingMinutesColumn({
 
         {sectionEditorTab === "notes" && (
           <div className="meeting-minutes-section-editor__panel">
-            <Field label="Discussion notes" hint="Discussion/report points only. Use - for bullets and two spaces for nested details.">
-              <textarea
+            <Field label="Discussion notes" hint="Discussion/report points only. Press / for headings, lists, and more.">
+              <MarkdownEditor
                 ref={isMobile ? undefined : sectionDiscussionRef}
-                className="textarea mono"
                 rows={8}
                 value={sectionDraft.discussion}
-                onChange={(event) => setSectionDraft({ ...sectionDraft, discussion: event.target.value })}
-                placeholder="- **Expenses incurred by Ahmad:**&#10;  - $80.00 for notary signing&#10;  - $33.01 for posters&#10;- Receipts are recorded on Teams under Expenses."
+                onChange={(markdown) => setSectionDraft({ ...sectionDraft, discussion: markdown })}
+                placeholder="Expenses incurred by Ahmad: $80.00 for notary signing, $33.01 for posters. Receipts are recorded on Teams under Expenses."
               />
             </Field>
             <Field label="Decisions" hint="One per line.">
@@ -1235,11 +1235,10 @@ export function MeetingMinutesColumn({
                         items={SECTION_TASK_STATUS_ITEMS}
                       />
                       <Field label="Completion note" hint="Saved to the task when this section is saved.">
-                        <textarea
-                          className="textarea"
+                        <MarkdownEditor
                           rows={2}
                           value={noteValue}
-                          onChange={(event) => updateTaskDraft(task._id, { completionNote: event.target.value })}
+                          onChange={(markdown) => updateTaskDraft(task._id, { completionNote: markdown })}
                           placeholder="Outcome, blockers, or notes for the kanban card."
                         />
                       </Field>

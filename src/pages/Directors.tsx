@@ -24,6 +24,7 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 export function DirectorsPage() {
   const society = useSociety();
@@ -306,7 +307,7 @@ export function DirectorsPage() {
               onChange={(v) => setSelected({ ...selected, consentOnFile: v })}
               label="Director consent evidence on file"
             />
-            <Field label="Notes"><textarea className="textarea" value={selected.notes ?? ""} onChange={(e) => setSelected({ ...selected, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={selected.notes ?? ""} onChange={(markdown) => setSelected({ ...selected, notes: markdown })} /></Field>
             {selected._id && (
               <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
                 <CustomFieldsPanel

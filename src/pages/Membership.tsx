@@ -4,6 +4,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { centsToDollarInput, dollarInputToCents, money, formatDate } from "../lib/format";
@@ -431,10 +432,10 @@ export function MembershipPage() {
               />
             </Field>
             <Field label="Description">
-              <textarea
-                className="textarea"
+              <MarkdownEditor
+                rows={4}
                 value={planDraft.description ?? ""}
-                onChange={(e) => setPlanDraft({ ...planDraft, description: e.target.value })}
+                onChange={(markdown) => setPlanDraft({ ...planDraft, description: markdown })}
               />
             </Field>
             <Field label="Price (CAD)">
@@ -602,10 +603,10 @@ export function MembershipPage() {
               />
             </Field>
             <Field label="Notes">
-              <textarea
-                className="textarea"
+              <MarkdownEditor
+                rows={4}
                 value={feeDraft.notes ?? ""}
-                onChange={(e) => setFeeDraft({ ...feeDraft, notes: e.target.value })}
+                onChange={(markdown) => setFeeDraft({ ...feeDraft, notes: markdown })}
               />
             </Field>
           </div>

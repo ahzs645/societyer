@@ -13,6 +13,7 @@ import { Checkbox } from "../components/Controls";
 import { Plus, AlertTriangle, Tag, CheckCircle2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { useToast } from "../components/Toast";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 type Augmented = any & { _directorName: string };
 
@@ -133,7 +134,7 @@ export function ConflictsPage() {
               <DatePicker value={form.declaredAt} onChange={(v) => setForm({ ...form, declaredAt: v })} />
             </Field>
             <Field label="Contract / matter"><input className="input" value={form.contractOrMatter} onChange={(e) => setForm({ ...form, contractOrMatter: e.target.value })} /></Field>
-            <Field label="Nature of interest"><textarea className="textarea" value={form.natureOfInterest} onChange={(e) => setForm({ ...form, natureOfInterest: e.target.value })} /></Field>
+            <Field label="Nature of interest"><MarkdownEditor rows={4} value={form.natureOfInterest} onChange={(markdown) => setForm({ ...form, natureOfInterest: markdown })} /></Field>
             <Checkbox
               checked={!!form.abstainedFromVote}
               onChange={(v) => setForm({ ...form, abstainedFromVote: v })}
@@ -144,7 +145,7 @@ export function ConflictsPage() {
               onChange={(v) => setForm({ ...form, leftRoom: v })}
               label="Left room during discussion"
             />
-            <Field label="Notes"><textarea className="textarea" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
           </div>
         )}
       </Drawer>

@@ -7,6 +7,7 @@ import { PageHeader, SeedPrompt } from "./_helpers";
 import { BookOpen, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { Field } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Checkbox } from "../components/Controls";
 
 const CATEGORIES = [
@@ -136,13 +137,12 @@ export function MotionLibraryPage() {
               />
             </Field>
             <Field label="Motion text">
-              <textarea
-                className="textarea"
+              <MarkdownEditor
                 placeholder="BE IT RESOLVED THAT..."
                 rows={5}
                 value={form.body}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, body: e.target.value }))
+                onChange={(markdown) =>
+                  setForm((f) => ({ ...f, body: markdown }))
                 }
               />
             </Field>

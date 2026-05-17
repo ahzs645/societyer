@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ClipboardCheck, Download, ExternalLink, FileText, ListChecks, Plus, ShieldCheck, Unlink, X } from "lucide-react";
 import { Badge } from "../../../components/ui";
+import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { Segmented } from "../../../components/primitives";
 import { formatDate } from "../../../lib/format";
 
@@ -208,11 +209,10 @@ export function MeetingPackageHub({
                     )}
                     {(sourceReviewStatus === "imported_needs_review" || sourceReviewStatus === "rejected") && (
                       <>
-                        <textarea
-                          className="textarea"
+                        <MarkdownEditor
                           rows={2}
                           value={sourceReviewNote}
-                          onChange={(event) => setSourceReviewNote(event.target.value)}
+                          onChange={(markdown) => setSourceReviewNote(markdown)}
                           placeholder="Review note"
                         />
                         <button className="btn-action btn-action--primary" onClick={completeSourceReview}>
@@ -245,11 +245,10 @@ export function MeetingPackageHub({
                   {meeting.packageReviewNotes && (
                     <div className="muted" style={{ fontSize: "var(--fs-sm)", whiteSpace: "pre-wrap" }}>{meeting.packageReviewNotes}</div>
                   )}
-                  <textarea
-                    className="textarea"
+                  <MarkdownEditor
                     rows={2}
                     value={packageReviewNote}
-                    onChange={(event) => setPackageReviewNote(event.target.value)}
+                    onChange={(markdown) => setPackageReviewNote(markdown)}
                     placeholder="Package review note"
                   />
                   <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>

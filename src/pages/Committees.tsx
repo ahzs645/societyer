@@ -10,6 +10,7 @@ import { Select } from "../components/Select";
 import { ColorPicker } from "../components/ColorPicker";
 import { Plus, Users, Target, UsersRound as UsersIcon } from "lucide-react";
 import { formatDateTime } from "../lib/format";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 const CADENCES = ["Weekly", "Biweekly", "Monthly", "Quarterly", "Ad-hoc"];
 const COLORS = ["#3b5bdb", "#0a8f4e", "#a86400", "#c9264a", "#6f42c1", "#0e7490"];
@@ -115,7 +116,7 @@ export function CommitteesPage() {
           <div>
             <Field label="Name"><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
             <Field label="Mission"><input className="input" value={form.mission ?? ""} onChange={(e) => setForm({ ...form, mission: e.target.value })} /></Field>
-            <Field label="Description"><textarea className="textarea" value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
+            <Field label="Description"><MarkdownEditor rows={4} value={form.description ?? ""} onChange={(markdown) => setForm({ ...form, description: markdown })} /></Field>
             <Field label="Cadence">
               <Select
                 value={form.cadence}

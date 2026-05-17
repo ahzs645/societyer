@@ -11,6 +11,7 @@ import { Plus, PenLine, Trash2, Tag } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 const FIELDS: FilterField<any>[] = [
   { id: "kind", label: "Kind", icon: <Tag size={14} />, options: ["Ordinary", "Special"], match: (r, q) => r.kind === q },
@@ -124,7 +125,7 @@ export function WrittenResolutionsPage() {
         {form && (
           <div>
             <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
-            <Field label="Resolution text"><textarea className="textarea" value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} /></Field>
+            <Field label="Resolution text"><MarkdownEditor rows={4} value={form.text} onChange={(markdown) => setForm({ ...form, text: markdown })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Kind">
                 <select className="input" value={form.kind} onChange={(e) => {

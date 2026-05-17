@@ -7,6 +7,7 @@ import { Drawer, Field, InspectorNote } from "../components/ui";
 import { Plus, UserCheck, Trash2 } from "lucide-react";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import {
   RecordTable,
   RecordTableScope,
@@ -225,7 +226,7 @@ export function ProxiesPage() {
               </select>
             </Field>
             <Field label="Proxy holder"><input className="input" value={form.proxyHolderName} onChange={(e) => setForm({ ...form, proxyHolderName: e.target.value })} /></Field>
-            <Field label="Instructions (optional)"><textarea className="textarea" value={form.instructions ?? ""} onChange={(e) => setForm({ ...form, instructions: e.target.value })} /></Field>
+            <Field label="Instructions (optional)"><MarkdownEditor rows={4} value={form.instructions ?? ""} onChange={(markdown) => setForm({ ...form, instructions: markdown })} /></Field>
             <Field label="Signed on"><input className="input" type="date" value={form.signedAtISO} onChange={(e) => setForm({ ...form, signedAtISO: e.target.value })} /></Field>
           </div>
         )}

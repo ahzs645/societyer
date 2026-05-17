@@ -7,6 +7,7 @@ import { Drawer, Field, Badge } from "../components/ui";
 import { Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import {
   RecordTable,
   RecordTableScope,
@@ -167,7 +168,7 @@ export function PipaTrainingPage() {
               <Field label="Next due"><input className="input" type="date" value={form.nextDueAtISO ?? ""} onChange={(e) => setForm({ ...form, nextDueAtISO: e.target.value })} /></Field>
             </div>
             <Field label="Trainer"><input className="input" value={form.trainer ?? ""} onChange={(e) => setForm({ ...form, trainer: e.target.value })} /></Field>
-            <Field label="Notes"><textarea className="textarea" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
           </div>
         )}
       </Drawer>

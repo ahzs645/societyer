@@ -10,6 +10,7 @@ import { Globe, Plus, Save, Trash2, Copy } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import {
   RecordTable,
   RecordTableScope,
@@ -385,7 +386,7 @@ export function TransparencyPage() {
         {settingsDraft && (
           <div>
             <Field label="Public slug"><input className="input" value={settingsDraft.publicSlug ?? ""} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicSlug: e.target.value })} /></Field>
-            <Field label="Public summary"><textarea className="textarea" rows={6} value={settingsDraft.publicSummary ?? ""} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicSummary: e.target.value })} /></Field>
+            <Field label="Public summary"><MarkdownEditor rows={6} value={settingsDraft.publicSummary ?? ""} onChange={(markdown) => setSettingsDraft({ ...settingsDraft, publicSummary: markdown })} /></Field>
             <Field label="Public contact email"><input className="input" value={settingsDraft.publicContactEmail ?? ""} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicContactEmail: e.target.value })} /></Field>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicTransparencyEnabled} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicTransparencyEnabled: e.target.checked })} /> Enable public page</label>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowBoard} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowBoard: e.target.checked })} /> Show board roster</label>
@@ -482,7 +483,7 @@ export function TransparencyPage() {
                 <option>Archived</option>
               </select>
             </Field>
-            <Field label="Summary"><textarea className="textarea" rows={5} value={publicationDraft.summary ?? ""} onChange={(e) => setPublicationDraft({ ...publicationDraft, summary: e.target.value })} /></Field>
+            <Field label="Summary"><MarkdownEditor rows={5} value={publicationDraft.summary ?? ""} onChange={(markdown) => setPublicationDraft({ ...publicationDraft, summary: markdown })} /></Field>
           </div>
         )}
       </Drawer>

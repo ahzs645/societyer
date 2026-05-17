@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { ErrorSummary, Field, InspectorNote, type ErrorSummaryItem } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { PIPA_INTAKE_NOTICE } from "../lib/legalCopy";
 import { ArrowLeft, HandHeart } from "lucide-react";
 
@@ -167,7 +168,7 @@ export function VolunteerApplyPage() {
                 <input className="input" value={form.interests} onChange={(e) => setForm({ ...form, interests: e.target.value })} />
               </Field>
               <Field label="Anything else the society should know?">
-                <textarea className="textarea" rows={5} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+                <MarkdownEditor rows={5} value={form.notes} onChange={(markdown) => setForm({ ...form, notes: markdown })} />
               </Field>
               <button className="btn btn--accent" type="submit" disabled={submitting}>
                 {submitting ? "Submitting…" : "Submit application"}

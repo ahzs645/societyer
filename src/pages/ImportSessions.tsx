@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Segmented } from "../components/primitives";
 import { useToast } from "../components/Toast";
 import { ImportWizard } from "../components/ImportWizard";
@@ -834,7 +835,7 @@ function RecordDrawer({
             <input className="input" value={form.sourceExternalIdsText} onChange={(event) => onChange({ ...form, sourceExternalIdsText: event.target.value })} />
           </Field>
           <Field label="Review notes">
-            <textarea className="textarea" rows={4} value={form.reviewNotes ?? ""} onChange={(event) => onChange({ ...form, reviewNotes: event.target.value })} />
+            <MarkdownEditor rows={4} value={form.reviewNotes ?? ""} onChange={(markdown) => onChange({ ...form, reviewNotes: markdown })} />
           </Field>
         </div>
       )}
@@ -1090,7 +1091,7 @@ function renderPayloadEditor(form: any, onChange: (form: any) => void) {
           <Field label="Source date"><input className="input" value={payload.sourceDate ?? ""} onChange={(event) => set({ sourceDate: event.target.value })} /></Field>
         </div>
         <Field label="Category"><input className="input" value={payload.category ?? ""} onChange={(event) => set({ category: event.target.value })} /></Field>
-        <Field label="Notes"><textarea className="textarea" rows={5} value={payload.notes ?? ""} onChange={(event) => set({ notes: event.target.value })} /></Field>
+        <Field label="Notes"><MarkdownEditor rows={5} value={payload.notes ?? ""} onChange={(markdown) => set({ notes: markdown })} /></Field>
       </>
     );
   }
@@ -1098,7 +1099,7 @@ function renderPayloadEditor(form: any, onChange: (form: any) => void) {
     return (
       <>
         <Field label="Label"><input className="input" value={payload.label ?? ""} onChange={(event) => set({ label: event.target.value })} /></Field>
-        <Field label="Value"><textarea className="textarea" rows={5} value={payload.value ?? ""} onChange={(event) => set({ value: event.target.value })} /></Field>
+        <Field label="Value"><MarkdownEditor rows={5} value={payload.value ?? ""} onChange={(markdown) => set({ value: markdown })} /></Field>
       </>
     );
   }
@@ -1110,7 +1111,7 @@ function renderPayloadEditor(form: any, onChange: (form: any) => void) {
           <Field label="Category"><input className="input" value={payload.category ?? ""} onChange={(event) => set({ category: event.target.value })} /></Field>
         </div>
         <Field label="Title"><input className="input" value={payload.title ?? ""} onChange={(event) => set({ title: event.target.value })} /></Field>
-        <Field label="Summary"><textarea className="textarea" rows={5} value={payload.summary ?? ""} onChange={(event) => set({ summary: event.target.value })} /></Field>
+        <Field label="Summary"><MarkdownEditor rows={5} value={payload.summary ?? ""} onChange={(markdown) => set({ summary: markdown })} /></Field>
       </>
     );
   }
@@ -1127,7 +1128,7 @@ function renderPayloadEditor(form: any, onChange: (form: any) => void) {
           <Field label="End"><input className="input" value={payload.endDate ?? ""} onChange={(event) => set({ endDate: event.target.value })} /></Field>
         </div>
         <Field label="Change type"><input className="input" value={payload.changeType ?? ""} onChange={(event) => set({ changeType: event.target.value })} /></Field>
-        <Field label="Notes"><textarea className="textarea" rows={4} value={payload.notes ?? ""} onChange={(event) => set({ notes: event.target.value })} /></Field>
+        <Field label="Notes"><MarkdownEditor rows={4} value={payload.notes ?? ""} onChange={(markdown) => set({ notes: markdown })} /></Field>
       </>
     );
   }
@@ -1139,7 +1140,7 @@ function renderPayloadEditor(form: any, onChange: (form: any) => void) {
           <Field label="Outcome"><input className="input" value={payload.outcome ?? ""} onChange={(event) => set({ outcome: event.target.value })} /></Field>
         </div>
         <Field label="Meeting title"><input className="input" value={payload.meetingTitle ?? ""} onChange={(event) => set({ meetingTitle: event.target.value })} /></Field>
-        <Field label="Motion text"><textarea className="textarea" rows={5} value={payload.motionText ?? ""} onChange={(event) => set({ motionText: event.target.value })} /></Field>
+        <Field label="Motion text"><MarkdownEditor rows={5} value={payload.motionText ?? ""} onChange={(markdown) => set({ motionText: markdown })} /></Field>
         <div className="row" style={{ gap: 12 }}>
           <Field label="Moved by"><input className="input" value={payload.movedByName ?? ""} onChange={(event) => set({ movedByName: event.target.value })} /></Field>
           <Field label="Seconded by"><input className="input" value={payload.secondedByName ?? ""} onChange={(event) => set({ secondedByName: event.target.value })} /></Field>
@@ -1200,7 +1201,7 @@ function renderPayloadEditor(form: any, onChange: (form: any) => void) {
           <textarea className="textarea mono" rows={16} value={payload.proposedText ?? ""} onChange={(event) => set({ proposedText: event.target.value })} />
         </Field>
         <Field label="Notes">
-          <textarea className="textarea" rows={4} value={payload.notes ?? ""} onChange={(event) => set({ notes: event.target.value })} />
+          <MarkdownEditor rows={4} value={payload.notes ?? ""} onChange={(markdown) => set({ notes: markdown })} />
         </Field>
       </>
     );
@@ -1241,8 +1242,8 @@ function renderPayloadEditor(form: any, onChange: (form: any) => void) {
           <Field label="Start"><input className="input" type="date" value={payload.startDate ?? ""} onChange={(event) => set({ startDate: event.target.value })} /></Field>
           <Field label="End"><input className="input" type="date" value={payload.endDate ?? ""} onChange={(event) => set({ endDate: event.target.value })} /></Field>
         </div>
-        <Field label="Restricted purpose"><textarea className="textarea" rows={3} value={payload.restrictedPurpose ?? ""} onChange={(event) => set({ restrictedPurpose: event.target.value })} /></Field>
-        <Field label="Notes"><textarea className="textarea" rows={4} value={payload.notes ?? ""} onChange={(event) => set({ notes: event.target.value })} /></Field>
+        <Field label="Restricted purpose"><MarkdownEditor rows={3} value={payload.restrictedPurpose ?? ""} onChange={(markdown) => set({ restrictedPurpose: markdown })} /></Field>
+        <Field label="Notes"><MarkdownEditor rows={4} value={payload.notes ?? ""} onChange={(markdown) => set({ notes: markdown })} /></Field>
       </>
     );
   }

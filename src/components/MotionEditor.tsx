@@ -20,6 +20,7 @@ function DinnerTableIcon({ size = 12 }: { size?: number }) {
   );
 }
 import { Badge, Field } from "./ui";
+import { MarkdownEditor } from "./MarkdownEditor";
 import { NameAutocomplete } from "./NameAutocomplete";
 import { Select, type SelectOption } from "./Select";
 
@@ -562,7 +563,7 @@ function MotionRow({
       {expanded && (
         <div style={{ marginTop: 10, borderTop: "1px dashed var(--border)", paddingTop: 10 }}>
           <Field label="Motion text">
-            <textarea className="textarea" value={motion.text} onChange={(e) => onPatch({ text: e.target.value })} />
+            <MarkdownEditor rows={4} value={motion.text} onChange={(markdown) => onPatch({ text: markdown })} />
           </Field>
           <div className="row" style={{ gap: 12 }}>
             <Field label="Moved by">

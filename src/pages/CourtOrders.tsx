@@ -15,6 +15,7 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 /**
  * Court orders affecting the society — required to be kept with
@@ -137,7 +138,7 @@ export function CourtOrdersPage() {
               <Field label="File #"><input className="input" value={form.fileNumber ?? ""} onChange={(e) => setForm({ ...form, fileNumber: e.target.value })} /></Field>
               <Field label="Order date"><input className="input" type="date" value={form.orderDate} onChange={(e) => setForm({ ...form, orderDate: e.target.value })} /></Field>
             </div>
-            <Field label="Description"><textarea className="textarea" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
+            <Field label="Description"><MarkdownEditor rows={4} value={form.description} onChange={(markdown) => setForm({ ...form, description: markdown })} /></Field>
             <Field label="Document (optional)">
               <select className="input" value={form.documentId ?? ""} onChange={(e) => setForm({ ...form, documentId: e.target.value || undefined })}>
                 <option value="">— none —</option>

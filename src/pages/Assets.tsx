@@ -22,6 +22,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { formatDate } from "../lib/format";
@@ -533,10 +534,10 @@ function AssetForm({
       <Field label="Warranty expires"><input className="input" type="date" value={form.warrantyExpiresAt ?? ""} onChange={(event) => setForm({ ...form, warrantyExpiresAt: event.target.value })} /></Field>
       <Field label="Next maintenance"><input className="input" type="date" value={form.nextMaintenanceDate ?? ""} onChange={(event) => setForm({ ...form, nextMaintenanceDate: event.target.value })} /></Field>
       <Field label="Next verification"><input className="input" type="date" value={form.nextVerificationDate ?? ""} onChange={(event) => setForm({ ...form, nextVerificationDate: event.target.value })} /></Field>
-      <Field label="Grant restrictions"><textarea className="textarea" rows={3} value={form.grantRestrictions ?? ""} onChange={(event) => setForm({ ...form, grantRestrictions: event.target.value })} /></Field>
-      <Field label="Insurance notes"><textarea className="textarea" rows={3} value={form.insuranceNotes ?? ""} onChange={(event) => setForm({ ...form, insuranceNotes: event.target.value })} /></Field>
-      <Field label="Disposal rules"><textarea className="textarea" rows={3} value={form.disposalRules ?? ""} onChange={(event) => setForm({ ...form, disposalRules: event.target.value })} /></Field>
-      <Field label="Notes"><textarea className="textarea" rows={3} value={form.notes ?? ""} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></Field>
+      <Field label="Grant restrictions"><MarkdownEditor rows={3} value={form.grantRestrictions ?? ""} onChange={(markdown) => setForm({ ...form, grantRestrictions: markdown })} /></Field>
+      <Field label="Insurance notes"><MarkdownEditor rows={3} value={form.insuranceNotes ?? ""} onChange={(markdown) => setForm({ ...form, insuranceNotes: markdown })} /></Field>
+      <Field label="Disposal rules"><MarkdownEditor rows={3} value={form.disposalRules ?? ""} onChange={(markdown) => setForm({ ...form, disposalRules: markdown })} /></Field>
+      <Field label="Notes"><MarkdownEditor rows={3} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
     </div>
   );
 }
@@ -552,7 +553,7 @@ function CustodyForm({ form, setForm }: { form: any; setForm: (form: any) => voi
       <Field label="Condition"><Select value={form.condition} options={ASSET_CONDITIONS} onChange={(condition) => setForm({ ...form, condition })} /></Field>
       <Field label="Expected return"><input className="input" type="date" value={form.expectedReturnDate} onChange={(event) => setForm({ ...form, expectedReturnDate: event.target.value })} /></Field>
       <Field label="Acceptance signature"><input className="input" value={form.acceptanceSignature} onChange={(event) => setForm({ ...form, acceptanceSignature: event.target.value })} /></Field>
-      <Field label="Notes"><textarea className="textarea" rows={4} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></Field>
+      <Field label="Notes"><MarkdownEditor rows={4} value={form.notes} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
     </div>
   );
 }
@@ -564,7 +565,7 @@ function MaintenanceForm({ form, setForm }: { form: any; setForm: (form: any) =>
       <Field label="Kind"><Select value={form.kind} options={MAINTENANCE_KINDS} onChange={(kind) => setForm({ ...form, kind })} /></Field>
       <Field label="Due date"><input className="input" type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })} /></Field>
       <Field label="Create task"><label className="checkbox"><input type="checkbox" checked={Boolean(form.createTask)} onChange={(event) => setForm({ ...form, createTask: event.target.checked })} /> Add to Tasks</label></Field>
-      <Field label="Notes"><textarea className="textarea" rows={4} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></Field>
+      <Field label="Notes"><MarkdownEditor rows={4} value={form.notes} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
     </div>
   );
 }
@@ -575,8 +576,8 @@ function DisposalForm({ form, setForm }: { form: any; setForm: (form: any) => vo
       <Field label="Disposed at"><input className="input" type="date" value={form.disposedAt} onChange={(event) => setForm({ ...form, disposedAt: event.target.value })} /></Field>
       <Field label="Method"><Select value={form.disposalMethod} options={["sold", "donated", "recycled", "destroyed", "lost", "returned to funder"]} onChange={(disposalMethod) => setForm({ ...form, disposalMethod })} /></Field>
       <Field label="Disposal value"><input className="input" value={form.disposalValue} onChange={(event) => setForm({ ...form, disposalValue: event.target.value })} /></Field>
-      <Field label="Reason"><textarea className="textarea" rows={3} value={form.disposalReason} onChange={(event) => setForm({ ...form, disposalReason: event.target.value })} /></Field>
-      <Field label="Notes"><textarea className="textarea" rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></Field>
+      <Field label="Reason"><MarkdownEditor rows={3} value={form.disposalReason} onChange={(markdown) => setForm({ ...form, disposalReason: markdown })} /></Field>
+      <Field label="Notes"><MarkdownEditor rows={3} value={form.notes} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { centsToDollarInput, dollarInputToCents } from "../lib/format";
 import { useToast } from "./Toast";
 import { Drawer, Field } from "./ui";
+import { MarkdownEditor } from "./MarkdownEditor";
 import { Select } from "./Select";
 
 const COLLECTION_MODELS = [
@@ -326,10 +327,10 @@ export function StudentLevyIntakeDrawer({
           </Field>
         </div>
         <Field label="Schedule notes">
-          <textarea
-            className="textarea"
+          <MarkdownEditor
+            rows={4}
             value={draft.collectionScheduleNotes}
-            onChange={(event) => setDraft({ ...draft, collectionScheduleNotes: event.target.value })}
+            onChange={(markdown) => setDraft({ ...draft, collectionScheduleNotes: markdown })}
           />
         </Field>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -401,10 +402,10 @@ export function StudentLevyIntakeDrawer({
           </Field>
         </div>
         <Field label="Notes">
-          <textarea
-            className="textarea"
+          <MarkdownEditor
+            rows={4}
             value={draft.notes}
-            onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
+            onChange={(markdown) => setDraft({ ...draft, notes: markdown })}
           />
         </Field>
 
@@ -497,10 +498,10 @@ export function StudentLevyIntakeDrawer({
                   />
                 </Field>
                 <Field label="Period notes">
-                  <textarea
-                    className="textarea"
+                  <MarkdownEditor
+                    rows={4}
                     value={row.notes}
-                    onChange={(event) => updateFee(index, { notes: event.target.value })}
+                    onChange={(markdown) => updateFee(index, { notes: markdown })}
                   />
                 </Field>
               </div>

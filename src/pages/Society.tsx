@@ -15,6 +15,7 @@ import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
 import { JURISDICTION_OPTIONS } from "../lib/jurisdictionGuideTracks";
 import { optionLabel } from "../lib/orgHubOptions";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 const CORE_ONBOARDING_STEPS = [
   "Society profile",
@@ -145,7 +146,7 @@ export function SocietyNewPage() {
                 </Field>
               </div>
               <Field label="Purposes (from constitution)">
-                <textarea className="textarea" value={form.purposes} onChange={(e) => set("purposes", e.target.value)} />
+                <MarkdownEditor rows={4} value={form.purposes} onChange={(markdown) => set("purposes", markdown)} />
               </Field>
               <div className="society-toggle-stack">
                 <Toggle checked={form.isCharity} onChange={(v) => set("isCharity", v)} label="Registered CRA charity" />
@@ -402,11 +403,11 @@ export function SocietyPage() {
                 reason="The society's purposes are part of the constitution. Changing them requires a special resolution (≥ 2/3 vote) and a constitution alteration filed via Societies Online ($50 fee). Charities must also notify the CRA."
               >
                 {(locked) => (
-                  <textarea
-                    className="textarea"
-                    disabled={locked}
+                  <MarkdownEditor
+                    rows={4}
+                    readOnly={locked}
                     value={form.purposes ?? ""}
-                    onChange={(e) => set("purposes", e.target.value)}
+                    onChange={(markdown) => set("purposes", markdown)}
                   />
                 )}
               </LockedField>

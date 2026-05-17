@@ -12,6 +12,7 @@ import { DatePicker } from "../components/DatePicker";
 import { ListTodo, Plus, Target } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { patchInList } from "../lib/optimistic";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 const STATUSES = ["NotStarted", "OnTrack", "AtRisk", "OffTrack", "Completed"];
 const CATEGORIES = ["Strategic", "Operational", "Program", "Fundraising", "Governance"];
@@ -204,7 +205,7 @@ export function GoalsPage() {
         {form && (
           <div>
             <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
-            <Field label="Description"><textarea className="textarea" value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
+            <Field label="Description"><MarkdownEditor rows={4} value={form.description ?? ""} onChange={(markdown) => setForm({ ...form, description: markdown })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Category">
                 <Select

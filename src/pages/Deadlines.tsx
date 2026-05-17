@@ -22,6 +22,7 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 type DeadlineStatus = "open" | "complete" | "closed";
 type StatusFilter = "open" | "complete" | "closed" | "all";
@@ -265,7 +266,7 @@ export function DeadlinesPage() {
         {form && (
           <div>
             <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
-            <Field label="Description"><textarea className="textarea" value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
+            <Field label="Description"><MarkdownEditor rows={4} value={form.description ?? ""} onChange={(markdown) => setForm({ ...form, description: markdown })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Category">
                 <Select
