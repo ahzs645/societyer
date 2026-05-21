@@ -196,8 +196,11 @@
   --z-modal:            91;
   --z-popover:          95;   /* popovers that may float above modals */
   --z-command-palette:  100;
-  --z-toast:            105;
-  --z-tooltip:          110;
+  /* Toast/tooltip sit above the Modal component's stack (it hardcodes its
+   * base z at 1000 and grows from there with stacked dialogs). Keeping these
+   * above 2000 ensures errors/notices stay readable over any open modal. */
+  --z-toast:            2000;
+  --z-tooltip:          2010;
 
   /* ---------------- Overlay backdrops ---------------- */
   --bg-overlay-scrim:       rgba(10, 10, 10, 0.28);
