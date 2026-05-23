@@ -1903,6 +1903,43 @@
 .name-autocomplete__option.is-highlighted {
   background: var(--bg-hover);
 }
+.name-autocomplete__option.has-remove {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 4px;
+}
+.name-autocomplete__option-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.name-autocomplete__remove {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 80ms ease, background 80ms ease, color 80ms ease;
+}
+.name-autocomplete__option:hover .name-autocomplete__remove,
+.name-autocomplete__option.is-highlighted .name-autocomplete__remove,
+.name-autocomplete__remove:focus-visible {
+  opacity: 1;
+}
+.name-autocomplete__remove:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
 .meeting-reminder-chip {
   // Match the .badge--success / .badge--accent visual treatment: soft tinted
   // background, bold tone-coloured text, transparent border. This resolves

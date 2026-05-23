@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { X } from "lucide-react";
 
 /**
  * Styled name-autocomplete input. Replaces the browser's native <datalist>
@@ -22,6 +23,7 @@ export function NameAutocomplete({
   ariaLabel,
   className = "input",
   onCommit,
+  onRemoveOption,
   inputProps,
 }: {
   value: string;
@@ -32,6 +34,9 @@ export function NameAutocomplete({
   ariaLabel?: string;
   className?: string;
   onCommit?: (value: string) => void;
+  /** When provided, each suggestion shows a ✕ that calls this with the
+   * option's value. Useful for letting users hide a stale suggestion. */
+  onRemoveOption?: (value: string) => void;
   inputProps?: Omit<
     React.InputHTMLAttributes<HTMLInputElement>,
     "value" | "onChange" | "placeholder" | "className" | "role" | "aria-expanded" | "aria-autocomplete" | "aria-label"
@@ -122,7 +127,7 @@ export function NameAutocomplete({
               key={option}
               role="option"
               aria-selected={idx === highlightIndex}
-              className={`name-autocomplete__option${idx === highlightIndex ? " is-highlighted" : ""}`}
+              className={`name-autocomplete__option${idx === highlightIndex ? " is-highlighted" : ""}${onRemoveOption ? " has-remove" : ""}`}
               onMouseDown={(event) => {
                 // preventDefault keeps the input focused so onBlur doesn't
                 // race with this click and close the dropdown first.
@@ -131,7 +136,22 @@ export function NameAutocomplete({
               }}
               onMouseEnter={() => setHighlightIndex(idx)}
             >
-              {option}
+              <span className="name-autocomplete__option-label">{option}</span>
+              {onRemoveOption && (
+                <button
+                  type="button"
+                  className="name-autocomplete__remove"
+                  aria-label={`Remove suggestion ${option}`}
+                  onMouseDown={(event) => {
+                    // Beat the parent li's onMouseDown that selects the option.
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onRemoveOption(option);
+                  }}
+                >
+                  <X size={12} />
+                </button>
+              )}
             </li>
           ))}
         </ul>

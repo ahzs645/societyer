@@ -12,13 +12,17 @@ import { DateTimeInput } from "../components/DateTimeInput";
 import { Toggle } from "../components/Controls";
 import { Tooltip } from "../components/Tooltip";
 import { useToast } from "../components/Toast";
-import { Plus, Calendar, Tag, AlertTriangle, BookMarked, Monitor } from "lucide-react";
+import { Plus, Calendar, Tag, AlertTriangle, BookMarked, Monitor, MoreHorizontal, Pencil, Trash2, ExternalLink } from "lucide-react";
 import { formatDateTime } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { CalendarView } from "../components/CalendarView";
 import type { ToneVariant } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { NameAutocomplete } from "../components/NameAutocomplete";
+import { Menu, type MenuSection } from "../components/Menu";
+import { ContextMenu } from "../components/ContextMenu";
+import { useConfirm } from "../components/Modal";
+import { useHiddenSuggestions, looksLikeLink } from "../lib/hiddenSuggestions";
 import type { Doc } from "../../convex/_generated/dataModel";
 
 const OVERLAP_WINDOW_MS = 2 * 60 * 60 * 1000; // within 2 hours counts as concurrent
@@ -80,8 +84,15 @@ export function MeetingsPage() {
     society && form?.scheduledAt ? { societyId: society._id, dateISO: form.scheduledAt } : "skip",
   );
   const create = useMutation(api.meetings.create);
+  const updateMeeting = useMutation(api.meetings.update);
+  const removeMeeting = useMutation(api.meetings.remove);
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const toast = useToast();
+  const [editingId, setEditingId] = useState<Doc<"meetings">["_id"] | null>(null);
+  const [contextMenu, setContextMenu] = useState<
+    { x: number; y: number; meeting: Doc<"meetings"> } | null
+  >(null);
   const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
   const noticeMaxDays = rules?.generalNoticeMaxDays ?? 60;
   const effectiveRules = formRules ?? rules;
@@ -89,6 +100,7 @@ export function MeetingsPage() {
   const effectiveNoticeMaxDays = effectiveRules?.generalNoticeMaxDays ?? noticeMaxDays;
 
   const conflicts = useMemo(() => computeConflicts(meetings ?? []), [meetings]);
+  const { hide: hideLocationSuggestion, isHidden: isHiddenLocation } = useHiddenSuggestions("meeting-location");
   const recentLocations = useMemo(() => {
     const sorted = (meetings ?? [])
       .filter((m) => m.location && m.location.trim())
@@ -99,15 +111,18 @@ export function MeetingsPage() {
       const loc = m.location!.trim();
       const key = loc.toLowerCase();
       if (seen.has(key)) continue;
+      if (looksLikeLink(loc)) continue;
+      if (isHiddenLocation(loc)) continue;
       seen.add(key);
       out.push(loc);
     }
     return out;
-  }, [meetings]);
+  }, [meetings, isHiddenLocation]);
   const defaultTemplate =
     (meetingTemplates ?? []).find((template) => template.isDefault) ?? (meetingTemplates ?? [])[0];
 
   const openNew = (overrides: Partial<MeetingDraft> = {}) => {
+    setEditingId(null);
     setForm({
       type: "Board", title: "",
       scheduledAt: toDateTimeLocalValue(new Date(Date.now() + noticeMinDays * 864e5)),
@@ -121,6 +136,70 @@ export function MeetingsPage() {
     });
     setOpen(true);
   };
+
+  const openEdit = (meeting: Doc<"meetings">) => {
+    setEditingId(meeting._id);
+    setForm({
+      type: meeting.type,
+      title: meeting.title,
+      scheduledAt: meeting.scheduledAt,
+      location: meeting.location ?? "",
+      electronic: !!meeting.electronic,
+      quorumRequired: meeting.quorumRequired != null ? String(meeting.quorumRequired) : "",
+      status: meeting.status,
+      attendeeIds: meeting.attendeeIds ?? [],
+      meetingTemplateId: meeting.meetingTemplateId ? String(meeting.meetingTemplateId) : "",
+      notes: meeting.notes ?? "",
+    });
+    setOpen(true);
+  };
+
+  const handleDelete = async (meeting: Doc<"meetings">) => {
+    const hasMinutes = !!meeting.minutesId;
+    const ok = await confirm({
+      title: `Delete "${meeting.title}"?`,
+      message: hasMinutes
+        ? "This meeting has recorded minutes attached. Deleting it removes the meeting record but the minutes document will be orphaned."
+        : "This will remove the meeting from the schedule. This action cannot be undone.",
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (!ok) return;
+    await removeMeeting({ id: meeting._id });
+    toast.success("Meeting deleted", meeting.title);
+  };
+
+  const meetingMenuSections = (meeting: Doc<"meetings">): MenuSection[] => [
+    {
+      id: "actions",
+      items: [
+        {
+          id: "open",
+          label: "Open",
+          icon: <ExternalLink size={14} />,
+          onSelect: () => navigate(`/app/meetings/${meeting._id}`),
+        },
+        {
+          id: "edit",
+          label: "Edit",
+          icon: <Pencil size={14} />,
+          onSelect: () => openEdit(meeting),
+        },
+      ],
+    },
+    {
+      id: "danger",
+      items: [
+        {
+          id: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          destructive: true,
+          onSelect: () => { void handleDelete(meeting); },
+        },
+      ],
+    },
+  ];
 
   useEffect(() => {
     if (!society || open || !meetingTemplates) return;
@@ -149,6 +228,25 @@ export function MeetingsPage() {
     if (!form) return;
     if (isGeneralMeeting(form.type) && !meetsNoticeWindow(form.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays)) {
       toast.error(`General meetings need ${effectiveNoticeMinDays}–${effectiveNoticeMaxDays} days of notice.`);
+      return;
+    }
+    if (editingId) {
+      await updateMeeting({
+        id: editingId,
+        patch: {
+          type: form.type,
+          title: form.title,
+          scheduledAt: form.scheduledAt,
+          location: form.location,
+          electronic: form.electronic,
+          quorumRequired: numberOrUndefined(form.quorumRequired),
+          status: form.status,
+          attendeeIds: form.attendeeIds,
+          notes: form.notes,
+        },
+      });
+      setOpen(false);
+      toast.success("Meeting updated", form.title);
       return;
     }
     const meetingId = await create({
@@ -230,7 +328,29 @@ export function MeetingsPage() {
           defaultSort={{ columnId: "scheduledAt", dir: "desc" }}
           viewsKey="meetings"
           sharedViewsContext={{ societyId: society._id, nameSingular: "meeting" }}
-          onRowClick={(row) => navigate(`/app/meetings/${row._id}`)}
+          onRowClick={(row) => openEdit(row)}
+          onPrimaryCellClick={(row) => navigate(`/app/meetings/${row._id}`)}
+          onRowContextMenu={(event, row) => {
+            event.preventDefault();
+            setContextMenu({ x: event.clientX, y: event.clientY, meeting: row });
+          }}
+          renderRowActions={(row) => (
+            <Menu
+              align="right"
+              minWidth={180}
+              sections={meetingMenuSections(row)}
+              trigger={
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Actions for ${row.title}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreHorizontal size={14} />
+                </button>
+              }
+            />
+          )}
           emptyMessage={
             <EmptyState
               icon={<Calendar size={18} />}
@@ -249,6 +369,14 @@ export function MeetingsPage() {
               id: "type", header: "Type", sortable: true,
               accessor: (r) => r.type,
               render: (r) => <Badge tone={r.type === "AGM" ? "accent" : r.type === "SGM" ? "warn" : "info"}>{r.type}</Badge>,
+              editable: {
+                type: "select",
+                options: ["Board", "Committee", "AGM", "SGM"],
+                getValue: (r) => r.type,
+                onCommit: async (r, v) => {
+                  await updateMeeting({ id: r._id, patch: { type: v } });
+                },
+              },
             },
             {
               id: "scheduledAt", header: "When", sortable: true,
@@ -299,11 +427,29 @@ export function MeetingsPage() {
                   </span>
                 );
               },
+              editable: {
+                type: "autocomplete",
+                getValue: (r) => r.location ?? "",
+                options: recentLocations,
+                onRemoveOption: hideLocationSuggestion,
+                placeholder: "Venue or join link",
+                onCommit: async (r, v) => {
+                  await updateMeeting({ id: r._id, patch: { location: v } });
+                },
+              },
             },
             {
               id: "status", header: "Status", sortable: true,
               accessor: (r) => r.status,
               render: (r) => <Badge tone={meetingStatusTone(r.status)}>{r.status}</Badge>,
+              editable: {
+                type: "select",
+                options: ["Scheduled", "Held", "Cancelled"],
+                getValue: (r) => r.status,
+                onCommit: async (r, v) => {
+                  await updateMeeting({ id: r._id, patch: { status: v } });
+                },
+              },
             },
             {
               id: "minutes", header: "Minutes",
@@ -314,8 +460,8 @@ export function MeetingsPage() {
       )}
 
       <Drawer
-        open={open} onClose={() => setOpen(false)} title="Schedule meeting"
-        footer={<><button className="btn" type="button" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" type="button" onClick={save}>Schedule</button></>}
+        open={open} onClose={() => setOpen(false)} title={editingId ? "Edit meeting" : "Schedule meeting"}
+        footer={<><button className="btn" type="button" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" type="button" onClick={save}>{editingId ? "Save" : "Schedule"}</button></>}
       >
         {form && (
           <div>
@@ -327,7 +473,7 @@ export function MeetingsPage() {
                 </div>
               </div>
             ) : null}
-            <div className="meeting-template-picker">
+            {!editingId && <div className="meeting-template-picker">
               <Field label="Template">
                 <Select
                   value={form.meetingTemplateId}
@@ -349,7 +495,7 @@ export function MeetingsPage() {
               ) : (
                 <p className="meeting-template-picker__summary">Start with an empty agenda and add sections from the meeting page.</p>
               )}
-            </div>
+            </div>}
             <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Type">
@@ -368,6 +514,7 @@ export function MeetingsPage() {
                 value={form.location}
                 onChange={(v) => setForm({ ...form, location: v })}
                 options={recentLocations}
+                onRemoveOption={hideLocationSuggestion}
                 placeholder={form.electronic ? "Zoom, Teams, or join link…" : "Where is it being held?"}
                 ariaLabel="Venue or join link"
               />
@@ -434,6 +581,12 @@ export function MeetingsPage() {
           </div>
         )}
       </Drawer>
+
+      <ContextMenu
+        position={contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null}
+        sections={contextMenu ? meetingMenuSections(contextMenu.meeting) : []}
+        onClose={() => setContextMenu(null)}
+      />
     </div>
   );
 }
