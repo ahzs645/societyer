@@ -12,12 +12,13 @@ import { DateTimeInput } from "../components/DateTimeInput";
 import { Toggle } from "../components/Controls";
 import { Tooltip } from "../components/Tooltip";
 import { useToast } from "../components/Toast";
-import { Plus, Calendar, Tag, AlertTriangle, BookMarked } from "lucide-react";
+import { Plus, Calendar, Tag, AlertTriangle, BookMarked, Monitor } from "lucide-react";
 import { formatDateTime } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { CalendarView } from "../components/CalendarView";
 import type { ToneVariant } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { NameAutocomplete } from "../components/NameAutocomplete";
 import type { Doc } from "../../convex/_generated/dataModel";
 
 const OVERLAP_WINDOW_MS = 2 * 60 * 60 * 1000; // within 2 hours counts as concurrent
@@ -88,6 +89,21 @@ export function MeetingsPage() {
   const effectiveNoticeMaxDays = effectiveRules?.generalNoticeMaxDays ?? noticeMaxDays;
 
   const conflicts = useMemo(() => computeConflicts(meetings ?? []), [meetings]);
+  const recentLocations = useMemo(() => {
+    const sorted = (meetings ?? [])
+      .filter((m) => m.location && m.location.trim())
+      .sort((a, b) => (b.scheduledAt ?? "").localeCompare(a.scheduledAt ?? ""));
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const m of sorted) {
+      const loc = m.location!.trim();
+      const key = loc.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(loc);
+    }
+    return out;
+  }, [meetings]);
   const defaultTemplate =
     (meetingTemplates ?? []).find((template) => template.isDefault) ?? (meetingTemplates ?? [])[0];
 
@@ -264,11 +280,25 @@ export function MeetingsPage() {
             {
               id: "location", header: "Location", sortable: true,
               accessor: (r) => r.location ?? "",
-              render: (r) => (
-                <span>
-                  {r.location ?? "—"} {r.electronic && <Badge tone="info">Electronic</Badge>}
-                </span>
-              ),
+              render: (r) => {
+                const hasLocation = !!r.location;
+                if (!hasLocation && !r.electronic) return <span className="muted">—</span>;
+                return (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    {r.electronic && (
+                      <Tooltip content="Electronic participation permitted">
+                        <span
+                          aria-label="Electronic participation permitted"
+                          style={{ display: "inline-flex", alignItems: "center", color: "var(--info, #3b82f6)" }}
+                        >
+                          <Monitor size={14} />
+                        </span>
+                      </Tooltip>
+                    )}
+                    <span>{hasLocation ? r.location : <span className="muted">Online</span>}</span>
+                  </span>
+                );
+              },
             },
             {
               id: "status", header: "Status", sortable: true,
@@ -333,7 +363,15 @@ export function MeetingsPage() {
                 <DateTimeInput value={form.scheduledAt} onChange={(v) => setForm({ ...form, scheduledAt: v })} />
               </Field>
             </div>
-            <Field label="Location"><input className="input" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></Field>
+            <Field label="Venue / link">
+              <NameAutocomplete
+                value={form.location}
+                onChange={(v) => setForm({ ...form, location: v })}
+                options={recentLocations}
+                placeholder={form.electronic ? "Zoom, Teams, or join link…" : "Where is it being held?"}
+                ariaLabel="Venue or join link"
+              />
+            </Field>
             <Toggle
               checked={form.electronic}
               onChange={(v) => setForm({ ...form, electronic: v })}
