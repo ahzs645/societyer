@@ -157,41 +157,62 @@ export const create = mutation({
         });
       }
     }
-    if (template && templateItems.length > 0) {
-      const attendees = Array.isArray(args.attendeeIds) ? args.attendeeIds.map(String) : [];
-      const quorumRequired = args.quorumRequired ?? snapshot.quorumRequired;
-      const minutesId = await ctx.db.insert("minutes", {
-        societyId: args.societyId,
-        meetingId,
-        heldAt: args.scheduledAt,
-        attendees,
-        absent: [],
-        quorumMet: quorumRequired == null ? false : attendees.length >= quorumRequired,
-        quorumRequired: quorumRequired ?? undefined,
-        bylawRuleSetId: args.bylawRuleSetId ?? snapshot.bylawRuleSetId,
-        quorumRuleVersion: args.quorumRuleVersion ?? snapshot.quorumRuleVersion,
-        quorumRuleEffectiveFromISO:
-          args.quorumRuleEffectiveFromISO ??
-          snapshot.quorumRuleEffectiveFromISO,
-        quorumSourceLabel: args.quorumSourceLabel ?? snapshot.quorumSourceLabel,
-        quorumComputedAtISO:
-          args.quorumComputedAtISO ?? snapshot.quorumComputedAtISO,
-        discussion: "",
-        sections: templateItems.map((item) => ({
-          title: resolveTemplateText(item.title, templateContext),
-          type: item.sectionType ?? inferAgendaSectionType(item.title),
-          presenter: item.presenter || undefined,
-          discussion: item.details ? resolveTemplateText(item.details, templateContext) : "",
-          decisions: [],
-          actionItems: [],
-          depth: item.depth,
-        })),
-        motions: templateMotions,
-        decisions: [],
-        actionItems: [],
-      });
-      await ctx.db.patch(meetingId, { minutesId });
+    // Resolve attendees. Explicit form input wins; otherwise auto-snapshot
+    // current directors for Board meetings. One-shot at create time only —
+    // edits never re-seed, so the user can manage the list freely afterwards.
+    let attendees = Array.isArray(args.attendeeIds) ? args.attendeeIds.map(String) : [];
+    if (attendees.length === 0 && args.type === "Board") {
+      const allDirectors = await ctx.db
+        .query("directors")
+        .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+        .collect();
+      const todayISO = new Date().toISOString().slice(0, 10);
+      attendees = allDirectors
+        .filter((d) => {
+          const status = String(d.status ?? "").toLowerCase();
+          if (status && !["active", "current", "verified"].includes(status)) return false;
+          const end = d.termEnd || d.resignedAt;
+          if (!end) return true;
+          return String(end).slice(0, 10) >= todayISO;
+        })
+        .map((d) => `${d.firstName ?? ""} ${d.lastName ?? ""}`.trim())
+        .filter(Boolean);
     }
+
+    const quorumRequired = args.quorumRequired ?? snapshot.quorumRequired;
+    const minutesId = await ctx.db.insert("minutes", {
+      societyId: args.societyId,
+      meetingId,
+      heldAt: args.scheduledAt,
+      attendees,
+      absent: [],
+      quorumMet: quorumRequired == null ? false : attendees.length >= quorumRequired,
+      quorumRequired: quorumRequired ?? undefined,
+      bylawRuleSetId: args.bylawRuleSetId ?? snapshot.bylawRuleSetId,
+      quorumRuleVersion: args.quorumRuleVersion ?? snapshot.quorumRuleVersion,
+      quorumRuleEffectiveFromISO:
+        args.quorumRuleEffectiveFromISO ??
+        snapshot.quorumRuleEffectiveFromISO,
+      quorumSourceLabel: args.quorumSourceLabel ?? snapshot.quorumSourceLabel,
+      quorumComputedAtISO:
+        args.quorumComputedAtISO ?? snapshot.quorumComputedAtISO,
+      discussion: "",
+      sections: templateItems.length > 0
+        ? templateItems.map((item) => ({
+            title: resolveTemplateText(item.title, templateContext),
+            type: item.sectionType ?? inferAgendaSectionType(item.title),
+            presenter: item.presenter || undefined,
+            discussion: item.details ? resolveTemplateText(item.details, templateContext) : "",
+            decisions: [],
+            actionItems: [],
+            depth: item.depth,
+          }))
+        : [],
+      motions: templateMotions,
+      decisions: [],
+      actionItems: [],
+    });
+    await ctx.db.patch(meetingId, { minutesId });
     return meetingId;
   },
 });

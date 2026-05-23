@@ -1042,11 +1042,8 @@ export function MeetingDetailPage() {
       ...minutes.attendees.map((name: string) => ({ name, status: "present" as const })),
       ...minutes.absent.map((name: string) => ({ name, status: "absent" as const })),
     ];
-    const seedDirectors = existing.length === 0
-      ? attendanceRowsForDirectors(currentDirectors)
-      : [];
     setAttendanceEdit({
-      people: [...existing, ...seedDirectors],
+      people: existing,
       quorumMet: minutes.quorumMet,
     });
   };

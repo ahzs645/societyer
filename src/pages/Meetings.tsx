@@ -453,7 +453,7 @@ export function MeetingsPage() {
             },
             {
               id: "minutes", header: "Minutes",
-              render: (r) => r.minutesId ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>,
+              render: (r) => r.status === "Held" ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>,
             },
           ]}
         />

@@ -895,8 +895,23 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
                   className={`${col.className ?? ""}${isFocused ? " is-focused" : ""}`.trim() || undefined}
                   style={{ textAlign: col.align }}
                   onClick={(e) => {
+                    if (isEditable) {
+                      setFocusedCell({ row: rowIndex, col: index });
+                      e.stopPropagation();
+                      return;
+                    }
+                    // For the first cell, the inner button stops propagation
+                    // when hit directly. This branch only runs when the click
+                    // landed on td padding around the button — treat that as
+                    // the same action so it doesn't fall through to the row
+                    // click (which usually opens an edit drawer). Skip the
+                    // focus ring since we're about to navigate away.
+                    if (index === 0 && (onPrimaryCellClick || onRowClick)) {
+                      e.stopPropagation();
+                      (onPrimaryCellClick ?? onRowClick)!(row);
+                      return;
+                    }
                     setFocusedCell({ row: rowIndex, col: index });
-                    if (isEditable) e.stopPropagation();
                   }}
                 >
                   {isEditable ? (

@@ -209,7 +209,7 @@ export function CommitteeDetailPage() {
                     <td className="table__cell--mono">{formatDateTime(m.scheduledAt)}</td>
                     <td>{m.location ?? "—"} {m.electronic && <Badge tone="info">Electronic</Badge>}</td>
                     <td><Badge tone={m.status === "Held" ? "success" : "warn"}>{m.status}</Badge></td>
-                    <td>{m.minutesId ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>}</td>
+                    <td>{m.status === "Held" ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>}</td>
                   </tr>
                 ))}
               {meetings.length === 0 && <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 24 }}>No meetings yet.</td></tr>}
