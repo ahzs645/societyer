@@ -2081,7 +2081,8 @@
 }
 /* Body row hover — uses --bg-hover (one step deeper than --bg-secondary)
  * so rows read as interactive and the action-reveal transition is obvious. */
-.table tbody tr:hover td {
+.table tbody tr:hover td,
+.table tbody tr:hover td[data-col-index="0"] {
   background: var(--bg-hover);
 }
 .table tbody tr[role="button"]:focus-visible {
