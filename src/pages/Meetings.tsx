@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Badge, Drawer, EmptyState, Field, Pill } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { Select } from "../components/Select";
 import { DateTimeInput } from "../components/DateTimeInput";
 import { Toggle } from "../components/Controls";
+import { Tooltip } from "../components/Tooltip";
 import { useToast } from "../components/Toast";
 import { Plus, Calendar, Tag, AlertTriangle, BookMarked } from "lucide-react";
 import { formatDateTime } from "../lib/format";
@@ -17,10 +18,11 @@ import { useBylawRules } from "../hooks/useBylawRules";
 import { CalendarView } from "../components/CalendarView";
 import type { ToneVariant } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import type { Doc } from "../../convex/_generated/dataModel";
 
 const OVERLAP_WINDOW_MS = 2 * 60 * 60 * 1000; // within 2 hours counts as concurrent
 
-function computeConflicts(meetings: any[]): Map<string, string[]> {
+function computeConflicts(meetings: Doc<"meetings">[]): Map<string, string[]> {
   const byTime = meetings
     .filter((m) => m.status !== "Cancelled")
     .map((m) => ({ id: m._id, title: m.title, ts: new Date(m.scheduledAt).getTime() }))
@@ -36,7 +38,7 @@ function computeConflicts(meetings: any[]): Map<string, string[]> {
   return out;
 }
 
-const MEETING_FIELDS: FilterField<any>[] = [
+const MEETING_FIELDS: FilterField<Doc<"meetings">>[] = [
   { id: "title", label: "Title", icon: <Tag size={14} />, match: (m, q) => m.title.toLowerCase().includes(q.toLowerCase()) },
   { id: "type", label: "Type", icon: <Tag size={14} />, options: ["Board", "Committee", "AGM", "SGM"], match: (m, q) => m.type === q },
   { id: "status", label: "Status", icon: <Tag size={14} />, options: ["Scheduled", "Held", "Cancelled"], match: (m, q) => m.status === q },
@@ -61,8 +63,13 @@ type MeetingDraft = {
 export function MeetingsPage() {
   const society = useSociety();
   const { rules } = useBylawRules();
-  const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
-  const meetingTemplates = useQuery(api.meetingTemplates.list, society ? { societyId: society._id } : "skip");
+  const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip") as
+    | Doc<"meetings">[]
+    | undefined;
+  const meetingTemplates = useQuery(
+    api.meetingTemplates.list,
+    society ? { societyId: society._id } : "skip",
+  ) as Doc<"meetingTemplates">[] | undefined;
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<MeetingDraft | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
@@ -76,9 +83,13 @@ export function MeetingsPage() {
   const toast = useToast();
   const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
   const noticeMaxDays = rules?.generalNoticeMaxDays ?? 60;
+  const effectiveRules = formRules ?? rules;
+  const effectiveNoticeMinDays = effectiveRules?.generalNoticeMinDays ?? noticeMinDays;
+  const effectiveNoticeMaxDays = effectiveRules?.generalNoticeMaxDays ?? noticeMaxDays;
 
-  const conflicts = computeConflicts(meetings ?? []);
-  const defaultTemplate = (meetingTemplates ?? []).find((template: any) => template.isDefault) ?? (meetingTemplates ?? [])[0];
+  const conflicts = useMemo(() => computeConflicts(meetings ?? []), [meetings]);
+  const defaultTemplate =
+    (meetingTemplates ?? []).find((template) => template.isDefault) ?? (meetingTemplates ?? [])[0];
 
   const openNew = (overrides: Partial<MeetingDraft> = {}) => {
     setForm({
@@ -96,7 +107,7 @@ export function MeetingsPage() {
   };
 
   useEffect(() => {
-    if (!society || open) return;
+    if (!society || open || !meetingTemplates) return;
     const intent = params.get("intent");
     if (intent !== "create" && intent !== "generate-agm-package") return;
     const type = params.get("type") === "AGM" ? "AGM" : "Board";
@@ -114,20 +125,12 @@ export function MeetingsPage() {
       next.delete("type");
       return next;
     }, { replace: true });
-  }, [open, params, setParams, society]);
-
-  useEffect(() => {
-    if (!open || !form || form.meetingTemplateId || !defaultTemplate?._id) return;
-    setForm({ ...form, meetingTemplateId: String(defaultTemplate._id) });
-  }, [defaultTemplate?._id, form, open]);
+  }, [open, params, setParams, society, meetingTemplates]);
 
   if (society === undefined) return <div className="page meetings-page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
   const save = async () => {
     if (!form) return;
-    const effectiveRules = formRules ?? rules;
-    const effectiveNoticeMinDays = effectiveRules?.generalNoticeMinDays ?? noticeMinDays;
-    const effectiveNoticeMaxDays = effectiveRules?.generalNoticeMaxDays ?? noticeMaxDays;
     if (isGeneralMeeting(form.type) && !meetsNoticeWindow(form.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays)) {
       toast.error(`General meetings need ${effectiveNoticeMinDays}–${effectiveNoticeMaxDays} days of notice.`);
       return;
@@ -149,9 +152,14 @@ export function MeetingsPage() {
         title="Meetings"
         icon={<Calendar size={16} />}
         iconColor="orange"
-        subtitle={`Board meetings, committee meetings, and general meetings (AGM/SGM). Active notice rule: ${noticeMinDays}–${noticeMaxDays} days.`}
+        subtitle="Board meetings, committee meetings, and general meetings (AGM/SGM)."
         actions={
-          <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
+            <Tooltip content="Required notice window for general meetings under the active bylaw rule set.">
+              <Pill tone="info" size="sm">
+                Notice: {noticeMinDays}–{noticeMaxDays} days
+              </Pill>
+            </Tooltip>
             <div className="segmented" role="tablist" aria-label="Meeting view">
               <button
                 type="button"
@@ -185,7 +193,7 @@ export function MeetingsPage() {
           </div>
           <div className="card__body">
             <CalendarView
-              items={(meetings ?? []) as any[]}
+              items={meetings ?? []}
               getDate={(meeting) => meeting.scheduledAt}
               getLabel={(meeting) => `${meetingTimeLabel(meeting.scheduledAt)} ${meeting.title}`}
               getTone={(meeting) => meetingStatusTone(meeting.status)}
@@ -198,7 +206,8 @@ export function MeetingsPage() {
         <DataTable
           label="All meetings"
           icon={<Calendar size={14} />}
-          data={(meetings ?? []) as any[]}
+          data={meetings ?? []}
+          loading={meetings === undefined}
           rowKey={(r) => r._id}
           filterFields={MEETING_FIELDS}
           searchPlaceholder="Search meetings…"
@@ -206,6 +215,18 @@ export function MeetingsPage() {
           viewsKey="meetings"
           sharedViewsContext={{ societyId: society._id, nameSingular: "meeting" }}
           onRowClick={(row) => navigate(`/app/meetings/${row._id}`)}
+          emptyMessage={
+            <EmptyState
+              icon={<Calendar size={18} />}
+              title="No meetings scheduled yet"
+              description="Schedule a board, committee, or general meeting to start tracking agendas, attendees, and minutes."
+              action={
+                <button className="btn btn--accent" type="button" onClick={() => openNew()}>
+                  <Plus size={12} /> Schedule meeting
+                </button>
+              }
+            />
+          }
           columns={[
             { id: "title", header: "Title", sortable: true, accessor: (r) => r.title, render: (r) => <strong>{r.title}</strong> },
             {
@@ -222,15 +243,19 @@ export function MeetingsPage() {
                   <span>
                     <span className="mono">{formatDateTime(r.scheduledAt)}</span>
                     {overlap && (
-                      <span
-                        title={`Overlaps with: ${overlap.join(", ")}`}
-                        style={{ marginLeft: 6, display: "inline-flex", alignItems: "center" }}
-                      >
-                        <Badge tone="warn">
-                          <AlertTriangle size={10} style={{ marginRight: 3, verticalAlign: -1 }} />
-                          {overlap.length} concurrent
-                        </Badge>
-                      </span>
+                      <Tooltip content={`Overlaps with: ${overlap.join(", ")}`}>
+                        <span
+                          aria-label={`${overlap.length} concurrent meeting${overlap.length === 1 ? "" : "s"}: ${overlap.join(", ")}`}
+                          style={{
+                            marginLeft: 6,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            color: "var(--warn, #c78b00)",
+                          }}
+                        >
+                          <AlertTriangle size={12} />
+                        </span>
+                      </Tooltip>
                     )}
                   </span>
                 );
@@ -264,19 +289,14 @@ export function MeetingsPage() {
       >
         {form && (
           <div>
-            {(() => {
-              const effectiveRules = formRules ?? rules;
-              const effectiveNoticeMinDays = effectiveRules?.generalNoticeMinDays ?? noticeMinDays;
-              const effectiveNoticeMaxDays = effectiveRules?.generalNoticeMaxDays ?? noticeMaxDays;
-              return isGeneralMeeting(form.type) && !meetsNoticeWindow(form.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays) ? (
+            {isGeneralMeeting(form.type) && !meetsNoticeWindow(form.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays) ? (
               <div className="flag flag--warn" style={{ marginBottom: 12 }}>
                 <AlertTriangle />
                 <div>
                   General meetings should be scheduled with {effectiveNoticeMinDays}–{effectiveNoticeMaxDays} days of notice under the rule set effective on this meeting date.
                 </div>
               </div>
-              ) : null;
-            })()}
+            ) : null}
             <div className="meeting-template-picker">
               <Field label="Template">
                 <Select
@@ -284,7 +304,7 @@ export function MeetingsPage() {
                   onChange={(v) => setForm({ ...form, meetingTemplateId: v })}
                   options={[
                     { value: "", label: "Blank meeting" },
-                    ...(meetingTemplates ?? []).map((template: any) => ({
+                    ...(meetingTemplates ?? []).map((template) => ({
                       value: String(template._id),
                       label: `${template.name}${template.isDefault ? " (default)" : ""}`,
                     })),
@@ -294,7 +314,7 @@ export function MeetingsPage() {
               {form.meetingTemplateId ? (
                 <p className="meeting-template-picker__summary">
                   <BookMarked size={12} style={{ verticalAlign: -2, marginRight: 4 }} />
-                  {templateSummary((meetingTemplates ?? []).find((template: any) => String(template._id) === form.meetingTemplateId))}
+                  {templateSummary((meetingTemplates ?? []).find((template) => String(template._id) === form.meetingTemplateId))}
                 </p>
               ) : (
                 <p className="meeting-template-picker__summary">Start with an empty agenda and add sections from the meeting page.</p>
@@ -317,7 +337,7 @@ export function MeetingsPage() {
             <Toggle
               checked={form.electronic}
               onChange={(v) => setForm({ ...form, electronic: v })}
-              disabled={!(formRules ?? rules)?.allowElectronicMeetings}
+              disabled={!effectiveRules?.allowElectronicMeetings}
               label="Electronic participation permitted"
             />
             <Field label="Quorum required">
@@ -325,8 +345,8 @@ export function MeetingsPage() {
                 className="input"
                 type="number"
                 placeholder={
-                  (formRules ?? rules)?.quorumType === "fixed"
-                    ? String((formRules ?? rules)?.quorumValue ?? "")
+                  effectiveRules?.quorumType === "fixed"
+                    ? String(effectiveRules?.quorumValue ?? "")
                     : "Computed for AGM/SGM"
                 }
                 value={form.quorumRequired ?? ""}
@@ -336,9 +356,9 @@ export function MeetingsPage() {
             <Field label="Notes"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
             {form.type === "AGM" && (
               <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                Reminder: AGM notice must be sent {(formRules ?? rules)?.generalNoticeMinDays ?? noticeMinDays}–{(formRules ?? rules)?.generalNoticeMaxDays ?? noticeMaxDays} days in advance.
-                {(formRules ?? rules)?.requireAgmFinancialStatements ? " Financial statements must be presented." : ""}
-                {(formRules ?? rules)?.requireAgmElections ? " Elections are expected under the effective rule set." : ""}
+                Reminder: AGM notice must be sent {effectiveNoticeMinDays}–{effectiveNoticeMaxDays} days in advance.
+                {effectiveRules?.requireAgmFinancialStatements ? " Financial statements must be presented." : ""}
+                {effectiveRules?.requireAgmElections ? " Elections are expected under the effective rule set." : ""}
               </div>
             )}
             {(() => {

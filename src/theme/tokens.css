@@ -36,6 +36,14 @@
   --bg-active: var(--gray-4);
   --bg-inverse: var(--bg-inverted-primary);
 
+  /* Floating overlay surfaces (tooltips, popovers). Unlike --bg-inverse, these
+     stay themed in both modes — a dark chip in light mode, a slightly
+     elevated dark surface in dark mode — so floating overlays don't flip to
+     a bright surface when the rest of the UI is dark. */
+  --bg-floating:     var(--gray-12);
+  --text-floating:   var(--gray-1);
+  --border-floating: transparent;
+
   /* ---------------- Borders (BORDER_LIGHT) ---------------- */
   --border-color-strong:            var(--gray-6);
   --border-color-medium:            var(--gray-5);
@@ -191,14 +199,16 @@
   --z-inspector:        31;   /* mobile inspector overlay */
   --z-drawer-backdrop:  40;
   --z-drawer:           41;
-  --z-dropdown:         80;   /* menus, selects, date/icon/color popovers */
   --z-modal-backdrop:   90;
   --z-modal:            91;
-  --z-popover:          95;   /* popovers that may float above modals */
-  --z-command-palette:  100;
-  /* Toast/tooltip sit above the Modal component's stack (it hardcodes its
-   * base z at 1000 and grows from there with stacked dialogs). Keeping these
-   * above 2000 ensures errors/notices stay readable over any open modal. */
+  /* Everything below sits above the Modal component's stack: Modal.tsx
+   * applies inline z-index starting at 1000 and grows by +2 per stacked
+   * dialog, so anything that needs to float over a modal (Select menus,
+   * popovers, palette, toasts, tooltips) must clear that band. Relative
+   * order between these layers is preserved. */
+  --z-dropdown:         1500;  /* menus, selects, date/icon/color popovers */
+  --z-popover:          1600;  /* popovers that may float above modals */
+  --z-command-palette:  1700;
   --z-toast:            2000;
   --z-tooltip:          2010;
 
@@ -258,6 +268,11 @@
   --bg-hover:  var(--gray-3);
   --bg-active: var(--gray-4);
   --bg-inverse: var(--bg-inverted-primary);
+
+  /* Floating overlay surfaces — elevated dark panel that stays themed. */
+  --bg-floating:     var(--gray-4);
+  --text-floating:   var(--gray-12);
+  --border-floating: var(--border-color-medium);
 
   /* Borders */
   --border-color-strong:            var(--gray-6);
