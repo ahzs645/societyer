@@ -5,6 +5,7 @@ export type OptionChoice = {
 
 export const ORG_HUB_OPTION_SETS = {
   entityTypes: [
+    { value: "corporation__business_", label: "Business Corporation" },
     { value: "corporation__nfp_", label: "Not-for-profit Corporation" },
     { value: "society", label: "Society" },
   ],
@@ -27,7 +28,9 @@ export const ORG_HUB_OPTION_SETS = {
     { value: "CA-BC", label: "British Columbia (Societyer code)" },
   ],
   actsFormedUnder: [
+    { value: "canada_business_corporations_act", label: "Canada Business Corporations Act" },
     { value: "canada_not_for_profit_corporations_act", label: "Canada Not-for-profit Corporations Act" },
+    { value: "business_corporations_act__ontario_", label: "Business Corporations Act (Ontario)" },
     { value: "not_for_profit_corporations_act__2010__ontario_", label: "Not-for-Profit Corporations Act, 2010 (Ontario)" },
     { value: "corporations_act__ontario_", label: "Corporations Act (Ontario)" },
     { value: "companies_act__new_brunswick_", label: "Companies Act (New Brunswick)" },

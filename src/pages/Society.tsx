@@ -14,10 +14,10 @@ import { Toggle } from "../components/Controls";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
 import { JURISDICTION_OPTIONS } from "../lib/jurisdictionGuideTracks";
-import { optionLabel } from "../lib/orgHubOptions";
+import { optionChoices, optionLabel } from "../lib/orgHubOptions";
 
 const CORE_ONBOARDING_STEPS = [
-  "Society profile",
+  "Organization profile",
   "Registered locations",
   "Governance documents",
   "People and access",
@@ -57,9 +57,17 @@ export function SocietyNewPage() {
     privacyOfficerEmail: "",
     isCharity: false,
     isMemberFunded: false,
+    distributing: false,
   });
 
   const set = (k: string, v: any) => setForm((current) => ({ ...current, [k]: v }));
+  const setJurisdiction = (jurisdictionCode: string) => {
+    setForm((current) => ({
+      ...current,
+      jurisdictionCode,
+      ...defaultsForJurisdiction(jurisdictionCode),
+    }));
+  };
   const canSave = form.name.trim().length > 0 && !saving;
 
   const save = async () => {
@@ -86,9 +94,9 @@ export function SocietyNewPage() {
             <span>Societyer setup</span>
           </div>
           <div className="society-create__copy">
-            <h1>New society workspace</h1>
+            <h1>New organization workspace</h1>
             <p>
-              Start with the society profile. Registry verification and advanced setup stay optional
+              Start with the organization profile. Registry verification and advanced setup stay optional
               until the workspace exists.
             </p>
           </div>
@@ -117,7 +125,7 @@ export function SocietyNewPage() {
           <section className="card society-create__card">
             <div className="card__head">
               <div>
-                <h2 className="card__title">Society profile</h2>
+                <h2 className="card__title">Organization profile</h2>
                 <span className="card__subtitle">The only required field right now is the legal name.</span>
               </div>
             </div>
@@ -138,7 +146,15 @@ export function SocietyNewPage() {
               </div>
               <div className="society-field-grid">
                 <Field label="Legal jurisdiction">
-                  <Select value={form.jurisdictionCode} onChange={(v) => set("jurisdictionCode", v)} options={JURISDICTION_OPTIONS} />
+                  <Select value={form.jurisdictionCode} onChange={setJurisdiction} options={JURISDICTION_OPTIONS} />
+                </Field>
+                <Field label="Entity type">
+                  <Select value={form.entityType} onChange={(v) => set("entityType", v)} options={optionChoices("entityTypes")} />
+                </Field>
+              </div>
+              <div className="society-field-grid">
+                <Field label="Act formed under">
+                  <Select value={form.actFormedUnder} onChange={(v) => set("actFormedUnder", v)} options={optionChoices("actsFormedUnder")} />
                 </Field>
                 <Field label="Official email">
                   <input className="input" type="email" value={form.officialEmail} onChange={(e) => set("officialEmail", e.target.value)} />
@@ -150,6 +166,7 @@ export function SocietyNewPage() {
               <div className="society-toggle-stack">
                 <Toggle checked={form.isCharity} onChange={(v) => set("isCharity", v)} label="Registered CRA charity" />
                 <Toggle checked={form.isMemberFunded} onChange={(v) => set("isMemberFunded", v)} label="Member-funded society" />
+                <Toggle checked={form.distributing} onChange={(v) => set("distributing", v)} label="Distributing corporation" />
               </div>
             </div>
           </section>
@@ -261,6 +278,9 @@ export function SocietyPage() {
         incorporationDate: form.incorporationDate,
         fiscalYearEnd: form.fiscalYearEnd,
         jurisdictionCode: form.jurisdictionCode ?? "CA-BC",
+        entityType: form.entityType,
+        actFormedUnder: form.actFormedUnder,
+        distributing: form.distributing,
         isCharity: form.isCharity,
         isMemberFunded: form.isMemberFunded,
         registeredOfficeAddress: registeredOfficeLine,
@@ -551,6 +571,30 @@ export function SocietyPage() {
       </div>
     </div>
   );
+}
+
+function defaultsForJurisdiction(jurisdictionCode: string) {
+  if (jurisdictionCode === "CA-FED-CBCA") {
+    return {
+      entityType: "corporation__business_",
+      actFormedUnder: "canada_business_corporations_act",
+      isMemberFunded: false,
+    };
+  }
+  if (jurisdictionCode === "CA-ON-OBCA") {
+    return {
+      entityType: "corporation__business_",
+      actFormedUnder: "business_corporations_act__ontario_",
+      isMemberFunded: false,
+    };
+  }
+  if (jurisdictionCode === "CA-BC") {
+    return {
+      entityType: "society",
+      actFormedUnder: "societies_act",
+    };
+  }
+  return {};
 }
 
 function AddressSummary({ label, row, fallback, hint }: { label: string; row?: any; fallback?: string; hint?: string }) {

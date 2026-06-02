@@ -27,7 +27,7 @@ export function LegalGuideBadge({
           {rule.caveatText && <span>{rule.caveatText}</span>}
           <span>{formatGuideDateRange(rule)}</span>
           {rule.sourceCurrentToISO && (
-            <span>BC Laws source current to {formatDate(rule.sourceCurrentToISO)}.</span>
+            <span>Source current to {formatDate(rule.sourceCurrentToISO)}.</span>
           )}
         </div>
       }

@@ -47,7 +47,7 @@ type OptionSetName =
   | "suffixCompanyNames";
 
 export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
-  entityTypes: ["corporation__nfp_", "society"],
+  entityTypes: ["corporation__business_", "corporation__nfp_", "society"],
   entityJurisdictions: [
     "federal__canada_",
     "ontario",
@@ -67,7 +67,9 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
     "CA-BC",
   ],
   actsFormedUnder: [
+    "canada_business_corporations_act",
     "canada_not_for_profit_corporations_act",
+    "business_corporations_act__ontario_",
     "not_for_profit_corporations_act__2010__ontario_",
     "corporations_act__ontario_",
     "companies_act__new_brunswick_",

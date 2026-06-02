@@ -115,6 +115,9 @@ export const createWorkspace = mutation({
     entityType: v.optional(v.string()),
     actFormedUnder: v.optional(v.string()),
     officialEmail: v.optional(v.string()),
+    numbered: v.optional(v.boolean()),
+    distributing: v.optional(v.boolean()),
+    solicitingPublicBenefit: v.optional(v.boolean()),
     organizationStatus: v.optional(v.string()),
     registeredOfficeAddress: v.optional(v.string()),
     mailingAddress: v.optional(v.string()),
@@ -150,6 +153,9 @@ export const createWorkspace = mutation({
       entityType: blankToUndefined(args.entityType),
       actFormedUnder: blankToUndefined(args.actFormedUnder),
       officialEmail: blankToUndefined(args.officialEmail),
+      numbered: args.numbered,
+      distributing: args.distributing,
+      solicitingPublicBenefit: args.solicitingPublicBenefit,
       organizationStatus: args.organizationStatus ?? "active",
       registeredOfficeAddress: blankToUndefined(args.registeredOfficeAddress),
       mailingAddress: blankToUndefined(args.mailingAddress),
@@ -168,7 +174,7 @@ export const createWorkspace = mutation({
       name: "Workspace onboarding",
       status: "active",
       provider: "internal",
-      nodePreview: workspaceOnboardingNodes(),
+      nodePreview: buildWorkspaceOnboardingNodes(args),
       trigger: { kind: "manual" },
       config: {
         source: "createWorkspace",
@@ -197,7 +203,7 @@ export const createWorkspace = mutation({
     });
 
     const taskIds = [];
-    for (const task of workspaceOnboardingTasks(args)) {
+    for (const task of buildWorkspaceOnboardingTasks(args)) {
       taskIds.push(await ctx.db.insert("tasks", {
         societyId,
         workflowId,
@@ -267,20 +273,21 @@ function blankToUndefined(value?: string) {
   return trimmed ? trimmed : undefined;
 }
 
-function workspaceOnboardingNodes() {
+export function buildWorkspaceOnboardingNodes(args: any = {}) {
+  const registry = registryOnboardingCopy(args);
   return [
     {
       key: "profile",
       type: "form",
-      label: "Society profile",
-      description: "Legal name, incorporation number/date, fiscal year end, jurisdiction, purposes, charity/member-funded flags, and official email.",
+      label: "Organization profile",
+      description: "Legal name, incorporation number/date, fiscal year end, jurisdiction, governing act, key status flags, and official email.",
       status: "ready",
     },
     {
       key: "registry_optional",
       type: "form",
-      label: "Registry verification",
-      description: "Optional check for registry status, last annual report, filing history, key custody, authorized filers, and BC Registry connector setup.",
+      label: registry.label,
+      description: registry.nodeDescription,
       status: "draft",
     },
     {
@@ -314,16 +321,17 @@ function workspaceOnboardingNodes() {
   ];
 }
 
-function workspaceOnboardingTasks(args: any) {
+export function buildWorkspaceOnboardingTasks(args: any) {
   const missingIdentity = [
     !args.incorporationNumber ? "incorporation number" : null,
     !args.incorporationDate ? "incorporation date" : null,
     !args.fiscalYearEnd ? "fiscal year end" : null,
   ].filter(Boolean);
+  const registry = registryOnboardingCopy(args);
   return [
     {
-      title: "Optional: verify BC Registry access",
-      description: `Confirm registry status, last annual report, filing history, registry key custody, authorized filers, and whether to connect the BC Registry browser workspace.${missingIdentity.length ? ` Missing profile fields now: ${missingIdentity.join(", ")}.` : ""}`,
+      title: registry.taskTitle,
+      description: `${registry.taskDescription}${missingIdentity.length ? ` Missing profile fields now: ${missingIdentity.join(", ")}.` : ""}`,
       priority: missingIdentity.length ? "High" : "Medium",
       tags: ["optional", "registry"],
     },
@@ -352,4 +360,46 @@ function workspaceOnboardingTasks(args: any) {
       tags: ["optional", "advanced-setup"],
     },
   ];
+}
+
+function registryOnboardingCopy(args: any) {
+  const jurisdictionCode = args?.jurisdictionCode ?? "CA-BC";
+  if (jurisdictionCode === "CA-BC") {
+    return {
+      label: "BC Registry verification",
+      nodeDescription:
+        "Optional check for registry status, last annual report, filing history, key custody, authorized filers, and BC Registry connector setup.",
+      taskTitle: "Optional: verify BC Registry access",
+      taskDescription:
+        "Confirm registry status, last annual report, filing history, registry key custody, authorized filers, and whether to connect the BC Registry browser workspace.",
+    };
+  }
+  if (jurisdictionCode === "CA-FED-CBCA") {
+    return {
+      label: "Corporations Canada verification",
+      nodeDescription:
+        "Optional check for federal corporation status, annual-return history, anniversary date, corporation key custody, authorized filers, and Corporations Canada source documents.",
+      taskTitle: "Optional: verify Corporations Canada access",
+      taskDescription:
+        "Confirm federal corporation status, anniversary date, annual-return history, corporation key custody, authorized filers, and whether source documents should be archived.",
+    };
+  }
+  if (jurisdictionCode === "CA-ON-OBCA") {
+    return {
+      label: "Ontario Business Registry verification",
+      nodeDescription:
+        "Optional check for Ontario registry status, initial return, annual returns, notices of change, company key custody, authorized filers, and profile-report evidence.",
+      taskTitle: "Optional: verify Ontario Business Registry access",
+      taskDescription:
+        "Confirm Ontario registry status, initial return, annual returns, notices of change, company key custody, authorized filers, and whether profile-report evidence should be archived.",
+    };
+  }
+  return {
+    label: "Registry verification",
+    nodeDescription:
+      "Optional check for registry status, filing history, key custody, authorized filers, and source-document evidence.",
+    taskTitle: "Optional: verify registry access",
+    taskDescription:
+      "Confirm registry status, filing history, key custody, authorized filers, and source-document evidence for this jurisdiction.",
+  };
 }
