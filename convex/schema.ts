@@ -926,15 +926,124 @@ export default defineSchema({
     societyId: v.id("societies"),
     connectionId: v.id("financialConnections"),
     externalId: v.string(),
+    code: v.optional(v.string()),
     name: v.string(),
     currency: v.string(),
     accountType: v.string(), // Bank | Credit | Income | Expense | Asset | Liability | Equity
+    subtype: v.optional(v.string()),
     balanceCents: v.number(),
     isRestricted: v.boolean(),
     restrictedPurpose: v.optional(v.string()),
+    sourceSystem: v.optional(v.string()), // societyer | ledgersmb | wave | csv | browser
+    normalBalance: v.optional(v.string()), // debit | credit
   })
     .index("by_society", ["societyId"])
+    .index("by_connection", ["connectionId"])
+    .index("by_society_code", ["societyId", "code"])
+    .index("by_society_external", ["societyId", "externalId"]),
+
+  accountingFiscalPeriods: defineTable({
+    societyId: v.id("societies"),
+    fiscalYear: v.string(),
+    periodLabel: v.string(),
+    startDate: v.string(),
+    endDate: v.string(),
+    status: v.string(), // open | closed | archived
+    closedAtISO: v.optional(v.string()),
+    closedByUserId: v.optional(v.id("users")),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_fiscal_year", ["societyId", "fiscalYear"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  accountingCounterparties: defineTable({
+    societyId: v.id("societies"),
+    name: v.string(),
+    kind: v.string(), // vendor | customer | funder | member | employee | government | other
+    provider: v.optional(v.string()), // ledgersmb | wave | societyer
+    externalId: v.optional(v.string()),
+    email: v.optional(v.string()),
+    taxIdentifier: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_kind", ["societyId", "kind"])
+    .index("by_society_external", ["societyId", "externalId"]),
+
+  fundRestrictions: defineTable({
+    societyId: v.id("societies"),
+    name: v.string(),
+    purpose: v.string(),
+    status: v.string(), // active | released | archived
+    linkedGrantId: v.optional(v.id("grants")),
+    linkedFinancialAccountId: v.optional(v.id("financialAccounts")),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_grant", ["linkedGrantId"]),
+
+  journalEntries: defineTable({
+    societyId: v.id("societies"),
+    connectionId: v.optional(v.id("financialConnections")),
+    fiscalPeriodId: v.optional(v.id("accountingFiscalPeriods")),
+    entryNumber: v.optional(v.string()),
+    reference: v.optional(v.string()),
+    date: v.string(),
+    memo: v.string(),
+    source: v.string(), // manual | ledgersmb | wave | csv | browser | receipt | grant | payroll | filing
+    sourceExternalId: v.optional(v.string()),
+    status: v.string(), // draft | posted | void
+    fiscalYear: v.optional(v.string()),
+    createdByUserId: v.optional(v.id("users")),
+    postedAtISO: v.optional(v.string()),
+    voidedAtISO: v.optional(v.string()),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    rawJson: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_date", ["societyId", "date"])
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_society_source", ["societyId", "source"])
     .index("by_connection", ["connectionId"]),
+
+  journalLines: defineTable({
+    societyId: v.id("societies"),
+    journalEntryId: v.id("journalEntries"),
+    accountId: v.id("financialAccounts"),
+    lineOrder: v.number(),
+    amountCents: v.number(),
+    side: v.string(), // debit | credit
+    description: v.optional(v.string()),
+    counterpartyId: v.optional(v.id("accountingCounterparties")),
+    grantId: v.optional(v.id("grants")),
+    fundRestrictionId: v.optional(v.id("fundRestrictions")),
+    financialTransactionId: v.optional(v.id("financialTransactions")),
+    transactionCandidateId: v.optional(v.id("transactionCandidates")),
+    documentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalId: v.optional(v.string()),
+    rawJson: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_entry", ["journalEntryId"])
+    .index("by_account", ["accountId"])
+    .index("by_counterparty", ["counterpartyId"])
+    .index("by_grant", ["grantId"])
+    .index("by_fund_restriction", ["fundRestrictionId"]),
 
   financialTransactions: defineTable({
     societyId: v.id("societies"),
@@ -964,6 +1073,24 @@ export default defineSchema({
     .index("by_society_counterparty_external_type", ["societyId", "counterpartyExternalId", "counterpartyResourceType"])
     .index("by_society_category_account_external", ["societyId", "categoryAccountExternalId"])
     .index("by_society_category", ["societyId", "category"]),
+
+  reconciliationRuns: defineTable({
+    societyId: v.id("societies"),
+    financialAccountId: v.id("financialAccounts"),
+    statementDate: v.string(),
+    statementBalanceCents: v.number(),
+    bookBalanceCents: v.optional(v.number()),
+    status: v.string(), // draft | ready | reconciled | reopened
+    reconciledAtISO: v.optional(v.string()),
+    reconciledByUserId: v.optional(v.id("users")),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_account", ["financialAccountId"])
+    .index("by_society_status", ["societyId", "status"]),
 
   budgets: defineTable({
     societyId: v.id("societies"),

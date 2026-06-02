@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { ConvexProvider, type ConvexReactClient } from "convex/react";
 import { convex } from "./lib/convex";
-import { isStaticDemoRuntime } from "./lib/staticRuntime";
+import { isLocalDataRuntime, isStaticDemoRuntime } from "./lib/staticRuntime";
 import { AuthProvider } from "./auth/AuthProvider";
 import { AuthGate } from "./components/AuthGate";
 import { Layout } from "./components/Layout";
@@ -147,6 +147,7 @@ function AppProviders({ client }: { client: ConvexReactClient }) {
 }
 
 const staticDemoRuntime = isStaticDemoRuntime();
+const localDataRuntime = isLocalDataRuntime();
 const routerBasename = staticDemoRuntime ? "/demo" : import.meta.env.BASE_URL;
 
 function PageLoader() {
@@ -157,11 +158,11 @@ function PageLoader() {
 
 function AsyncAppProviders() {
   const [convexClient, setConvexClient] = React.useState<ConvexReactClient | null>(
-    () => (staticDemoRuntime ? null : convex),
+    () => (localDataRuntime ? null : convex),
   );
 
   React.useEffect(() => {
-    if (!staticDemoRuntime) return;
+    if (!localDataRuntime) return;
     let active = true;
     import("./lib/staticConvex").then(({ staticConvex }) => {
       if (active) setConvexClient(staticConvex as unknown as ConvexReactClient);
@@ -217,9 +218,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       >
         <Suspense fallback={<PageLoader />}>
         <Routes>
-          {!staticDemoRuntime && <Route path="/" element={<LandingPage />} />}
+          {!localDataRuntime && <Route path="/" element={<LandingPage />} />}
           <Route element={<AsyncAppProviders />}>
-            {staticDemoRuntime && (
+            {localDataRuntime && (
               <Route
                 path="/"
                 element={

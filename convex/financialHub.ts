@@ -14,6 +14,29 @@ function normalizeCategoryLabel(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
 }
 
+function validateJournalLines(lines: Array<{ amountCents: number; side: string }>) {
+  if (lines.length < 2) {
+    throw new Error("A journal entry needs at least two lines.");
+  }
+  let debitCents = 0;
+  let creditCents = 0;
+  for (const line of lines) {
+    if (line.amountCents <= 0) {
+      throw new Error("Journal line amounts must be positive cents.");
+    }
+    if (line.side === "debit") {
+      debitCents += line.amountCents;
+    } else if (line.side === "credit") {
+      creditCents += line.amountCents;
+    } else {
+      throw new Error("Journal line side must be debit or credit.");
+    }
+  }
+  if (debitCents !== creditCents) {
+    throw new Error("Journal entry is not balanced.");
+  }
+}
+
 export const connections = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
@@ -34,6 +57,54 @@ export const accounts = query({
       .collect(),
 });
 
+export const fiscalPeriods = query({
+  args: { societyId: v.id("societies"), fiscalYear: v.optional(v.string()) },
+  returns: v.any(),
+  handler: async (ctx, { societyId, fiscalYear }) => {
+    const rows = await ctx.db
+      .query("accountingFiscalPeriods")
+      .withIndex("by_society_fiscal_year", (q) =>
+        fiscalYear ? q.eq("societyId", societyId).eq("fiscalYear", fiscalYear) : q.eq("societyId", societyId),
+      )
+      .collect();
+    return rows.sort((a, b) => a.startDate.localeCompare(b.startDate));
+  },
+});
+
+export const counterparties = query({
+  args: { societyId: v.id("societies"), kind: v.optional(v.string()) },
+  returns: v.any(),
+  handler: async (ctx, { societyId, kind }) => {
+    const rows = await (kind
+      ? ctx.db
+          .query("accountingCounterparties")
+          .withIndex("by_society_kind", (q) => q.eq("societyId", societyId).eq("kind", kind))
+          .collect()
+      : ctx.db
+          .query("accountingCounterparties")
+          .withIndex("by_society", (q) => q.eq("societyId", societyId))
+          .collect());
+    return rows.sort((a, b) => a.name.localeCompare(b.name));
+  },
+});
+
+export const fundRestrictions = query({
+  args: { societyId: v.id("societies"), status: v.optional(v.string()) },
+  returns: v.any(),
+  handler: async (ctx, { societyId, status }) => {
+    const rows = await (status
+      ? ctx.db
+          .query("fundRestrictions")
+          .withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", status))
+          .collect()
+      : ctx.db
+          .query("fundRestrictions")
+          .withIndex("by_society", (q) => q.eq("societyId", societyId))
+          .collect());
+    return rows.sort((a, b) => a.name.localeCompare(b.name));
+  },
+});
+
 export const transactions = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
@@ -43,6 +114,130 @@ export const transactions = query({
       .withIndex("by_society_date", (q) => q.eq("societyId", societyId))
       .order("desc")
       .take(limit ?? 100),
+});
+
+export const journalEntries = query({
+  args: { societyId: v.id("societies"), status: v.optional(v.string()), limit: v.optional(v.number()) },
+  returns: v.any(),
+  handler: async (ctx, { societyId, status, limit }) => {
+    const entries = await (status
+      ? ctx.db
+          .query("journalEntries")
+          .withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", status))
+          .collect()
+      : ctx.db
+          .query("journalEntries")
+          .withIndex("by_society_date", (q) => q.eq("societyId", societyId))
+          .order("desc")
+          .take(limit ?? 100));
+    const sorted = entries.sort((a, b) => b.date.localeCompare(a.date)).slice(0, limit ?? 100);
+    const lines = await Promise.all(
+      sorted.map((entry) =>
+        ctx.db
+          .query("journalLines")
+          .withIndex("by_entry", (q) => q.eq("journalEntryId", entry._id))
+          .collect(),
+      ),
+    );
+    return sorted.map((entry, index) => ({
+      ...entry,
+      lines: lines[index].sort((a, b) => a.lineOrder - b.lineOrder),
+    }));
+  },
+});
+
+export const journalEntry = query({
+  args: { id: v.id("journalEntries") },
+  returns: v.any(),
+  handler: async (ctx, { id }) => {
+    const entry = await ctx.db.get(id);
+    if (!entry) return null;
+    const lines = await ctx.db
+      .query("journalLines")
+      .withIndex("by_entry", (q) => q.eq("journalEntryId", id))
+      .collect();
+    return {
+      ...entry,
+      lines: lines.sort((a, b) => a.lineOrder - b.lineOrder),
+    };
+  },
+});
+
+export const upsertJournalEntry = mutation({
+  args: {
+    id: v.optional(v.id("journalEntries")),
+    societyId: v.id("societies"),
+    connectionId: v.optional(v.id("financialConnections")),
+    fiscalPeriodId: v.optional(v.id("accountingFiscalPeriods")),
+    entryNumber: v.optional(v.string()),
+    reference: v.optional(v.string()),
+    date: v.string(),
+    memo: v.string(),
+    source: v.string(),
+    sourceExternalId: v.optional(v.string()),
+    status: v.string(),
+    fiscalYear: v.optional(v.string()),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    rawJson: v.optional(v.string()),
+    lines: v.array(
+      v.object({
+        id: v.optional(v.id("journalLines")),
+        accountId: v.id("financialAccounts"),
+        amountCents: v.number(),
+        side: v.string(),
+        description: v.optional(v.string()),
+        counterpartyId: v.optional(v.id("accountingCounterparties")),
+        grantId: v.optional(v.id("grants")),
+        fundRestrictionId: v.optional(v.id("fundRestrictions")),
+        financialTransactionId: v.optional(v.id("financialTransactions")),
+        transactionCandidateId: v.optional(v.id("transactionCandidates")),
+        documentIds: v.optional(v.array(v.id("documents"))),
+        sourceExternalId: v.optional(v.string()),
+        rawJson: v.optional(v.string()),
+      }),
+    ),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    await requireRole(ctx, {
+      actingUserId: args.actingUserId,
+      societyId: args.societyId,
+      required: "Director",
+    });
+    validateJournalLines(args.lines);
+    const now = new Date().toISOString();
+    const { id, lines, actingUserId, ...entry } = args;
+    const postedAtISO = entry.status === "posted" ? now : undefined;
+    const entryId = id
+      ? (await ctx.db.patch(id, { ...entry, postedAtISO, updatedAtISO: now }), id)
+      : await ctx.db.insert("journalEntries", {
+          ...entry,
+          createdByUserId: actingUserId,
+          postedAtISO,
+          createdAtISO: now,
+          updatedAtISO: now,
+        });
+
+    const existingLines = await ctx.db
+      .query("journalLines")
+      .withIndex("by_entry", (q) => q.eq("journalEntryId", entryId))
+      .collect();
+    for (const line of existingLines) await ctx.db.delete(line._id);
+
+    for (const [index, line] of lines.entries()) {
+      const { id: _lineId, ...payload } = line;
+      await ctx.db.insert("journalLines", {
+        societyId: args.societyId,
+        journalEntryId: entryId,
+        lineOrder: index,
+        ...payload,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    }
+    return entryId;
+  },
 });
 
 export const transactionsForAccountExternalId = query({
