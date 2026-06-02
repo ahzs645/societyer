@@ -32,6 +32,11 @@ type WorkspaceInfo = {
   rootPath: string;
 };
 
+type DesktopConfig = {
+  workspaceRoot?: string;
+  setupComplete?: boolean;
+};
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = process.env.VITE_DEV_SERVER_URL || process.env.SOCIETYER_ELECTRON_DEV === "1";
 
@@ -39,10 +44,42 @@ let mainWindow: BrowserWindow | null = null;
 let workspaceRoot: string | null = null;
 let workspaceInfo: WorkspaceInfo | null = null;
 
+function configPath() {
+  return path.join(app.getPath("userData"), "desktop-config.json");
+}
+
+async function readDesktopConfig(): Promise<DesktopConfig> {
+  try {
+    const parsed = JSON.parse(await readFile(configPath(), "utf8"));
+    return {
+      workspaceRoot: typeof parsed.workspaceRoot === "string" ? parsed.workspaceRoot : undefined,
+      setupComplete: parsed.setupComplete === true,
+    };
+  } catch {
+    return {};
+  }
+}
+
+async function writeDesktopConfig(next: DesktopConfig) {
+  await mkdir(app.getPath("userData"), { recursive: true });
+  await writeFile(configPath(), JSON.stringify(next, null, 2));
+}
+
+async function updateDesktopConfig(patch: DesktopConfig) {
+  const current = await readDesktopConfig();
+  const next = { ...current, ...patch };
+  await writeDesktopConfig(next);
+  return next;
+}
+
 async function ensureWorkspace() {
   if (workspaceRoot && workspaceInfo) return { root: workspaceRoot, info: workspaceInfo };
 
-  const root = process.env.SOCIETYER_WORKSPACE_DIR || path.join(app.getPath("userData"), "workspace");
+  const config = await readDesktopConfig();
+  const root =
+    process.env.SOCIETYER_WORKSPACE_DIR ||
+    config.workspaceRoot ||
+    path.join(app.getPath("userData"), "workspace");
   workspaceRoot = root;
   workspaceInfo = await readOrCreateWorkspaceInfo(root);
   return { root, info: workspaceInfo };
@@ -162,9 +199,18 @@ function registerIpc() {
     if (result.canceled || !result.filePaths[0]) return null;
     workspaceRoot = result.filePaths[0];
     workspaceInfo = await readOrCreateWorkspaceInfo(workspaceRoot);
+    await updateDesktopConfig({ workspaceRoot });
     return workspaceRoot;
   });
   ipcMain.handle("societyer:getWorkspaceInfo", async () => (await ensureWorkspace()).info);
+  ipcMain.handle("societyer:getSetupState", async () => {
+    const config = await readDesktopConfig();
+    return { complete: config.setupComplete === true };
+  });
+  ipcMain.handle("societyer:setSetupComplete", async (_event, complete: boolean) => {
+    const config = await updateDesktopConfig({ setupComplete: complete === true });
+    return { complete: config.setupComplete === true };
+  });
   ipcMain.handle("societyer:writeDocumentVersion", (_event, input: WriteDocumentVersionInput) => writeDocumentVersion(input));
   ipcMain.handle("societyer:readDocumentVersion", (_event, input: ReadDocumentVersionInput) => readDocumentVersion(input));
   ipcMain.handle("societyer:openDocumentVersion", (_event, input: ReadDocumentVersionInput) => openDocumentVersion(input));
@@ -189,7 +235,7 @@ async function createWindow() {
   if (isDev) {
     await mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL || "http://127.0.0.1:5173");
   } else {
-    await mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
+    await mainWindow.loadFile(path.resolve(__dirname, "../../dist/index.html"));
   }
 }
 

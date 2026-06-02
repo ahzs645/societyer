@@ -1,6 +1,6 @@
 import React, { Suspense } from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { BrowserRouter, HashRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { ConvexProvider, type ConvexReactClient } from "convex/react";
 import { convex } from "./lib/convex";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "./lib/staticRuntime";
@@ -153,7 +153,8 @@ function AppProviders({ client }: { client: ConvexReactClient }) {
 const staticDemoRuntime = isStaticDemoRuntime();
 const localDataRuntime = isLocalDataRuntime();
 const electronLocalRuntime = getRuntimeMode() === "electron-local";
-const routerBasename = staticDemoRuntime ? "/demo" : import.meta.env.BASE_URL;
+const Router = electronLocalRuntime ? HashRouter : BrowserRouter;
+const routerBasename = electronLocalRuntime ? undefined : staticDemoRuntime ? "/demo" : import.meta.env.BASE_URL;
 
 function PageLoader() {
   return (
@@ -217,7 +218,7 @@ function RootErrorFallback() {
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary label="root" fallback={<RootErrorFallback />}>
-      <BrowserRouter
+      <Router
         basename={routerBasename}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
@@ -495,7 +496,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>
-      </BrowserRouter>
+      </Router>
     </ErrorBoundary>
   </React.StrictMode>,
 );

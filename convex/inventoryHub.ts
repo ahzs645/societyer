@@ -188,6 +188,56 @@ export const stockMovements = query({
       .take(limit ?? 100),
 });
 
+export const receiptLinks = query({
+  args: { societyId: v.id("societies"), inventoryItemId: v.optional(v.id("inventoryItems")) },
+  returns: v.any(),
+  handler: async (ctx, { societyId, inventoryItemId }) => {
+    const rows = inventoryItemId
+      ? await ctx.db
+          .query("assetReceiptLinks")
+          .withIndex("by_inventory_item", (q: any) => q.eq("inventoryItemId", inventoryItemId))
+          .collect()
+      : await ctx.db
+          .query("assetReceiptLinks")
+          .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+          .collect();
+    const scoped = rows.filter((row: any) => row.societyId === societyId);
+    const documents = await Promise.all(scoped.map((row: any) => ctx.db.get(row.receiptDocumentId)));
+    const assets = await Promise.all(scoped.map((row: any) => ctx.db.get(row.assetId)));
+    return scoped.map((row: any, index: number) => ({
+      ...row,
+      receiptDocument: documents[index],
+      asset: assets[index],
+    }));
+  },
+});
+
+export const counts = query({
+  args: { societyId: v.id("societies"), status: v.optional(v.string()) },
+  returns: v.any(),
+  handler: async (ctx, { societyId, status }) => {
+    const rows = await (status
+      ? ctx.db
+          .query("inventoryCounts")
+          .withIndex("by_society_status", (q: any) => q.eq("societyId", societyId).eq("status", status))
+          .collect()
+      : ctx.db
+          .query("inventoryCounts")
+          .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+          .collect());
+    const sorted = rows.sort((a: any, b: any) => b.startedAtISO.localeCompare(a.startedAtISO));
+    const lines = await Promise.all(
+      sorted.map((count: any) =>
+        ctx.db
+          .query("inventoryCountLines")
+          .withIndex("by_count", (q: any) => q.eq("inventoryCountId", count._id))
+          .collect(),
+      ),
+    );
+    return sorted.map((count: any, index: number) => ({ ...count, lines: lines[index] }));
+  },
+});
+
 export const upsertConnection = mutation({
   args: {
     id: v.optional(v.id("inventoryConnections")),
@@ -368,6 +418,211 @@ export const postStockMovement = mutation({
     const movement = await ctx.db.get(id);
     await postMovementEffects(ctx, movement);
     return id;
+  },
+});
+
+export const postCountVarianceAdjustments = mutation({
+  args: {
+    inventoryCountId: v.id("inventoryCounts"),
+    reason: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, { inventoryCountId, reason }) => {
+    const count = await ctx.db.get(inventoryCountId);
+    if (!count) return { adjusted: 0 };
+    const now = new Date().toISOString();
+    const lines = await ctx.db
+      .query("inventoryCountLines")
+      .withIndex("by_count", (q: any) => q.eq("inventoryCountId", inventoryCountId))
+      .collect();
+    let adjusted = 0;
+    for (const line of lines) {
+      if (line.adjustmentMovementId || line.countedQuantity == null || line.expectedQuantity == null) continue;
+      const variance = line.countedQuantity - line.expectedQuantity;
+      if (variance === 0) continue;
+      const item = await ctx.db.get(line.inventoryItemId);
+      const movementId = await ctx.db.insert("stockMovements", {
+        societyId: count.societyId,
+        movementDate: now.slice(0, 10),
+        movementType: "adjustment",
+        status: "posted",
+        inventoryItemId: line.inventoryItemId,
+        inventoryLotId: line.inventoryLotId,
+        fromLocationId: variance < 0 ? line.locationId : undefined,
+        toLocationId: variance > 0 ? line.locationId : undefined,
+        quantity: Math.abs(variance),
+        unitOfMeasure: item?.unitOfMeasure ?? "each",
+        reason: reason ?? `Physical count variance: ${count.title}`,
+        reference: count.title,
+        sourceSystem: "societyer_count",
+        documentIds: count.sourceDocumentIds ?? [],
+        rawJson: JSON.stringify({ inventoryCountId, countLineId: line._id, expectedQuantity: line.expectedQuantity, countedQuantity: line.countedQuantity }),
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      const movement = await ctx.db.get(movementId);
+      await postMovementEffects(ctx, movement);
+      await ctx.db.patch(line._id, {
+        varianceQuantity: variance,
+        adjustmentMovementId: movementId,
+        status: "adjusted",
+        updatedAtISO: now,
+      });
+      adjusted += 1;
+    }
+    await ctx.db.patch(inventoryCountId, {
+      status: "completed",
+      completedAtISO: count.completedAtISO ?? now,
+      updatedAtISO: now,
+    });
+    return { adjusted };
+  },
+});
+
+export const importOpenBoxesSnapshot = mutation({
+  args: {
+    societyId: v.id("societies"),
+    connectionId: v.optional(v.id("inventoryConnections")),
+    products: v.optional(v.array(v.object({
+      id: v.string(),
+      productCode: v.optional(v.string()),
+      name: v.string(),
+      category: v.optional(v.string()),
+      unitOfMeasure: v.optional(v.string()),
+      lotAndExpiryControl: v.optional(v.boolean()),
+      serialized: v.optional(v.boolean()),
+      rawJson: v.optional(v.string()),
+    }))),
+    locations: v.optional(v.array(v.object({
+      id: v.string(),
+      name: v.string(),
+      locationType: v.optional(v.string()),
+      rawJson: v.optional(v.string()),
+    }))),
+    movements: v.optional(v.array(v.object({
+      id: v.string(),
+      date: v.string(),
+      type: v.string(),
+      productId: v.string(),
+      originLocationId: v.optional(v.string()),
+      destinationLocationId: v.optional(v.string()),
+      quantity: v.number(),
+      unitOfMeasure: v.optional(v.string()),
+      reason: v.optional(v.string()),
+      rawJson: v.optional(v.string()),
+    }))),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const now = new Date().toISOString();
+    let connectionId = args.connectionId;
+    if (!connectionId) {
+      connectionId = await ctx.db.insert("inventoryConnections", {
+        societyId: args.societyId,
+        provider: "openboxes",
+        displayName: "OpenBoxes",
+        status: "active",
+        lastSyncedAtISO: now,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    }
+    const itemByExternalId = new Map<string, any>();
+    const locationByExternalId = new Map<string, any>();
+    let itemsUpserted = 0;
+    let locationsUpserted = 0;
+    let movementsPosted = 0;
+
+    const existingItems = await ctx.db
+      .query("inventoryItems")
+      .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))
+      .collect();
+    for (const product of args.products ?? []) {
+      const existing = existingItems.find((row: any) => row.connectionId === connectionId && row.externalId === product.id);
+      const payload = {
+        societyId: args.societyId,
+        connectionId,
+        sku: product.productCode,
+        name: product.name,
+        category: product.category ?? "OpenBoxes",
+        itemType: "supply",
+        unitOfMeasure: product.unitOfMeasure ?? "each",
+        currency: "CAD",
+        trackSerial: product.serialized ?? false,
+        trackLot: product.lotAndExpiryControl ?? false,
+        trackExpiry: product.lotAndExpiryControl ?? false,
+        status: "active",
+        externalId: product.id,
+        sourceSystem: "openboxes",
+        rawJson: product.rawJson,
+        updatedAtISO: now,
+      };
+      const id = existing
+        ? (await ctx.db.patch(existing._id, payload), existing._id)
+        : await ctx.db.insert("inventoryItems", { ...payload, createdAtISO: now });
+      itemByExternalId.set(product.id, { _id: id, ...payload });
+      itemsUpserted += 1;
+    }
+
+    const existingLocations = await ctx.db
+      .query("inventoryLocations")
+      .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))
+      .collect();
+    for (const location of args.locations ?? []) {
+      const existing = existingLocations.find((row: any) => row.connectionId === connectionId && row.externalId === location.id);
+      const payload = {
+        societyId: args.societyId,
+        connectionId,
+        name: location.name,
+        locationType: location.locationType ?? "facility",
+        active: true,
+        externalId: location.id,
+        sourceSystem: "openboxes",
+        rawJson: location.rawJson,
+        updatedAtISO: now,
+      };
+      const id = existing
+        ? (await ctx.db.patch(existing._id, payload), existing._id)
+        : await ctx.db.insert("inventoryLocations", { ...payload, createdAtISO: now });
+      locationByExternalId.set(location.id, { _id: id, ...payload });
+      locationsUpserted += 1;
+    }
+
+    for (const movement of args.movements ?? []) {
+      const already = await ctx.db
+        .query("stockMovements")
+        .withIndex("by_connection_external", (q: any) => q.eq("connectionId", connectionId).eq("sourceExternalId", movement.id))
+        .first();
+      if (already) continue;
+      const item = itemByExternalId.get(movement.productId) ?? existingItems.find((row: any) => row.connectionId === connectionId && row.externalId === movement.productId);
+      if (!item) continue;
+      const from = movement.originLocationId ? locationByExternalId.get(movement.originLocationId) ?? existingLocations.find((row: any) => row.connectionId === connectionId && row.externalId === movement.originLocationId) : null;
+      const to = movement.destinationLocationId ? locationByExternalId.get(movement.destinationLocationId) ?? existingLocations.find((row: any) => row.connectionId === connectionId && row.externalId === movement.destinationLocationId) : null;
+      const movementId = await ctx.db.insert("stockMovements", {
+        societyId: args.societyId,
+        connectionId,
+        movementDate: movement.date,
+        movementType: movement.type,
+        status: "posted",
+        inventoryItemId: item._id,
+        fromLocationId: from?._id,
+        toLocationId: to?._id,
+        quantity: movement.quantity,
+        unitOfMeasure: movement.unitOfMeasure ?? item.unitOfMeasure ?? "each",
+        reason: movement.reason,
+        sourceExternalId: movement.id,
+        sourceSystem: "openboxes",
+        documentIds: [],
+        rawJson: movement.rawJson,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      const row = await ctx.db.get(movementId);
+      await postMovementEffects(ctx, row);
+      movementsPosted += 1;
+    }
+    await ctx.db.patch(connectionId, { lastSyncedAtISO: now, updatedAtISO: now });
+    return { connectionId, itemsUpserted, locationsUpserted, movementsPosted };
   },
 });
 

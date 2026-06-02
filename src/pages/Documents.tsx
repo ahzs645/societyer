@@ -17,7 +17,7 @@ import { DocumentVersionsDrawer } from "../components/DocumentVersions";
 import { PaperlessDocumentAction } from "../components/PaperlessDocumentAction";
 import { isDemoMode } from "../lib/demoMode";
 import { getDocumentStorageProvider } from "../lib/runtimeMode";
-import { writeLocalDocumentVersion } from "../lib/documentStorage";
+import { openDocumentDownloadTarget, writeLocalDocumentVersion } from "../lib/documentStorage";
 
 const CATS = ["Constitution", "Bylaws", "Minutes", "FinancialStatement", "Policy", "Filing", "Agreement", "Library", "WorkflowGenerated", "Other"] as const;
 
@@ -463,18 +463,18 @@ function DocumentQueueCard({
 function CurrentDocumentDownload({ documentId, legacyStorageId }: { documentId: any; legacyStorageId?: any }) {
   const latest = useQuery(api.documentVersions.latest, { documentId });
   const legacyUrl = useQuery(api.files.getUrl, legacyStorageId ? { storageId: legacyStorageId } : "skip");
-  const getDownloadUrl = useAction(api.documentVersions.getDownloadUrl);
+  const getDownloadTarget = useAction(api.documentVersions.getDownloadTarget);
   const toast = useToast();
 
   const open = async () => {
     if (latest) {
-      const url = await getDownloadUrl({ versionId: latest._id });
-      if (!url) return;
-      if (url.startsWith("demo://")) {
+      const target = await getDownloadTarget({ versionId: latest._id });
+      if (!target) return;
+      if (target.kind === "url" && target.url?.startsWith("demo://")) {
         toast.info("Demo mode — no real file is stored, so the download URL is simulated.");
         return;
       }
-      window.open(url, "_blank");
+      await openDocumentDownloadTarget(target);
       return;
     }
     if (legacyUrl) window.open(legacyUrl, "_blank");

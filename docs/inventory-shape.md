@@ -178,6 +178,26 @@ Important fields:
 - `grantId`
 - `fundRestrictionId`
 - `documentIds`
+
+### `assetReceiptLinks`
+
+Represents a reviewed link between one receipt/invoice line and an asset or inventory item.
+
+Important fields:
+
+- `assetId`
+- `inventoryItemId`
+- `receiptDocumentId`
+- `financialTransactionId`
+- `receiptLineLabel`
+- `receiptLineIndex`
+- `quantity`
+- `unitOfMeasure`
+- `unitCostCents`
+- `totalCostCents`
+- `sourceText`
+
+This lets Societyer answer: "Which receipt line bought this asset or stock item?" without forcing the whole receipt into the asset row. It also allows a receipt with multiple purchased items to link each line to different assets or inventory items.
 - `rawJson`
 
 OpenBoxes mapping:
@@ -297,4 +317,3 @@ Initial provider roles:
 - Snipe-IT: later adapter for IT asset-specific environments, not the first stock-ledger reference.
 
 The provider adapter should map external product, location, lot, movement, and source identifiers onto Societyer tables without forcing the UI to become provider-specific.
-

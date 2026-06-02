@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
 import { requireRole } from "./users";
+import { transactionBackfillSides, validateBalancedJournalLines } from "./lib/accountingCore";
 
 const ACCOUNT_TYPES = ["Asset", "Liability", "Equity", "Income", "Expense"] as const;
 const NORMAL_BALANCES = ["debit", "credit"] as const;
@@ -39,16 +40,7 @@ function requireOption(value: string, allowed: readonly string[], label: string)
 }
 
 function validateJournalLines(lines: Array<{ amountCents: number; side: string }>) {
-  if (lines.length < 2) throw new Error("A journal entry needs at least two lines.");
-  let debitCents = 0;
-  let creditCents = 0;
-  for (const line of lines) {
-    if (line.amountCents <= 0) throw new Error("Journal line amounts must be positive cents.");
-    if (line.side === "debit") debitCents += line.amountCents;
-    else if (line.side === "credit") creditCents += line.amountCents;
-    else throw new Error("Journal line side must be debit or credit.");
-  }
-  if (debitCents !== creditCents) throw new Error("Journal entry is not balanced.");
+  validateBalancedJournalLines(lines);
 }
 
 function csvEscape(value: unknown) {
@@ -349,6 +341,75 @@ export const exportCsv = query({
       return { filename: kind === "journal_entries" ? "journal-entries.csv" : "general-ledger.csv", contentType: "text/csv", csv: csvRows(rows) };
     }
     throw new Error("Unsupported accounting CSV export kind.");
+  },
+});
+
+export const boardAuditorPackage = query({
+  args: {
+    societyId: v.id("societies"),
+    fiscalYear: v.optional(v.string()),
+    packageKind: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, { societyId, fiscalYear, packageKind }) => {
+    const [society, trial, ledger, entries, restrictions, reconciliations] = await Promise.all([
+      ctx.db.get(societyId),
+      buildTrialBalance(ctx, societyId, fiscalYear),
+      buildGeneralLedger(ctx, societyId, fiscalYear),
+      ctx.db.query("journalEntries").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "posted")).collect(),
+      ctx.db.query("fundRestrictions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("reconciliationRuns").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ]);
+    if (!society) throw new Error("Society not found.");
+    const includedEntries = entries.filter((entry) => !fiscalYear || entry.fiscalYear === fiscalYear);
+    const documentIds = new Set<string>();
+    for (const entry of includedEntries) for (const id of entry.sourceDocumentIds ?? []) documentIds.add(String(id));
+    for (const line of ledger) for (const id of line.documentIds ?? []) documentIds.add(String(id));
+    for (const restriction of restrictions) for (const id of restriction.sourceDocumentIds ?? []) documentIds.add(String(id));
+    for (const run of reconciliations) for (const id of run.sourceDocumentIds ?? []) documentIds.add(String(id));
+    const documents = await Promise.all(Array.from(documentIds).map((id) => ctx.db.get(id as any)));
+    const attachments = documents
+      .filter(Boolean)
+      .map((document: any) => ({
+        documentId: document._id,
+        title: document.title,
+        category: document.category,
+        fileName: document.fileName,
+        storageId: document.storageId ? String(document.storageId) : undefined,
+        url: document.url,
+      }));
+    const trialRows = [["account_code", "account_name", "debit_cents", "credit_cents", "balance_cents"]];
+    for (const row of trial) trialRows.push([row.account?.code ?? "", row.account?.name ?? "", row.debitCents, row.creditCents, row.balanceCents]);
+    const ledgerRows = [["entry_date", "entry_number", "memo", "account_code", "account_name", "side", "amount_cents", "line_description", "document_ids"]];
+    for (const line of ledger) {
+      ledgerRows.push([line.entry.date, line.entry.entryNumber ?? "", line.entry.memo, line.account?.code ?? "", line.account?.name ?? "", line.side, line.amountCents, line.description ?? "", (line.documentIds ?? []).join(";")]);
+    }
+    const reconciliationRows = [["statement_date", "account_id", "statement_balance_cents", "book_balance_cents", "status"]];
+    for (const run of reconciliations) {
+      reconciliationRows.push([run.statementDate, String(run.financialAccountId), run.statementBalanceCents, run.bookBalanceCents ?? "", run.status]);
+    }
+    const manifest = {
+      packageVersion: 1,
+      packageKind: packageKind ?? "board_auditor",
+      societyId,
+      societyName: society.name,
+      fiscalYear: fiscalYear ?? null,
+      generatedAtISO: new Date().toISOString(),
+      files: ["manifest.json", "trial-balance.csv", "general-ledger.csv", "reconciliations.csv", "attachments.json"],
+      attachmentCount: attachments.length,
+    };
+    return {
+      filename: `societyer-${packageKind ?? "board-auditor"}-${fiscalYear ?? "all"}-package.zip`,
+      contentType: "application/zip",
+      files: [
+        { path: "manifest.json", content: JSON.stringify(manifest, null, 2) },
+        { path: "trial-balance.csv", content: csvRows(trialRows) },
+        { path: "general-ledger.csv", content: csvRows(ledgerRows) },
+        { path: "reconciliations.csv", content: csvRows(reconciliationRows) },
+        { path: "attachments.json", content: JSON.stringify(attachments, null, 2) },
+      ],
+      attachments,
+    };
   },
 });
 
@@ -835,6 +896,113 @@ export const postTransactionCandidateAllocation = mutation({
       notes: [candidate.notes, `Posted to allocated journal entry ${entryId}`].filter(Boolean).join("\n"),
     });
     return entryId;
+  },
+});
+
+export const backfillFinancialTransactionsToJournal = mutation({
+  args: {
+    societyId: v.id("societies"),
+    fiscalYear: v.optional(v.string()),
+    limit: v.optional(v.number()),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, { societyId, fiscalYear, limit, actingUserId }) => {
+    await requireRole(ctx, { actingUserId, societyId, required: "Admin" });
+    const [transactions, existingLines, accounts, mappings] = await Promise.all([
+      ctx.db.query("financialTransactions").withIndex("by_society_date", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("journalLines").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("accountingAccountMappings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ]);
+    const alreadyBackfilled = new Set(existingLines.map((line: any) => String(line.financialTransactionId ?? "")));
+    const accountsById = new Map(accounts.map((account: any) => [String(account._id), account]));
+    const fallbackIncome = accounts.find((account: any) => account.accountType === "Income");
+    const fallbackExpense = accounts.find((account: any) => account.accountType === "Expense");
+    const now = new Date().toISOString();
+    let scanned = 0;
+    let posted = 0;
+    let skipped = 0;
+    let needsMapping = 0;
+    for (const transaction of transactions.sort((a: any, b: any) => a.date.localeCompare(b.date))) {
+      if (posted >= (limit ?? 200)) break;
+      scanned += 1;
+      if (alreadyBackfilled.has(String(transaction._id))) {
+        skipped += 1;
+        continue;
+      }
+      const cashAccount = accountsById.get(String(transaction.accountId));
+      if (!cashAccount) {
+        needsMapping += 1;
+        continue;
+      }
+      const { cashSide, offsetSide, absoluteAmountCents, offsetKind } = transactionBackfillSides(transaction.amountCents);
+      const mapped = mappings.find((mapping: any) =>
+        mapping.status === "active" &&
+        (
+          (transaction.categoryAccountExternalId && mapping.externalAccountId === transaction.categoryAccountExternalId) ||
+          (transaction.categoryAccountExternalId && mapping.externalAccountCode === transaction.categoryAccountExternalId) ||
+          (transaction.category && mapping.externalCategory?.toLowerCase?.() === transaction.category.toLowerCase()) ||
+          (transaction.category && mapping.externalAccountName?.toLowerCase?.() === transaction.category.toLowerCase())
+        ),
+      );
+      const offsetAccount = mapped
+        ? accountsById.get(String(mapped.financialAccountId))
+        : offsetKind === "income"
+          ? fallbackIncome
+          : fallbackExpense;
+      if (!offsetAccount) {
+        needsMapping += 1;
+        continue;
+      }
+      const period = await assertPeriodOpen(ctx, { societyId, date: transaction.date });
+      const entryId = await ctx.db.insert("journalEntries", {
+        societyId,
+        connectionId: transaction.connectionId,
+        fiscalPeriodId: period?._id,
+        date: transaction.date,
+        memo: transaction.description,
+        source: "financialTransactionBackfill",
+        sourceExternalId: transaction.externalId,
+        status: "posted",
+        fiscalYear: fiscalYear ?? period?.fiscalYear,
+        createdByUserId: actingUserId,
+        postedAtISO: now,
+        rawJson: JSON.stringify(transaction),
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      await ctx.db.insert("journalLines", {
+        societyId,
+        journalEntryId: entryId,
+        accountId: transaction.accountId,
+        lineOrder: 0,
+        amountCents: absoluteAmountCents,
+        side: cashSide,
+        description: transaction.description,
+        financialTransactionId: transaction._id,
+        sourceExternalId: transaction.externalId,
+        rawJson: JSON.stringify({ backfillRole: "cash" }),
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      await ctx.db.insert("journalLines", {
+        societyId,
+        journalEntryId: entryId,
+        accountId: offsetAccount._id,
+        lineOrder: 1,
+        amountCents: absoluteAmountCents,
+        side: offsetSide,
+        description: transaction.category ?? transaction.description,
+        financialTransactionId: transaction._id,
+        sourceExternalId: transaction.categoryAccountExternalId ?? transaction.externalId,
+        rawJson: JSON.stringify({ backfillRole: "offset", mappingId: mapped?._id }),
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      posted += 1;
+    }
+    return { scanned, posted, skipped, needsMapping };
   },
 });
 

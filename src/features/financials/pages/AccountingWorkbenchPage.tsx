@@ -36,6 +36,87 @@ function downloadCsv(filename: string, csv: string) {
   URL.revokeObjectURL(url);
 }
 
+const CRC_TABLE = Array.from({ length: 256 }, (_, index) => {
+  let value = index;
+  for (let bit = 0; bit < 8; bit += 1) value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+  return value >>> 0;
+});
+
+function crc32(bytes: Uint8Array) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function writeU16(bytes: number[], value: number) {
+  bytes.push(value & 0xff, (value >>> 8) & 0xff);
+}
+
+function writeU32(bytes: number[], value: number) {
+  bytes.push(value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff);
+}
+
+function downloadZip(filename: string, files: Array<{ path: string; content: string }>) {
+  const encoder = new TextEncoder();
+  const output: number[] = [];
+  const central: number[] = [];
+  for (const file of files) {
+    const name = encoder.encode(file.path);
+    const content = encoder.encode(file.content);
+    const crc = crc32(content);
+    const offset = output.length;
+    writeU32(output, 0x04034b50);
+    writeU16(output, 20);
+    writeU16(output, 0);
+    writeU16(output, 0);
+    writeU16(output, 0);
+    writeU16(output, 0);
+    writeU32(output, crc);
+    writeU32(output, content.length);
+    writeU32(output, content.length);
+    writeU16(output, name.length);
+    writeU16(output, 0);
+    output.push(...name, ...content);
+    writeU32(central, 0x02014b50);
+    writeU16(central, 20);
+    writeU16(central, 20);
+    writeU16(central, 0);
+    writeU16(central, 0);
+    writeU16(central, 0);
+    writeU16(central, 0);
+    writeU32(central, crc);
+    writeU32(central, content.length);
+    writeU32(central, content.length);
+    writeU16(central, name.length);
+    writeU16(central, 0);
+    writeU16(central, 0);
+    writeU16(central, 0);
+    writeU16(central, 0);
+    writeU32(central, 0);
+    writeU32(central, offset);
+    central.push(...name);
+  }
+  const centralOffset = output.length;
+  output.push(...central);
+  writeU32(output, 0x06054b50);
+  writeU16(output, 0);
+  writeU16(output, 0);
+  writeU16(output, files.length);
+  writeU16(output, files.length);
+  writeU32(output, central.length);
+  writeU32(output, centralOffset);
+  writeU16(output, 0);
+  const blob = new Blob([new Uint8Array(output)], { type: "application/zip" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function AccountingWorkbenchPage() {
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
@@ -90,10 +171,12 @@ export function AccountingWorkbenchPage() {
   const postAllocation = useMutation(api.accounting.postTransactionCandidateAllocation);
   const createRecon = useMutation(api.accounting.createReconciliationRun);
   const setReconStatus = useMutation(api.accounting.setReconciliationRunStatus);
+  const backfillTransactions = useMutation(api.accounting.backfillFinancialTransactionsToJournal);
   const chartCsv = useQuery(api.accounting.exportCsv, society ? { societyId: society._id, kind: "chart_of_accounts" } : "skip");
   const trialCsv = useQuery(api.accounting.exportCsv, society ? { societyId: society._id, kind: "trial_balance" } : "skip");
   const journalCsv = useQuery(api.accounting.exportCsv, society ? { societyId: society._id, kind: "journal_entries" } : "skip");
   const ledgerCsv = useQuery(api.accounting.exportCsv, society ? { societyId: society._id, kind: "general_ledger" } : "skip");
+  const boardAuditorPackage = useQuery(api.accounting.boardAuditorPackage, society ? { societyId: society._id, fiscalYear: currentYear(), packageKind: "board_auditor" } : "skip");
 
   const candidates = transactionCandidates?.transactionCandidates ?? [];
   const cashAccounts = (accounts ?? []).filter((account: any) => ["Asset", "Bank", "Credit"].includes(account.accountType));
@@ -212,6 +295,14 @@ export function AccountingWorkbenchPage() {
     downloadCsv(result.filename, result.csv);
   };
 
+  const doPackageExport = () => {
+    if (!boardAuditorPackage?.files) {
+      toast.warn("Package is still loading");
+      return;
+    }
+    downloadZip(boardAuditorPackage.filename, boardAuditorPackage.files);
+  };
+
   return (
     <div className="page page--wide accounting-workbench">
       <PageHeader
@@ -231,6 +322,12 @@ export function AccountingWorkbenchPage() {
         <button className="btn-action" onClick={() => setDrawer("journal")}><GitCompareArrows size={12} /> Journal entry</button>
         <button className="btn-action" onClick={() => setDrawer("candidate")}><Split size={12} /> Post candidate</button>
         <button className="btn-action" onClick={() => setDrawer("reconciliation")}><Scale size={12} /> Reconcile</button>
+        <button className="btn-action" disabled={busy} onClick={() => run(async () => {
+          const result = await backfillTransactions({ societyId: society._id, fiscalYear: currentYear(), actingUserId });
+          toast.success(`Backfilled ${result.posted} transaction${result.posted === 1 ? "" : "s"}`);
+        })}>
+          <FileSpreadsheet size={12} /> Backfill imports
+        </button>
       </div>
 
       <div className="stat-grid">
@@ -278,8 +375,11 @@ export function AccountingWorkbenchPage() {
                 <Download size={12} /> {kind.replace(/_/g, " ")}
               </button>
             ))}
+            <button className="btn-action btn-action--primary" onClick={doPackageExport} disabled={!boardAuditorPackage?.files}>
+              <Download size={12} /> board/auditor ZIP
+            </button>
           </div>
-          <div className="muted accounting-note">Exports are generated from the internal journal shape for the demo.</div>
+          <div className="muted accounting-note">Exports are generated from the internal journal shape and include attachment references.</div>
         </section>
       </div>
 

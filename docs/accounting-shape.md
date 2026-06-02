@@ -218,6 +218,28 @@ This is separate from per-transaction match fields so Societyer can track statem
 
 ## Migration Approach
 
+`financialTransactions` remain source/import rows. They are not the durable ledger.
+
+The `backfillFinancialTransactionsToJournal` mutation creates posted journal entries from imported financial transactions only when the transaction has not already been linked from a journal line. It uses active `accountingAccountMappings` first, then falls back to a basic income/expense account. Rows without a usable offset account are skipped and counted as `needsMapping`.
+
+This keeps migration incremental:
+
+- imported bank/provider rows stay available for audit and reconciliation
+- reviewed or backfilled rows gain `journalEntries` and `journalLines`
+- reporting can prefer posted journal lines without deleting original imports
+- provider write-back can wait until the internal workflow has been exercised locally
+
+## Board and Auditor Packages
+
+`boardAuditorPackage` returns a package manifest plus CSV/JSON files for:
+
+- trial balance
+- general ledger
+- reconciliation runs
+- attachment references
+
+The demo UI turns these files into a ZIP download. Attachment references are included as metadata first; binary evidence bundling can be added later once the storage-provider boundary is settled.
+
 Do not remove `financialTransactions` yet.
 
 Use this sequence:

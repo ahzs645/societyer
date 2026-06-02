@@ -30,9 +30,15 @@ export type DesktopConnectorHealth = {
   message?: string;
 };
 
+export type DesktopSetupState = {
+  complete: boolean;
+};
+
 export type SocietyerDesktopBridge = {
   chooseWorkspaceDirectory(): Promise<string | null>;
   getWorkspaceInfo(): Promise<DesktopWorkspaceInfo | null>;
+  getSetupState(): Promise<DesktopSetupState>;
+  setSetupComplete(complete: boolean): Promise<DesktopSetupState>;
   writeDocumentVersion(input: DesktopWriteDocumentVersionInput): Promise<DocumentVersionRef>;
   readDocumentVersion(input: DesktopReadDocumentVersionInput): Promise<ArrayBuffer>;
   openDocumentVersion(input: DesktopReadDocumentVersionInput): Promise<void>;

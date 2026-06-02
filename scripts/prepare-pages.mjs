@@ -39,6 +39,7 @@ const demoAppRoutes = [
   "app/attestations",
   "app/retention",
   "app/insurance",
+  "app/inventory",
   "app/pipa-training",
   "app/proxies",
   "app/auditors",

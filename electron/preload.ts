@@ -8,6 +8,8 @@ import type {
 const bridge: SocietyerDesktopBridge = {
   chooseWorkspaceDirectory: () => ipcRenderer.invoke("societyer:chooseWorkspaceDirectory"),
   getWorkspaceInfo: () => ipcRenderer.invoke("societyer:getWorkspaceInfo"),
+  getSetupState: () => ipcRenderer.invoke("societyer:getSetupState"),
+  setSetupComplete: (complete: boolean) => ipcRenderer.invoke("societyer:setSetupComplete", complete),
   writeDocumentVersion: (input: DesktopWriteDocumentVersionInput) =>
     ipcRenderer.invoke("societyer:writeDocumentVersion", input),
   readDocumentVersion: (input: DesktopReadDocumentVersionInput) =>

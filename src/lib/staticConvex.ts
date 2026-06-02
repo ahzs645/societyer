@@ -2578,6 +2578,27 @@ const tables: Record<string, any[]> = {
   ],
   assetVerificationRuns: [],
   assetVerificationItems: [],
+  assetReceiptLinks: [
+    {
+      _id: "static_asset_receipt_link_projector",
+      societyId: SOCIETY_ID,
+      assetId: "static_asset_projector",
+      inventoryItemId: "static_inventory_item_projector",
+      receiptDocumentId: "static_document_projector_receipt",
+      financialTransactionId: "static_tx_projector",
+      receiptLineLabel: "Epson community projector",
+      receiptLineIndex: 1,
+      quantity: 1,
+      unitOfMeasure: "each",
+      unitCostCents: 92000,
+      totalCostCents: 92000,
+      sourceText: "Projector purchase line from demo receipt.",
+      notes: "Seeded link from receipt line to asset and inventory item.",
+      createdByUserId: USER_TREASURER_ID,
+      createdAtISO: "2025-09-12T18:00:00.000Z",
+      updatedAtISO: "2025-09-12T18:00:00.000Z",
+    },
+  ],
   inventoryConnections: [
     {
       _id: "static_inventory_connection_openboxes",
@@ -3143,12 +3164,58 @@ function staticAccountingCsv(seed: StaticDemoSeed | Record<string, any[]> = tabl
   return { filename: "trial-balance.csv", contentType: "text/csv", csv: staticCsvRows(rows) };
 }
 
+function staticBoardAuditorPackage(seed: StaticDemoSeed | Record<string, any[]> = tables, args?: StaticArgs) {
+  const ledger = staticGeneralLedger(seed, args);
+  const documentIds = new Set<string>();
+  for (const line of ledger) for (const id of line.documentIds ?? []) documentIds.add(String(id));
+  const attachments = Array.from(documentIds)
+    .map((id) => byId(seed.documents ?? tables.documents, id))
+    .filter(Boolean)
+    .map((document: any) => ({
+      documentId: document._id,
+      title: document.title,
+      category: document.category,
+      fileName: document.fileName,
+      url: document.url,
+    }));
+  const trialRows = [["account_code", "account_name", "debit_cents", "credit_cents", "balance_cents"]];
+  for (const row of staticTrialBalance(seed, args)) trialRows.push([row.account?.code ?? "", row.account?.name ?? "", row.debitCents, row.creditCents, row.balanceCents]);
+  const ledgerRows = [["entry_date", "entry_number", "memo", "account_code", "account_name", "side", "amount_cents", "line_description", "document_ids"]];
+  for (const line of ledger) ledgerRows.push([line.entry.date, line.entry.entryNumber ?? "", line.entry.memo, line.account?.code ?? "", line.account?.name ?? "", line.side, line.amountCents, line.description ?? "", (line.documentIds ?? []).join(";")]);
+  const reconciliationRows = [["statement_date", "account_id", "statement_balance_cents", "book_balance_cents", "status"]];
+  for (const run of scopedRows(seed.reconciliationRuns ?? reconciliationRuns, args)) reconciliationRows.push([run.statementDate, run.financialAccountId, run.statementBalanceCents, run.bookBalanceCents ?? "", run.status]);
+  const manifest = {
+    packageVersion: 1,
+    packageKind: args?.packageKind ?? "board_auditor",
+    societyId: args?.societyId ?? SOCIETY_ID,
+    societyName: society.name,
+    fiscalYear: args?.fiscalYear ?? null,
+    generatedAtISO: new Date().toISOString(),
+    files: ["manifest.json", "trial-balance.csv", "general-ledger.csv", "reconciliations.csv", "attachments.json"],
+    attachmentCount: attachments.length,
+  };
+  return {
+    filename: `societyer-${args?.packageKind ?? "board-auditor"}-${args?.fiscalYear ?? "all"}-package.zip`,
+    contentType: "application/zip",
+    files: [
+      { path: "manifest.json", content: JSON.stringify(manifest, null, 2) },
+      { path: "trial-balance.csv", content: staticCsvRows(trialRows) },
+      { path: "general-ledger.csv", content: staticCsvRows(ledgerRows) },
+      { path: "reconciliations.csv", content: staticCsvRows(reconciliationRows) },
+      { path: "attachments.json", content: JSON.stringify(attachments, null, 2) },
+    ],
+    attachments,
+  };
+}
+
 function staticAccountingSeed(store?: StaticDemoDexieStore | null, args?: StaticArgs) {
   return {
     financialAccounts: store?.listRows("financialAccounts", args) ?? financialAccounts,
     fundRestrictions: store?.listRows("fundRestrictions", args) ?? fundRestrictions,
     journalEntries: store?.listRows("journalEntries", args) ?? journalEntries,
     journalLines: store?.listRows("journalLines", args) ?? journalLines,
+    reconciliationRuns: store?.listRows("reconciliationRuns", args) ?? reconciliationRuns,
+    documents: store?.listRows("documents", args) ?? documents,
   };
 }
 
@@ -3942,6 +4009,7 @@ const STATIC_EXPORT_TABLES = [
   "assetMaintenance",
   "assetVerificationRuns",
   "assetVerificationItems",
+  "assetReceiptLinks",
   "inventoryConnections",
   "inventoryItems",
   "inventoryLocations",
@@ -4141,6 +4209,8 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
           .sort((a: any, b: any) => b.happenedAtISO.localeCompare(a.happenedAtISO)),
         maintenance: (store?.listRows("assetMaintenance", { societyId: asset.societyId }) ?? tables.assetMaintenance)
           .filter((row: any) => row.assetId === asset._id),
+        receiptLinks: (store?.listRows("assetReceiptLinks", { societyId: asset.societyId }) ?? tables.assetReceiptLinks)
+          .filter((row: any) => row.assetId === asset._id),
       };
     }
     case "assets:events":
@@ -4154,6 +4224,10 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     case "assets:verificationItems":
       return (store?.listRows("assetVerificationItems", args) ?? tables.assetVerificationItems)
         .filter((row: any) => row.runId === args?.runId);
+    case "assets:receiptLinks": {
+      const rows = store?.listRows("assetReceiptLinks", args) ?? scopedRows(tables.assetReceiptLinks, args);
+      return args?.receiptDocumentId ? rows.filter((row: any) => row.receiptDocumentId === args.receiptDocumentId) : rows;
+    }
     case "inventoryHub:connections":
       return store?.listRows("inventoryConnections", args) ?? scopedRows(tables.inventoryConnections, args);
     case "inventoryHub:items": {
@@ -4170,6 +4244,23 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
       return (store?.listRows("stockMovements", args) ?? scopedRows(tables.stockMovements, args))
         .sort((a: any, b: any) => b.movementDate.localeCompare(a.movementDate))
         .slice(0, args?.limit ?? 100);
+    case "inventoryHub:counts": {
+      const rows = store?.listRows("inventoryCounts", args) ?? scopedRows(tables.inventoryCounts, args);
+      const filtered = args?.status ? rows.filter((row: any) => row.status === args.status) : rows;
+      const lines = store?.listRows("inventoryCountLines", args) ?? scopedRows(tables.inventoryCountLines, args);
+      return filtered
+        .sort((a: any, b: any) => b.startedAtISO.localeCompare(a.startedAtISO))
+        .map((count: any) => ({ ...count, lines: lines.filter((line: any) => line.inventoryCountId === count._id) }));
+    }
+    case "inventoryHub:receiptLinks": {
+      const rows = store?.listRows("assetReceiptLinks", args) ?? scopedRows(tables.assetReceiptLinks, args);
+      return (args?.inventoryItemId ? rows.filter((row: any) => row.inventoryItemId === args.inventoryItemId) : rows)
+        .map((row: any) => ({
+          ...row,
+          receiptDocument: byId(store?.listRows("documents", args) ?? documents, row.receiptDocumentId),
+          asset: byId(store?.listRows("assets", args) ?? tables.assets, row.assetId),
+        }));
+    }
     case "aiAgents:getChatContext": {
       const catalog: Record<string, any[]> = {};
       aiToolCatalog.forEach((tool) => {
@@ -4464,6 +4555,8 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
       return staticGeneralLedger(staticAccountingSeed(store, args), args);
     case "accounting:exportCsv":
       return staticAccountingCsv(staticAccountingSeed(store, args), args);
+    case "accounting:boardAuditorPackage":
+      return staticBoardAuditorPackage(staticAccountingSeed(store, args), args);
     case "financialHub:accounts":
       return financialAccounts;
     case "financialHub:connections":
@@ -5109,6 +5202,82 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     });
     return args?.id;
   }
+  if (name === "accounting:backfillFinancialTransactionsToJournal") {
+    const now = new Date().toISOString();
+    const seed = staticAccountingSeed(store, args);
+    const existingLines = store?.listRows("journalLines", args) ?? journalLines;
+    const alreadyBackfilled = new Set(existingLines.map((line: any) => String(line.financialTransactionId ?? "")));
+    const accounts = seed.financialAccounts;
+    const accountById = new Map(accounts.map((account: any) => [account._id, account]));
+    const fallbackIncome = accounts.find((account: any) => account.accountType === "Income");
+    const fallbackExpense = accounts.find((account: any) => account.accountType === "Expense");
+    let scanned = 0;
+    let posted = 0;
+    let skipped = 0;
+    let needsMapping = 0;
+    for (const transaction of scopedRows(store?.listRows("financialTransactions", args) ?? financialTransactions, args).sort((a, b) => a.date.localeCompare(b.date))) {
+      if (posted >= (args?.limit ?? 200)) break;
+      scanned += 1;
+      if (alreadyBackfilled.has(String(transaction._id))) {
+        skipped += 1;
+        continue;
+      }
+      const cashAccount = accountById.get(transaction.accountId);
+      const offsetAccount = transaction.amountCents >= 0 ? fallbackIncome : fallbackExpense;
+      if (!cashAccount || !offsetAccount || transaction.amountCents === 0) {
+        needsMapping += 1;
+        continue;
+      }
+      const amountCents = Math.abs(transaction.amountCents);
+      const entryId = `static_journal_backfill_${transaction._id}`;
+      store?.upsertRow("journalEntries", {
+        _id: entryId,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        connectionId: transaction.connectionId,
+        date: transaction.date,
+        memo: transaction.description,
+        source: "financialTransactionBackfill",
+        sourceExternalId: transaction.externalId,
+        status: "posted",
+        fiscalYear: args?.fiscalYear,
+        createdByUserId: args?.actingUserId,
+        postedAtISO: now,
+        rawJson: JSON.stringify(transaction),
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      store?.upsertRow("journalLines", {
+        _id: `static_jline_backfill_cash_${transaction._id}`,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        journalEntryId: entryId,
+        accountId: transaction.accountId,
+        lineOrder: 0,
+        amountCents,
+        side: transaction.amountCents >= 0 ? "debit" : "credit",
+        description: transaction.description,
+        financialTransactionId: transaction._id,
+        sourceExternalId: transaction.externalId,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      store?.upsertRow("journalLines", {
+        _id: `static_jline_backfill_offset_${transaction._id}`,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        journalEntryId: entryId,
+        accountId: offsetAccount._id,
+        lineOrder: 1,
+        amountCents,
+        side: transaction.amountCents >= 0 ? "credit" : "debit",
+        description: transaction.category ?? transaction.description,
+        financialTransactionId: transaction._id,
+        sourceExternalId: transaction.categoryAccountExternalId ?? transaction.externalId,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      posted += 1;
+    }
+    return { scanned, posted, skipped, needsMapping };
+  }
   if (name === "seed:run") {
     void store?.reseed();
     return { societyId: SOCIETY_ID };
@@ -5358,6 +5527,246 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     }
     return { sourceId: source._id, installed: true };
   }
+  if (name === "inventoryHub:postStockMovement") {
+    const now = new Date().toISOString();
+    const movement = {
+      _id: `static_stock_movement_manual_${Date.now()}`,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      movementDate: args?.movementDate ?? now.slice(0, 10),
+      movementType: args?.movementType ?? "receive",
+      status: args?.status ?? "posted",
+      inventoryItemId: args?.inventoryItemId,
+      inventoryLotId: args?.inventoryLotId,
+      fromLocationId: args?.fromLocationId,
+      toLocationId: args?.toLocationId,
+      quantity: Number(args?.quantity ?? 0),
+      unitOfMeasure: args?.unitOfMeasure ?? "each",
+      unitCostCents: args?.unitCostCents,
+      totalCostCents: args?.totalCostCents,
+      reason: args?.reason,
+      reference: args?.reference,
+      sourceExternalId: args?.sourceExternalId,
+      sourceSystem: args?.sourceSystem ?? "societyer_manual",
+      documentIds: args?.documentIds ?? [],
+      rawJson: args?.rawJson,
+      createdAtISO: now,
+      updatedAtISO: now,
+    };
+    store?.upsertRow("stockMovements", movement);
+    const applyDelta = (locationId: string | undefined, delta: number) => {
+      if (!locationId || delta === 0) return;
+      const balances = store?.listRows("inventoryBalances", { societyId: movement.societyId }) ?? tables.inventoryBalances;
+      const balance = balances.find((row: any) =>
+        row.inventoryItemId === movement.inventoryItemId && row.locationId === locationId && String(row.inventoryLotId ?? "") === String(movement.inventoryLotId ?? "")
+      );
+      if (balance) {
+        const quantityOnHand = (balance.quantityOnHand ?? 0) + delta;
+        const quantityReserved = balance.quantityReserved ?? 0;
+        store?.upsertRow("inventoryBalances", {
+          ...balance,
+          quantityOnHand,
+          quantityAvailable: quantityOnHand - quantityReserved,
+          lastMovementId: movement._id,
+          ...(movement.movementType === "count" ? { lastCountedAtISO: now } : {}),
+          updatedAtISO: now,
+        });
+      } else {
+        store?.upsertRow("inventoryBalances", {
+          _id: `static_inventory_balance_${Date.now()}_${locationId}`,
+          societyId: movement.societyId,
+          inventoryItemId: movement.inventoryItemId,
+          inventoryLotId: movement.inventoryLotId,
+          locationId,
+          quantityOnHand: delta,
+          quantityReserved: 0,
+          quantityAvailable: delta,
+          lastMovementId: movement._id,
+          ...(movement.movementType === "count" ? { lastCountedAtISO: now } : {}),
+          createdAtISO: now,
+          updatedAtISO: now,
+        });
+      }
+    };
+    const quantity = Number(movement.quantity ?? 0);
+    if (movement.fromLocationId) applyDelta(movement.fromLocationId, -quantity);
+    if (movement.toLocationId) applyDelta(movement.toLocationId, quantity);
+    if (!movement.fromLocationId && !movement.toLocationId) throw new Error("Stock movement needs a source or destination location.");
+    return movement._id;
+  }
+  if (name === "inventoryHub:backfillAssets") {
+    const now = new Date().toISOString();
+    const assets = store?.listRows("assets", args) ?? scopedRows(tables.assets, args);
+    let itemsCreated = 0;
+    let locationsCreated = 0;
+    let movementsCreated = 0;
+    let balancesCreated = 0;
+    for (const asset of assets) {
+      let item = (store?.listRows("inventoryItems", { societyId: asset.societyId }) ?? tables.inventoryItems).find((row: any) => row.assetId === asset._id);
+      if (!item) {
+        item = {
+          _id: `static_inventory_item_${asset._id}_${Date.now()}`,
+          societyId: asset.societyId,
+          sku: asset.assetTag,
+          name: asset.name,
+          category: asset.category,
+          itemType: asset.category === "Consumable" ? "consumable" : "asset",
+          unitOfMeasure: asset.quantityUnit ?? "each",
+          currency: asset.currency ?? "CAD",
+          trackSerial: Boolean(asset.serialNumber),
+          trackLot: false,
+          trackExpiry: false,
+          status: "active",
+          assetId: asset._id,
+          sourceSystem: "societyer_assets",
+          createdAtISO: now,
+          updatedAtISO: now,
+        };
+        store?.upsertRow("inventoryItems", item);
+        itemsCreated += 1;
+      }
+      const locationName = String(asset.location ?? asset.custodianName ?? "Inventory").trim() || "Inventory";
+      let location = (store?.listRows("inventoryLocations", { societyId: asset.societyId }) ?? tables.inventoryLocations).find((row: any) => row.name === locationName);
+      if (!location) {
+        location = {
+          _id: `static_inventory_location_${Date.now()}_${asset._id}`,
+          societyId: asset.societyId,
+          name: locationName,
+          locationType: asset.location ? "facility" : "virtual",
+          active: true,
+          sourceSystem: "societyer_assets",
+          createdAtISO: now,
+          updatedAtISO: now,
+        };
+        store?.upsertRow("inventoryLocations", location);
+        locationsCreated += 1;
+      }
+      const existingMovement = (store?.listRows("stockMovements", { societyId: asset.societyId }) ?? tables.stockMovements).find((row: any) => row.inventoryItemId === item._id);
+      if (existingMovement) continue;
+      const quantity = asset.category === "Consumable" ? asset.quantityOnHand ?? 0 : asset.status === "Disposed" || asset.status === "Lost" ? 0 : 1;
+      if (quantity <= 0) continue;
+      mutationResult("inventoryHub:postStockMovement", {
+        societyId: asset.societyId,
+        movementDate: asset.purchaseDate ?? now.slice(0, 10),
+        movementType: "receive",
+        inventoryItemId: item._id,
+        toLocationId: location._id,
+        quantity,
+        unitOfMeasure: item.unitOfMeasure,
+        reason: "Backfilled from Societyer asset register",
+        reference: asset.assetTag,
+        sourceSystem: "societyer_assets",
+      }, store);
+      movementsCreated += 1;
+      balancesCreated += 1;
+    }
+    return { itemsCreated, locationsCreated, movementsCreated, balancesCreated };
+  }
+  if (name === "inventoryHub:postCountVarianceAdjustments") {
+    const now = new Date().toISOString();
+    const count = store?.getRow("inventoryCounts", args?.inventoryCountId) ?? byId(tables.inventoryCounts, args?.inventoryCountId);
+    if (!count) return { adjusted: 0 };
+    const lines = (store?.listRows("inventoryCountLines", { societyId: count.societyId }) ?? tables.inventoryCountLines).filter((line: any) => line.inventoryCountId === count._id);
+    let adjusted = 0;
+    for (const line of lines) {
+      if (line.adjustmentMovementId || line.countedQuantity == null || line.expectedQuantity == null) continue;
+      const variance = line.countedQuantity - line.expectedQuantity;
+      if (variance === 0) continue;
+      const movementId = mutationResult("inventoryHub:postStockMovement", {
+        societyId: count.societyId,
+        movementDate: now.slice(0, 10),
+        movementType: "adjustment",
+        inventoryItemId: line.inventoryItemId,
+        fromLocationId: variance < 0 ? line.locationId : undefined,
+        toLocationId: variance > 0 ? line.locationId : undefined,
+        quantity: Math.abs(variance),
+        unitOfMeasure: "each",
+        reason: args?.reason ?? `Physical count variance: ${count.title}`,
+        reference: count.title,
+        sourceSystem: "societyer_count",
+      }, store);
+      store?.upsertRow("inventoryCountLines", { ...line, varianceQuantity: variance, adjustmentMovementId: movementId, status: "adjusted", updatedAtISO: now });
+      adjusted += 1;
+    }
+    store?.upsertRow("inventoryCounts", { ...count, status: "completed", completedAtISO: count.completedAtISO ?? now, updatedAtISO: now });
+    return { adjusted };
+  }
+  if (name === "inventoryHub:importOpenBoxesSnapshot") {
+    const now = new Date().toISOString();
+    const connectionId = args?.connectionId ?? "static_inventory_connection_openboxes";
+    store?.upsertRow("inventoryConnections", {
+      _id: connectionId,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      provider: "openboxes",
+      displayName: "OpenBoxes",
+      status: "active",
+      lastSyncedAtISO: now,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    let itemsUpserted = 0;
+    let locationsUpserted = 0;
+    let movementsPosted = 0;
+    for (const product of args?.products ?? []) {
+      store?.upsertRow("inventoryItems", {
+        _id: `static_openboxes_item_${product.id}`,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        connectionId,
+        sku: product.productCode,
+        name: product.name,
+        category: product.category ?? "OpenBoxes",
+        itemType: "supply",
+        unitOfMeasure: product.unitOfMeasure ?? "each",
+        currency: "CAD",
+        trackSerial: Boolean(product.serialized),
+        trackLot: Boolean(product.lotAndExpiryControl),
+        trackExpiry: Boolean(product.lotAndExpiryControl),
+        status: "active",
+        externalId: product.id,
+        sourceSystem: "openboxes",
+        rawJson: product.rawJson,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      itemsUpserted += 1;
+    }
+    for (const location of args?.locations ?? []) {
+      store?.upsertRow("inventoryLocations", {
+        _id: `static_openboxes_location_${location.id}`,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        connectionId,
+        name: location.name,
+        locationType: location.locationType ?? "facility",
+        active: true,
+        externalId: location.id,
+        sourceSystem: "openboxes",
+        rawJson: location.rawJson,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      locationsUpserted += 1;
+    }
+    for (const movement of args?.movements ?? []) {
+      const itemId = `static_openboxes_item_${movement.productId}`;
+      const fromLocationId = movement.originLocationId ? `static_openboxes_location_${movement.originLocationId}` : undefined;
+      const toLocationId = movement.destinationLocationId ? `static_openboxes_location_${movement.destinationLocationId}` : undefined;
+      mutationResult("inventoryHub:postStockMovement", {
+        societyId: args?.societyId ?? SOCIETY_ID,
+        movementDate: movement.date,
+        movementType: movement.type,
+        inventoryItemId: itemId,
+        fromLocationId,
+        toLocationId,
+        quantity: movement.quantity,
+        unitOfMeasure: movement.unitOfMeasure ?? "each",
+        reason: movement.reason,
+        sourceExternalId: movement.id,
+        sourceSystem: "openboxes",
+        rawJson: movement.rawJson,
+      }, store);
+      movementsPosted += 1;
+    }
+    return { connectionId, itemsUpserted, locationsUpserted, movementsPosted };
+  }
   if (name === "society:updateInventorySettings") {
     const societyId = args?.societyId ?? SOCIETY_ID;
     const existing = store?.getRow("societies", societyId) ?? society;
@@ -5498,6 +5907,78 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       createdAtISO: now,
     });
     return event._id;
+  }
+  if (name === "assets:linkReceiptLine") {
+    const asset = store?.getRow("assets", args?.assetId) ?? byId(tables.assets, args?.assetId);
+    if (!asset) return null;
+    const now = new Date().toISOString();
+    let inventoryItemId;
+    if (args?.createInventoryItem) {
+      let inventoryItem = (store?.listRows("inventoryItems", { societyId: asset.societyId }) ?? tables.inventoryItems)
+        .find((row: any) => row.assetId === asset._id);
+      if (!inventoryItem) {
+        inventoryItem = {
+          _id: `static_inventory_item_${asset._id}_${Date.now()}`,
+          societyId: asset.societyId,
+          sku: asset.assetTag,
+          name: asset.name,
+          description: asset.notes,
+          category: asset.category,
+          itemType: asset.category === "Consumable" ? "consumable" : "asset",
+          unitOfMeasure: asset.quantityUnit ?? args?.unitOfMeasure ?? "each",
+          defaultCostCents: asset.purchaseValueCents,
+          currency: asset.currency ?? "CAD",
+          trackSerial: Boolean(asset.serialNumber),
+          trackLot: false,
+          trackExpiry: false,
+          status: asset.status === "Disposed" ? "archived" : "active",
+          assetId: asset._id,
+          sourceSystem: "societyer_assets",
+          createdAtISO: now,
+          updatedAtISO: now,
+        };
+        store?.upsertRow("inventoryItems", inventoryItem);
+      }
+      inventoryItemId = inventoryItem._id;
+    }
+    const linkId = `static_asset_receipt_link_${Date.now()}`;
+    store?.upsertRow("assetReceiptLinks", {
+      _id: linkId,
+      societyId: args?.societyId ?? asset.societyId,
+      assetId: asset._id,
+      inventoryItemId,
+      receiptDocumentId: args?.receiptDocumentId,
+      financialTransactionId: args?.financialTransactionId,
+      receiptLineLabel: args?.receiptLineLabel,
+      receiptLineIndex: args?.receiptLineIndex,
+      quantity: args?.quantity,
+      unitOfMeasure: args?.unitOfMeasure,
+      unitCostCents: args?.unitCostCents,
+      totalCostCents: args?.totalCostCents,
+      sourceText: args?.sourceText,
+      notes: args?.notes,
+      createdByUserId: args?.actingUserId,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    store?.upsertRow("assets", {
+      ...asset,
+      receiptDocumentId: asset.receiptDocumentId ?? args?.receiptDocumentId,
+      purchaseTransactionId: asset.purchaseTransactionId ?? args?.financialTransactionId,
+      sourceDocumentIds: Array.from(new Set([...(asset.sourceDocumentIds ?? []), args?.receiptDocumentId].filter(Boolean))),
+      updatedAtISO: now,
+    });
+    store?.upsertRow("assetEvents", {
+      _id: `static_asset_event_receipt_link_${Date.now()}`,
+      societyId: asset.societyId,
+      assetId: asset._id,
+      eventType: "receipt_link",
+      happenedAtISO: now,
+      documentIds: [args?.receiptDocumentId].filter(Boolean),
+      notes: [args?.receiptLineLabel, args?.notes].filter(Boolean).join(" — "),
+      createdAtISO: now,
+    });
+    return { linkId, inventoryItemId };
   }
   if (name === "assets:recordEvent") {
     const asset = store?.getRow("assets", args?.assetId) ?? byId(tables.assets, args?.assetId);

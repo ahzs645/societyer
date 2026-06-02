@@ -1,10 +1,13 @@
-import { staticConvex, reseedStaticDemoData } from "./staticConvex";
+import { createLocalWorkspaceAdapter } from "./localWorkspaceAdapter";
 
-// Temporary local-data facade. Keep app startup pointed here so the current
-// static demo adapter can be replaced by a durable workspace adapter later
-// without changing the React provider wiring again.
-export const localDataClient = staticConvex;
+const localWorkspaceAdapter = createLocalWorkspaceAdapter();
+
+// Keep app startup pointed at a local adapter boundary. The adapter currently
+// delegates to the static/demo client, but Electron can replace this module
+// with a workspace-scoped Dexie implementation without touching the router or
+// provider wiring.
+export const localDataClient = localWorkspaceAdapter.client;
 
 export function reseedLocalData() {
-  return reseedStaticDemoData();
+  return localWorkspaceAdapter.reseed();
 }

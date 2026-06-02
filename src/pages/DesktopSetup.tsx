@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   CheckCircle2,
   Database,
@@ -23,8 +23,11 @@ const DEFAULT_CONNECTOR_ENDPOINT = "http://127.0.0.1:8890";
 
 export function DesktopSetupPage() {
   const runtime = useMemo(() => getRuntimeDescriptor(), []);
+  const navigate = useNavigate();
   const bridgeAvailable = isDesktopBridgeAvailable();
   const [workspace, setWorkspace] = useState<DesktopWorkspaceInfo | null>(null);
+  const [setupComplete, setSetupComplete] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [connectorEndpoint, setConnectorEndpoint] = useState(
     () => localStorage.getItem(CONNECTOR_ENDPOINT_KEY) || DEFAULT_CONNECTOR_ENDPOINT,
   );
@@ -36,9 +39,15 @@ export function DesktopSetupPage() {
     const bridge = getDesktopBridge();
     if (!bridge) return;
     let active = true;
-    bridge.getWorkspaceInfo().then((info) => {
-      if (active) setWorkspace(info);
-    }).catch(() => undefined);
+    Promise.all([bridge.getWorkspaceInfo(), bridge.getSetupState()])
+      .then(([info, setup]) => {
+        if (!active) return;
+        setWorkspace(info);
+        setSetupComplete(setup.complete);
+      })
+      .catch((error) => {
+        if (active) setStatusMessage(error instanceof Error ? error.message : "Desktop setup could not load.");
+      });
     return () => {
       active = false;
     };
@@ -52,6 +61,9 @@ export function DesktopSetupPage() {
       const selected = await bridge.chooseWorkspaceDirectory();
       if (!selected) return;
       setWorkspace(await bridge.getWorkspaceInfo());
+      setStatusMessage("Workspace folder updated.");
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Workspace selection failed.");
     } finally {
       setBusy(null);
     }
@@ -64,6 +76,9 @@ export function DesktopSetupPage() {
     try {
       const result = await bridge.createBackup();
       setBackupPath(result.path);
+      setStatusMessage("Backup created.");
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Backup failed.");
     } finally {
       setBusy(null);
     }
@@ -77,6 +92,23 @@ export function DesktopSetupPage() {
     localStorage.setItem(CONNECTOR_ENDPOINT_KEY, connectorEndpoint);
     try {
       setConnectorHealth(await bridge.checkConnector(connectorEndpoint));
+    } catch (error) {
+      setConnectorHealth({ ok: false, message: error instanceof Error ? error.message : "Connector check failed." });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const completeSetup = async (target: "/app" | "/app/society/new") => {
+    const bridge = getDesktopBridge();
+    if (!bridge || !workspace?.rootPath) return;
+    setBusy("workspace");
+    try {
+      const setup = await bridge.setSetupComplete(true);
+      setSetupComplete(setup.complete);
+      navigate(target);
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Setup could not be completed.");
     } finally {
       setBusy(null);
     }
@@ -100,7 +132,7 @@ export function DesktopSetupPage() {
     },
     {
       label: "Connector service",
-      complete: connectorHealth?.ok === true,
+      complete: true,
       detail: connectorHealth
         ? connectorHealth.ok
           ? `Connected${connectorHealth.provider ? ` to ${connectorHealth.provider}` : ""}.`
@@ -108,6 +140,8 @@ export function DesktopSetupPage() {
         : "Optional Docker service.",
     },
   ];
+
+  const requiredReady = bridgeAvailable && Boolean(workspace?.rootPath) && runtime.documentStorage === "local-filesystem";
 
   return (
     <div className="page page--wide">
@@ -117,11 +151,21 @@ export function DesktopSetupPage() {
         icon={<HardDrive size={16} />}
         iconColor="blue"
         actions={
-          <Link className="btn-action btn-action--primary" to="/app">
-            <CheckCircle2 size={12} /> Continue to workspace
-          </Link>
+          <button
+            className="btn-action btn-action--primary"
+            disabled={!requiredReady || busy === "workspace"}
+            onClick={() => completeSetup(setupComplete ? "/app" : "/app/society/new")}
+          >
+            <CheckCircle2 size={12} /> {setupComplete ? "Continue to workspace" : "Create first society"}
+          </button>
         }
       />
+
+      {statusMessage && (
+        <div className="notice notice--info" style={{ marginBottom: 16 }}>
+          {statusMessage}
+        </div>
+      )}
 
       <div className="settings-pair" style={{ marginBottom: 16 }}>
         <div className="card">
@@ -131,7 +175,7 @@ export function DesktopSetupPage() {
               <span className="card__subtitle">Local records and document versions are stored in this folder.</span>
             </div>
             <Badge tone={workspace?.rootPath ? "success" : "warn"}>
-              {workspace?.rootPath ? "Ready" : "Default"}
+              {workspace?.rootPath ? "Ready" : "Pending"}
             </Badge>
           </div>
           <div className="card__body">
@@ -140,7 +184,7 @@ export function DesktopSetupPage() {
                 <div>
                   <strong>{workspace?.name ?? "Societyer Workspace"}</strong>
                   <div className="muted mono" style={{ fontSize: "var(--fs-xs)" }}>
-                    {workspace?.rootPath ?? "Workspace path will be assigned by Electron."}
+                    {workspace?.rootPath ?? "Open through Electron to create the default workspace."}
                   </div>
                 </div>
                 <button className="btn btn--accent" disabled={!bridgeAvailable || busy === "workspace"} onClick={chooseWorkspace}>
@@ -154,7 +198,7 @@ export function DesktopSetupPage() {
                     {backupPath ?? "Creates a local copy inside the workspace backups folder."}
                   </div>
                 </div>
-                <button className="btn" disabled={!bridgeAvailable || busy === "backup"} onClick={createBackup}>
+                <button className="btn" disabled={!requiredReady || busy === "backup"} onClick={createBackup}>
                   <Database size={12} /> {busy === "backup" ? "Backing up..." : "Create backup"}
                 </button>
               </div>
@@ -186,6 +230,34 @@ export function DesktopSetupPage() {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card__head">
+          <div>
+            <h2 className="card__title">Start local workspace</h2>
+            <span className="card__subtitle">Create a workspace record now, or enter the demo data after confirming the vault.</span>
+          </div>
+          <Badge tone={setupComplete ? "success" : requiredReady ? "info" : "warn"}>
+            {setupComplete ? "Complete" : requiredReady ? "Ready" : "Needs setup"}
+          </Badge>
+        </div>
+        <div className="card__body">
+          <div className="settings-row">
+            <div>
+              <strong>Society records</strong>
+              <div className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+                Local files are ready before cloud, AI, connector, or Paperless services are connected.
+              </div>
+            </div>
+            <button className="btn btn--accent" disabled={!requiredReady || busy === "workspace"} onClick={() => completeSetup("/app/society/new")}>
+              <CheckCircle2 size={12} /> Create new society
+            </button>
+            <button className="btn" disabled={!requiredReady || busy === "workspace"} onClick={() => completeSetup("/app")}>
+              Use demo data
+            </button>
           </div>
         </div>
       </div>

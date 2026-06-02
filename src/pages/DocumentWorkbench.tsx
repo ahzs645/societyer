@@ -10,6 +10,7 @@ import { Badge, Field } from "../components/ui";
 import { SignaturePanel } from "../components/SignaturePanel";
 import { useToast } from "../components/Toast";
 import { formatDateTime } from "../lib/format";
+import { openDocumentDownloadTarget } from "../lib/documentStorage";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -35,7 +36,7 @@ export function DocumentWorkbenchPage() {
   const createComment = useMutation(api.documentComments.create);
   const setCommentStatus = useMutation(api.documentComments.setStatus);
   const removeComment = useMutation(api.documentComments.remove);
-  const getDownloadUrl = useAction(api.documentVersions.getDownloadUrl);
+  const getDownloadTarget = useAction(api.documentVersions.getDownloadTarget);
   const user = useCurrentUser();
   const userId = useCurrentUserId() ?? undefined;
   const toast = useToast();
@@ -62,13 +63,13 @@ export function DocumentWorkbenchPage() {
 
   const openFile = async () => {
     if (latest) {
-      const url = await getDownloadUrl({ versionId: latest._id });
-      if (!url) return;
-      if (url.startsWith("demo://")) {
+      const target = await getDownloadTarget({ versionId: latest._id });
+      if (!target) return;
+      if (target.kind === "url" && target.url?.startsWith("demo://")) {
         toast.info("Demo mode — no stored file is available.");
         return;
       }
-      window.open(url, "_blank");
+      await openDocumentDownloadTarget(target);
       return;
     }
     if (legacyUrl) {

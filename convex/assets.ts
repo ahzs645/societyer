@@ -200,7 +200,7 @@ export const bundle = query({
   handler: async (ctx, { id }) => {
     const asset = await ctx.db.get(id);
     if (!asset) return null;
-    const [events, maintenance] = await Promise.all([
+    const [events, maintenance, receiptLinks] = await Promise.all([
       ctx.db
         .query("assetEvents")
         .withIndex("by_asset_happened", (q: any) => q.eq("assetId", id))
@@ -210,8 +210,29 @@ export const bundle = query({
         .query("assetMaintenance")
         .withIndex("by_asset", (q: any) => q.eq("assetId", id))
         .collect(),
+      ctx.db
+        .query("assetReceiptLinks")
+        .withIndex("by_asset", (q: any) => q.eq("assetId", id))
+        .collect(),
     ]);
-    return { asset, events, maintenance };
+    return { asset, events, maintenance, receiptLinks };
+  },
+});
+
+export const receiptLinks = query({
+  args: { societyId: v.id("societies"), receiptDocumentId: v.optional(v.id("documents")) },
+  returns: v.any(),
+  handler: async (ctx, { societyId, receiptDocumentId }) => {
+    const rows = receiptDocumentId
+      ? await ctx.db
+          .query("assetReceiptLinks")
+          .withIndex("by_receipt_document", (q: any) => q.eq("receiptDocumentId", receiptDocumentId))
+          .collect()
+      : await ctx.db
+          .query("assetReceiptLinks")
+          .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+          .collect();
+    return rows.filter((row: any) => row.societyId === societyId);
   },
 });
 
@@ -393,6 +414,74 @@ export const addConsumableStock = mutation({
       createdAtISO: now,
     });
     return eventId;
+  },
+});
+
+export const linkReceiptLine = mutation({
+  args: {
+    societyId: v.id("societies"),
+    assetId: v.id("assets"),
+    receiptDocumentId: v.id("documents"),
+    financialTransactionId: v.optional(v.id("financialTransactions")),
+    receiptLineLabel: v.optional(v.string()),
+    receiptLineIndex: v.optional(v.number()),
+    quantity: v.optional(v.number()),
+    unitOfMeasure: v.optional(v.string()),
+    unitCostCents: v.optional(v.number()),
+    totalCostCents: v.optional(v.number()),
+    sourceText: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createInventoryItem: v.optional(v.boolean()),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const [asset, document, transaction] = await Promise.all([
+      ctx.db.get(args.assetId),
+      ctx.db.get(args.receiptDocumentId),
+      args.financialTransactionId ? ctx.db.get(args.financialTransactionId) : Promise.resolve(null),
+    ]);
+    if (!asset || asset.societyId !== args.societyId) throw new Error("Asset must belong to this society.");
+    if (!document || document.societyId !== args.societyId) throw new Error("Receipt document must belong to this society.");
+    if (transaction && transaction.societyId !== args.societyId) throw new Error("Financial transaction must belong to this society.");
+    if (args.quantity !== undefined && args.quantity <= 0) throw new Error("Receipt line quantity must be positive.");
+    const now = new Date().toISOString();
+    const inventoryItemId = args.createInventoryItem ? await findOrCreateInventoryItemForAsset(ctx, asset) : undefined;
+    const linkId = await ctx.db.insert("assetReceiptLinks", {
+      societyId: args.societyId,
+      assetId: args.assetId,
+      inventoryItemId,
+      receiptDocumentId: args.receiptDocumentId,
+      financialTransactionId: args.financialTransactionId,
+      receiptLineLabel: args.receiptLineLabel,
+      receiptLineIndex: args.receiptLineIndex,
+      quantity: args.quantity,
+      unitOfMeasure: args.unitOfMeasure,
+      unitCostCents: args.unitCostCents,
+      totalCostCents: args.totalCostCents,
+      sourceText: args.sourceText,
+      notes: args.notes,
+      createdByUserId: args.actingUserId,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    const documentIds = new Set([...(asset.sourceDocumentIds ?? []), args.receiptDocumentId]);
+    await ctx.db.patch(args.assetId, {
+      receiptDocumentId: asset.receiptDocumentId ?? args.receiptDocumentId,
+      purchaseTransactionId: asset.purchaseTransactionId ?? args.financialTransactionId,
+      sourceDocumentIds: Array.from(documentIds),
+      updatedAtISO: now,
+    });
+    await ctx.db.insert("assetEvents", {
+      societyId: args.societyId,
+      assetId: args.assetId,
+      eventType: "receipt_link",
+      happenedAtISO: now,
+      documentIds: [args.receiptDocumentId],
+      notes: [args.receiptLineLabel, args.notes].filter(Boolean).join(" — "),
+      createdAtISO: now,
+    });
+    return { linkId, inventoryItemId };
   },
 });
 

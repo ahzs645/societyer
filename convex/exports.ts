@@ -56,6 +56,14 @@ export const EXPORTABLE_TABLES = [
   "financialStatementImportLines",
   "treasurerReports",
   "transactionCandidates",
+  "accountingFiscalPeriods",
+  "accountingCounterparties",
+  "accountingAccountMappings",
+  "fundRestrictions",
+  "journalEntries",
+  "journalLines",
+  "reconciliationRuns",
+  "reconciliationRunLines",
   "signatures",
   "filingBotRuns",
   "aiAgentRuns",
@@ -150,6 +158,7 @@ export const EXPORTABLE_TABLES = [
   "sourceEvidence",
   "secretVaultItems",
   "archiveAccessions",
+  "assetReceiptLinks",
 ] as const;
 
 const EXPORTABLE_SET = new Set<string>(EXPORTABLE_TABLES);

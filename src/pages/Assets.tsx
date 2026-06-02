@@ -9,6 +9,7 @@ import {
   ClipboardList,
   Download,
   FileSpreadsheet,
+  Link2,
   Package,
   PackageCheck,
   Pencil,
@@ -71,12 +72,15 @@ export function AssetsPage() {
   const create = useMutation(api.assets.create);
   const update = useMutation(api.assets.update);
   const addConsumableStock = useMutation(api.assets.addConsumableStock);
+  const linkReceiptLine = useMutation(api.assets.linkReceiptLine);
   const remove = useMutation(api.assets.remove);
   const startVerificationRun = useMutation(api.assets.startVerificationRun);
-  const [drawer, setDrawer] = useState<"new" | "edit" | "import" | "verify" | "stock" | null>(null);
+  const [drawer, setDrawer] = useState<"new" | "edit" | "import" | "verify" | "stock" | "receiptLine" | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [stockAsset, setStockAsset] = useState<any>(null);
   const [stockForm, setStockForm] = useState({ observedQuantityBefore: "", quantityAdded: "", notes: "" });
+  const [receiptLinkAsset, setReceiptLinkAsset] = useState<any>(null);
+  const [receiptLinkForm, setReceiptLinkForm] = useState({ receiptDocumentId: "", financialTransactionId: "", receiptLineLabel: "", receiptLineIndex: "", quantity: "", unitOfMeasure: "each", unitCost: "", totalCost: "", sourceText: "", notes: "", createInventoryItem: true });
   const [form, setForm] = useState<any>(null);
   const [csvInput, setCsvInput] = useState("");
   const [verificationTitle, setVerificationTitle] = useState(`Physical inventory ${todayDate()}`);
@@ -161,6 +165,50 @@ export function AssetsPage() {
     setStockAsset(null);
   };
 
+  const openReceiptLineLink = (row: any) => {
+    setReceiptLinkAsset(row);
+    setReceiptLinkForm({
+      receiptDocumentId: row.receiptDocumentId ?? "",
+      financialTransactionId: row.purchaseTransactionId ?? "",
+      receiptLineLabel: row.name ?? "",
+      receiptLineIndex: "",
+      quantity: row.category === "Consumable" ? row.quantityOnHand?.toString?.() ?? "" : "1",
+      unitOfMeasure: row.quantityUnit ?? "each",
+      unitCost: centsToInput(row.purchaseValueCents),
+      totalCost: centsToInput(row.purchaseValueCents),
+      sourceText: "",
+      notes: "",
+      createInventoryItem: true,
+    });
+    setDrawer("receiptLine");
+  };
+
+  const saveReceiptLineLink = async () => {
+    if (!receiptLinkAsset) return;
+    if (!receiptLinkForm.receiptDocumentId) {
+      toast.error("Choose a receipt document to link.");
+      return;
+    }
+    await linkReceiptLine({
+      societyId: society._id,
+      assetId: receiptLinkAsset._id,
+      receiptDocumentId: receiptLinkForm.receiptDocumentId as any,
+      financialTransactionId: receiptLinkForm.financialTransactionId ? receiptLinkForm.financialTransactionId as any : undefined,
+      receiptLineLabel: receiptLinkForm.receiptLineLabel || undefined,
+      receiptLineIndex: receiptLinkForm.receiptLineIndex ? Number(receiptLinkForm.receiptLineIndex) : undefined,
+      quantity: receiptLinkForm.quantity ? Number(receiptLinkForm.quantity) : undefined,
+      unitOfMeasure: receiptLinkForm.unitOfMeasure || undefined,
+      unitCostCents: inputToCents(receiptLinkForm.unitCost),
+      totalCostCents: inputToCents(receiptLinkForm.totalCost),
+      sourceText: receiptLinkForm.sourceText || undefined,
+      notes: receiptLinkForm.notes || undefined,
+      createInventoryItem: receiptLinkForm.createInventoryItem,
+    } as any);
+    toast.success("Receipt line linked");
+    setDrawer(null);
+    setReceiptLinkAsset(null);
+  };
+
   return (
     <div className="page">
       <PageHeader
@@ -243,6 +291,9 @@ export function AssetsPage() {
                 <ClipboardList size={12} /> Add stock
               </button>
             )}
+            <button className="btn btn--ghost btn--sm" onClick={() => openReceiptLineLink(row)}>
+              <Link2 size={12} /> Link receipt item
+            </button>
             <button className="btn btn--ghost btn--sm" onClick={() => openEdit(row)}>
               <Pencil size={12} /> Edit
             </button>
@@ -293,6 +344,26 @@ export function AssetsPage() {
             <textarea className="textarea" rows={3} value={stockForm.notes} onChange={(event) => setStockForm({ ...stockForm, notes: event.target.value })} />
           </Field>
         </div>
+      </Drawer>
+
+      <Drawer
+        open={drawer === "receiptLine"}
+        onClose={() => setDrawer(null)}
+        title={receiptLinkAsset ? `Link receipt item: ${receiptLinkAsset.name}` : "Link receipt item"}
+        size="wide"
+        footer={
+          <>
+            <button className="btn" onClick={() => setDrawer(null)}>Cancel</button>
+            <button className="btn btn--accent" onClick={saveReceiptLineLink}>Link item</button>
+          </>
+        }
+      >
+        <ReceiptLineLinkForm
+          form={receiptLinkForm}
+          setForm={setReceiptLinkForm}
+          documents={documents ?? []}
+          transactions={transactions ?? []}
+        />
       </Drawer>
 
       <Drawer
@@ -607,6 +678,71 @@ function AssetForm({
       <Field label="Insurance notes"><textarea className="textarea" rows={3} value={form.insuranceNotes ?? ""} onChange={(event) => setForm({ ...form, insuranceNotes: event.target.value })} /></Field>
       <Field label="Disposal rules"><textarea className="textarea" rows={3} value={form.disposalRules ?? ""} onChange={(event) => setForm({ ...form, disposalRules: event.target.value })} /></Field>
       <Field label="Notes"><textarea className="textarea" rows={3} value={form.notes ?? ""} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></Field>
+    </div>
+  );
+}
+
+function ReceiptLineLinkForm({
+  form,
+  setForm,
+  documents,
+  transactions,
+}: {
+  form: any;
+  setForm: (form: any) => void;
+  documents: any[];
+  transactions: any[];
+}) {
+  const receiptDocuments = documents.filter((doc) =>
+    doc.category === "Receipt" ||
+    doc.category === "FinancialStatement" ||
+    (doc.tags ?? []).some((tag: string) => /receipt|invoice|finance/i.test(tag)),
+  );
+  const purchaseTransactions = transactions.filter((txn) => txn.amountCents < 0);
+  return (
+    <div className="form-grid">
+      <Field label="Receipt document" required>
+        <select className="input" value={form.receiptDocumentId} onChange={(event) => setForm({ ...form, receiptDocumentId: event.target.value })}>
+          <option value="">Choose receipt or invoice</option>
+          {receiptDocuments.map((doc) => <option key={doc._id} value={doc._id}>{doc.title}</option>)}
+        </select>
+      </Field>
+      <Field label="Financial transaction">
+        <select className="input" value={form.financialTransactionId} onChange={(event) => setForm({ ...form, financialTransactionId: event.target.value })}>
+          <option value="">No transaction linked</option>
+          {purchaseTransactions.map((txn) => <option key={txn._id} value={txn._id}>{txn.date} · {txn.description} · {money(Math.abs(txn.amountCents))}</option>)}
+        </select>
+      </Field>
+      <Field label="Receipt line label">
+        <input className="input" value={form.receiptLineLabel} onChange={(event) => setForm({ ...form, receiptLineLabel: event.target.value })} />
+      </Field>
+      <Field label="Line number">
+        <input className="input" type="number" inputMode="numeric" min="0" value={form.receiptLineIndex} onChange={(event) => setForm({ ...form, receiptLineIndex: event.target.value })} />
+      </Field>
+      <Field label="Quantity">
+        <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} />
+      </Field>
+      <Field label="Unit">
+        <input className="input" value={form.unitOfMeasure} onChange={(event) => setForm({ ...form, unitOfMeasure: event.target.value })} />
+      </Field>
+      <Field label="Unit cost">
+        <input className="input" inputMode="decimal" value={form.unitCost} onChange={(event) => setForm({ ...form, unitCost: event.target.value })} />
+      </Field>
+      <Field label="Total cost">
+        <input className="input" inputMode="decimal" value={form.totalCost} onChange={(event) => setForm({ ...form, totalCost: event.target.value })} />
+      </Field>
+      <Field label="Inventory">
+        <label className="checkbox">
+          <input type="checkbox" checked={Boolean(form.createInventoryItem)} onChange={(event) => setForm({ ...form, createInventoryItem: event.target.checked })} />
+          Link this asset to an inventory item
+        </label>
+      </Field>
+      <Field label="Receipt line text">
+        <textarea className="textarea" rows={3} value={form.sourceText} onChange={(event) => setForm({ ...form, sourceText: event.target.value })} />
+      </Field>
+      <Field label="Notes">
+        <textarea className="textarea" rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+      </Field>
     </div>
   );
 }

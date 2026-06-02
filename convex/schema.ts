@@ -3090,6 +3090,30 @@ export default defineSchema({
     .index("by_asset", ["assetId"])
     .index("by_run_status", ["runId", "status"]),
 
+  assetReceiptLinks: defineTable({
+    societyId: v.id("societies"),
+    assetId: v.id("assets"),
+    inventoryItemId: v.optional(v.id("inventoryItems")),
+    receiptDocumentId: v.id("documents"),
+    financialTransactionId: v.optional(v.id("financialTransactions")),
+    receiptLineLabel: v.optional(v.string()),
+    receiptLineIndex: v.optional(v.number()),
+    quantity: v.optional(v.number()),
+    unitOfMeasure: v.optional(v.string()),
+    unitCostCents: v.optional(v.number()),
+    totalCostCents: v.optional(v.number()),
+    sourceText: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_asset", ["assetId"])
+    .index("by_inventory_item", ["inventoryItemId"])
+    .index("by_receipt_document", ["receiptDocumentId"])
+    .index("by_financial_transaction", ["financialTransactionId"]),
+
   inventoryConnections: defineTable({
     societyId: v.id("societies"),
     provider: v.string(), // openboxes | odoo | erpnext | snipeit | csv | receipt | manual | demo

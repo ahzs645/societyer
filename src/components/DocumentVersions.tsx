@@ -9,7 +9,7 @@ import { isDemoMode } from "../lib/demoMode";
 import { History, Upload, RotateCcw, Download } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { getDocumentStorageProvider } from "../lib/runtimeMode";
-import { writeLocalDocumentVersion } from "../lib/documentStorage";
+import { openDocumentDownloadTarget, writeLocalDocumentVersion } from "../lib/documentStorage";
 
 export function DocumentVersionsDrawer({
   open,
@@ -32,7 +32,7 @@ export function DocumentVersionsDrawer({
   const beginUpload = useAction(api.documentVersions.beginUpload);
   const recordUpload = useMutation(api.documentVersions.recordUploadedVersion);
   const rollback = useMutation(api.documentVersions.rollback);
-  const getDownloadUrl = useAction(api.documentVersions.getDownloadUrl);
+  const getDownloadTarget = useAction(api.documentVersions.getDownloadTarget);
   const paperlessConnection = useQuery(api.paperless.listConnection, { societyId });
   const syncDocument = useAction(api.paperless.syncDocument);
   const actingUserId = useCurrentUserId() ?? undefined;
@@ -137,13 +137,13 @@ export function DocumentVersionsDrawer({
   };
 
   const download = async (versionId: Id<"documentVersions">) => {
-    const url = await getDownloadUrl({ versionId });
-    if (!url) return;
-    if (url.startsWith("demo://")) {
+    const target = await getDownloadTarget({ versionId });
+    if (!target) return;
+    if (target.kind === "url" && target.url?.startsWith("demo://")) {
       toast.info("Demo mode — no real file is stored, so the download URL is simulated.");
       return;
     }
-    window.open(url, "_blank");
+    await openDocumentDownloadTarget(target);
   };
 
   return (
