@@ -31,6 +31,9 @@ import {
 } from "../features/financials/lib/waveResources";
 
 export {
+  AccountingWorkbenchPage,
+} from "../features/financials/pages/AccountingWorkbenchPage";
+export {
   WaveAccountDetailPage,
   WaveResourceDetailPage,
   WaveResourceTablePage,
@@ -68,6 +71,10 @@ export function FinancialsPage() {
   const transactions = useQuery(
     api.financialHub.transactions,
     society ? { societyId: society._id, limit: 25 } : "skip",
+  );
+  const trialBalance = useQuery(
+    api.accounting.trialBalance,
+    society ? { societyId: society._id } : "skip",
   );
   const operatingSubscriptions = useQuery(
     api.financialHub.operatingSubscriptions,
@@ -146,6 +153,18 @@ export function FinancialsPage() {
     }
     return types;
   }, [waveSummary]);
+  const ledgerRevenueCents = (trialBalance ?? [])
+    .filter((row: any) => row.account?.accountType === "Income")
+    .reduce((sum: number, row: any) => sum + row.creditCents - row.debitCents, 0);
+  const ledgerExpenseCents = (trialBalance ?? [])
+    .filter((row: any) => row.account?.accountType === "Expense")
+    .reduce((sum: number, row: any) => sum + row.debitCents - row.creditCents, 0);
+  const ledgerAssetCents = (trialBalance ?? [])
+    .filter((row: any) => ["Asset", "Bank", "Credit"].includes(row.account?.accountType))
+    .reduce((sum: number, row: any) => sum + row.balanceCents, 0);
+  const ledgerRestrictedCents = (trialBalance ?? [])
+    .filter((row: any) => row.account?.isRestricted)
+    .reduce((sum: number, row: any) => sum + Math.abs(row.balanceCents), 0);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -229,6 +248,9 @@ export function FinancialsPage() {
         actions={
           activeConnection ? (
             <>
+              <Link className="btn-action" to="/app/financials/accounting">
+                <PiggyBank size={12} /> Accounting
+              </Link>
               <Badge tone="success">Connected · {activeConnection.provider}</Badge>
               <button
                 className="btn-action"
@@ -275,6 +297,9 @@ export function FinancialsPage() {
             </>
           ) : (
             <>
+              <Link className="btn-action" to="/app/financials/accounting">
+                <PiggyBank size={12} /> Accounting
+              </Link>
               <button
                 className="btn-action btn-action--primary"
                 disabled={busy || !canConnectWave}
@@ -325,6 +350,25 @@ export function FinancialsPage() {
       )}
 
       {waveHealth && <WaveHealthPanel result={waveHealth} />}
+
+      {(trialBalance ?? []).length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card__head">
+            <h2 className="card__title">Internal ledger summary</h2>
+            <span className="card__subtitle">Posted journal lines take priority for board and auditor reporting.</span>
+          </div>
+          <div className="stat-grid stat-grid--3" style={{ margin: "0 16px 16px" }}>
+            <Stat label="Ledger revenue" value={money(ledgerRevenueCents)} />
+            <Stat label="Ledger expenses" value={money(ledgerExpenseCents)} />
+            <Stat label="Ledger net" value={money(ledgerRevenueCents - ledgerExpenseCents)} tone={ledgerRevenueCents - ledgerExpenseCents < 0 ? "danger" : "ok"} />
+          </div>
+          <div className="stat-grid stat-grid--3" style={{ margin: "0 16px 16px" }}>
+            <Stat label="Ledger assets" value={money(ledgerAssetCents)} />
+            <Stat label="Restricted ledger" value={money(ledgerRestrictedCents)} />
+            <Stat label="Trial balance lines" value={String(trialBalance.length)} />
+          </div>
+        </div>
+      )}
 
       {activeConnection && hub && (
         <div className="stat-grid" style={{ marginBottom: 16 }}>

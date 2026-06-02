@@ -932,6 +932,143 @@
   .two-col { gap: var(--s-3); }
 }
 
+/* Accounting workbench */
+.accounting-workbench {
+  --accounting-grid-min: 320px;
+}
+.accounting-action-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-4);
+}
+.accounting-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-4);
+  margin-bottom: var(--s-4);
+}
+.accounting-list,
+.accounting-journal-list,
+.accounting-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.accounting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-width: 0;
+  padding: var(--s-3);
+  border-top: 1px solid var(--border);
+}
+.accounting-row:first-child {
+  border-top: 0;
+}
+.accounting-row__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+.accounting-export-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+  padding: 0 var(--s-4) var(--s-3);
+}
+.accounting-note,
+.accounting-empty {
+  padding: var(--s-3) var(--s-4);
+}
+.accounting-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.accounting-entry {
+  border-top: 1px solid var(--border);
+}
+.accounting-entry:first-child {
+  border-top: 0;
+}
+.accounting-entry > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  cursor: pointer;
+}
+.accounting-entry > summary::marker {
+  color: var(--text-tertiary);
+}
+.accounting-form-grid,
+.accounting-line {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+.accounting-line {
+  align-items: end;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+@media (max-width: 900px) {
+  .accounting-grid,
+  .accounting-form-grid,
+  .accounting-line {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .accounting-action-bar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .accounting-action-bar .btn-action,
+  .accounting-export-grid .btn-action {
+    width: 100%;
+    justify-content: center;
+  }
+  .accounting-export-grid {
+    grid-template-columns: 1fr;
+    padding-inline: var(--s-3);
+  }
+  .accounting-row {
+    align-items: stretch;
+    flex-direction: column;
+    padding: var(--s-3);
+  }
+  .accounting-row__actions {
+    justify-content: flex-start;
+  }
+  .accounting-entry > summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+@media (max-width: 480px) {
+  .accounting-action-bar {
+    grid-template-columns: 1fr;
+  }
+  .accounting-row__actions .btn,
+  .accounting-row__actions .btn-action,
+  .accounting-line .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .accounting-table-wrap .table {
+    min-width: 640px;
+  }
+}
+
 /* ---- Wide-content page cap ---------------------------------------------
  * Desktop optimisation for form-heavy pages (Society, Exports, etc.): cap
  * the content width so rows and grids don't stretch across ultrawide
@@ -1615,6 +1752,40 @@
 .treasurer-timeline-table td {
   overflow-wrap: anywhere;
 }
+
+/* ---- Accounting / Financials responsive hooks --------------------------
+ * Financials currently relies on generic page/card/table chrome plus inline
+ * layout styles from the Wave explorer. These hooks let the Accounting UI opt
+ * into scoped responsive behavior without changing the core finance logic. */
+.accounting-page,
+.financials-page {
+  display: grid;
+  gap: var(--s-4);
+  align-content: start;
+}
+.accounting-page__actions,
+.financials-page__actions,
+.accounting-control-row,
+.financials-control-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+}
+.accounting-control-row .input,
+.financials-control-row .input {
+  min-width: min(100%, 220px);
+}
+.accounting-table,
+.financials-table,
+.wave-cache-table {
+  table-layout: fixed;
+}
+.accounting-table td,
+.financials-table td,
+.wave-cache-table td {
+  overflow-wrap: anywhere;
+}
 @media (max-width: 1100px) {
   .treasurer-overview-grid,
   .treasurer-category-grid,
@@ -1626,8 +1797,43 @@
   }
 }
 @media (max-width: 760px) {
+  .accounting-page,
+  .financials-page {
+    gap: var(--s-3);
+  }
+  .accounting-page__actions,
+  .financials-page__actions,
+  .accounting-control-row,
+  .financials-control-row {
+    align-items: stretch;
+  }
+  .accounting-page__actions > *,
+  .financials-page__actions > *,
+  .accounting-control-row > *,
+  .financials-control-row > * {
+    min-width: 0;
+  }
+  .accounting-control-row .input,
+  .financials-control-row .input {
+    width: 100%;
+    max-width: none;
+  }
+  .accounting-table,
+  .financials-table,
+  .wave-cache-table,
+  .treasurer-claims-table,
+  .treasurer-funding-table,
+  .treasurer-source-table,
+  .treasurer-timeline-table {
+    table-layout: auto;
+    min-width: 680px;
+  }
   .treasurer-page {
     gap: var(--s-3);
+  }
+  .treasurer-page .page__actions,
+  .treasurer-page .page-header__actions {
+    width: 100%;
   }
   .treasurer-period-card__body {
     align-items: stretch;
@@ -1646,6 +1852,41 @@
   .treasurer-period-field--fy .input {
     width: min(100%, 190px);
     min-width: 0;
+  }
+  .treasurer-category-grid,
+  .treasurer-register-grid {
+    grid-template-columns: 1fr;
+  }
+  .treasurer-claim-stats {
+    margin-bottom: var(--s-3);
+  }
+  .treasurer-budget-card .card__body,
+  .treasurer-restricted-card .card__body {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  .treasurer-restricted-card .row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .treasurer-restricted-card .row > div {
+    min-width: min(100%, 220px);
+  }
+}
+@media (max-width: 480px) {
+  .treasurer-period-card__body {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .treasurer-period-field {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--s-1);
+  }
+  .treasurer-period-field .input,
+  .treasurer-period-field--fy .input {
+    width: 100%;
   }
 }
 

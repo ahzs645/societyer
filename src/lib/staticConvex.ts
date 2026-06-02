@@ -24,6 +24,14 @@ const FINANCIAL_CONNECTION_ID = "static_financial_connection";
 const PAPERLESS_CONNECTION_ID = "static_paperless_connection";
 const CASH_ACCOUNT_ID = "static_financial_cash";
 const GRANT_ACCOUNT_ID = "static_financial_grant";
+const ACCOUNT_RECEIVABLE_ID = "static_financial_ar";
+const ACCOUNT_PAYABLE_ID = "static_financial_ap";
+const ACCOUNT_NET_ASSETS_ID = "static_financial_net_assets";
+const ACCOUNT_GRANT_REVENUE_ID = "static_financial_grant_revenue";
+const ACCOUNT_DONATION_REVENUE_ID = "static_financial_donation_revenue";
+const ACCOUNT_PROGRAM_EXPENSE_ID = "static_financial_program_expense";
+const ACCOUNT_FACILITIES_EXPENSE_ID = "static_financial_facilities_expense";
+const ACCOUNT_EQUIPMENT_EXPENSE_ID = "static_financial_equipment_expense";
 
 type StaticArgs = Record<string, any> | undefined;
 
@@ -300,7 +308,25 @@ const evidenceRegistersOverview = {
   financialStatementImports: [],
   financialStatementImportLines: [],
   treasurerReports: [],
-  transactionCandidates: [],
+  transactionCandidates: [
+    {
+      _id: "static_candidate_supplies",
+      societyId: SOCIETY_ID,
+      transactionDate: "2026-04-18",
+      description: "Workshop supplies receipt",
+      amountCents: -18550,
+      accountName: "Operating chequing",
+      counterparty: "Harbour Office Supply",
+      category: "Program supplies",
+      status: "Matched",
+      sensitivity: "Internal",
+      confidence: "High",
+      sourceDocumentIds: ["static_document_projector_receipt"],
+      sourceExternalIds: ["demo:csv:workshop-supplies"],
+      notes: "Demo transaction candidate ready to post into the ledger.",
+      createdAtISO: "2026-04-18T18:00:00.000Z",
+    },
+  ],
   sourceEvidence: [],
   archiveAccessions: [],
 };
@@ -1486,24 +1512,40 @@ const financialAccounts = [
     societyId: SOCIETY_ID,
     connectionId: FINANCIAL_CONNECTION_ID,
     externalId: "cash",
+    code: "1000",
     name: "Operating chequing",
     currency: "CAD",
     accountType: "Bank",
+    subtype: "cash",
     balanceCents: 3490000,
     isRestricted: false,
+    sourceSystem: "societyer",
+    normalBalance: "debit",
   },
   {
     _id: GRANT_ACCOUNT_ID,
     societyId: SOCIETY_ID,
     connectionId: FINANCIAL_CONNECTION_ID,
     externalId: "grant",
+    code: "1010",
     name: "Neighbourhood grant fund",
     currency: "CAD",
     accountType: "Bank",
+    subtype: "restricted_cash",
     balanceCents: 2750000,
     isRestricted: true,
     restrictedPurpose: "Youth resilience program",
+    sourceSystem: "societyer",
+    normalBalance: "debit",
   },
+  { _id: ACCOUNT_RECEIVABLE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "ar", code: "1100", name: "Accounts receivable", currency: "CAD", accountType: "Asset", subtype: "receivable", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "debit" },
+  { _id: ACCOUNT_PAYABLE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "ap", code: "2000", name: "Accounts payable", currency: "CAD", accountType: "Liability", subtype: "payable", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "credit" },
+  { _id: ACCOUNT_NET_ASSETS_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "net_assets", code: "3000", name: "Unrestricted net assets", currency: "CAD", accountType: "Equity", subtype: "net_assets", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "credit" },
+  { _id: ACCOUNT_GRANT_REVENUE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "grant_revenue", code: "4100", name: "Grant revenue", currency: "CAD", accountType: "Income", subtype: "grants", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "credit" },
+  { _id: ACCOUNT_DONATION_REVENUE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "donations", code: "4000", name: "Donations and fundraising", currency: "CAD", accountType: "Income", subtype: "donations", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "credit" },
+  { _id: ACCOUNT_PROGRAM_EXPENSE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "program_expense", code: "5000", name: "Program supplies", currency: "CAD", accountType: "Expense", subtype: "program", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "debit" },
+  { _id: ACCOUNT_FACILITIES_EXPENSE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "facilities", code: "5200", name: "Facilities and utilities", currency: "CAD", accountType: "Expense", subtype: "facilities", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "debit" },
+  { _id: ACCOUNT_EQUIPMENT_EXPENSE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "equipment", code: "5500", name: "Equipment and technology", currency: "CAD", accountType: "Expense", subtype: "equipment", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "debit" },
 ];
 
 const financialTransactions = [
@@ -1553,6 +1595,66 @@ const financialTransactions = [
     counterpartyResourceType: "vendor",
   },
 ];
+
+const accountingFiscalPeriods = [
+  {
+    _id: "static_accounting_period_2026",
+    societyId: SOCIETY_ID,
+    fiscalYear: "2026",
+    periodLabel: "FY 2026",
+    startDate: "2026-01-01",
+    endDate: "2026-12-31",
+    status: "open",
+    createdAtISO: "2026-01-01T00:00:00.000Z",
+    updatedAtISO: "2026-01-01T00:00:00.000Z",
+  },
+];
+
+const accountingCounterparties = [
+  { _id: "static_counterparty_harbour", societyId: SOCIETY_ID, name: "Harbour Foundation", kind: "funder", provider: "societyer", externalId: "vendor_harbour", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
+  { _id: "static_counterparty_hall", societyId: SOCIETY_ID, name: "Riverside Hall", kind: "vendor", provider: "societyer", externalId: "vendor_city", createdAtISO: "2026-04-05T18:00:00.000Z", updatedAtISO: "2026-04-05T18:00:00.000Z" },
+];
+
+const fundRestrictions = [
+  {
+    _id: "static_fund_restriction_youth",
+    societyId: SOCIETY_ID,
+    name: "Youth resilience grant",
+    purpose: "Program supplies and venue costs for youth resilience workshops.",
+    status: "active",
+    linkedFinancialAccountId: GRANT_ACCOUNT_ID,
+    startDate: "2026-04-01",
+    endDate: "2026-12-31",
+    sourceDocumentIds: ["static_document_financials"],
+    createdAtISO: "2026-04-01T18:00:00.000Z",
+    updatedAtISO: "2026-04-01T18:00:00.000Z",
+  },
+];
+
+const accountingAccountMappings = [
+  { _id: "static_mapping_grant_revenue", societyId: SOCIETY_ID, provider: "wave", externalAccountName: "Grant revenue", externalCategory: "Grant revenue", financialAccountId: ACCOUNT_GRANT_REVENUE_ID, confidence: "manual", status: "active", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
+  { _id: "static_mapping_facilities", societyId: SOCIETY_ID, provider: "wave", externalAccountName: "Facilities", externalCategory: "Facilities", financialAccountId: ACCOUNT_FACILITIES_EXPENSE_ID, confidence: "manual", status: "active", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
+  { _id: "static_mapping_program", societyId: SOCIETY_ID, provider: "csv", externalAccountName: "Program supplies", externalCategory: "Program supplies", financialAccountId: ACCOUNT_PROGRAM_EXPENSE_ID, confidence: "manual", status: "active", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
+];
+
+const journalEntries = [
+  { _id: "static_journal_opening", societyId: SOCIETY_ID, fiscalPeriodId: "static_accounting_period_2026", entryNumber: "OB-2026", date: "2026-01-01", memo: "Opening balances", source: "opening_balance", status: "posted", fiscalYear: "2026", createdByUserId: USER_TREASURER_ID, postedAtISO: "2026-01-01T18:00:00.000Z", sourceDocumentIds: ["static_document_financials"], createdAtISO: "2026-01-01T18:00:00.000Z", updatedAtISO: "2026-01-01T18:00:00.000Z" },
+  { _id: "static_journal_grant", societyId: SOCIETY_ID, fiscalPeriodId: "static_accounting_period_2026", entryNumber: "JE-0001", date: "2026-04-01", memo: "Foundation grant deposit", source: "wave", sourceExternalId: "tx-grant", status: "posted", fiscalYear: "2026", createdByUserId: USER_TREASURER_ID, postedAtISO: "2026-04-01T18:00:00.000Z", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
+  { _id: "static_journal_space", societyId: SOCIETY_ID, fiscalPeriodId: "static_accounting_period_2026", entryNumber: "JE-0002", date: "2026-04-05", memo: "Community hall rental", source: "wave", sourceExternalId: "tx-space", status: "posted", fiscalYear: "2026", createdByUserId: USER_TREASURER_ID, postedAtISO: "2026-04-05T18:00:00.000Z", createdAtISO: "2026-04-05T18:00:00.000Z", updatedAtISO: "2026-04-05T18:00:00.000Z" },
+];
+
+const journalLines = [
+  { _id: "static_jline_opening_cash", societyId: SOCIETY_ID, journalEntryId: "static_journal_opening", accountId: CASH_ACCOUNT_ID, lineOrder: 0, amountCents: 3490000, side: "debit", description: "Opening operating cash", createdAtISO: "2026-01-01T18:00:00.000Z", updatedAtISO: "2026-01-01T18:00:00.000Z" },
+  { _id: "static_jline_opening_grant_cash", societyId: SOCIETY_ID, journalEntryId: "static_journal_opening", accountId: GRANT_ACCOUNT_ID, lineOrder: 1, amountCents: 2750000, side: "debit", description: "Opening restricted grant cash", fundRestrictionId: "static_fund_restriction_youth", createdAtISO: "2026-01-01T18:00:00.000Z", updatedAtISO: "2026-01-01T18:00:00.000Z" },
+  { _id: "static_jline_opening_equity", societyId: SOCIETY_ID, journalEntryId: "static_journal_opening", accountId: ACCOUNT_NET_ASSETS_ID, lineOrder: 2, amountCents: 6240000, side: "credit", description: "Opening net assets", createdAtISO: "2026-01-01T18:00:00.000Z", updatedAtISO: "2026-01-01T18:00:00.000Z" },
+  { _id: "static_jline_grant_cash", societyId: SOCIETY_ID, journalEntryId: "static_journal_grant", accountId: GRANT_ACCOUNT_ID, lineOrder: 0, amountCents: 1500000, side: "debit", description: "Grant deposit", counterpartyId: "static_counterparty_harbour", fundRestrictionId: "static_fund_restriction_youth", financialTransactionId: "static_tx_grant", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
+  { _id: "static_jline_grant_revenue", societyId: SOCIETY_ID, journalEntryId: "static_journal_grant", accountId: ACCOUNT_GRANT_REVENUE_ID, lineOrder: 1, amountCents: 1500000, side: "credit", description: "Grant revenue", counterpartyId: "static_counterparty_harbour", fundRestrictionId: "static_fund_restriction_youth", financialTransactionId: "static_tx_grant", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
+  { _id: "static_jline_space_cash", societyId: SOCIETY_ID, journalEntryId: "static_journal_space", accountId: CASH_ACCOUNT_ID, lineOrder: 0, amountCents: 42000, side: "credit", description: "Hall rental payment", counterpartyId: "static_counterparty_hall", financialTransactionId: "static_tx_space", createdAtISO: "2026-04-05T18:00:00.000Z", updatedAtISO: "2026-04-05T18:00:00.000Z" },
+  { _id: "static_jline_space_expense", societyId: SOCIETY_ID, journalEntryId: "static_journal_space", accountId: ACCOUNT_FACILITIES_EXPENSE_ID, lineOrder: 1, amountCents: 42000, side: "debit", description: "Community hall rental", counterpartyId: "static_counterparty_hall", financialTransactionId: "static_tx_space", createdAtISO: "2026-04-05T18:00:00.000Z", updatedAtISO: "2026-04-05T18:00:00.000Z" },
+];
+
+const reconciliationRuns: any[] = [];
+const reconciliationRunLines: any[] = [];
 
 const budgets = [
   {
@@ -1891,6 +1993,14 @@ const tables: Record<string, any[]> = {
   aiMessages,
   aiToolDrafts,
   aiProviderSettings,
+  accountingFiscalPeriods,
+  accountingCounterparties,
+  accountingAccountMappings,
+  fundRestrictions,
+  journalEntries,
+  journalLines,
+  reconciliationRuns,
+  reconciliationRunLines,
   motionBacklog,
   pendingEmails: [
     {
@@ -2956,6 +3066,99 @@ function staticCategoryAccountStats(externalId?: string, label?: string) {
   };
 }
 
+function staticTrialBalance(seed: StaticDemoSeed | Record<string, any[]> = tables, args?: StaticArgs) {
+  const entries = scopedRows(seed.journalEntries ?? [], args).filter((entry) => entry.status === "posted");
+  const entryIds = new Set(entries.map((entry) => entry._id));
+  const accounts = scopedRows(seed.financialAccounts ?? financialAccounts, args);
+  const accountById = new Map(accounts.map((account) => [account._id, account]));
+  const totals = new Map<string, { debitCents: number; creditCents: number }>();
+  for (const line of scopedRows(seed.journalLines ?? [], args)) {
+    if (!entryIds.has(line.journalEntryId)) continue;
+    const current = totals.get(line.accountId) ?? { debitCents: 0, creditCents: 0 };
+    if (line.side === "debit") current.debitCents += line.amountCents;
+    if (line.side === "credit") current.creditCents += line.amountCents;
+    totals.set(line.accountId, current);
+  }
+  return Array.from(totals.entries())
+    .map(([accountId, total]) => ({
+      account: accountById.get(accountId) ?? null,
+      ...total,
+      balanceCents: total.debitCents - total.creditCents,
+    }))
+    .sort((a, b) => String(a.account?.code ?? "").localeCompare(String(b.account?.code ?? "")));
+}
+
+function staticGeneralLedger(seed: StaticDemoSeed | Record<string, any[]> = tables, args?: StaticArgs) {
+  const entries = scopedRows(seed.journalEntries ?? [], args).filter((entry) => entry.status === "posted");
+  const entryById = new Map(entries.map((entry) => [entry._id, entry]));
+  const accounts = scopedRows(seed.financialAccounts ?? financialAccounts, args);
+  const accountById = new Map(accounts.map((account) => [account._id, account]));
+  return scopedRows(seed.journalLines ?? [], args)
+    .filter((line) => entryById.has(line.journalEntryId))
+    .map((line) => ({ ...line, entry: entryById.get(line.journalEntryId), account: accountById.get(line.accountId) ?? null }))
+    .sort((a, b) => `${a.entry.date}:${a.account?.code ?? ""}:${a.lineOrder}`.localeCompare(`${b.entry.date}:${b.account?.code ?? ""}:${b.lineOrder}`));
+}
+
+function staticRestrictedFundBalances(seed: StaticDemoSeed | Record<string, any[]> = tables, args?: StaticArgs) {
+  const restrictions = scopedRows(seed.fundRestrictions ?? fundRestrictions, args);
+  const totals = new Map<string, { debitCents: number; creditCents: number }>();
+  for (const line of staticGeneralLedger(seed, args)) {
+    if (!line.fundRestrictionId) continue;
+    const current = totals.get(line.fundRestrictionId) ?? { debitCents: 0, creditCents: 0 };
+    if (line.side === "debit") current.debitCents += line.amountCents;
+    if (line.side === "credit") current.creditCents += line.amountCents;
+    totals.set(line.fundRestrictionId, current);
+  }
+  return restrictions
+    .map((restriction) => {
+      const total = totals.get(restriction._id) ?? { debitCents: 0, creditCents: 0 };
+      return {
+        ...restriction,
+        debitCents: total.debitCents,
+        creditCents: total.creditCents,
+        balanceCents: total.debitCents - total.creditCents,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function staticAccountingCsv(seed: StaticDemoSeed | Record<string, any[]> = tables, args?: StaticArgs) {
+  const kind = args?.kind ?? "trial_balance";
+  if (kind === "chart_of_accounts") {
+    const rows = [["code", "name", "type", "subtype", "currency", "normal_balance", "external_id"]];
+    for (const account of scopedRows(seed.financialAccounts ?? financialAccounts, args).sort((a, b) => String(a.code ?? "").localeCompare(String(b.code ?? "")))) {
+      rows.push([account.code ?? "", account.name, account.accountType, account.subtype ?? "", account.currency, account.normalBalance ?? "", account.externalId]);
+    }
+    return { filename: "chart-of-accounts.csv", contentType: "text/csv", csv: staticCsvRows(rows) };
+  }
+  if (kind === "journal_entries" || kind === "general_ledger") {
+    const rows = [["entry_date", "entry_number", "reference", "memo", "status", "source", "account_code", "account_name", "side", "amount_cents", "line_description"]];
+    for (const line of staticGeneralLedger(seed, args)) {
+      rows.push([line.entry.date, line.entry.entryNumber ?? "", line.entry.reference ?? "", line.entry.memo, line.entry.status, line.entry.source, line.account?.code ?? "", line.account?.name ?? "", line.side, line.amountCents, line.description ?? ""]);
+    }
+    return { filename: kind === "journal_entries" ? "journal-entries.csv" : "general-ledger.csv", contentType: "text/csv", csv: staticCsvRows(rows) };
+  }
+  const rows = [["account_code", "account_name", "debit_cents", "credit_cents", "balance_cents"]];
+  for (const row of staticTrialBalance(seed, args)) rows.push([row.account?.code ?? "", row.account?.name ?? "", row.debitCents, row.creditCents, row.balanceCents]);
+  return { filename: "trial-balance.csv", contentType: "text/csv", csv: staticCsvRows(rows) };
+}
+
+function staticAccountingSeed(store?: StaticDemoDexieStore | null, args?: StaticArgs) {
+  return {
+    financialAccounts: store?.listRows("financialAccounts", args) ?? financialAccounts,
+    fundRestrictions: store?.listRows("fundRestrictions", args) ?? fundRestrictions,
+    journalEntries: store?.listRows("journalEntries", args) ?? journalEntries,
+    journalLines: store?.listRows("journalLines", args) ?? journalLines,
+  };
+}
+
+function staticCsvRows(rows: unknown[][]) {
+  return rows.map((row) => row.map((value) => {
+    const text = String(value ?? "");
+    return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  }).join(",")).join("\n");
+}
+
 function normalizeStaticCategoryLabel(value?: string) {
   return String(value ?? "").trim().toLowerCase();
 }
@@ -3721,6 +3924,16 @@ const STATIC_EXPORT_TABLES = [
   "policies",
   "conflicts",
   "financials",
+  "financialAccounts",
+  "financialTransactions",
+  "accountingFiscalPeriods",
+  "accountingCounterparties",
+  "accountingAccountMappings",
+  "fundRestrictions",
+  "journalEntries",
+  "journalLines",
+  "reconciliationRuns",
+  "reconciliationRunLines",
   "bylawRuleSets",
   "goals",
   "tasks",
@@ -4211,6 +4424,46 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
         presentedAtMeeting: null,
       };
     }
+    case "accounting:chartAccounts":
+      return scopedRows(store?.listRows("financialAccounts", args) ?? financialAccounts, args)
+        .sort((a, b) => String(a.code ?? "").localeCompare(String(b.code ?? "")) || a.name.localeCompare(b.name));
+    case "accounting:fiscalPeriods":
+      return scopedRows(store?.listRows("accountingFiscalPeriods", args) ?? accountingFiscalPeriods, args)
+        .sort((a, b) => a.startDate.localeCompare(b.startDate));
+    case "accounting:counterparties":
+      return scopedRows(store?.listRows("accountingCounterparties", args) ?? accountingCounterparties, args)
+        .sort((a, b) => a.name.localeCompare(b.name));
+    case "accounting:fundRestrictions":
+      return scopedRows(store?.listRows("fundRestrictions", args) ?? fundRestrictions, args)
+        .sort((a, b) => a.name.localeCompare(b.name));
+    case "accounting:restrictedFundBalances":
+      return staticRestrictedFundBalances(staticAccountingSeed(store, args), args);
+    case "accounting:accountMappings":
+      return scopedRows(store?.listRows("accountingAccountMappings", args) ?? accountingAccountMappings, args)
+        .sort((a, b) => `${a.provider}:${a.externalAccountName}`.localeCompare(`${b.provider}:${b.externalAccountName}`));
+    case "accounting:journalEntries": {
+      const entries = scopedRows(store?.listRows("journalEntries", args) ?? journalEntries, args)
+        .filter((entry) => !args?.status || entry.status === args.status)
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, args?.limit ?? 100);
+      const lines = store?.listRows("journalLines", args) ?? journalLines;
+      return entries.map((entry) => ({
+        ...entry,
+        lines: lines.filter((line) => line.journalEntryId === entry._id).sort((a, b) => a.lineOrder - b.lineOrder),
+      }));
+    }
+    case "accounting:journalEntry": {
+      const entry = byId(store?.listRows("journalEntries", args) ?? journalEntries, args?.id);
+      if (!entry) return null;
+      const lines = store?.listRows("journalLines", args) ?? journalLines;
+      return { ...entry, lines: lines.filter((line) => line.journalEntryId === entry._id).sort((a, b) => a.lineOrder - b.lineOrder) };
+    }
+    case "accounting:trialBalance":
+      return staticTrialBalance(staticAccountingSeed(store, args), args);
+    case "accounting:generalLedger":
+      return staticGeneralLedger(staticAccountingSeed(store, args), args);
+    case "accounting:exportCsv":
+      return staticAccountingCsv(staticAccountingSeed(store, args), args);
     case "financialHub:accounts":
       return financialAccounts;
     case "financialHub:connections":
@@ -4710,6 +4963,152 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       updated: [],
     };
   }
+  if (name === "accounting:seedSocietyChartOfAccounts") {
+    return { inserted: 0, skipped: financialAccounts.length };
+  }
+  if (name === "accounting:upsertFiscalPeriod") {
+    const now = new Date().toISOString();
+    const id = args?.id ?? `static_accounting_period_${Date.now()}`;
+    store?.upsertRow("accountingFiscalPeriods", {
+      _id: id,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      fiscalYear: args?.fiscalYear,
+      periodLabel: args?.periodLabel,
+      startDate: args?.startDate,
+      endDate: args?.endDate,
+      status: args?.status ?? "open",
+      notes: args?.notes,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    return id;
+  }
+  if (name === "accounting:closeFiscalPeriod" || name === "accounting:reopenFiscalPeriod") {
+    const status = name.endsWith("closeFiscalPeriod") ? "closed" : "open";
+    store?.upsertRow("accountingFiscalPeriods", {
+      ...(store.getRow("accountingFiscalPeriods", args?.id) ?? byId(accountingFiscalPeriods, args?.id)),
+      _id: args?.id,
+      status,
+      closedAtISO: status === "closed" ? new Date().toISOString() : undefined,
+      updatedAtISO: new Date().toISOString(),
+    });
+    return args?.id;
+  }
+  if (name === "accounting:upsertJournalEntry" || name === "accounting:postOpeningBalances") {
+    const now = new Date().toISOString();
+    const id = args?.id ?? `static_journal_${Date.now()}`;
+    const lines = args?.lines ?? [];
+    store?.upsertRow("journalEntries", {
+      _id: id,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      fiscalPeriodId: args?.fiscalPeriodId,
+      date: args?.date,
+      memo: args?.memo ?? (name.endsWith("postOpeningBalances") ? "Opening balances" : "Manual journal entry"),
+      source: args?.source ?? (name.endsWith("postOpeningBalances") ? "opening_balance" : "manual"),
+      status: args?.status ?? "posted",
+      fiscalYear: args?.fiscalYear,
+      createdByUserId: args?.actingUserId,
+      postedAtISO: now,
+      sourceDocumentIds: args?.sourceDocumentIds,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    lines.forEach((line: any, index: number) => {
+      store?.upsertRow("journalLines", {
+        _id: `static_jline_${Date.now()}_${index}`,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        journalEntryId: id,
+        accountId: line.accountId,
+        lineOrder: index,
+        amountCents: line.amountCents,
+        side: line.side,
+        description: line.description,
+        fundRestrictionId: line.fundRestrictionId,
+        documentIds: args?.sourceDocumentIds,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    });
+    return id;
+  }
+  if (name === "accounting:postTransactionCandidateAllocation") {
+    const now = new Date().toISOString();
+    const candidate = evidenceRegistersOverview.transactionCandidates.find((row: any) => row._id === args?.transactionCandidateId);
+    const id = `static_journal_candidate_${Date.now()}`;
+    const total = (args?.allocations ?? []).reduce((sum: number, row: any) => sum + row.amountCents, 0);
+    store?.upsertRow("journalEntries", {
+      _id: id,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      date: candidate?.transactionDate ?? now.slice(0, 10),
+      memo: args?.memo ?? candidate?.description ?? "Posted transaction candidate",
+      source: "transactionCandidate",
+      status: "posted",
+      fiscalYear: args?.fiscalYear,
+      createdByUserId: args?.actingUserId,
+      postedAtISO: now,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    store?.upsertRow("journalLines", {
+      _id: `static_jline_candidate_cash_${Date.now()}`,
+      societyId: SOCIETY_ID,
+      journalEntryId: id,
+      accountId: args?.cashAccountId,
+      lineOrder: 0,
+      amountCents: total,
+      side: "credit",
+      description: candidate?.description,
+      transactionCandidateId: args?.transactionCandidateId,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    (args?.allocations ?? []).forEach((line: any, index: number) => {
+      store?.upsertRow("journalLines", {
+        _id: `static_jline_candidate_alloc_${Date.now()}_${index}`,
+        societyId: SOCIETY_ID,
+        journalEntryId: id,
+        accountId: line.accountId,
+        lineOrder: index + 1,
+        amountCents: line.amountCents,
+        side: "debit",
+        description: line.description,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    });
+    return id;
+  }
+  if (name === "accounting:createReconciliationRun") {
+    const now = new Date().toISOString();
+    const seed = staticAccountingSeed(store, args);
+    const ledger = staticGeneralLedger(seed, args).filter((line) => line.accountId === args?.financialAccountId && line.entry.date <= args?.statementDate);
+    const bookBalanceCents = ledger.reduce((sum, line) => sum + (line.side === "debit" ? line.amountCents : -line.amountCents), 0);
+    const differenceCents = (args?.statementBalanceCents ?? 0) - bookBalanceCents;
+    const runId = `static_reconciliation_run_${Date.now()}`;
+    store?.upsertRow("reconciliationRuns", {
+      _id: runId,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      financialAccountId: args?.financialAccountId,
+      statementDate: args?.statementDate,
+      statementBalanceCents: args?.statementBalanceCents,
+      bookBalanceCents,
+      status: differenceCents === 0 ? "ready" : "draft",
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    return { runId, bookBalanceCents, differenceCents };
+  }
+  if (name === "accounting:setReconciliationRunStatus") {
+    const existing = store?.getRow("reconciliationRuns", args?.id) ?? byId(reconciliationRuns, args?.id);
+    store?.upsertRow("reconciliationRuns", {
+      ...existing,
+      _id: args?.id,
+      status: args?.status,
+      reconciledAtISO: args?.status === "reconciled" ? new Date().toISOString() : existing?.reconciledAtISO,
+      updatedAtISO: new Date().toISOString(),
+    });
+    return args?.id;
+  }
   if (name === "seed:run") {
     void store?.reseed();
     return { societyId: SOCIETY_ID };
@@ -5174,6 +5573,7 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     const now = new Date().toISOString();
     const assets = store?.listRows("assets", args) ?? scopedRows(tables.assets, args);
     const runId = `static_asset_verification_${Date.now()}`;
+    const inventoryCountId = `static_inventory_count_${Date.now()}`;
     store?.upsertRow("assetVerificationRuns", {
       _id: runId,
       societyId: args?.societyId ?? SOCIETY_ID,
@@ -5185,7 +5585,76 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       createdAtISO: now,
       updatedAtISO: now,
     });
+    store?.upsertRow("inventoryCounts", {
+      _id: inventoryCountId,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      title: args?.title,
+      status: "open",
+      startedAtISO: now,
+      reviewerName: args?.reviewerName,
+      scope: "assets",
+      sourceDocumentIds: [],
+      notes: args?.notes,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
     assets.forEach((asset: any) => {
+      const existingItems = store?.listRows("inventoryItems", { societyId: asset.societyId }) ?? tables.inventoryItems;
+      let inventoryItem = existingItems.find((row: any) => row.assetId === asset._id);
+      if (!inventoryItem) {
+        inventoryItem = {
+          _id: `static_inventory_item_${asset._id}_${Date.now()}`,
+          societyId: asset.societyId,
+          sku: asset.assetTag,
+          name: asset.name,
+          description: asset.notes,
+          category: asset.category,
+          itemType: asset.category === "Consumable" ? "consumable" : "asset",
+          unitOfMeasure: asset.quantityUnit ?? "each",
+          currency: asset.currency ?? "CAD",
+          trackSerial: Boolean(asset.serialNumber),
+          trackLot: false,
+          trackExpiry: false,
+          status: asset.status === "Disposed" ? "archived" : "active",
+          assetId: asset._id,
+          sourceSystem: "societyer_assets",
+          createdAtISO: now,
+          updatedAtISO: now,
+        };
+        store?.upsertRow("inventoryItems", inventoryItem);
+      }
+      const locationName = String(asset.location ?? asset.custodianName ?? "Inventory").trim() || "Inventory";
+      const existingLocations = store?.listRows("inventoryLocations", { societyId: asset.societyId }) ?? tables.inventoryLocations;
+      let location = existingLocations.find((row: any) => row.name.toLowerCase() === locationName.toLowerCase());
+      if (!location) {
+        location = {
+          _id: `static_inventory_location_${asset._id}_${Date.now()}`,
+          societyId: asset.societyId,
+          name: locationName,
+          locationType: asset.location ? "facility" : "virtual",
+          active: true,
+          sourceSystem: "societyer_assets",
+          createdAtISO: now,
+          updatedAtISO: now,
+        };
+        store?.upsertRow("inventoryLocations", location);
+      }
+      const expectedQuantity = asset.category === "Consumable"
+        ? asset.quantityOnHand ?? 0
+        : asset.status === "Disposed" || asset.status === "Lost"
+          ? 0
+          : 1;
+      store?.upsertRow("inventoryCountLines", {
+        _id: `static_inventory_count_line_${asset._id}_${Date.now()}`,
+        societyId: asset.societyId,
+        inventoryCountId,
+        inventoryItemId: inventoryItem._id,
+        locationId: location._id,
+        expectedQuantity,
+        status: "pending",
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
       store?.upsertRow("assetVerificationItems", {
         _id: `static_asset_verification_item_${asset._id}_${Date.now()}`,
         societyId: asset.societyId,
@@ -5212,6 +5681,28 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       notes: args?.notes,
       updatedAtISO: now,
     });
+    const run = store?.getRow("assetVerificationRuns", item.runId) ?? byId(tables.assetVerificationRuns, item.runId);
+    const asset = store?.getRow("assets", item.assetId) ?? byId(tables.assets, item.assetId);
+    const inventoryItem = (store?.listRows("inventoryItems", { societyId: item.societyId }) ?? tables.inventoryItems)
+      .find((row: any) => row.assetId === item.assetId);
+    const count = (store?.listRows("inventoryCounts", { societyId: item.societyId }) ?? tables.inventoryCounts)
+      .find((row: any) => row.status === "open" && row.title === run?.title && row.startedAtISO === run?.startedAtISO);
+    const countLine = count && inventoryItem
+      ? (store?.listRows("inventoryCountLines", { societyId: item.societyId }) ?? tables.inventoryCountLines)
+          .find((row: any) => row.inventoryCountId === count._id && row.inventoryItemId === inventoryItem._id)
+      : null;
+    if (countLine) {
+      const countedQuantity = args?.status === "missing" ? 0 : countLine.expectedQuantity ?? (asset?.category === "Consumable" ? asset?.quantityOnHand ?? 0 : 1);
+      store?.upsertRow("inventoryCountLines", {
+        ...countLine,
+        countedQuantity,
+        varianceQuantity: countedQuantity - (countLine.expectedQuantity ?? 0),
+        condition: args?.observedCondition,
+        status: args?.status === "verified" ? "counted" : args?.status,
+        notes: args?.notes,
+        updatedAtISO: now,
+      });
+    }
     return args?.itemId;
   }
   if (name === "assets:completeVerificationRun") {
@@ -5219,6 +5710,9 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     if (!run) return null;
     const now = new Date().toISOString();
     store?.upsertRow("assetVerificationRuns", { ...run, status: "Completed", completedAtISO: now, updatedAtISO: now });
+    const count = (store?.listRows("inventoryCounts", { societyId: run.societyId }) ?? tables.inventoryCounts)
+      .find((row: any) => row.status === "open" && row.title === run.title && row.startedAtISO === run.startedAtISO);
+    if (count) store?.upsertRow("inventoryCounts", { ...count, status: "completed", completedAtISO: now, updatedAtISO: now });
     return args?.id;
   }
   if (name === "assets:dispose") {

@@ -564,17 +564,46 @@ export const startVerificationRun = mutation({
       createdAtISO: now,
       updatedAtISO: now,
     });
+    const inventoryCountId = await ctx.db.insert("inventoryCounts", {
+      societyId: args.societyId,
+      title: args.title,
+      status: "open",
+      startedAtISO: now,
+      reviewerName: args.reviewerName,
+      scope: "assets",
+      sourceDocumentIds: [],
+      notes: args.notes,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
     await Promise.all(
-      assets.map((asset: any) =>
-        ctx.db.insert("assetVerificationItems", {
+      assets.map(async (asset: any) => {
+        const itemId = await findOrCreateInventoryItemForAsset(ctx, asset);
+        const locationId = await findOrCreateInventoryLocationForAsset(ctx, asset);
+        const expectedQuantity = asset.category === "Consumable"
+          ? asset.quantityOnHand ?? 0
+          : asset.status === "Disposed" || asset.status === "Lost"
+            ? 0
+            : 1;
+        await ctx.db.insert("inventoryCountLines", {
+          societyId: args.societyId,
+          inventoryCountId,
+          inventoryItemId: itemId,
+          locationId,
+          expectedQuantity,
+          status: "pending",
+          createdAtISO: now,
+          updatedAtISO: now,
+        });
+        return ctx.db.insert("assetVerificationItems", {
           societyId: args.societyId,
           runId,
           assetId: asset._id,
           status: "pending",
           createdAtISO: now,
           updatedAtISO: now,
-        }),
-      ),
+        });
+      }),
     );
     return runId;
   },
@@ -621,6 +650,41 @@ export const verifyAsset = mutation({
       ...(args.observedCondition ? { condition: args.observedCondition } : {}),
       updatedAtISO: now,
     });
+    const asset = await ctx.db.get(item.assetId);
+    if (asset) {
+      const inventoryItem = await ctx.db
+        .query("inventoryItems")
+        .withIndex("by_asset", (q: any) => q.eq("assetId", item.assetId))
+        .first();
+      if (inventoryItem) {
+        const run = await ctx.db.get(item.runId);
+        const counts = run
+          ? await ctx.db
+              .query("inventoryCounts")
+              .withIndex("by_society_status", (q: any) => q.eq("societyId", item.societyId).eq("status", "open"))
+              .collect()
+          : [];
+        const count = counts.find((row: any) => row.title === run?.title && row.startedAtISO === run?.startedAtISO);
+        if (count) {
+          const lines = await ctx.db
+            .query("inventoryCountLines")
+            .withIndex("by_count", (q: any) => q.eq("inventoryCountId", count._id))
+            .collect();
+          const line = lines.find((row: any) => row.inventoryItemId === inventoryItem._id);
+          if (line) {
+            const countedQuantity = args.status === "missing" ? 0 : line.expectedQuantity ?? (asset.category === "Consumable" ? asset.quantityOnHand ?? 0 : 1);
+            await ctx.db.patch(line._id, {
+              countedQuantity,
+              varianceQuantity: countedQuantity - (line.expectedQuantity ?? 0),
+              condition: args.observedCondition,
+              status: args.status === "verified" ? "counted" : args.status,
+              notes: args.notes,
+              updatedAtISO: now,
+            });
+          }
+        }
+      }
+    }
     return args.itemId;
   },
 });
@@ -631,6 +695,15 @@ export const completeVerificationRun = mutation({
   handler: async (ctx, { id }) => {
     const now = new Date().toISOString();
     await ctx.db.patch(id, { status: "Completed", completedAtISO: now, updatedAtISO: now });
+    const run = await ctx.db.get(id);
+    if (run) {
+      const counts = await ctx.db
+        .query("inventoryCounts")
+        .withIndex("by_society_status", (q: any) => q.eq("societyId", run.societyId).eq("status", "open"))
+        .collect();
+      const count = counts.find((row: any) => row.title === run.title && row.startedAtISO === run.startedAtISO);
+      if (count) await ctx.db.patch(count._id, { status: "completed", completedAtISO: now, updatedAtISO: now });
+    }
     return id;
   },
 });

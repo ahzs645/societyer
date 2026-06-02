@@ -191,6 +191,43 @@ export const fundRestrictions = query({
   },
 });
 
+export const restrictedFundBalances = query({
+  args: { societyId: v.id("societies"), fiscalYear: v.optional(v.string()) },
+  returns: v.any(),
+  handler: async (ctx, { societyId, fiscalYear }) => {
+    const [restrictions, entries, lines] = await Promise.all([
+      ctx.db.query("fundRestrictions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("journalEntries").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "posted")).collect(),
+      ctx.db.query("journalLines").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ]);
+    const entryIds = new Set(
+      entries
+        .filter((entry) => !fiscalYear || entry.fiscalYear === fiscalYear)
+        .map((entry) => String(entry._id)),
+    );
+    const totals = new Map<string, { debitCents: number; creditCents: number }>();
+    for (const line of lines) {
+      if (!line.fundRestrictionId || !entryIds.has(String(line.journalEntryId))) continue;
+      const key = String(line.fundRestrictionId);
+      const current = totals.get(key) ?? { debitCents: 0, creditCents: 0 };
+      if (line.side === "debit") current.debitCents += line.amountCents;
+      if (line.side === "credit") current.creditCents += line.amountCents;
+      totals.set(key, current);
+    }
+    return restrictions
+      .map((restriction) => {
+        const total = totals.get(String(restriction._id)) ?? { debitCents: 0, creditCents: 0 };
+        return {
+          ...restriction,
+          debitCents: total.debitCents,
+          creditCents: total.creditCents,
+          balanceCents: total.debitCents - total.creditCents,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  },
+});
+
 export const accountMappings = query({
   args: { societyId: v.id("societies"), provider: v.optional(v.string()), status: v.optional(v.string()) },
   returns: v.any(),
@@ -880,7 +917,7 @@ export const createReconciliationRun = mutation({
     const account = await ctx.db.get(args.financialAccountId);
     if (!account || account.societyId !== args.societyId) throw new Error("Account must belong to this society.");
     const [entries, lines] = await Promise.all([
-      ctx.db.query("journalEntries").withIndex("by_society_status", (q) => q.eq("societyId", args.societyId).eq("posted")).collect(),
+      ctx.db.query("journalEntries").withIndex("by_society_status", (q) => q.eq("societyId", args.societyId).eq("status", "posted")).collect(),
       ctx.db.query("journalLines").withIndex("by_account", (q) => q.eq("accountId", args.financialAccountId)).collect(),
     ]);
     const entryById = new Map(entries.filter((entry) => entry.date <= args.statementDate).map((entry) => [String(entry._id), entry]));

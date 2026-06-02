@@ -34,6 +34,7 @@ const DEMO_ROUTES = [
   { path: "/demo/app/documents", name: "Documents" },
   { path: "/demo/app/conflicts", name: "Conflicts" },
   { path: "/demo/app/financials", name: "Financials" },
+  { path: "/demo/app/financials/accounting", name: "Accounting" },
   { path: "/demo/app/treasurer", name: "Treasurer" },
   { path: "/demo/app/committees", name: "Committees" },
   { path: "/demo/app/goals", name: "Goals" },

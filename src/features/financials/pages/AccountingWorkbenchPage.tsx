@@ -1,0 +1,447 @@
+import { useState } from "react";
+import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { useMutation, useQuery } from "convex/react";
+import { ArrowLeft, Download, FileSpreadsheet, GitCompareArrows, Landmark, Lock, PlusCircle, Scale, Split, Unlock } from "lucide-react";
+import { api } from "@/lib/convexApi";
+import { useSociety } from "../../../hooks/useSociety";
+import { useCurrentUserId } from "../../../hooks/useCurrentUser";
+import { useToast } from "../../../components/Toast";
+import { Badge, Drawer, Field } from "../../../components/ui";
+import { PageHeader, SeedPrompt } from "../../../pages/_helpers";
+import { formatDate, money } from "../../../lib/format";
+
+type DrawerKind = "period" | "opening" | "journal" | "candidate" | "reconciliation" | null;
+
+const today = () => new Date().toISOString().slice(0, 10);
+const currentYear = () => new Date().getFullYear().toString();
+
+function centsFromInput(value: string) {
+  return Math.round(Number(value || "0") * 100);
+}
+
+function dollarsFromCents(value: number) {
+  return (value / 100).toFixed(2);
+}
+
+function downloadCsv(filename: string, csv: string) {
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export function AccountingWorkbenchPage() {
+  const society = useSociety();
+  const actingUserId = useCurrentUserId() ?? undefined;
+  const toast = useToast();
+  const [drawer, setDrawer] = useState<DrawerKind>(null);
+  const [busy, setBusy] = useState(false);
+  const [periodForm, setPeriodForm] = useState({
+    fiscalYear: currentYear(),
+    periodLabel: `FY ${currentYear()}`,
+    startDate: `${currentYear()}-01-01`,
+    endDate: `${currentYear()}-12-31`,
+  });
+  const [openingRows, setOpeningRows] = useState([
+    { accountId: "", side: "debit", amount: "" },
+    { accountId: "", side: "credit", amount: "" },
+  ]);
+  const [journalForm, setJournalForm] = useState({
+    date: today(),
+    memo: "",
+    fiscalYear: currentYear(),
+    allowClosed: false,
+    lines: [
+      { accountId: "", side: "debit", amount: "", description: "" },
+      { accountId: "", side: "credit", amount: "", description: "" },
+    ],
+  });
+  const [candidateForm, setCandidateForm] = useState({
+    candidateId: "",
+    cashAccountId: "",
+    allocationAccountId: "",
+    amount: "",
+    description: "",
+  });
+  const [reconciliationForm, setReconciliationForm] = useState({
+    financialAccountId: "",
+    statementDate: today(),
+    statementBalance: "",
+  });
+
+  const accounts = useQuery(api.accounting.chartAccounts, society ? { societyId: society._id } : "skip");
+  const periods = useQuery(api.accounting.fiscalPeriods, society ? { societyId: society._id } : "skip");
+  const journalEntries = useQuery(api.accounting.journalEntries, society ? { societyId: society._id, limit: 25 } : "skip");
+  const trialBalance = useQuery(api.accounting.trialBalance, society ? { societyId: society._id } : "skip");
+  const restrictedBalances = useQuery(api.accounting.restrictedFundBalances, society ? { societyId: society._id } : "skip");
+  const transactionCandidates = useQuery(api.evidenceRegisters.overview, society ? { societyId: society._id } : "skip");
+  const seedChart = useMutation(api.accounting.seedSocietyChartOfAccounts);
+  const upsertPeriod = useMutation(api.accounting.upsertFiscalPeriod);
+  const closePeriod = useMutation(api.accounting.closeFiscalPeriod);
+  const reopenPeriod = useMutation(api.accounting.reopenFiscalPeriod);
+  const postOpening = useMutation(api.accounting.postOpeningBalances);
+  const upsertJournal = useMutation(api.accounting.upsertJournalEntry);
+  const postAllocation = useMutation(api.accounting.postTransactionCandidateAllocation);
+  const createRecon = useMutation(api.accounting.createReconciliationRun);
+  const setReconStatus = useMutation(api.accounting.setReconciliationRunStatus);
+  const chartCsv = useQuery(api.accounting.exportCsv, society ? { societyId: society._id, kind: "chart_of_accounts" } : "skip");
+  const trialCsv = useQuery(api.accounting.exportCsv, society ? { societyId: society._id, kind: "trial_balance" } : "skip");
+  const journalCsv = useQuery(api.accounting.exportCsv, society ? { societyId: society._id, kind: "journal_entries" } : "skip");
+  const ledgerCsv = useQuery(api.accounting.exportCsv, society ? { societyId: society._id, kind: "general_ledger" } : "skip");
+
+  const candidates = transactionCandidates?.transactionCandidates ?? [];
+  const cashAccounts = (accounts ?? []).filter((account: any) => ["Asset", "Bank", "Credit"].includes(account.accountType));
+  const totalDebit = (trialBalance ?? []).reduce((sum: number, row: any) => sum + row.debitCents, 0);
+  const totalCredit = (trialBalance ?? []).reduce((sum: number, row: any) => sum + row.creditCents, 0);
+
+  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === null) return <SeedPrompt />;
+
+  const run = async (fn: () => Promise<void>, success?: string) => {
+    setBusy(true);
+    try {
+      await fn();
+      if (success) toast.success(success);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Accounting action failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const savePeriod = () =>
+    run(async () => {
+      await upsertPeriod({ societyId: society._id, ...periodForm, status: "open", actingUserId });
+      setDrawer(null);
+    }, "Fiscal period created");
+
+  const saveOpening = () =>
+    run(async () => {
+      await postOpening({
+        societyId: society._id,
+        date: periodForm.startDate || today(),
+        fiscalYear: periodForm.fiscalYear,
+        lines: openingRows
+          .filter((row) => row.accountId && row.amount)
+          .map((row) => ({
+            accountId: row.accountId as any,
+            side: row.side,
+            amountCents: centsFromInput(row.amount),
+          })),
+        actingUserId,
+      });
+      setDrawer(null);
+    }, "Opening balances posted");
+
+  const saveJournal = () =>
+    run(async () => {
+      await upsertJournal({
+        societyId: society._id,
+        date: journalForm.date,
+        memo: journalForm.memo || "Manual journal entry",
+        source: journalForm.allowClosed ? "adjustment" : "manual",
+        status: "posted",
+        fiscalYear: journalForm.fiscalYear,
+        allowClosedPeriodAdjustment: journalForm.allowClosed,
+        lines: journalForm.lines
+          .filter((line) => line.accountId && line.amount)
+          .map((line) => ({
+            accountId: line.accountId as any,
+            side: line.side,
+            amountCents: centsFromInput(line.amount),
+            description: line.description || undefined,
+          })),
+        actingUserId,
+      });
+      setDrawer(null);
+    }, "Journal entry posted");
+
+  const saveCandidateAllocation = () =>
+    run(async () => {
+      await postAllocation({
+        transactionCandidateId: candidateForm.candidateId as any,
+        cashAccountId: candidateForm.cashAccountId as any,
+        allocations: [
+          {
+            accountId: candidateForm.allocationAccountId as any,
+            amountCents: centsFromInput(candidateForm.amount),
+            description: candidateForm.description || undefined,
+          },
+        ],
+        fiscalYear: currentYear(),
+        actingUserId,
+      });
+      setDrawer(null);
+    }, "Candidate posted to journal");
+
+  const saveReconciliation = () =>
+    run(async () => {
+      const result = await createRecon({
+        societyId: society._id,
+        financialAccountId: reconciliationForm.financialAccountId as any,
+        statementDate: reconciliationForm.statementDate,
+        statementBalanceCents: centsFromInput(reconciliationForm.statementBalance),
+        actingUserId,
+      });
+      if (result.differenceCents === 0) {
+        await setReconStatus({ id: result.runId, status: "reconciled", actingUserId });
+      }
+      setDrawer(null);
+      toast.info(`Book balance ${money(result.bookBalanceCents)} · difference ${money(result.differenceCents)}`);
+    }, "Reconciliation run created");
+
+  const exportByKind: Record<string, any> = {
+    chart_of_accounts: chartCsv,
+    trial_balance: trialCsv,
+    journal_entries: journalCsv,
+    general_ledger: ledgerCsv,
+  };
+
+  const doExport = (kind: string) => {
+    const result = exportByKind[kind];
+    if (!result?.csv) {
+      toast.warn("Export is still loading");
+      return;
+    }
+    downloadCsv(result.filename, result.csv);
+  };
+
+  return (
+    <div className="page page--wide accounting-workbench">
+      <PageHeader
+        title="Accounting"
+        icon={<Landmark size={16} />}
+        iconColor="green"
+        subtitle="Internal ledger setup, journal posting, candidate allocation, reconciliation, and audit exports."
+        actions={<Link className="btn-action" to="/app/financials"><ArrowLeft size={12} /> Financials</Link>}
+      />
+
+      <div className="accounting-action-bar">
+        <button className="btn-action btn-action--primary" disabled={busy} onClick={() => run(async () => { await seedChart({ societyId: society._id, actingUserId }); }, "Chart of accounts seeded")}>
+          <Landmark size={12} /> Seed chart
+        </button>
+        <button className="btn-action" onClick={() => setDrawer("period")}><PlusCircle size={12} /> Fiscal period</button>
+        <button className="btn-action" onClick={() => setDrawer("opening")}><FileSpreadsheet size={12} /> Opening balances</button>
+        <button className="btn-action" onClick={() => setDrawer("journal")}><GitCompareArrows size={12} /> Journal entry</button>
+        <button className="btn-action" onClick={() => setDrawer("candidate")}><Split size={12} /> Post candidate</button>
+        <button className="btn-action" onClick={() => setDrawer("reconciliation")}><Scale size={12} /> Reconcile</button>
+      </div>
+
+      <div className="stat-grid">
+        <div className="stat"><div className="stat__label">Chart accounts</div><div className="stat__value">{accounts?.length ?? 0}</div></div>
+        <div className="stat"><div className="stat__label">Posted entries</div><div className="stat__value">{journalEntries?.filter((e: any) => e.status === "posted").length ?? 0}</div></div>
+        <div className="stat"><div className="stat__label">Debit total</div><div className="stat__value">{money(totalDebit)}</div></div>
+        <div className="stat"><div className="stat__label">Credit total</div><div className="stat__value">{money(totalCredit)}</div></div>
+      </div>
+
+      <div className="accounting-grid">
+        <section className="card">
+          <div className="card__head">
+            <h2 className="card__title">Fiscal periods</h2>
+            <span className="card__subtitle">Close periods before year-end exports.</span>
+          </div>
+          <div className="accounting-list">
+            {(periods ?? []).map((period: any) => (
+              <div className="accounting-row" key={period._id}>
+                <div>
+                  <strong>{period.periodLabel}</strong>
+                  <div className="muted">{formatDate(period.startDate)} to {formatDate(period.endDate)}</div>
+                </div>
+                <div className="accounting-row__actions">
+                  <Badge tone={period.status === "open" ? "success" : "warn"}>{period.status}</Badge>
+                  {period.status === "open" ? (
+                    <button className="btn btn--ghost btn--sm" onClick={() => run(async () => { await closePeriod({ id: period._id, actingUserId }); }, "Period closed")}><Lock size={12} /> Close</button>
+                  ) : (
+                    <button className="btn btn--ghost btn--sm" onClick={() => run(async () => { await reopenPeriod({ id: period._id, actingUserId }); }, "Period reopened")}><Unlock size={12} /> Reopen</button>
+                  )}
+                </div>
+              </div>
+            ))}
+            {(periods ?? []).length === 0 && <div className="muted accounting-empty">No fiscal periods yet.</div>}
+          </div>
+        </section>
+
+        <section className="card">
+          <div className="card__head">
+            <h2 className="card__title">Exports</h2>
+            <span className="card__subtitle">CSV downloads for board and auditor packages.</span>
+          </div>
+          <div className="accounting-export-grid">
+            {["chart_of_accounts", "trial_balance", "journal_entries", "general_ledger"].map((kind) => (
+              <button key={kind} className="btn-action" onClick={() => doExport(kind)} disabled={!exportByKind[kind]}>
+                <Download size={12} /> {kind.replace(/_/g, " ")}
+              </button>
+            ))}
+          </div>
+          <div className="muted accounting-note">Exports are generated from the internal journal shape for the demo.</div>
+        </section>
+      </div>
+
+      <section className="card">
+        <div className="card__head">
+          <h2 className="card__title">Trial balance</h2>
+          <span className="card__subtitle">Posted journal-line totals by chart account.</span>
+        </div>
+        <ResponsiveTable>
+          <thead><tr><th>Account</th><th>Type</th><th style={{ textAlign: "right" }}>Debit</th><th style={{ textAlign: "right" }}>Credit</th><th style={{ textAlign: "right" }}>Balance</th></tr></thead>
+          <tbody>
+            {(trialBalance ?? []).map((row: any) => (
+              <tr key={row.account?._id ?? row.account?.code}>
+                <td><strong>{row.account?.code}</strong> {row.account?.name}</td>
+                <td>{row.account?.accountType}</td>
+                <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(row.debitCents)}</td>
+                <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(row.creditCents)}</td>
+                <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(row.balanceCents)}</td>
+              </tr>
+            ))}
+            {(trialBalance ?? []).length === 0 && <tr><td colSpan={5} className="muted accounting-empty">No posted journal lines yet.</td></tr>}
+          </tbody>
+        </ResponsiveTable>
+      </section>
+
+      <section className="card">
+        <div className="card__head">
+          <h2 className="card__title">Journal entries</h2>
+          <span className="card__subtitle">Recent posted and draft ledger entries.</span>
+        </div>
+        <div className="accounting-journal-list">
+          {(journalEntries ?? []).map((entry: any) => (
+            <details className="accounting-entry" key={entry._id}>
+              <summary>
+                <span><strong>{formatDate(entry.date)}</strong> {entry.memo}</span>
+                <Badge tone={entry.status === "posted" ? "success" : "warn"}>{entry.status}</Badge>
+              </summary>
+              <ResponsiveTable>
+                <thead><tr><th>Account</th><th>Side</th><th>Description</th><th style={{ textAlign: "right" }}>Amount</th></tr></thead>
+                <tbody>
+                  {(entry.lines ?? []).map((line: any) => {
+                    const account = (accounts ?? []).find((candidate: any) => candidate._id === line.accountId);
+                    return (
+                      <tr key={line._id}>
+                        <td>{account?.code} {account?.name}</td>
+                        <td>{line.side}</td>
+                        <td>{line.description ?? "—"}</td>
+                        <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(line.amountCents)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </ResponsiveTable>
+            </details>
+          ))}
+          {(journalEntries ?? []).length === 0 && <div className="muted accounting-empty">No journal entries yet.</div>}
+        </div>
+      </section>
+
+      {restrictedBalances.length > 0 && (
+        <section className="card">
+          <div className="card__head"><h2 className="card__title">Restricted funds</h2></div>
+          <div className="accounting-list">
+            {restrictedBalances.map((row: any) => (
+              <div className="accounting-row" key={row._id}>
+                <div><strong>{row.name}</strong><div className="muted">{row.purpose}</div></div>
+                <div className="mono">{money(row.balanceCents)}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <Drawer open={drawer === "period"} onClose={() => setDrawer(null)} title="Create fiscal period" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={savePeriod}>Create</button></>}>
+        <FormGrid>
+          <Field label="Fiscal year"><input className="input" value={periodForm.fiscalYear} onChange={(e) => setPeriodForm({ ...periodForm, fiscalYear: e.target.value })} /></Field>
+          <Field label="Period label"><input className="input" value={periodForm.periodLabel} onChange={(e) => setPeriodForm({ ...periodForm, periodLabel: e.target.value })} /></Field>
+          <Field label="Start date"><input className="input" type="date" value={periodForm.startDate} onChange={(e) => setPeriodForm({ ...periodForm, startDate: e.target.value })} /></Field>
+          <Field label="End date"><input className="input" type="date" value={periodForm.endDate} onChange={(e) => setPeriodForm({ ...periodForm, endDate: e.target.value })} /></Field>
+        </FormGrid>
+      </Drawer>
+
+      <Drawer open={drawer === "opening"} onClose={() => setDrawer(null)} title="Post opening balances" size="wide" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={saveOpening}>Post</button></>}>
+        <AccountingLines rows={openingRows} setRows={setOpeningRows} accounts={accounts ?? []} />
+      </Drawer>
+
+      <Drawer open={drawer === "journal"} onClose={() => setDrawer(null)} title="Post journal entry" size="wide" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={saveJournal}>Post</button></>}>
+        <FormGrid>
+          <Field label="Date"><input className="input" type="date" value={journalForm.date} onChange={(e) => setJournalForm({ ...journalForm, date: e.target.value })} /></Field>
+          <Field label="Fiscal year"><input className="input" value={journalForm.fiscalYear} onChange={(e) => setJournalForm({ ...journalForm, fiscalYear: e.target.value })} /></Field>
+          <Field label="Memo"><input className="input" value={journalForm.memo} onChange={(e) => setJournalForm({ ...journalForm, memo: e.target.value })} /></Field>
+          <label className="checkbox"><input type="checkbox" checked={journalForm.allowClosed} onChange={(e) => setJournalForm({ ...journalForm, allowClosed: e.target.checked })} /> Closed-period adjustment</label>
+        </FormGrid>
+        <AccountingLines rows={journalForm.lines} setRows={(lines: any) => setJournalForm({ ...journalForm, lines })} accounts={accounts ?? []} includeDescription />
+      </Drawer>
+
+      <Drawer open={drawer === "candidate"} onClose={() => setDrawer(null)} title="Post transaction candidate" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy || !candidateForm.candidateId} onClick={saveCandidateAllocation}>Post</button></>}>
+        <div className="col">
+          <Field label="Candidate"><select className="input" value={candidateForm.candidateId} onChange={(e) => {
+            const candidate = candidates.find((row: any) => row._id === e.target.value);
+            setCandidateForm({ ...candidateForm, candidateId: e.target.value, amount: candidate?.amountCents ? dollarsFromCents(Math.abs(candidate.amountCents)) : candidateForm.amount, description: candidate?.description ?? candidateForm.description });
+          }}><option value="">Select candidate</option>{candidates.map((row: any) => <option key={row._id} value={row._id}>{row.transactionDate} · {row.description}</option>)}</select></Field>
+          <Field label="Cash account"><AccountSelect accounts={cashAccounts} value={candidateForm.cashAccountId} onChange={(cashAccountId) => setCandidateForm({ ...candidateForm, cashAccountId })} /></Field>
+          <Field label="Offset account"><AccountSelect accounts={accounts ?? []} value={candidateForm.allocationAccountId} onChange={(allocationAccountId) => setCandidateForm({ ...candidateForm, allocationAccountId })} /></Field>
+          <Field label="Amount"><input className="input" type="number" value={candidateForm.amount} onChange={(e) => setCandidateForm({ ...candidateForm, amount: e.target.value })} /></Field>
+          <Field label="Description"><input className="input" value={candidateForm.description} onChange={(e) => setCandidateForm({ ...candidateForm, description: e.target.value })} /></Field>
+        </div>
+      </Drawer>
+
+      <Drawer open={drawer === "reconciliation"} onClose={() => setDrawer(null)} title="Create reconciliation run" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={saveReconciliation}>Create</button></>}>
+        <div className="col">
+          <Field label="Financial account"><AccountSelect accounts={cashAccounts} value={reconciliationForm.financialAccountId} onChange={(financialAccountId) => setReconciliationForm({ ...reconciliationForm, financialAccountId })} /></Field>
+          <Field label="Statement date"><input className="input" type="date" value={reconciliationForm.statementDate} onChange={(e) => setReconciliationForm({ ...reconciliationForm, statementDate: e.target.value })} /></Field>
+          <Field label="Statement balance"><input className="input" type="number" value={reconciliationForm.statementBalance} onChange={(e) => setReconciliationForm({ ...reconciliationForm, statementBalance: e.target.value })} /></Field>
+        </div>
+      </Drawer>
+    </div>
+  );
+}
+
+function ResponsiveTable({ children }: { children: ReactNode }) {
+  return <div className="accounting-table-wrap"><table className="table">{children}</table></div>;
+}
+
+function FormGrid({ children }: { children: ReactNode }) {
+  return <div className="accounting-form-grid">{children}</div>;
+}
+
+function AccountSelect({ accounts, value, onChange }: { accounts: any[]; value: string; onChange: (value: string) => void }) {
+  return (
+    <select className="input" value={value} onChange={(event) => onChange(event.target.value)}>
+      <option value="">Select account</option>
+      {accounts.map((account) => <option key={account._id} value={account._id}>{account.code ? `${account.code} · ` : ""}{account.name}</option>)}
+    </select>
+  );
+}
+
+function AccountingLines({
+  rows,
+  setRows,
+  accounts,
+  includeDescription,
+}: {
+  rows: any[];
+  setRows: (rows: any[]) => void;
+  accounts: any[];
+  includeDescription?: boolean;
+}) {
+  const update = (index: number, patch: any) => setRows(rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
+  return (
+    <div className="accounting-lines">
+      {rows.map((row, index) => (
+        <div className="accounting-line" key={index}>
+          <Field label="Account"><AccountSelect accounts={accounts} value={row.accountId} onChange={(accountId) => update(index, { accountId })} /></Field>
+          <Field label="Side"><select className="input" value={row.side} onChange={(e) => update(index, { side: e.target.value })}><option value="debit">Debit</option><option value="credit">Credit</option></select></Field>
+          <Field label="Amount"><input className="input" type="number" value={row.amount} onChange={(e) => update(index, { amount: e.target.value })} /></Field>
+          {includeDescription && <Field label="Description"><input className="input" value={row.description ?? ""} onChange={(e) => update(index, { description: e.target.value })} /></Field>}
+        </div>
+      ))}
+      <button className="btn-action" type="button" onClick={() => setRows([...rows, { accountId: "", side: "debit", amount: "", description: "" }])}>
+        <PlusCircle size={12} /> Add line
+      </button>
+    </div>
+  );
+}

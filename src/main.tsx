@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom
 import { ConvexProvider, type ConvexReactClient } from "convex/react";
 import { convex } from "./lib/convex";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "./lib/staticRuntime";
+import { getRuntimeMode } from "./lib/runtimeMode";
 import { AuthProvider } from "./auth/AuthProvider";
 import { AuthGate } from "./components/AuthGate";
 import { Layout } from "./components/Layout";
@@ -14,6 +15,7 @@ import { ToastProvider } from "./components/Toast";
 import { applyThemePreference, getStoredThemePreference } from "./lib/theme";
 
 const Dashboard = React.lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
+const DesktopSetupPage = React.lazy(() => import("./pages/DesktopSetup").then((m) => ({ default: m.DesktopSetupPage })));
 const SocietyPage = React.lazy(() => import("./pages/Society").then((m) => ({ default: m.SocietyPage })));
 const SocietyNewPage = React.lazy(() => import("./pages/Society").then((m) => ({ default: m.SocietyNewPage })));
 const OrganizationDetailsPage = React.lazy(() => import("./pages/OrganizationDetails").then((m) => ({ default: m.OrganizationDetailsPage })));
@@ -40,6 +42,7 @@ const LibraryPage = React.lazy(() => import("./pages/Library").then((m) => ({ de
 const MinuteBookPage = React.lazy(() => import("./pages/MinuteBook").then((m) => ({ default: m.MinuteBookPage })));
 const ConflictsPage = React.lazy(() => import("./pages/Conflicts").then((m) => ({ default: m.ConflictsPage })));
 const FinancialsPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.FinancialsPage })));
+const AccountingWorkbenchPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.AccountingWorkbenchPage })));
 const FinancialYearDetailPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.FinancialYearDetailPage })));
 const WaveAccountDetailPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.WaveAccountDetailPage })));
 const WaveResourceDetailPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.WaveResourceDetailPage })));
@@ -149,6 +152,7 @@ function AppProviders({ client }: { client: ConvexReactClient }) {
 
 const staticDemoRuntime = isStaticDemoRuntime();
 const localDataRuntime = isLocalDataRuntime();
+const electronLocalRuntime = getRuntimeMode() === "electron-local";
 const routerBasename = staticDemoRuntime ? "/demo" : import.meta.env.BASE_URL;
 
 function PageLoader() {
@@ -230,7 +234,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                   </AuthGate>
                 }
               >
-                <Route index element={<Dashboard />} />
+                <Route index element={electronLocalRuntime ? <DesktopSetupPage /> : <Dashboard />} />
               </Route>
             )}
             <Route path="/login" element={<LoginPage />} />
@@ -269,6 +273,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               }
             >
             <Route index element={<Dashboard />} />
+            <Route path="setup" element={<DesktopSetupPage />} />
             <Route path="society" element={<SocietyPage />} />
             <Route path="organization-details" element={<OrganizationDetailsPage />} />
             <Route path="role-holders" element={<RoleHoldersPage />} />
@@ -301,6 +306,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="minute-book" element={<MinuteBookPage />} />
             <Route path="conflicts" element={<ConflictsPage />} />
             <Route path="financials" element={<FinancialsPage />} />
+            <Route path="financials/accounting" element={<AccountingWorkbenchPage />} />
             <Route path="financials/fy/:fiscalYear" element={<FinancialYearDetailPage />} />
             <Route path="financials/wave/account/:resourceId" element={<WaveAccountDetailPage />} />
             <Route path="financials/wave/:resourceType/:resourceId" element={<WaveResourceDetailPage />} />

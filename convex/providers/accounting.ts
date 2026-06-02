@@ -22,6 +22,18 @@ export type WaveTransaction = {
   counterparty?: string;
 };
 
+export type AccountingProvider = "wave" | "ledgersmb" | "csv" | "browser" | "societyer";
+
+export type AccountMappingCandidate = {
+  provider: AccountingProvider;
+  externalAccountId?: string;
+  externalAccountCode?: string;
+  externalAccountName?: string;
+  externalCategory?: string;
+  confidence?: "high" | "medium" | "low";
+  notes?: string;
+};
+
 const DEMO_ACCOUNTS: WaveAccount[] = [
   { externalId: "acc_chk_01", name: "Operating Chequing (RBC)", currency: "CAD", accountType: "Bank", balanceCents: 8_421_75, isRestricted: false },
   { externalId: "acc_sav_01", name: "Reserve Savings", currency: "CAD", accountType: "Bank", balanceCents: 54_300_00, isRestricted: false },
@@ -52,6 +64,79 @@ const DEMO_TX: WaveTransaction[] = [
   { externalId: "tx_1009", accountExternalId: "acc_chk_01", date: daysAgo(22), description: "Grant disbursement — VanCity arts", amountCents: 15_000_00, category: "Donations & fundraising", counterparty: "VanCity Foundation" },
   { externalId: "tx_1010", accountExternalId: "acc_chk_01", date: daysAgo(25), description: "Staff laptops (2)", amountCents: -2_240_00, category: "Facilities & utilities" },
 ];
+
+export function waveAccountMappingCandidate(account: WaveAccount): AccountMappingCandidate {
+  return {
+    provider: "wave",
+    externalAccountId: account.externalId,
+    externalAccountName: account.name,
+    externalCategory: account.accountType,
+    confidence: account.externalId ? "high" : "medium",
+    notes: account.restrictedPurpose,
+  };
+}
+
+export function waveTransactionMappingCandidates(transaction: WaveTransaction): AccountMappingCandidate[] {
+  return uniqueMappingCandidates([
+    {
+      provider: "wave",
+      externalAccountId: transaction.accountExternalId,
+      externalAccountName: transaction.accountExternalId,
+      confidence: transaction.accountExternalId ? "high" : "low",
+      notes: "Wave transaction source account.",
+    },
+    transaction.category
+      ? {
+          provider: "wave",
+          externalAccountName: transaction.category,
+          externalCategory: transaction.category,
+          confidence: "medium",
+          notes: "Wave transaction category.",
+        }
+      : undefined,
+  ]);
+}
+
+export function transactionImportMappingCandidates(input: {
+  sourceSystem?: string;
+  accountName?: string;
+  accountExternalId?: string;
+  accountCode?: string;
+  category?: string;
+}): AccountMappingCandidate[] {
+  const provider = normalizeAccountingProvider(input.sourceSystem);
+  return uniqueMappingCandidates([
+    input.accountName || input.accountExternalId || input.accountCode
+      ? {
+          provider,
+          externalAccountId: input.accountExternalId,
+          externalAccountCode: input.accountCode,
+          externalAccountName: input.accountName ?? input.accountExternalId ?? input.accountCode,
+          confidence: input.accountExternalId || input.accountCode ? "high" : "medium",
+          notes: "Imported transaction account.",
+        }
+      : undefined,
+    input.category
+      ? {
+          provider,
+          externalAccountName: input.category,
+          externalCategory: input.category,
+          confidence: "medium",
+          notes: "Imported transaction category.",
+        }
+      : undefined,
+  ]);
+}
+
+export function normalizeAccountingProvider(value: unknown): AccountingProvider {
+  const text = String(value ?? "").toLowerCase();
+  if (text.includes("wave")) return "wave";
+  if (text.includes("ledgersmb") || text.includes("ledger-smb")) return "ledgersmb";
+  if (text.includes("browser")) return "browser";
+  if (text.includes("csv") || text.includes("spreadsheet")) return "csv";
+  if (text.includes("societyer")) return "societyer";
+  return "csv";
+}
 
 function env(name: string): string | undefined {
   try {
@@ -91,6 +176,25 @@ async function waveGraphQL<T>(query: string, variables: Record<string, unknown>)
 
 function variableStrings(variables: Record<string, unknown>) {
   return Object.values(variables).filter((value): value is string => typeof value === "string");
+}
+
+function uniqueMappingCandidates(rows: Array<AccountMappingCandidate | undefined>) {
+  const seen = new Set<string>();
+  const result: AccountMappingCandidate[] = [];
+  for (const row of rows) {
+    if (!row?.externalAccountName && !row?.externalAccountId && !row?.externalAccountCode && !row?.externalCategory) continue;
+    const key = [
+      row.provider,
+      row.externalAccountId ?? "",
+      row.externalAccountCode ?? "",
+      row.externalAccountName ?? "",
+      row.externalCategory ?? "",
+    ].join("::").toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(row);
+  }
+  return result;
 }
 
 export async function waveListAccounts(args: { allowDemo?: boolean } = {}): Promise<{ provider: "wave" | "demo"; accounts: WaveAccount[] }> {

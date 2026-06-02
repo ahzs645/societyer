@@ -18,6 +18,7 @@ const demoAppRoutes = [
   "app/documents",
   "app/conflicts",
   "app/financials",
+  "app/financials/accounting",
   "app/grants",
   "app/privacy",
   "app/communications",

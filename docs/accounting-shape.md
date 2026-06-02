@@ -258,7 +258,7 @@ Bring over accounting concepts in this order. Do not bring over the full LedgerS
 
 7. Account mapping rules
 
-   Added now as `accountingAccountMappings`. Imported provider accounts/categories should map to Societyer chart accounts through this table, not hard-coded in Wave or import-session code.
+   Added now as `accountingAccountMappings`. Imported provider accounts/categories should map to Societyer chart accounts through this table. Wave accounts/transaction categories and CSV/browser transaction candidates now produce provider-neutral mapping candidates; approved import-session transaction candidates include resolved mapping suggestions in backend notes when an active mapping exists.
 
 8. Multi-line allocations
 
@@ -270,7 +270,7 @@ Bring over accounting concepts in this order. Do not bring over the full LedgerS
 
 10. LedgerSMB adapter
 
-   Started now as `convex/providers/ledgersmbAdapter.ts`. It normalizes LedgerSMB-like account, journal entry, and journal line payloads. A real connector can call this once credentials/API routing are added.
+   Started now as `convex/providers/ledgersmbAdapter.ts`. It normalizes LedgerSMB-like account, journal entry, and journal line payloads and includes endpoint/auth scaffolding for `LEDGERSMB_BASE_URL`, `LEDGERSMB_DATABASE`, basic auth, and bearer/API-key auth. The default API boundary reads `/api/accounts` and `/api/journal-entries`; callers can override paths through the generic client `get` method if a deployed LedgerSMB instance exposes a different route shape.
 
 11. Export formats
 

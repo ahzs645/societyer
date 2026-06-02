@@ -454,6 +454,75 @@ export const recordAssetStockIntake = mutation({
   },
 });
 
+export const backfillAssets = mutation({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, { societyId }) => {
+    const assets = await ctx.db
+      .query("assets")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .collect();
+    let itemsCreated = 0;
+    let locationsCreated = 0;
+    let movementsCreated = 0;
+    let balancesCreated = 0;
+    for (const asset of assets) {
+      const existingItem = await ctx.db
+        .query("inventoryItems")
+        .withIndex("by_asset", (q: any) => q.eq("assetId", asset._id))
+        .first();
+      const itemId = existingItem?._id ?? await createInventoryItemForAsset(ctx, asset);
+      if (!existingItem) itemsCreated += 1;
+      const beforeLocations = await ctx.db
+        .query("inventoryLocations")
+        .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+        .collect();
+      const locationId = await findOrCreateLocation(ctx, {
+        societyId,
+        name: asset.location ?? asset.custodianName ?? "Inventory",
+        locationType: asset.location ? "facility" : "virtual",
+        sourceSystem: "societyer_assets",
+      });
+      if (!beforeLocations.some((row: any) => row._id === locationId)) locationsCreated += 1;
+      const existingMovements = await ctx.db
+        .query("stockMovements")
+        .withIndex("by_item_date", (q: any) => q.eq("inventoryItemId", itemId))
+        .collect();
+      if (existingMovements.length > 0) continue;
+      const quantity = asset.category === "Consumable" ? asset.quantityOnHand ?? 0 : asset.status === "Disposed" || asset.status === "Lost" ? 0 : 1;
+      if (quantity <= 0) continue;
+      const now = new Date().toISOString();
+      const movementId = await ctx.db.insert("stockMovements", {
+        societyId,
+        movementDate: asset.purchaseDate ?? now.slice(0, 10),
+        movementType: "receive",
+        status: "posted",
+        inventoryItemId: itemId,
+        toLocationId: locationId,
+        quantity,
+        unitOfMeasure: asset.quantityUnit ?? "each",
+        unitCostCents: asset.purchaseValueCents,
+        totalCostCents: asset.purchaseValueCents && quantity ? Math.round(asset.purchaseValueCents * quantity) : undefined,
+        reason: "Backfilled from Societyer asset register",
+        reference: asset.assetTag,
+        sourceSystem: "societyer_assets",
+        purchaseTransactionId: asset.purchaseTransactionId,
+        receiptDocumentId: asset.receiptDocumentId,
+        grantId: asset.grantId,
+        documentIds: asset.sourceDocumentIds ?? [],
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      movementsCreated += 1;
+      const existingBalance = await balanceFor(ctx, { inventoryItemId: itemId, locationId });
+      if (!existingBalance) balancesCreated += 1;
+      const movement = await ctx.db.get(movementId);
+      await postMovementEffects(ctx, movement);
+    }
+    return { itemsCreated, locationsCreated, movementsCreated, balancesCreated };
+  },
+});
+
 async function createInventoryItemForAsset(ctx: any, asset: any) {
   const existing = await ctx.db
     .query("inventoryItems")
@@ -481,4 +550,3 @@ async function createInventoryItemForAsset(ctx: any, asset: any) {
     updatedAtISO: now,
   });
 }
-
