@@ -1,21 +1,21 @@
 import type { Id } from "../../convex/_generated/dataModel";
 import { STATIC_DEMO_SOCIETY_ID } from "./staticIds";
-import { isStaticDemoRuntime } from "./staticRuntime";
+import { isLocalDataRuntime } from "./staticRuntime";
 
 type SeedResult = { societyId: Id<"societies"> };
 type ResetResult = { ok: boolean };
 
 export async function seedDemoSociety(): Promise<SeedResult> {
-  if (isStaticDemoRuntime()) {
-    await reseedStaticDemoData();
+  if (isLocalDataRuntime()) {
+    await reseedLocalData();
     return { societyId: STATIC_DEMO_SOCIETY_ID as Id<"societies"> };
   }
   return postMaintenance<SeedResult>("seed");
 }
 
 export async function resetDemoData(): Promise<ResetResult> {
-  if (isStaticDemoRuntime()) {
-    await reseedStaticDemoData();
+  if (isLocalDataRuntime()) {
+    await reseedLocalData();
     return { ok: true };
   }
   return postMaintenance<ResetResult>("reset");
@@ -45,7 +45,7 @@ async function postMaintenance<T>(operation: "seed" | "reset"): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function reseedStaticDemoData() {
-  const { reseedStaticDemoData: reseed } = await import("./staticConvex");
+async function reseedLocalData() {
+  const { reseedLocalData: reseed } = await import("./localDataClient");
   await reseed();
 }

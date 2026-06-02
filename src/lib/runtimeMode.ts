@@ -5,8 +5,8 @@ export type RuntimeMode =
   | "electron-local";
 
 export type DocumentStorageProvider =
-  | "convex-storage"
-  | "rustfs-s3"
+  | "convex"
+  | "rustfs"
   | "local-filesystem"
   | "demo";
 
@@ -15,6 +15,12 @@ export type RuntimeCapabilities = {
   nativeFiles: boolean;
   liveCollaboration: boolean;
   serverActions: boolean;
+};
+
+export type RuntimeDescriptor = {
+  mode: RuntimeMode;
+  documentStorage: DocumentStorageProvider;
+  capabilities: RuntimeCapabilities;
 };
 
 export function getRuntimeMode(): RuntimeMode {
@@ -34,7 +40,16 @@ export function getDocumentStorageProvider(): DocumentStorageProvider {
   const runtimeMode = getRuntimeMode();
   if (runtimeMode === "electron-local") return "local-filesystem";
   if (runtimeMode === "local-indexeddb") return "demo";
-  return "rustfs-s3";
+  return "rustfs";
+}
+
+export function getRuntimeDescriptor(): RuntimeDescriptor {
+  const mode = getRuntimeMode();
+  return {
+    mode,
+    documentStorage: getDocumentStorageProvider(),
+    capabilities: runtimeCapabilities(mode),
+  };
 }
 
 export function runtimeCapabilities(mode: RuntimeMode): RuntimeCapabilities {
@@ -85,8 +100,8 @@ function isRuntimeMode(value: string): value is RuntimeMode {
 
 function isDocumentStorageProvider(value: string): value is DocumentStorageProvider {
   return (
-    value === "convex-storage" ||
-    value === "rustfs-s3" ||
+    value === "convex" ||
+    value === "rustfs" ||
     value === "local-filesystem" ||
     value === "demo"
   );

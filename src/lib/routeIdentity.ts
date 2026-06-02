@@ -228,6 +228,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/finance-imports": { icon: ArrowDownToLine, group: "finance", label: "Finance imports" },
   "/app/treasurer": { icon: Landmark, group: "finance", label: "Treasurer" },
   "/app/assets": { icon: Package, group: "finance", label: "Assets", module: "assets" },
+  "/app/inventory": { icon: Package, group: "finance", label: "Inventory", module: "assets" },
   "/app/grants": { icon: BadgeDollarSign, group: "finance", label: "Grants", module: "grants" },
   "/app/reconciliation": { icon: Scale, group: "finance", label: "Reconciliation", module: "reconciliation" },
   "/app/receipts": { icon: Receipt, group: "finance", label: "Donation receipts", module: "donationReceipts" },

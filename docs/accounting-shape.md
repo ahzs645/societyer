@@ -60,6 +60,19 @@ optional provider sync / write-back
 
 ## Internal Model
 
+## Module Boundary
+
+Keep the codebase modular:
+
+- `convex/accounting.ts`: Societyer internal accounting core. Owns chart of accounts, fiscal periods, counterparties, fund restrictions, journal entries, journal lines, trial balance, and posting reviewed candidates.
+- `convex/financialHub.ts`: provider-facing finance hub. Owns Wave/demo/browser connection state, imported financial accounts/transactions, budgets, operating subscriptions, provider sync, and high-level summary.
+- `convex/reconciliation.ts`: bank/import reconciliation workflow. It can later attach reconciliation runs to posted journal lines, but should not own journal posting logic.
+- `convex/importSessions.ts`: staging/review workflow. It can create `transactionCandidates`, but posting candidates into the ledger belongs in `convex/accounting.ts`.
+- Provider adapters belong under `convex/providers/*` and should map external systems into the internal accounting shape without leaking provider-specific fields into the main UI.
+- `convex/providers/ledgersmbAdapter.ts`: LedgerSMB normalization boundary. It maps LedgerSMB-shaped account and journal payloads into Societyer account/journal DTOs without owning persistence.
+
+This boundary keeps the first-party Societyer finance UI provider-neutral while still allowing Wave, LedgerSMB, CSV, and browser imports to feed the same accounting core.
+
 ### `financialConnections`
 
 Represents an external accounting or import source.
@@ -120,6 +133,19 @@ Represents restricted funds and donor/funder purpose constraints.
 
 This is a Societyer-specific layer on top of normal accounting because societies need to prove restricted money was used for the permitted purpose.
 
+### `accountingAccountMappings`
+
+Represents provider-to-Societyer chart mappings.
+
+Examples:
+
+- Wave account/category -> Societyer account
+- LedgerSMB account id/code -> Societyer account
+- CSV column/category -> Societyer account
+- browser connector normalized category -> Societyer account
+
+This keeps provider sync modular. Provider adapters should look up or suggest mappings; they should not hard-code account ids in import logic.
+
 ### `transactionCandidates`
 
 Represents imported or extracted source rows before posting.
@@ -133,6 +159,13 @@ Examples:
 - financial statement imports
 
 Candidates should not be treated as the general ledger.
+
+`convex/accounting.ts` includes `postTransactionCandidate`, which converts one reviewed candidate into a balanced two-line journal entry:
+
+- incoming cash: debit cash/bank, credit revenue/receivable/other offset
+- outgoing cash: credit cash/bank, debit expense/asset/liability/other offset
+
+More complex allocations should use `upsertJournalEntry` directly with more than two lines.
 
 ### `journalEntries`
 
@@ -195,6 +228,65 @@ Use this sequence:
 4. Keep `financialTransactions` as a bank/import source table during migration.
 5. Add LedgerSMB sync adapter once the internal journal model is exercised locally.
 
+## What Else To Bring Over
+
+Bring over accounting concepts in this order. Do not bring over the full LedgerSMB application surface.
+
+1. Chart of accounts template
+
+   Added now as a Societyer-oriented starter chart in `convex/accounting.ts`. This gives small societies a sane account list while staying compatible with LedgerSMB-style account codes and normal balances.
+
+2. Double-entry journal validation
+
+   Added now. Posted entries must have at least two lines, positive amounts, valid debit/credit sides, and equal debit and credit totals.
+
+3. Trial balance
+
+   Added now as `accounting.trialBalance`. This is the first reporting primitive to prove posted journal lines are internally consistent.
+
+4. Candidate posting workflow
+
+   Added now as `accounting.postTransactionCandidate`. This creates the bridge from imported rows to real accounting records.
+
+5. Fiscal period close controls
+
+   Added now. `accounting.closeFiscalPeriod` and `accounting.reopenFiscalPeriod` control period status. Journal posting checks for closed periods unless an explicit adjustment override is passed.
+
+6. Opening balances
+
+   Added now as `accounting.postOpeningBalances`. A society can seed chart accounts, enter opening cash/liability/net-asset balances, and post one balanced opening entry.
+
+7. Account mapping rules
+
+   Added now as `accountingAccountMappings`. Imported provider accounts/categories should map to Societyer chart accounts through this table, not hard-coded in Wave or import-session code.
+
+8. Multi-line allocations
+
+   Added now as `accounting.postTransactionCandidateAllocation`. One imported bank transaction can split across multiple accounts, grants, restrictions, and documents.
+
+9. Reconciliation runs against journal lines
+
+   Added now as `accounting.createReconciliationRun` and `accounting.setReconciliationRunStatus`. Existing transaction-level reconciliation can remain, but formal reconciliation now compares statement balances to posted journal lines for the account.
+
+10. LedgerSMB adapter
+
+   Started now as `convex/providers/ledgersmbAdapter.ts`. It normalizes LedgerSMB-like account, journal entry, and journal line payloads. A real connector can call this once credentials/API routing are added.
+
+11. Export formats
+
+   Added now as `accounting.exportCsv` for `chart_of_accounts`, `trial_balance`, `journal_entries`, and `general_ledger`. This returns CSV content for UI/API download flows.
+
+## Remaining Product/UI Work
+
+The backend shape now supports the accounting workflow. The next product work is to expose it safely:
+
+- Financials setup screen: seed chart of accounts, enter opening balances, create fiscal periods.
+- Candidate review screen: choose cash account, offset account, or multi-line allocations before posting.
+- Journal screen: list entries, inspect lines, create manual adjusting entries.
+- Reconciliation screen: create statement reconciliation runs and finalize runs when differences are resolved.
+- Export buttons: call `accounting.exportCsv` and download the returned CSV.
+- LedgerSMB connection screen: collect connection settings and use the adapter boundary once a live API path is selected.
+
 ## Provider Strategy
 
 LedgerSMB is the first shape reference, not necessarily the first production connector.
@@ -206,4 +298,3 @@ Initial provider roles:
 - CSV/browser imports: transaction intake for bank/card activity Wave does not expose through public API.
 
 The provider adapter should map external account, journal, counterparty, and source identifiers onto Societyer tables without forcing the UI to become provider-specific.
-

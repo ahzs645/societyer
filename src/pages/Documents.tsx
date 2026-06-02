@@ -16,6 +16,8 @@ import { formatDate, formatDateTime } from "../lib/format";
 import { DocumentVersionsDrawer } from "../components/DocumentVersions";
 import { PaperlessDocumentAction } from "../components/PaperlessDocumentAction";
 import { isDemoMode } from "../lib/demoMode";
+import { getDocumentStorageProvider } from "../lib/runtimeMode";
+import { writeLocalDocumentVersion } from "../lib/documentStorage";
 
 const CATS = ["Constitution", "Bylaws", "Minutes", "FinancialStatement", "Policy", "Filing", "Agreement", "Library", "WorkflowGenerated", "Other"] as const;
 
@@ -68,6 +70,28 @@ export function DocumentsPage() {
   );
 
   const uploadFile = async (documentId: any, file: File) => {
+    const storageProvider = getDocumentStorageProvider();
+    if (storageProvider === "local-filesystem") {
+      const ref = await writeLocalDocumentVersion({
+        societyId: society._id,
+        documentId,
+        version: 1,
+        file,
+      });
+      return await recordVersionUpload({
+        societyId: society._id,
+        documentId,
+        version: 1,
+        storageProvider: ref.provider,
+        storageKey: ref.key,
+        fileName: ref.fileName,
+        mimeType: ref.mimeType,
+        fileSizeBytes: ref.byteLength ?? file.size,
+        sha256: ref.sha256,
+        actingUserId,
+      });
+    }
+
     if (isDemoMode()) {
       return await createDemoVersion({
         societyId: society._id,
@@ -110,6 +134,10 @@ export function DocumentsPage() {
 
   const maybeSyncToPaperless = async (documentId: any) => {
     if (!paperlessConnection?.autoUpload || paperlessConnection.status !== "connected") return;
+    if (getDocumentStorageProvider() === "local-filesystem") {
+      toast.info("Paperless sync is skipped for local filesystem documents.");
+      return;
+    }
     try {
       await syncDocument({ societyId: society._id, documentId, actingUserId });
       toast.success("Uploaded and sent to Paperless-ngx");

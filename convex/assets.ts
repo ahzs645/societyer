@@ -65,6 +65,119 @@ const eventInput = v.object({
   notes: v.optional(v.string()),
 });
 
+async function findOrCreateInventoryItemForAsset(ctx: any, asset: any) {
+  const existing = await ctx.db
+    .query("inventoryItems")
+    .withIndex("by_asset", (q: any) => q.eq("assetId", asset._id))
+    .first();
+  if (existing) return existing._id;
+  const now = new Date().toISOString();
+  return ctx.db.insert("inventoryItems", {
+    societyId: asset.societyId,
+    sku: asset.assetTag,
+    name: asset.name,
+    description: asset.notes,
+    category: asset.category,
+    itemType: asset.category === "Consumable" ? "consumable" : "asset",
+    unitOfMeasure: asset.quantityUnit ?? "each",
+    defaultCostCents: asset.purchaseValueCents,
+    currency: asset.currency ?? "CAD",
+    trackSerial: Boolean(asset.serialNumber),
+    trackLot: false,
+    trackExpiry: false,
+    status: asset.status === "Disposed" ? "archived" : "active",
+    assetId: asset._id,
+    sourceSystem: "societyer_assets",
+    createdAtISO: now,
+    updatedAtISO: now,
+  });
+}
+
+async function findOrCreateInventoryLocationForAsset(ctx: any, asset: any) {
+  const name = String(asset.location ?? asset.custodianName ?? "Inventory").trim() || "Inventory";
+  const existing = await ctx.db
+    .query("inventoryLocations")
+    .withIndex("by_society", (q: any) => q.eq("societyId", asset.societyId))
+    .collect();
+  const match = existing.find((row: any) => row.name.toLowerCase() === name.toLowerCase());
+  if (match) return match._id;
+  const now = new Date().toISOString();
+  return ctx.db.insert("inventoryLocations", {
+    societyId: asset.societyId,
+    name,
+    locationType: asset.location ? "facility" : "virtual",
+    active: true,
+    sourceSystem: "societyer_assets",
+    createdAtISO: now,
+    updatedAtISO: now,
+  });
+}
+
+async function balanceFor(ctx: any, inventoryItemId: any, locationId: any) {
+  const rows = await ctx.db
+    .query("inventoryBalances")
+    .withIndex("by_item_location", (q: any) => q.eq("inventoryItemId", inventoryItemId).eq("locationId", locationId))
+    .collect();
+  return rows.find((row: any) => row.inventoryLotId === undefined);
+}
+
+async function recordConsumableStockMovement(
+  ctx: any,
+  asset: any,
+  assetEventId: any,
+  observedQuantityBefore: number,
+  quantityAdded: number,
+) {
+  if (quantityAdded <= 0) return null;
+  const now = new Date().toISOString();
+  const inventoryItemId = await findOrCreateInventoryItemForAsset(ctx, asset);
+  const toLocationId = await findOrCreateInventoryLocationForAsset(ctx, asset);
+  const movementId = await ctx.db.insert("stockMovements", {
+    societyId: asset.societyId,
+    movementDate: now.slice(0, 10),
+    movementType: "receive",
+    status: "posted",
+    inventoryItemId,
+    toLocationId,
+    quantity: quantityAdded,
+    unitOfMeasure: asset.quantityUnit ?? "each",
+    reference: asset.assetTag,
+    sourceSystem: "societyer_assets",
+    assetEventId,
+    purchaseTransactionId: asset.purchaseTransactionId,
+    receiptDocumentId: asset.receiptDocumentId,
+    grantId: asset.grantId,
+    documentIds: asset.sourceDocumentIds ?? [],
+    rawJson: JSON.stringify({ observedQuantityBefore, quantityAdded }),
+    createdAtISO: now,
+    updatedAtISO: now,
+  });
+  const existingBalance = await balanceFor(ctx, inventoryItemId, toLocationId);
+  if (existingBalance) {
+    const quantityOnHand = existingBalance.quantityOnHand + quantityAdded;
+    const quantityReserved = existingBalance.quantityReserved ?? 0;
+    await ctx.db.patch(existingBalance._id, {
+      quantityOnHand,
+      quantityAvailable: quantityOnHand - quantityReserved,
+      lastMovementId: movementId,
+      updatedAtISO: now,
+    });
+  } else {
+    await ctx.db.insert("inventoryBalances", {
+      societyId: asset.societyId,
+      inventoryItemId,
+      locationId: toLocationId,
+      quantityOnHand: quantityAdded,
+      quantityReserved: 0,
+      quantityAvailable: quantityAdded,
+      lastMovementId: movementId,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+  }
+  return movementId;
+}
+
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
@@ -265,6 +378,7 @@ export const addConsumableStock = mutation({
       notes,
       createdAtISO: now,
     });
+    await recordConsumableStockMovement(ctx, asset, eventId, observedQuantityBefore, quantityAdded);
     await ctx.db.patch(assetId, {
       quantityOnHand: quantityAfter,
       updatedAtISO: now,

@@ -10,7 +10,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { authClient, BetterAuthSession } from "../lib/authClient";
 import { getAuthMode, type AuthMode } from "../lib/authMode";
-import { isStaticDemoRuntime } from "../lib/staticRuntime";
+import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { setStoredUserId } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
 
@@ -27,7 +27,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const mode = getAuthMode();
 
-  if (mode !== "better-auth" || isStaticDemoRuntime()) {
+  if (mode !== "better-auth" || isLocalDataRuntime()) {
     return <NoAuthProvider mode="none">{children}</NoAuthProvider>;
   }
 

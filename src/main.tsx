@@ -66,6 +66,7 @@ const MotionBacklogPage = React.lazy(() => import("./pages/MotionBacklog").then(
 const MotionLibraryPage = React.lazy(() => import("./pages/MotionLibrary").then((m) => ({ default: m.MotionLibraryPage })));
 const TreasurerPage = React.lazy(() => import("./pages/Treasurer").then((m) => ({ default: m.TreasurerPage })));
 const AssetsPage = React.lazy(() => import("./pages/Assets").then((m) => ({ default: m.AssetsPage })));
+const InventoryPage = React.lazy(() => import("./pages/Inventory").then((m) => ({ default: m.InventoryPage })));
 const AssetDetailPage = React.lazy(() => import("./pages/Assets").then((m) => ({ default: m.AssetDetailPage })));
 const AssetVerificationPage = React.lazy(() => import("./pages/Assets").then((m) => ({ default: m.AssetVerificationPage })));
 const MembershipPage = React.lazy(() => import("./pages/Membership").then((m) => ({ default: m.MembershipPage })));
@@ -164,8 +165,8 @@ function AsyncAppProviders() {
   React.useEffect(() => {
     if (!localDataRuntime) return;
     let active = true;
-    import("./lib/staticConvex").then(({ staticConvex }) => {
-      if (active) setConvexClient(staticConvex as unknown as ConvexReactClient);
+    import("./lib/localDataClient").then(({ localDataClient }) => {
+      if (active) setConvexClient(localDataClient as unknown as ConvexReactClient);
     });
     return () => {
       active = false;
@@ -352,6 +353,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route
               path="assets"
               element={withModule("assets", <AssetsPage />)}
+            />
+            <Route
+              path="inventory"
+              element={withModule("assets", <InventoryPage />)}
             />
             <Route
               path="assets/verification/:runId"

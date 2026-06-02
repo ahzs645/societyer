@@ -345,6 +345,7 @@ const NAV_GROUPS: NavGroup[] = [
       navItem("/app/finance-imports"),
       navItem("/app/treasurer"),
       navItem("/app/assets"),
+      navItem("/app/inventory"),
       navItem("/app/grants"),
       navItem("/app/reconciliation"),
       navItem("/app/receipts"),

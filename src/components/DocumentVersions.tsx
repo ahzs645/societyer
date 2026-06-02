@@ -8,6 +8,8 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { isDemoMode } from "../lib/demoMode";
 import { History, Upload, RotateCcw, Download } from "lucide-react";
 import { formatDate } from "../lib/format";
+import { getDocumentStorageProvider } from "../lib/runtimeMode";
+import { writeLocalDocumentVersion } from "../lib/documentStorage";
 
 export function DocumentVersionsDrawer({
   open,
@@ -55,7 +57,33 @@ export function DocumentVersionsDrawer({
     if (!documentId) return;
     setBusy(true);
     try {
-      if (isDemoMode()) {
+      const storageProvider = getDocumentStorageProvider();
+      if (storageProvider === "local-filesystem") {
+        const version = (versions?.[0]?.version ?? 0) + 1;
+        const ref = await writeLocalDocumentVersion({
+          societyId,
+          documentId,
+          version,
+          file,
+        });
+        await recordUpload({
+          societyId,
+          documentId,
+          version,
+          storageProvider: ref.provider,
+          storageKey: ref.key,
+          fileName: ref.fileName,
+          mimeType: ref.mimeType,
+          fileSizeBytes: ref.byteLength ?? file.size,
+          sha256: ref.sha256,
+          changeNote: changeNote || undefined,
+          actingUserId,
+        });
+        toast.success(`Uploaded as v${version}`);
+        if (paperlessConnection?.autoUpload) {
+          toast.info("Paperless sync is skipped for local filesystem versions.");
+        }
+      } else if (isDemoMode()) {
         const versionId = await createDemoVersion({
           societyId,
           documentId,

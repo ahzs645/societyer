@@ -169,6 +169,35 @@ export const getDownloadUrl = action({
   },
 });
 
+export const getDownloadTarget = action({
+  args: { versionId: v.id("documentVersions") },
+  returns: v.any(),
+  handler: async (ctx, { versionId }) => {
+    const version = await ctx.runQuery(api.documentVersions.get, { id: versionId });
+    if (!version) return null;
+    if (version.storageProvider === "local-filesystem") {
+      return {
+        kind: "local-filesystem",
+        provider: version.storageProvider,
+        key: version.storageKey,
+        fileName: version.fileName,
+        mimeType: version.mimeType,
+        fileSizeBytes: version.fileSizeBytes,
+      };
+    }
+    const url = await ctx.runAction(api.documentVersions.getDownloadUrl, { versionId });
+    return {
+      kind: "url",
+      provider: version.storageProvider,
+      key: version.storageKey,
+      url,
+      fileName: version.fileName,
+      mimeType: version.mimeType,
+      fileSizeBytes: version.fileSizeBytes,
+    };
+  },
+});
+
 export const get = query({
   args: { id: v.id("documentVersions") },
   returns: v.any(),

@@ -2468,6 +2468,203 @@ const tables: Record<string, any[]> = {
   ],
   assetVerificationRuns: [],
   assetVerificationItems: [],
+  inventoryConnections: [
+    {
+      _id: "static_inventory_connection_openboxes",
+      societyId: SOCIETY_ID,
+      provider: "openboxes",
+      displayName: "OpenBoxes reference shape",
+      status: "active",
+      externalOrganizationId: "demo-riverside",
+      baseUrl: "https://openboxes.example/demo",
+      lastSyncedAtISO: "2026-05-01T18:00:00.000Z",
+      settingsJson: JSON.stringify({ mode: "reference", sync: "manual" }),
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+  ],
+  inventoryItems: [
+    {
+      _id: "static_inventory_item_chocolate_milk",
+      societyId: SOCIETY_ID,
+      connectionId: "static_inventory_connection_openboxes",
+      sku: "CON-0001",
+      name: "Chocolate milk flats",
+      description: "Program consumable tracked through the stock ledger.",
+      category: "Consumable",
+      itemType: "consumable",
+      unitOfMeasure: "flats",
+      defaultCostCents: 4320,
+      currency: "CAD",
+      trackSerial: false,
+      trackLot: false,
+      trackExpiry: true,
+      reorderPoint: 2,
+      status: "active",
+      assetId: "static_asset_chocolate_milk",
+      externalId: "openboxes-product-chocolate-milk",
+      sourceSystem: "openboxes",
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+    {
+      _id: "static_inventory_item_projector",
+      societyId: SOCIETY_ID,
+      sku: "AST-0001",
+      name: "Epson community projector",
+      category: "Program equipment",
+      itemType: "asset",
+      unitOfMeasure: "each",
+      defaultCostCents: 92000,
+      currency: "CAD",
+      trackSerial: true,
+      trackLot: false,
+      trackExpiry: false,
+      status: "active",
+      assetId: "static_asset_projector",
+      sourceSystem: "societyer_assets",
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+  ],
+  inventoryLocations: [
+    {
+      _id: "static_inventory_location_program_fridge",
+      societyId: SOCIETY_ID,
+      connectionId: "static_inventory_connection_openboxes",
+      name: "Program room fridge",
+      locationType: "room",
+      active: true,
+      externalId: "openboxes-location-program-fridge",
+      sourceSystem: "openboxes",
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+    {
+      _id: "static_inventory_location_records_cabinet",
+      societyId: SOCIETY_ID,
+      name: "Records office equipment cabinet",
+      locationType: "bin",
+      active: true,
+      sourceSystem: "societyer_assets",
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+  ],
+  inventoryLots: [],
+  stockMovements: [
+    {
+      _id: "static_stock_movement_chocolate_receive",
+      societyId: SOCIETY_ID,
+      connectionId: "static_inventory_connection_openboxes",
+      movementDate: "2026-04-28",
+      movementType: "receive",
+      status: "posted",
+      inventoryItemId: "static_inventory_item_chocolate_milk",
+      toLocationId: "static_inventory_location_program_fridge",
+      quantity: 3,
+      unitOfMeasure: "flats",
+      unitCostCents: 1440,
+      totalCostCents: 4320,
+      reason: "Program supply purchase",
+      reference: "CON-0001",
+      sourceExternalId: "openboxes-stock-movement-1001",
+      sourceSystem: "openboxes",
+      documentIds: [],
+      createdAtISO: "2026-04-28T18:00:00.000Z",
+      updatedAtISO: "2026-04-28T18:00:00.000Z",
+    },
+    {
+      _id: "static_stock_movement_chocolate_consume",
+      societyId: SOCIETY_ID,
+      movementDate: "2026-05-01",
+      movementType: "consume",
+      status: "posted",
+      inventoryItemId: "static_inventory_item_chocolate_milk",
+      fromLocationId: "static_inventory_location_program_fridge",
+      quantity: 2,
+      unitOfMeasure: "flats",
+      reason: "Youth workshop snacks",
+      reference: "Workshop 2026-05-01",
+      sourceSystem: "societyer_assets",
+      documentIds: [],
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+    {
+      _id: "static_stock_movement_projector_intake",
+      societyId: SOCIETY_ID,
+      movementDate: "2025-09-12",
+      movementType: "receive",
+      status: "posted",
+      inventoryItemId: "static_inventory_item_projector",
+      toLocationId: "static_inventory_location_records_cabinet",
+      quantity: 1,
+      unitOfMeasure: "each",
+      unitCostCents: 92000,
+      totalCostCents: 92000,
+      reason: "Grant-funded equipment purchase",
+      reference: "AST-0001",
+      sourceSystem: "societyer_assets",
+      assetEventId: "static_asset_event_projector_intake",
+      purchaseTransactionId: "static_tx_projector",
+      receiptDocumentId: "static_document_projector_receipt",
+      documentIds: ["static_document_projector_receipt", "static_document_financials"],
+      createdAtISO: "2025-09-12T18:00:00.000Z",
+      updatedAtISO: "2025-09-12T18:00:00.000Z",
+    },
+  ],
+  inventoryBalances: [
+    {
+      _id: "static_inventory_balance_chocolate_fridge",
+      societyId: SOCIETY_ID,
+      inventoryItemId: "static_inventory_item_chocolate_milk",
+      locationId: "static_inventory_location_program_fridge",
+      quantityOnHand: 1,
+      quantityReserved: 0,
+      quantityAvailable: 1,
+      lastMovementId: "static_stock_movement_chocolate_consume",
+      lastCountedAtISO: "2026-05-01T18:00:00.000Z",
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+    {
+      _id: "static_inventory_balance_projector_cabinet",
+      societyId: SOCIETY_ID,
+      inventoryItemId: "static_inventory_item_projector",
+      locationId: "static_inventory_location_records_cabinet",
+      quantityOnHand: 1,
+      quantityReserved: 0,
+      quantityAvailable: 1,
+      lastMovementId: "static_stock_movement_projector_intake",
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+  ],
+  inventoryCounts: [],
+  inventoryCountLines: [],
+  inventoryCandidates: [
+    {
+      _id: "static_inventory_candidate_receipt_chocolate",
+      societyId: SOCIETY_ID,
+      candidateType: "movement",
+      sourceSystem: "receipt",
+      sourceExternalId: "receipt-line-chocolate-milk",
+      status: "posted",
+      occurredAtISO: "2026-04-28T18:00:00.000Z",
+      sku: "CON-0001",
+      itemName: "Chocolate milk flats",
+      locationName: "Program room fridge",
+      quantity: 3,
+      unitOfMeasure: "flats",
+      suggestedInventoryItemId: "static_inventory_item_chocolate_milk",
+      suggestedLocationId: "static_inventory_location_program_fridge",
+      postedMovementId: "static_stock_movement_chocolate_receive",
+      rawJson: JSON.stringify({ source: "demo receipt extraction", quantity: 3, unit: "flats" }),
+      createdAtISO: "2026-04-28T18:00:00.000Z",
+      updatedAtISO: "2026-04-28T18:00:00.000Z",
+    },
+  ],
   meetings,
   memberProposals: [],
   memberSubscriptions,
@@ -3532,6 +3729,15 @@ const STATIC_EXPORT_TABLES = [
   "assetMaintenance",
   "assetVerificationRuns",
   "assetVerificationItems",
+  "inventoryConnections",
+  "inventoryItems",
+  "inventoryLocations",
+  "inventoryLots",
+  "stockMovements",
+  "inventoryBalances",
+  "inventoryCounts",
+  "inventoryCountLines",
+  "inventoryCandidates",
   "minuteBookItems",
   "activity",
   "notes",
@@ -3735,6 +3941,22 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     case "assets:verificationItems":
       return (store?.listRows("assetVerificationItems", args) ?? tables.assetVerificationItems)
         .filter((row: any) => row.runId === args?.runId);
+    case "inventoryHub:connections":
+      return store?.listRows("inventoryConnections", args) ?? scopedRows(tables.inventoryConnections, args);
+    case "inventoryHub:items": {
+      const rows = store?.listRows("inventoryItems", args) ?? scopedRows(tables.inventoryItems, args);
+      return args?.itemType ? rows.filter((row: any) => row.itemType === args.itemType) : rows;
+    }
+    case "inventoryHub:locations":
+      return store?.listRows("inventoryLocations", args) ?? scopedRows(tables.inventoryLocations, args);
+    case "inventoryHub:balances": {
+      const rows = store?.listRows("inventoryBalances", args) ?? scopedRows(tables.inventoryBalances, args);
+      return args?.inventoryItemId ? rows.filter((row: any) => row.inventoryItemId === args.inventoryItemId) : rows;
+    }
+    case "inventoryHub:stockMovements":
+      return (store?.listRows("stockMovements", args) ?? scopedRows(tables.stockMovements, args))
+        .sort((a: any, b: any) => b.movementDate.localeCompare(a.movementDate))
+        .slice(0, args?.limit ?? 100);
     case "aiAgents:getChatContext": {
       const catalog: Record<string, any[]> = {};
       aiToolCatalog.forEach((tool) => {
@@ -3864,9 +4086,16 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
         .sort((a, b) => b.createdAtISO.localeCompare(a.createdAtISO));
     case "documents:reviewQueues":
       return staticDocumentReviewQueues();
-    case "documentVersions:latest":
+    case "documentVersions:latest": {
+      const rows = store?.listRows("documentVersions", args) ?? scopedRows(tables.documentVersions, args);
+      return rows
+        .filter((row) => row.documentId === args?.documentId)
+        .sort((a, b) => b.version - a.version)[0] ?? null;
+    }
     case "documentVersions:listForDocument":
-      return [];
+      return (store?.listRows("documentVersions", args) ?? scopedRows(tables.documentVersions, args))
+        .filter((row) => row.documentId === args?.documentId)
+        .sort((a, b) => b.version - a.version);
     case "evidenceRegisters:overview":
       return evidenceRegistersOverview;
     case "importSessions:list":
@@ -4767,6 +4996,97 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       createdAtISO: now,
     };
     store?.upsertRow("assetEvents", event);
+    const existingItems = store?.listRows("inventoryItems", { societyId: asset.societyId }) ?? tables.inventoryItems;
+    let inventoryItem = existingItems.find((row: any) => row.assetId === asset._id);
+    if (!inventoryItem) {
+      inventoryItem = {
+        _id: `static_inventory_item_${asset._id}_${Date.now()}`,
+        societyId: asset.societyId,
+        sku: asset.assetTag,
+        name: asset.name,
+        description: asset.notes,
+        category: asset.category,
+        itemType: asset.category === "Consumable" ? "consumable" : "asset",
+        unitOfMeasure: asset.quantityUnit ?? "each",
+        defaultCostCents: asset.purchaseValueCents,
+        currency: asset.currency ?? "CAD",
+        trackSerial: Boolean(asset.serialNumber),
+        trackLot: false,
+        trackExpiry: false,
+        status: asset.status === "Disposed" ? "archived" : "active",
+        assetId: asset._id,
+        sourceSystem: "societyer_assets",
+        createdAtISO: now,
+        updatedAtISO: now,
+      };
+      store?.upsertRow("inventoryItems", inventoryItem);
+    }
+    const locationName = String(asset.location ?? asset.custodianName ?? "Inventory").trim() || "Inventory";
+    const existingLocations = store?.listRows("inventoryLocations", { societyId: asset.societyId }) ?? tables.inventoryLocations;
+    let location = existingLocations.find((row: any) => row.name.toLowerCase() === locationName.toLowerCase());
+    if (!location) {
+      location = {
+        _id: `static_inventory_location_${Date.now()}`,
+        societyId: asset.societyId,
+        name: locationName,
+        locationType: asset.location ? "facility" : "virtual",
+        active: true,
+        sourceSystem: "societyer_assets",
+        createdAtISO: now,
+        updatedAtISO: now,
+      };
+      store?.upsertRow("inventoryLocations", location);
+    }
+    const movement = {
+      _id: `static_stock_movement_${Date.now()}`,
+      societyId: asset.societyId,
+      movementDate: now.slice(0, 10),
+      movementType: "receive",
+      status: "posted",
+      inventoryItemId: inventoryItem._id,
+      toLocationId: location._id,
+      quantity: quantityAdded,
+      unitOfMeasure: asset.quantityUnit ?? "each",
+      reference: asset.assetTag,
+      sourceSystem: "societyer_assets",
+      assetEventId: event._id,
+      purchaseTransactionId: asset.purchaseTransactionId,
+      receiptDocumentId: asset.receiptDocumentId,
+      grantId: asset.grantId,
+      documentIds: asset.sourceDocumentIds ?? [],
+      rawJson: JSON.stringify({ observedQuantityBefore, quantityAdded }),
+      createdAtISO: now,
+      updatedAtISO: now,
+    };
+    store?.upsertRow("stockMovements", movement);
+    const existingBalances = store?.listRows("inventoryBalances", { societyId: asset.societyId }) ?? tables.inventoryBalances;
+    const balance = existingBalances.find((row: any) =>
+      row.inventoryItemId === inventoryItem._id && row.locationId === location._id && !row.inventoryLotId
+    );
+    if (balance) {
+      const quantityOnHand = (balance.quantityOnHand ?? 0) + quantityAdded;
+      const quantityReserved = balance.quantityReserved ?? 0;
+      store?.upsertRow("inventoryBalances", {
+        ...balance,
+        quantityOnHand,
+        quantityAvailable: quantityOnHand - quantityReserved,
+        lastMovementId: movement._id,
+        updatedAtISO: now,
+      });
+    } else {
+      store?.upsertRow("inventoryBalances", {
+        _id: `static_inventory_balance_${Date.now()}`,
+        societyId: asset.societyId,
+        inventoryItemId: inventoryItem._id,
+        locationId: location._id,
+        quantityOnHand: quantityAdded,
+        quantityReserved: 0,
+        quantityAvailable: quantityAdded,
+        lastMovementId: movement._id,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    }
     store?.upsertRow("assets", { ...asset, quantityOnHand: quantityAfter, updatedAtISO: now });
     store?.upsertRow("activity", {
       _id: `static_activity_asset_stock_intake_${Date.now()}`,
@@ -4915,6 +5235,86 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       updatedAtISO: new Date().toISOString(),
     });
     return args?.assetId;
+  }
+  if (name === "documentVersions:recordUploadedVersion") {
+    const now = new Date().toISOString();
+    const id = `static_documentVersion_${Date.now()}`;
+    const existing = store?.listRows("documentVersions", { documentId: args?.documentId }) ?? [];
+    for (const row of existing) {
+      if (row.isCurrent) store?.upsertRow("documentVersions", { ...row, isCurrent: false });
+    }
+    store?.upsertRow("documentVersions", {
+      _id: id,
+      _creationTime: Date.now(),
+      societyId: args?.societyId ?? SOCIETY_ID,
+      documentId: args?.documentId,
+      version: args?.version ?? Math.max(0, ...existing.map((row) => Number(row.version) || 0)) + 1,
+      storageProvider: args?.storageProvider ?? "demo",
+      storageKey: args?.storageKey ?? `demo://document-version/${id}`,
+      fileName: args?.fileName ?? "document",
+      mimeType: args?.mimeType,
+      fileSizeBytes: args?.fileSizeBytes,
+      sha256: args?.sha256,
+      uploadedByUserId: args?.actingUserId,
+      uploadedByName: "Static user",
+      uploadedAtISO: now,
+      changeNote: args?.changeNote,
+      isCurrent: true,
+    });
+    const document = store?.getRow("documents", args?.documentId);
+    if (document) {
+      store?.upsertRow("documents", {
+        ...document,
+        storageId: undefined,
+        fileName: args?.fileName,
+        mimeType: args?.mimeType,
+        fileSizeBytes: args?.fileSizeBytes,
+        updatedAtISO: now,
+      });
+    }
+    return id;
+  }
+  if (name === "documentVersions:createDemoVersion") {
+    return mutationResult("documentVersions:recordUploadedVersion", {
+      ...args,
+      version: undefined,
+      storageProvider: "demo",
+      storageKey: `demo://upload/${encodeURIComponent(args?.fileName ?? "document")}`,
+    }, store);
+  }
+  if (name === "documentVersions:getDownloadUrl") {
+    const version = store?.getRow("documentVersions", args?.versionId);
+    if (!version) return null;
+    if (version.storageProvider === "local-filesystem") {
+      return `local-file://${encodeURIComponent(version.storageKey)}`;
+    }
+    if (version.storageProvider === "demo") {
+      return `demo://download/${encodeURIComponent(version.storageKey)}`;
+    }
+    return version.storageKey ? `static://${encodeURIComponent(version.storageKey)}` : null;
+  }
+  if (name === "documentVersions:getDownloadTarget") {
+    const version = store?.getRow("documentVersions", args?.versionId);
+    if (!version) return null;
+    if (version.storageProvider === "local-filesystem") {
+      return {
+        kind: "local-filesystem",
+        provider: version.storageProvider,
+        key: version.storageKey,
+        fileName: version.fileName,
+        mimeType: version.mimeType,
+        fileSizeBytes: version.fileSizeBytes,
+      };
+    }
+    return {
+      kind: "url",
+      provider: version.storageProvider,
+      key: version.storageKey,
+      url: mutationResult("documentVersions:getDownloadUrl", args, store),
+      fileName: version.fileName,
+      mimeType: version.mimeType,
+      fileSizeBytes: version.fileSizeBytes,
+    };
   }
   const [moduleName, exportName] = name.split(":");
   if (exportName && /^(create|update|upsert|issue|setStatus|remove)/.test(exportName)) {

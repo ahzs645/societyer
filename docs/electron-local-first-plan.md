@@ -35,8 +35,8 @@ Document storage should be configured separately from runtime mode:
 
 ```ts
 type DocumentStorageProvider =
-  | "convex-storage"
-  | "rustfs-s3"
+  | "convex"
+  | "rustfs"
   | "local-filesystem"
   | "demo";
 ```
@@ -46,7 +46,7 @@ Recommended Electron default:
 ```ts
 runtimeMode: "electron-local";
 documentStorage: "local-filesystem";
-syncStorage: "rustfs-s3" | "convex-storage" | null;
+syncStorage: "rustfs" | "convex" | null;
 ```
 
 RustFS/S3 should remain available as remote or sync storage, not as a required local desktop dependency. The Electron default should use a local workspace folder and expose file operations only through preload APIs.
@@ -123,6 +123,17 @@ window.societyerDesktop = {
 7. Keep browser imports as a separate Docker connector service.
 8. Package the Electron shell after the adapters are stable.
 
+## Current Modular Boundaries
+
+The first boundary files are intentionally small:
+
+- `src/lib/runtimeMode.ts` owns runtime and document storage mode detection.
+- `src/lib/localDataClient.ts` is the temporary local-data client facade. It currently delegates to the static demo adapter, but app startup imports this facade so a durable local workspace adapter can replace it later.
+- `src/lib/desktopBridge.ts` defines the future Electron preload contract. React code should call this bridge instead of importing Node or Electron APIs.
+- `src/lib/documentStorage.ts` defines frontend document storage helpers and the local-filesystem bridge entrypoints.
+
+Keep future Electron work inside these boundaries first. Avoid putting filesystem, connector, or sync behavior directly into page components unless a small page-level branch is unavoidable.
+
 ## Compatibility Buckets
 
 Local CRUD viable:
@@ -136,3 +147,34 @@ Local stub viable:
 Server required:
 
 - Real email/SMS delivery, Stripe webhooks, public hosted portal, third-party webhooks, AI/transcription, authenticated external API pulls, browser imports, and multi-user collaboration across devices.
+
+## Fix Backlog
+
+These are the concrete code gaps to close before Electron packaging should start.
+
+### Runtime And Local Data
+
+- Replace `/demo` checks with runtime/capability checks where appropriate. `isStaticDemoRuntime()` should only mean the public demo route; local IndexedDB and Electron should use `isLocalDataRuntime()` or explicit capabilities.
+- Generalize `src/lib/staticConvex.ts` into a local adapter boundary. The current hard-coded `societyer-static-demo` Dexie database, Riverside seed, and demo labels should become configurable local workspace inputs.
+- Make Dexie authoritative for both reads and writes. Some custom query paths still read immutable seed arrays after mutations write to the generic `records` table, so local writes can disappear from those views.
+- Tighten mutation fallback behavior. Generic `create` / `update` / `upsert` inference is acceptable for a demo, but local workspace mode needs explicit function-to-table mapping for important records and clear unsupported-operation errors for server-only actions.
+- Keep the current `ConvexProvider` boundary. The React app should continue using Convex hooks while startup chooses a hosted, self-hosted, or local client implementation.
+
+### Document Storage
+
+- Normalize provider IDs across frontend and Convex. Current backend code understands `rustfs` and `demo`; document versions also need a clear `convex` and `local-filesystem` story.
+- Add a real `local-filesystem` provider through Electron preload APIs. It should return opaque relative storage keys and metadata, not absolute local paths.
+- Branch Electron uploads before RustFS presigned upload flows. Local files should not call `beginUpload` expecting a remote PUT URL.
+- Add provider-aware download metadata. Do not reuse `demo://` for real local files; use a separate local-file sentinel or structured metadata that the Electron preload can open/read.
+- Update document open/download call sites in documents, document versions, document workbench, workflow detail, meeting materials, and package exports.
+- Preserve legacy Convex `_storage` and RustFS paths. Local filesystem storage should be additive through document versions, not a replacement for existing `documents.storageId`.
+- Decide Paperless behavior for local files. Convex actions cannot read a user's Electron filesystem, so local-file Paperless sync must be disabled or moved to a frontend/Electron bridge.
+- Update exports so local-file attachments are represented safely. Export manifests should use opaque keys and only include bytes when an Electron export process copies them into a bundle.
+
+### Browser Connectors
+
+- Keep browser imports as an optional service, not part of the core desktop package.
+- Add provider-aware connector metadata. The current connector runner is effectively Blitz-only; Electron should be another browser backend or the UI should clearly treat the Docker/Blitz connector as the supported external provider.
+- Make live-view rendering provider-specific. `LiveBrowserView` currently assumes noVNC/RFB; Electron may use a native BrowserView/WebContentsView or show an external-service status instead.
+- Make the Browser Connectors page display provider health and unavailable states instead of assuming the Blitz dashboard and VNC fields.
+- Keep API gateway orchestration server-assisted. The gateway should remain responsible for auth scopes, import staging, Convex writes, and workflow history.
