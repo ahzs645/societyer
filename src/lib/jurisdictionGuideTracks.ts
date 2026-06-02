@@ -1,6 +1,10 @@
 import bcGuidePackJson from "./jurisdictionGuidePacks/ca-bc.json";
 import federalCbcaGuidePackJson from "./jurisdictionGuidePacks/ca-fed-cbca.json";
 import ontarioObcaGuidePackJson from "./jurisdictionGuidePacks/ca-on-obca.json";
+import {
+  jurisdictionGuidePackSchema,
+  type JurisdictionGuidePackV2,
+} from "./jurisdictionGuideSchema";
 
 export type JurisdictionCode = "CA-BC" | "CA-FED-CBCA" | "CA-ON-OBCA" | string;
 
@@ -62,6 +66,15 @@ export type JurisdictionGuidePack = {
     currentToISO?: string;
   }[];
   rules: LegalGuideRule[];
+  metadata?: {
+    schemaVersion: string;
+    packId: string;
+    status: string;
+    version: string;
+    reviewedAt: string;
+    legalDisclaimer: string;
+    maintainers: { name: string; role: string; contact?: string }[];
+  };
 };
 
 const guidePackJson = [
@@ -168,5 +181,68 @@ function unsupportedJurisdictionGuidePack(
 }
 
 function normalizeGuidePack(pack: unknown): JurisdictionGuidePack {
-  return pack as JurisdictionGuidePack;
+  return adaptGuidePack(jurisdictionGuidePackSchema.parse(pack));
+}
+
+function adaptGuidePack(pack: JurisdictionGuidePackV2): JurisdictionGuidePack {
+  const sourcesById = new Map(pack.sources.map((source) => [source.sourceId, source]));
+  return {
+    code: pack.jurisdiction.code,
+    name: pack.jurisdiction.name,
+    countryCode: pack.jurisdiction.countryCode,
+    subdivisionCode: pack.jurisdiction.subdivisionCode,
+    default: pack.defaultForJurisdiction,
+    description: pack.description,
+    metadata: {
+      schemaVersion: pack.schemaVersion,
+      packId: pack.packId,
+      status: pack.status,
+      version: pack.version,
+      reviewedAt: pack.reviewedAt,
+      legalDisclaimer: pack.legalDisclaimer,
+      maintainers: pack.maintainers,
+    },
+    sources: pack.sources.map((source) => ({
+      label: source.title,
+      url: source.canonicalUrl,
+      currentToISO: source.currentTo,
+    })),
+    rules: pack.rules.map((rule) => {
+      const source = sourcesById.get(rule.authority.sourceId);
+      const section = rule.authority.sections[0];
+      return {
+        id: rule.ruleId,
+        jurisdictionCode: pack.jurisdiction.code,
+        jurisdictionName: pack.jurisdiction.name,
+        statuteKey: rule.authority.sourceId,
+        instrument: rule.authority.instrument,
+        sectionLabel: section.label,
+        citationLabel: rule.content.displayCitation,
+        topics: rule.topics,
+        effectiveFromISO: rule.validity.effectiveFrom,
+        effectiveToISO: rule.validity.effectiveTo ?? undefined,
+        sourceUrl: section.url,
+        pointInTimeUrl: section.pointInTimeUrl ?? source?.pointInTimeUrl,
+        sourceCurrentToISO: rule.provenance.sourceCurrentTo ?? source?.currentTo,
+        ruleKind: legacyRuleKind(rule.ruleType),
+        summary: rule.content.summary,
+        tooltipText: rule.content.tooltip,
+        caveatText: rule.content.caveat,
+        priority: rule.priority,
+      };
+    }),
+  };
+}
+
+function legacyRuleKind(ruleKind: string): LegalGuideRuleKind {
+  if (
+    ruleKind === "statutory_minimum" ||
+    ruleKind === "default_rule" ||
+    ruleKind === "model_bylaw" ||
+    ruleKind === "historical_caveat"
+  ) {
+    return ruleKind;
+  }
+  if (ruleKind === "transitional_rule") return "historical_caveat";
+  return "statutory_minimum";
 }

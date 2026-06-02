@@ -44,7 +44,7 @@
     "test:api-contract": "tsx scripts/check-api-contract.ts",
     "test:accounting-core": "tsx scripts/check-accounting-core.ts",
     "test:dashboard-compliance": "tsx scripts/check-dashboard-compliance-rules.ts",
-    "test:jurisdiction-guides": "tsx scripts/check-jurisdiction-guide-tracks.ts",
+    "test:jurisdiction-guides": "tsx scripts/validate-jurisdiction-guide-packs.ts && tsx scripts/check-jurisdiction-guide-tracks.ts",
     "test:create-workspace-onboarding": "tsx scripts/check-create-workspace-onboarding.ts",
     "test:org-details": "tsx scripts/check-org-detail-smoke.ts",
     "test:pdf-ingestion": "tsx scripts/check-pdf-table-normalization.ts",
