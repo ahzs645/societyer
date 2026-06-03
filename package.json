@@ -13,6 +13,7 @@
     "desktop:build": "tsc -p tsconfig.electron.json && VITE_RUNTIME_MODE=electron-local VITE_DOCUMENT_STORAGE_PROVIDER=local-filesystem VITE_BASE_PATH=./ vite build",
     "desktop:dev": "concurrently -k \"VITE_RUNTIME_MODE=electron-local VITE_DOCUMENT_STORAGE_PROVIDER=local-filesystem vite --host 127.0.0.1 --port 55173 --strictPort\" \"wait-on http://127.0.0.1:55173 && npm run desktop:build:main && VITE_DEV_SERVER_URL=http://127.0.0.1:55173 electron .\"",
     "desktop:build:main": "tsc -p tsconfig.electron.json",
+    "desktop:package": "npm run desktop:build && npx electron-builder --mac --config electron-builder.json",
     "build:pages": "npm run convex:typecheck && tsc -b && VITE_STABLE_ASSET_NAMES=1 vite build && node scripts/prepare-pages.mjs",
     "preview": "vite preview",
     "convex": "convex dev",
@@ -103,6 +104,21 @@
     "tsx": "^4.21.0",
     "zod": "^4.3.6",
     "zustand": "^5.0.12"
+  },
+  "build": {
+    "appId": "app.societyer.desktop",
+    "productName": "Societyer",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.business"
+    }
   },
   "devDependencies": {
     "@convex-dev/eslint-plugin": "^2.0.0",

@@ -1,4 +1,5 @@
-import { DexieWorkspaceClient, StaticConvexClient } from "./staticConvex";
+import { StaticConvexClient } from "./staticConvex";
+import { DexieWorkspaceClient } from "./dexieWorkspaceClient";
 import { getRuntimeDescriptor, type RuntimeDescriptor } from "./runtimeMode";
 import { isStaticDemoRuntime } from "./staticRuntime";
 

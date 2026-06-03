@@ -4,6 +4,9 @@ export type DesktopWorkspaceInfo = {
   id: string;
   name?: string;
   rootPath?: string;
+  schemaVersion?: number;
+  createdAtISO?: string;
+  updatedAtISO?: string;
 };
 
 export type DesktopWriteDocumentVersionInput = {

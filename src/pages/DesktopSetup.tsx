@@ -8,6 +8,7 @@ import {
   HardDrive,
   PlugZap,
   ShieldCheck,
+  Upload,
 } from "lucide-react";
 import { PageHeader } from "./_helpers";
 import { Badge } from "../components/ui";
@@ -17,7 +18,7 @@ import {
   type DesktopConnectorHealth,
   type DesktopWorkspaceInfo,
 } from "../lib/desktopBridge";
-import { downloadLocalWorkspaceSnapshot } from "../lib/localWorkspaceExport";
+import { downloadLocalWorkspaceSnapshot, importLocalWorkspaceSnapshotFile } from "../lib/localWorkspaceExport";
 import { getRuntimeDescriptor } from "../lib/runtimeMode";
 
 const CONNECTOR_ENDPOINT_KEY = "societyer.desktop.connectorEndpoint";
@@ -34,7 +35,7 @@ export function DesktopSetupPage() {
     () => localStorage.getItem(CONNECTOR_ENDPOINT_KEY) || DEFAULT_CONNECTOR_ENDPOINT,
   );
   const [connectorHealth, setConnectorHealth] = useState<DesktopConnectorHealth | null>(null);
-  const [busy, setBusy] = useState<"workspace" | "backup" | "connector" | "export" | null>(null);
+  const [busy, setBusy] = useState<"workspace" | "backup" | "connector" | "export" | "import" | null>(null);
   const [backupPath, setBackupPath] = useState<string | null>(null);
 
   useEffect(() => {
@@ -93,6 +94,19 @@ export function DesktopSetupPage() {
       setStatusMessage("Local workspace data export created.");
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Local data export failed.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const importLocalData = async (file: File | null | undefined) => {
+    if (!file) return;
+    setBusy("import");
+    try {
+      await importLocalWorkspaceSnapshotFile(file);
+      setStatusMessage("Local workspace data import completed.");
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Local data import failed.");
     } finally {
       setBusy(null);
     }
@@ -220,12 +234,30 @@ export function DesktopSetupPage() {
                 <div>
                   <strong>Local data export</strong>
                   <div className="muted mono" style={{ fontSize: "var(--fs-xs)" }}>
-                    Downloads the local IndexedDB workspace records as JSON.
+                    Downloads local records, document versions, attachment references, and change metadata as JSON.
                   </div>
                 </div>
                 <button className="btn" disabled={!requiredReady || busy === "export"} onClick={exportLocalData}>
                   <Download size={12} /> {busy === "export" ? "Exporting..." : "Export data"}
                 </button>
+              </div>
+              <div className="settings-row">
+                <div>
+                  <strong>Local data import</strong>
+                  <div className="muted mono" style={{ fontSize: "var(--fs-xs)" }}>
+                    Restores a local workspace JSON snapshot into IndexedDB.
+                  </div>
+                </div>
+                <label className={`btn${!requiredReady || busy === "import" ? " is-disabled" : ""}`}>
+                  <Upload size={12} /> {busy === "import" ? "Importing..." : "Import data"}
+                  <input
+                    accept="application/json"
+                    disabled={!requiredReady || busy === "import"}
+                    onChange={(event) => void importLocalData(event.currentTarget.files?.[0])}
+                    style={{ display: "none" }}
+                    type="file"
+                  />
+                </label>
               </div>
             </div>
           </div>

@@ -30,6 +30,9 @@ type WorkspaceInfo = {
   id: string;
   name: string;
   rootPath: string;
+  schemaVersion: number;
+  createdAtISO: string;
+  updatedAtISO: string;
 };
 
 type DesktopConfig = {
@@ -90,16 +93,26 @@ async function readOrCreateWorkspaceInfo(root: string): Promise<WorkspaceInfo> {
   const workspacePath = path.join(root, "workspace.json");
   try {
     const parsed = JSON.parse(await readFile(workspacePath, "utf8"));
-    return {
+    const now = new Date().toISOString();
+    const info = {
       id: String(parsed.id || randomUUID()),
       name: String(parsed.name || "Societyer Workspace"),
       rootPath: root,
+      schemaVersion: Number(parsed.schemaVersion || 1),
+      createdAtISO: String(parsed.createdAtISO || now),
+      updatedAtISO: now,
     };
+    await writeFile(workspacePath, JSON.stringify(info, null, 2));
+    return info;
   } catch {
+    const now = new Date().toISOString();
     const info = {
       id: randomUUID(),
       name: "Societyer Workspace",
       rootPath: root,
+      schemaVersion: 1,
+      createdAtISO: now,
+      updatedAtISO: now,
     };
     await writeFile(workspacePath, JSON.stringify(info, null, 2));
     return info;

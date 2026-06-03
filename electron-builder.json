@@ -1,0 +1,15 @@
+{
+  "appId": "app.societyer.desktop",
+  "productName": "Societyer",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "dist-electron/**/*",
+    "package.json"
+  ],
+  "mac": {
+    "category": "public.app-category.business"
+  }
+}

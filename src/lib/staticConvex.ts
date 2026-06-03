@@ -1,7 +1,7 @@
 import { RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinitions";
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
-import { LocalDexieRowStore, type LocalSeed } from "./localDexieRowStore";
+import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "./localDexieRowStore";
 import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
 
 const FUNCTION_NAME = Symbol.for("functionName");
@@ -6475,7 +6475,7 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       for (const row of existing) {
         if (row.isCurrent) store.upsertRow("documentVersions", { ...row, isCurrent: false });
       }
-      store.upsertRow("documentVersions", {
+      const versionRow = {
         _id: id,
         _creationTime: Date.now(),
         societyId: args?.societyId ?? SOCIETY_ID,
@@ -6492,7 +6492,21 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
         uploadedAtISO: now,
         changeNote: args?.changeNote,
         isCurrent: true,
-      });
+      };
+      store.upsertRow("documentVersions", versionRow);
+      if (versionRow.storageProvider === "local-filesystem" && versionRow.storageKey) {
+        store.upsertAttachment({
+          societyId: versionRow.societyId,
+          documentId: versionRow.documentId,
+          versionId: versionRow._id,
+          provider: versionRow.storageProvider,
+          storageKey: versionRow.storageKey,
+          fileName: versionRow.fileName,
+          mimeType: versionRow.mimeType,
+          fileSizeBytes: versionRow.fileSizeBytes,
+          sha256: versionRow.sha256,
+        });
+      }
       const document = store.getRow("documents", args?.documentId);
       if (document) {
         store.upsertRow("documents", {
@@ -6867,7 +6881,7 @@ function staticSingularKind(value: string) {
   return value.replace(/ies$/, "y").replace(/s$/, "") || "record";
 }
 
-type StaticDemoSeed = LocalSeed;
+export type StaticDemoSeed = LocalSeed;
 
 const STATIC_DEMO_SEED: StaticDemoSeed = {
   ...tables,
@@ -7035,12 +7049,20 @@ class StaticDemoDexieStore {
     await this.rowsStore.reseed();
   }
 
+  async importSnapshot(snapshot: LocalWorkspaceSnapshot) {
+    await this.rowsStore.importSnapshot(snapshot);
+  }
+
   transaction<T>(mutate: () => T): T {
     return this.rowsStore.transaction(mutate);
   }
 
   exportSnapshot() {
     return this.rowsStore.exportSnapshot();
+  }
+
+  upsertAttachment(attachment: Parameters<LocalDexieRowStore["upsertAttachment"]>[0]) {
+    return this.rowsStore.upsertAttachment(attachment);
   }
 
   private agendaSummaryForMeeting(meeting: any) {
@@ -7249,19 +7271,9 @@ export class StaticConvexClient {
   exportLocalWorkspaceSnapshot() {
     return this.store.exportSnapshot();
   }
-}
 
-export class DexieWorkspaceClient extends StaticConvexClient {
-  constructor(options?: { databaseName?: string; seed?: StaticDemoSeed }) {
-    super({
-      databaseName: options?.databaseName,
-      seed: options?.seed ?? {},
-      url: "dexie://societyer-workspace",
-    });
-  }
-
-  reseedWorkspace() {
-    return this.reseedStaticDemo();
+  importLocalWorkspaceSnapshot(snapshot: LocalWorkspaceSnapshot) {
+    return this.store.importSnapshot(snapshot);
   }
 }
 
