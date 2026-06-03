@@ -4,7 +4,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { useEffect, useState } from "react";
 import { getAuthMode } from "../lib/authMode";
 import { STATIC_DEMO_USER_ID } from "../lib/staticIds";
-import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
+import { isStaticDemoRuntime } from "../lib/staticRuntime";
 
 const KEY = "societyer.currentUserId";
 let staticUserId = STATIC_DEMO_USER_ID as Id<"users"> | null;
@@ -12,7 +12,6 @@ let staticUserId = STATIC_DEMO_USER_ID as Id<"users"> | null;
 export function getStoredUserId(): Id<"users"> | null {
   if (isStaticDemoRuntime()) return staticUserId;
   const v = localStorage.getItem(KEY);
-  if (!v && isLocalDataRuntime()) return STATIC_DEMO_USER_ID as Id<"users">;
   return (v as Id<"users"> | null) ?? null;
 }
 

@@ -2,7 +2,6 @@ import React, { Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, HashRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { ConvexProvider, type ConvexReactClient } from "convex/react";
-import { convex } from "./lib/convex";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "./lib/staticRuntime";
 import { getRuntimeMode } from "./lib/runtimeMode";
 import { AuthProvider } from "./auth/AuthProvider";
@@ -163,15 +162,15 @@ function PageLoader() {
 }
 
 function AsyncAppProviders() {
-  const [convexClient, setConvexClient] = React.useState<ConvexReactClient | null>(
-    () => (localDataRuntime ? null : convex),
-  );
+  const [convexClient, setConvexClient] = React.useState<ConvexReactClient | null>(null);
 
   React.useEffect(() => {
-    if (!localDataRuntime) return;
     let active = true;
-    import("./lib/localDataClient").then(({ localDataClient }) => {
-      if (active) setConvexClient(localDataClient as unknown as ConvexReactClient);
+    const clientPromise = localDataRuntime
+      ? import("./lib/localDataClient").then(({ localDataClient }) => localDataClient)
+      : import("./lib/convex").then(({ convex }) => convex);
+    clientPromise.then((client) => {
+      if (active) setConvexClient(client as unknown as ConvexReactClient);
     });
     return () => {
       active = false;

@@ -8,11 +8,13 @@ import {
 } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
-import { authClient, BetterAuthSession } from "../lib/authClient";
 import { getAuthMode, type AuthMode } from "../lib/authMode";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { setStoredUserId } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
+
+type AuthClient = typeof import("../lib/authClient").authClient;
+type BetterAuthSession = AuthClient["$Infer"]["Session"];
 
 type AuthContextValue = {
   mode: AuthMode;
@@ -61,6 +63,38 @@ function BetterAuthProvider({
   children,
   mode,
 }: {
+  children: React.ReactNode;
+  mode: AuthMode;
+}) {
+  const [authClient, setAuthClient] = useState<AuthClient | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    import("../lib/authClient").then((module) => {
+      if (active) setAuthClient(module.authClient);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (!authClient) {
+    return <NoAuthProvider mode={mode}>{children}</NoAuthProvider>;
+  }
+
+  return (
+    <BetterAuthProviderReady authClient={authClient} mode={mode}>
+      {children}
+    </BetterAuthProviderReady>
+  );
+}
+
+function BetterAuthProviderReady({
+  authClient,
+  children,
+  mode,
+}: {
+  authClient: AuthClient;
   children: React.ReactNode;
   mode: AuthMode;
 }) {

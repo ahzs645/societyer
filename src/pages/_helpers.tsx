@@ -1,43 +1,58 @@
 import { Sparkles } from "lucide-react";
 import { ReactNode, useState, createElement } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { EmptyState, TintedIconTile } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { setStoredSocietyId } from "../hooks/useSociety";
 import { maintenanceErrorMessage, seedDemoSociety } from "../lib/maintenanceApi";
 import { getRouteIdentity, resolveRouteIdentity, type IconTone } from "../lib/routeIdentity";
+import { isStaticDemoRuntime } from "../lib/staticRuntime";
+import { getRuntimeMode } from "../lib/runtimeMode";
 
 export function SeedPrompt() {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const showDemoSeed = isStaticDemoRuntime() || getRuntimeMode() === "local-indexeddb";
   return (
     <div className="page">
       <EmptyState
         icon={<Sparkles size={20} />}
         title="No society yet"
         action={
-          <button
-            className="btn btn--accent"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                const result = await seedDemoSociety();
-                setStoredSocietyId(result.societyId);
-                toast.success("Demo society seeded");
-              } catch (error) {
-                toast.error(maintenanceErrorMessage(error));
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            <Sparkles size={14} /> {busy ? "Seeding..." : "Seed demo society"}
-          </button>
+          showDemoSeed ? (
+            <button
+              className="btn btn--accent"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const result = await seedDemoSociety();
+                  setStoredSocietyId(result.societyId);
+                  toast.success("Demo society seeded");
+                } catch (error) {
+                  toast.error(maintenanceErrorMessage(error));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <Sparkles size={14} /> {busy ? "Seeding..." : "Seed demo society"}
+            </button>
+          ) : (
+            <Link className="btn btn--accent" to="/app/society/new">
+              Create society
+            </Link>
+          )
         }
       >
-        Click below to load <strong>Riverside Community Society</strong>, a fictional BC
-        non-profit used to showcase the app. You can wipe it any time.
+        {showDemoSeed ? (
+          <>
+            Click below to load <strong>Riverside Community Society</strong>, a fictional BC
+            non-profit used to showcase the app. You can wipe it any time.
+          </>
+        ) : (
+          <>Create a local society workspace to start storing records and documents.</>
+        )}
       </EmptyState>
     </div>
   );

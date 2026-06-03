@@ -20,6 +20,8 @@ export type LocalChangeEnvelope = {
   societyId?: string;
   op: "upsert" | "delete" | "seed";
   createdAtISO: string;
+  mutationId?: string;
+  reason?: string;
 };
 
 export class LocalDexieDatabase extends Dexie {
@@ -57,6 +59,8 @@ export class LocalDexieRowStore {
   private cache: LocalSeed;
   private seed: LocalSeed;
   private listeners = new Set<() => void>();
+  private transactionDepth = 0;
+  private pendingNotify = false;
 
   constructor(seed: LocalSeed, options?: { databaseName?: string; logLabel?: string }) {
     this.seed = cloneLocalSeed(seed);
@@ -93,7 +97,7 @@ export class LocalDexieRowStore {
     if (!row?._id) return null;
     this.cache[table] = upsertLocalRow(this.rows(table), row);
     this.persistRow(table, row, "upsert");
-    this.notify();
+    this.scheduleNotify();
     return row;
   }
 
@@ -110,11 +114,34 @@ export class LocalDexieRowStore {
     if (!id) return null;
     const previous = this.getRow(table, id);
     this.cache[table] = this.rows(table).filter((row) => row._id !== id);
-    void this.db?.records.delete(localRecordKey(table, id));
+    const deletedAtISO = new Date().toISOString();
+    void this.db?.records.put(localDeletedRecord(table, {
+      _id: id,
+      societyId: previous?.societyId,
+      ...(previous ?? {}),
+      deletedAtISO,
+    }));
     if (table === "meetings" || table === "minutes") void this.db?.[table].delete(id);
     void this.appendChange(table, { _id: id, societyId: previous?.societyId }, "delete");
-    this.notify();
+    this.scheduleNotify();
     return previous;
+  }
+
+  transaction<T>(mutate: () => T): T {
+    this.transactionDepth += 1;
+    try {
+      return mutate();
+    } finally {
+      this.transactionDepth -= 1;
+      if (this.transactionDepth === 0 && this.pendingNotify) this.notify();
+    }
+  }
+
+  exportSnapshot() {
+    return {
+      exportedAtISO: new Date().toISOString(),
+      tables: cloneLocalSeed(this.cache),
+    };
   }
 
   async reseed() {
@@ -207,7 +234,16 @@ export class LocalDexieRowStore {
   }
 
   private notify() {
+    this.pendingNotify = false;
     for (const listener of this.listeners) listener();
+  }
+
+  private scheduleNotify() {
+    if (this.transactionDepth > 0) {
+      this.pendingNotify = true;
+      return;
+    }
+    this.notify();
   }
 }
 
@@ -254,5 +290,13 @@ export function localRecord(table: string, row: any): LocalRecordEnvelope {
     updatedAtISO: row.updatedAtISO,
     deletedAtISO: row.deletedAtISO,
     value: cloneLocalRow(row),
+  };
+}
+
+export function localDeletedRecord(table: string, row: any): LocalRecordEnvelope {
+  const deletedAtISO = row.deletedAtISO ?? new Date().toISOString();
+  return {
+    ...localRecord(table, { ...row, deletedAtISO }),
+    deletedAtISO,
   };
 }

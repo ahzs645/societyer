@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   CheckCircle2,
   Database,
+  Download,
   FolderOpen,
   HardDrive,
   PlugZap,
@@ -16,6 +17,7 @@ import {
   type DesktopConnectorHealth,
   type DesktopWorkspaceInfo,
 } from "../lib/desktopBridge";
+import { downloadLocalWorkspaceSnapshot } from "../lib/localWorkspaceExport";
 import { getRuntimeDescriptor } from "../lib/runtimeMode";
 
 const CONNECTOR_ENDPOINT_KEY = "societyer.desktop.connectorEndpoint";
@@ -32,7 +34,7 @@ export function DesktopSetupPage() {
     () => localStorage.getItem(CONNECTOR_ENDPOINT_KEY) || DEFAULT_CONNECTOR_ENDPOINT,
   );
   const [connectorHealth, setConnectorHealth] = useState<DesktopConnectorHealth | null>(null);
-  const [busy, setBusy] = useState<"workspace" | "backup" | "connector" | null>(null);
+  const [busy, setBusy] = useState<"workspace" | "backup" | "connector" | "export" | null>(null);
   const [backupPath, setBackupPath] = useState<string | null>(null);
 
   useEffect(() => {
@@ -79,6 +81,18 @@ export function DesktopSetupPage() {
       setStatusMessage("Backup created.");
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Backup failed.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const exportLocalData = () => {
+    setBusy("export");
+    try {
+      downloadLocalWorkspaceSnapshot();
+      setStatusMessage("Local workspace data export created.");
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Local data export failed.");
     } finally {
       setBusy(null);
     }
@@ -200,6 +214,17 @@ export function DesktopSetupPage() {
                 </div>
                 <button className="btn" disabled={!requiredReady || busy === "backup"} onClick={createBackup}>
                   <Database size={12} /> {busy === "backup" ? "Backing up..." : "Create backup"}
+                </button>
+              </div>
+              <div className="settings-row">
+                <div>
+                  <strong>Local data export</strong>
+                  <div className="muted mono" style={{ fontSize: "var(--fs-xs)" }}>
+                    Downloads the local IndexedDB workspace records as JSON.
+                  </div>
+                </div>
+                <button className="btn" disabled={!requiredReady || busy === "export"} onClick={exportLocalData}>
+                  <Download size={12} /> {busy === "export" ? "Exporting..." : "Export data"}
                 </button>
               </div>
             </div>

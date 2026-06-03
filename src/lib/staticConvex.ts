@@ -3616,6 +3616,43 @@ function staticDocumentReviewQueues() {
   };
 }
 
+function staticDocumentReviewQueuesFromStore(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
+  if (!store) return staticDocumentReviewQueues();
+  const rows = store.listRows("documents", args).filter((document: any) => !staticIsImportSession(document) && !staticIsImportRecord(document));
+  const taskCounts = new Map<string, number>();
+  for (const task of store.listRows("tasks", args).filter((task: any) => task.status !== "Done" && task.documentId)) {
+    taskCounts.set(String(task.documentId), (taskCounts.get(String(task.documentId)) ?? 0) + 1);
+  }
+  const commentCounts = new Map<string, number>();
+  for (const comment of store.listRows("documentComments", args).filter((comment: any) => comment.status !== "resolved")) {
+    commentCounts.set(String(comment.documentId), (commentCounts.get(String(comment.documentId)) ?? 0) + 1);
+  }
+  const materialDocIds = new Set(store.listRows("meetingMaterials", args).map((row: any) => String(row.documentId)));
+  const annotated = rows.map((document: any) => ({
+    ...document,
+    openTaskCount: taskCounts.get(String(document._id)) ?? 0,
+    openCommentCount: commentCounts.get(String(document._id)) ?? 0,
+    signatureCount: 0,
+    linkedToMeetingPackage: materialDocIds.has(String(document._id)) || !!document.meetingId,
+  }));
+  const actionRequired = annotated.filter((document: any) => document.reviewStatus === "needs_signature" || document.openCommentCount > 0 || document.openTaskCount > 0);
+  const workInProgress = annotated.filter((document: any) => document.reviewStatus === "in_review" || document.linkedToMeetingPackage || document.openCommentCount > 0);
+  return {
+    recent: annotated
+      .filter((document: any) => document.lastOpenedAtISO || document.createdAtISO)
+      .sort((a: any, b: any) => String(b.lastOpenedAtISO ?? b.createdAtISO).localeCompare(String(a.lastOpenedAtISO ?? a.createdAtISO)))
+      .slice(0, 8),
+    actionRequired: actionRequired.slice(0, 8),
+    workInProgress: workInProgress.slice(0, 8),
+    counts: {
+      documents: annotated.length,
+      recent: annotated.length,
+      actionRequired: actionRequired.length,
+      workInProgress: workInProgress.length,
+    },
+  };
+}
+
 function staticMeetingPackage(args: StaticArgs) {
   const meeting = byId(meetings, args?.meetingId) ?? meetings[0];
   const materials = meetingMaterials
@@ -4239,6 +4276,18 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
       return (store?.listRows("activity", args) ?? tables.activity)
         .sort((a: any, b: any) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")))
         .slice(0, args?.limit ?? tables.activity.length);
+    case "importSessions:list":
+      return staticImportSessionRows(store, args?.societyId);
+    case "importSessions:get": {
+      const sessionDoc = store?.getRow("documents", args?.sessionId);
+      if (!staticIsImportSession(sessionDoc)) return null;
+      const session = staticHydrateImportSession(sessionDoc);
+      const records = staticImportRecordRows(store, args?.sessionId);
+      return {
+        session: { ...session, summary: staticImportSessionSummary(session, records) },
+        records,
+      };
+    }
     case "aiAgents:listDefinitions":
       return aiAgentDefinitions;
     case "aiAgents:listSkills":
@@ -4448,7 +4497,7 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
         .filter((comment) => comment.documentId === args?.documentId)
         .sort((a, b) => b.createdAtISO.localeCompare(a.createdAtISO));
     case "documents:reviewQueues":
-      return staticDocumentReviewQueues();
+      return staticDocumentReviewQueuesFromStore(store, args);
     case "documentVersions:latest": {
       const rows = store?.listRows("documentVersions", args) ?? scopedRows(tables.documentVersions, args);
       return rows
@@ -4461,10 +4510,6 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
         .sort((a, b) => b.version - a.version);
     case "evidenceRegisters:overview":
       return evidenceRegistersOverview;
-    case "importSessions:list":
-      return [];
-    case "importSessions:get":
-      return null;
     case "organizationHistory:list":
       return orgHistoryBundle;
     case "paperless:connectionStatus":
@@ -4947,6 +4992,69 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       updatedAtISO: new Date().toISOString(),
     });
     return args?.societyId ?? existing._id;
+  }
+
+  if (name === "importSessions:createFromBundle") {
+    return staticCreateImportSession(store, args);
+  }
+
+  if (name === "importSessions:updateRecord") {
+    const doc = store?.getRow("documents", args?.recordId);
+    if (!staticIsImportRecord(doc)) return null;
+    const record = staticHydrateImportRecord(doc);
+    const next = {
+      ...record,
+      status: staticReviewStatus(args?.status ?? record.status),
+      reviewNotes: args?.reviewNotes != null ? String(args.reviewNotes) : record.reviewNotes,
+      payload: args?.payload ?? record.payload,
+      sourceExternalIds: args?.sourceExternalIds ?? record.sourceExternalIds,
+      updatedAtISO: new Date().toISOString(),
+    };
+    store?.upsertRow("documents", {
+      ...doc,
+      title: next.title,
+      content: JSON.stringify(next),
+    });
+    staticPatchImportSessionUpdatedAt(store, next.sessionId);
+    return args?.recordId;
+  }
+
+  if (name === "importSessions:bulkSetStatus") {
+    const wanted = staticReviewStatus(args?.status);
+    const recordIds = Array.isArray(args?.recordIds) ? new Set(args.recordIds) : null;
+    let updated = 0;
+    store?.transaction(() => {
+      for (const doc of store.listRows("documents", {}).filter(staticIsImportRecord)) {
+        const record = staticHydrateImportRecord(doc);
+        if (record.sessionId !== args?.sessionId) continue;
+        if (recordIds && !recordIds.has(record._id)) continue;
+        store.upsertRow("documents", {
+          ...doc,
+          content: JSON.stringify({ ...record, status: wanted, updatedAtISO: new Date().toISOString() }),
+        });
+        updated += 1;
+      }
+      staticPatchImportSessionUpdatedAt(store, args?.sessionId);
+    });
+    return { updated };
+  }
+
+  if (name === "importSessions:removeSession") {
+    store?.transaction(() => {
+      for (const record of staticImportRecordRows(store, args?.sessionId)) store.removeRow("documents", record._id);
+      store.removeRow("documents", args?.sessionId);
+    });
+    return null;
+  }
+
+  if (
+    name === "importSessions:applyApprovedToOrgHistory" ||
+    name === "importSessions:applyApprovedMeetings" ||
+    name === "importSessions:backfillApprovedMeetingReferences" ||
+    name === "importSessions:applyApprovedDocuments" ||
+    name === "importSessions:applyApprovedSectionRecords"
+  ) {
+    return { deferred: true, updated: 0, applied: 0, message: "Local import apply is not enabled yet." };
   }
 
   if (name === "aiChat:createThread") {
@@ -6363,38 +6471,40 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     const now = new Date().toISOString();
     const id = `static_documentVersion_${Date.now()}`;
     const existing = store?.listRows("documentVersions", { documentId: args?.documentId }) ?? [];
-    for (const row of existing) {
-      if (row.isCurrent) store?.upsertRow("documentVersions", { ...row, isCurrent: false });
-    }
-    store?.upsertRow("documentVersions", {
-      _id: id,
-      _creationTime: Date.now(),
-      societyId: args?.societyId ?? SOCIETY_ID,
-      documentId: args?.documentId,
-      version: args?.version ?? Math.max(0, ...existing.map((row) => Number(row.version) || 0)) + 1,
-      storageProvider: args?.storageProvider ?? "demo",
-      storageKey: args?.storageKey ?? `demo://document-version/${id}`,
-      fileName: args?.fileName ?? "document",
-      mimeType: args?.mimeType,
-      fileSizeBytes: args?.fileSizeBytes,
-      sha256: args?.sha256,
-      uploadedByUserId: args?.actingUserId,
-      uploadedByName: "Static user",
-      uploadedAtISO: now,
-      changeNote: args?.changeNote,
-      isCurrent: true,
-    });
-    const document = store?.getRow("documents", args?.documentId);
-    if (document) {
-      store?.upsertRow("documents", {
-        ...document,
-        storageId: undefined,
-        fileName: args?.fileName,
+    store?.transaction(() => {
+      for (const row of existing) {
+        if (row.isCurrent) store.upsertRow("documentVersions", { ...row, isCurrent: false });
+      }
+      store.upsertRow("documentVersions", {
+        _id: id,
+        _creationTime: Date.now(),
+        societyId: args?.societyId ?? SOCIETY_ID,
+        documentId: args?.documentId,
+        version: args?.version ?? Math.max(0, ...existing.map((row) => Number(row.version) || 0)) + 1,
+        storageProvider: args?.storageProvider ?? "demo",
+        storageKey: args?.storageKey ?? `demo://document-version/${id}`,
+        fileName: args?.fileName ?? "document",
         mimeType: args?.mimeType,
         fileSizeBytes: args?.fileSizeBytes,
-        updatedAtISO: now,
+        sha256: args?.sha256,
+        uploadedByUserId: args?.actingUserId,
+        uploadedByName: "Static user",
+        uploadedAtISO: now,
+        changeNote: args?.changeNote,
+        isCurrent: true,
       });
-    }
+      const document = store.getRow("documents", args?.documentId);
+      if (document) {
+        store.upsertRow("documents", {
+          ...document,
+          storageId: undefined,
+          fileName: args?.fileName,
+          mimeType: args?.mimeType,
+          fileSizeBytes: args?.fileSizeBytes,
+          updatedAtISO: now,
+        });
+      }
+    });
     return id;
   }
   if (name === "documentVersions:rollback") {
@@ -6402,29 +6512,31 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     if (!target) return null;
     const now = new Date().toISOString();
     const existing = store?.listRows("documentVersions", { documentId: target.documentId }) ?? [];
-    for (const row of existing) {
-      store?.upsertRow("documentVersions", { ...row, isCurrent: row._id === target._id });
-    }
-    const document = store?.getRow("documents", target.documentId);
-    if (document) {
-      store?.upsertRow("documents", {
-        ...document,
-        fileName: target.fileName,
-        mimeType: target.mimeType,
-        fileSizeBytes: target.fileSizeBytes,
-        updatedAtISO: now,
+    store?.transaction(() => {
+      for (const row of existing) {
+        store.upsertRow("documentVersions", { ...row, isCurrent: row._id === target._id });
+      }
+      const document = store.getRow("documents", target.documentId);
+      if (document) {
+        store.upsertRow("documents", {
+          ...document,
+          fileName: target.fileName,
+          mimeType: target.mimeType,
+          fileSizeBytes: target.fileSizeBytes,
+          updatedAtISO: now,
+        });
+      }
+      store.upsertRow("activity", {
+        _id: `static_activity_document_rollback_${Date.now()}`,
+        _creationTime: Date.now(),
+        societyId: target.societyId,
+        actor: "Desktop user",
+        entityType: "document",
+        entityId: target.documentId,
+        action: "version-rollback",
+        summary: `Rolled back to ${target.fileName ?? `v${target.version}`}`,
+        createdAtISO: now,
       });
-    }
-    store?.upsertRow("activity", {
-      _id: `static_activity_document_rollback_${Date.now()}`,
-      _creationTime: Date.now(),
-      societyId: target.societyId,
-      actor: "Desktop user",
-      entityType: "document",
-      entityId: target.documentId,
-      action: "version-rollback",
-      summary: `Rolled back to ${target.fileName ?? `v${target.version}`}`,
-      createdAtISO: now,
     });
     return target._id;
   }
@@ -6526,6 +6638,233 @@ function staticAgentOutput(agent: any, input: string) {
     ...(agent.outputContract?.length ? ["Expected output contract:", ...agent.outputContract.map((field: string) => `- ${field}`), ""] : []),
     "Provider status: static demo deterministic stub.",
   ].join("\n");
+}
+
+const STATIC_IMPORT_SESSION_TAG = "import-session";
+const STATIC_IMPORT_RECORD_TAG = "import-session-record";
+const STATIC_IMPORT_SESSION_CATEGORY = "Import Session";
+const STATIC_IMPORT_RECORD_CATEGORY = "Import Candidate";
+
+function staticImportSessionRows(store?: StaticDemoDexieStore | null, societyId?: string) {
+  return (store?.listRows("documents", societyId ? { societyId } : undefined) ?? [])
+    .filter(staticIsImportSession)
+    .map(staticHydrateImportSession)
+    .map((session) => ({ ...session, summary: staticImportSessionSummary(session, staticImportRecordRows(store, session._id)) }))
+    .sort((a, b) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
+}
+
+function staticImportRecordRows(store?: StaticDemoDexieStore | null, sessionId?: string) {
+  return (store?.listRows("documents", {}) ?? [])
+    .filter(staticIsImportRecord)
+    .map(staticHydrateImportRecord)
+    .filter((record) => !sessionId || record.sessionId === sessionId)
+    .sort((a, b) => String(a.recordKind ?? "").localeCompare(String(b.recordKind ?? "")) || String(a.title ?? "").localeCompare(String(b.title ?? "")));
+}
+
+function staticHydrateImportSession(doc: any) {
+  const payload = staticParseJson(doc?.content);
+  return {
+    ...payload,
+    _id: doc._id,
+    _creationTime: doc._creationTime,
+    name: payload.name ?? doc.title,
+    createdAtISO: payload.createdAtISO ?? doc.createdAtISO,
+  };
+}
+
+function staticHydrateImportRecord(doc: any) {
+  const payload = staticParseJson(doc?.content);
+  return {
+    ...payload,
+    _id: doc._id,
+    _creationTime: doc._creationTime,
+    title: payload.title ?? doc.title,
+    status: staticReviewStatus(payload.status),
+    sourceExternalIds: Array.isArray(payload.sourceExternalIds) ? payload.sourceExternalIds : [],
+    riskFlags: Array.isArray(payload.riskFlags) ? payload.riskFlags : [],
+    importedTargets: payload.importedTargets ?? {},
+  };
+}
+
+function staticImportSessionSummary(session: any, records: any[] = []) {
+  const summary = session?.summary;
+  if (summary && typeof summary === "object" && Number.isFinite(Number(summary.total))) return summary;
+  return staticSummarizeImportRecords(records);
+}
+
+function staticSummarizeImportRecords(records: any[]) {
+  const byKind: Record<string, number> = {};
+  const byStatus: Record<string, number> = {};
+  const byTarget: Record<string, number> = {};
+  let riskCount = 0;
+  for (const record of records) {
+    byKind[record.recordKind] = (byKind[record.recordKind] ?? 0) + 1;
+    byStatus[record.status] = (byStatus[record.status] ?? 0) + 1;
+    byTarget[record.targetModule] = (byTarget[record.targetModule] ?? 0) + 1;
+    if ((record.riskFlags ?? []).length > 0) riskCount += 1;
+  }
+  return {
+    total: records.length,
+    byKind,
+    byStatus,
+    byTarget,
+    riskCount,
+    orgHistoryApplied: 0,
+    meetingsApplied: 0,
+    documentsApplied: 0,
+    sectionsApplied: 0,
+  };
+}
+
+function staticRecordsFromImportBundle(bundle: any) {
+  const records: any[] = [];
+  const pushRows = (key: string, recordKind: string, targetModule: string) => {
+    for (const payload of staticArrayOf(bundle?.[key])) {
+      records.push(staticImportRecord(recordKind, targetModule, payload));
+    }
+  };
+  pushRows("sources", "source", "Org history sources");
+  pushRows("facts", "fact", "Org history");
+  pushRows("events", "event", "Org history");
+  pushRows("boardTerms", "boardTerm", "Directors and roles");
+  pushRows("motions", "motion", "Meetings and minutes");
+  pushRows("meetingMinutes", "meetingMinutes", "Meetings and minutes");
+  pushRows("documents", "documentCandidate", "Documents");
+  pushRows("documentMap", "documentCandidate", "Documents");
+  pushRows("filings", "filing", "filings");
+  pushRows("deadlines", "deadline", "deadlines");
+  pushRows("policies", "policy", "policies");
+  pushRows("grants", "grant", "grants");
+  pushRows("employees", "employee", "employees");
+  pushRows("volunteers", "volunteer", "volunteers");
+  for (const [key, value] of Object.entries(bundle ?? {})) {
+    if (!Array.isArray(value) || records.some((record) => record.sourceCollection === key)) continue;
+    for (const payload of value) records.push(staticImportRecord(staticSingularKind(key), key, payload, key));
+  }
+  return records;
+}
+
+function staticImportRecord(recordKind: string, targetModule: string, payload: any, sourceCollection?: string) {
+  const title = staticImportRecordTitle(recordKind, payload);
+  return {
+    recordKind,
+    targetModule,
+    title,
+    description: staticCleanText(payload?.description ?? payload?.summary ?? payload?.notes) ?? "",
+    payload: payload && typeof payload === "object" ? payload : { value: payload },
+    sourceExternalIds: staticArrayOf(payload?.sourceExternalIds ?? payload?.externalId ?? payload?.id).map(String),
+    confidence: Number(payload?.confidence ?? 0.8),
+    riskFlags: [],
+    sourceCollection,
+  };
+}
+
+function staticCreateImportSession(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
+  const records = staticRecordsFromImportBundle(args?.bundle);
+  if (records.length === 0) throw new Error("Import bundle did not contain any supported records.");
+  const now = new Date().toISOString();
+  const sessionId = `static_import_session_${Date.now()}`;
+  const sessionPayload = {
+    kind: "importSession",
+    name: staticCleanText(args?.name) || staticCleanText(args?.bundle?.metadata?.name) || "Local import session",
+    sourceSystem: staticCleanText(args?.bundle?.metadata?.sourceSystem ?? args?.bundle?.sourceSystem) || "local",
+    bundleMetadata: args?.bundle?.metadata ?? null,
+    createdAtISO: now,
+    updatedAtISO: now,
+    status: "Reviewing",
+    summary: staticSummarizeImportRecords(records.map((record) => ({ ...record, status: "Pending", importedTargets: {} }))),
+  };
+  store?.transaction(() => {
+    store.upsertRow("documents", {
+      _id: sessionId,
+      _creationTime: Date.now(),
+      societyId: args?.societyId ?? SOCIETY_ID,
+      title: sessionPayload.name,
+      category: STATIC_IMPORT_SESSION_CATEGORY,
+      content: JSON.stringify(sessionPayload),
+      createdAtISO: now,
+      flaggedForDeletion: false,
+      tags: [STATIC_IMPORT_SESSION_TAG, `source:${sessionPayload.sourceSystem}`],
+    });
+    records.forEach((record, index) => {
+      const recordId = `static_import_record_${Date.now()}_${index}`;
+      const payload = {
+        ...record,
+        sessionId,
+        kind: "importRecord",
+        status: "Pending",
+        reviewNotes: staticCleanText(record.payload?.reviewNotes) || "",
+        importedTargets: {},
+        createdAtISO: now,
+        updatedAtISO: now,
+      };
+      store.upsertRow("documents", {
+        _id: recordId,
+        _creationTime: Date.now() + index + 1,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        title: record.title,
+        category: STATIC_IMPORT_RECORD_CATEGORY,
+        importSessionId: sessionId,
+        importRecordKind: record.recordKind,
+        content: JSON.stringify(payload),
+        createdAtISO: now,
+        flaggedForDeletion: false,
+        tags: [STATIC_IMPORT_SESSION_TAG, STATIC_IMPORT_RECORD_TAG, `kind:${record.recordKind}`, `target:${record.targetModule}`],
+      });
+    });
+  });
+  return sessionId;
+}
+
+function staticPatchImportSessionUpdatedAt(store: StaticDemoDexieStore | null | undefined, sessionId: string | undefined) {
+  const sessionDoc = store?.getRow("documents", sessionId);
+  if (!sessionDoc || !staticIsImportSession(sessionDoc)) return;
+  const session = staticHydrateImportSession(sessionDoc);
+  store?.upsertRow("documents", {
+    ...sessionDoc,
+    content: JSON.stringify({ ...session, updatedAtISO: new Date().toISOString() }),
+  });
+}
+
+function staticIsImportSession(doc: any) {
+  return Boolean(doc?.tags?.includes(STATIC_IMPORT_SESSION_TAG) && !doc?.tags?.includes(STATIC_IMPORT_RECORD_TAG));
+}
+
+function staticIsImportRecord(doc: any) {
+  return Boolean(doc?.tags?.includes(STATIC_IMPORT_SESSION_TAG) && doc?.tags?.includes(STATIC_IMPORT_RECORD_TAG));
+}
+
+function staticParseJson(value: unknown) {
+  if (!value || typeof value !== "string") return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function staticReviewStatus(value: unknown) {
+  return value === "Approved" || value === "Rejected" ? value : "Pending";
+}
+
+function staticArrayOf(value: unknown) {
+  if (Array.isArray(value)) return value;
+  if (value == null) return [];
+  return [value];
+}
+
+function staticCleanText(value: unknown) {
+  const text = String(value ?? "").trim();
+  return text || undefined;
+}
+
+function staticImportRecordTitle(recordKind: string, payload: any) {
+  return staticCleanText(payload?.title ?? payload?.name ?? payload?.label ?? payload?.description) ?? `${recordKind} import`;
+}
+
+function staticSingularKind(value: string) {
+  return value.replace(/ies$/, "y").replace(/s$/, "") || "record";
 }
 
 type StaticDemoSeed = LocalSeed;
@@ -6694,6 +7033,14 @@ class StaticDemoDexieStore {
 
   async reseed() {
     await this.rowsStore.reseed();
+  }
+
+  transaction<T>(mutate: () => T): T {
+    return this.rowsStore.transaction(mutate);
+  }
+
+  exportSnapshot() {
+    return this.rowsStore.exportSnapshot();
   }
 
   private agendaSummaryForMeeting(meeting: any) {
@@ -6897,6 +7244,10 @@ export class StaticConvexClient {
 
   reseedStaticDemo() {
     return this.store.reseed();
+  }
+
+  exportLocalWorkspaceSnapshot() {
+    return this.store.exportSnapshot();
   }
 }
 
