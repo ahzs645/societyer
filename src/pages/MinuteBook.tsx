@@ -12,6 +12,7 @@ import { useToast } from "../components/Toast";
 import { BookOpen, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 export function MinuteBookPage() {
   const society = useSociety();
@@ -242,7 +243,7 @@ export function MinuteBookPage() {
             <RecordSelect label="Policy" value={draft.policyId} rows={safeRows(detail, "policies")} onChange={(value) => setDraft({ ...draft, policyId: value })} getLabel={(row: any) => row.policyName} />
             <RecordSelect label="Workflow package" value={draft.workflowPackageId} rows={safeRows(detail, "workflowPackages")} onChange={(value) => setDraft({ ...draft, workflowPackageId: value })} getLabel={(row: any) => row.packageName} />
             <RecordSelect label="Written resolution" value={draft.writtenResolutionId} rows={safeRows(detail, "writtenResolutions")} onChange={(value) => setDraft({ ...draft, writtenResolutionId: value })} getLabel={(row: any) => row.title} />
-            <Field label="Notes"><textarea className="textarea" value={draft.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={draft.notes ?? ""} onChange={(markdown) => setDraft({ ...draft, notes: markdown })} /></Field>
           </>
         )}
       </Drawer>

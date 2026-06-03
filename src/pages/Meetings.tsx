@@ -1,25 +1,33 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Badge, Drawer, EmptyState, Field, Pill } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { Select } from "../components/Select";
 import { DateTimeInput } from "../components/DateTimeInput";
 import { Toggle } from "../components/Controls";
+import { Tooltip } from "../components/Tooltip";
 import { useToast } from "../components/Toast";
-import { Plus, Calendar, Tag, AlertTriangle, BookMarked } from "lucide-react";
+import { Plus, Calendar, Tag, AlertTriangle, BookMarked, Monitor, MoreHorizontal, Pencil, Trash2, ExternalLink } from "lucide-react";
 import { formatDateTime } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { CalendarView } from "../components/CalendarView";
 import type { ToneVariant } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
+import { NameAutocomplete } from "../components/NameAutocomplete";
+import { Menu, type MenuSection } from "../components/Menu";
+import { ContextMenu } from "../components/ContextMenu";
+import { useConfirm } from "../components/Modal";
+import { useHiddenSuggestions, looksLikeLink } from "../lib/hiddenSuggestions";
+import type { Doc } from "../../convex/_generated/dataModel";
 
 const OVERLAP_WINDOW_MS = 2 * 60 * 60 * 1000; // within 2 hours counts as concurrent
 
-function computeConflicts(meetings: any[]): Map<string, string[]> {
+function computeConflicts(meetings: Doc<"meetings">[]): Map<string, string[]> {
   const byTime = meetings
     .filter((m) => m.status !== "Cancelled")
     .map((m) => ({ id: m._id, title: m.title, ts: new Date(m.scheduledAt).getTime() }))
@@ -35,7 +43,7 @@ function computeConflicts(meetings: any[]): Map<string, string[]> {
   return out;
 }
 
-const MEETING_FIELDS: FilterField<any>[] = [
+const MEETING_FIELDS: FilterField<Doc<"meetings">>[] = [
   { id: "title", label: "Title", icon: <Tag size={14} />, match: (m, q) => m.title.toLowerCase().includes(q.toLowerCase()) },
   { id: "type", label: "Type", icon: <Tag size={14} />, options: ["Board", "Committee", "AGM", "SGM"], match: (m, q) => m.type === q },
   { id: "status", label: "Status", icon: <Tag size={14} />, options: ["Scheduled", "Held", "Cancelled"], match: (m, q) => m.status === q },
@@ -60,8 +68,13 @@ type MeetingDraft = {
 export function MeetingsPage() {
   const society = useSociety();
   const { rules } = useBylawRules();
-  const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
-  const meetingTemplates = useQuery(api.meetingTemplates.list, society ? { societyId: society._id } : "skip");
+  const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip") as
+    | Doc<"meetings">[]
+    | undefined;
+  const meetingTemplates = useQuery(
+    api.meetingTemplates.list,
+    society ? { societyId: society._id } : "skip",
+  ) as Doc<"meetingTemplates">[] | undefined;
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<MeetingDraft | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
@@ -71,15 +84,45 @@ export function MeetingsPage() {
     society && form?.scheduledAt ? { societyId: society._id, dateISO: form.scheduledAt } : "skip",
   );
   const create = useMutation(api.meetings.create);
+  const updateMeeting = useMutation(api.meetings.update);
+  const removeMeeting = useMutation(api.meetings.remove);
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const toast = useToast();
+  const [editingId, setEditingId] = useState<Doc<"meetings">["_id"] | null>(null);
+  const [contextMenu, setContextMenu] = useState<
+    { x: number; y: number; meeting: Doc<"meetings"> } | null
+  >(null);
   const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
   const noticeMaxDays = rules?.generalNoticeMaxDays ?? 60;
+  const effectiveRules = formRules ?? rules;
+  const effectiveNoticeMinDays = effectiveRules?.generalNoticeMinDays ?? noticeMinDays;
+  const effectiveNoticeMaxDays = effectiveRules?.generalNoticeMaxDays ?? noticeMaxDays;
 
-  const conflicts = computeConflicts(meetings ?? []);
-  const defaultTemplate = (meetingTemplates ?? []).find((template: any) => template.isDefault) ?? (meetingTemplates ?? [])[0];
+  const conflicts = useMemo(() => computeConflicts(meetings ?? []), [meetings]);
+  const { hide: hideLocationSuggestion, isHidden: isHiddenLocation } = useHiddenSuggestions("meeting-location");
+  const recentLocations = useMemo(() => {
+    const sorted = (meetings ?? [])
+      .filter((m) => m.location && m.location.trim())
+      .sort((a, b) => (b.scheduledAt ?? "").localeCompare(a.scheduledAt ?? ""));
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const m of sorted) {
+      const loc = m.location!.trim();
+      const key = loc.toLowerCase();
+      if (seen.has(key)) continue;
+      if (looksLikeLink(loc)) continue;
+      if (isHiddenLocation(loc)) continue;
+      seen.add(key);
+      out.push(loc);
+    }
+    return out;
+  }, [meetings, isHiddenLocation]);
+  const defaultTemplate =
+    (meetingTemplates ?? []).find((template) => template.isDefault) ?? (meetingTemplates ?? [])[0];
 
   const openNew = (overrides: Partial<MeetingDraft> = {}) => {
+    setEditingId(null);
     setForm({
       type: "Board", title: "",
       scheduledAt: toDateTimeLocalValue(new Date(Date.now() + noticeMinDays * 864e5)),
@@ -94,8 +137,72 @@ export function MeetingsPage() {
     setOpen(true);
   };
 
+  const openEdit = (meeting: Doc<"meetings">) => {
+    setEditingId(meeting._id);
+    setForm({
+      type: meeting.type,
+      title: meeting.title,
+      scheduledAt: meeting.scheduledAt,
+      location: meeting.location ?? "",
+      electronic: !!meeting.electronic,
+      quorumRequired: meeting.quorumRequired != null ? String(meeting.quorumRequired) : "",
+      status: meeting.status,
+      attendeeIds: meeting.attendeeIds ?? [],
+      meetingTemplateId: meeting.meetingTemplateId ? String(meeting.meetingTemplateId) : "",
+      notes: meeting.notes ?? "",
+    });
+    setOpen(true);
+  };
+
+  const handleDelete = async (meeting: Doc<"meetings">) => {
+    const hasMinutes = !!meeting.minutesId;
+    const ok = await confirm({
+      title: `Delete "${meeting.title}"?`,
+      message: hasMinutes
+        ? "This meeting has recorded minutes attached. Deleting it removes the meeting record but the minutes document will be orphaned."
+        : "This will remove the meeting from the schedule. This action cannot be undone.",
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (!ok) return;
+    await removeMeeting({ id: meeting._id });
+    toast.success("Meeting deleted", meeting.title);
+  };
+
+  const meetingMenuSections = (meeting: Doc<"meetings">): MenuSection[] => [
+    {
+      id: "actions",
+      items: [
+        {
+          id: "open",
+          label: "Open",
+          icon: <ExternalLink size={14} />,
+          onSelect: () => navigate(`/app/meetings/${meeting._id}`),
+        },
+        {
+          id: "edit",
+          label: "Edit",
+          icon: <Pencil size={14} />,
+          onSelect: () => openEdit(meeting),
+        },
+      ],
+    },
+    {
+      id: "danger",
+      items: [
+        {
+          id: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          destructive: true,
+          onSelect: () => { void handleDelete(meeting); },
+        },
+      ],
+    },
+  ];
+
   useEffect(() => {
-    if (!society || open) return;
+    if (!society || open || !meetingTemplates) return;
     const intent = params.get("intent");
     if (intent !== "create" && intent !== "generate-agm-package") return;
     const type = params.get("type") === "AGM" ? "AGM" : "Board";
@@ -113,22 +220,33 @@ export function MeetingsPage() {
       next.delete("type");
       return next;
     }, { replace: true });
-  }, [open, params, setParams, society]);
-
-  useEffect(() => {
-    if (!open || !form || form.meetingTemplateId || !defaultTemplate?._id) return;
-    setForm({ ...form, meetingTemplateId: String(defaultTemplate._id) });
-  }, [defaultTemplate?._id, form, open]);
+  }, [open, params, setParams, society, meetingTemplates]);
 
   if (society === undefined) return <div className="page meetings-page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
   const save = async () => {
     if (!form) return;
-    const effectiveRules = formRules ?? rules;
-    const effectiveNoticeMinDays = effectiveRules?.generalNoticeMinDays ?? noticeMinDays;
-    const effectiveNoticeMaxDays = effectiveRules?.generalNoticeMaxDays ?? noticeMaxDays;
     if (isGeneralMeeting(form.type) && !meetsNoticeWindow(form.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays)) {
       toast.error(`General meetings need ${effectiveNoticeMinDays}–${effectiveNoticeMaxDays} days of notice.`);
+      return;
+    }
+    if (editingId) {
+      await updateMeeting({
+        id: editingId,
+        patch: {
+          type: form.type,
+          title: form.title,
+          scheduledAt: form.scheduledAt,
+          location: form.location,
+          electronic: form.electronic,
+          quorumRequired: numberOrUndefined(form.quorumRequired),
+          status: form.status,
+          attendeeIds: form.attendeeIds,
+          notes: form.notes,
+        },
+      });
+      setOpen(false);
+      toast.success("Meeting updated", form.title);
       return;
     }
     const meetingId = await create({
@@ -148,9 +266,14 @@ export function MeetingsPage() {
         title="Meetings"
         icon={<Calendar size={16} />}
         iconColor="orange"
-        subtitle={`Board meetings, committee meetings, and general meetings (AGM/SGM). Active notice rule: ${noticeMinDays}–${noticeMaxDays} days.`}
+        subtitle="Board meetings, committee meetings, and general meetings (AGM/SGM)."
         actions={
-          <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
+            <Tooltip content="Required notice window for general meetings under the active bylaw rule set.">
+              <Pill tone="info" size="sm">
+                Notice: {noticeMinDays}–{noticeMaxDays} days
+              </Pill>
+            </Tooltip>
             <div className="segmented" role="tablist" aria-label="Meeting view">
               <button
                 type="button"
@@ -184,7 +307,7 @@ export function MeetingsPage() {
           </div>
           <div className="card__body">
             <CalendarView
-              items={(meetings ?? []) as any[]}
+              items={meetings ?? []}
               getDate={(meeting) => meeting.scheduledAt}
               getLabel={(meeting) => `${meetingTimeLabel(meeting.scheduledAt)} ${meeting.title}`}
               getTone={(meeting) => meetingStatusTone(meeting.status)}
@@ -197,20 +320,63 @@ export function MeetingsPage() {
         <DataTable
           label="All meetings"
           icon={<Calendar size={14} />}
-          data={(meetings ?? []) as any[]}
+          data={meetings ?? []}
+          loading={meetings === undefined}
           rowKey={(r) => r._id}
           filterFields={MEETING_FIELDS}
           searchPlaceholder="Search meetings…"
           defaultSort={{ columnId: "scheduledAt", dir: "desc" }}
           viewsKey="meetings"
           sharedViewsContext={{ societyId: society._id, nameSingular: "meeting" }}
-          onRowClick={(row) => navigate(`/app/meetings/${row._id}`)}
+          onRowClick={(row) => openEdit(row)}
+          onPrimaryCellClick={(row) => navigate(`/app/meetings/${row._id}`)}
+          onRowContextMenu={(event, row) => {
+            event.preventDefault();
+            setContextMenu({ x: event.clientX, y: event.clientY, meeting: row });
+          }}
+          renderRowActions={(row) => (
+            <Menu
+              align="right"
+              minWidth={180}
+              sections={meetingMenuSections(row)}
+              trigger={
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Actions for ${row.title}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreHorizontal size={14} />
+                </button>
+              }
+            />
+          )}
+          emptyMessage={
+            <EmptyState
+              icon={<Calendar size={18} />}
+              title="No meetings scheduled yet"
+              description="Schedule a board, committee, or general meeting to start tracking agendas, attendees, and minutes."
+              action={
+                <button className="btn btn--accent" type="button" onClick={() => openNew()}>
+                  <Plus size={12} /> Schedule meeting
+                </button>
+              }
+            />
+          }
           columns={[
             { id: "title", header: "Title", sortable: true, accessor: (r) => r.title, render: (r) => <strong>{r.title}</strong> },
             {
               id: "type", header: "Type", sortable: true,
               accessor: (r) => r.type,
               render: (r) => <Badge tone={r.type === "AGM" ? "accent" : r.type === "SGM" ? "warn" : "info"}>{r.type}</Badge>,
+              editable: {
+                type: "select",
+                options: ["Board", "Committee", "AGM", "SGM"],
+                getValue: (r) => r.type,
+                onCommit: async (r, v) => {
+                  await updateMeeting({ id: r._id, patch: { type: v } });
+                },
+              },
             },
             {
               id: "scheduledAt", header: "When", sortable: true,
@@ -221,15 +387,19 @@ export function MeetingsPage() {
                   <span>
                     <span className="mono">{formatDateTime(r.scheduledAt)}</span>
                     {overlap && (
-                      <span
-                        title={`Overlaps with: ${overlap.join(", ")}`}
-                        style={{ marginLeft: 6, display: "inline-flex", alignItems: "center" }}
-                      >
-                        <Badge tone="warn">
-                          <AlertTriangle size={10} style={{ marginRight: 3, verticalAlign: -1 }} />
-                          {overlap.length} concurrent
-                        </Badge>
-                      </span>
+                      <Tooltip content={`Overlaps with: ${overlap.join(", ")}`}>
+                        <span
+                          aria-label={`${overlap.length} concurrent meeting${overlap.length === 1 ? "" : "s"}: ${overlap.join(", ")}`}
+                          style={{
+                            marginLeft: 6,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            color: "var(--warn, #c78b00)",
+                          }}
+                        >
+                          <AlertTriangle size={12} />
+                        </span>
+                      </Tooltip>
                     )}
                   </span>
                 );
@@ -238,52 +408,79 @@ export function MeetingsPage() {
             {
               id: "location", header: "Location", sortable: true,
               accessor: (r) => r.location ?? "",
-              render: (r) => (
-                <span>
-                  {r.location ?? "—"} {r.electronic && <Badge tone="info">Electronic</Badge>}
-                </span>
-              ),
+              render: (r) => {
+                const hasLocation = !!r.location;
+                if (!hasLocation && !r.electronic) return <span className="muted">—</span>;
+                return (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    {r.electronic && (
+                      <Tooltip content="Electronic participation permitted">
+                        <span
+                          aria-label="Electronic participation permitted"
+                          style={{ display: "inline-flex", alignItems: "center", color: "var(--info, #3b82f6)" }}
+                        >
+                          <Monitor size={14} />
+                        </span>
+                      </Tooltip>
+                    )}
+                    <span>{hasLocation ? r.location : <span className="muted">Online</span>}</span>
+                  </span>
+                );
+              },
+              editable: {
+                type: "autocomplete",
+                getValue: (r) => r.location ?? "",
+                options: recentLocations,
+                onRemoveOption: hideLocationSuggestion,
+                placeholder: "Venue or join link",
+                onCommit: async (r, v) => {
+                  await updateMeeting({ id: r._id, patch: { location: v } });
+                },
+              },
             },
             {
               id: "status", header: "Status", sortable: true,
               accessor: (r) => r.status,
               render: (r) => <Badge tone={meetingStatusTone(r.status)}>{r.status}</Badge>,
+              editable: {
+                type: "select",
+                options: ["Scheduled", "Held", "Cancelled"],
+                getValue: (r) => r.status,
+                onCommit: async (r, v) => {
+                  await updateMeeting({ id: r._id, patch: { status: v } });
+                },
+              },
             },
             {
               id: "minutes", header: "Minutes",
-              render: (r) => r.minutesId ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>,
+              render: (r) => r.status === "Held" ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>,
             },
           ]}
         />
       )}
 
       <Drawer
-        open={open} onClose={() => setOpen(false)} title="Schedule meeting"
-        footer={<><button className="btn" type="button" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" type="button" onClick={save}>Schedule</button></>}
+        open={open} onClose={() => setOpen(false)} title={editingId ? "Edit meeting" : "Schedule meeting"}
+        footer={<><button className="btn" type="button" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" type="button" onClick={save}>{editingId ? "Save" : "Schedule"}</button></>}
       >
         {form && (
           <div>
-            {(() => {
-              const effectiveRules = formRules ?? rules;
-              const effectiveNoticeMinDays = effectiveRules?.generalNoticeMinDays ?? noticeMinDays;
-              const effectiveNoticeMaxDays = effectiveRules?.generalNoticeMaxDays ?? noticeMaxDays;
-              return isGeneralMeeting(form.type) && !meetsNoticeWindow(form.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays) ? (
+            {isGeneralMeeting(form.type) && !meetsNoticeWindow(form.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays) ? (
               <div className="flag flag--warn" style={{ marginBottom: 12 }}>
                 <AlertTriangle />
                 <div>
                   General meetings should be scheduled with {effectiveNoticeMinDays}–{effectiveNoticeMaxDays} days of notice under the rule set effective on this meeting date.
                 </div>
               </div>
-              ) : null;
-            })()}
-            <div className="meeting-template-picker">
+            ) : null}
+            {!editingId && <div className="meeting-template-picker">
               <Field label="Template">
                 <Select
                   value={form.meetingTemplateId}
                   onChange={(v) => setForm({ ...form, meetingTemplateId: v })}
                   options={[
                     { value: "", label: "Blank meeting" },
-                    ...(meetingTemplates ?? []).map((template: any) => ({
+                    ...(meetingTemplates ?? []).map((template) => ({
                       value: String(template._id),
                       label: `${template.name}${template.isDefault ? " (default)" : ""}`,
                     })),
@@ -293,12 +490,12 @@ export function MeetingsPage() {
               {form.meetingTemplateId ? (
                 <p className="meeting-template-picker__summary">
                   <BookMarked size={12} style={{ verticalAlign: -2, marginRight: 4 }} />
-                  {templateSummary((meetingTemplates ?? []).find((template: any) => String(template._id) === form.meetingTemplateId))}
+                  {templateSummary((meetingTemplates ?? []).find((template) => String(template._id) === form.meetingTemplateId))}
                 </p>
               ) : (
                 <p className="meeting-template-picker__summary">Start with an empty agenda and add sections from the meeting page.</p>
               )}
-            </div>
+            </div>}
             <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Type">
@@ -312,11 +509,20 @@ export function MeetingsPage() {
                 <DateTimeInput value={form.scheduledAt} onChange={(v) => setForm({ ...form, scheduledAt: v })} />
               </Field>
             </div>
-            <Field label="Location"><input className="input" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></Field>
+            <Field label="Venue / link">
+              <NameAutocomplete
+                value={form.location}
+                onChange={(v) => setForm({ ...form, location: v })}
+                options={recentLocations}
+                onRemoveOption={hideLocationSuggestion}
+                placeholder={form.electronic ? "Zoom, Teams, or join link…" : "Where is it being held?"}
+                ariaLabel="Venue or join link"
+              />
+            </Field>
             <Toggle
               checked={form.electronic}
               onChange={(v) => setForm({ ...form, electronic: v })}
-              disabled={!(formRules ?? rules)?.allowElectronicMeetings}
+              disabled={!effectiveRules?.allowElectronicMeetings}
               label="Electronic participation permitted"
             />
             <Field label="Quorum required">
@@ -324,20 +530,20 @@ export function MeetingsPage() {
                 className="input"
                 type="number"
                 placeholder={
-                  (formRules ?? rules)?.quorumType === "fixed"
-                    ? String((formRules ?? rules)?.quorumValue ?? "")
+                  effectiveRules?.quorumType === "fixed"
+                    ? String(effectiveRules?.quorumValue ?? "")
                     : "Computed for AGM/SGM"
                 }
                 value={form.quorumRequired ?? ""}
                 onChange={(e) => setForm({ ...form, quorumRequired: e.target.value })}
               />
             </Field>
-            <Field label="Notes"><textarea className="textarea" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
             {form.type === "AGM" && (
               <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                Reminder: AGM notice must be sent {(formRules ?? rules)?.generalNoticeMinDays ?? noticeMinDays}–{(formRules ?? rules)?.generalNoticeMaxDays ?? noticeMaxDays} days in advance.
-                {(formRules ?? rules)?.requireAgmFinancialStatements ? " Financial statements must be presented." : ""}
-                {(formRules ?? rules)?.requireAgmElections ? " Elections are expected under the effective rule set." : ""}
+                Reminder: AGM notice must be sent {effectiveNoticeMinDays}–{effectiveNoticeMaxDays} days in advance.
+                {effectiveRules?.requireAgmFinancialStatements ? " Financial statements must be presented." : ""}
+                {effectiveRules?.requireAgmElections ? " Elections are expected under the effective rule set." : ""}
               </div>
             )}
             {(() => {
@@ -375,6 +581,12 @@ export function MeetingsPage() {
           </div>
         )}
       </Drawer>
+
+      <ContextMenu
+        position={contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null}
+        sections={contextMenu ? meetingMenuSections(contextMenu.meeting) : []}
+        onClose={() => setContextMenu(null)}
+      />
     </div>
   );
 }

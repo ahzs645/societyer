@@ -25,6 +25,7 @@ import {
 import { GrantSummaryStats } from "../features/grants/components/GrantSummaryStats";
 import { buildCsjOrientationEmailBody } from "../features/grants/lib/csjOrientationEmail";
 import { enrichGcosNormalizedGrant, readGcosExportFile } from "../lib/gcosExportImport";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 export function GrantsPage() {
   const society = useSociety();
@@ -700,7 +701,7 @@ export function GrantsPage() {
                 {(documents ?? []).map((document) => <option key={document._id} value={document._id}>{document.title}</option>)}
               </select>
             </Field>
-            <Field label="Notes"><textarea className="textarea" value={txnDraft.notes ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={txnDraft.notes ?? ""} onChange={(markdown) => setTxnDraft({ ...txnDraft, notes: markdown })} /></Field>
           </div>
         )}
       </Drawer>
@@ -746,14 +747,14 @@ export function GrantsPage() {
             </div>
             <Field label="Submitted"><input className="input" type="date" value={reportDraft.submittedAtISO ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, submittedAtISO: e.target.value })} /></Field>
             <Field label="Spending to date" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={reportDraft.spendingToDateDollars ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, spendingToDateDollars: e.target.value })} /></Field>
-            <Field label="Outcome summary"><textarea className="textarea" value={reportDraft.outcomeSummary ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, outcomeSummary: e.target.value })} /></Field>
+            <Field label="Outcome summary"><MarkdownEditor rows={4} value={reportDraft.outcomeSummary ?? ""} onChange={(markdown) => setReportDraft({ ...reportDraft, outcomeSummary: markdown })} /></Field>
             <Field label="Report document">
               <select className="input" value={reportDraft.documentId ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, documentId: e.target.value })}>
                 <option value="">None</option>
                 {(documents ?? []).map((document) => <option key={document._id} value={document._id}>{document.title}</option>)}
               </select>
             </Field>
-            <Field label="Notes"><textarea className="textarea" value={reportDraft.notes ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={reportDraft.notes ?? ""} onChange={(markdown) => setReportDraft({ ...reportDraft, notes: markdown })} /></Field>
           </div>
         )}
       </Drawer>

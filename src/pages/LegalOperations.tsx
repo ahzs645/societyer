@@ -12,6 +12,7 @@ import { BookTemplate, FileSignature, Landmark, Plus, Scale, Trash2, UsersRound 
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
 import { StructuredAddressFields } from "../components/StructuredAddressFields";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 export function RoleHoldersPage() {
   const society = useSociety();
@@ -201,11 +202,11 @@ export function RoleHoldersPage() {
               <label><input type="checkbox" checked={Boolean(draft.authorizedRepresentative)} onChange={(e) => setDraft({ ...draft, authorizedRepresentative: e.target.checked })} /> Authorized representative</label>
               <label><input type="checkbox" checked={Boolean(draft.nonNaturalPerson)} onChange={(e) => setDraft({ ...draft, nonNaturalPerson: e.target.checked })} /> Non-natural person</label>
             </div>
-            <Field label="Nature of control"><textarea className="textarea" value={draft.natureOfControl ?? ""} onChange={(e) => setDraft({ ...draft, natureOfControl: e.target.value })} /></Field>
+            <Field label="Nature of control"><MarkdownEditor rows={4} value={draft.natureOfControl ?? ""} onChange={(markdown) => setDraft({ ...draft, natureOfControl: markdown })} /></Field>
             <StructuredAddressFields value={draft} onChange={(address) => setDraft({ ...draft, ...address })} />
             <Field label="Service address"><input className="input" value={draft.serviceStreet ?? ""} onChange={(e) => setDraft({ ...draft, serviceStreet: e.target.value })} /></Field>
             <Field label="Related shareholder/controller IDs"><input className="input" value={draft.relatedShareholderIdsText ?? ""} onChange={(e) => setDraft({ ...draft, relatedShareholderIdsText: e.target.value })} /></Field>
-            <Field label="Notes"><textarea className="textarea" value={draft.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={draft.notes ?? ""} onChange={(markdown) => setDraft({ ...draft, notes: markdown })} /></Field>
           </>
         )}
       </Drawer>
@@ -368,10 +369,10 @@ export function RightsLedgerPage() {
               <Field label="ID prefix"><input className="input" value={classDraft.idPrefix ?? ""} onChange={(e) => setClassDraft({ ...classDraft, idPrefix: e.target.value })} /></Field>
               <Field label="Highest assigned number"><input className="input" value={classDraft.highestAssignedNumber ?? ""} onChange={(e) => setClassDraft({ ...classDraft, highestAssignedNumber: e.target.value })} /></Field>
             </div>
-            <Field label="Voting rights"><textarea className="textarea" value={classDraft.votingRights ?? ""} onChange={(e) => setClassDraft({ ...classDraft, votingRights: e.target.value })} /></Field>
-            <Field label="Holding conditions"><textarea className="textarea" value={classDraft.conditionsToHold ?? ""} onChange={(e) => setClassDraft({ ...classDraft, conditionsToHold: e.target.value })} /></Field>
-            <Field label="Transfer conditions"><textarea className="textarea" value={classDraft.conditionsToTransfer ?? ""} onChange={(e) => setClassDraft({ ...classDraft, conditionsToTransfer: e.target.value })} /></Field>
-            <Field label="Other provisions"><textarea className="textarea" value={classDraft.otherProvisions ?? ""} onChange={(e) => setClassDraft({ ...classDraft, otherProvisions: e.target.value })} /></Field>
+            <Field label="Voting rights"><MarkdownEditor rows={4} value={classDraft.votingRights ?? ""} onChange={(markdown) => setClassDraft({ ...classDraft, votingRights: markdown })} /></Field>
+            <Field label="Holding conditions"><MarkdownEditor rows={4} value={classDraft.conditionsToHold ?? ""} onChange={(markdown) => setClassDraft({ ...classDraft, conditionsToHold: markdown })} /></Field>
+            <Field label="Transfer conditions"><MarkdownEditor rows={4} value={classDraft.conditionsToTransfer ?? ""} onChange={(markdown) => setClassDraft({ ...classDraft, conditionsToTransfer: markdown })} /></Field>
+            <Field label="Other provisions"><MarkdownEditor rows={4} value={classDraft.otherProvisions ?? ""} onChange={(markdown) => setClassDraft({ ...classDraft, otherProvisions: markdown })} /></Field>
           </>
         )}
       </Drawer>
@@ -398,7 +399,7 @@ export function RightsLedgerPage() {
               <Field label="Quantity"><input className="input" value={transferDraft.quantity ?? ""} onChange={(e) => setTransferDraft({ ...transferDraft, quantity: e.target.value })} /></Field>
               <Field label="Consideration type"><input className="input" value={transferDraft.considerationType ?? ""} onChange={(e) => setTransferDraft({ ...transferDraft, considerationType: e.target.value })} /></Field>
             </div>
-            <Field label="Consideration description"><textarea className="textarea" value={transferDraft.considerationDescription ?? ""} onChange={(e) => setTransferDraft({ ...transferDraft, considerationDescription: e.target.value })} /></Field>
+            <Field label="Consideration description"><MarkdownEditor rows={4} value={transferDraft.considerationDescription ?? ""} onChange={(markdown) => setTransferDraft({ ...transferDraft, considerationDescription: markdown })} /></Field>
           </>
         )}
       </Drawer>
@@ -770,7 +771,7 @@ function TemplateDraftForm({ draft, setDraft }: { draft: any; setDraft: (draft: 
         <Field label="Review-required data fields"><input className="input" value={draft.reviewDataFieldsText ?? ""} onChange={(e) => setDraft({ ...draft, reviewDataFieldsText: e.target.value })} /></Field>
         <Field label="Timeline"><input className="input" value={draft.timeline ?? ""} onChange={(e) => setDraft({ ...draft, timeline: e.target.value })} /></Field>
         <Field label="Deliverable"><input className="input" value={draft.deliverable ?? ""} onChange={(e) => setDraft({ ...draft, deliverable: e.target.value })} /></Field>
-        <Field label="Terms"><textarea className="textarea" value={draft.terms ?? ""} onChange={(e) => setDraft({ ...draft, terms: e.target.value })} /></Field>
+        <Field label="Terms"><MarkdownEditor rows={4} value={draft.terms ?? ""} onChange={(markdown) => setDraft({ ...draft, terms: markdown })} /></Field>
         <label><input type="checkbox" checked={Boolean(draft.signatureRequired)} onChange={(e) => setDraft({ ...draft, signatureRequired: e.target.checked })} /> Signature required</label>
       </>
     );
@@ -781,9 +782,9 @@ function TemplateDraftForm({ draft, setDraft }: { draft: any; setDraft: (draft: 
         <Field label="Package name"><input className="input" value={draft.packageName ?? ""} onChange={(e) => setDraft({ ...draft, packageName: e.target.value })} /></Field>
         <div className="grid two"><OptionSelect label="Part type" setName="partTypes" value={draft.partType ?? ""} emptyLabel="No type" onChange={(value) => setDraft({ ...draft, partType: value })} /><OptionSelect label="Status" setName="precedentStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} /></div>
         <Field label="Short description"><input className="input" value={draft.shortDescription ?? ""} onChange={(e) => setDraft({ ...draft, shortDescription: e.target.value })} /></Field>
-        <Field label="Description"><textarea className="textarea" value={draft.description ?? ""} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></Field>
+        <Field label="Description"><MarkdownEditor rows={4} value={draft.description ?? ""} onChange={(markdown) => setDraft({ ...draft, description: markdown })} /></Field>
         <Field label="Timeline"><input className="input" value={draft.timeline ?? ""} onChange={(e) => setDraft({ ...draft, timeline: e.target.value })} /></Field>
-        <Field label="Deliverables"><textarea className="textarea" value={draft.deliverables ?? ""} onChange={(e) => setDraft({ ...draft, deliverables: e.target.value })} /></Field>
+        <Field label="Deliverables"><MarkdownEditor rows={4} value={draft.deliverables ?? ""} onChange={(markdown) => setDraft({ ...draft, deliverables: markdown })} /></Field>
         <Field label="Price items"><input className="input" value={draft.priceItemsText ?? ""} onChange={(e) => setDraft({ ...draft, priceItemsText: e.target.value })} /></Field>
         <div className="row" style={{ gap: 16 }}><label><input type="checkbox" checked={Boolean(draft.requiresAmendmentRecord)} onChange={(e) => setDraft({ ...draft, requiresAmendmentRecord: e.target.checked })} /> Requires amendment</label><label><input type="checkbox" checked={Boolean(draft.requiresAnnualMaintenanceRecord)} onChange={(e) => setDraft({ ...draft, requiresAnnualMaintenanceRecord: e.target.checked })} /> Requires annual maintenance</label></div>
       </>
@@ -832,9 +833,9 @@ function FormationDraftForm({ draft, setDraft, jurisdictionByCode }: { draft: an
         <OptionSelect label="Jurisdiction" setName="entityJurisdictions" value={draft.jurisdiction ?? ""} emptyLabel="No jurisdiction" onChange={(value) => setDraft({ ...draft, jurisdiction: value })} />
         {draft.jurisdiction && jurisdictionByCode.get(draft.jurisdiction) && <div className="muted">Act: {optionLabel("actsFormedUnder", jurisdictionByCode.get(draft.jurisdiction)?.actFormedUnder)}</div>}
         <div className="grid two"><Field label="NUANS number"><input className="input" value={draft.nuansNumber ?? ""} onChange={(e) => setDraft({ ...draft, nuansNumber: e.target.value })} /></Field><Field label="NUANS date"><DatePicker value={draft.nuansDate ?? ""} onChange={(value) => setDraft({ ...draft, nuansDate: value })} /></Field></div>
-        <Field label="Purpose statement"><textarea className="textarea" value={draft.purposeStatement ?? ""} onChange={(e) => setDraft({ ...draft, purposeStatement: e.target.value })} /></Field>
-        <Field label="Classes of membership"><textarea className="textarea" value={draft.classesOfMembership ?? ""} onChange={(e) => setDraft({ ...draft, classesOfMembership: e.target.value })} /></Field>
-        <Field label="Distribution of property"><textarea className="textarea" value={draft.distributionOfProperty ?? ""} onChange={(e) => setDraft({ ...draft, distributionOfProperty: e.target.value })} /></Field>
+        <Field label="Purpose statement"><MarkdownEditor rows={4} value={draft.purposeStatement ?? ""} onChange={(markdown) => setDraft({ ...draft, purposeStatement: markdown })} /></Field>
+        <Field label="Classes of membership"><MarkdownEditor rows={4} value={draft.classesOfMembership ?? ""} onChange={(markdown) => setDraft({ ...draft, classesOfMembership: markdown })} /></Field>
+        <Field label="Distribution of property"><MarkdownEditor rows={4} value={draft.distributionOfProperty ?? ""} onChange={(markdown) => setDraft({ ...draft, distributionOfProperty: markdown })} /></Field>
         <Field label="Assigned staff IDs"><input className="input" value={draft.assignedStaffIdsText ?? ""} onChange={(e) => setDraft({ ...draft, assignedStaffIdsText: e.target.value })} /></Field>
         <Field label="Signing package IDs"><input className="input mono" value={draft.signingPackageIdsText ?? ""} onChange={(e) => setDraft({ ...draft, signingPackageIdsText: e.target.value })} /></Field>
       </>
@@ -858,7 +859,7 @@ function FormationDraftForm({ draft, setDraft, jurisdictionByCode }: { draft: an
         <Field label="New entity name"><input className="input" value={draft.entityNameNew ?? ""} onChange={(e) => setDraft({ ...draft, entityNameNew: e.target.value })} /></Field>
         <div className="grid two"><Field label="Minimum directors"><input className="input" value={draft.directorsMinimum ?? ""} onChange={(e) => setDraft({ ...draft, directorsMinimum: e.target.value })} /></Field><Field label="Maximum directors"><input className="input" value={draft.directorsMaximum ?? ""} onChange={(e) => setDraft({ ...draft, directorsMaximum: e.target.value })} /></Field></div>
         <OptionSelect label="New jurisdiction" setName="entityJurisdictions" value={draft.jurisdictionNew ?? ""} emptyLabel="No jurisdiction" onChange={(value) => setDraft({ ...draft, jurisdictionNew: value })} />
-        <Field label="Rights class amendment"><textarea className="textarea" value={draft.shareClassAmendmentText ?? ""} onChange={(e) => setDraft({ ...draft, shareClassAmendmentText: e.target.value })} /></Field>
+        <Field label="Rights class amendment"><MarkdownEditor rows={4} value={draft.shareClassAmendmentText ?? ""} onChange={(markdown) => setDraft({ ...draft, shareClassAmendmentText: markdown })} /></Field>
       </>
     );
   }
@@ -891,7 +892,7 @@ function FormationDraftForm({ draft, setDraft, jurisdictionByCode }: { draft: an
       <Field label="Page"><input className="input" value={draft.page ?? ""} onChange={(e) => setDraft({ ...draft, page: e.target.value })} /></Field>
       <Field label="URL"><input className="input" value={draft.pageLocationUrl ?? ""} onChange={(e) => setDraft({ ...draft, pageLocationUrl: e.target.value })} /></Field>
       <Field label="Error code"><input className="input" value={draft.errorCode ?? ""} onChange={(e) => setDraft({ ...draft, errorCode: e.target.value })} /></Field>
-      <Field label="Error message"><textarea className="textarea" value={draft.errorMessage ?? ""} onChange={(e) => setDraft({ ...draft, errorMessage: e.target.value })} /></Field>
+      <Field label="Error message"><MarkdownEditor rows={4} value={draft.errorMessage ?? ""} onChange={(markdown) => setDraft({ ...draft, errorMessage: markdown })} /></Field>
     </>
   );
 }

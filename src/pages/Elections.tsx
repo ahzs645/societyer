@@ -7,6 +7,7 @@ import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Vote, Plus, Users, CheckCircle2, Trash2 } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { isBetterAuthMode } from "../lib/authMode";
@@ -346,10 +347,10 @@ export function ElectionsPage() {
               />
             </Field>
             <Field label="Description">
-              <textarea
-                className="textarea"
+              <MarkdownEditor
+                rows={4}
                 value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                onChange={(markdown) => setForm({ ...form, description: markdown })}
               />
             </Field>
             <div className="row" style={{ gap: 12 }}>

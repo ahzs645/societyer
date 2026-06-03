@@ -97,6 +97,17 @@
   grid-column: 1 / -1;
 }
 
+.asset-form__notes {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.asset-form__notes-panel {
+  min-height: 120px;
+}
+
 .callout {
   align-items: center;
   border: 1px solid var(--border);

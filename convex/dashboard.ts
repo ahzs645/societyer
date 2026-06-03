@@ -219,7 +219,8 @@ type DirectorRecord = {
 };
 
 type DeadlineRecord = {
-  done: boolean;
+  status?: "open" | "complete" | "closed";
+  done?: boolean;
 };
 
 type ConflictRecord = {

@@ -12,6 +12,7 @@ import { exportWordDoc, escapeHtml } from "../lib/exportWord";
 import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { StructuredAddressTextFields } from "../components/StructuredAddressFields";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 const FIELDS: FilterField<any>[] = [
   { id: "nonCash", label: "Type", icon: <Tag size={14} />, options: ["Cash", "Non-cash"], match: (r, q) => (r.isNonCash ? "Non-cash" : "Cash") === q },
@@ -185,7 +186,7 @@ export function ReceiptsPage() {
             </label>
             {form.isNonCash && (
               <>
-                <Field label="Description"><textarea className="textarea" value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
+                <Field label="Description"><MarkdownEditor rows={4} value={form.description ?? ""} onChange={(markdown) => setForm({ ...form, description: markdown })} /></Field>
                 <Field label="Appraiser"><input className="input" value={form.appraiserName ?? ""} onChange={(e) => setForm({ ...form, appraiserName: e.target.value })} /></Field>
               </>
             )}

@@ -11,6 +11,7 @@ import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { formatDateTime } from "../lib/format";
 import { StructuredAddressTextFields } from "../components/StructuredAddressFields";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 type AudiencePreset =
   | "all_members"
@@ -661,7 +662,7 @@ export function CommunicationsPage() {
               </select>
             </Field>
             <Field label="Subject"><input className="input" value={templateDraft.subject} onChange={(e) => setTemplateDraft({ ...templateDraft, subject: e.target.value })} /></Field>
-            <Field label="Body"><textarea className="textarea" rows={10} value={templateDraft.bodyText} onChange={(e) => setTemplateDraft({ ...templateDraft, bodyText: e.target.value })} /></Field>
+            <Field label="Body"><MarkdownEditor rows={10} value={templateDraft.bodyText} onChange={(markdown) => setTemplateDraft({ ...templateDraft, bodyText: markdown })} /></Field>
           </div>
         )}
       </Drawer>
@@ -699,7 +700,7 @@ export function CommunicationsPage() {
         {segmentDraft && (
           <div>
             <Field label="Name"><input className="input" value={segmentDraft.name} onChange={(e) => setSegmentDraft({ ...segmentDraft, name: e.target.value })} /></Field>
-            <Field label="Description"><textarea className="textarea" rows={4} value={segmentDraft.description ?? ""} onChange={(e) => setSegmentDraft({ ...segmentDraft, description: e.target.value })} /></Field>
+            <Field label="Description"><MarkdownEditor rows={4} value={segmentDraft.description ?? ""} onChange={(markdown) => setSegmentDraft({ ...segmentDraft, description: markdown })} /></Field>
             <Field label="Base audience">
               <select className="input" value={segmentDraft.includeAudience} onChange={(e) => setSegmentDraft({ ...segmentDraft, includeAudience: e.target.value })}>
                 <option value="all_members">All members</option>
@@ -974,10 +975,10 @@ export function CommunicationsPage() {
               Estimated recipients: {audiencePreview ?? 0}
             </div>
             <Field label="Subject"><input className="input" value={sendDraft.subject} onChange={(e) => setSendDraft({ ...sendDraft, subject: e.target.value })} /></Field>
-            <Field label="Body"><textarea className="textarea" rows={10} value={sendDraft.bodyText} onChange={(e) => setSendDraft({ ...sendDraft, bodyText: e.target.value })} /></Field>
+            <Field label="Body"><MarkdownEditor rows={10} value={sendDraft.bodyText} onChange={(markdown) => setSendDraft({ ...sendDraft, bodyText: markdown })} /></Field>
             {selectedSendTemplate?.kind === "newsletter" && (
               <Field label="Custom newsletter message">
-                <textarea className="textarea" rows={4} value={sendDraft.customMessage ?? ""} onChange={(e) => setSendDraft({ ...sendDraft, customMessage: e.target.value })} />
+                <MarkdownEditor rows={4} value={sendDraft.customMessage ?? ""} onChange={(markdown) => setSendDraft({ ...sendDraft, customMessage: markdown })} />
               </Field>
             )}
           </div>

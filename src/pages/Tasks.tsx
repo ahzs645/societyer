@@ -6,18 +6,27 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Drawer, Field, Badge, MenuRow } from "../components/ui";
+import { Drawer, Badge, MenuRow } from "../components/ui";
 import { Checkbox } from "../components/Controls";
 import { Segmented } from "../components/primitives";
 import { Kanban } from "../components/Kanban";
 import { Select } from "../components/Select";
-import { DatePicker } from "../components/DatePicker";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Pencil, Plus, Search, ListTodo, Trash2, X } from "lucide-react";
 import { formatDate } from "../lib/format";
+import {
+  TaskFormFields,
+  makeTaskFormDefaults,
+  useTaskFormData,
+  type TaskFormValue,
+} from "../features/tasks/TaskFormFields";
 
-const STATUSES = ["Todo", "InProgress", "Blocked", "Done"];
+type EditableTaskForm = TaskFormValue & {
+  _id?: string;
+  tags?: string[];
+};
+
 const COLS = [
   { id: "Todo", label: "To do", accent: "var(--text-tertiary)" },
   { id: "InProgress", label: "In progress", accent: "var(--accent)" },
@@ -28,13 +37,11 @@ const COLS = [
 export function TasksPage() {
   const society = useSociety();
   const tasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
-  const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
-  const goals = useQuery(api.goals.list, society ? { societyId: society._id } : "skip");
-  const users = useQuery(api.users.list, society ? { societyId: society._id } : "skip");
-  const filings = useQuery(api.filings.list, society ? { societyId: society._id } : "skip");
-  const workflows = useQuery(api.workflows.list, society ? { societyId: society._id } : "skip");
-  const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
-  const commitments = useQuery(api.commitments.list, society ? { societyId: society._id } : "skip");
+  // Shared dropdown sources (committees, goals, users, filings, workflows,
+  // documents, commitments) — feeds both the page's filters/cards and the
+  // shared TaskFormFields component used in the create/edit drawer.
+  const formData = useTaskFormData(society?._id);
+  const { committees, goals, users, filings, workflows, documents, commitments } = formData;
   const create = useMutation(api.tasks.create);
   const update = useMutation(api.tasks.update);
   const remove = useMutation(api.tasks.remove);
@@ -50,7 +57,7 @@ export function TasksPage() {
   const [filterGoal, setFilterGoal] = useState<string>(requestedGoalId);
   const [filterLink, setFilterLink] = useState<string>("");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<any>(null);
+  const [form, setForm] = useState<EditableTaskForm | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [cardMenu, setCardMenu] = useState<{ task: any; top: number; left: number } | null>(null);
@@ -91,21 +98,11 @@ export function TasksPage() {
 
   const openNew = useCallback(() => {
     setForm({
-      title: "",
-      status: "Todo",
-      priority: "Medium",
-      assignee: "",
-      dueDate: "",
+      ...makeTaskFormDefaults({
+        committeeId: filterCommittee || undefined,
+        goalId: filterGoal || undefined,
+      }),
       tags: [],
-      committeeId: filterCommittee || undefined,
-      goalId: filterGoal || undefined,
-      responsibleUserId: "",
-      filingId: "",
-      workflowId: "",
-      documentId: "",
-      commitmentId: "",
-      eventId: "",
-      completionNote: "",
     });
     setOpen(true);
   }, [filterCommittee, filterGoal]);
@@ -140,20 +137,32 @@ export function TasksPage() {
 
   const openEdit = (task: any) => {
     setForm({
-      ...task,
-      responsibleUserId: task.responsibleUserIds?.[0] ?? "",
-      dueDate: task.dueDate ?? "",
-      filingId: task.filingId ?? "",
-      workflowId: task.workflowId ?? "",
-      documentId: task.documentId ?? "",
-      commitmentId: task.commitmentId ?? "",
-      eventId: task.eventId ?? "",
-      completionNote: task.completionNote ?? "",
+      ...makeTaskFormDefaults({
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        priority: task.priority,
+        assignee: task.assignee,
+        dueDate: task.dueDate,
+        responsibleUserId: task.responsibleUserIds?.[0] ?? "",
+        committeeId: task.committeeId,
+        goalId: task.goalId,
+        meetingId: task.meetingId,
+        filingId: task.filingId,
+        workflowId: task.workflowId,
+        documentId: task.documentId,
+        commitmentId: task.commitmentId,
+        eventId: task.eventId,
+        completionNote: task.completionNote,
+      }),
+      _id: task._id,
+      tags: task.tags ?? [],
     });
     setOpen(true);
   };
 
   const save = async () => {
+    if (!form) return;
     if (form._id) {
       await update({
         id: form._id,
@@ -183,18 +192,18 @@ export function TasksPage() {
     await create({
       societyId: society._id,
       title: form.title,
-      description: form.description,
+      description: form.description || undefined,
       status: form.status,
       priority: form.priority,
-      assignee: form.assignee,
-      responsibleUserIds: form.responsibleUserId ? [form.responsibleUserId] : undefined,
+      assignee: form.assignee || undefined,
+      responsibleUserIds: form.responsibleUserId ? [form.responsibleUserId as any] : undefined,
       dueDate: form.dueDate || undefined,
-      committeeId: form.committeeId || undefined,
-      goalId: form.goalId || undefined,
-      filingId: form.filingId || undefined,
-      workflowId: form.workflowId || undefined,
-      documentId: form.documentId || undefined,
-      commitmentId: form.commitmentId || undefined,
+      committeeId: (form.committeeId || undefined) as any,
+      goalId: (form.goalId || undefined) as any,
+      filingId: (form.filingId || undefined) as any,
+      workflowId: (form.workflowId || undefined) as any,
+      documentId: (form.documentId || undefined) as any,
+      commitmentId: (form.commitmentId || undefined) as any,
       eventId: form.eventId || undefined,
       tags: form.tags ?? [],
     });
@@ -649,102 +658,12 @@ export function TasksPage() {
         }
       >
         {form && (
-          <div>
-            <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
-            <Field label="Description"><textarea className="textarea" value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
-            <div className="row" style={{ gap: 12 }}>
-              <Field label="Status">
-                <Select
-                  value={form.status}
-                  onChange={(v) => setForm({ ...form, status: v })}
-                  options={STATUSES.map((s) => ({ value: s, label: s }))}
-                />
-              </Field>
-              <Field label="Priority">
-                <Select
-                  value={form.priority}
-                  onChange={(v) => setForm({ ...form, priority: v })}
-                  options={["Low", "Medium", "High", "Urgent"].map((p) => ({ value: p, label: p }))}
-                />
-              </Field>
-              <Field label="Due">
-                <DatePicker value={form.dueDate ?? ""} onChange={(v) => setForm({ ...form, dueDate: v })} />
-              </Field>
-            </div>
-            <Field label="Assignee"><input className="input" value={form.assignee ?? ""} onChange={(e) => setForm({ ...form, assignee: e.target.value })} /></Field>
-            <Field label="Responsible user">
-              <Select
-                value={form.responsibleUserId ?? ""}
-                onChange={(v) => setForm({ ...form, responsibleUserId: v || "" })}
-                clearable
-                searchable
-                options={(users ?? []).map((u: any) => ({ value: u._id, label: u.displayName }))}
-              />
-            </Field>
-            <Field label="Committee (optional)">
-              <Select
-                value={form.committeeId ?? ""}
-                onChange={(v) => setForm({ ...form, committeeId: v || undefined })}
-                clearable
-                searchable
-                options={(committees ?? []).map((c: any) => ({ value: c._id, label: c.name }))}
-              />
-            </Field>
-            <Field label="Goal (optional)">
-              <Select
-                value={form.goalId ?? ""}
-                onChange={(v) => setForm({ ...form, goalId: v || undefined })}
-                clearable
-                searchable
-                options={(goals ?? []).map((g: any) => ({ value: g._id, label: g.title }))}
-              />
-            </Field>
-            <Field label="Filing (optional)">
-              <Select
-                value={form.filingId ?? ""}
-                onChange={(v) => setForm({ ...form, filingId: v || "" })}
-                clearable
-                searchable
-                options={(filings ?? []).map((f: any) => ({ value: f._id, label: `${f.kind}${f.periodLabel ? ` - ${f.periodLabel}` : ""}` }))}
-              />
-            </Field>
-            <Field label="Workflow (optional)">
-              <Select
-                value={form.workflowId ?? ""}
-                onChange={(v) => setForm({ ...form, workflowId: v || "" })}
-                clearable
-                searchable
-                options={(workflows ?? []).map((w: any) => ({ value: w._id, label: w.name }))}
-              />
-            </Field>
-            <Field label="Document (optional)">
-              <Select
-                value={form.documentId ?? ""}
-                onChange={(v) => setForm({ ...form, documentId: v || "" })}
-                clearable
-                searchable
-                options={(documents ?? []).map((d: any) => ({ value: d._id, label: d.title }))}
-              />
-            </Field>
-            <Field label="Commitment (optional)">
-              <Select
-                value={form.commitmentId ?? ""}
-                onChange={(v) => setForm({ ...form, commitmentId: v || "" })}
-                clearable
-                searchable
-                options={(commitments ?? []).map((c: any) => ({ value: c._id, label: c.title, hint: c.nextDueDate ? `Due ${formatDate(c.nextDueDate)}` : c.status }))}
-              />
-            </Field>
-            <Field label="Event ID (optional)"><input className="input mono" value={form.eventId ?? ""} onChange={(e) => setForm({ ...form, eventId: e.target.value })} placeholder="custom.event or imported event id" /></Field>
-            <Field label="Completion note">
-              <textarea
-                className="textarea"
-                value={form.completionNote ?? ""}
-                onChange={(e) => setForm({ ...form, completionNote: e.target.value })}
-                placeholder="Evidence captured, filed confirmation, or blocker resolution."
-              />
-            </Field>
-          </div>
+          <TaskFormFields
+            value={form}
+            onChange={(patch) => setForm((prev) => (prev ? { ...prev, ...patch } : prev))}
+            data={formData}
+            mode={form._id ? "edit" : "create"}
+          />
         )}
       </Drawer>
     </div>

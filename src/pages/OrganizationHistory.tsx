@@ -41,6 +41,7 @@ import {
   Upload,
   Users,
 } from "lucide-react";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 type Confidence = "High" | "Medium" | "Review";
 type Status = "Draft" | "Verified" | "NeedsReview" | "Archived";
@@ -894,7 +895,7 @@ export function OrganizationHistoryPage() {
               <input className="input" value={sourceForm.url ?? ""} onChange={(e) => setSourceForm({ ...sourceForm, url: e.target.value })} />
             </Field>
             <Field label="Notes">
-              <textarea className="textarea" value={sourceForm.notes ?? ""} onChange={(e) => setSourceForm({ ...sourceForm, notes: e.target.value })} />
+              <MarkdownEditor rows={4} value={sourceForm.notes ?? ""} onChange={(markdown) => setSourceForm({ ...sourceForm, notes: markdown })} />
             </Field>
           </div>
         )}
@@ -912,7 +913,7 @@ export function OrganizationHistoryPage() {
               <input className="input" value={factForm.label} onChange={(e) => setFactForm({ ...factForm, label: e.target.value })} />
             </Field>
             <Field label="Value" required>
-              <textarea className="textarea" value={factForm.value} onChange={(e) => setFactForm({ ...factForm, value: e.target.value })} />
+              <MarkdownEditor rows={4} value={factForm.value} onChange={(markdown) => setFactForm({ ...factForm, value: markdown })} />
             </Field>
             <StatusFields form={factForm} setForm={setFactForm} />
             <Field label="Sources">
@@ -937,7 +938,7 @@ export function OrganizationHistoryPage() {
               <input className="input" value={eventForm.title} onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })} />
             </Field>
             <Field label="Summary" required>
-              <textarea className="textarea" value={eventForm.summary} onChange={(e) => setEventForm({ ...eventForm, summary: e.target.value })} />
+              <MarkdownEditor rows={4} value={eventForm.summary} onChange={(markdown) => setEventForm({ ...eventForm, summary: markdown })} />
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Category">
@@ -1010,7 +1011,7 @@ export function OrganizationHistoryPage() {
             </div>
             <StatusFields form={boardTermForm} setForm={setBoardTermForm} />
             <Field label="Notes">
-              <textarea className="textarea" value={boardTermForm.notes ?? ""} onChange={(e) => setBoardTermForm({ ...boardTermForm, notes: e.target.value })} />
+              <MarkdownEditor rows={4} value={boardTermForm.notes ?? ""} onChange={(markdown) => setBoardTermForm({ ...boardTermForm, notes: markdown })} />
             </Field>
             <Field label="Sources">
               <SourcePicker sources={sources} selectedIds={boardTermForm.sourceIds ?? []} onChange={(sourceIds) => setBoardTermForm({ ...boardTermForm, sourceIds })} />
@@ -1034,7 +1035,7 @@ export function OrganizationHistoryPage() {
               <input className="input" value={motionForm.meetingTitle ?? ""} onChange={(e) => setMotionForm({ ...motionForm, meetingTitle: e.target.value })} />
             </Field>
             <Field label="Motion text" required>
-              <textarea className="textarea" value={motionForm.motionText} onChange={(e) => setMotionForm({ ...motionForm, motionText: e.target.value })} />
+              <MarkdownEditor rows={4} value={motionForm.motionText} onChange={(markdown) => setMotionForm({ ...motionForm, motionText: markdown })} />
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Outcome" required>
@@ -1058,7 +1059,7 @@ export function OrganizationHistoryPage() {
               <NumberField label="Abstain" value={motionForm.abstentions} onChange={(abstentions) => setMotionForm({ ...motionForm, abstentions })} />
             </div>
             <Field label="Notes">
-              <textarea className="textarea" value={motionForm.notes ?? ""} onChange={(e) => setMotionForm({ ...motionForm, notes: e.target.value })} />
+              <MarkdownEditor rows={4} value={motionForm.notes ?? ""} onChange={(markdown) => setMotionForm({ ...motionForm, notes: markdown })} />
             </Field>
             <Field label="Sources">
               <SourcePicker sources={sources} selectedIds={motionForm.sourceIds ?? []} onChange={(sourceIds) => setMotionForm({ ...motionForm, sourceIds })} />
@@ -1102,7 +1103,7 @@ export function OrganizationHistoryPage() {
               <BudgetLinesEditor lines={budgetForm.lines ?? []} onChange={(lines) => setBudgetForm({ ...budgetForm, lines })} />
             </Field>
             <Field label="Notes">
-              <textarea className="textarea" value={budgetForm.notes ?? ""} onChange={(e) => setBudgetForm({ ...budgetForm, notes: e.target.value })} />
+              <MarkdownEditor rows={4} value={budgetForm.notes ?? ""} onChange={(markdown) => setBudgetForm({ ...budgetForm, notes: markdown })} />
             </Field>
             <Field label="Sources">
               <SourcePicker sources={sources} selectedIds={budgetForm.sourceIds ?? []} onChange={(sourceIds) => setBudgetForm({ ...budgetForm, sourceIds })} />

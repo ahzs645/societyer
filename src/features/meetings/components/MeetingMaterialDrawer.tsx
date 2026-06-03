@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import { LockKeyhole } from "lucide-react";
 import { Badge, Drawer, Field } from "../../../components/ui";
+import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { Checkbox } from "../../../components/Controls";
 import {
   ACCESS_GRANT_LEVELS,
@@ -179,7 +180,7 @@ export function MeetingMaterialDrawer({
             label="Required review for this meeting"
           />
           <Field label="Notes">
-            <textarea className="textarea" rows={3} value={materialDraft.notes} onChange={(event) => setMaterialDraft({ ...materialDraft, notes: event.target.value })} />
+            <MarkdownEditor rows={3} value={materialDraft.notes} onChange={(markdown) => setMaterialDraft({ ...materialDraft, notes: markdown })} />
           </Field>
         </div>
       )}

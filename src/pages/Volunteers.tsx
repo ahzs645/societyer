@@ -10,6 +10,7 @@ import { DataTable } from "../components/DataTable";
 import { HandHeart, Plus, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 export function VolunteersPage() {
   const society = useSociety();
@@ -427,7 +428,7 @@ export function VolunteersPage() {
               <Field label="Applied"><input className="input" type="date" value={volunteerDraft.applicationReceivedAtISO ?? ""} onChange={(e) => setVolunteerDraft({ ...volunteerDraft, applicationReceivedAtISO: e.target.value })} /></Field>
               <Field label="Renewal due"><input className="input" type="date" value={volunteerDraft.renewalDueAtISO ?? ""} onChange={(e) => setVolunteerDraft({ ...volunteerDraft, renewalDueAtISO: e.target.value })} /></Field>
             </div>
-            <Field label="Notes"><textarea className="textarea" value={volunteerDraft.notes ?? ""} onChange={(e) => setVolunteerDraft({ ...volunteerDraft, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={volunteerDraft.notes ?? ""} onChange={(markdown) => setVolunteerDraft({ ...volunteerDraft, notes: markdown })} /></Field>
             {volunteerDraft._id && (
               <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
                 <CustomFieldsPanel
@@ -543,7 +544,7 @@ export function VolunteersPage() {
                 ))}
               </select>
             </Field>
-            <Field label="Notes"><textarea className="textarea" value={screeningDraft.notes ?? ""} onChange={(e) => setScreeningDraft({ ...screeningDraft, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={screeningDraft.notes ?? ""} onChange={(markdown) => setScreeningDraft({ ...screeningDraft, notes: markdown })} /></Field>
           </div>
         )}
       </Drawer>

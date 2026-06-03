@@ -6,6 +6,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
 
@@ -134,11 +135,10 @@ export function MotionBacklogPage() {
                     />
                   </Field>
                   <Field label="Motion text">
-                    <textarea
-                      className="textarea"
+                    <MarkdownEditor
                       rows={5}
                       value={form.motionText}
-                      onChange={(event) => setForm({ ...form, motionText: event.target.value })}
+                      onChange={(markdown) => setForm({ ...form, motionText: markdown })}
                       placeholder="BE IT RESOLVED THAT..."
                     />
                   </Field>

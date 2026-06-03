@@ -16,6 +16,7 @@ import { formatDate } from "../lib/format";
 import { JURISDICTION_OPTIONS } from "../lib/jurisdictionGuideTracks";
 import { optionChoices, optionLabel } from "../lib/orgHubOptions";
 import { defaultsForJurisdiction, jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 const CORE_ONBOARDING_STEPS = [
   "Organization profile",
@@ -162,7 +163,7 @@ export function SocietyNewPage() {
                 </Field>
               </div>
               <Field label="Purposes (from constitution)">
-                <textarea className="textarea" value={form.purposes} onChange={(e) => set("purposes", e.target.value)} />
+                <MarkdownEditor rows={4} value={form.purposes} onChange={(markdown) => set("purposes", markdown)} />
               </Field>
               <div className="society-toggle-stack">
                 <Toggle checked={form.isCharity} onChange={(v) => set("isCharity", v)} label="Registered CRA charity" />
@@ -424,11 +425,11 @@ export function SocietyPage() {
                 reason="Purposes or articles can require member/shareholder approval and a registry filing to change. Charities may also need CRA review."
               >
                 {(locked) => (
-                  <textarea
-                    className="textarea"
-                    disabled={locked}
+                  <MarkdownEditor
+                    rows={4}
+                    readOnly={locked}
                     value={form.purposes ?? ""}
-                    onChange={(e) => set("purposes", e.target.value)}
+                    onChange={(markdown) => set("purposes", markdown)}
                   />
                 )}
               </LockedField>

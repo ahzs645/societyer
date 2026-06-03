@@ -6,6 +6,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Vote, ArrowLeft, ShieldCheck, CheckCircle2, Lock } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { isBetterAuthMode } from "../lib/authMode";
@@ -338,12 +339,11 @@ export function ElectionDetailPage() {
                     </select>
                   </Field>
                   <Field label="Candidate statement">
-                    <textarea
-                      className="textarea"
+                    <MarkdownEditor
                       rows={4}
                       value={nominationDraft.statement}
-                      onChange={(e) =>
-                        setNominationDraft({ ...nominationDraft, statement: e.target.value })
+                      onChange={(markdown) =>
+                        setNominationDraft({ ...nominationDraft, statement: markdown })
                       }
                     />
                   </Field>
@@ -545,12 +545,11 @@ export function ElectionDetailPage() {
                   </div>
                 </Field>
                 <Field label="Results summary">
-                  <textarea
-                    className="textarea"
+                  <MarkdownEditor
                     rows={4}
                     value={adminDraft.resultsSummary}
-                    onChange={(e) =>
-                      setAdminDraft({ ...adminDraft, resultsSummary: e.target.value })
+                    onChange={(markdown) =>
+                      setAdminDraft({ ...adminDraft, resultsSummary: markdown })
                     }
                   />
                 </Field>

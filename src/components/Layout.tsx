@@ -28,6 +28,7 @@ import {
   Bell,
   ShieldCheck,
   Eye,
+  EyeOff,
   Archive,
   UserCheck,
   Calculator,
@@ -80,6 +81,8 @@ import { api } from "@/lib/convexApi";
 import { DemoBanner } from "./DemoBanner";
 import { CommandPalette } from "./CommandPalette";
 import { DraftMinutesPicker } from "./DraftMinutesPicker";
+import { GlobalTaskCreate } from "./GlobalTaskCreate";
+import { GlobalAssetCreate } from "./GlobalAssetCreate";
 import { ShortcutHelp } from "./ShortcutHelp";
 import { NotificationBell } from "./NotificationBell";
 import { GlobalAiAssistant, openGlobalAiAssistant } from "../features/ai/GlobalAiAssistant";
@@ -95,10 +98,12 @@ import { useStaticCommands } from "../lib/useStaticCommands";
 import { useTranslation } from "react-i18next";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { useThemePreference } from "../hooks/useThemePreference";
+import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
+import { useAiChatVisibility } from "../hooks/useAiChatVisibility";
 import type { ThemePreference } from "../lib/theme";
 import { mobileSidebarMediaQuery } from "../lib/breakpoints";
 import { DEFAULT_PINNED_ROUTES } from "../lib/navConfig";
-import { useUIStore } from "../lib/store";
+import { useUIStore, type PinnedView } from "../lib/store";
 
 function NotificationBellSafe() {
   return (
@@ -157,6 +162,14 @@ function CommandPaletteSafe() {
   return (
     <ErrorBoundary label="CommandPalette" fallback={null}>
       <CommandPalette />
+    </ErrorBoundary>
+  );
+}
+
+function GlobalAiAssistantSafe() {
+  return (
+    <ErrorBoundary label="GlobalAiAssistant" fallback={null}>
+      <GlobalAiAssistant />
     </ErrorBoundary>
   );
 }
@@ -576,10 +589,12 @@ const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
 };
 
 type SidebarContextMenu = {
-  item: NavItem;
+  ref: FavoriteRef;
   label: string;
   top: number;
   left: number;
+  /** Target URL for "Open in new tab"; omitted for commands (which have no URL). */
+  openInNewTabTarget?: string;
 };
 
 function getSidebarMenuPosition(x: number, y: number) {
@@ -635,11 +650,18 @@ export function Layout() {
     maxHeight: number;
   } | null>(null);
   const [navContextMenu, setNavContextMenu] = useState<SidebarContextMenu | null>(null);
+  const { hidden: operationsDeskHidden, setHidden: setOperationsDeskHidden } =
+    useOperationsDeskVisibility();
+  const { hidden: aiChatHidden } = useAiChatVisibility();
+  const [operationsDeskMenu, setOperationsDeskMenu] = useState<
+    { top: number; left: number } | null
+  >(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
   const mainRef = useRef<HTMLDivElement | null>(null);
   const workspaceButtonRef = useRef<HTMLButtonElement | null>(null);
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const navContextMenuRef = useRef<HTMLDivElement | null>(null);
+  const operationsDeskMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (isStaticDemoRuntime()) return;
@@ -695,6 +717,7 @@ export function Layout() {
   // intact. Views are appended on first appearance and removed when they
   // disappear from the zustand store.
   const pinnedViews = useUIStore((s) => s.pinnedViews);
+  const unpinView = useUIStore((s) => s.unpinView);
   useEffect(() => {
     setFavoritesOrder((prev) => {
       const seen = new Set(prev.map(favoriteRefKey));
@@ -854,6 +877,28 @@ export function Layout() {
     };
   }, [navContextMenu]);
 
+  useEffect(() => {
+    if (!operationsDeskMenu) return;
+    const onDown = (event: MouseEvent) => {
+      if (operationsDeskMenuRef.current?.contains(event.target as Node)) return;
+      setOperationsDeskMenu(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOperationsDeskMenu(null);
+    };
+    const close = () => setOperationsDeskMenu(null);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [operationsDeskMenu]);
+
   const counts = useQuery(api.dashboard.navCounts, society ? { societyId: society._id } : "skip");
   const pinnedRouteSet = useMemo(() => new Set(pinnedRoutes), [pinnedRoutes]);
   const pinnedNav = useMemo(() => getPinnedNav(pinnedRoutes), [pinnedRoutes]);
@@ -908,11 +953,19 @@ export function Layout() {
     }
   };
 
-  const togglePinnedRoute = (item: NavItem) => {
-    setPinnedRoutes((prev) => {
-      if (prev.includes(item.to)) return prev.filter((route) => route !== item.to);
-      return normalizePinnedRoutes([...prev, item.to]);
-    });
+  const togglePinnedFavorite = (ref: FavoriteRef) => {
+    if (ref.kind === "route") {
+      setPinnedRoutes((prev) => {
+        if (prev.includes(ref.id)) return prev.filter((route) => route !== ref.id);
+        return normalizePinnedRoutes([...prev, ref.id]);
+      });
+    } else if (ref.kind === "command") {
+      // From this menu we only ever see already-pinned commands (the menu is
+      // only triggered from the favorites bar), so this is effectively unpin.
+      setPinnedCommandIds((prev) => prev.filter((id) => id !== ref.id));
+    } else {
+      unpinView(ref.viewsKey, ref.viewId);
+    }
     setNavContextMenu(null);
   };
 
@@ -992,32 +1045,115 @@ export function Layout() {
     });
   };
 
-  const openNavContextMenu = (item: NavItem, x: number, y: number) => {
+  const openFavoriteContextMenu = (
+    ref: FavoriteRef,
+    label: string,
+    openInNewTabTarget: string | undefined,
+    x: number,
+    y: number,
+  ) => {
     const position = getSidebarMenuPosition(x, y);
     setNavContextMenu({
-      item,
-      label: getNavItemLabel(item),
+      ref,
+      label,
       top: position.top,
       left: position.left,
+      openInNewTabTarget,
     });
     setWorkspaceOpen(false);
   };
 
+  const isContextMenuKey = (event: ReactKeyboardEvent<HTMLElement>) =>
+    event.key === "ContextMenu" || (event.shiftKey && event.key === "F10");
+
   const handleNavItemContextMenu = (event: ReactMouseEvent<HTMLElement>, item: NavItem) => {
     event.preventDefault();
     event.stopPropagation();
-    openNavContextMenu(item, event.clientX, event.clientY);
+    openFavoriteContextMenu(
+      { kind: "route", id: item.to },
+      getNavItemLabel(item),
+      item.to,
+      event.clientX,
+      event.clientY,
+    );
   };
 
   const handleNavItemKeyDown = (event: ReactKeyboardEvent<HTMLElement>, item: NavItem) => {
-    if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+    if (!isContextMenuKey(event)) return;
     event.preventDefault();
     const rect = event.currentTarget.getBoundingClientRect();
-    openNavContextMenu(item, rect.left + 28, rect.bottom - 2);
+    openFavoriteContextMenu(
+      { kind: "route", id: item.to },
+      getNavItemLabel(item),
+      item.to,
+      rect.left + 28,
+      rect.bottom - 2,
+    );
   };
 
-  const openNavItemInNewTab = (item: NavItem) => {
-    window.open(item.to, "_blank", "noopener,noreferrer");
+  const handleCommandContextMenu = (
+    event: ReactMouseEvent<HTMLElement>,
+    commandId: string,
+    label: string,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openFavoriteContextMenu(
+      { kind: "command", id: commandId },
+      label,
+      undefined,
+      event.clientX,
+      event.clientY,
+    );
+  };
+
+  const handleCommandKeyDown = (
+    event: ReactKeyboardEvent<HTMLElement>,
+    commandId: string,
+    label: string,
+  ) => {
+    if (!isContextMenuKey(event)) return;
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    openFavoriteContextMenu(
+      { kind: "command", id: commandId },
+      label,
+      undefined,
+      rect.left + 28,
+      rect.bottom - 2,
+    );
+  };
+
+  const handleViewContextMenu = (event: ReactMouseEvent<HTMLElement>, view: PinnedView) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openFavoriteContextMenu(
+      { kind: "view", viewsKey: view.viewsKey, viewId: view.viewId },
+      view.label,
+      `${view.to}?view=${view.viewId}`,
+      event.clientX,
+      event.clientY,
+    );
+  };
+
+  const handleViewKeyDown = (event: ReactKeyboardEvent<HTMLElement>, view: PinnedView) => {
+    if (!isContextMenuKey(event)) return;
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    openFavoriteContextMenu(
+      { kind: "view", viewsKey: view.viewsKey, viewId: view.viewId },
+      view.label,
+      `${view.to}?view=${view.viewId}`,
+      rect.left + 28,
+      rect.bottom - 2,
+    );
+  };
+
+  const handleOperationsDeskContextMenu = (event: ReactMouseEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setOperationsDeskMenu(getSidebarMenuPosition(event.clientX, event.clientY));
+    setWorkspaceOpen(false);
     setNavContextMenu(null);
   };
 
@@ -1025,6 +1161,8 @@ export function Layout() {
     <InspectorProvider>
       <CommandPaletteSafe />
       <DraftMinutesPicker />
+      <GlobalTaskCreate />
+      <GlobalAssetCreate />
       <ShortcutHelp />
       <div className={shellClassName}>
         {isMobileNav && mobileSidebarOpen && (
@@ -1064,14 +1202,16 @@ export function Layout() {
             </button>
             <div className="sidebar__brand-actions">
               <NotificationBellSafe />
-              <button
-                className="sidebar__icon-btn"
-                onClick={openGlobalAiAssistant}
-                title="AI assistant"
-                aria-label="AI assistant"
-              >
-                <Bot size={14} />
-              </button>
+              {!aiChatHidden && (
+                <button
+                  className="sidebar__icon-btn"
+                  onClick={openGlobalAiAssistant}
+                  title="AI assistant"
+                  aria-label="AI assistant"
+                >
+                  <Bot size={14} />
+                </button>
+              )}
               <button
                 className="sidebar__icon-btn"
                 onClick={() => window.dispatchEvent(new Event("kbar:open"))}
@@ -1090,39 +1230,42 @@ export function Layout() {
               </button>
             </div>
           </div>
-          <div className={`sidebar__spotlight${spotlightCollapsed ? " is-collapsed" : ""}`}>
-            <button
-              type="button"
-              className="sidebar__spotlight-toggle"
-              onClick={() => setSpotlightCollapsed((v) => !v)}
-              aria-expanded={!spotlightCollapsed}
-            >
-              <span className="sidebar__spotlight-label">{t("sidebar.operationsDesk")}</span>
-              <ChevronDown size={12} className="sidebar__spotlight-chevron" />
-            </button>
-            {!spotlightCollapsed && (
-              <>
-                <NavLink
-                  to="/app/tasks"
-                  className={({ isActive }) =>
-                    `sidebar__spotlight-meta sidebar__spotlight-meta--link${isActive ? " is-active" : ""}`
-                  }
-                >
-                  <span>{t("sidebar.openTasks")}</span>
-                  <Pill size="sm">{counts?.openTasks ?? 0}</Pill>
-                </NavLink>
-                <NavLink
-                  to="/app/deadlines"
-                  className={({ isActive }) =>
-                    `sidebar__spotlight-meta sidebar__spotlight-meta--link${isActive ? " is-active" : ""}`
-                  }
-                >
-                  <span>{t("sidebar.upcomingDeadlines")}</span>
-                  <Pill size="sm">{counts?.openDeadlines ?? 0}</Pill>
-                </NavLink>
-              </>
-            )}
-          </div>
+          {!operationsDeskHidden && (
+            <div className={`sidebar__spotlight${spotlightCollapsed ? " is-collapsed" : ""}`}>
+              <button
+                type="button"
+                className="sidebar__spotlight-toggle"
+                onClick={() => setSpotlightCollapsed((v) => !v)}
+                onContextMenu={handleOperationsDeskContextMenu}
+                aria-expanded={!spotlightCollapsed}
+              >
+                <span className="sidebar__spotlight-label">{t("sidebar.operationsDesk")}</span>
+                <ChevronDown size={12} className="sidebar__spotlight-chevron" />
+              </button>
+              {!spotlightCollapsed && (
+                <>
+                  <NavLink
+                    to="/app/tasks"
+                    className={({ isActive }) =>
+                      `sidebar__spotlight-meta sidebar__spotlight-meta--link${isActive ? " is-active" : ""}`
+                    }
+                  >
+                    <span>{t("sidebar.openTasks")}</span>
+                    <Pill size="sm">{counts?.openTasks ?? 0}</Pill>
+                  </NavLink>
+                  <NavLink
+                    to="/app/deadlines"
+                    className={({ isActive }) =>
+                      `sidebar__spotlight-meta sidebar__spotlight-meta--link${isActive ? " is-active" : ""}`
+                    }
+                  >
+                    <span>{t("sidebar.upcomingDeadlines")}</span>
+                    <Pill size="sm">{counts?.openDeadlines ?? 0}</Pill>
+                  </NavLink>
+                </>
+              )}
+            </div>
+          )}
 
           <nav className="sidebar__nav">
             <div className="sidebar__section sidebar__section--compact">
@@ -1205,12 +1348,15 @@ export function Layout() {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
                         navigate(target);
+                        return;
                       }
+                      handleViewKeyDown(event, view);
                     }}
                     onDragStart={onFavoriteDragStart(index)}
                     onDragOver={onFavoriteDragOver(index)}
                     onDrop={onFavoriteDrop}
                     onDragEnd={onFavoriteDragEnd}
+                    onContextMenu={(event) => handleViewContextMenu(event, view)}
                   >
                     <span className="sidebar__nav-icon" aria-hidden="true">
                       <Pin size={12} />
@@ -1234,7 +1380,9 @@ export function Layout() {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
                       void command.run();
+                      return;
                     }
+                    handleCommandKeyDown(event, command.id, command.label);
                   }}
                   title={collapsed ? command.label : undefined}
                   aria-label={command.label}
@@ -1243,6 +1391,7 @@ export function Layout() {
                   onDragOver={onFavoriteDragOver(index)}
                   onDrop={onFavoriteDrop}
                   onDragEnd={onFavoriteDragEnd}
+                  onContextMenu={(event) => handleCommandContextMenu(event, command.id, command.label)}
                 >
                   <TintedIconTile tone="gray" size="sm" className="sidebar__icon-chip">
                     <Icon size={14} />
@@ -1414,74 +1563,111 @@ export function Layout() {
         )}
 
         {navContextMenu && createPortal(
+          (() => {
+            const ref = navContextMenu.ref;
+            const isPinned =
+              ref.kind === "route"
+                ? pinnedRouteSet.has(ref.id)
+                : ref.kind === "command"
+                  ? pinnedCommandIds.includes(ref.id)
+                  : pinnedViews.some((v) => v.viewsKey === ref.viewsKey && v.viewId === ref.viewId);
+            const orderIndex = favoritesOrder.findIndex(
+              (entry) => favoriteRefKey(entry) === favoriteRefKey(ref),
+            );
+            const canMoveUp = orderIndex > 0;
+            const canMoveDown = orderIndex >= 0 && orderIndex < favoritesOrder.length - 1;
+            const openTarget = navContextMenu.openInNewTabTarget;
+
+            return (
+              <div
+                ref={navContextMenuRef}
+                className="menu menu--actions sidebar-context-menu"
+                role="menu"
+                style={{
+                  top: navContextMenu.top,
+                  left: navContextMenu.left,
+                  width: SIDEBAR_MENU_WIDTH,
+                }}
+              >
+                <div className="menu__section">
+                  <MenuSectionLabel>{navContextMenu.label}</MenuSectionLabel>
+                  <MenuRow
+                    role="menuitem"
+                    icon={isPinned ? <PinOff size={14} /> : <Pin size={14} />}
+                    label={
+                      isPinned ? t("sidebar.unpinFromFavorites") : t("sidebar.pinToFavorites")
+                    }
+                    onClick={() => togglePinnedFavorite(ref)}
+                  />
+                  {(canMoveUp || canMoveDown) && (
+                    <>
+                      <div className="menu__separator" />
+                      {canMoveUp && (
+                        <MenuRow
+                          role="menuitem"
+                          icon={<ArrowUp size={14} />}
+                          label="Move up"
+                          onClick={() => {
+                            moveFavoriteByIndex(orderIndex, -1);
+                            setNavContextMenu(null);
+                          }}
+                        />
+                      )}
+                      {canMoveDown && (
+                        <MenuRow
+                          role="menuitem"
+                          icon={<ArrowDown size={14} />}
+                          label="Move down"
+                          onClick={() => {
+                            moveFavoriteByIndex(orderIndex, 1);
+                            setNavContextMenu(null);
+                          }}
+                        />
+                      )}
+                    </>
+                  )}
+                  {openTarget && (
+                    <>
+                      <div className="menu__separator" />
+                      <MenuRow
+                        role="menuitem"
+                        icon={<ExternalLink size={14} />}
+                        label={t("sidebar.openInNewTab")}
+                        onClick={() => {
+                          window.open(openTarget, "_blank", "noopener,noreferrer");
+                          setNavContextMenu(null);
+                        }}
+                      />
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })(),
+          document.body,
+        )}
+
+        {operationsDeskMenu && createPortal(
           <div
-            ref={navContextMenuRef}
+            ref={operationsDeskMenuRef}
             className="menu menu--actions sidebar-context-menu"
             role="menu"
             style={{
-              top: navContextMenu.top,
-              left: navContextMenu.left,
+              top: operationsDeskMenu.top,
+              left: operationsDeskMenu.left,
               width: SIDEBAR_MENU_WIDTH,
             }}
           >
             <div className="menu__section">
-              <MenuSectionLabel>{navContextMenu.label}</MenuSectionLabel>
+              <MenuSectionLabel>{t("sidebar.operationsDesk")}</MenuSectionLabel>
               <MenuRow
                 role="menuitem"
-                icon={pinnedRouteSet.has(navContextMenu.item.to) ? <PinOff size={14} /> : <Pin size={14} />}
-                label={
-                  pinnedRouteSet.has(navContextMenu.item.to)
-                    ? t("sidebar.unpinFromFavorites")
-                    : t("sidebar.pinToFavorites")
-                }
-                onClick={() => togglePinnedRoute(navContextMenu.item)}
-              />
-              {(() => {
-                // Move up / Move down only show for pinned items, and only
-                // in directions that lead somewhere. Resolved against the
-                // unified favorites order so a pinned route can be moved
-                // past a pinned action that's adjacent to it.
-                const orderIndex = favoritesOrder.findIndex(
-                  (ref) => ref.kind === "route" && ref.id === navContextMenu.item.to,
-                );
-                if (orderIndex < 0) return null;
-                const canMoveUp = orderIndex > 0;
-                const canMoveDown = orderIndex < favoritesOrder.length - 1;
-                if (!canMoveUp && !canMoveDown) return null;
-                return (
-                  <>
-                    <div className="menu__separator" />
-                    {canMoveUp && (
-                      <MenuRow
-                        role="menuitem"
-                        icon={<ArrowUp size={14} />}
-                        label="Move up"
-                        onClick={() => {
-                          moveFavoriteByIndex(orderIndex, -1);
-                          setNavContextMenu(null);
-                        }}
-                      />
-                    )}
-                    {canMoveDown && (
-                      <MenuRow
-                        role="menuitem"
-                        icon={<ArrowDown size={14} />}
-                        label="Move down"
-                        onClick={() => {
-                          moveFavoriteByIndex(orderIndex, 1);
-                          setNavContextMenu(null);
-                        }}
-                      />
-                    )}
-                  </>
-                );
-              })()}
-              <div className="menu__separator" />
-              <MenuRow
-                role="menuitem"
-                icon={<ExternalLink size={14} />}
-                label={t("sidebar.openInNewTab")}
-                onClick={() => openNavItemInNewTab(navContextMenu.item)}
+                icon={<EyeOff size={14} />}
+                label={t("sidebar.hideOperationsDesk")}
+                onClick={() => {
+                  setOperationsDeskHidden(true);
+                  setOperationsDeskMenu(null);
+                }}
               />
             </div>
           </div>,
@@ -1503,7 +1689,7 @@ export function Layout() {
             </div>
           </div>
         </div>
-        <GlobalAiAssistant />
+        {!aiChatHidden && <GlobalAiAssistantSafe />}
         {isMobileNav && (
           <nav className="bottom-nav" aria-label={t("sidebar.navigation")}>
             {/* Icon size 16px matches twenty's icon.size.md — the CSS also

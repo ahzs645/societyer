@@ -10,6 +10,7 @@ import { FilterField } from "../components/FilterBar";
 import { ArrowLeft, FileSearch, Pencil, Plus, Shield, ShieldAlert, Tag, Trash2 } from "lucide-react";
 import { centsToDollarInput, dollarInputToCents, formatDate, money } from "../lib/format";
 import { CitationBadge } from "../components/CitationTooltip";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 const KINDS = ["DirectorsOfficers", "GeneralLiability", "PropertyCasualty", "CyberLiability", "Other"];
 const STATUSES = ["NeedsReview", "Active", "Lapsed", "Cancelled"];
@@ -264,7 +265,7 @@ export function InsurancePage() {
               <Field label="Premium" hint="Dollars, only when explicit"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.premiumDollars ?? ""} onChange={(e) => setForm({ ...form, premiumDollars: e.target.value })} /></Field>
               <Field label="Deductible" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.deductibleDollars ?? ""} onChange={(e) => setForm({ ...form, deductibleDollars: e.target.value })} /></Field>
             </div>
-            <Field label="Coverage summary"><textarea className="textarea" value={form.coverageSummary ?? ""} onChange={(e) => setForm({ ...form, coverageSummary: e.target.value })} /></Field>
+            <Field label="Coverage summary"><MarkdownEditor rows={4} value={form.coverageSummary ?? ""} onChange={(markdown) => setForm({ ...form, coverageSummary: markdown })} /></Field>
             <Field label="Additional insureds" hint="Comma-separated"><input className="input" value={form.additionalInsuredsInput ?? ""} onChange={(e) => setForm({ ...form, additionalInsuredsInput: e.target.value })} /></Field>
             <Field label="Covered parties/classes" hint="One per line: name | type | class | source IDs | citation ID | notes">
               <textarea className="textarea" value={form.coveredPartiesInput ?? ""} onChange={(e) => setForm({ ...form, coveredPartiesInput: e.target.value })} />
@@ -322,7 +323,7 @@ export function InsurancePage() {
               </Field>
             </div>
             <Field label="Risk flags" hint="Comma-separated"><input className="input" value={form.riskFlagsInput ?? ""} onChange={(e) => setForm({ ...form, riskFlagsInput: e.target.value })} /></Field>
-            <Field label="Notes"><textarea className="textarea" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
           </div>
           )
         )}

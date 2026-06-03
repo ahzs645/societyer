@@ -6,6 +6,7 @@ import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { SeedPrompt } from "./_helpers";
 import { Button, Drawer, Field, SettingsShell } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { AlertTriangle, Database, Link2, Plus, Sliders, Trash2 } from "lucide-react";
 import { FIELD_TYPES as RECORD_FIELD_TYPES, RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinitions";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -344,11 +345,10 @@ export function CustomFieldsPage() {
               </select>
             </Field>
             <Field label="Description">
-              <textarea
-                className="textarea"
+              <MarkdownEditor
                 rows={2}
                 value={draft.description ?? ""}
-                onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                onChange={(markdown) => setDraft({ ...draft, description: markdown })}
               />
             </Field>
             <label className="workflow-checkbox">

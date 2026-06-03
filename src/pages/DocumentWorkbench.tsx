@@ -7,6 +7,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Field } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { SignaturePanel } from "../components/SignaturePanel";
 import { useToast } from "../components/Toast";
 import { formatDateTime } from "../lib/format";
@@ -217,11 +218,10 @@ export function DocumentWorkbenchPage() {
                 </Field>
               </div>
               <Field label="Comment">
-                <textarea
-                  className="textarea"
+                <MarkdownEditor
                   rows={3}
                   value={draft.body}
-                  onChange={(event) => setDraft({ ...draft, body: event.target.value })}
+                  onChange={(markdown) => setDraft({ ...draft, body: markdown })}
                   placeholder="Add a question, requested change, or review note."
                 />
               </Field>

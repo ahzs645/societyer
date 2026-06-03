@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { ErrorSummary, Field, InspectorNote, type ErrorSummaryItem } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { PIPA_INTAKE_NOTICE } from "../lib/legalCopy";
 import { ArrowLeft, BadgeDollarSign } from "lucide-react";
 
@@ -197,13 +198,13 @@ export function GrantApplyPage() {
                 <input className="input" value={form.projectTitle} onChange={(e) => setForm({ ...form, projectTitle: e.target.value })} />
               </Field>
               <Field label="Project summary" id={FIELD_IDS.projectSummary} required error={fieldError(visibleErrors, "Project summary")}>
-                <textarea className="textarea" rows={5} value={form.projectSummary} onChange={(e) => setForm({ ...form, projectSummary: e.target.value })} />
+                <MarkdownEditor rows={5} value={form.projectSummary} onChange={(markdown) => setForm({ ...form, projectSummary: markdown })} />
               </Field>
               <Field label="Proposed use of funds">
-                <textarea className="textarea" rows={4} value={form.proposedUseOfFunds} onChange={(e) => setForm({ ...form, proposedUseOfFunds: e.target.value })} />
+                <MarkdownEditor rows={4} value={form.proposedUseOfFunds} onChange={(markdown) => setForm({ ...form, proposedUseOfFunds: markdown })} />
               </Field>
               <Field label="Expected outcomes">
-                <textarea className="textarea" rows={4} value={form.expectedOutcomes} onChange={(e) => setForm({ ...form, expectedOutcomes: e.target.value })} />
+                <MarkdownEditor rows={4} value={form.expectedOutcomes} onChange={(markdown) => setForm({ ...form, expectedOutcomes: markdown })} />
               </Field>
               <button className="btn btn--accent" type="submit" disabled={submitting}>
                 {submitting ? "Submitting…" : "Submit funding request"}

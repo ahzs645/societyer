@@ -7,6 +7,7 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, SeedPrompt } from "./_helpers";
 import { ArrowDown, ArrowUp, ClipboardList, ExternalLink, IndentDecrease, IndentIncrease, Plus, Save, Trash2 } from "lucide-react";
 import { useToast } from "../components/Toast";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { formatDate } from "../lib/format";
 import { Select } from "../components/Select";
 
@@ -371,25 +372,25 @@ export function AgendaBuilderPage() {
                           style={{ flex: "0 1 110px" }}
                         />
                       </div>
-                      <textarea
-                        className="input"
-                        value={item.details}
-                        disabled={finalized}
-                        onChange={(e) => patchDraftItem(i, { details: e.target.value })}
-                        placeholder="Agenda details / starter minutes notes"
-                        rows={2}
-                        style={{ width: "100%", marginTop: 6 }}
-                      />
-                      {item.type === "motion" && (
-                        <textarea
-                          className="input"
-                          value={item.motionText ?? ""}
-                          disabled={finalized}
-                          onChange={(e) => patchDraftItem(i, { motionText: e.target.value })}
-                          placeholder="Motion text"
-                          rows={3}
-                          style={{ width: "100%", marginTop: 6 }}
+                      <div style={{ marginTop: 6 }}>
+                        <MarkdownEditor
+                          value={item.details}
+                          readOnly={finalized}
+                          onChange={(markdown) => patchDraftItem(i, { details: markdown })}
+                          placeholder="Agenda details / starter minutes notes"
+                          rows={2}
                         />
+                      </div>
+                      {item.type === "motion" && (
+                        <div style={{ marginTop: 6 }}>
+                          <MarkdownEditor
+                            value={item.motionText ?? ""}
+                            readOnly={finalized}
+                            onChange={(markdown) => patchDraftItem(i, { motionText: markdown })}
+                            placeholder="Motion text"
+                            rows={3}
+                          />
+                        </div>
                       )}
                     </div>
                     <div className="col" style={{ gap: 4 }}>

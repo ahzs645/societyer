@@ -2645,12 +2645,16 @@ export default defineSchema({
     description: v.optional(v.string()),
     dueDate: v.string(),
     category: v.string(),
-    done: v.boolean(),
+    status: v.optional(
+      v.union(v.literal("open"), v.literal("complete"), v.literal("closed")),
+    ),
+    done: v.optional(v.boolean()),
     recurrence: v.optional(v.string()),
     linkedFilingId: v.optional(v.id("filings")),
   })
     .index("by_society", ["societyId"])
     .index("by_society_due", ["societyId", "dueDate"])
+    .index("by_society_status", ["societyId", "status"])
     .index("by_society_done", ["societyId", "done"]),
 
   commitments: defineTable({

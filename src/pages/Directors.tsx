@@ -25,6 +25,7 @@ import {
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 export function DirectorsPage() {
   const society = useSociety();
@@ -53,6 +54,10 @@ export function DirectorsPage() {
   const bcResidents = active.filter((d: any) => d.isBCResident).length;
   const missingConsent = active.filter((d: any) => !d.consentOnFile);
   const isBcSociety = (society?.jurisdictionCode ?? "CA-BC") === "CA-BC";
+  // While the directors query is still resolving, every count is 0 and the
+  // compliance flags would flash red for a frame before real data arrives.
+  // Skip the warning UI until we know the actual numbers.
+  const directorsLoaded = directors !== undefined;
   const roleTerms = useMemo(() => {
     return (orgHistory?.boardTerms ?? [])
       .slice()
@@ -132,17 +137,17 @@ export function DirectorsPage() {
       <div className="stat-grid">
         <div className="stat">
           <div className="stat__label">Active directors</div>
-          <div className="stat__value" style={{ color: isBcSociety && active.length < 3 && !society.isMemberFunded ? "var(--danger)" : undefined }}>{active.length}</div>
+          <div className="stat__value" style={{ color: directorsLoaded && isBcSociety && active.length < 3 && !society.isMemberFunded ? "var(--danger)" : undefined }}>{directorsLoaded ? active.length : "—"}</div>
           <div className="stat__sub">{isBcSociety ? "Minimum 3 for regular societies." : "Review governing statute, articles, and by-laws."}</div>
         </div>
         <div className="stat">
           <div className="stat__label">{jurisdictionCopy.directorResidencyLabel}</div>
-          <div className="stat__value" style={{ color: isBcSociety && bcResidents < 1 && !society.isMemberFunded ? "var(--danger)" : undefined }}>{bcResidents}</div>
+          <div className="stat__value" style={{ color: directorsLoaded && isBcSociety && bcResidents < 1 && !society.isMemberFunded ? "var(--danger)" : undefined }}>{directorsLoaded ? bcResidents : "—"}</div>
           <div className="stat__sub">{society.isMemberFunded ? "No s.40 residency requirement." : jurisdictionCopy.directorResidencySubtext}</div>
         </div>
         <div className="stat">
           <div className="stat__label">Consent evidence</div>
-          <div className="stat__value" style={{ color: missingConsent.length ? "var(--warn)" : undefined }}>{active.length - missingConsent.length}/{active.length}</div>
+          <div className="stat__value" style={{ color: directorsLoaded && missingConsent.length ? "var(--warn)" : undefined }}>{directorsLoaded ? `${active.length - missingConsent.length}/${active.length}` : "—"}</div>
           <div className="stat__sub">Written consent or meeting record.</div>
         </div>
         <div className="stat">
@@ -152,7 +157,7 @@ export function DirectorsPage() {
         </div>
       </div>
 
-      {directorMode === "register" && ((isBcSociety && (active.length < 3 || (bcResidents < 1 && !society.isMemberFunded))) || missingConsent.length > 0) && (
+      {directorsLoaded && directorMode === "register" && ((isBcSociety && (active.length < 3 || (bcResidents < 1 && !society.isMemberFunded))) || missingConsent.length > 0) && (
         <div className="col" style={{ marginBottom: 16, gap: 6 }}>
           {isBcSociety && active.length < 3 && !society.isMemberFunded && <Flag level="err">Fewer than 3 active directors — regular societies must have at least 3.</Flag>}
           {isBcSociety && bcResidents < 1 && !society.isMemberFunded && <Flag level="err">No BC-resident director. At least one is required for non-member-funded societies.</Flag>}
@@ -309,7 +314,7 @@ export function DirectorsPage() {
               onChange={(v) => setSelected({ ...selected, consentOnFile: v })}
               label="Director consent evidence on file"
             />
-            <Field label="Notes"><textarea className="textarea" value={selected.notes ?? ""} onChange={(e) => setSelected({ ...selected, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={selected.notes ?? ""} onChange={(markdown) => setSelected({ ...selected, notes: markdown })} /></Field>
             {selected._id && (
               <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
                 <CustomFieldsPanel

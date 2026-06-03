@@ -24,11 +24,18 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { formatDate } from "../lib/format";
 import { useToast } from "../components/Toast";
 import { AssetQrLabel } from "../features/assets/AssetQrLabel";
+import { openGlobalAssetCreate } from "../components/GlobalAssetCreate";
+import {
+  AssetFormFields,
+  useAssetFormData,
+  type AssetFormValue,
+} from "../features/assets/AssetFormFields";
 import {
   ASSET_CATEGORIES,
   ASSET_CONDITIONS,
@@ -44,9 +51,7 @@ import {
   inputToCents,
   isDue,
   money,
-  nextAssetTag,
   normalizeAssetForm,
-  oneYearFromToday,
   parseAssetCsv,
   summarizeAssets,
   todayDate,
@@ -81,7 +86,8 @@ export function AssetsPage() {
   const [stockForm, setStockForm] = useState({ observedQuantityBefore: "", quantityAdded: "", notes: "" });
   const [receiptLinkAsset, setReceiptLinkAsset] = useState<any>(null);
   const [receiptLinkForm, setReceiptLinkForm] = useState({ receiptDocumentId: "", financialTransactionId: "", receiptLineLabel: "", receiptLineIndex: "", quantity: "", unitOfMeasure: "each", unitCost: "", totalCost: "", sourceText: "", notes: "", createInventoryItem: true });
-  const [form, setForm] = useState<any>(null);
+  const formData = useAssetFormData(society?._id);
+  const [form, setForm] = useState<AssetFormValue | null>(null);
   const [csvInput, setCsvInput] = useState("");
   const [verificationTitle, setVerificationTitle] = useState(`Physical inventory ${todayDate()}`);
 
@@ -91,31 +97,21 @@ export function AssetsPage() {
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
 
-  const openNew = () => {
-    setEditingId(null);
-    setForm(formFromAsset({ assetTag: nextAssetTag(rows), category: "Program equipment", condition: "Good", status: "Available", currency: "CAD", capitalized: false }));
-    setDrawer("new");
-  };
-
   const openEdit = (row: any) => {
     setEditingId(row._id);
-    setForm(formFromAsset(row));
+    setForm(formFromAsset(row) as AssetFormValue);
     setDrawer("edit");
   };
 
   const save = async () => {
+    if (!form || !editingId) return;
     const payload = normalizeAssetForm(form);
     if (!payload.assetTag || !payload.name) {
       toast.error("Asset tag and name are required.");
       return;
     }
-    if (editingId) {
-      await update({ id: editingId as any, patch: payload as any });
-      toast.success("Asset updated");
-    } else {
-      await create({ societyId: society._id, ...payload, sourceDocumentIds: [] } as any);
-      toast.success("Asset created");
-    }
+    await update({ id: editingId as any, patch: payload as any });
+    toast.success("Asset updated");
     setDrawer(null);
   };
 
@@ -225,7 +221,7 @@ export function AssetsPage() {
             <button className="btn-action" onClick={() => setDrawer("verify")}>
               <ClipboardCheck size={12} /> Start verification
             </button>
-            <button className="btn-action btn-action--primary" onClick={openNew}>
+            <button className="btn-action btn-action--primary" onClick={openGlobalAssetCreate}>
               <Plus size={12} /> New asset
             </button>
           </div>
@@ -305,9 +301,9 @@ export function AssetsPage() {
       />
 
       <Drawer
-        open={drawer === "new" || drawer === "edit"}
+        open={drawer === "edit"}
         onClose={() => setDrawer(null)}
-        title={drawer === "edit" ? "Edit asset" : "New asset"}
+        title="Edit asset"
         size="wide"
         footer={
           <>
@@ -316,7 +312,14 @@ export function AssetsPage() {
           </>
         }
       >
-        {form && <AssetForm form={form} setForm={setForm} documents={documents ?? []} transactions={transactions ?? []} />}
+        {form && (
+          <AssetFormFields
+            value={form}
+            onChange={(patch) => setForm((prev) => (prev ? { ...prev, ...patch } : prev))}
+            data={formData}
+            autoFocusName={false}
+          />
+        )}
       </Drawer>
 
       <Drawer
@@ -411,13 +414,14 @@ export function AssetDetailPage() {
   const society = useSociety();
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const transactions = useQuery(api.financialHub.transactions, society ? { societyId: society._id, limit: 200 } : "skip");
+  const formData = useAssetFormData(society?._id);
   const update = useMutation(api.assets.update);
   const recordEvent = useMutation(api.assets.recordEvent);
   const scheduleMaintenance = useMutation(api.assets.scheduleMaintenance);
   const completeMaintenance = useMutation(api.assets.completeMaintenance);
   const dispose = useMutation(api.assets.dispose);
   const [drawer, setDrawer] = useState<"edit" | "custody" | "maintenance" | "disposal" | null>(null);
-  const [form, setForm] = useState<any>(null);
+  const [form, setForm] = useState<AssetFormValue | null>(null);
   const [eventForm, setEventForm] = useState<any>({ eventType: "checkout", toCustodianType: "member", toCustodianName: "", responsiblePersonName: "", location: "", condition: "Good", expectedReturnDate: "", acceptanceSignature: "", notes: "" });
   const [maintenanceForm, setMaintenanceForm] = useState<any>({ title: "Asset maintenance", kind: "maintenance", dueDate: todayDate(), createTask: true, notes: "" });
   const [disposalForm, setDisposalForm] = useState<any>({ disposedAt: todayDate(), disposalMethod: "sold", disposalReason: "", disposalValue: "", notes: "" });
@@ -434,11 +438,12 @@ export function AssetDetailPage() {
   const purchaseTransaction = (transactions ?? []).find((txn: any) => txn._id === asset.purchaseTransactionId);
 
   const openEdit = () => {
-    setForm(formFromAsset(asset));
+    setForm(formFromAsset(asset) as AssetFormValue);
     setDrawer("edit");
   };
 
   const saveEdit = async () => {
+    if (!form) return;
     await update({ id: asset._id, patch: normalizeAssetForm(form) as any });
     toast.success("Asset updated");
     setDrawer(null);
@@ -560,7 +565,14 @@ export function AssetDetailPage() {
       />
 
       <Drawer open={drawer === "edit"} onClose={() => setDrawer(null)} title="Edit asset" size="wide" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" onClick={saveEdit}>Save</button></>}>
-        {form && <AssetForm form={form} setForm={setForm} documents={documents ?? []} transactions={transactions ?? []} />}
+        {form && (
+          <AssetFormFields
+            value={form}
+            onChange={(patch) => setForm((prev) => (prev ? { ...prev, ...patch } : prev))}
+            data={formData}
+            autoFocusName={false}
+          />
+        )}
       </Drawer>
       <Drawer open={drawer === "custody"} onClose={() => setDrawer(null)} title="Record custody event" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" onClick={saveEvent}>Record</button></>}>
         <CustodyForm form={eventForm} setForm={setEventForm} />
@@ -619,65 +631,6 @@ export function AssetVerificationPage() {
           </>
         )}
       />
-    </div>
-  );
-}
-
-function AssetForm({
-  form,
-  setForm,
-  documents,
-  transactions,
-}: {
-  form: any;
-  setForm: (form: any) => void;
-  documents: any[];
-  transactions: any[];
-}) {
-  const receiptDocuments = documents.filter((doc) =>
-    doc.category === "Receipt" ||
-    doc.category === "FinancialStatement" ||
-    (doc.tags ?? []).some((tag: string) => /receipt|invoice|finance/i.test(tag)),
-  );
-  const purchaseTransactions = transactions.filter((txn) => txn.amountCents < 0);
-  return (
-    <div className="form-grid">
-      <Field label="Asset tag" required><input className="input" value={form.assetTag ?? ""} onChange={(event) => setForm({ ...form, assetTag: event.target.value })} /></Field>
-      <Field label="Preferred label"><select className="input" value={form.preferredLabelType ?? "qr"} onChange={(event) => setForm({ ...form, preferredLabelType: event.target.value })}>{ASSET_LABEL_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></Field>
-      <Field label="Name" required><input className="input" value={form.name ?? ""} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field>
-      <Field label="Category"><Select value={form.category} options={ASSET_CATEGORIES} onChange={(category) => setForm({ ...form, category })} /></Field>
-      <Field label="Serial number"><input className="input" value={form.serialNumber ?? ""} onChange={(event) => setForm({ ...form, serialNumber: event.target.value })} /></Field>
-      <Field label="Status"><Select value={form.status} options={ASSET_STATUSES} onChange={(status) => setForm({ ...form, status })} /></Field>
-      <Field label="Condition"><Select value={form.condition} options={ASSET_CONDITIONS} onChange={(condition) => setForm({ ...form, condition })} /></Field>
-      <Field label="Location"><input className="input" value={form.location ?? ""} onChange={(event) => setForm({ ...form, location: event.target.value })} /></Field>
-      <Field label="Custodian type"><Select value={form.custodianType} options={CUSTODIAN_TYPES} onChange={(custodianType) => setForm({ ...form, custodianType })} /></Field>
-      <Field label="Custodian"><input className="input" value={form.custodianName ?? ""} onChange={(event) => setForm({ ...form, custodianName: event.target.value })} /></Field>
-      <Field label="Responsible person"><input className="input" value={form.responsiblePersonName ?? ""} onChange={(event) => setForm({ ...form, responsiblePersonName: event.target.value })} /></Field>
-      <Field label="Expected return"><input className="input" type="date" value={form.expectedReturnDate ?? ""} onChange={(event) => setForm({ ...form, expectedReturnDate: event.target.value })} /></Field>
-      <Field label="Supplier"><input className="input" value={form.supplier ?? ""} onChange={(event) => setForm({ ...form, supplier: event.target.value })} /></Field>
-      <Field label="Purchase date"><input className="input" type="date" value={form.purchaseDate ?? ""} onChange={(event) => setForm({ ...form, purchaseDate: event.target.value })} /></Field>
-      <Field label="Purchase value"><input className="input" inputMode="decimal" value={form.purchaseValue ?? ""} onChange={(event) => setForm({ ...form, purchaseValue: event.target.value })} /></Field>
-      {form.category === "Consumable" && (
-        <>
-          <Field label="Quantity on hand"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.quantityOnHand ?? ""} onChange={(event) => setForm({ ...form, quantityOnHand: event.target.value })} /></Field>
-          <Field label="Quantity unit"><input className="input" placeholder="flats, cases, units..." value={form.quantityUnit ?? ""} onChange={(event) => setForm({ ...form, quantityUnit: event.target.value })} /></Field>
-        </>
-      )}
-      <Field label="Book value"><input className="input" inputMode="decimal" value={form.bookValue ?? ""} onChange={(event) => setForm({ ...form, bookValue: event.target.value })} /></Field>
-      <Field label="Purchase receipt"><select className="input" value={form.receiptDocumentId ?? ""} onChange={(event) => setForm({ ...form, receiptDocumentId: event.target.value })}><option value="">No receipt linked</option>{receiptDocuments.map((doc) => <option key={doc._id} value={doc._id}>{doc.title}</option>)}</select></Field>
-      <Field label="Finance transaction"><select className="input" value={form.purchaseTransactionId ?? ""} onChange={(event) => setForm({ ...form, purchaseTransactionId: event.target.value })}><option value="">No transaction linked</option>{purchaseTransactions.map((txn) => <option key={txn._id} value={txn._id}>{txn.date} · {txn.description} · {money(Math.abs(txn.amountCents))}</option>)}</select></Field>
-      <Field label="Capitalized"><label className="checkbox"><input type="checkbox" checked={Boolean(form.capitalized)} onChange={(event) => setForm({ ...form, capitalized: event.target.checked })} /> Track as fixed asset</label></Field>
-      <Field label="Depreciation"><input className="input" value={form.depreciationMethod ?? ""} onChange={(event) => setForm({ ...form, depreciationMethod: event.target.value })} /></Field>
-      <Field label="Useful life months"><input className="input" inputMode="numeric" value={form.usefulLifeMonths ?? ""} onChange={(event) => setForm({ ...form, usefulLifeMonths: event.target.value })} /></Field>
-      <Field label="Funding source"><input className="input" value={form.fundingSource ?? ""} onChange={(event) => setForm({ ...form, fundingSource: event.target.value })} /></Field>
-      <Field label="Retention until"><input className="input" type="date" value={form.retentionUntil ?? ""} onChange={(event) => setForm({ ...form, retentionUntil: event.target.value })} /></Field>
-      <Field label="Warranty expires"><input className="input" type="date" value={form.warrantyExpiresAt ?? ""} onChange={(event) => setForm({ ...form, warrantyExpiresAt: event.target.value })} /></Field>
-      <Field label="Next maintenance"><input className="input" type="date" value={form.nextMaintenanceDate ?? ""} onChange={(event) => setForm({ ...form, nextMaintenanceDate: event.target.value })} /></Field>
-      <Field label="Next verification"><input className="input" type="date" value={form.nextVerificationDate ?? ""} onChange={(event) => setForm({ ...form, nextVerificationDate: event.target.value })} /></Field>
-      <Field label="Grant restrictions"><textarea className="textarea" rows={3} value={form.grantRestrictions ?? ""} onChange={(event) => setForm({ ...form, grantRestrictions: event.target.value })} /></Field>
-      <Field label="Insurance notes"><textarea className="textarea" rows={3} value={form.insuranceNotes ?? ""} onChange={(event) => setForm({ ...form, insuranceNotes: event.target.value })} /></Field>
-      <Field label="Disposal rules"><textarea className="textarea" rows={3} value={form.disposalRules ?? ""} onChange={(event) => setForm({ ...form, disposalRules: event.target.value })} /></Field>
-      <Field label="Notes"><textarea className="textarea" rows={3} value={form.notes ?? ""} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></Field>
     </div>
   );
 }
@@ -746,7 +699,6 @@ function ReceiptLineLinkForm({
     </div>
   );
 }
-
 function CustodyForm({ form, setForm }: { form: any; setForm: (form: any) => void }) {
   return (
     <div className="form-grid">
@@ -758,7 +710,7 @@ function CustodyForm({ form, setForm }: { form: any; setForm: (form: any) => voi
       <Field label="Condition"><Select value={form.condition} options={ASSET_CONDITIONS} onChange={(condition) => setForm({ ...form, condition })} /></Field>
       <Field label="Expected return"><input className="input" type="date" value={form.expectedReturnDate} onChange={(event) => setForm({ ...form, expectedReturnDate: event.target.value })} /></Field>
       <Field label="Acceptance signature"><input className="input" value={form.acceptanceSignature} onChange={(event) => setForm({ ...form, acceptanceSignature: event.target.value })} /></Field>
-      <Field label="Notes"><textarea className="textarea" rows={4} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></Field>
+      <Field label="Notes"><MarkdownEditor rows={4} value={form.notes} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
     </div>
   );
 }
@@ -770,7 +722,7 @@ function MaintenanceForm({ form, setForm }: { form: any; setForm: (form: any) =>
       <Field label="Kind"><Select value={form.kind} options={MAINTENANCE_KINDS} onChange={(kind) => setForm({ ...form, kind })} /></Field>
       <Field label="Due date"><input className="input" type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })} /></Field>
       <Field label="Create task"><label className="checkbox"><input type="checkbox" checked={Boolean(form.createTask)} onChange={(event) => setForm({ ...form, createTask: event.target.checked })} /> Add to Tasks</label></Field>
-      <Field label="Notes"><textarea className="textarea" rows={4} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></Field>
+      <Field label="Notes"><MarkdownEditor rows={4} value={form.notes} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
     </div>
   );
 }
@@ -781,8 +733,8 @@ function DisposalForm({ form, setForm }: { form: any; setForm: (form: any) => vo
       <Field label="Disposed at"><input className="input" type="date" value={form.disposedAt} onChange={(event) => setForm({ ...form, disposedAt: event.target.value })} /></Field>
       <Field label="Method"><Select value={form.disposalMethod} options={["sold", "donated", "recycled", "destroyed", "lost", "returned to funder"]} onChange={(disposalMethod) => setForm({ ...form, disposalMethod })} /></Field>
       <Field label="Disposal value"><input className="input" value={form.disposalValue} onChange={(event) => setForm({ ...form, disposalValue: event.target.value })} /></Field>
-      <Field label="Reason"><textarea className="textarea" rows={3} value={form.disposalReason} onChange={(event) => setForm({ ...form, disposalReason: event.target.value })} /></Field>
-      <Field label="Notes"><textarea className="textarea" rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></Field>
+      <Field label="Reason"><MarkdownEditor rows={3} value={form.disposalReason} onChange={(markdown) => setForm({ ...form, disposalReason: markdown })} /></Field>
+      <Field label="Notes"><MarkdownEditor rows={3} value={form.notes} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
     </div>
   );
 }

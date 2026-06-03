@@ -133,8 +133,12 @@ export const summary = query({
       today,
     });
 
-    const overdueDeadlines = deadlines.filter((deadline) => !deadline.done && deadline.dueDate < today);
-    const dueSoonDeadlines = deadlines.filter((deadline) => !deadline.done && deadline.dueDate >= today && daysBetween(today, deadline.dueDate) <= 45);
+    const isOpen = (d: any) => {
+      const status = d.status ?? (d.done ? "complete" : "open");
+      return status === "open";
+    };
+    const overdueDeadlines = deadlines.filter((deadline) => isOpen(deadline) && deadline.dueDate < today);
+    const dueSoonDeadlines = deadlines.filter((deadline) => isOpen(deadline) && deadline.dueDate >= today && daysBetween(today, deadline.dueDate) <= 45);
     const openConflicts = conflicts.filter((conflict) => !conflict.resolvedAt);
     const policiesDue = policies.filter((policy) => policy.status !== "Ceased" && policy.reviewDate && policy.reviewDate <= addDays(today, 45));
     const currentDirectorAttestations = directorAttestations.filter((row) => row.year === cycleYear);

@@ -12,6 +12,7 @@ import { useToast } from "../components/Toast";
 import { FileJson, Plus, Trash2, Workflow } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 export function WorkflowPackagesPage() {
   const society = useSociety();
@@ -238,7 +239,7 @@ export function WorkflowPackagesPage() {
               <Field label="Stripe checkout session"><input className="input mono" value={draft.stripeCheckoutSessionId ?? ""} onChange={(e) => setDraft({ ...draft, stripeCheckoutSessionId: e.target.value })} /></Field>
             </div>
             <Field label="Price items"><input className="input" value={draft.priceItemsText ?? ""} onChange={(e) => setDraft({ ...draft, priceItemsText: e.target.value })} /></Field>
-            <Field label="Notes"><textarea className="textarea" value={draft.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={draft.notes ?? ""} onChange={(markdown) => setDraft({ ...draft, notes: markdown })} /></Field>
           </>
         )}
       </Drawer>

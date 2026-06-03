@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DataTable } from "../components/DataTable";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
@@ -608,7 +609,7 @@ function CommitmentFormFields({
         <input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
       </Field>
       <Field label="Requirement" required hint="What the contract, policy, grant, or agreement requires the organization to do.">
-        <textarea className="textarea" value={form.requirement} onChange={(e) => setForm({ ...form, requirement: e.target.value })} />
+        <MarkdownEditor rows={4} value={form.requirement} onChange={(markdown) => setForm({ ...form, requirement: markdown })} />
       </Field>
       <div className="row" style={{ gap: 12 }}>
         <Field label="Category">
@@ -643,7 +644,7 @@ function CommitmentFormFields({
         />
       </Field>
       <Field label="Source excerpt" hint="Clause or paragraph text that created this obligation.">
-        <textarea className="textarea" value={form.sourceExcerpt ?? ""} onChange={(e) => setForm({ ...form, sourceExcerpt: e.target.value })} />
+        <MarkdownEditor rows={4} value={form.sourceExcerpt ?? ""} onChange={(markdown) => setForm({ ...form, sourceExcerpt: markdown })} />
       </Field>
       <div className="row" style={{ gap: 12 }}>
         <Field label="Source label">
@@ -677,10 +678,10 @@ function CommitmentFormFields({
         <input className="input" value={form.owner ?? ""} onChange={(e) => setForm({ ...form, owner: e.target.value })} />
       </Field>
       <Field label="Uncertainty or review note">
-        <textarea className="textarea" value={form.uncertaintyNote ?? ""} onChange={(e) => setForm({ ...form, uncertaintyNote: e.target.value })} />
+        <MarkdownEditor rows={4} value={form.uncertaintyNote ?? ""} onChange={(markdown) => setForm({ ...form, uncertaintyNote: markdown })} />
       </Field>
       <Field label="Notes">
-        <textarea className="textarea" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+        <MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} />
       </Field>
     </div>
   );
@@ -765,10 +766,10 @@ function EventFormFields({
         </div>
       </Field>
       <Field label="Evidence notes">
-        <textarea className="textarea" value={form.evidenceNotes ?? ""} onChange={(e) => setForm({ ...form, evidenceNotes: e.target.value })} />
+        <MarkdownEditor rows={4} value={form.evidenceNotes ?? ""} onChange={(markdown) => setForm({ ...form, evidenceNotes: markdown })} />
       </Field>
       <Field label="Summary">
-        <textarea className="textarea" value={form.summary ?? ""} onChange={(e) => setForm({ ...form, summary: e.target.value })} />
+        <MarkdownEditor rows={4} value={form.summary ?? ""} onChange={(markdown) => setForm({ ...form, summary: markdown })} />
       </Field>
     </div>
   );

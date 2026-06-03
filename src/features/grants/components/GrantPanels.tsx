@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ExternalLink, ListChecks, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge, Field, InspectorNote } from "../../../components/ui";
+import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { StructuredAddressFields } from "../../../components/StructuredAddressFields";
 import { formatDate, money } from "../../../lib/format";
 import {
@@ -211,15 +212,15 @@ export function GrantEditorForm({
         <Field label="Requested" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountRequestedDollars ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, amountRequestedDollars: e.target.value })} /></Field>
         <Field label="Awarded" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountAwardedDollars ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, amountAwardedDollars: e.target.value })} /></Field>
       </div>
-      <Field label="Restricted purpose"><textarea className="textarea" value={grantDraft.restrictedPurpose ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, restrictedPurpose: e.target.value })} /></Field>
+      <Field label="Restricted purpose"><MarkdownEditor rows={4} value={grantDraft.restrictedPurpose ?? ""} onChange={(markdown) => setGrantDraft({ ...grantDraft, restrictedPurpose: markdown })} /></Field>
       <GrantRequirementsEditor
         draft={grantDraft}
         documents={documents}
         onChange={setGrantDraft}
       />
       <label className="checkbox"><input type="checkbox" checked={!!grantDraft.allowPublicApplications} onChange={(e) => setGrantDraft({ ...grantDraft, allowPublicApplications: e.target.checked })} /> Accept public applications</label>
-      <Field label="Public description"><textarea className="textarea" rows={4} value={grantDraft.publicDescription ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, publicDescription: e.target.value })} /></Field>
-      <Field label="Application instructions"><textarea className="textarea" rows={4} value={grantDraft.applicationInstructions ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, applicationInstructions: e.target.value })} /></Field>
+      <Field label="Public description"><MarkdownEditor rows={4} value={grantDraft.publicDescription ?? ""} onChange={(markdown) => setGrantDraft({ ...grantDraft, publicDescription: markdown })} /></Field>
+      <Field label="Application instructions"><MarkdownEditor rows={4} value={grantDraft.applicationInstructions ?? ""} onChange={(markdown) => setGrantDraft({ ...grantDraft, applicationInstructions: markdown })} /></Field>
       <div className="row" style={{ gap: 12 }}>
         <Field label="Application due"><input className="input" type="date" value={grantDraft.applicationDueDate ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, applicationDueDate: e.target.value })} /></Field>
         <Field label="Next report"><input className="input" type="date" value={grantDraft.nextReportDueAtISO ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, nextReportDueAtISO: e.target.value })} /></Field>
@@ -269,9 +270,9 @@ export function GrantEditorForm({
         <input className="input" value={grantDraft.riskFlagsInput ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, riskFlagsInput: e.target.value })} />
       </Field>
       <Field label="Source notes">
-        <textarea className="textarea" rows={3} value={grantDraft.sourceNotes ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, sourceNotes: e.target.value })} />
+        <MarkdownEditor rows={3} value={grantDraft.sourceNotes ?? ""} onChange={(markdown) => setGrantDraft({ ...grantDraft, sourceNotes: markdown })} />
       </Field>
-      <Field label="Notes"><textarea className="textarea" value={grantDraft.notes ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, notes: e.target.value })} /></Field>
+      <Field label="Notes"><MarkdownEditor rows={4} value={grantDraft.notes ?? ""} onChange={(markdown) => setGrantDraft({ ...grantDraft, notes: markdown })} /></Field>
     </div>
   );
 }
@@ -394,7 +395,7 @@ function GrantEditorPageLayout({
             <input className="input" value={grantDraft.nextAction ?? ""} onChange={(e) => update({ nextAction: e.target.value })} />
           </Field>
           <Field label="Restricted purpose">
-            <textarea className="textarea" value={grantDraft.restrictedPurpose ?? ""} onChange={(e) => update({ restrictedPurpose: e.target.value })} />
+            <MarkdownEditor rows={4} value={grantDraft.restrictedPurpose ?? ""} onChange={(markdown) => update({ restrictedPurpose: markdown })} />
           </Field>
         </EditSection>
 
@@ -411,10 +412,10 @@ function GrantEditorPageLayout({
             <input type="checkbox" checked={!!grantDraft.allowPublicApplications} onChange={(e) => update({ allowPublicApplications: e.target.checked })} /> Accept public applications
           </label>
           <Field label="Public description">
-            <textarea className="textarea" rows={4} value={grantDraft.publicDescription ?? ""} onChange={(e) => update({ publicDescription: e.target.value })} />
+            <MarkdownEditor rows={4} value={grantDraft.publicDescription ?? ""} onChange={(markdown) => update({ publicDescription: markdown })} />
           </Field>
           <Field label="Application instructions">
-            <textarea className="textarea" rows={4} value={grantDraft.applicationInstructions ?? ""} onChange={(e) => update({ applicationInstructions: e.target.value })} />
+            <MarkdownEditor rows={4} value={grantDraft.applicationInstructions ?? ""} onChange={(markdown) => update({ applicationInstructions: markdown })} />
           </Field>
         </EditSection>
 
@@ -479,10 +480,10 @@ function GrantEditorPageLayout({
             <input className="input" value={grantDraft.riskFlagsInput ?? ""} onChange={(e) => update({ riskFlagsInput: e.target.value })} />
           </Field>
           <Field label="Source notes">
-            <textarea className="textarea" rows={3} value={grantDraft.sourceNotes ?? ""} onChange={(e) => update({ sourceNotes: e.target.value })} />
+            <MarkdownEditor rows={3} value={grantDraft.sourceNotes ?? ""} onChange={(markdown) => update({ sourceNotes: markdown })} />
           </Field>
           <Field label="Notes">
-            <textarea className="textarea" value={grantDraft.notes ?? ""} onChange={(e) => update({ notes: e.target.value })} />
+            <MarkdownEditor rows={4} value={grantDraft.notes ?? ""} onChange={(markdown) => update({ notes: markdown })} />
           </Field>
         </EditSection>
       </div>
@@ -2494,11 +2495,10 @@ function GrantRequirementsEditor({
                     )}
                   </div>
                   <Field label="Notes">
-                    <textarea
-                      className="textarea"
+                    <MarkdownEditor
                       rows={2}
                       value={item.notes ?? ""}
-                      onChange={(event) => updateRequirement(index, { notes: event.target.value })}
+                      onChange={(markdown) => updateRequirement(index, { notes: markdown })}
                     />
                   </Field>
                   {(item.sourceUrl || item.documentUrl || item.formNumber) && (

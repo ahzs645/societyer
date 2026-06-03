@@ -18,6 +18,7 @@ import { BulkEditPanel } from "../components/BulkEditPanel";
 import { MergeRecordsModal } from "../components/MergeRecordsModal";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { StructuredAddressTextFields } from "../components/StructuredAddressFields";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import {
   RecordTable,
   RecordTableScope,
@@ -336,7 +337,7 @@ export function MembersPage() {
               onChange={(v) => setSelected({ ...selected, votingRights: v })}
               label="Voting rights"
             />
-            <Field label="Notes"><textarea className="textarea" value={selected.notes ?? ""} onChange={(e) => setSelected({ ...selected, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={selected.notes ?? ""} onChange={(markdown) => setSelected({ ...selected, notes: markdown })} /></Field>
             {selected._id && (
               <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
                 <CustomFieldsPanel

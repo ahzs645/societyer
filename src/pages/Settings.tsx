@@ -13,6 +13,8 @@ import { getAuthMode } from "../lib/authMode";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
 import { maintenanceErrorMessage, resetDemoData, seedDemoSociety } from "../lib/maintenanceApi";
 import { useThemePreference } from "../hooks/useThemePreference";
+import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
+import { useAiChatVisibility } from "../hooks/useAiChatVisibility";
 import { useTranslation } from "react-i18next";
 import type { ThemePreference } from "../lib/theme";
 import {
@@ -35,6 +37,9 @@ export function SettingsPage() {
   const confirm = useConfirm();
   const toast = useToast();
   const { preference: theme, resolvedTheme, setPreference: setTheme } = useThemePreference();
+  const { hidden: operationsDeskHidden, setHidden: setOperationsDeskHidden } =
+    useOperationsDeskVisibility();
+  const { hidden: aiChatHidden, setHidden: setAiChatHidden } = useAiChatVisibility();
   const [moduleSettings, setModuleSettings] = useState(() => normalizeModuleSettings(undefined));
   const [savingModule, setSavingModule] = useState<ModuleKey | null>(null);
   const [inventoryPromptEnabled, setInventoryPromptEnabled] = useState(false);
@@ -155,6 +160,36 @@ export function SettingsPage() {
               direction="horizontal"
             />
           </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">Sidebar</h2>
+          <span className="card__subtitle">Choose which sidebar sections show in your workspace.</span>
+        </div>
+        <div className="card__body col" style={{ gap: 12 }}>
+          <Toggle
+            checked={!operationsDeskHidden}
+            onChange={(checked) => setOperationsDeskHidden(!checked)}
+            label={t("sidebar.showOperationsDesk")}
+            hint={t("sidebar.showOperationsDeskHint")}
+          />
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">AI assistant</h2>
+          <span className="card__subtitle">Show or hide the in-app AI chat features.</span>
+        </div>
+        <div className="card__body col" style={{ gap: 12 }}>
+          <Toggle
+            checked={!aiChatHidden}
+            onChange={(checked) => setAiChatHidden(!checked)}
+            label="Enable AI chat"
+            hint="When off, the sidebar bot button and the floating AI assistant are removed. Other AI-driven helpers (e.g. transcript generation) stay available."
+          />
         </div>
       </div>
 

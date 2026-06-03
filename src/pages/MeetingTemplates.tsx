@@ -7,6 +7,7 @@ import { PageHeader, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { ArrowLeft, BookOpen, ChevronDown, Copy, MinusCircle, Pencil, Plus, Save, Sparkles, Star, Trash2, X } from "lucide-react";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 type TemplateItemDraft = {
   title: string;
@@ -558,11 +559,10 @@ export function MeetingTemplateBuilderPage() {
                               <input className="input" value={item.presenter} onChange={(event) => updateItem(index, { presenter: event.target.value })} placeholder="Chair, secretary, treasurer..." />
                             </Field>
                             <Field label="Default notes">
-                              <textarea
-                                className="textarea"
+                              <MarkdownEditor
                                 rows={4}
                                 value={item.details}
-                                onChange={(event) => updateItem(index, { details: event.target.value })}
+                                onChange={(markdown) => updateItem(index, { details: markdown })}
                                 placeholder="Optional notes or speaking points for this agenda item."
                               />
                             </Field>
@@ -638,7 +638,7 @@ export function MeetingTemplateBuilderPage() {
               </select>
             </Field>
             <Field label="Description">
-              <textarea className="textarea" rows={4} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="Used for recurring board meetings" />
+              <MarkdownEditor rows={4} value={draft.description} onChange={(markdown) => setDraft({ ...draft, description: markdown })} placeholder="Used for recurring board meetings" />
             </Field>
             <label className="meeting-templates__default-toggle">
               <input type="checkbox" checked={draft.isDefault} onChange={(event) => setDraft({ ...draft, isDefault: event.target.checked })} />

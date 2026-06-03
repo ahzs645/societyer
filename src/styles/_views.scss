@@ -1625,21 +1625,37 @@
 }
 .meeting-minutes-agenda-editor__row {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto auto;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
   gap: 6px;
   align-items: center;
+  position: relative;
 }
 .meeting-minutes-agenda-editor__row > .input {
   min-width: 0;
 }
 .meeting-minutes-agenda-editor__row.is-locked {
-  grid-template-columns: 32px minmax(0, 1fr) auto auto;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+}
+.meeting-minutes-agenda-editor__row.is-dragging {
+  opacity: 0.4;
+}
+// Drop indicator: a 2px hairline at the top of the targeted root row.
+.meeting-minutes-agenda-editor__row.is-drop-above::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -3px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+  pointer-events: none;
 }
 .meeting-minutes-agenda-editor__index {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
+  width: 36px;
   height: 32px;
   min-width: 0;
   color: var(--text-secondary);
@@ -1648,18 +1664,29 @@
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
+  border-radius: var(--r-sm);
+  transition: background 120ms ease;
 }
-.meeting-minutes-agenda-editor__hierarchy-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+.meeting-minutes-agenda-editor__index.is-drag-handle {
+  cursor: grab;
 }
-.meeting-minutes-agenda-editor__hierarchy-actions .btn-action:disabled {
-  opacity: 0.38;
-  pointer-events: none;
+.meeting-minutes-agenda-editor__index.is-drag-handle:hover,
+.meeting-minutes-agenda-editor__index.is-drag-handle:focus-visible {
+  background: var(--bg-subtle);
 }
-.meeting-minutes-agenda-editor__hierarchy-actions .btn-action,
+.meeting-minutes-agenda-editor__index.is-drag-handle:active {
+  cursor: grabbing;
+}
 .meeting-minutes-agenda-editor__row > .btn-action--icon {
+  width: 32px;
+  height: 32px;
+}
+.meeting-minutes-agenda-editor__actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.meeting-minutes-agenda-editor__actions > .btn-action--icon {
   width: 32px;
   height: 32px;
 }
@@ -1681,22 +1708,6 @@
   background: var(--border);
 }
 @media (max-width: 560px) {
-  .meeting-minutes-agenda-editor__row {
-    grid-template-columns: 32px minmax(0, 1fr) auto;
-  }
-  .meeting-minutes-agenda-editor__row.is-locked {
-    grid-template-columns: 32px minmax(0, 1fr) auto;
-  }
-  .meeting-minutes-agenda-editor__hierarchy-actions {
-    grid-column: 2 / -1;
-    grid-row: 2;
-    padding-left: 2px;
-  }
-  .meeting-minutes-agenda-editor__remove {
-    grid-column: 3;
-    grid-row: 1;
-  }
-  .meeting-minutes-agenda-editor__hierarchy-actions .btn-action,
   .meeting-minutes-agenda-editor__row > .btn-action--icon {
     width: 32px;
     height: 32px;
@@ -1892,6 +1903,43 @@
 .name-autocomplete__option.is-highlighted {
   background: var(--bg-hover);
 }
+.name-autocomplete__option.has-remove {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 4px;
+}
+.name-autocomplete__option-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.name-autocomplete__remove {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 80ms ease, background 80ms ease, color 80ms ease;
+}
+.name-autocomplete__option:hover .name-autocomplete__remove,
+.name-autocomplete__option.is-highlighted .name-autocomplete__remove,
+.name-autocomplete__remove:focus-visible {
+  opacity: 1;
+}
+.name-autocomplete__remove:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
 .meeting-reminder-chip {
   // Match the .badge--success / .badge--accent visual treatment: soft tinted
   // background, bold tone-coloured text, transparent border. This resolves
@@ -1973,6 +2021,13 @@
 }
 .meeting-minutes-section-item.is-dragging {
   opacity: 0.5;
+}
+.meeting-minutes-section-item.is-editing > .meeting-minutes-section-item__summary {
+  cursor: default;
+  list-style: none;
+}
+.meeting-minutes-section-item.is-editing > .meeting-minutes-section-item__summary::-webkit-details-marker {
+  display: none;
 }
 /* Drop indicators — a thin accent line above (or below, for the last row)
  * the target. Drawn outside the row's box-model via offsets so it doesn't
@@ -2164,9 +2219,6 @@
   align-items: center;
   gap: 6px;
   flex: 0 0 auto;
-}
-.meeting-minutes-section-item__action-tooltip {
-  display: inline-flex;
 }
 .meeting-minutes-section-item__body {
   display: grid;
@@ -2686,22 +2738,6 @@
   gap: var(--s-2);
   margin-bottom: var(--s-3);
 }
-.meeting-detail-subtitle {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  max-width: min(72ch, 100%);
-  min-width: 0;
-  vertical-align: top;
-}
-.meeting-detail-subtitle__location {
-  min-width: 0;
-  max-width: clamp(140px, 28vw, 360px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  vertical-align: bottom;
-}
 .meeting-detail-location-value {
   display: block;
   max-width: 34ch;
@@ -3082,13 +3118,6 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   .meeting-detail-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .meeting-detail-subtitle {
-    display: flex;
-    flex-wrap: wrap;
-  }
-  .meeting-detail-subtitle__location {
-    max-width: 100%;
-  }
   .meeting-detail-location-value {
     max-width: 100%;
   }
@@ -3213,20 +3242,6 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   text-align: center;
   font-size: var(--fs-sm);
 }
-.attendance-details {
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bg-base);
-  padding: var(--s-3);
-}
-.attendance-details__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-2);
-  font-size: var(--fs-sm);
-  margin-bottom: var(--s-2);
-}
 .attendance-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -3247,6 +3262,7 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   min-width: 0;
   display: grid;
   gap: 2px;
+  flex: 1; // pushes the status badge to the right of the row
 }
 .attendance-list__person a,
 .attendance-list__person span {
@@ -4222,6 +4238,7 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 /* Segmented control */
 .segmented {
   display: inline-flex;
+  align-self: flex-start;
   background: var(--bg-subtle);
   border: 1px solid var(--border);
   border-radius: var(--r-pill);

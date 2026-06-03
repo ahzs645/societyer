@@ -9,6 +9,7 @@ import { ShieldCheck, PenLine } from "lucide-react";
 import { formatDate, initials } from "../lib/format";
 import { DIRECTOR_ATTESTATION_COPY, LEGAL_COPY_REVIEWED } from "../lib/legalCopy";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import {
   RecordTable,
   RecordTableScope,
@@ -201,7 +202,7 @@ export function AttestationsPage() {
             <label className="checkbox"><input type="checkbox" checked={form.notBankrupt} onChange={(e) => setForm({ ...form, notBankrupt: e.target.checked })} /> {DIRECTOR_ATTESTATION_COPY.statements.bankruptcy}</label>
             <label className="checkbox"><input type="checkbox" checked={form.notDisqualified} onChange={(e) => setForm({ ...form, notDisqualified: e.target.checked })} /> {DIRECTOR_ATTESTATION_COPY.statements.disqualification}</label>
             <label className="checkbox"><input type="checkbox" checked={form.stillResidentOrEligible} onChange={(e) => setForm({ ...form, stillResidentOrEligible: e.target.checked })} /> {DIRECTOR_ATTESTATION_COPY.statements.residency}</label>
-            <Field label="Notes (optional)"><textarea className="textarea" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+            <Field label="Notes (optional)"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
           </div>
         )}
       </Drawer>

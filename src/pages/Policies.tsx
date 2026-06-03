@@ -12,6 +12,7 @@ import { useToast } from "../components/Toast";
 import { FileText, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 export function PoliciesPage() {
   const society = useSociety();
@@ -267,7 +268,7 @@ export function PoliciesPage() {
             <Toggle checked={!!draft.signatureRequired} onChange={(value) => setDraft({ ...draft, signatureRequired: value })} label="Signature required" />
             <OptionMultiSelect label="Required signers" setName="requiredSigners" values={listValues(draft.requiredSigners)} onChange={(values) => setDraft({ ...draft, requiredSigners: values })} />
             <Field label="HTML"><textarea className="textarea mono" value={draft.html ?? ""} onChange={(e) => setDraft({ ...draft, html: e.target.value })} /></Field>
-            <Field label="Notes"><textarea className="textarea" value={draft.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={draft.notes ?? ""} onChange={(markdown) => setDraft({ ...draft, notes: markdown })} /></Field>
           </>
         )}
       </Drawer>

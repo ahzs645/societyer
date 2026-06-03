@@ -11,6 +11,7 @@ import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { centsToDollarInput, dollarInputToCents, formatDate } from "../lib/format";
 import { StudentLevyIntakeDrawer } from "../components/StudentLevyIntakeDrawer";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 function cents(value: number): string {
   const abs = Math.abs(value);
@@ -890,10 +891,10 @@ export function TreasurerPage() {
               </Field>
             </div>
             <Field label="Collection schedule" hint="Example: Fall and Winter semesters only; Summer excluded.">
-              <textarea
-                className="textarea"
+              <MarkdownEditor
+                rows={4}
                 value={sourceDraft.collectionScheduleNotes ?? ""}
-                onChange={(e) => setSourceDraft({ ...sourceDraft, collectionScheduleNotes: e.target.value })}
+                onChange={(markdown) => setSourceDraft({ ...sourceDraft, collectionScheduleNotes: markdown })}
               />
             </Field>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -933,7 +934,7 @@ export function TreasurerPage() {
               <input className="input" value={sourceDraft.restrictedPurpose ?? ""} onChange={(e) => setSourceDraft({ ...sourceDraft, restrictedPurpose: e.target.value })} />
             </Field>
             <Field label="Notes">
-              <textarea className="textarea" value={sourceDraft.notes ?? ""} onChange={(e) => setSourceDraft({ ...sourceDraft, notes: e.target.value })} />
+              <MarkdownEditor rows={4} value={sourceDraft.notes ?? ""} onChange={(markdown) => setSourceDraft({ ...sourceDraft, notes: markdown })} />
             </Field>
           </div>
         )}
@@ -1015,7 +1016,7 @@ export function TreasurerPage() {
               <Select value={eventDraft.attributionStatus} onChange={(v) => setEventDraft({ ...eventDraft, attributionStatus: v })} options={ATTRIBUTION_STATUSES} />
             </Field>
             <Field label="Notes">
-              <textarea className="textarea" value={eventDraft.notes ?? ""} onChange={(e) => setEventDraft({ ...eventDraft, notes: e.target.value })} />
+              <MarkdownEditor rows={4} value={eventDraft.notes ?? ""} onChange={(markdown) => setEventDraft({ ...eventDraft, notes: markdown })} />
             </Field>
           </div>
         )}
@@ -1120,7 +1121,7 @@ export function TreasurerPage() {
               </Field>
             </div>
             <Field label="Notes">
-              <textarea className="textarea" value={expenseDraft.notes ?? ""} onChange={(e) => setExpenseDraft({ ...expenseDraft, notes: e.target.value })} />
+              <MarkdownEditor rows={4} value={expenseDraft.notes ?? ""} onChange={(markdown) => setExpenseDraft({ ...expenseDraft, notes: markdown })} />
             </Field>
           </div>
         )}

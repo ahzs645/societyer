@@ -7,6 +7,7 @@ import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   Inbox,
@@ -454,12 +455,11 @@ export function OutboxPage() {
               />
             </Field>
             <Field label="Body">
-              <textarea
-                className="textarea"
+              <MarkdownEditor
                 rows={10}
                 value={selected.body}
-                onChange={(e) => setSelected({ ...selected, body: e.target.value })}
-                disabled={selected.status === "sent"}
+                onChange={(markdown) => setSelected({ ...selected, body: markdown })}
+                readOnly={selected.status === "sent"}
               />
             </Field>
 
@@ -532,12 +532,11 @@ export function OutboxPage() {
 
             {selected.notes && (
               <Field label="Notes">
-                <textarea
-                  className="textarea"
+                <MarkdownEditor
                   rows={2}
                   value={selected.notes}
-                  onChange={(e) => setSelected({ ...selected, notes: e.target.value })}
-                  disabled={selected.status === "sent"}
+                  onChange={(markdown) => setSelected({ ...selected, notes: markdown })}
+                  readOnly={selected.status === "sent"}
                 />
               </Field>
             )}
