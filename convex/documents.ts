@@ -1,5 +1,9 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import {
+  canAccessDocument,
+  documentAccessContextForActor,
+} from "./lib/access/documentAccess";
 
 const VISIBLE_DOCUMENT_CATEGORIES = [
   "Constitution",
@@ -24,33 +28,73 @@ const DOCUMENT_QUEUE_RELATED_SCAN_LIMIT = 250;
 const DOCUMENT_QUEUE_RELATED_DOC_LIMIT = 64;
 
 export const list = query({
-  args: { societyId: v.id("societies") },
+  args: { societyId: v.id("societies"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const groups = await Promise.all(
-      VISIBLE_DOCUMENT_CATEGORIES.map((category) =>
+  handler: async (ctx, { societyId, actingUserId }) => {
+    const [groups, linkedMaterials, accessContext] = await Promise.all([
+      Promise.all(VISIBLE_DOCUMENT_CATEGORIES.map((category) =>
         ctx.db
           .query("documents")
           .withIndex("by_society_category", (q) => q.eq("societyId", societyId).eq("category", category))
           .collect(),
-      ),
-    );
-    return groups.flat().sort((a, b) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
+      )),
+      ctx.db
+        .query("meetingMaterials")
+        .withIndex("by_society", (q) => q.eq("societyId", societyId))
+        .collect(),
+      documentAccessContextForActor(ctx, societyId, actingUserId),
+    ]);
+    return groups
+      .flat()
+      .filter((doc) => !accessContext || canAccessDocument(doc, linkedMaterials, accessContext))
+      .sort((a, b) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
   },
 });
 
 export const get = query({
-  args: { id: v.id("documents") },
+  args: { id: v.id("documents"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: async (ctx, { id, actingUserId }) => {
+    const document = await ctx.db.get(id);
+    if (!document || !actingUserId) return document;
+    const [linkedMaterials, accessContext] = await Promise.all([
+      ctx.db
+        .query("meetingMaterials")
+        .withIndex("by_society", (q) => q.eq("societyId", document.societyId))
+        .collect(),
+      documentAccessContextForActor(ctx, document.societyId, actingUserId),
+    ]);
+    return accessContext && canAccessDocument(document, linkedMaterials, accessContext) ? document : null;
+  },
 });
 
 export const getMany = query({
-  args: { ids: v.array(v.id("documents")) },
+  args: { ids: v.array(v.id("documents")), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { ids }) => {
+  handler: async (ctx, { ids, actingUserId }) => {
     const rows = await Promise.all(ids.map((id) => ctx.db.get(id)));
-    return rows.filter(Boolean);
+    const documents = rows.filter(Boolean);
+    if (!actingUserId || !documents.length) return documents;
+
+    const societyIds = Array.from(new Set(documents.map((doc: any) => String(doc.societyId))));
+    const materialsBySociety = new Map<string, any[]>();
+    const contextBySociety = new Map<string, any>();
+    for (const societyId of societyIds) {
+      const [materials, accessContext] = await Promise.all([
+        ctx.db
+          .query("meetingMaterials")
+          .withIndex("by_society", (q) => q.eq("societyId", societyId as any))
+          .collect(),
+        documentAccessContextForActor(ctx, societyId as any, actingUserId),
+      ]);
+      materialsBySociety.set(societyId, materials);
+      contextBySociety.set(societyId, accessContext);
+    }
+    return documents.filter((document: any) => {
+      const societyId = String(document.societyId);
+      const accessContext = contextBySociety.get(societyId);
+      return accessContext && canAccessDocument(document, materialsBySociety.get(societyId) ?? [], accessContext);
+    });
   },
 });
 
@@ -145,10 +189,10 @@ export const updateReviewStatus = mutation({
 });
 
 export const reviewQueues = query({
-  args: { societyId: v.id("societies") },
+  args: { societyId: v.id("societies"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const [documentGroups, recentlyOpened, tasks, comments, signatures, materials] = await Promise.all([
+  handler: async (ctx, { societyId, actingUserId }) => {
+    const [documentGroups, recentlyOpened, tasks, comments, signatures, materials, accessContext] = await Promise.all([
       Promise.all(
         VISIBLE_DOCUMENT_CATEGORIES.map((category) =>
           ctx.db
@@ -178,11 +222,17 @@ export const reviewQueues = query({
         .query("meetingMaterials")
         .withIndex("by_society", (q) => q.eq("societyId", societyId))
         .take(DOCUMENT_QUEUE_RELATED_SCAN_LIMIT),
+      documentAccessContextForActor(ctx, societyId, actingUserId),
     ]);
 
     const documentsById = new Map<string, any>();
     for (const doc of [...documentGroups.flat(), ...recentlyOpened]) {
-      if (!isInternalDocumentRecord(doc)) documentsById.set(String(doc._id), doc);
+      if (
+        !isInternalDocumentRecord(doc) &&
+        (!accessContext || canAccessDocument(doc, materials, accessContext))
+      ) {
+        documentsById.set(String(doc._id), doc);
+      }
     }
     const taskCounts = countByDocument(tasks.filter((task) => task.status !== "Done"));
     const openCommentCounts = countByDocument(comments.filter((comment) => comment.status !== "resolved"));
@@ -198,7 +248,13 @@ export const reviewQueues = query({
       .slice(0, DOCUMENT_QUEUE_RELATED_DOC_LIMIT);
     const relatedDocuments = await Promise.all(relatedDocIds.map((id) => ctx.db.get(id as any)));
     for (const doc of relatedDocuments) {
-      if (doc && !isInternalDocumentRecord(doc)) documentsById.set(String(doc._id), doc);
+      if (
+        doc &&
+        !isInternalDocumentRecord(doc) &&
+        (!accessContext || canAccessDocument(doc, materials, accessContext))
+      ) {
+        documentsById.set(String(doc._id), doc);
+      }
     }
 
     const docs = [...documentsById.values()];

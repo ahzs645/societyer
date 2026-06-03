@@ -1,9 +1,11 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
+  canAccessMeetingMaterial,
   normalizeAccessGrants,
   summarizeMeetingMaterials,
 } from "./lib/access/materialAccess";
+import { documentAccessContextForActor } from "./lib/access/documentAccess";
 
 const accessGrantValidator = v.object({
   subjectType: v.string(),
@@ -14,15 +16,21 @@ const accessGrantValidator = v.object({
 });
 
 export const listForMeeting = query({
-  args: { meetingId: v.id("meetings") },
+  args: { meetingId: v.id("meetings"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { meetingId }) => {
+  handler: async (ctx, { meetingId, actingUserId }) => {
+    const meeting = await ctx.db.get(meetingId);
+    if (!meeting) return [];
     const materials = await ctx.db
       .query("meetingMaterials")
       .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
       .collect();
+    const accessContext = await documentAccessContextForActor(ctx, meeting.societyId, actingUserId);
+    const visibleMaterials = accessContext
+      ? materials.filter((material) => canAccessMeetingMaterial(material, accessContext))
+      : materials;
     const rows = await Promise.all(
-      materials.map(async (material) => ({
+      visibleMaterials.map(async (material) => ({
         ...material,
         document: await ctx.db.get(material.documentId),
       })),
@@ -32,9 +40,9 @@ export const listForMeeting = query({
 });
 
 export const packageForMeeting = query({
-  args: { meetingId: v.id("meetings") },
+  args: { meetingId: v.id("meetings"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { meetingId }) => {
+  handler: async (ctx, { meetingId, actingUserId }) => {
     const meeting = await ctx.db.get(meetingId);
     if (!meeting) return null;
 
@@ -52,9 +60,13 @@ export const packageForMeeting = query({
         .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
         .collect(),
     ]);
+    const accessContext = await documentAccessContextForActor(ctx, meeting.societyId, actingUserId);
+    const visibleMaterials = accessContext
+      ? materials.filter((material) => canAccessMeetingMaterial(material, accessContext))
+      : materials;
 
     const materialRows = await Promise.all(
-      materials.map(async (material) => {
+      visibleMaterials.map(async (material) => {
         const document = await ctx.db.get(material.documentId);
         const downloadUrl = document?.storageId
           ? await ctx.storage.getUrl(document.storageId)
@@ -67,24 +79,25 @@ export const packageForMeeting = query({
     );
 
     const agenda = parseAgenda(meeting.agendaJson);
-    const materialSummary = summarizeMeetingMaterials(materials);
+    const visibleMaterialSummary = summarizeMeetingMaterials(visibleMaterials);
     return {
       meeting,
       minutes,
       agenda,
-      materials: materialRows
+        materials: materialRows
         .filter((row) => row.document)
         .sort((a, b) => a.order - b.order || String(a.createdAtISO).localeCompare(String(b.createdAtISO))),
       tasks: tasks.sort((a, b) => String(a.dueDate ?? "").localeCompare(String(b.dueDate ?? ""))),
       counts: {
         agendaItems: agenda.length,
         materials: materials.length,
-        requiredMaterials: materials.filter((row) => row.requiredForMeeting).length,
-        readyMaterials: materialSummary.ready,
-        attentionMaterials: materialSummary.needsAttention,
-        expiredMaterials: materialSummary.expired,
-        restrictedMaterials: materialSummary.restricted,
-        explicitGrantMaterials: materialSummary.withExplicitGrants,
+        visibleMaterials: visibleMaterials.length,
+        requiredMaterials: visibleMaterials.filter((row) => row.requiredForMeeting).length,
+        readyMaterials: visibleMaterialSummary.ready,
+        attentionMaterials: visibleMaterialSummary.needsAttention,
+        expiredMaterials: visibleMaterialSummary.expired,
+        restrictedMaterials: visibleMaterialSummary.restricted,
+        explicitGrantMaterials: visibleMaterialSummary.withExplicitGrants,
         openTasks: tasks.filter((task) => task.status !== "Done").length,
       },
     };
@@ -92,15 +105,19 @@ export const packageForMeeting = query({
 });
 
 export const listForSociety = query({
-  args: { societyId: v.id("societies") },
+  args: { societyId: v.id("societies"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
+  handler: async (ctx, { societyId, actingUserId }) => {
     const materials = await ctx.db
       .query("meetingMaterials")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
       .collect();
+    const accessContext = await documentAccessContextForActor(ctx, societyId, actingUserId);
+    const visibleMaterials = accessContext
+      ? materials.filter((material) => canAccessMeetingMaterial(material, accessContext))
+      : materials;
     const rows = await Promise.all(
-      materials.map(async (material) => ({
+      visibleMaterials.map(async (material) => ({
         ...material,
         document: await ctx.db.get(material.documentId),
         meeting: await ctx.db.get(material.meetingId),

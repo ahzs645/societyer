@@ -6343,8 +6343,8 @@ class StaticDemoDexieDatabase extends Dexie {
   minutes!: Table<any, string>;
   records!: Table<any, string>;
 
-  constructor() {
-    super("societyer-static-demo");
+  constructor(databaseName = "societyer-static-demo") {
+    super(databaseName);
     this.version(1).stores({
       meetings: "_id, societyId, scheduledAt, status",
       minutes: "_id, meetingId, societyId, heldAt, status",
@@ -6363,13 +6363,13 @@ class StaticDemoDexieStore {
   private seed: StaticDemoSeed;
   private listeners = new Set<() => void>();
 
-  constructor(seed: StaticDemoSeed) {
+  constructor(seed: StaticDemoSeed, options?: { databaseName?: string }) {
     this.seed = cloneStaticSeed(seed);
     this.cache = cloneStaticSeed(seed);
 
     if (typeof window === "undefined" || !("indexedDB" in window)) return;
 
-    this.db = new StaticDemoDexieDatabase();
+    this.db = new StaticDemoDexieDatabase(options?.databaseName);
     void this.hydrate(seed).catch((error) => {
       console.warn("[societyer-demo] Dexie hydrate failed; using in-memory static data.", error);
     });
@@ -6785,7 +6785,11 @@ function staticModel(
 }
 
 export class StaticConvexClient {
-  private store = new StaticDemoDexieStore(STATIC_DEMO_SEED);
+  private store: StaticDemoDexieStore;
+
+  constructor(options?: { databaseName?: string }) {
+    this.store = new StaticDemoDexieStore(STATIC_DEMO_SEED, options);
+  }
 
   get url() {
     return "static://societyer-demo";

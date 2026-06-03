@@ -15,9 +15,9 @@ import { Plus, Trash2, Flag as FlagIcon, Upload, Download, FolderOpen, Tag, Hist
 import { formatDate, formatDateTime } from "../lib/format";
 import { DocumentVersionsDrawer } from "../components/DocumentVersions";
 import { PaperlessDocumentAction } from "../components/PaperlessDocumentAction";
-import { isDemoMode } from "../lib/demoMode";
 import { getDocumentStorageProvider } from "../lib/runtimeMode";
-import { openDocumentDownloadTarget, writeLocalDocumentVersion } from "../lib/documentStorage";
+import { openDocumentDownloadTarget } from "../lib/documentStorage";
+import { uploadDocumentVersion } from "../lib/documentVersionUpload";
 
 const CATS = ["Constitution", "Bylaws", "Minutes", "FinancialStatement", "Policy", "Filing", "Agreement", "Library", "WorkflowGenerated", "Other"] as const;
 
@@ -36,8 +36,9 @@ const DOC_FIELDS: FilterField<any>[] = [
 
 export function DocumentsPage() {
   const society = useSociety();
-  const docs = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
-  const reviewQueues = useQuery(api.documents.reviewQueues, society ? { societyId: society._id } : "skip");
+  const actingUserId = useCurrentUserId() ?? undefined;
+  const docs = useQuery(api.documents.list, society ? { societyId: society._id, actingUserId } : "skip");
+  const reviewQueues = useQuery(api.documents.reviewQueues, society ? { societyId: society._id, actingUserId } : "skip");
   const importSessions = useQuery(api.importSessions.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.documents.create);
   const flag = useMutation(api.documents.flagForDeletion);
@@ -48,7 +49,6 @@ export function DocumentsPage() {
   const syncDocument = useAction(api.paperless.syncDocument);
   const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
   const paperlessConnection = useQuery(api.paperless.listConnection, society ? { societyId: society._id } : "skip");
-  const actingUserId = useCurrentUserId() ?? undefined;
   const confirm = useConfirm();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -70,66 +70,17 @@ export function DocumentsPage() {
   );
 
   const uploadFile = async (documentId: any, file: File) => {
-    const storageProvider = getDocumentStorageProvider();
-    if (storageProvider === "local-filesystem") {
-      const ref = await writeLocalDocumentVersion({
-        societyId: society._id,
-        documentId,
-        version: 1,
-        file,
-      });
-      return await recordVersionUpload({
-        societyId: society._id,
-        documentId,
-        version: 1,
-        storageProvider: ref.provider,
-        storageKey: ref.key,
-        fileName: ref.fileName,
-        mimeType: ref.mimeType,
-        fileSizeBytes: ref.byteLength ?? file.size,
-        sha256: ref.sha256,
-        actingUserId,
-      });
-    }
-
-    if (isDemoMode()) {
-      return await createDemoVersion({
-        societyId: society._id,
-        documentId,
-        fileName: file.name,
-        mimeType: file.type,
-        fileSizeBytes: file.size,
-        actingUserId,
-      });
-    }
-
-    const { version, presigned } = await beginVersionUpload({
+    const result = await uploadDocumentVersion({
       societyId: society._id,
       documentId,
-      fileName: file.name,
-      mimeType: file.type,
-      fileSizeBytes: file.size,
+      file,
+      nextVersion: 1,
       actingUserId,
+      createDemoVersion,
+      beginUpload: beginVersionUpload,
+      recordUploadedVersion: recordVersionUpload,
     });
-    if (presigned.provider === "rustfs") {
-      const res = await fetch(presigned.url, {
-        method: "PUT",
-        headers: presigned.headers ?? (file.type ? { "Content-Type": file.type } : {}),
-        body: file,
-      });
-      if (!res.ok) throw new Error(`RustFS upload failed (${res.status})`);
-    }
-    return await recordVersionUpload({
-      societyId: society._id,
-      documentId,
-      version,
-      storageProvider: presigned.provider,
-      storageKey: presigned.key,
-      fileName: file.name,
-      mimeType: file.type,
-      fileSizeBytes: file.size,
-      actingUserId,
-    });
+    return result.versionId;
   };
 
   const maybeSyncToPaperless = async (documentId: any) => {

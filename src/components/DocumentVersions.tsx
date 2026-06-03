@@ -5,11 +5,10 @@ import { Id } from "../../convex/_generated/dataModel";
 import { Drawer, Field, Badge } from "./ui";
 import { useToast } from "./Toast";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
-import { isDemoMode } from "../lib/demoMode";
 import { History, Upload, RotateCcw, Download } from "lucide-react";
 import { formatDate } from "../lib/format";
-import { getDocumentStorageProvider } from "../lib/runtimeMode";
-import { openDocumentDownloadTarget, writeLocalDocumentVersion } from "../lib/documentStorage";
+import { openDocumentDownloadTarget } from "../lib/documentStorage";
+import { uploadDocumentVersion } from "../lib/documentVersionUpload";
 
 export function DocumentVersionsDrawer({
   open,
@@ -57,75 +56,26 @@ export function DocumentVersionsDrawer({
     if (!documentId) return;
     setBusy(true);
     try {
-      const storageProvider = getDocumentStorageProvider();
-      if (storageProvider === "local-filesystem") {
-        const version = (versions?.[0]?.version ?? 0) + 1;
-        const ref = await writeLocalDocumentVersion({
-          societyId,
-          documentId,
-          version,
-          file,
-        });
-        await recordUpload({
-          societyId,
-          documentId,
-          version,
-          storageProvider: ref.provider,
-          storageKey: ref.key,
-          fileName: ref.fileName,
-          mimeType: ref.mimeType,
-          fileSizeBytes: ref.byteLength ?? file.size,
-          sha256: ref.sha256,
-          changeNote: changeNote || undefined,
-          actingUserId,
-        });
-        toast.success(`Uploaded as v${version}`);
-        if (paperlessConnection?.autoUpload) {
-          toast.info("Paperless sync is skipped for local filesystem versions.");
-        }
-      } else if (isDemoMode()) {
-        const versionId = await createDemoVersion({
-          societyId,
-          documentId,
-          fileName: file.name,
-          mimeType: file.type,
-          fileSizeBytes: file.size,
-          changeNote: changeNote || undefined,
-          actingUserId,
-        });
-        await maybeSyncVersionToPaperless(versionId);
-        toast.success(`Uploaded as v${(versions?.[0]?.version ?? 0) + 1} (demo)`);
+      const result = await uploadDocumentVersion({
+        societyId,
+        documentId,
+        file,
+        nextVersion: (versions?.[0]?.version ?? 0) + 1,
+        changeNote,
+        actingUserId,
+        createDemoVersion,
+        beginUpload,
+        recordUploadedVersion: recordUpload,
+      });
+      if (result.provider === "local-filesystem") {
+        if (paperlessConnection?.autoUpload) toast.info("Paperless sync is skipped for local filesystem versions.");
       } else {
-        const { version, presigned } = await beginUpload({
-          societyId,
-          documentId,
-          fileName: file.name,
-          mimeType: file.type,
-          fileSizeBytes: file.size,
-          actingUserId,
-        });
-        if (presigned.provider === "rustfs") {
-          const res = await fetch(presigned.url, {
-            method: "PUT",
-            headers: presigned.headers ?? (file.type ? { "Content-Type": file.type } : {}),
-            body: file,
-          });
-          if (!res.ok) throw new Error(`RustFS upload failed (${res.status})`);
-        }
-        const versionId = await recordUpload({
-          societyId,
-          documentId,
-          version,
-          storageProvider: presigned.provider,
-          storageKey: presigned.key,
-          fileName: file.name,
-          mimeType: file.type,
-          fileSizeBytes: file.size,
-          changeNote: changeNote || undefined,
-          actingUserId,
-        });
-        await maybeSyncVersionToPaperless(versionId);
-        toast.success(`Uploaded as v${version}`);
+        await maybeSyncVersionToPaperless(result.versionId);
+      }
+      if (result.provider === "demo") {
+        toast.success(`Uploaded as v${result.version} (demo)`);
+      } else {
+        toast.success(`Uploaded as v${result.version}`);
       }
       setChangeNote("");
     } catch (err: any) {

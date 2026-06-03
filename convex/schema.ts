@@ -668,7 +668,7 @@ export default defineSchema({
     societyId: v.id("societies"),
     documentId: v.id("documents"),
     version: v.number(),
-    storageProvider: v.string(), // convex | rustfs | demo
+    storageProvider: v.string(), // rustfs | demo | local | local-filesystem | convex legacy
     storageKey: v.string(),
     fileName: v.string(),
     mimeType: v.optional(v.string()),

@@ -22,6 +22,7 @@ import {
   GrantEditorForm,
   GrantReadPanel,
 } from "../features/grants/components/GrantPanels";
+import { GrantSummaryStats } from "../features/grants/components/GrantSummaryStats";
 import { enrichGcosNormalizedGrant, readGcosExportFile } from "../lib/gcosExportImport";
 
 export function GrantsPage() {
@@ -221,12 +222,7 @@ export function GrantsPage() {
         }
       />
 
-      <div className="stat-grid" style={{ marginBottom: 16 }}>
-        <Stat label="Pipeline" value={String(summary?.pipeline ?? 0)} />
-        <Stat label="Active awards" value={String(summary?.active ?? 0)} />
-        <Stat label="Pending intake" value={String(summary?.pendingApplications ?? 0)} />
-        <Stat label="Ledger spend" value={money(summary?.ledgerSpendCents ?? 0)} tone={(summary?.overdueReports ?? 0) > 0 ? "danger" : undefined} />
-      </div>
+      <GrantSummaryStats summary={summary} />
 
       <DataTable
         label="Applications"
@@ -1133,23 +1129,4 @@ function buildCsjOrientationEmailBody(employee: any) {
     "",
     "Ahmad Jalil",
   ].join("\n");
-}
-
-function Stat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "danger";
-}) {
-  return (
-    <div className="stat">
-      <div className="stat__label">{label}</div>
-      <div className="stat__value" style={tone ? { color: "var(--danger)" } : undefined}>
-        {value}
-      </div>
-    </div>
-  );
 }

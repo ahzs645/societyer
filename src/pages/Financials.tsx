@@ -5,7 +5,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field, Flag } from "../components/ui";
 import { Select } from "../components/Select";
-import { formatDate, formatDateTime, money } from "../lib/format";
+import { formatDateTime, money } from "../lib/format";
 import { isDemoMode } from "../lib/demoMode";
 import { Database, Link2, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -17,6 +17,7 @@ import {
 } from "../features/financials/components/WaveHealthPanel";
 import { WaveCacheExplorer } from "../features/financials/components/WaveCacheExplorer";
 import { OperatingSubscriptionsCard, ProviderCard, Stat } from "../features/financials/components/FinancialDashboardCards";
+import { YearOverYearFinancialsCard } from "../features/financials/components/YearOverYearFinancialsCard";
 import {
   OPERATING_SUBSCRIPTION_INTERVALS,
   OPERATING_SUBSCRIPTION_STATUSES,
@@ -39,17 +40,6 @@ export {
   WaveResourceTablePage,
 } from "../features/financials/pages/WavePages";
 export { FinancialYearDetailPage } from "../features/financials/pages/FinancialYearDetailPage";
-
-function auditStatusTone(status: string) {
-  if (status === "Audited") return "success";
-  if (["ReviewEngagement", "Review engagement", "Compilation", "Compiled", "T2/GIFI"].includes(status)) return "info";
-  return "warn";
-}
-
-function auditStatusLabel(status: string) {
-  if (status === "ReviewEngagement") return "Review engagement";
-  return status;
-}
 
 export function FinancialsPage() {
   const society = useSociety();
@@ -609,56 +599,7 @@ export function FinancialsPage() {
         </div>
       )}
 
-      <div className="card">
-        <div className="card__head"><h2 className="card__title">Year-over-year</h2></div>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Fiscal year</th>
-              <th>Period end</th>
-              <th>Revenue</th>
-              <th>Expenses</th>
-              <th>Net assets</th>
-              <th>Restricted</th>
-              <th>Audit</th>
-              <th>Board approval</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((f) => (
-              <tr
-                key={f._id}
-                role="button"
-                tabIndex={0}
-                aria-label={`Open FY ${f.fiscalYear} financial detail`}
-                onClick={() => openFinancialYear(f.fiscalYear)}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter" && event.key !== " ") return;
-                  event.preventDefault();
-                  openFinancialYear(f.fiscalYear);
-                }}
-              >
-                <td><strong>{f.fiscalYear}</strong></td>
-                <td className="table__cell--mono">{formatDate(f.periodEnd)}</td>
-                <td className="table__cell--mono">{money(f.revenueCents)}</td>
-                <td className="table__cell--mono">{money(f.expensesCents)}</td>
-                <td className="table__cell--mono">{money(f.netAssetsCents)}</td>
-                <td className="table__cell--mono">{money(f.restrictedFundsCents)}</td>
-                <td>
-                  <Badge tone={auditStatusTone(f.auditStatus)}>
-                    {auditStatusLabel(f.auditStatus)}
-                  </Badge>
-                  {f.auditorName && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{f.auditorName}</div>}
-                </td>
-                <td className="table__cell--mono">{f.approvedByBoardAt ? formatDate(f.approvedByBoardAt) : "—"}</td>
-              </tr>
-            ))}
-            {sorted.length === 0 && (
-              <tr><td colSpan={8} className="muted" style={{ textAlign: "center", padding: 24 }}>No financial statements yet.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <YearOverYearFinancialsCard rows={sorted} onOpenFinancialYear={openFinancialYear} />
 
       {latest && latest.remunerationDisclosures.length > 0 && (
         <>

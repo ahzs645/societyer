@@ -26,7 +26,8 @@ import {
 export function DocumentWorkbenchPage() {
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
-  const document = useQuery(api.documents.get, id ? { id: id as Id<"documents"> } : "skip");
+  const userId = useCurrentUserId() ?? undefined;
+  const document = useQuery(api.documents.get, id ? { id: id as Id<"documents">, actingUserId: userId } : "skip");
   const latest = useQuery(api.documentVersions.latest, id ? { documentId: id as Id<"documents"> } : "skip");
   const legacyUrl = useQuery(api.files.getUrl, document?.storageId ? { storageId: document.storageId } : "skip");
   const comments = useQuery(api.documentComments.listForDocument, id ? { documentId: id as Id<"documents"> } : "skip");
@@ -38,7 +39,6 @@ export function DocumentWorkbenchPage() {
   const removeComment = useMutation(api.documentComments.remove);
   const getDownloadTarget = useAction(api.documentVersions.getDownloadTarget);
   const user = useCurrentUser();
-  const userId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const openedRef = useRef(false);
   const [draft, setDraft] = useState({

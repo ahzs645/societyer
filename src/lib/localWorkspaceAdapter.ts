@@ -1,17 +1,28 @@
-import { staticConvex, reseedStaticDemoData } from "./staticConvex";
+import { StaticConvexClient } from "./staticConvex";
 import { getRuntimeDescriptor, type RuntimeDescriptor } from "./runtimeMode";
 
 export type LocalWorkspaceAdapter = {
-  client: typeof staticConvex;
+  client: StaticConvexClient;
   runtime: RuntimeDescriptor;
   reseed(): void;
 };
 
 export function createLocalWorkspaceAdapter(): LocalWorkspaceAdapter {
   const runtime = getRuntimeDescriptor();
+  const client = new StaticConvexClient({ databaseName: localWorkspaceDatabaseName(runtime) });
   return {
-    client: staticConvex,
+    client,
     runtime,
-    reseed: reseedStaticDemoData,
+    reseed: () => client.reseedStaticDemo(),
   };
+}
+
+function localWorkspaceDatabaseName(runtime: RuntimeDescriptor) {
+  const configured = import.meta.env.VITE_LOCAL_WORKSPACE_ID as string | undefined;
+  const rawKey = configured || `${runtime.mode}-${runtime.documentStorage}`;
+  return `societyer-local-${slugifyLocalWorkspaceKey(rawKey)}`;
+}
+
+function slugifyLocalWorkspaceKey(value: string) {
+  return value.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "workspace";
 }

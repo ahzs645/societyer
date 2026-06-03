@@ -201,8 +201,11 @@ async function publicDocumentDownloadUrl(ctx: any, document: any) {
     .filter((version: any) => version.isCurrent)
     .sort((a: any, b: any) => b.version - a.version)[0] ?? null;
   if (current) {
+    if (current.storageProvider !== "demo" && current.storageProvider !== "rustfs") {
+      return undefined;
+    }
     return await createDownloadUrl({
-      provider: current.storageProvider as "demo" | "rustfs",
+      provider: current.storageProvider,
       key: current.storageKey,
     });
   }

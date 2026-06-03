@@ -1026,9 +1026,10 @@ export const inspectPdfTemplate = action({
       throw new Error("The selected document version is not a PDF.");
     }
 
-    const url = await ctx.runAction(api.documentVersions.getDownloadUrl, {
+    const target = await ctx.runAction(api.documentVersions.getDownloadTarget, {
       versionId: version._id,
     });
+    const url = target?.kind === "url" ? target.url : null;
     if (!url || typeof url !== "string") throw new Error("Could not create a PDF download URL.");
     if (url.startsWith("demo://")) {
       throw new Error("Demo documents do not contain real PDF bytes to inspect.");
@@ -1076,9 +1077,10 @@ export const createPdfTemplateImportSession = action({
       throw new Error("The selected document version is not a PDF.");
     }
 
-    const url = await ctx.runAction(api.documentVersions.getDownloadUrl, {
+    const target = await ctx.runAction(api.documentVersions.getDownloadTarget, {
       versionId: version._id,
     });
+    const url = target?.kind === "url" ? target.url : null;
     if (!url || typeof url !== "string") throw new Error("Could not create a PDF download URL.");
     if (url.startsWith("demo://")) {
       throw new Error("Demo documents do not contain real PDF bytes to inspect.");

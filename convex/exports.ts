@@ -68,6 +68,13 @@ export const EXPORTABLE_TABLES = [
   "filingBotRuns",
   "aiAgentRuns",
   "aiAgentAuditEvents",
+  "aiSkills",
+  "aiLogicFunctions",
+  "aiChatThreads",
+  "aiMessages",
+  "aiToolDrafts",
+  "aiProviderSettings",
+  "aiModelCatalogCache",
   "recordLayouts",
   "workflows",
   "workflowPackages",
@@ -94,6 +101,7 @@ export const EXPORTABLE_TABLES = [
   "signingAuthorities",
   "committees",
   "committeeMembers",
+  "orgChartAssignments",
   "volunteers",
   "volunteerApplications",
   "volunteerScreenings",
@@ -123,6 +131,11 @@ export const EXPORTABLE_TABLES = [
   "bylawRuleSets",
   "goals",
   "tasks",
+  "assets",
+  "assetEvents",
+  "assetMaintenance",
+  "assetVerificationRuns",
+  "assetVerificationItems",
   "minuteBookItems",
   "activity",
   "notes",
@@ -159,15 +172,25 @@ export const EXPORTABLE_TABLES = [
   "secretVaultItems",
   "archiveAccessions",
   "assetReceiptLinks",
+  "inventoryConnections",
+  "inventoryItems",
+  "inventoryLocations",
+  "inventoryLots",
+  "stockMovements",
+  "inventoryBalances",
+  "inventoryCounts",
+  "inventoryCountLines",
+  "inventoryCandidates",
 ] as const;
 
 const EXPORTABLE_SET = new Set<string>(EXPORTABLE_TABLES);
 const DEFAULT_REDACTED_FIELDS = ["secretEncrypted", "tokenHash", "storageId"] as const;
 const RECOVERY_REDACTED_FIELDS = ["storageId"] as const;
-const GLOBAL_TABLES = new Set(["jurisdictionMetadata"]);
+const GLOBAL_TABLES = new Set(["jurisdictionMetadata", "aiModelCatalogCache"]);
 const OPTIONAL_SOCIETY_TABLES = new Set(["legalTemplateDataFields", "legalTemplates", "legalPrecedents"]);
 const SOCIETY_INDEX_BY_TABLE: Record<string, string> = {
   budgets: "by_society_fy",
+  stockMovements: "by_society_date",
 };
 
 export const listExportableTables = query({
