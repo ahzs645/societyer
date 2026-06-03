@@ -1,7 +1,7 @@
-import Dexie, { type Table } from "dexie";
 import { RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinitions";
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
+import { LocalDexieRowStore, type LocalSeed } from "./localDexieRowStore";
 import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
 
 const FUNCTION_NAME = Symbol.for("functionName");
@@ -3327,6 +3327,63 @@ function dashboardSummary() {
   };
 }
 
+function dashboardSummaryFromStore(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
+  if (!store) return dashboardSummary();
+  const societyRow = store.getRow("societies", args?.societyId) ?? society;
+  const activeDirectors = store.listRows("directors", args).filter((director: any) => director.status === "Active");
+  const activeMembers = store.listRows("members", args).filter((member: any) => member.status === "Active");
+  const meetingsRows = store.listRows("meetings", args);
+  const filingsRows = store.listRows("filings", args);
+  const deadlinesRows = store.listRows("deadlines", args);
+  const conflictsRows = store.listRows("conflicts", args);
+  const committeesRows = store.listRows("committees", args);
+  const goalsRows = store.listRows("goals", args);
+  const tasksRows = store.listRows("tasks", args);
+  const documentsRows = store.listRows("documents", args);
+  const bcResidents = activeDirectors.filter((director: any) => director.isBCResident).length;
+  const today = new Date().toISOString().slice(0, 10);
+  const overdueFilings = filingsRows.filter((filing: any) => filing.status !== "Filed" && filing.dueDate < today);
+  const upcomingFilings = filingsRows.filter((filing: any) => filing.status !== "Filed" && filing.dueDate >= today);
+  return {
+    ...dashboardSummary(),
+    society: societyRow,
+    counts: {
+      members: activeMembers.length,
+      directors: activeDirectors.length,
+      bcResidents,
+      meetingsThisYear: meetingsRows.filter((meeting: any) => String(meeting.scheduledAt ?? "").startsWith(String(new Date().getFullYear()))).length,
+      overdueFilings: overdueFilings.length,
+      openDeadlines: deadlinesRows.filter((deadline: any) => !deadline.done).length,
+      openConflicts: conflictsRows.filter((conflict: any) => !conflict.resolvedAt).length,
+      committees: committeesRows.filter((committee: any) => committee.status !== "Archived").length,
+      openGoals: goalsRows.filter((goal: any) => goal.status !== "Completed").length,
+      openTasks: tasksRows.filter((task: any) => task.status !== "Done").length,
+    },
+    upcomingMeetings: meetingsRows.filter((meeting: any) => meeting.status === "Scheduled").slice(0, 3),
+    upcomingFilings,
+    overdueFilings: overdueFilings.slice(0, 12),
+    goals: goalsRows
+      .filter((goal: any) => goal.status !== "Completed")
+      .sort((a: any, b: any) => String(a.targetDate ?? "9999-12-31").localeCompare(String(b.targetDate ?? "9999-12-31")))
+      .slice(0, 4),
+    openTasks: tasksRows
+      .filter((task: any) => task.status !== "Done")
+      .sort((a: any, b: any) => String(a.dueDate ?? "9999-12-31").localeCompare(String(b.dueDate ?? "9999-12-31")))
+      .slice(0, 6),
+    evidenceChains: documentsRows.slice(0, 3).map((document: any) => ({
+      id: document._id,
+      title: document.title,
+      status: document.flaggedForDeletion ? "attention" : "verified",
+      summary: document.fileName ? "Local document metadata is stored in the workspace." : "Document record exists without an attached version.",
+      actionHref: `/app/documents/${document._id}`,
+      nodes: [
+        { label: "Document", value: document.title, status: "verified", href: `/app/documents/${document._id}` },
+        { label: "Storage", value: document.fileName ?? "No file attached", status: document.fileName ? "verified" : "attention" },
+      ],
+    })),
+  };
+}
+
 function annualCycleSummary(args: StaticArgs) {
   const cycleYear = Number(args?.year ?? new Date().getFullYear());
   const today = "2026-05-10";
@@ -4179,7 +4236,9 @@ function staticSanitizeExportRow(row: any) {
 function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null) {
   switch (name) {
     case "activity:list":
-      return tables.activity.slice(0, args?.limit ?? tables.activity.length);
+      return (store?.listRows("activity", args) ?? tables.activity)
+        .sort((a: any, b: any) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")))
+        .slice(0, args?.limit ?? tables.activity.length);
     case "aiAgents:listDefinitions":
       return aiAgentDefinitions;
     case "aiAgents:listSkills":
@@ -4383,7 +4442,7 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     case "commitments:eventsForCommitment":
       return commitmentEvents.filter((event) => event.commitmentId === args?.commitmentId);
     case "dashboard:summary":
-      return dashboardSummary();
+      return dashboardSummaryFromStore(store, args);
     case "documentComments:listForDocument":
       return documentComments
         .filter((comment) => comment.documentId === args?.documentId)
@@ -4786,7 +4845,11 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
 
   const [moduleName, exportName] = name.split(":");
   const tableName = staticTableNameForModule(moduleName);
-  if (moduleName === "society" && exportName === "get") return store?.getRow("societies", args?.id ?? SOCIETY_ID) ?? society;
+  if (moduleName === "society" && exportName === "get") {
+    const localSocieties = store?.listRows("societies", {});
+    if (store && localSocieties && localSocieties.length === 0) return null;
+    return store?.getRow("societies", args?.id ?? localSocieties?.[0]?._id ?? SOCIETY_ID) ?? society;
+  }
   if (moduleName === "society" && exportName === "list") return store?.listRows("societies", args) ?? [society];
   if (exportName === "list") return store?.listRows(tableName, args) ?? scopedRows(tables[tableName] ?? [], args);
   if (exportName === "get") return store?.getRow(tableName, args?.id) ?? byId(tables[tableName] ?? [], args?.id);
@@ -4800,6 +4863,91 @@ function mutableQueryResult(name: string, args: StaticArgs, store?: StaticDemoDe
 function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null) {
   const localResult = store?.mutationResult(name, args);
   if (localResult !== undefined) return localResult;
+
+  if (name === "society:createWorkspace") {
+    const now = new Date().toISOString();
+    const societyId = `static_society_${Date.now()}`;
+    const workflowId = `static_workflow_onboarding_${Date.now()}`;
+    const taskSeeds = [
+      ["profile", "Review organization profile"],
+      ["locations", "Add registered and mailing locations"],
+      ["documents", "Upload constitution and bylaws"],
+      ["people", "Add directors, members, and access"],
+    ];
+    const taskIds = taskSeeds.map(([key]) => `static_task_onboarding_${key}_${Date.now()}`);
+    store?.upsertRow("societies", {
+      _id: societyId,
+      _creationTime: Date.now(),
+      name: args?.name,
+      incorporationNumber: args?.incorporationNumber,
+      incorporationDate: args?.incorporationDate,
+      fiscalYearEnd: args?.fiscalYearEnd,
+      jurisdictionCode: args?.jurisdictionCode ?? "CA-BC",
+      entityType: args?.entityType,
+      actFormedUnder: args?.actFormedUnder,
+      officialEmail: args?.officialEmail,
+      organizationStatus: args?.organizationStatus ?? "active",
+      registeredOfficeAddress: args?.registeredOfficeAddress,
+      mailingAddress: args?.mailingAddress,
+      purposes: args?.purposes,
+      privacyOfficerName: args?.privacyOfficerName,
+      privacyOfficerEmail: args?.privacyOfficerEmail,
+      isCharity: args?.isCharity === true,
+      isMemberFunded: args?.isMemberFunded === true,
+      distributing: args?.distributing === true,
+      disabledModules: [],
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    store?.upsertRow("workflows", {
+      _id: workflowId,
+      _creationTime: Date.now(),
+      societyId,
+      title: "Workspace onboarding",
+      status: "Active",
+      kind: "onboarding",
+      createdByUserId: args?.actingUserId,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    taskSeeds.forEach(([, title], index) => {
+      store?.upsertRow("tasks", {
+        _id: taskIds[index],
+        _creationTime: Date.now() + index,
+        societyId,
+        title,
+        status: "Todo",
+        priority: index === 0 ? "High" : "Medium",
+        workflowId,
+        createdByUserId: args?.actingUserId,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    });
+    store?.upsertRow("activity", {
+      _id: `static_activity_workspace_${Date.now()}`,
+      _creationTime: Date.now(),
+      societyId,
+      actor: "Desktop user",
+      entityType: "society",
+      entityId: societyId,
+      action: "workspace-created",
+      summary: `Created ${args?.name ?? "workspace"}`,
+      createdAtISO: now,
+    });
+    return { societyId, workflowId, taskIds };
+  }
+
+  if (name === "society:updateModules") {
+    const existing = store?.getRow("societies", args?.societyId) ?? society;
+    store?.upsertRow("societies", {
+      ...existing,
+      _id: args?.societyId ?? existing._id,
+      disabledModules: args?.disabledModules ?? [],
+      updatedAtISO: new Date().toISOString(),
+    });
+    return args?.societyId ?? existing._id;
+  }
 
   if (name === "aiChat:createThread") {
     const now = new Date().toISOString();
@@ -6249,6 +6397,37 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     }
     return id;
   }
+  if (name === "documentVersions:rollback") {
+    const target = store?.getRow("documentVersions", args?.versionId);
+    if (!target) return null;
+    const now = new Date().toISOString();
+    const existing = store?.listRows("documentVersions", { documentId: target.documentId }) ?? [];
+    for (const row of existing) {
+      store?.upsertRow("documentVersions", { ...row, isCurrent: row._id === target._id });
+    }
+    const document = store?.getRow("documents", target.documentId);
+    if (document) {
+      store?.upsertRow("documents", {
+        ...document,
+        fileName: target.fileName,
+        mimeType: target.mimeType,
+        fileSizeBytes: target.fileSizeBytes,
+        updatedAtISO: now,
+      });
+    }
+    store?.upsertRow("activity", {
+      _id: `static_activity_document_rollback_${Date.now()}`,
+      _creationTime: Date.now(),
+      societyId: target.societyId,
+      actor: "Desktop user",
+      entityType: "document",
+      entityId: target.documentId,
+      action: "version-rollback",
+      summary: `Rolled back to ${target.fileName ?? `v${target.version}`}`,
+      createdAtISO: now,
+    });
+    return target._id;
+  }
   if (name === "documentVersions:createDemoVersion") {
     return mutationResult("documentVersions:recordUploadedVersion", {
       ...args,
@@ -6291,6 +6470,24 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       fileSizeBytes: version.fileSizeBytes,
     };
   }
+  if (name === "documents:flagForDeletion") {
+    const existing = store?.getRow("documents", args?.id);
+    if (!existing) return null;
+    store?.upsertRow("documents", {
+      ...existing,
+      flaggedForDeletion: args?.flagged === true,
+      updatedAtISO: new Date().toISOString(),
+    });
+    return args?.id;
+  }
+  if (name === "documents:remove") {
+    const existing = store?.getRow("documents", args?.id);
+    if (!existing) return null;
+    const versions = store?.listRows("documentVersions", { documentId: args?.id }) ?? [];
+    for (const version of versions) store?.removeRow("documentVersions", version._id);
+    store?.removeRow("documents", args?.id);
+    return null;
+  }
   const [moduleName, exportName] = name.split(":");
   if (exportName && /^(create|update|upsert|issue|setStatus|remove)/.test(exportName)) {
     const tableName = staticMutationTableName(moduleName, exportName);
@@ -6331,55 +6528,25 @@ function staticAgentOutput(agent: any, input: string) {
   ].join("\n");
 }
 
-type StaticDemoSeed = Record<string, any[]>;
+type StaticDemoSeed = LocalSeed;
 
 const STATIC_DEMO_SEED: StaticDemoSeed = {
   ...tables,
   societies: [society],
 };
 
-class StaticDemoDexieDatabase extends Dexie {
-  meetings!: Table<any, string>;
-  minutes!: Table<any, string>;
-  records!: Table<any, string>;
-
-  constructor(databaseName = "societyer-static-demo") {
-    super(databaseName);
-    this.version(1).stores({
-      meetings: "_id, societyId, scheduledAt, status",
-      minutes: "_id, meetingId, societyId, heldAt, status",
-    });
-    this.version(2).stores({
-      meetings: "_id, societyId, scheduledAt, status",
-      minutes: "_id, meetingId, societyId, heldAt, status",
-      records: "&key, table, id, societyId",
-    });
-  }
-}
-
 class StaticDemoDexieStore {
-  private db: StaticDemoDexieDatabase | null = null;
-  private cache: StaticDemoSeed;
-  private seed: StaticDemoSeed;
-  private listeners = new Set<() => void>();
+  private rowsStore: LocalDexieRowStore;
 
   constructor(seed: StaticDemoSeed, options?: { databaseName?: string }) {
-    this.seed = cloneStaticSeed(seed);
-    this.cache = cloneStaticSeed(seed);
-
-    if (typeof window === "undefined" || !("indexedDB" in window)) return;
-
-    this.db = new StaticDemoDexieDatabase(options?.databaseName);
-    void this.hydrate(seed).catch((error) => {
-      console.warn("[societyer-demo] Dexie hydrate failed; using in-memory static data.", error);
+    this.rowsStore = new LocalDexieRowStore(seed, {
+      databaseName: options?.databaseName ?? "societyer-static-demo",
+      logLabel: "societyer-demo",
     });
   }
 
   onUpdate(listener: () => void) {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
+    return this.rowsStore.onUpdate(listener);
   }
 
   queryResult(name: string, args: StaticArgs) {
@@ -6395,7 +6562,7 @@ class StaticDemoDexieStore {
         return record ? [record.agenda] : [];
       }
       case "agendas:listForSociety":
-        return scopedRows(this.cache.meetings, args).map((meeting) => this.agendaSummaryForMeeting(meeting));
+        return scopedRows(this.rows("meetings"), args).map((meeting) => this.agendaSummaryForMeeting(meeting));
       case "meetings:get":
         return this.getRow("meetings", args?.id) ?? this.listRows("meetings", args)[0] ?? null;
       case "meetings:list":
@@ -6425,7 +6592,7 @@ class StaticDemoDexieStore {
         motionText: item?.motionText,
       })).filter((item: any) => item.title));
       const updated = this.patchRow("meetings", args?.meetingId, { agendaJson });
-      const minute = this.cache.minutes.find((row) => row.meetingId === args?.meetingId);
+      const minute = this.rows("minutes").find((row) => row.meetingId === args?.meetingId);
       if (minute) {
         this.patchRow("minutes", minute._id, {
           sections: items.filter((item: any) => String(item?.title ?? "").trim()).map((item: any) => ({
@@ -6453,9 +6620,9 @@ class StaticDemoDexieStore {
 
     if (name === "agendas:startMinutesFromAgenda") {
       const meetingId = String(args?.agendaId ?? "").replace(/^static_agenda_/, "");
-      const meeting = byId(this.cache.meetings, meetingId);
+      const meeting = byId(this.rows("meetings"), meetingId);
       if (!meeting) return { minutesId: null, reused: false };
-      const existing = this.cache.minutes.find((row) => row.meetingId === meetingId);
+      const existing = this.rows("minutes").find((row) => row.meetingId === meetingId);
       if (existing) return { minutesId: existing._id, reused: true };
       const items = parseStaticAgendaItems(meeting.agendaJson);
       const now = Date.now();
@@ -6482,10 +6649,8 @@ class StaticDemoDexieStore {
         decisions: [],
         actionItems: [],
       };
-      this.cache.minutes = upsertStaticRow(this.cache.minutes, row);
-      void this.db?.minutes.put(cloneStaticRow(row));
+      this.upsertRow("minutes", row);
       this.patchRow("meetings", meetingId, { minutesId: row._id });
-      this.notify();
       return { minutesId: row._id, reused: false };
     }
 
@@ -6505,7 +6670,6 @@ class StaticDemoDexieStore {
         ...args,
       };
       this.upsertRow("minutes", row);
-      this.notify();
       return row._id;
     }
 
@@ -6513,45 +6677,23 @@ class StaticDemoDexieStore {
   }
 
   listRows(table: string, args?: StaticArgs) {
-    return scopedRows(this.rows(table), args);
+    return this.rowsStore.listRows(table, args);
   }
 
   getRow(table: string, id: string | undefined) {
-    return byId(this.rows(table), id);
+    return this.rowsStore.getRow(table, id);
   }
 
   upsertRow(table: string, row: any) {
-    if (!row?._id) return null;
-    this.cache[table] = upsertStaticRow(this.rows(table), row);
-    this.persistRow(table, row);
-    this.notify();
-    return row;
+    return this.rowsStore.upsertRow(table, row);
   }
 
   removeRow(table: string, id: string | undefined) {
-    if (!id) return null;
-    const previous = this.getRow(table, id);
-    this.cache[table] = this.rows(table).filter((row) => row._id !== id);
-    void this.db?.records.delete(staticRecordKey(table, id));
-    if (table === "meetings" || table === "minutes") void this.db?.[table].delete(id);
-    this.notify();
-    return previous;
+    return this.rowsStore.removeRow(table, id);
   }
 
   async reseed() {
-    this.cache = cloneStaticSeed(this.seed);
-    if (!this.db) {
-      this.notify();
-      return;
-    }
-    await this.db.open();
-    await Promise.all([
-      this.db.records.clear(),
-      this.db.meetings.clear(),
-      this.db.minutes.clear(),
-    ]);
-    await this.writeSeed(this.seed);
-    this.notify();
+    await this.rowsStore.reseed();
   }
 
   private agendaSummaryForMeeting(meeting: any) {
@@ -6567,7 +6709,7 @@ class StaticDemoDexieStore {
   }
 
   private agendaForMeeting(meetingId: string | undefined) {
-    const meeting = byId(this.cache.meetings, meetingId);
+    const meeting = byId(this.rows("meetings"), meetingId);
     if (!meeting) return null;
     const items = parseStaticAgendaItems(meeting.agendaJson).map((entry, order) => ({
       _id: `static_agenda_item_${meeting._id}_${order}`,
@@ -6583,107 +6725,13 @@ class StaticDemoDexieStore {
     return { agenda: this.agendaSummaryForMeeting(meeting), items };
   }
 
-  private async hydrate(seed: StaticDemoSeed) {
-    if (!this.db) return;
-
-    await this.db.open();
-    if ((await this.db.records.count()) === 0) {
-      const [legacyMeetings, legacyMinutes] = await Promise.all([
-        this.db.meetings.toArray(),
-        this.db.minutes.toArray(),
-      ]);
-      await this.writeSeed({
-        ...seed,
-        meetings: legacyMeetings.length ? legacyMeetings : seed.meetings,
-        minutes: legacyMinutes.length ? legacyMinutes : seed.minutes,
-      });
-    } else {
-      await this.putMissingSeedRows(seed);
-    }
-
-    const localRecords = await this.db.records.toArray();
-    const next = cloneStaticSeed(seed);
-    for (const record of localRecords) {
-      if (!record?.table || !record?.value?._id) continue;
-      next[record.table] = upsertStaticRow(next[record.table] ?? [], record.value);
-    }
-
-    this.cache = next;
-    this.notify();
-  }
-
-  private async writeSeed(seed: StaticDemoSeed) {
-    if (!this.db) return;
-    const records = Object.entries(seed).flatMap(([table, rows]) =>
-      rows.filter((row) => row?._id).map((row) => staticRecord(table, row)),
-    );
-    if (records.length) await this.db.records.bulkPut(records);
-    await Promise.all([
-      seed.meetings?.length ? this.db.meetings.bulkPut(cloneStaticRows(seed.meetings)) : Promise.resolve(),
-      seed.minutes?.length ? this.db.minutes.bulkPut(cloneStaticRows(seed.minutes)) : Promise.resolve(),
-    ]);
-  }
-
-  private async putMissingSeedRows(seed: StaticDemoSeed) {
-    if (!this.db) return;
-    const missing: any[] = [];
-    for (const [table, rows] of Object.entries(seed)) {
-      for (const row of rows) {
-        if (!row?._id) continue;
-        if (!(await this.db.records.get(staticRecordKey(table, row._id)))) missing.push(staticRecord(table, row));
-      }
-    }
-    if (missing.length) await this.db.records.bulkPut(missing);
-  }
-
   private rows(table: string) {
-    return this.cache[table] ?? [];
+    return this.rowsStore.rows(table);
   }
 
   private patchRow(table: string, id: string | undefined, patch: Record<string, any>) {
-    if (!id) return null;
-    const existing = this.rows(table).find((row) => row._id === id);
-    if (!existing) return null;
-    const updated = { ...existing, ...patch, updatedAtISO: new Date().toISOString() };
-    this.upsertRow(table, updated);
-    this.notify();
-    return updated;
+    return this.rowsStore.patchRow(table, id, patch);
   }
-
-  private persistRow(table: string, row: any) {
-    void this.db?.records.put(staticRecord(table, row));
-    if (table === "meetings" || table === "minutes") void this.db?.[table].put(cloneStaticRow(row));
-  }
-
-  private notify() {
-    for (const listener of this.listeners) listener();
-  }
-}
-
-function cloneStaticRow<T>(row: T): T {
-  return JSON.parse(JSON.stringify(row));
-}
-
-function cloneStaticRows<T>(rows: T[]): T[] {
-  return rows.map((row) => cloneStaticRow(row));
-}
-
-function cloneStaticSeed(seed: StaticDemoSeed): StaticDemoSeed {
-  return Object.fromEntries(Object.entries(seed).map(([table, rows]) => [table, cloneStaticRows(rows)]));
-}
-
-function staticRecordKey(table: string, id: string) {
-  return `${table}:${id}`;
-}
-
-function staticRecord(table: string, row: any) {
-  return {
-    key: staticRecordKey(table, row._id),
-    table,
-    id: row._id,
-    societyId: row.societyId,
-    value: cloneStaticRow(row),
-  };
 }
 
 function staticTableNameForModule(moduleName: string) {
@@ -6704,22 +6752,6 @@ function staticMutationTableName(moduleName: string, exportName: string) {
   if (moduleName === "financialHub" && exportName.includes("OperatingSubscription")) return "operatingSubscriptions";
   if (moduleName === "transparency") return "transparency";
   return staticTableNameForModule(moduleName);
-}
-
-function upsertStaticRow(rows: any[], row: any) {
-  const index = rows.findIndex((candidate) => candidate._id === row._id);
-  if (index === -1) return [...rows, row];
-  const next = rows.slice();
-  next[index] = row;
-  return next;
-}
-
-async function putMissingStaticRows(table: Table<any, string>, seedRows: any[]) {
-  const missing: any[] = [];
-  for (const row of seedRows) {
-    if (!(await table.get(row._id))) missing.push(cloneStaticRow(row));
-  }
-  if (missing.length) await table.bulkPut(missing);
 }
 
 function staticModelCatalog(provider: string) {
@@ -6786,13 +6818,15 @@ function staticModel(
 
 export class StaticConvexClient {
   private store: StaticDemoDexieStore;
+  private clientUrl: string;
 
-  constructor(options?: { databaseName?: string }) {
-    this.store = new StaticDemoDexieStore(STATIC_DEMO_SEED, options);
+  constructor(options?: { databaseName?: string; seed?: StaticDemoSeed; url?: string }) {
+    this.store = new StaticDemoDexieStore(options?.seed ?? STATIC_DEMO_SEED, options);
+    this.clientUrl = options?.url ?? "static://societyer-demo";
   }
 
   get url() {
-    return "static://societyer-demo";
+    return this.clientUrl;
   }
 
   watchQuery(query: any, args?: StaticArgs) {
@@ -6863,6 +6897,20 @@ export class StaticConvexClient {
 
   reseedStaticDemo() {
     return this.store.reseed();
+  }
+}
+
+export class DexieWorkspaceClient extends StaticConvexClient {
+  constructor(options?: { databaseName?: string; seed?: StaticDemoSeed }) {
+    super({
+      databaseName: options?.databaseName,
+      seed: options?.seed ?? {},
+      url: "dexie://societyer-workspace",
+    });
+  }
+
+  reseedWorkspace() {
+    return this.reseedStaticDemo();
   }
 }
 

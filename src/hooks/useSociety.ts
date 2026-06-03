@@ -3,7 +3,7 @@ import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useEffect, useMemo, useState } from "react";
 import { STATIC_DEMO_SOCIETY_ID } from "../lib/staticIds";
-import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
+import { isStaticDemoRuntime } from "../lib/staticRuntime";
 
 const KEY = "societyer.currentSocietyId";
 const SOCIETY_CHANGED_EVENT = "societyer:society-changed";
@@ -12,7 +12,6 @@ let staticSocietyId = STATIC_DEMO_SOCIETY_ID as Id<"societies"> | null;
 export function getStoredSocietyId(): Id<"societies"> | null {
   if (isStaticDemoRuntime()) return staticSocietyId;
   const value = localStorage.getItem(KEY);
-  if (!value && isLocalDataRuntime()) return STATIC_DEMO_SOCIETY_ID as Id<"societies">;
   return (value as Id<"societies"> | null) ?? null;
 }
 

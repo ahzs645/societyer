@@ -1,5 +1,6 @@
-import { StaticConvexClient } from "./staticConvex";
+import { DexieWorkspaceClient, StaticConvexClient } from "./staticConvex";
 import { getRuntimeDescriptor, type RuntimeDescriptor } from "./runtimeMode";
+import { isStaticDemoRuntime } from "./staticRuntime";
 
 export type LocalWorkspaceAdapter = {
   client: StaticConvexClient;
@@ -9,7 +10,7 @@ export type LocalWorkspaceAdapter = {
 
 export function createLocalWorkspaceAdapter(): LocalWorkspaceAdapter {
   const runtime = getRuntimeDescriptor();
-  const client = new StaticConvexClient({ databaseName: localWorkspaceDatabaseName(runtime) });
+  const client = createLocalClient(runtime);
   return {
     client,
     runtime,
@@ -17,9 +18,16 @@ export function createLocalWorkspaceAdapter(): LocalWorkspaceAdapter {
   };
 }
 
-function localWorkspaceDatabaseName(runtime: RuntimeDescriptor) {
+function createLocalClient(runtime: RuntimeDescriptor) {
+  if (runtime.mode === "electron-local" && !isStaticDemoRuntime()) {
+    return new DexieWorkspaceClient({ databaseName: localWorkspaceDatabaseName(runtime, "workspace") });
+  }
+  return new StaticConvexClient({ databaseName: localWorkspaceDatabaseName(runtime, "demo") });
+}
+
+function localWorkspaceDatabaseName(runtime: RuntimeDescriptor, seedMode: "demo" | "workspace") {
   const configured = import.meta.env.VITE_LOCAL_WORKSPACE_ID as string | undefined;
-  const rawKey = configured || `${runtime.mode}-${runtime.documentStorage}`;
+  const rawKey = configured || `${runtime.mode}-${runtime.documentStorage}-${seedMode}`;
   return `societyer-local-${slugifyLocalWorkspaceKey(rawKey)}`;
 }
 

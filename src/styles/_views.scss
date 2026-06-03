@@ -1226,7 +1226,7 @@
 
 .agenda-builder__workspace {
   display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
   gap: var(--s-4);
   align-items: start;
 }
@@ -1240,15 +1240,39 @@
 }
 
 .agenda-builder__agenda-button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   width: 100%;
-  justify-content: space-between;
   gap: var(--s-3);
+  height: auto;
+  min-height: 40px;
+  padding-block: var(--s-2);
   text-align: left;
+  white-space: normal;
 }
 
-.agenda-builder__agenda-button > span:first-child {
+.agenda-builder__agenda-copy,
+.agenda-builder__agenda-title,
+.agenda-builder__agenda-date {
+  display: block;
   min-width: 0;
+}
+
+.agenda-builder__agenda-title {
+  line-height: 1.25;
   overflow-wrap: anywhere;
+}
+
+.agenda-builder__agenda-date,
+.agenda-builder__agenda-status {
+  font-size: var(--fs-sm);
+  line-height: 1.3;
+}
+
+.agenda-builder__agenda-status {
+  padding-top: 1px;
+  white-space: nowrap;
 }
 
 @media (max-width: 900px) {
