@@ -31,16 +31,6 @@ import {
   isBrowserBackedWaveConnection,
 } from "../features/financials/lib/waveResources";
 
-export {
-  AccountingWorkbenchPage,
-} from "../features/financials/pages/AccountingWorkbenchPage";
-export {
-  WaveAccountDetailPage,
-  WaveResourceDetailPage,
-  WaveResourceTablePage,
-} from "../features/financials/pages/WavePages";
-export { FinancialYearDetailPage } from "../features/financials/pages/FinancialYearDetailPage";
-
 export function FinancialsPage() {
   const society = useSociety();
   const navigate = useNavigate();
