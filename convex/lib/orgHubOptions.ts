@@ -65,6 +65,8 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
     "yukon",
     "foreign",
     "CA-BC",
+    "CA-FED-CBCA",
+    "CA-ON-OBCA",
   ],
   actsFormedUnder: [
     "canada_business_corporations_act",
@@ -138,11 +140,11 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
     "company_keys",
     "paper_minute_book_archive",
   ],
-  taxNumberTypes: ["business_number", "income_tax", "sales_tax", "import___export", "payroll_tax", "charity_number", "registry_account", "gst", "payroll", "other"],
-  companyKeyTypes: ["company_key", "password__bc_", "access_code"],
+  taxNumberTypes: ["corporation_key", "company_key", "ontario_company_key", "business_number", "income_tax", "sales_tax", "import___export", "payroll_tax", "charity_number", "registry_account", "gst", "payroll", "other"],
+  companyKeyTypes: ["company_key", "corporation_key", "ontario_company_key", "password__bc_", "access_code"],
   permissionLevels: ["entity_administrator", "entity_editor", "entity_viewer"],
   signerStatuses: ["unsigned", "opened_package", "all_signed", "signed", "declined", "needs_review"],
-  filingTypes: ["annual", "notice_of_change", "formation"],
+  filingTypes: ["annual", "annual_return", "initial_return", "notice_of_change", "formation", "profile_report", "extra_provincial_registration"],
   officerTitles: [
     "assistant_secretary",
     "assistant_treasurer",

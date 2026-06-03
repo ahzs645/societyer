@@ -219,6 +219,7 @@ export const upsertRegistration = mutation({
     id: v.optional(v.id("organizationRegistrations")),
     societyId: v.id("societies"),
     jurisdiction: v.string(),
+    homeJurisdiction: v.optional(v.string()),
     assumedName: v.optional(v.string()),
     registrationNumber: v.optional(v.string()),
     registrationDate: v.optional(v.string()),
@@ -226,6 +227,12 @@ export const upsertRegistration = mutation({
     deRegistrationDate: v.optional(v.string()),
     nuansNumber: v.optional(v.string()),
     officialEmail: v.optional(v.string()),
+    annualReturnDueDate: v.optional(v.string()),
+    lastAnnualReturnFiledDate: v.optional(v.string()),
+    registryProfileReportDate: v.optional(v.string()),
+    agentForServiceName: v.optional(v.string()),
+    agentForServiceAddress: v.optional(v.string()),
+    principalOfficeAddress: v.optional(v.string()),
     representativeIds: v.optional(v.array(v.string())),
     status: v.optional(v.string()),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
@@ -234,6 +241,7 @@ export const upsertRegistration = mutation({
   returns: v.any(),
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("entityJurisdictions", args.jurisdiction, "Registration jurisdiction", false);
+    assertAllowedOption("entityJurisdictions", args.homeJurisdiction, "Home jurisdiction");
     assertAllowedOption("registrationStatuses", args.status, "Registration status");
     const now = new Date().toISOString();
     const payload = {

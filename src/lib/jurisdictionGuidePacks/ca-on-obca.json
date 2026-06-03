@@ -188,7 +188,19 @@
         "caveat": "Vacancies and articles/by-laws can affect whether remaining directors may act.",
         "displayCitation": "OBCA s.126(3)-(5)"
       },
-      "priority": 34
+      "priority": 34,
+      "parameters": [
+        {
+          "key": "directors_quorum.default_formula",
+          "type": "string",
+          "value": "majority_of_directors_or_articles_minimum"
+        },
+        {
+          "key": "directors_quorum.under_three_directors_formula",
+          "type": "string",
+          "value": "all_directors_present"
+        }
+      ]
     },
     {
       "ruleId": "ca-on-obca-special-resolution",
@@ -232,7 +244,21 @@
         "caveat": "Some OBCA actions require additional class, article, by-law, or dissent-right analysis.",
         "displayCitation": "OBCA s.1(1)"
       },
-      "priority": 50
+      "priority": 50,
+      "parameters": [
+        {
+          "key": "shareholder_vote.special_resolution.min_fraction",
+          "type": "number",
+          "value": 0.6666666667,
+          "unit": "votes_cast",
+          "operator": ">="
+        },
+        {
+          "key": "shareholder_written_resolution.unanimous_required",
+          "type": "boolean",
+          "value": true
+        }
+      ]
     },
     {
       "ruleId": "ca-on-obca-obr-filings",

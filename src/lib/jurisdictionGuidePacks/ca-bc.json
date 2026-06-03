@@ -358,7 +358,30 @@
         "caveat": "Bylaws may set a longer or Act-permitted shorter notice period.",
         "displayCitation": "BC Societies Act ss.77-78"
       },
-      "priority": 20
+      "priority": 20,
+      "parameters": [
+        {
+          "key": "general_meeting_notice.min_days",
+          "type": "integer",
+          "value": 14,
+          "unit": "days",
+          "operator": ">="
+        },
+        {
+          "key": "general_meeting_notice.max_days",
+          "type": "integer",
+          "value": 60,
+          "unit": "days",
+          "operator": "<="
+        },
+        {
+          "key": "general_meeting_notice.bylaw_min_days_floor",
+          "type": "integer",
+          "value": 7,
+          "unit": "days",
+          "operator": ">="
+        }
+      ]
     },
     {
       "ruleId": "ca-bc-societies-act-member-proposals",
@@ -940,7 +963,14 @@
         "caveat": "The society's board-meeting bylaw language controls if different.",
         "displayCitation": "BC Model Bylaws s.5.5"
       },
-      "priority": 34
+      "priority": 34,
+      "parameters": [
+        {
+          "key": "directors_quorum.model_bylaws_formula",
+          "type": "string",
+          "value": "majority_of_directors"
+        }
+      ]
     }
   ]
 }

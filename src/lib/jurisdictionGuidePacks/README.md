@@ -75,7 +75,7 @@ Future executable compliance logic should live in a separate layer, likely `juri
 ## Adding A Pack
 
 1. Add a JSON file in this directory.
-2. Register it in `src/lib/jurisdictionGuideTracks.ts`.
+2. Register it in `src/lib/jurisdictionGuidePackRegistry.ts`.
 3. Run `npm run test:jurisdiction-guides`.
 4. Add or update behavior checks when the pack should affect UI output.
 

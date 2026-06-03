@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { disabledModulesValidator } from "./lib/moduleSettings";
 import { assertAllowedOption } from "./lib/orgHubOptions";
 import { seedSociety } from "./seedRecordTableMetadata";
+import { registryOnboardingCopy } from "../shared/jurisdictionWorkspace";
 
 export const get = query({
   args: {},
@@ -274,7 +275,7 @@ function blankToUndefined(value?: string) {
 }
 
 export function buildWorkspaceOnboardingNodes(args: any = {}) {
-  const registry = registryOnboardingCopy(args);
+  const registry = registryOnboardingCopy(args?.jurisdictionCode ?? "CA-BC");
   return [
     {
       key: "profile",
@@ -327,7 +328,7 @@ export function buildWorkspaceOnboardingTasks(args: any) {
     !args.incorporationDate ? "incorporation date" : null,
     !args.fiscalYearEnd ? "fiscal year end" : null,
   ].filter(Boolean);
-  const registry = registryOnboardingCopy(args);
+  const registry = registryOnboardingCopy(args?.jurisdictionCode ?? "CA-BC");
   return [
     {
       title: registry.taskTitle,
@@ -360,46 +361,4 @@ export function buildWorkspaceOnboardingTasks(args: any) {
       tags: ["optional", "advanced-setup"],
     },
   ];
-}
-
-function registryOnboardingCopy(args: any) {
-  const jurisdictionCode = args?.jurisdictionCode ?? "CA-BC";
-  if (jurisdictionCode === "CA-BC") {
-    return {
-      label: "BC Registry verification",
-      nodeDescription:
-        "Optional check for registry status, last annual report, filing history, key custody, authorized filers, and BC Registry connector setup.",
-      taskTitle: "Optional: verify BC Registry access",
-      taskDescription:
-        "Confirm registry status, last annual report, filing history, registry key custody, authorized filers, and whether to connect the BC Registry browser workspace.",
-    };
-  }
-  if (jurisdictionCode === "CA-FED-CBCA") {
-    return {
-      label: "Corporations Canada verification",
-      nodeDescription:
-        "Optional check for federal corporation status, annual-return history, anniversary date, corporation key custody, authorized filers, and Corporations Canada source documents.",
-      taskTitle: "Optional: verify Corporations Canada access",
-      taskDescription:
-        "Confirm federal corporation status, anniversary date, annual-return history, corporation key custody, authorized filers, and whether source documents should be archived.",
-    };
-  }
-  if (jurisdictionCode === "CA-ON-OBCA") {
-    return {
-      label: "Ontario Business Registry verification",
-      nodeDescription:
-        "Optional check for Ontario registry status, initial return, annual returns, notices of change, company key custody, authorized filers, and profile-report evidence.",
-      taskTitle: "Optional: verify Ontario Business Registry access",
-      taskDescription:
-        "Confirm Ontario registry status, initial return, annual returns, notices of change, company key custody, authorized filers, and whether profile-report evidence should be archived.",
-    };
-  }
-  return {
-    label: "Registry verification",
-    nodeDescription:
-      "Optional check for registry status, filing history, key custody, authorized filers, and source-document evidence.",
-    taskTitle: "Optional: verify registry access",
-    taskDescription:
-      "Confirm registry status, filing history, key custody, authorized filers, and source-document evidence for this jurisdiction.",
-  };
 }

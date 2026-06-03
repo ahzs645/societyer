@@ -1,6 +1,4 @@
-import bcGuidePackJson from "./jurisdictionGuidePacks/ca-bc.json";
-import federalCbcaGuidePackJson from "./jurisdictionGuidePacks/ca-fed-cbca.json";
-import ontarioObcaGuidePackJson from "./jurisdictionGuidePacks/ca-on-obca.json";
+import { JURISDICTION_GUIDE_PACK_JSON } from "./jurisdictionGuidePackRegistry";
 import {
   jurisdictionGuidePackSchema,
   type JurisdictionGuidePackV2,
@@ -77,14 +75,8 @@ export type JurisdictionGuidePack = {
   };
 };
 
-const guidePackJson = [
-  bcGuidePackJson,
-  federalCbcaGuidePackJson,
-  ontarioObcaGuidePackJson,
-] as const;
-
 export const JURISDICTION_GUIDE_PACKS: JurisdictionGuidePack[] =
-  guidePackJson.map(normalizeGuidePack);
+  JURISDICTION_GUIDE_PACK_JSON.map(normalizeGuidePack);
 
 export const JURISDICTION_OPTIONS = JURISDICTION_GUIDE_PACKS.map((pack) => ({
   value: pack.code,

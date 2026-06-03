@@ -15,6 +15,7 @@ import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
 import { JURISDICTION_OPTIONS } from "../lib/jurisdictionGuideTracks";
 import { optionChoices, optionLabel } from "../lib/orgHubOptions";
+import { defaultsForJurisdiction, jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 
 const CORE_ONBOARDING_STEPS = [
   "Organization profile",
@@ -252,6 +253,7 @@ export function SocietyPage() {
   if (society === null) return <SeedPrompt />;
   if (!form) return null;
 
+  const jurisdictionCopy = jurisdictionDisplayCopy(form.jurisdictionCode ?? society.jurisdictionCode);
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
   const missingGovernanceCount = [
     society.constitutionDocId,
@@ -342,8 +344,8 @@ export function SocietyPage() {
     <div className="page page--wide">
       <PageHeader
         routeKey="/app/society"
-        title="Society profile"
-        subtitle="Constitution details, registered office, and key flags."
+        title="Organization profile"
+        subtitle="Governing details, registered office, and key flags."
         actions={
           <>
             <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
@@ -363,7 +365,7 @@ export function SocietyPage() {
             <div className="card__body">
               <LockedField
                 label="Legal name"
-                reason="Changing the society's legal name requires a special resolution (≥ 2/3 vote) and a name reservation, then filed via Societies Online with the constitution alteration ($50 fee)."
+                reason="Changing the legal name can require a special resolution, name reservation, and registry filing. Review the active jurisdiction guide and governing documents first."
               >
                 {(locked) => (
                   <input
@@ -378,7 +380,7 @@ export function SocietyPage() {
               <div className="society-field-grid society-field-grid--three">
                 <LockedField
                   label="Incorporation #"
-                  reason="The incorporation number is assigned by the BC Registry and never changes for the life of the society. Edit only to fix a data-entry error."
+                  reason="The incorporation or corporation number is assigned by the registry and generally stays stable for the life of the organization. Edit only to fix a data-entry error."
                 >
                   {(locked) => (
                     <input
@@ -391,7 +393,7 @@ export function SocietyPage() {
                 </LockedField>
                 <LockedField
                   label="Incorporation date"
-                  reason="The date of incorporation is a historical fact recorded by the BC Registry. Edit only to fix a data-entry error."
+                  reason="The date of incorporation is a historical fact recorded by the registry. Edit only to fix a data-entry error."
                 >
                   {(locked) => (
                     <DatePicker
@@ -419,7 +421,7 @@ export function SocietyPage() {
 
               <LockedField
                 label="Purposes (from constitution)"
-                reason="The society's purposes are part of the constitution. Changing them requires a special resolution (≥ 2/3 vote) and a constitution alteration filed via Societies Online ($50 fee). Charities must also notify the CRA."
+                reason="Purposes or articles can require member/shareholder approval and a registry filing to change. Charities may also need CRA review."
               >
                 {(locked) => (
                   <textarea
@@ -442,7 +444,7 @@ export function SocietyPage() {
 
                 <LockedField
                   label="Status flags"
-                  reason="Charity status is controlled by the CRA (T2050 application / revocation). Member-funded status requires a constitution amendment under s.190 and disqualifies the society from holding land for charitable purposes."
+                  reason="Charity status is controlled by the CRA. Jurisdiction-specific status flags should be reviewed against the governing statute and filed documents."
                 >
                   {(locked) => (
                     <div className="society-toggle-stack">
@@ -482,7 +484,7 @@ export function SocietyPage() {
                   label="Registered office"
                   row={currentRegisteredOffice}
                   fallback={form.registeredOfficeAddress}
-                  hint="Must be in BC. Records are kept here unless a notice says otherwise."
+                  hint={jurisdictionCopy.registeredOfficeHint}
                 />
                 <AddressSummary
                   label="Mailing address"
@@ -492,7 +494,7 @@ export function SocietyPage() {
               </div>
               <div className="hr" />
               <div className="society-field-grid society-field-grid--mobile-pair">
-                <Field label="Privacy officer (PIPA)">
+                <Field label={jurisdictionCopy.privacyOfficerLabel}>
                   <input className="input" value={form.privacyOfficerName ?? ""} onChange={(e) => set("privacyOfficerName", e.target.value)} />
                 </Field>
                 <Field label="Privacy officer email">
@@ -529,7 +531,7 @@ export function SocietyPage() {
                   <tbody>
                     <DocTableRow label="Constitution" present={!!society.constitutionDocId} />
                     <DocTableRow label="Bylaws" present={!!society.bylawsDocId} />
-                    <DocTableRow label="PIPA policy" present={!!society.privacyPolicyDocId} />
+                    <DocTableRow label={jurisdictionCopy.privacyPolicyLabel} present={!!society.privacyPolicyDocId} />
                     <DocTableRow label="Hyperpolicy" present={false} />
                   </tbody>
                 </table>
@@ -571,30 +573,6 @@ export function SocietyPage() {
       </div>
     </div>
   );
-}
-
-function defaultsForJurisdiction(jurisdictionCode: string) {
-  if (jurisdictionCode === "CA-FED-CBCA") {
-    return {
-      entityType: "corporation__business_",
-      actFormedUnder: "canada_business_corporations_act",
-      isMemberFunded: false,
-    };
-  }
-  if (jurisdictionCode === "CA-ON-OBCA") {
-    return {
-      entityType: "corporation__business_",
-      actFormedUnder: "business_corporations_act__ontario_",
-      isMemberFunded: false,
-    };
-  }
-  if (jurisdictionCode === "CA-BC") {
-    return {
-      entityType: "society",
-      actFormedUnder: "societies_act",
-    };
-  }
-  return {};
 }
 
 function AddressSummary({ label, row, fallback, hint }: { label: string; row?: any; fallback?: string; hint?: string }) {

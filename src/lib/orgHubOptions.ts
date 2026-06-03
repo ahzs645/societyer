@@ -26,6 +26,8 @@ export const ORG_HUB_OPTION_SETS = {
     { value: "yukon", label: "Yukon" },
     { value: "foreign", label: "Foreign" },
     { value: "CA-BC", label: "British Columbia (Societyer code)" },
+    { value: "CA-FED-CBCA", label: "Canada federal - CBCA (Societyer code)" },
+    { value: "CA-ON-OBCA", label: "Ontario - OBCA (Societyer code)" },
   ],
   actsFormedUnder: [
     { value: "canada_business_corporations_act", label: "Canada Business Corporations Act" },
@@ -140,6 +142,9 @@ export const ORG_HUB_OPTION_SETS = {
     { value: "transfer_participants", label: "Transfer Participants" },
   ],
   taxNumberTypes: [
+    { value: "corporation_key", label: "Corporation key" },
+    { value: "company_key", label: "Company key" },
+    { value: "ontario_company_key", label: "Ontario company key" },
     { value: "business_number", label: "Business Number" },
     { value: "income_tax", label: "Income Tax" },
     { value: "sales_tax", label: "Sales Tax (GST/HST/PST)" },
@@ -153,6 +158,8 @@ export const ORG_HUB_OPTION_SETS = {
   ],
   companyKeyTypes: [
     { value: "company_key", label: "Company Key" },
+    { value: "corporation_key", label: "Corporation Key" },
+    { value: "ontario_company_key", label: "Ontario Company Key" },
     { value: "password__bc_", label: "Password" },
     { value: "access_code", label: "Access Code" },
   ],
@@ -171,8 +178,12 @@ export const ORG_HUB_OPTION_SETS = {
   ],
   filingTypes: [
     { value: "annual", label: "Annual" },
+    { value: "annual_return", label: "Annual Return" },
+    { value: "initial_return", label: "Initial Return" },
     { value: "notice_of_change", label: "Notice of Change" },
     { value: "formation", label: "Formation" },
+    { value: "profile_report", label: "Profile Report" },
+    { value: "extra_provincial_registration", label: "Extra-Provincial Registration" },
   ],
   officerTitles: [
     { value: "assistant_secretary", label: "Assistant Secretary" },

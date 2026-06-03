@@ -23,11 +23,13 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
+import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 
 const KINDS = ["RegistryRecord", "AnnualReport", "ChangeOfDirectors", "ChangeOfAddress", "BylawAmendment", "T2", "T1044", "T3010", "T4", "GSTHST"] as const;
 
 export function FilingsPage() {
   const society = useSociety();
+  const jurisdictionCopy = jurisdictionDisplayCopy(society?.jurisdictionCode);
   const actingUserId = useCurrentUserId() ?? undefined;
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
@@ -128,7 +130,7 @@ export function FilingsPage() {
         title="Filings"
         icon={<ClipboardList size={16} />}
         iconColor="orange"
-        subtitle="BC Societies Online filings, CRA returns, payroll & GST/HST."
+        subtitle={jurisdictionCopy.filingsSubtitle}
         actions={
           <>
             <button className="btn-action" onClick={importRegistryHistory} disabled={importingRegistry}>

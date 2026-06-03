@@ -81,6 +81,7 @@ export default defineSchema({
   organizationRegistrations: defineTable({
     societyId: v.id("societies"),
     jurisdiction: v.string(),
+    homeJurisdiction: v.optional(v.string()),
     assumedName: v.optional(v.string()),
     registrationNumber: v.optional(v.string()),
     registrationDate: v.optional(v.string()),
@@ -88,6 +89,12 @@ export default defineSchema({
     deRegistrationDate: v.optional(v.string()),
     nuansNumber: v.optional(v.string()),
     officialEmail: v.optional(v.string()),
+    annualReturnDueDate: v.optional(v.string()),
+    lastAnnualReturnFiledDate: v.optional(v.string()),
+    registryProfileReportDate: v.optional(v.string()),
+    agentForServiceName: v.optional(v.string()),
+    agentForServiceAddress: v.optional(v.string()),
+    principalOfficeAddress: v.optional(v.string()),
     representativeIds: v.array(v.string()),
     status: v.string(), // active | inactive | pending | needs_review
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),

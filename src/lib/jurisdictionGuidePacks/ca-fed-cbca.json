@@ -187,7 +187,14 @@
         "caveat": "Vacancies and article/by-law provisions can affect whether remaining directors may act.",
         "displayCitation": "CBCA s.114(2)"
       },
-      "priority": 34
+      "priority": 34,
+      "parameters": [
+        {
+          "key": "directors_quorum.default_formula",
+          "type": "string",
+          "value": "majority_of_directors_or_articles_minimum"
+        }
+      ]
     },
     {
       "ruleId": "ca-fed-cbca-special-resolution",
@@ -231,7 +238,21 @@
         "caveat": "Specific transactions, class votes, articles, by-laws, or unanimous shareholder agreements may add separate approval requirements.",
         "displayCitation": "CBCA s.2(1)"
       },
-      "priority": 50
+      "priority": 50,
+      "parameters": [
+        {
+          "key": "shareholder_vote.special_resolution.min_fraction",
+          "type": "number",
+          "value": 0.6666666667,
+          "unit": "votes_cast",
+          "operator": ">="
+        },
+        {
+          "key": "shareholder_written_resolution.unanimous_required",
+          "type": "boolean",
+          "value": true
+        }
+      ]
     }
   ]
 }

@@ -24,9 +24,11 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
+import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 
 export function DirectorsPage() {
   const society = useSociety();
+  const jurisdictionCopy = jurisdictionDisplayCopy(society?.jurisdictionCode);
   const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const orgHistory = useQuery(api.organizationHistory.list, society ? { societyId: society._id } : "skip");
@@ -50,6 +52,7 @@ export function DirectorsPage() {
   const active = (directors ?? []).filter((d: any) => d.status === "Active");
   const bcResidents = active.filter((d: any) => d.isBCResident).length;
   const missingConsent = active.filter((d: any) => !d.consentOnFile);
+  const isBcSociety = (society?.jurisdictionCode ?? "CA-BC") === "CA-BC";
   const roleTerms = useMemo(() => {
     return (orgHistory?.boardTerms ?? [])
       .slice()
@@ -129,13 +132,13 @@ export function DirectorsPage() {
       <div className="stat-grid">
         <div className="stat">
           <div className="stat__label">Active directors</div>
-          <div className="stat__value" style={{ color: active.length < 3 && !society.isMemberFunded ? "var(--danger)" : undefined }}>{active.length}</div>
-          <div className="stat__sub">Minimum 3 for regular societies.</div>
+          <div className="stat__value" style={{ color: isBcSociety && active.length < 3 && !society.isMemberFunded ? "var(--danger)" : undefined }}>{active.length}</div>
+          <div className="stat__sub">{isBcSociety ? "Minimum 3 for regular societies." : "Review governing statute, articles, and by-laws."}</div>
         </div>
         <div className="stat">
-          <div className="stat__label">BC residents</div>
-          <div className="stat__value" style={{ color: bcResidents < 1 && !society.isMemberFunded ? "var(--danger)" : undefined }}>{bcResidents}</div>
-          <div className="stat__sub">{society.isMemberFunded ? "No s.40 residency requirement." : "At least one BC resident required."}</div>
+          <div className="stat__label">{jurisdictionCopy.directorResidencyLabel}</div>
+          <div className="stat__value" style={{ color: isBcSociety && bcResidents < 1 && !society.isMemberFunded ? "var(--danger)" : undefined }}>{bcResidents}</div>
+          <div className="stat__sub">{society.isMemberFunded ? "No s.40 residency requirement." : jurisdictionCopy.directorResidencySubtext}</div>
         </div>
         <div className="stat">
           <div className="stat__label">Consent evidence</div>
@@ -145,14 +148,14 @@ export function DirectorsPage() {
         <div className="stat">
           <div className="stat__label">Change of directors</div>
           <div className="stat__value">30d</div>
-          <div className="stat__sub">File within 30 days via Societies Online.</div>
+          <div className="stat__sub">{jurisdictionCopy.directorChangeSubtext}</div>
         </div>
       </div>
 
-      {directorMode === "register" && (active.length < 3 || (bcResidents < 1 && !society.isMemberFunded) || missingConsent.length > 0) && (
+      {directorMode === "register" && ((isBcSociety && (active.length < 3 || (bcResidents < 1 && !society.isMemberFunded))) || missingConsent.length > 0) && (
         <div className="col" style={{ marginBottom: 16, gap: 6 }}>
-          {active.length < 3 && !society.isMemberFunded && <Flag level="err">Fewer than 3 active directors — regular societies must have at least 3.</Flag>}
-          {bcResidents < 1 && !society.isMemberFunded && <Flag level="err">No BC-resident director. At least one is required for non-member-funded societies.</Flag>}
+          {isBcSociety && active.length < 3 && !society.isMemberFunded && <Flag level="err">Fewer than 3 active directors — regular societies must have at least 3.</Flag>}
+          {isBcSociety && bcResidents < 1 && !society.isMemberFunded && <Flag level="err">No BC-resident director. At least one is required for non-member-funded societies.</Flag>}
           {missingConsent.length > 0 && <Flag level="warn">{missingConsent.length} director(s) without consent evidence on file.</Flag>}
         </div>
       )}
