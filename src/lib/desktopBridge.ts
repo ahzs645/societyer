@@ -49,6 +49,8 @@ export type DesktopAppInfo = {
   userDataPath: string;
   homePath: string;
   resourcePath: string;
+  runtimeMode: string;
+  documentStorageProvider: string;
   iconPaths: {
     png: string | null;
     icns: string | null;
@@ -57,11 +59,38 @@ export type DesktopAppInfo = {
 };
 
 export type DesktopUpdateStatus = {
+  status: "disabled" | "idle" | "checking" | "available" | "downloading" | "downloaded" | "error";
   enabled: boolean;
-  available: boolean;
+  channel: "stable" | "beta" | "nightly";
   currentVersion: string;
-  reason: string;
+  availableVersion?: string;
+  downloadedVersion?: string;
+  downloadPercent?: number;
+  reason?: string;
+  error?: string;
   feedPath: string;
+};
+
+export type DesktopServiceId =
+  | "browser-connectors"
+  | "rustfs-s3"
+  | "paperless-ngx"
+  | "sync-helper"
+  | "ai-worker";
+
+export type DesktopServiceConfig = {
+  serviceId: DesktopServiceId;
+  endpoint?: string;
+  enabled?: boolean;
+};
+
+export type DesktopServiceStatus = {
+  id: DesktopServiceId;
+  label: string;
+  configured: boolean;
+  ok: boolean;
+  endpoint?: string;
+  message?: string;
 };
 
 export type DesktopSecretKey =
@@ -87,7 +116,15 @@ export type SocietyerDesktopBridge = {
   checkConnector(endpoint: string): Promise<DesktopConnectorHealth>;
   openExternal(url: string): Promise<boolean>;
   getAppInfo(): Promise<DesktopAppInfo>;
-  getUpdateStatus(): Promise<DesktopUpdateStatus>;
+  getUpdateState(): Promise<DesktopUpdateStatus>;
+  checkForUpdate(): Promise<DesktopUpdateStatus>;
+  downloadUpdate(): Promise<DesktopUpdateStatus>;
+  installUpdate(): Promise<DesktopUpdateStatus>;
+  setUpdateChannel(channel: DesktopUpdateStatus["channel"]): Promise<DesktopUpdateStatus>;
+  listServiceStatuses(): Promise<DesktopServiceStatus[]>;
+  checkService(serviceId: DesktopServiceId): Promise<DesktopServiceStatus>;
+  getServiceConfig(serviceId: DesktopServiceId): Promise<DesktopServiceConfig>;
+  saveServiceConfig(config: DesktopServiceConfig): Promise<DesktopServiceConfig>;
   openWorkspaceFolder(): Promise<void>;
   openBackupFolder(backupPath?: string): Promise<void>;
   getSecret(key: DesktopSecretKey): Promise<string | null>;

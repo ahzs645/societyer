@@ -1,5 +1,6 @@
 import { access } from "node:fs/promises";
 import path from "node:path";
+import type { DesktopEnvironment } from "./environment.js";
 
 export type DesktopIconPaths = {
   png: string | null;
@@ -16,26 +17,26 @@ export async function pathExists(filePath: string) {
   }
 }
 
-export function getResourcePathCandidates(dirname: string, fileName: string) {
+export function getResourcePathCandidates(environment: DesktopEnvironment, fileName: string) {
   return [
-    path.resolve(dirname, "../../assets/electron", fileName),
-    path.resolve(process.resourcesPath, fileName),
-    path.resolve(process.resourcesPath, "assets/electron", fileName),
+    path.resolve(environment.dirname, "../../assets/electron", fileName),
+    path.resolve(environment.resourcesPath, fileName),
+    path.resolve(environment.resourcesPath, "assets/electron", fileName),
   ];
 }
 
-export async function resolveResourcePath(dirname: string, fileName: string) {
-  for (const candidate of getResourcePathCandidates(dirname, fileName)) {
+export async function resolveResourcePath(environment: DesktopEnvironment, fileName: string) {
+  for (const candidate of getResourcePathCandidates(environment, fileName)) {
     if (await pathExists(candidate)) return candidate;
   }
   return null;
 }
 
-export async function getIconPaths(dirname: string): Promise<DesktopIconPaths> {
+export async function getIconPaths(environment: DesktopEnvironment): Promise<DesktopIconPaths> {
   const [png, icns, ico] = await Promise.all([
-    resolveResourcePath(dirname, "icon.png"),
-    resolveResourcePath(dirname, "icon.icns"),
-    resolveResourcePath(dirname, "icon.ico"),
+    resolveResourcePath(environment, "icon.png"),
+    resolveResourcePath(environment, "icon.icns"),
+    resolveResourcePath(environment, "icon.ico"),
   ]);
   return { png, icns, ico };
 }

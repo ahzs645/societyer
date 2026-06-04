@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Database, FolderOpen, HardDrive, KeyRound, PlugZap } from "lucide-react";
+import { Database, FolderOpen, HardDrive, KeyRound, PlugZap, RefreshCw } from "lucide-react";
 
 import {
   getDesktopBridge,
@@ -7,6 +7,7 @@ import {
   type DesktopAppInfo,
   type DesktopConnectorHealth,
   type DesktopSecretKey,
+  type DesktopServiceStatus,
   type DesktopUpdateStatus,
   type DesktopWorkspaceInfo,
 } from "../lib/desktopBridge";
@@ -57,7 +58,8 @@ export function DesktopDiagnosticsPanel() {
     () => localStorage.getItem(CONNECTOR_ENDPOINT_KEY) || DEFAULT_CONNECTOR_ENDPOINT,
   );
   const [connectorHealth, setConnectorHealth] = useState<DesktopConnectorHealth | null>(null);
-  const [busy, setBusy] = useState<"backup" | "connector" | "workspace" | "backup-folder" | null>(null);
+  const [serviceStatuses, setServiceStatuses] = useState<DesktopServiceStatus[]>([]);
+  const [busy, setBusy] = useState<"backup" | "connector" | "workspace" | "backup-folder" | "updates" | "services" | null>(null);
   const [backupPath, setBackupPath] = useState<string | null>(null);
   const [secretValues, setSecretValues] = useState<Partial<Record<DesktopSecretKey, string>>>({});
   const [storedSecrets, setStoredSecrets] = useState<Partial<Record<DesktopSecretKey, boolean>>>({});
@@ -68,16 +70,18 @@ export function DesktopDiagnosticsPanel() {
     let active = true;
     Promise.all([
       bridge.getAppInfo(),
-      bridge.getUpdateStatus(),
+      bridge.getUpdateState(),
       bridge.getWorkspaceInfo(),
       bridge.getSetupState(),
+      bridge.listServiceStatuses(),
     ])
-      .then(([info, updates, workspaceInfo, setup]) => {
+      .then(([info, updates, workspaceInfo, setup, services]) => {
         if (!active) return;
         setAppInfo(info);
         setUpdateStatus(updates);
         setWorkspace(workspaceInfo);
         setSetupComplete(setup.complete);
+        setServiceStatuses(services);
       })
       .catch((error) => {
         if (!active) return;
@@ -171,6 +175,36 @@ export function DesktopDiagnosticsPanel() {
     }
   };
 
+  const checkUpdates = async () => {
+    const bridge = getDesktopBridge();
+    if (!bridge) return;
+    setBusy("updates");
+    try {
+      const state = await bridge.checkForUpdate();
+      setUpdateStatus(state);
+      if (state.status === "available") toast.success("Update available", state.availableVersion);
+      else if (state.status === "error") toast.error("Update check failed", state.error);
+      else toast.info("Update status checked", state.reason);
+    } catch (error) {
+      toast.error("Update check failed", error instanceof Error ? error.message : undefined);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const refreshServices = async () => {
+    const bridge = getDesktopBridge();
+    if (!bridge) return;
+    setBusy("services");
+    try {
+      setServiceStatuses(await bridge.listServiceStatuses());
+    } catch (error) {
+      toast.error("Service check failed", error instanceof Error ? error.message : undefined);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const saveSecret = async (key: DesktopSecretKey) => {
     const bridge = getDesktopBridge();
     const value = secretValues[key] ?? "";
@@ -223,12 +257,18 @@ export function DesktopDiagnosticsPanel() {
                   ["Node", appInfo?.nodeVersion ?? "Loading..."],
                   ["Resource path", appInfo?.resourcePath ?? "Loading..."],
                   ["Icon PNG", appInfo?.iconPaths.png ?? "Not found"],
-                  ["Document storage", runtime.documentStorage],
+                  ["Runtime mode", appInfo?.runtimeMode ?? runtime.mode],
+                  ["Document storage", appInfo?.documentStorageProvider ?? runtime.documentStorage],
                   ["Setup complete", setupComplete === null ? "Loading..." : setupComplete ? "Yes" : "No"],
-                  ["Updates", updateStatus ? (updateStatus.enabled ? "Enabled" : "Disabled") : "Loading..."],
-                  ["Update reason", updateStatus?.reason ?? "Loading..."],
+                  ["Updates", updateStatus ? `${updateStatus.status} (${updateStatus.channel})` : "Loading..."],
+                  ["Update reason", updateStatus?.error ?? updateStatus?.reason ?? "Loading..."],
                 ]}
               />
+              <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                <button className="btn" disabled={busy === "updates"} onClick={checkUpdates}>
+                  <RefreshCw size={12} /> {busy === "updates" ? "Checking..." : "Check updates"}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -255,6 +295,35 @@ export function DesktopDiagnosticsPanel() {
                   <HardDrive size={12} /> Open backup folder
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card" style={{ background: "var(--bg-base)" }}>
+          <div className="card__head">
+            <div>
+              <h3 className="card__title" style={{ fontSize: "var(--fs-md)" }}>Optional services</h3>
+              <span className="card__subtitle">Server-assisted integrations are checked only when configured.</span>
+            </div>
+            <button className="btn" disabled={busy === "services"} onClick={refreshServices}>
+              <RefreshCw size={12} /> {busy === "services" ? "Checking..." : "Refresh"}
+            </button>
+          </div>
+          <div className="card__body">
+            <div className="settings-list">
+              {serviceStatuses.map((service) => (
+                <div className="settings-row" key={service.id}>
+                  <div>
+                    <strong>{service.label}</strong>
+                    <div className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+                      {service.endpoint ?? service.message ?? "Not configured"}
+                    </div>
+                  </div>
+                  <Badge tone={service.ok ? "success" : service.configured ? "warn" : "neutral"}>
+                    {service.ok ? "Available" : service.configured ? "Unavailable" : "Optional"}
+                  </Badge>
+                </div>
+              ))}
             </div>
           </div>
         </div>

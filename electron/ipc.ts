@@ -1,4 +1,5 @@
-import { dialog, ipcMain } from "electron";
+import { dialog } from "electron";
+import { z } from "zod";
 
 import { getAppInfo } from "./appInfo.js";
 import { checkConnector } from "./connectors.js";
@@ -6,14 +7,28 @@ import { readDesktopConfig, updateDesktopConfig } from "./config.js";
 import {
   openDocumentVersion,
   readDocumentVersion,
-  type ReadDocumentVersionInput,
   writeDocumentVersion,
-  type WriteDocumentVersionInput,
 } from "./documents.js";
+import type { DesktopEnvironment } from "./environment.js";
 import * as IpcChannels from "./ipcChannels.js";
+import { DesktopSchemas, handleValidatedIpc, VoidPayloadSchema } from "./ipcValidation.js";
 import { getDesktopSecret, removeDesktopSecret, setDesktopSecret } from "./safeStorage.js";
+import {
+  checkService,
+  getServiceConfig,
+  isDesktopServiceId,
+  listServiceStatuses,
+  saveServiceConfig,
+  type DesktopServiceId,
+} from "./services.js";
 import { openExternal } from "./shell.js";
-import { getUpdateStatus } from "./updates.js";
+import {
+  checkForUpdate,
+  downloadUpdate,
+  getUpdateState,
+  installUpdate,
+  setUpdateChannel,
+} from "./updates.js";
 import {
   createBackup,
   ensureWorkspace,
@@ -22,54 +37,221 @@ import {
   selectWorkspace,
 } from "./workspace.js";
 
-export function registerIpc(dirname: string) {
-  ipcMain.handle(IpcChannels.CHOOSE_WORKSPACE_DIRECTORY_CHANNEL, async () => {
-    const result = await dialog.showOpenDialog({
-      properties: ["openDirectory", "createDirectory"],
-    });
-    if (result.canceled || !result.filePaths[0]) return null;
-    await selectWorkspace(result.filePaths[0]);
-    return result.filePaths[0];
+const optionalString = z.string().optional();
+const booleanPayload = z.boolean();
+const externalUrlPayload = z.string();
+const secretKeyPayload = z.string();
+const setSecretPayload = z.object({ key: z.string(), value: z.string() });
+const serviceIdPayload = z.custom<DesktopServiceId>(
+  (value) => typeof value === "string" && isDesktopServiceId(value),
+  "Unknown desktop service.",
+);
+
+export function registerIpc(environment: DesktopEnvironment) {
+  registerAppHandlers(environment);
+  registerWorkspaceHandlers();
+  registerDocumentHandlers();
+  registerConnectorHandlers();
+  registerUpdateHandlers(environment);
+  registerServiceHandlers();
+  registerSecretHandlers();
+}
+
+function registerAppHandlers(environment: DesktopEnvironment) {
+  handleValidatedIpc({
+    channel: IpcChannels.GET_APP_INFO_CHANNEL,
+    payload: VoidPayloadSchema,
+    result: DesktopSchemas.appInfo,
+    handler: () => getAppInfo(environment),
   });
 
-  ipcMain.handle(IpcChannels.GET_WORKSPACE_INFO_CHANNEL, async () => (await ensureWorkspace()).info);
+  handleValidatedIpc({
+    channel: IpcChannels.OPEN_EXTERNAL_CHANNEL,
+    payload: externalUrlPayload,
+    result: z.boolean(),
+    handler: (_event, url) => openExternal(url),
+  });
+}
 
-  ipcMain.handle(IpcChannels.GET_SETUP_STATE_CHANNEL, async () => {
-    const config = await readDesktopConfig();
-    return { complete: config.setupComplete === true };
+function registerWorkspaceHandlers() {
+  handleValidatedIpc({
+    channel: IpcChannels.CHOOSE_WORKSPACE_DIRECTORY_CHANNEL,
+    payload: VoidPayloadSchema,
+    result: z.string().nullable(),
+    handler: async () => {
+      const result = await dialog.showOpenDialog({
+        properties: ["openDirectory", "createDirectory"],
+      });
+      if (result.canceled || !result.filePaths[0]) return null;
+      await selectWorkspace(result.filePaths[0]);
+      return result.filePaths[0];
+    },
   });
 
-  ipcMain.handle(IpcChannels.SET_SETUP_COMPLETE_CHANNEL, async (_event, complete: boolean) => {
-    const config = await updateDesktopConfig({ setupComplete: complete === true });
-    return { complete: config.setupComplete === true };
+  handleValidatedIpc({
+    channel: IpcChannels.GET_WORKSPACE_INFO_CHANNEL,
+    payload: VoidPayloadSchema,
+    result: DesktopSchemas.workspaceInfo,
+    handler: async () => (await ensureWorkspace()).info,
   });
 
-  ipcMain.handle(IpcChannels.WRITE_DOCUMENT_VERSION_CHANNEL, (_event, input: WriteDocumentVersionInput) =>
-    writeDocumentVersion(input),
-  );
+  handleValidatedIpc({
+    channel: IpcChannels.GET_SETUP_STATE_CHANNEL,
+    payload: VoidPayloadSchema,
+    result: DesktopSchemas.setupState,
+    handler: async () => {
+      const config = await readDesktopConfig();
+      return { complete: config.setupComplete === true };
+    },
+  });
 
-  ipcMain.handle(IpcChannels.READ_DOCUMENT_VERSION_CHANNEL, (_event, input: ReadDocumentVersionInput) =>
-    readDocumentVersion(input),
-  );
+  handleValidatedIpc({
+    channel: IpcChannels.SET_SETUP_COMPLETE_CHANNEL,
+    payload: booleanPayload,
+    result: DesktopSchemas.setupState,
+    handler: async (_event, complete) => {
+      const config = await updateDesktopConfig({ setupComplete: complete === true });
+      return { complete: config.setupComplete === true };
+    },
+  });
 
-  ipcMain.handle(IpcChannels.OPEN_DOCUMENT_VERSION_CHANNEL, (_event, input: ReadDocumentVersionInput) =>
-    openDocumentVersion(input),
-  );
+  handleValidatedIpc({
+    channel: IpcChannels.CREATE_BACKUP_CHANNEL,
+    payload: VoidPayloadSchema,
+    result: DesktopSchemas.backupResult,
+    handler: () => createBackup(),
+  });
 
-  ipcMain.handle(IpcChannels.CREATE_BACKUP_CHANNEL, () => createBackup());
-  ipcMain.handle(IpcChannels.CHECK_CONNECTOR_CHANNEL, (_event, endpoint: string) =>
-    checkConnector(endpoint),
-  );
-  ipcMain.handle(IpcChannels.OPEN_EXTERNAL_CHANNEL, (_event, url: string) => openExternal(url));
-  ipcMain.handle(IpcChannels.GET_APP_INFO_CHANNEL, () => getAppInfo(dirname));
-  ipcMain.handle(IpcChannels.GET_UPDATE_STATUS_CHANNEL, () => getUpdateStatus(dirname));
-  ipcMain.handle(IpcChannels.OPEN_WORKSPACE_FOLDER_CHANNEL, () => openWorkspaceFolder());
-  ipcMain.handle(IpcChannels.OPEN_BACKUP_FOLDER_CHANNEL, (_event, backupPath?: string) =>
-    openBackupFolder(backupPath),
-  );
-  ipcMain.handle(IpcChannels.GET_SECRET_CHANNEL, (_event, key: string) => getDesktopSecret(key));
-  ipcMain.handle(IpcChannels.SET_SECRET_CHANNEL, (_event, input: { key: string; value: string }) =>
-    setDesktopSecret(input.key, input.value),
-  );
-  ipcMain.handle(IpcChannels.REMOVE_SECRET_CHANNEL, (_event, key: string) => removeDesktopSecret(key));
+  handleValidatedIpc({
+    channel: IpcChannels.OPEN_WORKSPACE_FOLDER_CHANNEL,
+    payload: VoidPayloadSchema,
+    handler: () => openWorkspaceFolder(),
+  });
+
+  handleValidatedIpc({
+    channel: IpcChannels.OPEN_BACKUP_FOLDER_CHANNEL,
+    payload: optionalString,
+    handler: (_event, backupPath) => openBackupFolder(backupPath),
+  });
+}
+
+function registerDocumentHandlers() {
+  handleValidatedIpc({
+    channel: IpcChannels.WRITE_DOCUMENT_VERSION_CHANNEL,
+    payload: DesktopSchemas.writeDocumentVersionInput,
+    result: DesktopSchemas.documentVersionRef,
+    handler: (_event, input) => writeDocumentVersion(input),
+  });
+
+  handleValidatedIpc({
+    channel: IpcChannels.READ_DOCUMENT_VERSION_CHANNEL,
+    payload: DesktopSchemas.readDocumentVersionInput,
+    result: z.instanceof(ArrayBuffer),
+    handler: (_event, input) => readDocumentVersion(input),
+  });
+
+  handleValidatedIpc({
+    channel: IpcChannels.OPEN_DOCUMENT_VERSION_CHANNEL,
+    payload: DesktopSchemas.readDocumentVersionInput,
+    handler: (_event, input) => openDocumentVersion(input),
+  });
+}
+
+function registerConnectorHandlers() {
+  handleValidatedIpc({
+    channel: IpcChannels.CHECK_CONNECTOR_CHANNEL,
+    payload: z.string(),
+    result: DesktopSchemas.connectorHealth,
+    handler: (_event, endpoint) => checkConnector(endpoint),
+  });
+}
+
+function registerUpdateHandlers(environment: DesktopEnvironment) {
+  handleValidatedIpc({
+    channel: IpcChannels.GET_UPDATE_STATE_CHANNEL,
+    payload: VoidPayloadSchema,
+    result: DesktopSchemas.updateState,
+    handler: () => getUpdateState(environment),
+  });
+
+  handleValidatedIpc({
+    channel: IpcChannels.SET_UPDATE_CHANNEL_CHANNEL,
+    payload: DesktopSchemas.updateChannel,
+    result: DesktopSchemas.updateState,
+    handler: (_event, channel) => setUpdateChannel(environment, channel),
+  });
+
+  handleValidatedIpc({
+    channel: IpcChannels.CHECK_FOR_UPDATE_CHANNEL,
+    payload: VoidPayloadSchema,
+    result: DesktopSchemas.updateState,
+    handler: () => checkForUpdate(environment),
+  });
+
+  handleValidatedIpc({
+    channel: IpcChannels.DOWNLOAD_UPDATE_CHANNEL,
+    payload: VoidPayloadSchema,
+    result: DesktopSchemas.updateState,
+    handler: () => downloadUpdate(environment),
+  });
+
+  handleValidatedIpc({
+    channel: IpcChannels.INSTALL_UPDATE_CHANNEL,
+    payload: VoidPayloadSchema,
+    result: DesktopSchemas.updateState,
+    handler: () => installUpdate(environment),
+  });
+}
+
+function registerServiceHandlers() {
+  handleValidatedIpc({
+    channel: IpcChannels.LIST_SERVICE_STATUSES_CHANNEL,
+    payload: VoidPayloadSchema,
+    result: z.array(DesktopSchemas.serviceStatus),
+    handler: () => listServiceStatuses(),
+  });
+
+  handleValidatedIpc({
+    channel: IpcChannels.CHECK_SERVICE_CHANNEL,
+    payload: serviceIdPayload,
+    result: DesktopSchemas.serviceStatus,
+    handler: (_event, serviceId) => checkService(serviceId),
+  });
+
+  handleValidatedIpc({
+    channel: IpcChannels.GET_SERVICE_CONFIG_CHANNEL,
+    payload: serviceIdPayload,
+    result: DesktopSchemas.serviceConfig,
+    handler: (_event, serviceId) => getServiceConfig(serviceId),
+  });
+
+  handleValidatedIpc({
+    channel: IpcChannels.SAVE_SERVICE_CONFIG_CHANNEL,
+    payload: DesktopSchemas.serviceConfig,
+    result: DesktopSchemas.serviceConfig,
+    handler: (_event, input) => saveServiceConfig(input),
+  });
+}
+
+function registerSecretHandlers() {
+  handleValidatedIpc({
+    channel: IpcChannels.GET_SECRET_CHANNEL,
+    payload: secretKeyPayload,
+    result: z.string().nullable(),
+    handler: (_event, key) => getDesktopSecret(key),
+  });
+
+  handleValidatedIpc({
+    channel: IpcChannels.SET_SECRET_CHANNEL,
+    payload: setSecretPayload,
+    result: z.object({ stored: z.boolean() }),
+    handler: (_event, input) => setDesktopSecret(input.key, input.value),
+  });
+
+  handleValidatedIpc({
+    channel: IpcChannels.REMOVE_SECRET_CHANNEL,
+    payload: secretKeyPayload,
+    result: z.object({ stored: z.boolean() }),
+    handler: (_event, key) => removeDesktopSecret(key),
+  });
 }

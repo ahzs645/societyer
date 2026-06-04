@@ -3,17 +3,17 @@ import { BrowserWindow, Menu, nativeTheme } from "electron";
 import path from "node:path";
 
 import { resolveResourcePath } from "./assets.js";
+import type { DesktopEnvironment } from "./environment.js";
 import { hardenWindowNavigation } from "./shell.js";
 
 export type CreateMainWindowOptions = {
-  dirname: string;
-  isDev: boolean;
-  devServerUrl?: string;
+  environment: DesktopEnvironment;
 };
 
 export async function createMainWindow(options: CreateMainWindowOptions) {
   const appTitle = "Societyer";
-  const iconPath = await resolveResourcePath(options.dirname, "icon.png");
+  const { environment } = options;
+  const iconPath = await resolveResourcePath(environment, "icon.png");
   const mainWindow = new BrowserWindow({
     width: 1320,
     height: 900,
@@ -25,7 +25,7 @@ export async function createMainWindow(options: CreateMainWindowOptions) {
     title: appTitle,
     ...(process.platform === "darwin" || !iconPath ? {} : { icon: iconPath }),
     webPreferences: {
-      preload: path.join(options.dirname, "preload.js"),
+      preload: path.join(environment.dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
@@ -106,14 +106,14 @@ export async function createMainWindow(options: CreateMainWindowOptions) {
   });
 
   const allowedOrigins: string[] = [];
-  if (options.isDev) {
-    const devUrl = options.devServerUrl || "http://127.0.0.1:5173";
+  if (environment.isDev) {
+    const devUrl = environment.devServerUrl || "http://127.0.0.1:5173";
     allowedOrigins.push(new URL(devUrl).origin);
     hardenWindowNavigation(mainWindow, allowedOrigins);
     await mainWindow.loadURL(devUrl);
   } else {
     hardenWindowNavigation(mainWindow, allowedOrigins);
-    await mainWindow.loadFile(path.resolve(options.dirname, "../../dist/index.html"));
+    await mainWindow.loadFile(environment.distIndexPath);
   }
 
   return mainWindow;

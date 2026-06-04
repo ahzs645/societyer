@@ -1,6 +1,6 @@
 import { app } from "electron";
-import os from "node:os";
 import { getIconPaths, type DesktopIconPaths } from "./assets.js";
+import type { DesktopEnvironment } from "./environment.js";
 
 export type DesktopAppInfo = {
   name: string;
@@ -14,23 +14,27 @@ export type DesktopAppInfo = {
   userDataPath: string;
   homePath: string;
   resourcePath: string;
+  runtimeMode: string;
+  documentStorageProvider: string;
   iconPaths: DesktopIconPaths;
 };
 
-export async function getAppInfo(dirname: string): Promise<DesktopAppInfo> {
+export async function getAppInfo(environment: DesktopEnvironment): Promise<DesktopAppInfo> {
   return {
-    name: app.getName(),
-    version: app.getVersion(),
-    isPackaged: app.isPackaged,
-    platform: process.platform,
-    arch: process.arch,
-    electronVersion: process.versions.electron,
-    chromeVersion: process.versions.chrome,
-    nodeVersion: process.versions.node,
-    userDataPath: app.getPath("userData"),
-    homePath: os.homedir(),
-    resourcePath: process.resourcesPath,
-    iconPaths: await getIconPaths(dirname),
+    name: environment.appName,
+    version: environment.appVersion,
+    isPackaged: environment.isPackaged,
+    platform: environment.platform,
+    arch: environment.arch,
+    electronVersion: environment.electronVersion,
+    chromeVersion: environment.chromeVersion,
+    nodeVersion: environment.nodeVersion,
+    userDataPath: environment.userDataPath,
+    homePath: environment.homePath,
+    resourcePath: environment.resourcesPath,
+    runtimeMode: environment.runtimeMode,
+    documentStorageProvider: environment.documentStorageProvider,
+    iconPaths: await getIconPaths(environment),
   };
 }
 

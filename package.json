@@ -91,6 +91,7 @@
     "date-fns": "^3.6.0",
     "dexie": "^4.4.2",
     "dotenv": "^17.4.2",
+    "electron-updater": "^6.8.3",
     "express": "^5.2.1",
     "fuse.js": "^7.3.0",
     "i18next": "^23.16.5",
