@@ -1,6 +1,6 @@
 import { app } from "electron";
 import { randomUUID } from "node:crypto";
-import { mkdir, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, open, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const MAX_LOG_BYTES = 10 * 1024 * 1024;
@@ -20,6 +20,25 @@ export function getLogDirectory() {
 
 export function getMainLogPath() {
   return path.join(getLogDirectory(), "main.log");
+}
+
+export async function readMainLogTail(maxBytes = 200_000): Promise<string> {
+  const filePath = getMainLogPath();
+  try {
+    const fileStat = await stat(filePath);
+    const start = Math.max(0, fileStat.size - maxBytes);
+    const length = fileStat.size - start;
+    const buffer = Buffer.alloc(length);
+    const handle = await open(filePath, "r");
+    try {
+      await handle.read(buffer, 0, length, start);
+    } finally {
+      await handle.close();
+    }
+    return buffer.toString("utf8");
+  } catch {
+    return "";
+  }
 }
 
 export async function logDesktopEvent(input: {

@@ -87,8 +87,10 @@ export async function createMainWindow(options: CreateMainWindowOptions) {
     hardenWindowNavigation(mainWindow, allowedOrigins);
     await mainWindow.loadURL(devUrl);
   } else {
+    const appUrl = `${SOCIETYER_APP_PROTOCOL}://index.html`;
+    allowedOrigins.push(new URL(appUrl).origin);
     hardenWindowNavigation(mainWindow, allowedOrigins);
-    await mainWindow.loadURL(`${SOCIETYER_APP_PROTOCOL}://index.html`);
+    await mainWindow.loadURL(appUrl);
   }
 
   return mainWindow;

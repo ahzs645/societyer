@@ -1,5 +1,6 @@
 import { ipcMain, type IpcMainInvokeEvent } from "electron";
 import { z } from "zod";
+import { isManagedServiceId, type ManagedServiceId } from "./processManager.js";
 import { isDesktopServiceId, type DesktopServiceId } from "./services.js";
 
 const VoidPayload = z.undefined().optional();
@@ -86,9 +87,40 @@ export const DesktopSchemas = {
     endpoint: z.string().optional(),
     message: z.string().optional(),
   }),
+  managedServiceId: z.custom<ManagedServiceId>(
+    (value) => typeof value === "string" && isManagedServiceId(value),
+    "Unknown managed service.",
+  ),
+  managedServiceStatus: z.object({
+    id: z.custom<ManagedServiceId>(
+      (value) => typeof value === "string" && isManagedServiceId(value),
+      "Unknown managed service.",
+    ),
+    label: z.string(),
+    state: z.union([
+      z.literal("disabled"),
+      z.literal("not-installed"),
+      z.literal("stopped"),
+      z.literal("starting"),
+      z.literal("running"),
+      z.literal("unhealthy"),
+      z.literal("stopping"),
+      z.literal("error"),
+    ]),
+    manageable: z.boolean(),
+    message: z.string().optional(),
+    composeFile: z.string().optional(),
+  }),
   serviceProfile: z.object({
     id: z.string(),
     name: z.string(),
+    kind: z.union([
+      z.literal("local-only"),
+      z.literal("browser-imports"),
+      z.literal("rustfs-replication"),
+      z.literal("paperless"),
+      z.literal("full-assisted"),
+    ]),
     services: z.record(z.string(), z.object({
       endpoint: z.string().optional(),
       enabled: z.boolean().optional(),
@@ -99,6 +131,13 @@ export const DesktopSchemas = {
   saveServiceProfileInput: z.object({
     id: z.string(),
     name: z.string(),
+    kind: z.union([
+      z.literal("local-only"),
+      z.literal("browser-imports"),
+      z.literal("rustfs-replication"),
+      z.literal("paperless"),
+      z.literal("full-assisted"),
+    ]).optional(),
   }),
   appInfo: z.object({
     name: z.string(),

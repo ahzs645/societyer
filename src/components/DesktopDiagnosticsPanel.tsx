@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Database, FolderOpen, HardDrive, KeyRound, PlugZap, RefreshCw } from "lucide-react";
+import { Database, Download, FileText, FolderOpen, HardDrive, KeyRound, PlugZap, RefreshCw } from "lucide-react";
 
 import {
   getDesktopBridge,
   isDesktopBridgeAvailable,
   type DesktopAppInfo,
   type DesktopConnectorHealth,
+  type DesktopManagedServiceStatus,
   type DesktopSecretKey,
   type DesktopServiceStatus,
   type DesktopUpdateStatus,
@@ -59,8 +60,10 @@ export function DesktopDiagnosticsPanel() {
   );
   const [connectorHealth, setConnectorHealth] = useState<DesktopConnectorHealth | null>(null);
   const [serviceStatuses, setServiceStatuses] = useState<DesktopServiceStatus[]>([]);
-  const [busy, setBusy] = useState<"backup" | "connector" | "workspace" | "backup-folder" | "logs" | "updates" | "services" | null>(null);
+  const [managedServices, setManagedServices] = useState<DesktopManagedServiceStatus[]>([]);
+  const [busy, setBusy] = useState<"backup" | "connector" | "workspace" | "backup-folder" | "logs" | "log-preview" | "updates" | "services" | "managed-services" | "start-connectors" | "stop-connectors" | null>(null);
   const [backupPath, setBackupPath] = useState<string | null>(null);
+  const [logPreview, setLogPreview] = useState("");
   const [secretValues, setSecretValues] = useState<Partial<Record<DesktopSecretKey, string>>>({});
   const [storedSecrets, setStoredSecrets] = useState<Partial<Record<DesktopSecretKey, boolean>>>({});
 
@@ -74,14 +77,16 @@ export function DesktopDiagnosticsPanel() {
       bridge.getWorkspaceInfo(),
       bridge.getSetupState(),
       bridge.listServiceStatuses(),
+      bridge.listManagedServiceStatuses(),
     ])
-      .then(([info, updates, workspaceInfo, setup, services]) => {
+      .then(([info, updates, workspaceInfo, setup, services, managed]) => {
         if (!active) return;
         setAppInfo(info);
         setUpdateStatus(updates);
         setWorkspace(workspaceInfo);
         setSetupComplete(setup.complete);
         setServiceStatuses(services);
+        setManagedServices(managed);
       })
       .catch((error) => {
         if (!active) return;
@@ -168,6 +173,31 @@ export function DesktopDiagnosticsPanel() {
     }
   };
 
+  const refreshLogPreview = async () => {
+    const bridge = getDesktopBridge();
+    if (!bridge) return;
+    setBusy("log-preview");
+    try {
+      const logText = await bridge.readMainLog(200_000);
+      setLogPreview(logText);
+      if (!logText) toast.info("No desktop log entries yet");
+    } catch (error) {
+      toast.error("Could not read logs", error instanceof Error ? error.message : undefined);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const exportLogPreview = () => {
+    const blob = new Blob([logPreview], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `societyer-desktop-${new Date().toISOString().slice(0, 10)}.log`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const checkConnector = async () => {
     const bridge = getDesktopBridge();
     if (!bridge) return;
@@ -213,6 +243,51 @@ export function DesktopDiagnosticsPanel() {
       setServiceStatuses(await bridge.listServiceStatuses());
     } catch (error) {
       toast.error("Service check failed", error instanceof Error ? error.message : undefined);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const refreshManagedServices = async () => {
+    const bridge = getDesktopBridge();
+    if (!bridge) return;
+    setBusy("managed-services");
+    try {
+      setManagedServices(await bridge.listManagedServiceStatuses());
+    } catch (error) {
+      toast.error("Managed service check failed", error instanceof Error ? error.message : undefined);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const startConnectors = async () => {
+    const bridge = getDesktopBridge();
+    if (!bridge) return;
+    setBusy("start-connectors");
+    try {
+      const status = await bridge.startManagedService("browser-connectors");
+      setManagedServices((prev) => upsertManagedService(prev, status));
+      if (status.state === "running") toast.success("Connector stack started", status.message);
+      else toast.warn("Connector stack did not start", status.message);
+    } catch (error) {
+      toast.error("Connector stack start failed", error instanceof Error ? error.message : undefined);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const stopConnectors = async () => {
+    const bridge = getDesktopBridge();
+    if (!bridge) return;
+    setBusy("stop-connectors");
+    try {
+      const status = await bridge.stopManagedService("browser-connectors");
+      setManagedServices((prev) => upsertManagedService(prev, status));
+      if (status.state === "stopped") toast.success("Connector stack stopped", status.message);
+      else toast.info("Connector stack status updated", status.message);
+    } catch (error) {
+      toast.error("Connector stack stop failed", error instanceof Error ? error.message : undefined);
     } finally {
       setBusy(null);
     }
@@ -314,6 +389,98 @@ export function DesktopDiagnosticsPanel() {
                   <HardDrive size={12} /> Open logs folder
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card" style={{ background: "var(--bg-base)" }}>
+          <div className="card__head">
+            <div>
+              <h3 className="card__title" style={{ fontSize: "var(--fs-md)" }}>Desktop logs</h3>
+              <span className="card__subtitle">Recent main-process entries from the current desktop log.</span>
+            </div>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <button className="btn" disabled={busy === "log-preview"} onClick={refreshLogPreview}>
+                <FileText size={12} /> {busy === "log-preview" ? "Loading..." : "Refresh"}
+              </button>
+              <button className="btn" disabled={!logPreview} onClick={exportLogPreview}>
+                <Download size={12} /> Export
+              </button>
+              <button className="btn" disabled={busy === "logs"} onClick={openLogs}>
+                <HardDrive size={12} /> Open folder
+              </button>
+            </div>
+          </div>
+          <div className="card__body">
+            <pre
+              className="mono"
+              style={{
+                background: "var(--bg-muted)",
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                maxHeight: 260,
+                overflow: "auto",
+                padding: 12,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            >
+              {logPreview || "No log preview loaded."}
+            </pre>
+          </div>
+        </div>
+
+        <div className="card" style={{ background: "var(--bg-base)" }}>
+          <div className="card__head">
+            <div>
+              <h3 className="card__title" style={{ fontSize: "var(--fs-md)" }}>Managed local helpers</h3>
+              <span className="card__subtitle">Explicit controls for optional helper services. Nothing starts automatically.</span>
+            </div>
+            <button className="btn" disabled={busy === "managed-services"} onClick={refreshManagedServices}>
+              <RefreshCw size={12} /> {busy === "managed-services" ? "Checking..." : "Refresh"}
+            </button>
+          </div>
+          <div className="card__body">
+            <div className="settings-list">
+              {managedServices.map((service) => (
+                <div className="settings-row" key={service.id}>
+                  <div style={{ flex: 1 }}>
+                    <strong>{service.label}</strong>
+                    <div className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+                      {service.message ?? service.composeFile ?? "Status unavailable."}
+                    </div>
+                    {service.composeFile && (
+                      <div className="muted mono" style={{ fontSize: "var(--fs-xs)", marginTop: 3 }}>
+                        {service.composeFile}
+                      </div>
+                    )}
+                  </div>
+                  <Badge tone={managedServiceTone(service.state)}>
+                    {service.state}
+                  </Badge>
+                  {service.id === "browser-connectors" && (
+                    <>
+                      <button
+                        className="btn"
+                        disabled={!service.manageable || busy === "start-connectors" || service.state === "running"}
+                        onClick={startConnectors}
+                      >
+                        {busy === "start-connectors" ? "Starting..." : "Start"}
+                      </button>
+                      <button
+                        className="btn"
+                        disabled={!service.manageable || busy === "stop-connectors" || service.state === "stopped"}
+                        onClick={stopConnectors}
+                      >
+                        {busy === "stop-connectors" ? "Stopping..." : "Stop"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))}
+              {managedServices.length === 0 && (
+                <div className="muted">No managed helper services are available.</div>
+              )}
             </div>
           </div>
         </div>
@@ -439,4 +606,22 @@ function DiagnosticRows({ rows }: { rows: [string, string][] }) {
       ))}
     </div>
   );
+}
+
+function upsertManagedService(
+  services: DesktopManagedServiceStatus[],
+  next: DesktopManagedServiceStatus,
+) {
+  const found = services.some((service) => service.id === next.id);
+  return found
+    ? services.map((service) => (service.id === next.id ? next : service))
+    : [...services, next];
+}
+
+function managedServiceTone(state: DesktopManagedServiceStatus["state"]) {
+  if (state === "running") return "success";
+  if (state === "stopped" || state === "disabled") return "neutral";
+  if (state === "not-installed") return "info";
+  if (state === "starting" || state === "stopping" || state === "unhealthy") return "warn";
+  return "danger";
 }

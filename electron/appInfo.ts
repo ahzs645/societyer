@@ -1,5 +1,6 @@
 import { app } from "electron";
 import { getIconPaths, type DesktopIconPaths } from "./assets.js";
+import { SOCIETYER_BUILD_COMMIT } from "./buildMetadata.js";
 import type { DesktopEnvironment } from "./environment.js";
 
 export type DesktopAppInfo = {
@@ -49,7 +50,7 @@ export function configureAppIdentity() {
   app.setAboutPanelOptions({
     applicationName: "Societyer",
     applicationVersion: app.getVersion(),
-    version: process.env.SOCIETYER_BUILD_COMMIT?.slice(0, 12) || (app.isPackaged ? app.getVersion() : "development"),
+    version: SOCIETYER_BUILD_COMMIT || process.env.SOCIETYER_BUILD_COMMIT?.slice(0, 12) || (app.isPackaged ? app.getVersion() : "development"),
     copyright: "Societyer",
   });
 

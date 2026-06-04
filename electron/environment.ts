@@ -1,6 +1,7 @@
 import { app } from "electron";
 import os from "node:os";
 import path from "node:path";
+import { SOCIETYER_BUILD_COMMIT } from "./buildMetadata.js";
 import { getDesktopRunId, getLogDirectory } from "./observability.js";
 
 export type DesktopEnvironment = {
@@ -64,6 +65,7 @@ function resolveBuildCommit() {
     process.env.SOCIETYER_BUILD_COMMIT ||
     process.env.GITHUB_SHA ||
     process.env.VERCEL_GIT_COMMIT_SHA ||
+    SOCIETYER_BUILD_COMMIT ||
     "";
   return /^[0-9a-f]{7,40}$/i.test(value) ? value.slice(0, 12).toLowerCase() : null;
 }

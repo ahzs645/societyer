@@ -25,5 +25,13 @@
   "win": {
     "icon": "assets/electron/icon.ico",
     "target": ["nsis"]
-  }
+  },
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "ahzs645",
+      "repo": "societyer",
+      "releaseType": "draft"
+    }
+  ]
 }

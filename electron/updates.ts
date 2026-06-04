@@ -5,6 +5,17 @@ import { readDesktopConfig, updateDesktopConfig } from "./config.js";
 import type { DesktopEnvironment } from "./environment.js";
 import { pathExists } from "./assets.js";
 import { makeDesktopLogger } from "./observability.js";
+import {
+  createDisabledUpdateState,
+  createIdleUpdateState,
+  updateCheckFailed,
+  updateCheckStarted,
+  updateCheckSucceeded,
+  updateDownloadFailed,
+  updateDownloadProgress,
+  updateDownloadStarted,
+  updateDownloadSucceeded,
+} from "./updateMachine.js";
 
 const { autoUpdater } = electronUpdater;
 const logger = makeDesktopLogger("updates");
@@ -55,42 +66,34 @@ async function resolveInitialUpdateState(environment: DesktopEnvironment): Promi
   };
 
   if (!(await pathExists(environment.appUpdateYmlPath))) {
-    return {
+    return createDisabledUpdateState({
       ...base,
-      status: "disabled",
-      enabled: false,
       reason: "Automatic updates are not configured because app-update.yml is missing.",
-    };
+    });
   }
 
   const provider = parseProvider(await readFile(environment.appUpdateYmlPath, "utf8"));
   if (!provider) {
-    return {
+    return createDisabledUpdateState({
       ...base,
-      status: "disabled",
-      enabled: false,
       reason: "Automatic updates are not configured because app-update.yml has no provider.",
-    };
+    });
   }
 
   if (!environment.isPackaged) {
-    return {
+    return createDisabledUpdateState({
       ...base,
-      status: "disabled",
-      enabled: false,
       reason: "Automatic updates are only enabled for packaged production builds.",
-    };
+    });
   }
 
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.channel = channel;
-  return {
+  return createIdleUpdateState({
     ...base,
-    status: "idle",
-    enabled: true,
     reason: `Update feed configured with ${provider}.`,
-  };
+  });
 }
 
 export async function getUpdateState(environment: DesktopEnvironment): Promise<DesktopUpdateState> {
@@ -112,21 +115,18 @@ export async function checkForUpdate(environment: DesktopEnvironment): Promise<D
   const current = await getUpdateState(environment);
   if (!current.enabled) return current;
 
-  updateState = { ...current, status: "checking", error: undefined };
+  updateState = updateCheckStarted(current);
   await logger.info("checking for updates", { channel: current.channel });
   try {
     const result: UpdateCheckResult | null = await autoUpdater.checkForUpdates();
     const version = result?.updateInfo?.version;
-    updateState = version
-      ? { ...updateState, status: "available", availableVersion: version }
-      : { ...updateState, status: "idle", reason: "No update is available." };
+    updateState = updateCheckSucceeded(updateState, version);
   } catch (error) {
     await logger.error("update check failed", error);
-    updateState = {
-      ...updateState,
-      status: "error",
-      error: error instanceof Error ? error.message : "Update check failed.",
-    };
+    updateState = updateCheckFailed(
+      updateState,
+      error instanceof Error ? error.message : "Update check failed.",
+    );
   }
   return updateState;
 }
@@ -135,30 +135,20 @@ export async function downloadUpdate(environment: DesktopEnvironment): Promise<D
   const current = await getUpdateState(environment);
   if (!current.enabled || !current.availableVersion) return current;
 
-  updateState = { ...current, status: "downloading", downloadPercent: 0, error: undefined };
+  updateState = updateDownloadStarted(current);
   await logger.info("downloading update", { availableVersion: current.availableVersion });
   autoUpdater.once("download-progress", (progress) => {
-    updateState = {
-      ...(updateState ?? current),
-      status: "downloading",
-      downloadPercent: Math.round(progress.percent),
-    };
+    updateState = updateDownloadProgress(updateState ?? current, progress.percent);
   });
   try {
     await autoUpdater.downloadUpdate();
-    updateState = {
-      ...(updateState ?? current),
-      status: "downloaded",
-      downloadedVersion: current.availableVersion,
-      downloadPercent: 100,
-    };
+    updateState = updateDownloadSucceeded(updateState ?? current);
   } catch (error) {
     await logger.error("update download failed", error);
-    updateState = {
-      ...(updateState ?? current),
-      status: "error",
-      error: error instanceof Error ? error.message : "Update download failed.",
-    };
+    updateState = updateDownloadFailed(
+      updateState ?? current,
+      error instanceof Error ? error.message : "Update download failed.",
+    );
   }
   return updateState;
 }

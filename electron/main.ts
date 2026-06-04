@@ -10,12 +10,13 @@ import { configureApplicationMenu } from "./menu.js";
 import { makeDesktopLogger } from "./observability.js";
 import { registerDesktopAppProtocol, registerDesktopProtocolPrivileges } from "./protocol.js";
 import { registerNativeThemeSync } from "./theme.js";
+import { configureUserDataPath } from "./userData.js";
 import { ensureWorkspace } from "./workspace.js";
 import { createMainWindow } from "./window.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL || process.env.SOCIETYER_ELECTRON_DEV === "1");
-app.setPath("userData", path.join(app.getPath("appData"), isDev ? "Societyer Desktop Dev" : "Societyer Desktop"));
+const userDataMigration = configureUserDataPath(isDev);
 const environment = createDesktopEnvironment(__dirname);
 const logger = makeDesktopLogger("main");
 
@@ -40,6 +41,9 @@ registerIpc(environment);
 app.whenReady().then(() =>
   runStartupStage("bootstrap", async () => {
     await logger.info("bootstrap start", { isDev: environment.isDev, isPackaged: environment.isPackaged });
+    if (userDataMigration.migratedFrom) {
+      await logger.info("migrated legacy userData", userDataMigration);
+    }
     configureAppIdentity();
     await configurePlatformAppIdentity(environment);
     registerDesktopAppProtocol(environment);

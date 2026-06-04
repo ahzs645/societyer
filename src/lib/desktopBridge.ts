@@ -99,9 +99,34 @@ export type DesktopServiceStatus = {
 export type DesktopServiceProfile = {
   id: string;
   name: string;
+  kind: "local-only" | "browser-imports" | "rustfs-replication" | "paperless" | "full-assisted";
   services: Record<string, { endpoint?: string; enabled?: boolean }>;
   updatedAtISO: string;
   active: boolean;
+};
+
+export type DesktopManagedServiceId =
+  | "browser-connectors"
+  | "paperless-ngx"
+  | "rustfs"
+  | "sync-helper"
+  | "ai-worker";
+
+export type DesktopManagedServiceStatus = {
+  id: DesktopManagedServiceId;
+  label: string;
+  state:
+    | "disabled"
+    | "not-installed"
+    | "stopped"
+    | "starting"
+    | "running"
+    | "unhealthy"
+    | "stopping"
+    | "error";
+  manageable: boolean;
+  message?: string;
+  composeFile?: string;
 };
 
 export type DesktopSecretKey =
@@ -132,6 +157,12 @@ export type SocietyerDesktopBridge = {
   checkConnector(endpoint: string): Promise<DesktopConnectorHealth>;
   openExternal(url: string): Promise<boolean>;
   getAppInfo(): Promise<DesktopAppInfo>;
+  readMainLog(maxBytes?: number): Promise<string>;
+  logRendererEvent(input: {
+    level: "info" | "warn" | "error";
+    message: string;
+    details?: Record<string, unknown>;
+  }): Promise<void>;
   getUpdateState(): Promise<DesktopUpdateStatus>;
   checkForUpdate(): Promise<DesktopUpdateStatus>;
   downloadUpdate(): Promise<DesktopUpdateStatus>;
@@ -142,8 +173,15 @@ export type SocietyerDesktopBridge = {
   getServiceConfig(serviceId: DesktopServiceId): Promise<DesktopServiceConfig>;
   saveServiceConfig(config: DesktopServiceConfig): Promise<DesktopServiceConfig>;
   listServiceProfiles(): Promise<DesktopServiceProfile[]>;
-  saveServiceProfile(profile: { id: string; name: string }): Promise<DesktopServiceProfile>;
+  saveServiceProfile(profile: {
+    id: string;
+    name: string;
+    kind?: DesktopServiceProfile["kind"];
+  }): Promise<DesktopServiceProfile>;
   activateServiceProfile(id: string): Promise<DesktopServiceProfile>;
+  listManagedServiceStatuses(): Promise<DesktopManagedServiceStatus[]>;
+  startManagedService(id: DesktopManagedServiceId): Promise<DesktopManagedServiceStatus>;
+  stopManagedService(id: DesktopManagedServiceId): Promise<DesktopManagedServiceStatus>;
   openWorkspaceFolder(): Promise<void>;
   openBackupFolder(backupPath?: string): Promise<void>;
   openLogFolder(): Promise<void>;

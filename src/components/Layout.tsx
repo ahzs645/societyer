@@ -732,12 +732,35 @@ export function Layout() {
           })
           .catch((error) => {
             toast.error("Workspace export failed", error instanceof Error ? error.message : undefined);
-          });
+        });
       }
     });
+    const logError = (message: string, details: Record<string, unknown>) => {
+      void bridge.logRendererEvent({ level: "error", message, details }).catch(() => {});
+    };
+    const handleError = (event: ErrorEvent) => {
+      logError("renderer window error", {
+        message: event.message,
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        stack: event.error instanceof Error ? event.error.stack : undefined,
+      });
+    };
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      logError("renderer unhandled rejection", {
+        message: reason instanceof Error ? reason.message : String(reason),
+        stack: reason instanceof Error ? reason.stack : undefined,
+      });
+    };
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
     return () => {
       cleanupTheme();
       cleanupMenu();
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleUnhandledRejection);
     };
   }, [navigate, toast]);
 
