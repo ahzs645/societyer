@@ -4,12 +4,21 @@
   "directories": {
     "output": "release"
   },
+  "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
   "files": [
     "dist/**/*",
     "dist-electron/**/*",
     "package.json"
   ],
   "mac": {
-    "category": "public.app-category.business"
+    "category": "public.app-category.business",
+    "target": ["dmg", "zip"]
+  },
+  "linux": {
+    "target": ["AppImage"],
+    "category": "Office"
+  },
+  "win": {
+    "target": ["nsis"]
   }
 }

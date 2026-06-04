@@ -7,7 +7,7 @@ export function configureApplicationMenu() {
   const appName = app.getName() || "Societyer";
   const focusedWindow = () => BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
   const openDocs = () => {
-    void openExternal("https://github.com");
+    void openExternal("https://github.com/ahzs645/societyer");
   };
 
   const template: MenuItemConstructorOptions[] = [];

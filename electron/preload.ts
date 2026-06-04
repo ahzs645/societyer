@@ -23,6 +23,12 @@ const bridge: SocietyerDesktopBridge = {
   checkConnector: (endpoint: string) => ipcRenderer.invoke(IpcChannels.CHECK_CONNECTOR_CHANNEL, endpoint),
   openExternal: (url: string) => ipcRenderer.invoke(IpcChannels.OPEN_EXTERNAL_CHANNEL, url),
   getAppInfo: () => ipcRenderer.invoke(IpcChannels.GET_APP_INFO_CHANNEL),
+  openWorkspaceFolder: () => ipcRenderer.invoke(IpcChannels.OPEN_WORKSPACE_FOLDER_CHANNEL),
+  openBackupFolder: (backupPath?: string) =>
+    ipcRenderer.invoke(IpcChannels.OPEN_BACKUP_FOLDER_CHANNEL, backupPath),
+  getSecret: (key) => ipcRenderer.invoke(IpcChannels.GET_SECRET_CHANNEL, key),
+  setSecret: (key, value) => ipcRenderer.invoke(IpcChannels.SET_SECRET_CHANNEL, { key, value }),
+  removeSecret: (key) => ipcRenderer.invoke(IpcChannels.REMOVE_SECRET_CHANNEL, key),
   onMenuAction: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, action: unknown) => {
       if (typeof action !== "string") return;

@@ -50,6 +50,17 @@ export type DesktopAppInfo = {
   homePath: string;
 };
 
+export type DesktopSecretKey =
+  | "connector-token"
+  | "rustfs-access-key"
+  | "rustfs-secret-key"
+  | "ai-api-key"
+  | "sync-token";
+
+export type DesktopSecretStatus = {
+  stored: boolean;
+};
+
 export type SocietyerDesktopBridge = {
   chooseWorkspaceDirectory(): Promise<string | null>;
   getWorkspaceInfo(): Promise<DesktopWorkspaceInfo | null>;
@@ -62,6 +73,11 @@ export type SocietyerDesktopBridge = {
   checkConnector(endpoint: string): Promise<DesktopConnectorHealth>;
   openExternal(url: string): Promise<boolean>;
   getAppInfo(): Promise<DesktopAppInfo>;
+  openWorkspaceFolder(): Promise<void>;
+  openBackupFolder(backupPath?: string): Promise<void>;
+  getSecret(key: DesktopSecretKey): Promise<string | null>;
+  setSecret(key: DesktopSecretKey, value: string): Promise<DesktopSecretStatus>;
+  removeSecret(key: DesktopSecretKey): Promise<DesktopSecretStatus>;
   onMenuAction(listener: (action: string) => void): () => void;
 };
 

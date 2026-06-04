@@ -11,8 +11,15 @@ import {
   type WriteDocumentVersionInput,
 } from "./documents.js";
 import * as IpcChannels from "./ipcChannels.js";
+import { getDesktopSecret, removeDesktopSecret, setDesktopSecret } from "./safeStorage.js";
 import { openExternal } from "./shell.js";
-import { createBackup, ensureWorkspace, selectWorkspace } from "./workspace.js";
+import {
+  createBackup,
+  ensureWorkspace,
+  openBackupFolder,
+  openWorkspaceFolder,
+  selectWorkspace,
+} from "./workspace.js";
 
 export function registerIpc() {
   ipcMain.handle(IpcChannels.CHOOSE_WORKSPACE_DIRECTORY_CHANNEL, async () => {
@@ -54,4 +61,13 @@ export function registerIpc() {
   );
   ipcMain.handle(IpcChannels.OPEN_EXTERNAL_CHANNEL, (_event, url: string) => openExternal(url));
   ipcMain.handle(IpcChannels.GET_APP_INFO_CHANNEL, () => getAppInfo());
+  ipcMain.handle(IpcChannels.OPEN_WORKSPACE_FOLDER_CHANNEL, () => openWorkspaceFolder());
+  ipcMain.handle(IpcChannels.OPEN_BACKUP_FOLDER_CHANNEL, (_event, backupPath?: string) =>
+    openBackupFolder(backupPath),
+  );
+  ipcMain.handle(IpcChannels.GET_SECRET_CHANNEL, (_event, key: string) => getDesktopSecret(key));
+  ipcMain.handle(IpcChannels.SET_SECRET_CHANNEL, (_event, input: { key: string; value: string }) =>
+    setDesktopSecret(input.key, input.value),
+  );
+  ipcMain.handle(IpcChannels.REMOVE_SECRET_CHANNEL, (_event, key: string) => removeDesktopSecret(key));
 }

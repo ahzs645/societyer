@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "Local-first desktop and web tools for society records, documents, and operations.",
   "author": "Societyer",
+  "copyright": "Copyright © Societyer",
   "type": "module",
   "main": "dist-electron/electron/main.js",
   "scripts": {
@@ -17,6 +18,7 @@
     "desktop:build:main": "tsc -p tsconfig.electron.json",
     "desktop:package": "npm run desktop:build && electron-builder --mac --config electron-builder.json",
     "desktop:smoke": "npm run desktop:build && node scripts/smoke-desktop.mjs",
+    "desktop:icons": "node scripts/generate-electron-icons.mjs",
     "build:pages": "npm run convex:typecheck && tsc -b && VITE_STABLE_ASSET_NAMES=1 vite build && node scripts/prepare-pages.mjs",
     "preview": "vite preview",
     "convex": "convex dev",
@@ -133,6 +135,7 @@
     "electron": "^42.3.0",
     "electron-builder": "^26.8.1",
     "eslint": "^10.2.1",
+    "pngjs": "^7.0.0",
     "sass": "^1.99.0",
     "typescript": "~5.6.3",
     "typescript-eslint": "^8.59.0",

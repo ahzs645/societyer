@@ -4,6 +4,7 @@ import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { readDesktopConfig, updateDesktopConfig } from "./config.js";
+import { openPath } from "./shell.js";
 
 export type WorkspaceInfo = {
   id: string;
@@ -90,4 +91,22 @@ export async function createBackup() {
     filter: (source) => !source.startsWith(backupRoot),
   });
   return { path: backupPath };
+}
+
+export async function openWorkspaceFolder() {
+  const { root } = await ensureWorkspace();
+  await openPath(root);
+}
+
+export async function openBackupFolder(backupPath?: string) {
+  const { root } = await ensureWorkspace();
+  const backupRoot = path.join(root, "backups");
+  const target = backupPath ? resolveWorkspaceKey(root, backupPath) : backupRoot;
+  const targetResolved = path.resolve(target);
+  const backupRootResolved = path.resolve(backupRoot);
+  if (targetResolved !== backupRootResolved && !targetResolved.startsWith(`${backupRootResolved}${path.sep}`)) {
+    throw new Error("Backup folder is outside the workspace backups directory.");
+  }
+  await mkdir(targetResolved, { recursive: true });
+  await openPath(targetResolved);
 }

@@ -11,6 +11,7 @@ import {
   Upload,
 } from "lucide-react";
 import { PageHeader } from "./_helpers";
+import { DesktopDiagnosticsPanel } from "../components/DesktopDiagnosticsPanel";
 import { Badge } from "../components/ui";
 import {
   getDesktopBridge,
@@ -351,6 +352,8 @@ export function DesktopSetupPage() {
           </div>
         </div>
       </div>
+
+      <DesktopDiagnosticsPanel />
     </div>
   );
 }

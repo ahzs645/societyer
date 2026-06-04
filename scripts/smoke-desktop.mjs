@@ -15,6 +15,7 @@ const child = spawn(electronBin, [mainEntry, `--user-data-dir=${userDataDir}`], 
     ...process.env,
     VITE_DEV_SERVER_URL: "",
     SOCIETYER_WORKSPACE_DIR: workspaceDir,
+    SOCIETYER_DESKTOP_SMOKE_PROBE: "1",
     ELECTRON_ENABLE_LOGGING: "1",
   },
 });
@@ -49,6 +50,9 @@ child.on("exit", async () => {
     "ERR_FILE_NOT_FOUND",
   ];
   const failures = fatalPatterns.filter((pattern) => output.includes(pattern));
+  if (!output.includes("SOCIETYER_DESKTOP_SMOKE_PROBE_OK")) {
+    failures.push("SOCIETYER_DESKTOP_SMOKE_PROBE_OK missing");
+  }
 
   if (failures.length > 0) {
     console.error("\nDesktop smoke test failed:");

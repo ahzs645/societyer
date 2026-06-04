@@ -104,6 +104,8 @@ import type { ThemePreference } from "../lib/theme";
 import { mobileSidebarMediaQuery } from "../lib/breakpoints";
 import { DEFAULT_PINNED_ROUTES } from "../lib/navConfig";
 import { useUIStore, type PinnedView } from "../lib/store";
+import { getDesktopBridge } from "../lib/desktopBridge";
+import { useToast } from "./Toast";
 
 function NotificationBellSafe() {
   return (
@@ -612,6 +614,7 @@ export function Layout() {
   const { t } = useTranslation();
   const loc = useLocation();
   const navigate = useNavigate();
+  const toast = useToast();
   const [isMobileNav, setIsMobileNav] = useState(() =>
     window.matchMedia(mobileSidebarMediaQuery).matches,
   );
@@ -662,6 +665,31 @@ export function Layout() {
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const navContextMenuRef = useRef<HTMLDivElement | null>(null);
   const operationsDeskMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const bridge = getDesktopBridge();
+    if (!bridge) return;
+    return bridge.onMenuAction((action) => {
+      if (action === "create-backup") {
+        void bridge
+          .createBackup()
+          .then((result) => {
+            toast.success("Backup created", {
+              description: result.path,
+              action: {
+                label: "Open",
+                onClick: () => {
+                  void bridge.openBackupFolder(result.path);
+                },
+              },
+            });
+          })
+          .catch((error) => {
+            toast.error("Backup failed", error instanceof Error ? error.message : undefined);
+          });
+      }
+    });
+  }, [toast]);
 
   useEffect(() => {
     if (isStaticDemoRuntime()) return;

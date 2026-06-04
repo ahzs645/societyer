@@ -74,6 +74,18 @@ export async function createMainWindow(options: CreateMainWindowOptions) {
   });
   mainWindow.webContents.on("did-finish-load", () => {
     mainWindow.setTitle(appTitle);
+    if (process.env.SOCIETYER_DESKTOP_SMOKE_PROBE === "1") {
+      void mainWindow.webContents
+        .executeJavaScript(
+          `(async () => Boolean(window.societyerDesktop && window.societyerDesktop.getAppInfo && await window.societyerDesktop.getAppInfo()))()`,
+        )
+        .then((ok) => {
+          console.log(ok ? "SOCIETYER_DESKTOP_SMOKE_PROBE_OK" : "SOCIETYER_DESKTOP_SMOKE_PROBE_FAILED");
+        })
+        .catch((error) => {
+          console.error("SOCIETYER_DESKTOP_SMOKE_PROBE_FAILED", error);
+        });
+    }
   });
   mainWindow.webContents.on(
     "did-fail-load",

@@ -9,6 +9,7 @@ import { RadioGroup, Toggle } from "../components/Controls";
 import { SettingsShell } from "../components/ui";
 import { Settings as SettingsIcon } from "lucide-react";
 import { LocaleSwitcher } from "../components/LocaleSwitcher";
+import { DesktopDiagnosticsPanel } from "../components/DesktopDiagnosticsPanel";
 import { getAuthMode } from "../lib/authMode";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
 import { maintenanceErrorMessage, resetDemoData, seedDemoSociety } from "../lib/maintenanceApi";
@@ -162,6 +163,8 @@ export function SettingsPage() {
           </div>
         </div>
       </div>
+
+      <DesktopDiagnosticsPanel />
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
