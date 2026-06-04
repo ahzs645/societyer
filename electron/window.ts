@@ -12,6 +12,7 @@ export type CreateMainWindowOptions = {
 
 export async function createMainWindow(options: CreateMainWindowOptions) {
   const appTitle = "Societyer";
+  const iconPath = path.resolve(options.dirname, "../../assets/electron/icon.png");
   const mainWindow = new BrowserWindow({
     width: 1320,
     height: 900,
@@ -21,6 +22,7 @@ export async function createMainWindow(options: CreateMainWindowOptions) {
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#0f172a" : "#ffffff",
     title: appTitle,
+    ...(process.platform === "darwin" ? {} : { icon: iconPath }),
     webPreferences: {
       preload: path.join(options.dirname, "preload.js"),
       contextIsolation: true,

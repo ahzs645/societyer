@@ -8,17 +8,22 @@
   "files": [
     "dist/**/*",
     "dist-electron/**/*",
+    "assets/electron/**/*",
     "package.json"
   ],
+  "icon": "assets/electron/icon",
   "mac": {
     "category": "public.app-category.business",
+    "icon": "assets/electron/icon.icns",
     "target": ["dmg", "zip"]
   },
   "linux": {
     "target": ["AppImage"],
-    "category": "Office"
+    "category": "Office",
+    "icon": "assets/electron/icon.png"
   },
   "win": {
+    "icon": "assets/electron/icon.ico",
     "target": ["nsis"]
   }
 }
