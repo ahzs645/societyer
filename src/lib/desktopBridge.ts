@@ -37,6 +37,19 @@ export type DesktopSetupState = {
   complete: boolean;
 };
 
+export type DesktopAppInfo = {
+  name: string;
+  version: string;
+  isPackaged: boolean;
+  platform: string;
+  arch: string;
+  electronVersion: string;
+  chromeVersion: string;
+  nodeVersion: string;
+  userDataPath: string;
+  homePath: string;
+};
+
 export type SocietyerDesktopBridge = {
   chooseWorkspaceDirectory(): Promise<string | null>;
   getWorkspaceInfo(): Promise<DesktopWorkspaceInfo | null>;
@@ -47,6 +60,9 @@ export type SocietyerDesktopBridge = {
   openDocumentVersion(input: DesktopReadDocumentVersionInput): Promise<void>;
   createBackup(): Promise<DesktopBackupResult>;
   checkConnector(endpoint: string): Promise<DesktopConnectorHealth>;
+  openExternal(url: string): Promise<boolean>;
+  getAppInfo(): Promise<DesktopAppInfo>;
+  onMenuAction(listener: (action: string) => void): () => void;
 };
 
 declare global {

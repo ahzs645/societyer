@@ -1,0 +1,12 @@
+export const CHOOSE_WORKSPACE_DIRECTORY_CHANNEL = "societyer:chooseWorkspaceDirectory";
+export const GET_WORKSPACE_INFO_CHANNEL = "societyer:getWorkspaceInfo";
+export const GET_SETUP_STATE_CHANNEL = "societyer:getSetupState";
+export const SET_SETUP_COMPLETE_CHANNEL = "societyer:setSetupComplete";
+export const WRITE_DOCUMENT_VERSION_CHANNEL = "societyer:writeDocumentVersion";
+export const READ_DOCUMENT_VERSION_CHANNEL = "societyer:readDocumentVersion";
+export const OPEN_DOCUMENT_VERSION_CHANNEL = "societyer:openDocumentVersion";
+export const CREATE_BACKUP_CHANNEL = "societyer:createBackup";
+export const CHECK_CONNECTOR_CHANNEL = "societyer:checkConnector";
+export const OPEN_EXTERNAL_CHANNEL = "societyer:openExternal";
+export const GET_APP_INFO_CHANNEL = "societyer:getAppInfo";
+export const MENU_ACTION_CHANNEL = "societyer:menuAction";
