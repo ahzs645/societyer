@@ -8,6 +8,13 @@ export type DesktopConfig = {
   setupComplete?: boolean;
   updateChannel?: "stable" | "beta" | "nightly";
   services?: Record<string, { endpoint?: string; enabled?: boolean }>;
+  serviceProfiles?: Record<string, {
+    id: string;
+    name: string;
+    services: Record<string, { endpoint?: string; enabled?: boolean }>;
+    updatedAtISO: string;
+  }>;
+  activeServiceProfileId?: string;
 };
 
 function configPath() {
@@ -22,6 +29,8 @@ export async function readDesktopConfig(): Promise<DesktopConfig> {
       setupComplete: parsed.setupComplete === true,
       updateChannel: parseUpdateChannel(parsed.updateChannel),
       services: parseServices(parsed.services),
+      serviceProfiles: parseServiceProfiles(parsed.serviceProfiles),
+      activeServiceProfileId: typeof parsed.activeServiceProfileId === "string" ? parsed.activeServiceProfileId : undefined,
     };
   } catch {
     return {};
@@ -38,9 +47,30 @@ export async function writeDesktopConfig(next: DesktopConfig) {
 
 export async function updateDesktopConfig(patch: DesktopConfig) {
   const current = await readDesktopConfig();
-  const next = { ...current, ...patch, services: { ...current.services, ...patch.services } };
+  const next = {
+    ...current,
+    ...patch,
+    services: { ...current.services, ...patch.services },
+    serviceProfiles: { ...current.serviceProfiles, ...patch.serviceProfiles },
+  };
   await writeDesktopConfig(next);
   return next;
+}
+
+function parseServiceProfiles(value: unknown): DesktopConfig["serviceProfiles"] {
+  if (!value || typeof value !== "object") return undefined;
+  const profiles: NonNullable<DesktopConfig["serviceProfiles"]> = {};
+  for (const [id, raw] of Object.entries(value)) {
+    if (!raw || typeof raw !== "object") continue;
+    const profile = raw as { name?: unknown; services?: unknown; updatedAtISO?: unknown };
+    profiles[id] = {
+      id,
+      name: typeof profile.name === "string" ? profile.name : "Service profile",
+      services: parseServices(profile.services) ?? {},
+      updatedAtISO: typeof profile.updatedAtISO === "string" ? profile.updatedAtISO : new Date().toISOString(),
+    };
+  }
+  return profiles;
 }
 
 function parseUpdateChannel(value: unknown): DesktopConfig["updateChannel"] {

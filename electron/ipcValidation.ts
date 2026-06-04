@@ -86,6 +86,20 @@ export const DesktopSchemas = {
     endpoint: z.string().optional(),
     message: z.string().optional(),
   }),
+  serviceProfile: z.object({
+    id: z.string(),
+    name: z.string(),
+    services: z.record(z.string(), z.object({
+      endpoint: z.string().optional(),
+      enabled: z.boolean().optional(),
+    })),
+    updatedAtISO: z.string(),
+    active: z.boolean(),
+  }),
+  saveServiceProfileInput: z.object({
+    id: z.string(),
+    name: z.string(),
+  }),
   appInfo: z.object({
     name: z.string(),
     version: z.string(),
@@ -98,6 +112,9 @@ export const DesktopSchemas = {
     userDataPath: z.string(),
     homePath: z.string(),
     resourcePath: z.string(),
+    logDirectory: z.string(),
+    runId: z.string(),
+    buildCommit: z.string().nullable(),
     runtimeMode: z.string(),
     documentStorageProvider: z.string(),
     iconPaths: z.object({

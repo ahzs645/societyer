@@ -53,6 +53,16 @@ export function applyThemePreference(preference = getStoredThemePreference()): R
   return resolvedTheme;
 }
 
+export function applyResolvedTheme(resolvedTheme: ResolvedTheme): ResolvedTheme {
+  if (typeof document !== "undefined") {
+    const root = document.documentElement;
+    root.classList.remove(...THEME_CLASSES);
+    root.classList.add(resolvedTheme);
+    root.style.colorScheme = resolvedTheme;
+  }
+  return resolvedTheme;
+}
+
 export function watchSystemTheme(onChange: (theme: ResolvedTheme) => void) {
   if (typeof window === "undefined" || !window.matchMedia) return () => {};
 

@@ -101,6 +101,7 @@ import { useThemePreference } from "../hooks/useThemePreference";
 import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
 import { useAiChatVisibility } from "../hooks/useAiChatVisibility";
 import type { ThemePreference } from "../lib/theme";
+import { applyResolvedTheme } from "../lib/theme";
 import { mobileSidebarMediaQuery } from "../lib/breakpoints";
 import { DEFAULT_PINNED_ROUTES } from "../lib/navConfig";
 import { useUIStore, type PinnedView } from "../lib/store";
@@ -669,7 +670,12 @@ export function Layout() {
   useEffect(() => {
     const bridge = getDesktopBridge();
     if (!bridge) return;
-    return bridge.onMenuAction((action) => {
+    const cleanupTheme = bridge.onNativeThemeChanged((state) => {
+      const preference = localStorage.getItem("societyer:theme");
+      if (preference && preference !== "system") return;
+      applyResolvedTheme(state.shouldUseDarkColors ? "dark" : "light");
+    });
+    const cleanupMenu = bridge.onMenuAction((action) => {
       if (action === "create-backup") {
         void bridge
           .createBackup()
@@ -687,9 +693,53 @@ export function Layout() {
           .catch((error) => {
             toast.error("Backup failed", error instanceof Error ? error.message : undefined);
           });
+      } else if (action === "open-settings") {
+        navigate("/app/settings");
+      } else if (action === "open-workspace") {
+        void bridge.openWorkspaceFolder().catch((error) => {
+          toast.error("Could not open workspace", error instanceof Error ? error.message : undefined);
+        });
+      } else if (action === "open-logs") {
+        void bridge.openLogFolder().catch((error) => {
+          toast.error("Could not open logs", error instanceof Error ? error.message : undefined);
+        });
+      } else if (action === "check-services") {
+        void bridge
+          .listServiceStatuses()
+          .then((services) => {
+            const available = services.filter((service) => service.ok).length;
+            toast.info("Service check complete", `${available}/${services.length} optional services available.`);
+          })
+          .catch((error) => {
+            toast.error("Service check failed", error instanceof Error ? error.message : undefined);
+          });
+      } else if (action === "check-for-updates") {
+        void bridge
+          .checkForUpdate()
+          .then((state) => {
+            if (state.status === "available") toast.success("Update available", state.availableVersion);
+            else if (state.status === "error") toast.error("Update check failed", state.error);
+            else toast.info("Update status checked", state.reason);
+          })
+          .catch((error) => {
+            toast.error("Update check failed", error instanceof Error ? error.message : undefined);
+          });
+      } else if (action === "export-workspace") {
+        import("../lib/localWorkspaceExport")
+          .then(({ downloadLocalWorkspaceSnapshot }) => {
+            downloadLocalWorkspaceSnapshot(`societyer-workspace-${new Date().toISOString().slice(0, 10)}.json`);
+            toast.success("Workspace export started");
+          })
+          .catch((error) => {
+            toast.error("Workspace export failed", error instanceof Error ? error.message : undefined);
+          });
       }
     });
-  }, [toast]);
+    return () => {
+      cleanupTheme();
+      cleanupMenu();
+    };
+  }, [navigate, toast]);
 
   useEffect(() => {
     if (isStaticDemoRuntime()) return;

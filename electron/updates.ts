@@ -4,8 +4,10 @@ import { readFile } from "node:fs/promises";
 import { readDesktopConfig, updateDesktopConfig } from "./config.js";
 import type { DesktopEnvironment } from "./environment.js";
 import { pathExists } from "./assets.js";
+import { makeDesktopLogger } from "./observability.js";
 
 const { autoUpdater } = electronUpdater;
+const logger = makeDesktopLogger("updates");
 
 export type DesktopUpdateChannel = "stable" | "beta" | "nightly";
 export type DesktopUpdateStateStatus =
@@ -111,6 +113,7 @@ export async function checkForUpdate(environment: DesktopEnvironment): Promise<D
   if (!current.enabled) return current;
 
   updateState = { ...current, status: "checking", error: undefined };
+  await logger.info("checking for updates", { channel: current.channel });
   try {
     const result: UpdateCheckResult | null = await autoUpdater.checkForUpdates();
     const version = result?.updateInfo?.version;
@@ -118,6 +121,7 @@ export async function checkForUpdate(environment: DesktopEnvironment): Promise<D
       ? { ...updateState, status: "available", availableVersion: version }
       : { ...updateState, status: "idle", reason: "No update is available." };
   } catch (error) {
+    await logger.error("update check failed", error);
     updateState = {
       ...updateState,
       status: "error",
@@ -132,6 +136,7 @@ export async function downloadUpdate(environment: DesktopEnvironment): Promise<D
   if (!current.enabled || !current.availableVersion) return current;
 
   updateState = { ...current, status: "downloading", downloadPercent: 0, error: undefined };
+  await logger.info("downloading update", { availableVersion: current.availableVersion });
   autoUpdater.once("download-progress", (progress) => {
     updateState = {
       ...(updateState ?? current),
@@ -148,6 +153,7 @@ export async function downloadUpdate(environment: DesktopEnvironment): Promise<D
       downloadPercent: 100,
     };
   } catch (error) {
+    await logger.error("update download failed", error);
     updateState = {
       ...(updateState ?? current),
       status: "error",

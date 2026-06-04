@@ -49,6 +49,9 @@ export type DesktopAppInfo = {
   userDataPath: string;
   homePath: string;
   resourcePath: string;
+  logDirectory: string;
+  runId: string;
+  buildCommit: string | null;
   runtimeMode: string;
   documentStorageProvider: string;
   iconPaths: {
@@ -93,6 +96,14 @@ export type DesktopServiceStatus = {
   message?: string;
 };
 
+export type DesktopServiceProfile = {
+  id: string;
+  name: string;
+  services: Record<string, { endpoint?: string; enabled?: boolean }>;
+  updatedAtISO: string;
+  active: boolean;
+};
+
 export type DesktopSecretKey =
   | "connector-token"
   | "rustfs-access-key"
@@ -102,6 +113,11 @@ export type DesktopSecretKey =
 
 export type DesktopSecretStatus = {
   stored: boolean;
+};
+
+export type DesktopNativeThemeState = {
+  shouldUseDarkColors: boolean;
+  themeSource: string;
 };
 
 export type SocietyerDesktopBridge = {
@@ -125,11 +141,16 @@ export type SocietyerDesktopBridge = {
   checkService(serviceId: DesktopServiceId): Promise<DesktopServiceStatus>;
   getServiceConfig(serviceId: DesktopServiceId): Promise<DesktopServiceConfig>;
   saveServiceConfig(config: DesktopServiceConfig): Promise<DesktopServiceConfig>;
+  listServiceProfiles(): Promise<DesktopServiceProfile[]>;
+  saveServiceProfile(profile: { id: string; name: string }): Promise<DesktopServiceProfile>;
+  activateServiceProfile(id: string): Promise<DesktopServiceProfile>;
   openWorkspaceFolder(): Promise<void>;
   openBackupFolder(backupPath?: string): Promise<void>;
+  openLogFolder(): Promise<void>;
   getSecret(key: DesktopSecretKey): Promise<string | null>;
   setSecret(key: DesktopSecretKey, value: string): Promise<DesktopSecretStatus>;
   removeSecret(key: DesktopSecretKey): Promise<DesktopSecretStatus>;
+  onNativeThemeChanged(listener: (state: DesktopNativeThemeState) => void): () => void;
   onMenuAction(listener: (action: string) => void): () => void;
 };
 

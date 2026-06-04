@@ -1,4 +1,7 @@
 import { readDesktopConfig, updateDesktopConfig } from "./config.js";
+import { makeDesktopLogger } from "./observability.js";
+
+const logger = makeDesktopLogger("services");
 
 export type DesktopServiceId =
   | "browser-connectors"
@@ -20,6 +23,14 @@ export type DesktopServiceStatus = {
   ok: boolean;
   endpoint?: string;
   message?: string;
+};
+
+export type DesktopServiceProfile = {
+  id: string;
+  name: string;
+  services: Record<string, { endpoint?: string; enabled?: boolean }>;
+  updatedAtISO: string;
+  active: boolean;
 };
 
 const SERVICES: Record<DesktopServiceId, { label: string; healthPath?: string }> = {
@@ -59,6 +70,41 @@ export async function listServiceStatuses(): Promise<DesktopServiceStatus[]> {
   return Promise.all((Object.keys(SERVICES) as DesktopServiceId[]).map((id) => checkService(id)));
 }
 
+export async function listServiceProfiles(): Promise<DesktopServiceProfile[]> {
+  const config = await readDesktopConfig();
+  return Object.values(config.serviceProfiles ?? {}).map((profile) => ({
+    ...profile,
+    active: profile.id === config.activeServiceProfileId,
+  }));
+}
+
+export async function saveCurrentServiceProfile(input: { id: string; name: string }) {
+  const config = await readDesktopConfig();
+  const id = sanitizeProfileId(input.id);
+  const profile = {
+    id,
+    name: input.name.trim() || "Service profile",
+    services: config.services ?? {},
+    updatedAtISO: new Date().toISOString(),
+  };
+  await updateDesktopConfig({
+    serviceProfiles: { [id]: profile },
+    activeServiceProfileId: id,
+  });
+  return { ...profile, active: true };
+}
+
+export async function activateServiceProfile(id: string) {
+  const config = await readDesktopConfig();
+  const profile = config.serviceProfiles?.[id];
+  if (!profile) throw new Error("Service profile not found.");
+  await updateDesktopConfig({
+    services: profile.services,
+    activeServiceProfileId: id,
+  });
+  return { ...profile, active: true };
+}
+
 export async function checkService(serviceId: DesktopServiceId): Promise<DesktopServiceStatus> {
   const service = SERVICES[serviceId];
   const config = await getServiceConfig(serviceId);
@@ -95,6 +141,7 @@ export async function checkService(serviceId: DesktopServiceId): Promise<Desktop
       message: response.ok ? "Service is available." : `Service returned ${response.status}.`,
     };
   } catch (error) {
+    await logger.warn("service health check failed", { serviceId, endpoint, error });
     return {
       id: serviceId,
       label: service.label,
@@ -104,4 +151,8 @@ export async function checkService(serviceId: DesktopServiceId): Promise<Desktop
       message: error instanceof Error ? error.message : "Service is unavailable.",
     };
   }
+}
+
+function sanitizeProfileId(value: string) {
+  return value.trim().replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 80) || "default";
 }

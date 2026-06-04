@@ -1,9 +1,11 @@
-import type * as Electron from "electron";
-import { BrowserWindow, Menu, nativeTheme } from "electron";
+import { BrowserWindow, nativeTheme } from "electron";
 import path from "node:path";
 
+import { showDefaultContextMenu } from "./contextMenu.js";
 import { resolveResourcePath } from "./assets.js";
 import type { DesktopEnvironment } from "./environment.js";
+import { makeDesktopLogger } from "./observability.js";
+import { SOCIETYER_APP_PROTOCOL } from "./protocol.js";
 import { hardenWindowNavigation } from "./shell.js";
 
 export type CreateMainWindowOptions = {
@@ -13,6 +15,7 @@ export type CreateMainWindowOptions = {
 export async function createMainWindow(options: CreateMainWindowOptions) {
   const appTitle = "Societyer";
   const { environment } = options;
+  const logger = makeDesktopLogger("window");
   const iconPath = await resolveResourcePath(environment, "icon.png");
   const mainWindow = new BrowserWindow({
     width: 1320,
@@ -38,37 +41,7 @@ export async function createMainWindow(options: CreateMainWindowOptions) {
 
   mainWindow.webContents.on("context-menu", (event, params) => {
     event.preventDefault();
-    const template: Electron.MenuItemConstructorOptions[] = [];
-
-    if (params.misspelledWord) {
-      for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
-        template.push({
-          label: suggestion,
-          click: () => mainWindow.webContents.replaceMisspelling(suggestion),
-        });
-      }
-      if (params.dictionarySuggestions.length === 0) {
-        template.push({ label: "No suggestions", enabled: false });
-      }
-      template.push({ type: "separator" });
-    }
-
-    if (params.mediaType === "image") {
-      template.push({
-        label: "Copy Image",
-        click: () => mainWindow.webContents.copyImageAt(params.x, params.y),
-      });
-      template.push({ type: "separator" });
-    }
-
-    template.push(
-      { role: "cut", enabled: params.editFlags.canCut },
-      { role: "copy", enabled: params.editFlags.canCopy },
-      { role: "paste", enabled: params.editFlags.canPaste },
-      { role: "selectAll", enabled: params.editFlags.canSelectAll },
-    );
-
-    Menu.buildFromTemplate(template).popup({ window: mainWindow });
+    showDefaultContextMenu({ window: mainWindow, webContents: mainWindow.webContents, params });
   });
 
   mainWindow.on("page-title-updated", (event) => {
@@ -99,10 +72,12 @@ export async function createMainWindow(options: CreateMainWindowOptions) {
         errorDescription,
         validatedURL,
       });
+      void logger.warn("main frame failed to load", { errorCode, errorDescription, validatedURL });
     },
   );
   mainWindow.webContents.on("render-process-gone", (_event, details) => {
     console.warn("Societyer Electron render process gone", details);
+    void logger.warn("render process gone", details);
   });
 
   const allowedOrigins: string[] = [];
@@ -113,7 +88,7 @@ export async function createMainWindow(options: CreateMainWindowOptions) {
     await mainWindow.loadURL(devUrl);
   } else {
     hardenWindowNavigation(mainWindow, allowedOrigins);
-    await mainWindow.loadFile(environment.distIndexPath);
+    await mainWindow.loadURL(`${SOCIETYER_APP_PROTOCOL}://index.html`);
   }
 
   return mainWindow;

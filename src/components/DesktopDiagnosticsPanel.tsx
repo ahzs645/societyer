@@ -59,7 +59,7 @@ export function DesktopDiagnosticsPanel() {
   );
   const [connectorHealth, setConnectorHealth] = useState<DesktopConnectorHealth | null>(null);
   const [serviceStatuses, setServiceStatuses] = useState<DesktopServiceStatus[]>([]);
-  const [busy, setBusy] = useState<"backup" | "connector" | "workspace" | "backup-folder" | "updates" | "services" | null>(null);
+  const [busy, setBusy] = useState<"backup" | "connector" | "workspace" | "backup-folder" | "logs" | "updates" | "services" | null>(null);
   const [backupPath, setBackupPath] = useState<string | null>(null);
   const [secretValues, setSecretValues] = useState<Partial<Record<DesktopSecretKey, string>>>({});
   const [storedSecrets, setStoredSecrets] = useState<Partial<Record<DesktopSecretKey, boolean>>>({});
@@ -150,6 +150,19 @@ export function DesktopDiagnosticsPanel() {
       await bridge.openBackupFolder(backupPath ?? undefined);
     } catch (error) {
       toast.error("Could not open backup folder", error instanceof Error ? error.message : undefined);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const openLogs = async () => {
+    const bridge = getDesktopBridge();
+    if (!bridge) return;
+    setBusy("logs");
+    try {
+      await bridge.openLogFolder();
+    } catch (error) {
+      toast.error("Could not open logs", error instanceof Error ? error.message : undefined);
     } finally {
       setBusy(null);
     }
@@ -256,6 +269,9 @@ export function DesktopDiagnosticsPanel() {
                   ["Chrome", appInfo?.chromeVersion ?? "Loading..."],
                   ["Node", appInfo?.nodeVersion ?? "Loading..."],
                   ["Resource path", appInfo?.resourcePath ?? "Loading..."],
+                  ["Log folder", appInfo?.logDirectory ?? "Loading..."],
+                  ["Run ID", appInfo?.runId ?? "Loading..."],
+                  ["Build commit", appInfo?.buildCommit ?? "Not embedded"],
                   ["Icon PNG", appInfo?.iconPaths.png ?? "Not found"],
                   ["Runtime mode", appInfo?.runtimeMode ?? runtime.mode],
                   ["Document storage", appInfo?.documentStorageProvider ?? runtime.documentStorage],
@@ -293,6 +309,9 @@ export function DesktopDiagnosticsPanel() {
                 </button>
                 <button className="btn" disabled={busy === "backup-folder"} onClick={openBackup}>
                   <HardDrive size={12} /> Open backup folder
+                </button>
+                <button className="btn" disabled={busy === "logs"} onClick={openLogs}>
+                  <HardDrive size={12} /> Open logs folder
                 </button>
               </div>
             </div>

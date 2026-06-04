@@ -12,16 +12,20 @@ import {
 import type { DesktopEnvironment } from "./environment.js";
 import * as IpcChannels from "./ipcChannels.js";
 import { DesktopSchemas, handleValidatedIpc, VoidPayloadSchema } from "./ipcValidation.js";
+import { getLogDirectory } from "./observability.js";
 import { getDesktopSecret, removeDesktopSecret, setDesktopSecret } from "./safeStorage.js";
 import {
   checkService,
+  activateServiceProfile,
   getServiceConfig,
   isDesktopServiceId,
+  listServiceProfiles,
   listServiceStatuses,
+  saveCurrentServiceProfile,
   saveServiceConfig,
   type DesktopServiceId,
 } from "./services.js";
-import { openExternal } from "./shell.js";
+import { openExternal, openPath } from "./shell.js";
 import {
   checkForUpdate,
   downloadUpdate,
@@ -133,6 +137,12 @@ function registerWorkspaceHandlers() {
     payload: optionalString,
     handler: (_event, backupPath) => openBackupFolder(backupPath),
   });
+
+  handleValidatedIpc({
+    channel: IpcChannels.OPEN_LOG_FOLDER_CHANNEL,
+    payload: VoidPayloadSchema,
+    handler: () => openPath(getLogDirectory()),
+  });
 }
 
 function registerDocumentHandlers() {
@@ -230,6 +240,27 @@ function registerServiceHandlers() {
     payload: DesktopSchemas.serviceConfig,
     result: DesktopSchemas.serviceConfig,
     handler: (_event, input) => saveServiceConfig(input),
+  });
+
+  handleValidatedIpc({
+    channel: IpcChannels.LIST_SERVICE_PROFILES_CHANNEL,
+    payload: VoidPayloadSchema,
+    result: z.array(DesktopSchemas.serviceProfile),
+    handler: () => listServiceProfiles(),
+  });
+
+  handleValidatedIpc({
+    channel: IpcChannels.SAVE_SERVICE_PROFILE_CHANNEL,
+    payload: DesktopSchemas.saveServiceProfileInput,
+    result: DesktopSchemas.serviceProfile,
+    handler: (_event, input) => saveCurrentServiceProfile(input),
+  });
+
+  handleValidatedIpc({
+    channel: IpcChannels.ACTIVATE_SERVICE_PROFILE_CHANNEL,
+    payload: z.string(),
+    result: DesktopSchemas.serviceProfile,
+    handler: (_event, id) => activateServiceProfile(id),
   });
 }
 
