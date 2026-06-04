@@ -23,6 +23,7 @@ const bridge: SocietyerDesktopBridge = {
   checkConnector: (endpoint: string) => ipcRenderer.invoke(IpcChannels.CHECK_CONNECTOR_CHANNEL, endpoint),
   openExternal: (url: string) => ipcRenderer.invoke(IpcChannels.OPEN_EXTERNAL_CHANNEL, url),
   getAppInfo: () => ipcRenderer.invoke(IpcChannels.GET_APP_INFO_CHANNEL),
+  getUpdateStatus: () => ipcRenderer.invoke(IpcChannels.GET_UPDATE_STATUS_CHANNEL),
   openWorkspaceFolder: () => ipcRenderer.invoke(IpcChannels.OPEN_WORKSPACE_FOLDER_CHANNEL),
   openBackupFolder: (backupPath?: string) =>
     ipcRenderer.invoke(IpcChannels.OPEN_BACKUP_FOLDER_CHANNEL, backupPath),

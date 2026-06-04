@@ -48,6 +48,20 @@ export type DesktopAppInfo = {
   nodeVersion: string;
   userDataPath: string;
   homePath: string;
+  resourcePath: string;
+  iconPaths: {
+    png: string | null;
+    icns: string | null;
+    ico: string | null;
+  };
+};
+
+export type DesktopUpdateStatus = {
+  enabled: boolean;
+  available: boolean;
+  currentVersion: string;
+  reason: string;
+  feedPath: string;
 };
 
 export type DesktopSecretKey =
@@ -73,6 +87,7 @@ export type SocietyerDesktopBridge = {
   checkConnector(endpoint: string): Promise<DesktopConnectorHealth>;
   openExternal(url: string): Promise<boolean>;
   getAppInfo(): Promise<DesktopAppInfo>;
+  getUpdateStatus(): Promise<DesktopUpdateStatus>;
   openWorkspaceFolder(): Promise<void>;
   openBackupFolder(backupPath?: string): Promise<void>;
   getSecret(key: DesktopSecretKey): Promise<string | null>;

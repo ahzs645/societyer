@@ -13,6 +13,7 @@ import {
 import * as IpcChannels from "./ipcChannels.js";
 import { getDesktopSecret, removeDesktopSecret, setDesktopSecret } from "./safeStorage.js";
 import { openExternal } from "./shell.js";
+import { getUpdateStatus } from "./updates.js";
 import {
   createBackup,
   ensureWorkspace,
@@ -21,7 +22,7 @@ import {
   selectWorkspace,
 } from "./workspace.js";
 
-export function registerIpc() {
+export function registerIpc(dirname: string) {
   ipcMain.handle(IpcChannels.CHOOSE_WORKSPACE_DIRECTORY_CHANNEL, async () => {
     const result = await dialog.showOpenDialog({
       properties: ["openDirectory", "createDirectory"],
@@ -60,7 +61,8 @@ export function registerIpc() {
     checkConnector(endpoint),
   );
   ipcMain.handle(IpcChannels.OPEN_EXTERNAL_CHANNEL, (_event, url: string) => openExternal(url));
-  ipcMain.handle(IpcChannels.GET_APP_INFO_CHANNEL, () => getAppInfo());
+  ipcMain.handle(IpcChannels.GET_APP_INFO_CHANNEL, () => getAppInfo(dirname));
+  ipcMain.handle(IpcChannels.GET_UPDATE_STATUS_CHANNEL, () => getUpdateStatus(dirname));
   ipcMain.handle(IpcChannels.OPEN_WORKSPACE_FOLDER_CHANNEL, () => openWorkspaceFolder());
   ipcMain.handle(IpcChannels.OPEN_BACKUP_FOLDER_CHANNEL, (_event, backupPath?: string) =>
     openBackupFolder(backupPath),

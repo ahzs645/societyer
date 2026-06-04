@@ -7,6 +7,7 @@ import {
   type DesktopAppInfo,
   type DesktopConnectorHealth,
   type DesktopSecretKey,
+  type DesktopUpdateStatus,
   type DesktopWorkspaceInfo,
 } from "../lib/desktopBridge";
 import { getRuntimeDescriptor } from "../lib/runtimeMode";
@@ -49,6 +50,7 @@ export function DesktopDiagnosticsPanel() {
   const runtime = useMemo(() => getRuntimeDescriptor(), []);
   const toast = useToast();
   const [appInfo, setAppInfo] = useState<DesktopAppInfo | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<DesktopUpdateStatus | null>(null);
   const [workspace, setWorkspace] = useState<DesktopWorkspaceInfo | null>(null);
   const [setupComplete, setSetupComplete] = useState<boolean | null>(null);
   const [connectorEndpoint, setConnectorEndpoint] = useState(
@@ -64,10 +66,16 @@ export function DesktopDiagnosticsPanel() {
     const bridge = getDesktopBridge();
     if (!bridge) return;
     let active = true;
-    Promise.all([bridge.getAppInfo(), bridge.getWorkspaceInfo(), bridge.getSetupState()])
-      .then(([info, workspaceInfo, setup]) => {
+    Promise.all([
+      bridge.getAppInfo(),
+      bridge.getUpdateStatus(),
+      bridge.getWorkspaceInfo(),
+      bridge.getSetupState(),
+    ])
+      .then(([info, updates, workspaceInfo, setup]) => {
         if (!active) return;
         setAppInfo(info);
+        setUpdateStatus(updates);
         setWorkspace(workspaceInfo);
         setSetupComplete(setup.complete);
       })
@@ -213,8 +221,12 @@ export function DesktopDiagnosticsPanel() {
                   ["Electron", appInfo?.electronVersion ?? "Loading..."],
                   ["Chrome", appInfo?.chromeVersion ?? "Loading..."],
                   ["Node", appInfo?.nodeVersion ?? "Loading..."],
+                  ["Resource path", appInfo?.resourcePath ?? "Loading..."],
+                  ["Icon PNG", appInfo?.iconPaths.png ?? "Not found"],
                   ["Document storage", runtime.documentStorage],
                   ["Setup complete", setupComplete === null ? "Loading..." : setupComplete ? "Yes" : "No"],
+                  ["Updates", updateStatus ? (updateStatus.enabled ? "Enabled" : "Disabled") : "Loading..."],
+                  ["Update reason", updateStatus?.reason ?? "Loading..."],
                 ]}
               />
             </div>

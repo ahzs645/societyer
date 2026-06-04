@@ -1,5 +1,6 @@
 import { app } from "electron";
 import os from "node:os";
+import { getIconPaths, type DesktopIconPaths } from "./assets.js";
 
 export type DesktopAppInfo = {
   name: string;
@@ -12,9 +13,11 @@ export type DesktopAppInfo = {
   nodeVersion: string;
   userDataPath: string;
   homePath: string;
+  resourcePath: string;
+  iconPaths: DesktopIconPaths;
 };
 
-export function getAppInfo(): DesktopAppInfo {
+export async function getAppInfo(dirname: string): Promise<DesktopAppInfo> {
   return {
     name: app.getName(),
     version: app.getVersion(),
@@ -26,6 +29,8 @@ export function getAppInfo(): DesktopAppInfo {
     nodeVersion: process.versions.node,
     userDataPath: app.getPath("userData"),
     homePath: os.homedir(),
+    resourcePath: process.resourcesPath,
+    iconPaths: await getIconPaths(dirname),
   };
 }
 

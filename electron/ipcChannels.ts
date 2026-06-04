@@ -9,6 +9,7 @@ export const CREATE_BACKUP_CHANNEL = "societyer:createBackup";
 export const CHECK_CONNECTOR_CHANNEL = "societyer:checkConnector";
 export const OPEN_EXTERNAL_CHANNEL = "societyer:openExternal";
 export const GET_APP_INFO_CHANNEL = "societyer:getAppInfo";
+export const GET_UPDATE_STATUS_CHANNEL = "societyer:getUpdateStatus";
 export const MENU_ACTION_CHANNEL = "societyer:menuAction";
 export const OPEN_WORKSPACE_FOLDER_CHANNEL = "societyer:openWorkspaceFolder";
 export const OPEN_BACKUP_FOLDER_CHANNEL = "societyer:openBackupFolder";

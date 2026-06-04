@@ -1,6 +1,7 @@
 import { app } from "electron";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 
 export type DesktopConfig = {
   workspaceRoot?: string;
@@ -25,7 +26,10 @@ export async function readDesktopConfig(): Promise<DesktopConfig> {
 
 export async function writeDesktopConfig(next: DesktopConfig) {
   await mkdir(app.getPath("userData"), { recursive: true });
-  await writeFile(configPath(), JSON.stringify(next, null, 2));
+  const targetPath = configPath();
+  const tempPath = `${targetPath}.${process.pid}.${randomUUID().replace(/-/g, "")}.tmp`;
+  await writeFile(tempPath, `${JSON.stringify(next, null, 2)}\n`);
+  await rename(tempPath, targetPath);
 }
 
 export async function updateDesktopConfig(patch: DesktopConfig) {

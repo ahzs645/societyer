@@ -27,7 +27,7 @@ async function openMainWindow() {
   return mainWindow;
 }
 
-registerIpc();
+registerIpc(__dirname);
 
 app.whenReady().then(async () => {
   configureAppIdentity();
