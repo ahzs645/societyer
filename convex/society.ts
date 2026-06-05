@@ -303,6 +303,22 @@ export const updateInventorySettings = mutation({
   },
 });
 
+export const updateNotificationSettings = mutation({
+  args: {
+    societyId: v.id("societies"),
+    // Days dismissed notifications are retained before purge. 0 = keep forever.
+    notificationRetentionDays: v.number(),
+  },
+  returns: v.id("societies"),
+  handler: async (ctx, { societyId, notificationRetentionDays }) => {
+    await ctx.db.patch(societyId, {
+      notificationRetentionDays: Math.max(0, Math.round(notificationRetentionDays)),
+      updatedAt: Date.now(),
+    });
+    return societyId;
+  },
+});
+
 function blankToUndefined(value?: string) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;

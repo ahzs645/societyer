@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { RadioGroup, Toggle } from "../components/Controls";
+import { Select } from "../components/Select";
 import { SettingsShell } from "../components/ui";
 import { Settings as SettingsIcon } from "lucide-react";
 import { LocaleSwitcher } from "../components/LocaleSwitcher";
@@ -34,6 +35,7 @@ export function SettingsPage() {
   const authMode = getAuthMode();
   const updateModules = useMutation(api.society.updateModules);
   const updateInventorySettings = useMutation(api.society.updateInventorySettings);
+  const updateNotificationSettings = useMutation(api.society.updateNotificationSettings);
   const seedSharedViews = useMutation(api.views.seedGovernanceDataTableViews);
   const confirm = useConfirm();
   const toast = useToast();
@@ -45,6 +47,8 @@ export function SettingsPage() {
   const [savingModule, setSavingModule] = useState<ModuleKey | null>(null);
   const [inventoryPromptEnabled, setInventoryPromptEnabled] = useState(false);
   const [savingInventorySettings, setSavingInventorySettings] = useState(false);
+  const [retentionDays, setRetentionDays] = useState("30");
+  const [savingRetention, setSavingRetention] = useState(false);
   const [maintenanceBusy, setMaintenanceBusy] = useState<"seed" | "reset" | null>(null);
   const [sharedViewsBusy, setSharedViewsBusy] = useState(false);
 
@@ -52,6 +56,7 @@ export function SettingsPage() {
     if (!society) return;
     setModuleSettings(normalizeModuleSettings(society));
     setInventoryPromptEnabled(Boolean(society.consumableIntakeCountPromptEnabled));
+    setRetentionDays(String(society.notificationRetentionDays ?? 30));
   }, [society]);
 
   const modulesByCategory = useMemo(
@@ -121,6 +126,28 @@ export function SettingsPage() {
       toast.error("Couldn't update inventory settings");
     } finally {
       setSavingInventorySettings(false);
+    }
+  };
+
+  const changeRetention = async (value: string) => {
+    const previous = retentionDays;
+    setRetentionDays(value);
+    setSavingRetention(true);
+    try {
+      await updateNotificationSettings({
+        societyId: society._id,
+        notificationRetentionDays: Number(value),
+      });
+      toast.success(
+        value === "0"
+          ? "Cleared notifications will be kept until deleted manually"
+          : `Cleared notifications will be kept for ${value} days`,
+      );
+    } catch (error) {
+      setRetentionDays(previous);
+      toast.error("Couldn't update notification settings");
+    } finally {
+      setSavingRetention(false);
     }
   };
 
@@ -256,6 +283,39 @@ export function SettingsPage() {
             label="Prompt for current count when adding consumables"
             hint="When adding stock to a consumable item, ask how many are left first, then add the new amount to that observed count."
           />
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">Notifications</h2>
+          <span className="card__subtitle">Controls for the in-app notification center.</span>
+        </div>
+        <div className="card__body col" style={{ gap: 12 }}>
+          <div className="settings-row" style={{ display: "flex", alignItems: "center", gap: 16, justifyContent: "space-between" }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 500 }}>Keep cleared notifications for</div>
+              <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>
+                When you clear a notification it leaves the bell immediately, but stays on the
+                Notifications page under “Dismissed” for this long before it’s permanently deleted.
+              </div>
+            </div>
+            <div style={{ flexShrink: 0, minWidth: 160 }}>
+              <Select
+                value={retentionDays}
+                onChange={changeRetention}
+                disabled={savingRetention}
+                options={[
+                  { value: "7", label: "7 days" },
+                  { value: "14", label: "14 days" },
+                  { value: "30", label: "30 days" },
+                  { value: "60", label: "60 days" },
+                  { value: "90", label: "90 days" },
+                  { value: "0", label: "Keep until deleted" },
+                ]}
+              />
+            </div>
+          </div>
         </div>
       </div>
 

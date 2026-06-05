@@ -57,6 +57,9 @@ export default defineSchema({
     publicGrantIntakeEnabled: v.optional(v.boolean()),
     disabledModules: v.optional(v.array(v.string())),
     consumableIntakeCountPromptEnabled: v.optional(v.boolean()),
+    // Days a dismissed notification is kept before the daily purge deletes it.
+    // Undefined = use the default (30). 0 = keep forever (never auto-delete).
+    notificationRetentionDays: v.optional(v.number()),
     demoMode: v.optional(v.boolean()),
     updatedAt: v.number(),
   }).index("by_public_slug", ["publicSlug"]),
@@ -763,6 +766,10 @@ export default defineSchema({
     body: v.optional(v.string()),
     linkHref: v.optional(v.string()),
     readAt: v.optional(v.string()),
+    // Set when the user clears the notification from the bell. Hidden from the
+    // bell + unread count immediately, but kept visible on the Notifications
+    // page until the daily purge removes it after the retention window.
+    dismissedAt: v.optional(v.string()),
     createdAtISO: v.string(),
   })
     .index("by_society", ["societyId"])
