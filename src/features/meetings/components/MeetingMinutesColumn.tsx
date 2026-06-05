@@ -4,6 +4,8 @@ import { Link } from "react-router-dom";
 import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, ExternalLink, FileText, GripVertical, IndentDecrease, IndentIncrease, ListChecks, Mic, MinusCircle, MoreHorizontal, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
 import { Badge, Field, MenuRow } from "../../../components/ui";
 import { MarkdownEditor, type MarkdownEditorHandle } from "../../../components/MarkdownEditor";
+import { LineListEditor } from "../../../components/LineListEditor";
+import { ListEditor } from "../../../components/ListEditor";
 import { useConfirm } from "../../../components/Modal";
 import { Checkbox } from "../../../components/Controls";
 import { LegalGuideInline } from "../../../components/LegalGuide";
@@ -251,7 +253,7 @@ export function MeetingMinutesColumn({
       type: "discussion",
       presenter: "",
       discussion: "",
-      decisions: "",
+      decisions: [],
       actionItems: [],
       linkedTaskIds: [],
       taskUpdates: {},
@@ -932,7 +934,7 @@ export function MeetingMinutesColumn({
       type: section.type ?? "discussion",
       presenter: section.presenter ?? "",
       discussion: section.discussion ?? "",
-      decisions: (section.decisions ?? []).join("\n"),
+      decisions: Array.isArray(section.decisions) ? section.decisions : [],
       actionItems: normalizeActionDrafts(section.actionItems ?? []),
       linkedTaskIds: Array.isArray(section.linkedTaskIds) ? section.linkedTaskIds : [],
       taskUpdates: {},
@@ -952,7 +954,7 @@ export function MeetingMinutesColumn({
       type: sectionDraft.type.trim() || undefined,
       presenter: cleanOptional(sectionDraft.presenter),
       discussion: cleanOptional(sectionDraft.discussion),
-      decisions: parseMultiline(sectionDraft.decisions),
+      decisions: sectionDraft.decisions.map((d) => d.trim()).filter(Boolean),
       actionItems: sectionDraft.actionItems
         .map((item) => ({
           text: item.text.trim(),
@@ -1189,8 +1191,14 @@ export function MeetingMinutesColumn({
                 placeholder="Expenses incurred by Ahmad: $80.00 for notary signing, $33.01 for posters. Receipts are recorded on Teams under Expenses."
               />
             </Field>
-            <Field label="Decisions" hint="One per line.">
-              <textarea className="textarea" rows={8} value={sectionDraft.decisions} onChange={(event) => setSectionDraft({ ...sectionDraft, decisions: event.target.value })} />
+            <Field label="Decisions">
+              <LineListEditor
+                items={sectionDraft.decisions}
+                onChange={(next) => setSectionDraft({ ...sectionDraft, decisions: next })}
+                placeholder="Add a decision…"
+                addLabel="Add decision"
+                aria-label="Decisions"
+              />
             </Field>
           </div>
         )}
@@ -2477,7 +2485,7 @@ type SectionDraft = {
   type: string;
   presenter: string;
   discussion: string;
-  decisions: string;
+  decisions: string[];
   actionItems: SectionActionDraft[];
   linkedTaskIds: string[];
   taskUpdates: Record<string, { status?: string; completionNote?: string }>;
@@ -2536,79 +2544,67 @@ function AttendanceRoster({
   const absentCount = people.length - presentCount;
 
   return (
-    <div className="attendance-roster">
-      <div className="attendance-roster__head">
-        <strong>Attendance</strong>
-        <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-          {presentCount} present · {absentCount} absent / regrets
-        </span>
-      </div>
-      {people.length > 0 && (
-        <ul className="attendance-roster__list">
-          {people.map((person, index) => (
-            <li key={`${index}-${person.name}`} className="attendance-roster__row">
-              <button
-                type="button"
-                className="attendance-roster__remove"
-                onClick={() => remove(index)}
-                aria-label={`Remove ${person.name}`}
-                title={`Remove ${person.name}`}
-              >
-                <MinusCircle size={16} />
-              </button>
-              <span className="attendance-roster__name">{person.name}</span>
-              <div className="attendance-roster__status segmented">
-                <button
-                  type="button"
-                  className={`segmented__btn${person.status === "present" ? " is-active" : ""}`}
-                  onClick={() => setStatus(index, "present")}
-                >
-                  Present
-                </button>
-                <button
-                  type="button"
-                  className={`segmented__btn${person.status === "absent" ? " is-active" : ""}`}
-                  onClick={() => setStatus(index, "absent")}
-                >
-                  Absent / regrets
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+    <ListEditor
+      items={people}
+      divided
+      onRemove={remove}
+      getRemoveLabel={(person) => `Remove ${person.name}`}
+      header={
+        <>
+          <strong>Attendance</strong>
+          <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+            {presentCount} present · {absentCount} absent / regrets
+          </span>
+        </>
+      }
+      renderItem={(person, index) => (
+        <>
+          <span className="attendance-roster__name">{person.name}</span>
+          <div className="attendance-roster__status segmented">
+            <button
+              type="button"
+              className={`segmented__btn${person.status === "present" ? " is-active" : ""}`}
+              onClick={() => setStatus(index, "present")}
+            >
+              Present
+            </button>
+            <button
+              type="button"
+              className={`segmented__btn${person.status === "absent" ? " is-active" : ""}`}
+              onClick={() => setStatus(index, "absent")}
+            >
+              Absent / regrets
+            </button>
+          </div>
+        </>
       )}
-      <div className="attendance-roster__add">
-        <NameAutocomplete
-          value={draft}
-          onChange={setDraft}
-          options={suggestions}
-          excludeOptions={takenNames}
-          placeholder="Type a name"
-          onCommit={(name) => commit(name)}
-        />
-        <button
-          type="button"
-          className="btn-action"
-          onClick={() => commit()}
-          disabled={!draft.trim()}
-        >
-          <Plus size={12} /> Add
-        </button>
-      </div>
-    </div>
+      footer={
+        <>
+          <NameAutocomplete
+            value={draft}
+            onChange={setDraft}
+            options={suggestions}
+            excludeOptions={takenNames}
+            placeholder="Type a name"
+            onCommit={(name) => commit(name)}
+          />
+          <button
+            type="button"
+            className="btn-action"
+            onClick={() => commit()}
+            disabled={!draft.trim()}
+          >
+            <Plus size={12} /> Add
+          </button>
+        </>
+      }
+    />
   );
 }
 
 function cleanOptional(value: string | undefined | null) {
   const text = String(value ?? "").trim();
   return text || undefined;
-}
-
-function parseMultiline(value: string) {
-  return String(value ?? "")
-    .split(/\r?\n/)
-    .map((line) => line.trim().replace(/^[-*•]\s*/, ""))
-    .filter(Boolean);
 }
 
 function normalizeActionDrafts(items: any[]): SectionActionDraft[] {

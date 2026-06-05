@@ -301,7 +301,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         featureConfigs: {
           [CrepeFeature.Placeholder]: {
             text: placeholderRef.current ?? "",
-            mode: "block",
+            // "doc" shows the placeholder only when the whole document is
+            // empty. "block" paints it on every empty paragraph, so it
+            // reappeared on each new line as the user pressed Enter.
+            mode: "doc",
           },
         },
       });
