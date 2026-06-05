@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "outDir": "dist-electron",
+    "rootDir": ".",
+    "types": ["node", "electron"],
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["electron/**/*.ts", "src/vite-env.d.ts", "src/lib/desktopBridge.ts", "src/lib/documentStorage.ts", "src/lib/runtimeMode.ts"]
+}

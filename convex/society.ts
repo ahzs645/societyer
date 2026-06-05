@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { disabledModulesValidator } from "./lib/moduleSettings";
 import { assertAllowedOption } from "./lib/orgHubOptions";
 import { seedSociety } from "./seedRecordTableMetadata";
+import { registryOnboardingCopy } from "../shared/jurisdictionWorkspace";
 
 export const get = query({
   args: {},
@@ -34,6 +35,10 @@ export const upsert = mutation({
     incorporationDate: v.optional(v.string()),
     fiscalYearEnd: v.optional(v.string()),
     jurisdictionCode: v.optional(v.string()),
+    homeJurisdictionCode: v.optional(v.string()),
+    primaryRegistrationId: v.optional(v.id("organizationRegistrations")),
+    anniversaryDate: v.optional(v.string()),
+    corporationKeyVaultItemId: v.optional(v.id("secretVaultItems")),
     entityType: v.optional(v.string()),
     actFormedUnder: v.optional(v.string()),
     officialEmail: v.optional(v.string()),
@@ -91,7 +96,12 @@ export const upsert = mutation({
         throw new Error("Public slug is already in use by another society.");
       }
     }
-    const payload = { ...rest, updatedAt: Date.now() };
+    const payload = {
+      ...rest,
+      homeJurisdictionCode: rest.homeJurisdictionCode ?? rest.jurisdictionCode,
+      anniversaryDate: rest.anniversaryDate ?? rest.incorporationDate,
+      updatedAt: Date.now(),
+    };
     if (id) {
       await ctx.db.patch(id, payload);
       return id;
@@ -112,9 +122,15 @@ export const createWorkspace = mutation({
     incorporationDate: v.optional(v.string()),
     fiscalYearEnd: v.optional(v.string()),
     jurisdictionCode: v.optional(v.string()),
+    homeJurisdictionCode: v.optional(v.string()),
+    anniversaryDate: v.optional(v.string()),
+    corporationKeyVaultItemId: v.optional(v.id("secretVaultItems")),
     entityType: v.optional(v.string()),
     actFormedUnder: v.optional(v.string()),
     officialEmail: v.optional(v.string()),
+    numbered: v.optional(v.boolean()),
+    distributing: v.optional(v.boolean()),
+    solicitingPublicBenefit: v.optional(v.boolean()),
     organizationStatus: v.optional(v.string()),
     registeredOfficeAddress: v.optional(v.string()),
     mailingAddress: v.optional(v.string()),
@@ -141,15 +157,25 @@ export const createWorkspace = mutation({
     assertAllowedOption("organizationStatuses", args.organizationStatus, "Organization status");
 
     const now = new Date().toISOString();
+    const jurisdictionCode = args.jurisdictionCode ?? "CA-BC";
+    const homeJurisdictionCode = args.homeJurisdictionCode ?? jurisdictionCode;
+    const anniversaryDate = blankToUndefined(args.anniversaryDate) ?? blankToUndefined(args.incorporationDate);
+
     const societyId = await ctx.db.insert("societies", {
       name,
       incorporationNumber: blankToUndefined(args.incorporationNumber),
       incorporationDate: blankToUndefined(args.incorporationDate),
       fiscalYearEnd: blankToUndefined(args.fiscalYearEnd),
-      jurisdictionCode: args.jurisdictionCode ?? "CA-BC",
+      jurisdictionCode,
+      homeJurisdictionCode,
+      anniversaryDate,
+      corporationKeyVaultItemId: args.corporationKeyVaultItemId,
       entityType: blankToUndefined(args.entityType),
       actFormedUnder: blankToUndefined(args.actFormedUnder),
       officialEmail: blankToUndefined(args.officialEmail),
+      numbered: args.numbered,
+      distributing: args.distributing,
+      solicitingPublicBenefit: args.solicitingPublicBenefit,
       organizationStatus: args.organizationStatus ?? "active",
       registeredOfficeAddress: blankToUndefined(args.registeredOfficeAddress),
       mailingAddress: blankToUndefined(args.mailingAddress),
@@ -160,6 +186,21 @@ export const createWorkspace = mutation({
       isMemberFunded: args.isMemberFunded ?? false,
       updatedAt: Date.now(),
     });
+    const homeRegistrationId = await ctx.db.insert("organizationRegistrations", {
+      societyId,
+      registrationType: "home",
+      jurisdiction: homeJurisdictionCode,
+      homeJurisdiction: homeJurisdictionCode,
+      registrationNumber: blankToUndefined(args.incorporationNumber),
+      registrationDate: blankToUndefined(args.incorporationDate),
+      officialEmail: blankToUndefined(args.officialEmail),
+      representativeIds: [],
+      status: "active",
+      notes: "Created automatically from the workspace home jurisdiction.",
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    await ctx.db.patch(societyId, { primaryRegistrationId: homeRegistrationId });
     await seedSociety(ctx, societyId);
 
     const workflowId = await ctx.db.insert("workflows", {
@@ -168,7 +209,7 @@ export const createWorkspace = mutation({
       name: "Workspace onboarding",
       status: "active",
       provider: "internal",
-      nodePreview: workspaceOnboardingNodes(),
+      nodePreview: buildWorkspaceOnboardingNodes(args),
       trigger: { kind: "manual" },
       config: {
         source: "createWorkspace",
@@ -197,7 +238,7 @@ export const createWorkspace = mutation({
     });
 
     const taskIds = [];
-    for (const task of workspaceOnboardingTasks(args)) {
+    for (const task of buildWorkspaceOnboardingTasks(args)) {
       taskIds.push(await ctx.db.insert("tasks", {
         societyId,
         workflowId,
@@ -247,25 +288,41 @@ export const updateModules = mutation({
   },
 });
 
+export const updateInventorySettings = mutation({
+  args: {
+    societyId: v.id("societies"),
+    consumableIntakeCountPromptEnabled: v.boolean(),
+  },
+  returns: v.id("societies"),
+  handler: async (ctx, { societyId, consumableIntakeCountPromptEnabled }) => {
+    await ctx.db.patch(societyId, {
+      consumableIntakeCountPromptEnabled,
+      updatedAt: Date.now(),
+    });
+    return societyId;
+  },
+});
+
 function blankToUndefined(value?: string) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
 
-function workspaceOnboardingNodes() {
+export function buildWorkspaceOnboardingNodes(args: any = {}) {
+  const registry = registryOnboardingCopy(args?.jurisdictionCode ?? "CA-BC");
   return [
     {
       key: "profile",
       type: "form",
-      label: "Society profile",
-      description: "Legal name, incorporation number/date, fiscal year end, jurisdiction, purposes, charity/member-funded flags, and official email.",
+      label: "Organization profile",
+      description: "Legal name, incorporation number/date, fiscal year end, jurisdiction, governing act, key status flags, and official email.",
       status: "ready",
     },
     {
       key: "registry_optional",
       type: "form",
-      label: "Registry verification",
-      description: "Optional check for registry status, last annual report, filing history, key custody, authorized filers, and BC Registry connector setup.",
+      label: registry.label,
+      description: registry.nodeDescription,
       status: "draft",
     },
     {
@@ -299,16 +356,17 @@ function workspaceOnboardingNodes() {
   ];
 }
 
-function workspaceOnboardingTasks(args: any) {
+export function buildWorkspaceOnboardingTasks(args: any) {
   const missingIdentity = [
     !args.incorporationNumber ? "incorporation number" : null,
     !args.incorporationDate ? "incorporation date" : null,
     !args.fiscalYearEnd ? "fiscal year end" : null,
   ].filter(Boolean);
+  const registry = registryOnboardingCopy(args?.jurisdictionCode ?? "CA-BC");
   return [
     {
-      title: "Optional: verify BC Registry access",
-      description: `Confirm registry status, last annual report, filing history, registry key custody, authorized filers, and whether to connect the BC Registry browser workspace.${missingIdentity.length ? ` Missing profile fields now: ${missingIdentity.join(", ")}.` : ""}`,
+      title: registry.taskTitle,
+      description: `${registry.taskDescription}${missingIdentity.length ? ` Missing profile fields now: ${missingIdentity.join(", ")}.` : ""}`,
       priority: missingIdentity.length ? "High" : "Medium",
       tags: ["optional", "registry"],
     },

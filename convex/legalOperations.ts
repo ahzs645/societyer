@@ -7,6 +7,20 @@ import {
   starterTemplateMarker,
   starterTemplateRequiredFields,
 } from "./starterPolicyTemplates";
+import {
+  CORPORATION_DOCUMENT_PACKETS,
+  corporationPacketEntityTypes,
+  corporationPacketForComplianceObligation,
+  corporationPacketPrecedentMarker,
+  corporationPacketTemplateHtml,
+  corporationPacketTemplateMarker,
+} from "../shared/corporationDocumentPackets";
+import {
+  corporationPacketDocxDataUrl,
+  corporationPacketDocxFileName,
+  corporationPacketDocxMimeType,
+} from "../shared/corporationPacketDocx";
+import { materializeRightsHoldings, validateLedger } from "../shared/equityLedger";
 
 export const listRoleHolders = query({
   args: { societyId: v.id("societies") },
@@ -167,6 +181,7 @@ export const rightsLedger = query({
     ]);
     return {
       classes: classes.sort((a, b) => String(a.className).localeCompare(String(b.className))),
+      holdings: await ctx.db.query("rightsHoldings").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
       transfers: transfers.sort((a, b) => String(b.transferDate ?? b.createdAtISO).localeCompare(String(a.transferDate ?? a.createdAtISO))),
       roleHolders: roleHolders.sort((a, b) => String(a.fullName).localeCompare(String(b.fullName))),
     };
@@ -281,11 +296,23 @@ export const upsertRightsholdingTransfer = mutation({
       notes: cleanText(args.notes),
       updatedAtISO: now,
     };
+    const existingTransfers = await ctx.db
+      .query("rightsholdingTransfers")
+      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+      .collect();
+    const proposedTransfers = existingTransfers
+      .filter((transfer) => !id || String(transfer._id) !== String(id))
+      .concat([{ ...payload, _id: id ?? "proposed", _creationTime: Date.now(), createdAtISO: now }])
+      .sort(rightsholdingTransferChronologicalSort);
+    validateLedger(proposedTransfers);
     if (id) {
       await ctx.db.patch(id, payload);
+      await syncRightsHoldings(ctx, args.societyId);
       return id;
     }
-    return await ctx.db.insert("rightsholdingTransfers", { ...payload, createdAtISO: now });
+    const transferId = await ctx.db.insert("rightsholdingTransfers", { ...payload, createdAtISO: now });
+    await syncRightsHoldings(ctx, args.societyId);
+    return transferId;
   },
 });
 
@@ -301,7 +328,9 @@ export const removeRightsholdingTransfer = mutation({
   args: { id: v.id("rightsholdingTransfers") },
   returns: v.any(),
   handler: async (ctx, { id }) => {
+    const existing = await ctx.db.get(id);
     await ctx.db.delete(id);
+    if (existing?.societyId) await syncRightsHoldings(ctx, existing.societyId);
   },
 });
 
@@ -394,6 +423,197 @@ export const seedStarterPolicyTemplates = mutation({
     }
 
     return { inserted, updated, skipped, total: STARTER_POLICY_TEMPLATES.length };
+  },
+});
+
+export const seedCorporationDocumentPackets = mutation({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, { societyId }) => seedCorporationDocumentPacketsForSociety(ctx, societyId),
+});
+
+export const stageCorporationDocumentPacket = mutation({
+  args: {
+    societyId: v.id("societies"),
+    packetKey: v.optional(v.string()),
+    obligationKey: v.optional(v.string()),
+    obligationRuleId: v.optional(v.string()),
+    obligationTitle: v.optional(v.string()),
+    filingKind: v.optional(v.string()),
+    dueDate: v.optional(v.string()),
+    filingId: v.optional(v.id("filings")),
+    sourceRegistrationId: v.optional(v.string()),
+    notes: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    await seedCorporationDocumentPacketsForSociety(ctx, args.societyId);
+    const packet = args.packetKey
+      ? CORPORATION_DOCUMENT_PACKETS.find((candidate) => candidate.key === args.packetKey)
+      : corporationPacketForComplianceObligation({
+          filingKind: args.filingKind,
+          obligationKey: args.obligationKey,
+          ruleId: args.obligationRuleId,
+        });
+    if (!packet) throw new Error("No corporation document packet matches this obligation.");
+
+    const precedent = await corporationPacketPrecedentForSociety(ctx, args.societyId, packet);
+
+    const now = new Date().toISOString();
+    const runId = await ctx.db.insert("legalPrecedentRuns", {
+      societyId: args.societyId,
+      name: `${packet.packageName}${args.dueDate ? ` - ${args.dueDate}` : ""}`,
+      status: "draft",
+      precedentId: precedent._id,
+      eventId: args.obligationRuleId,
+      dateTime: args.dueDate,
+      dataJson: JSON.stringify({
+        packetKey: packet.key,
+        obligationKey: args.obligationKey,
+        obligationRuleId: args.obligationRuleId,
+        obligationTitle: args.obligationTitle,
+        filingKind: args.filingKind,
+        dueDate: args.dueDate,
+        sourceRegistrationId: args.sourceRegistrationId,
+      }),
+      dataJsonList: [],
+      dataReviewed: false,
+      externalNotes: args.obligationTitle,
+      searchIds: [],
+      registrationIds: args.sourceRegistrationId ? [args.sourceRegistrationId] : [],
+      filingIds: args.filingId ? [args.filingId] : [],
+      generatedDocumentIds: [],
+      signerRoleHolderIds: [],
+      priceItems: [],
+      abstainingDirectorIds: [],
+      abstainingRightsholderIds: [],
+      sourceExternalIds: [
+        `societyer:compliance-obligation:${args.obligationRuleId ?? args.obligationKey ?? packet.key}`,
+        `societyer:corporation-packet-run:${packet.key}`,
+      ],
+      notes: args.notes ?? `Staged from compliance obligation ${args.obligationKey ?? args.obligationRuleId ?? packet.key}.`,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    const artifacts = await createPacketRunArtifacts(ctx, {
+      societyId: args.societyId,
+      packet,
+      runId,
+      eventId: args.obligationRuleId ?? args.obligationKey,
+      effectiveDate: args.dueDate,
+      filingId: args.filingId,
+      dataJson: JSON.stringify({
+        packetKey: packet.key,
+        obligationKey: args.obligationKey,
+        obligationRuleId: args.obligationRuleId,
+        obligationTitle: args.obligationTitle,
+        filingKind: args.filingKind,
+        dueDate: args.dueDate,
+        sourceRegistrationId: args.sourceRegistrationId,
+      }),
+      notes: args.notes ?? `Editable packet output staged from compliance obligation ${args.obligationKey ?? args.obligationRuleId ?? packet.key}.`,
+    });
+    return { runId, packetKey: packet.key, precedentId: precedent._id, ...artifacts };
+  },
+});
+
+export const stageShareIssuancePacket = mutation({
+  args: {
+    societyId: v.id("societies"),
+    transferId: v.id("rightsholdingTransfers"),
+    notes: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const transfer = await ctx.db.get(args.transferId);
+    if (!transfer || transfer.societyId !== args.societyId) {
+      throw new Error("Share issuance transfer was not found for this workspace.");
+    }
+    if (transfer.transferType !== "issuance") {
+      throw new Error("Only issuance transfers can stage the share issuance packet.");
+    }
+    const packet = CORPORATION_DOCUMENT_PACKETS.find((candidate) => candidate.key === "issue-shares");
+    if (!packet) throw new Error("Share issuance packet is not configured.");
+
+    await seedCorporationDocumentPacketsForSociety(ctx, args.societyId);
+    const precedent = await corporationPacketPrecedentForSociety(ctx, args.societyId, packet);
+    const now = new Date().toISOString();
+    const runId = await ctx.db.insert("legalPrecedentRuns", {
+      societyId: args.societyId,
+      name: `${packet.packageName}${transfer.transferDate ? ` - ${transfer.transferDate}` : ""}`,
+      status: "draft",
+      precedentId: precedent._id,
+      eventId: String(args.transferId),
+      dateTime: transfer.transferDate,
+      dataJson: JSON.stringify({
+        packetKey: packet.key,
+        transferId: args.transferId,
+        transferType: transfer.transferType,
+        transferDate: transfer.transferDate,
+        rightsClassId: transfer.rightsClassId,
+        destinationRoleHolderId: transfer.destinationRoleHolderId,
+        destinationHolderName: transfer.destinationHolderName,
+        quantity: transfer.quantity,
+        considerationType: transfer.considerationType,
+        considerationDescription: transfer.considerationDescription,
+      }),
+      dataJsonList: [],
+      dataReviewed: false,
+      externalNotes: "Share issuance packet staged from the share register.",
+      searchIds: [],
+      registrationIds: [],
+      filingIds: [],
+      generatedDocumentIds: [],
+      signerRoleHolderIds: transfer.destinationRoleHolderId ? [transfer.destinationRoleHolderId] : [],
+      priceItems: [],
+      abstainingDirectorIds: [],
+      abstainingRightsholderIds: [],
+      sourceExternalIds: [
+        `societyer:rightsholding-transfer:${args.transferId}`,
+        `societyer:corporation-packet-run:${packet.key}`,
+      ],
+      notes: args.notes ?? `Staged share issuance packet for ledger transfer ${args.transferId}.`,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    const artifacts = await createPacketRunArtifacts(ctx, {
+      societyId: args.societyId,
+      packet,
+      runId,
+      eventId: String(args.transferId),
+      effectiveDate: transfer.transferDate,
+      signerRoleHolderIds: transfer.destinationRoleHolderId ? [transfer.destinationRoleHolderId] : [],
+      dataJson: JSON.stringify({
+        packetKey: packet.key,
+        transferId: args.transferId,
+        transferType: transfer.transferType,
+        transferDate: transfer.transferDate,
+        rightsClassId: transfer.rightsClassId,
+        destinationRoleHolderId: transfer.destinationRoleHolderId,
+        destinationHolderName: transfer.destinationHolderName,
+        quantity: transfer.quantity,
+        considerationType: transfer.considerationType,
+        considerationDescription: transfer.considerationDescription,
+      }),
+      notes: args.notes ?? `Editable share issuance packet output staged for ledger transfer ${args.transferId}.`,
+    });
+    await ctx.db.patch(args.transferId, {
+      precedentRunId: runId,
+      sourceDocumentIds: cleanDocumentIds([...(transfer.sourceDocumentIds ?? []), artifacts.draftDocumentId]),
+      sourceExternalIds: cleanList([
+        ...(transfer.sourceExternalIds ?? []),
+        `societyer:corporation-packet-run:${packet.key}`,
+        `societyer:legal-precedent-run:${runId}`,
+        `societyer:generated-legal-document:${artifacts.generatedDocumentId}`,
+        `societyer:minute-book-item:${artifacts.minuteBookItemId}`,
+        `societyer:source-evidence:${artifacts.sourceEvidenceId}`,
+        ...artifacts.signerIds.map((signerId: string) => `societyer:legal-signer:${signerId}`),
+      ]),
+      notes: [transfer.notes, args.notes ?? "Share issuance packet staged in Template Engine."].filter(Boolean).join("\n\n"),
+      updatedAtISO: now,
+    });
+    await syncRightsHoldings(ctx, args.societyId);
+    return { runId, packetKey: packet.key, precedentId: precedent._id, transferId: args.transferId, ...artifacts };
   },
 });
 
@@ -1196,12 +1416,383 @@ export const removeSupportLog = mutation({
   },
 });
 
+async function seedCorporationDocumentPacketsForSociety(ctx: any, societyId: any) {
+  const now = new Date().toISOString();
+  const [existingTemplates, existingPrecedents] = await Promise.all([
+    ctx.db.query("legalTemplates").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
+    ctx.db.query("legalPrecedents").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
+  ]);
+  let insertedTemplates = 0;
+  let updatedTemplates = 0;
+  let skippedTemplates = 0;
+  let insertedPrecedents = 0;
+  let updatedPrecedents = 0;
+  let skippedPrecedents = 0;
+  const templateIdByPacketKey = new Map<string, any>();
+
+  for (const packet of CORPORATION_DOCUMENT_PACKETS) {
+    const marker = corporationPacketTemplateMarker(packet);
+    const existingByMarker = existingTemplates.find((row: any) => (row.sourceExternalIds ?? []).includes(marker));
+    const existingByName = existingTemplates.find((row: any) => String(row.name ?? "").toLowerCase() === packet.templateName.toLowerCase());
+    const payload = {
+      societyId,
+      templateType: "document",
+      name: packet.templateName,
+      status: "active",
+      templateDocumentId: undefined,
+      docxDocumentId: undefined,
+      pdfDocumentId: undefined,
+      html: corporationPacketTemplateHtml(packet),
+      notes: [
+        packet.summary,
+        "Catalog packet for corporation minute book, registers, filings, and compliance evidence.",
+        `Packet key: ${packet.key}`,
+      ].join("\n"),
+      owner: "Societyer corporation packet catalog",
+      ownerIsTobuso: false,
+      signatureRequired: packet.signatureRequired,
+      documentTag: packet.documentTag,
+      entityTypes: corporationPacketEntityTypes(),
+      jurisdictions: packet.jurisdictions,
+      requiredSigners: packet.requiredSigners,
+      requiredDataFieldIds: [],
+      optionalDataFieldIds: [],
+      reviewDataFieldIds: [],
+      requiredDataFields: packet.requiredDataFields,
+      optionalDataFields: packet.optionalDataFields,
+      reviewDataFields: packet.reviewDataFields,
+      timeline: packet.timeline,
+      deliverable: packet.deliverable,
+      terms: packet.terms,
+      filingType: packet.filingType,
+      priceItems: [],
+      sourceExternalIds: [marker],
+      updatedAtISO: now,
+    };
+
+    if (existingByMarker) {
+      await ctx.db.patch(existingByMarker._id, payload);
+      updatedTemplates += 1;
+      templateIdByPacketKey.set(packet.key, existingByMarker._id);
+    } else if (existingByName) {
+      skippedTemplates += 1;
+      templateIdByPacketKey.set(packet.key, existingByName._id);
+    } else {
+      const id = await ctx.db.insert("legalTemplates", { ...payload, createdAtISO: now });
+      insertedTemplates += 1;
+      templateIdByPacketKey.set(packet.key, id);
+    }
+  }
+
+  for (const packet of CORPORATION_DOCUMENT_PACKETS) {
+    const marker = corporationPacketPrecedentMarker(packet);
+    const existingByMarker = existingPrecedents.find((row: any) => (row.sourceExternalIds ?? []).includes(marker));
+    const existingByName = existingPrecedents.find((row: any) => String(row.packageName ?? "").toLowerCase() === packet.packageName.toLowerCase());
+    const templateId = templateIdByPacketKey.get(packet.key);
+    const payload = {
+      societyId,
+      packageName: packet.packageName,
+      partType: packet.partType,
+      status: "active",
+      description: packet.terms,
+      shortDescription: packet.summary,
+      timeline: packet.timeline,
+      deliverables: packet.deliverable,
+      internalNotes: `Catalog packet key: ${packet.key}`,
+      addOnTerms: packet.terms,
+      templateIds: templateId ? [templateId] : [],
+      templateNames: [packet.templateName],
+      templateFilingNames: packet.templateFilingNames ?? [],
+      templateSearchNames: [],
+      templateRegistrationNames: packet.templateRegistrationNames ?? [],
+      requiresAmendmentRecord: packet.requiresAmendmentRecord,
+      requiresAnnualMaintenanceRecord: packet.requiresAnnualMaintenanceRecord,
+      priceItems: [],
+      entityTypes: corporationPacketEntityTypes(),
+      jurisdictions: packet.jurisdictions,
+      subloopPairs: [],
+      sourceExternalIds: [marker],
+      updatedAtISO: now,
+    };
+
+    if (existingByMarker) {
+      await ctx.db.patch(existingByMarker._id, payload);
+      updatedPrecedents += 1;
+    } else if (existingByName) {
+      skippedPrecedents += 1;
+    } else {
+      await ctx.db.insert("legalPrecedents", { ...payload, createdAtISO: now });
+      insertedPrecedents += 1;
+    }
+  }
+
+  return {
+    insertedTemplates,
+    updatedTemplates,
+    skippedTemplates,
+    insertedPrecedents,
+    updatedPrecedents,
+    skippedPrecedents,
+    total: CORPORATION_DOCUMENT_PACKETS.length,
+  };
+}
+
+async function corporationPacketPrecedentForSociety(ctx: any, societyId: any, packet: (typeof CORPORATION_DOCUMENT_PACKETS)[number]) {
+  const marker = corporationPacketPrecedentMarker(packet);
+  const precedent = await ctx.db
+    .query("legalPrecedents")
+    .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+    .collect()
+    .then((rows: any[]) => rows.find((row) => (row.sourceExternalIds ?? []).includes(marker)));
+  if (!precedent) throw new Error(`Corporation document packet precedent was not seeded: ${packet.key}`);
+  return precedent;
+}
+
+async function createPacketRunArtifacts(ctx: any, args: {
+  societyId: any;
+  packet: (typeof CORPORATION_DOCUMENT_PACKETS)[number];
+  runId: any;
+  eventId?: string;
+  effectiveDate?: string;
+  filingId?: any;
+  signerRoleHolderIds?: any[];
+  dataJson?: string;
+  notes?: string;
+}) {
+  const now = new Date().toISOString();
+  const signerRoleHolderIds = args.signerRoleHolderIds?.length
+    ? args.signerRoleHolderIds
+    : await defaultPacketSignerRoleHolderIds(ctx, args.societyId);
+  const run = await ctx.db.get(args.runId);
+  const sourceExternalIds = [
+    ...(run?.sourceExternalIds ?? []),
+    `societyer:corporation-packet-run:${args.packet.key}`,
+    `societyer:legal-precedent-run:${args.runId}`,
+  ];
+  const docxDataUrl = corporationPacketDocxDataUrl(args.packet);
+  const docxFileName = corporationPacketDocxFileName(args.packet);
+  const docxMimeType = corporationPacketDocxMimeType();
+  const draftDocumentId = await ctx.db.insert("documents", {
+    societyId: args.societyId,
+    title: `${args.packet.packageName} - editable draft`,
+    category: "governance",
+    fileName: docxFileName,
+    mimeType: docxMimeType,
+    content: corporationPacketTemplateHtml(args.packet),
+    url: docxDataUrl,
+    fileSizeBytes: docxDataUrl.length,
+    retentionYears: 7,
+    createdAtISO: now,
+    reviewStatus: "needs_signature",
+    librarySection: "governance",
+    flaggedForDeletion: false,
+    sourceExternalIds,
+    sourcePayloadJson: args.dataJson,
+    tags: ["corporation-packet", args.packet.key, "editable-docx"],
+  });
+  const draftDocumentVersionId = await ctx.db.insert("documentVersions", {
+    societyId: args.societyId,
+    documentId: draftDocumentId,
+    version: 1,
+    storageProvider: "generated-inline",
+    storageKey: docxDataUrl,
+    fileName: docxFileName,
+    mimeType: docxMimeType,
+    fileSizeBytes: docxDataUrl.length,
+    uploadedByName: "Societyer packet generator",
+    uploadedAtISO: now,
+    changeNote: `Generated editable DOCX for ${args.packet.packageName}.`,
+    isCurrent: true,
+  });
+  const generatedDocumentId = await ctx.db.insert("generatedLegalDocuments", {
+    societyId: args.societyId,
+    title: args.packet.packageName,
+    status: "draft",
+    draftDocumentId,
+    sourceTemplateName: args.packet.templateName,
+    precedentRunId: args.runId,
+    eventId: args.eventId,
+    effectiveDate: args.effectiveDate,
+    documentTag: args.packet.documentTag,
+    dataJson: args.dataJson,
+    subloopJsonList: [],
+    signersRequiredRoleHolderIds: signerRoleHolderIds,
+    signersWhoSignedIds: [],
+    signerTagsRequired: args.packet.requiredSigners ?? [],
+    signerTagsSigned: [],
+    sourceDocumentIds: [draftDocumentId],
+    sourceExternalIds: cleanList([
+      ...sourceExternalIds,
+      `societyer:editable-document:${draftDocumentId}`,
+      `societyer:document-version:${draftDocumentVersionId}`,
+    ]),
+    notes: args.notes,
+    createdAtISO: now,
+    updatedAtISO: now,
+  });
+  const signerIds = await createPacketSigners(ctx, {
+    societyId: args.societyId,
+    generatedDocumentId,
+    roleHolderIds: signerRoleHolderIds,
+    eventId: args.eventId,
+    sourceExternalIds: [...sourceExternalIds, `societyer:generated-legal-document:${generatedDocumentId}`],
+  });
+  const sourceEvidenceId = await ctx.db.insert("sourceEvidence", {
+    societyId: args.societyId,
+    sourceDocumentId: draftDocumentId,
+    externalSystem: "societyer",
+    externalId: `corporation-packet:${args.packet.key}:${args.runId}`,
+    sourceTitle: `${args.packet.packageName} editable packet`,
+    sourceDate: args.effectiveDate,
+    evidenceKind: "provenance",
+    targetTable: "generatedLegalDocuments",
+    targetId: String(generatedDocumentId),
+    sensitivity: "standard",
+    accessLevel: "internal",
+    summary: `Editable document, generated-document row, signer placeholders, and minute-book record staged for ${args.packet.packageName}.`,
+    status: "Linked",
+    notes: args.notes,
+    createdAtISO: now,
+  });
+  const minuteBookItemId = await ctx.db.insert("minuteBookItems", {
+    societyId: args.societyId,
+    title: args.packet.packageName,
+    recordType: args.packet.requiresAnnualMaintenanceRecord ? "filing" : "package",
+    effectiveDate: args.effectiveDate,
+    status: "Draft",
+    documentIds: [draftDocumentId],
+    filingId: args.filingId,
+    signatureIds: [],
+    sourceEvidenceIds: [sourceEvidenceId],
+    notes: args.notes ?? `Minute-book item staged from corporation packet ${args.packet.key}.`,
+    createdAtISO: now,
+    updatedAtISO: now,
+  });
+  await ctx.db.patch(args.runId, {
+    generatedDocumentIds: [generatedDocumentId],
+    signerRoleHolderIds,
+    sourceExternalIds: cleanList([
+      ...sourceExternalIds,
+      `societyer:editable-document:${draftDocumentId}`,
+      `societyer:document-version:${draftDocumentVersionId}`,
+      `societyer:generated-legal-document:${generatedDocumentId}`,
+      `societyer:minute-book-item:${minuteBookItemId}`,
+      `societyer:source-evidence:${sourceEvidenceId}`,
+      ...signerIds.map((signerId: string) => `societyer:legal-signer:${signerId}`),
+    ]),
+    updatedAtISO: now,
+  });
+  if (args.filingId) {
+    await ctx.db.patch(args.filingId, {
+      stagedPacketDocumentId: draftDocumentId,
+      relatedPrecedentRunId: args.runId,
+      updatedAtISO: now,
+    });
+  }
+  return { draftDocumentId, draftDocumentVersionId, generatedDocumentId, signerIds, minuteBookItemId, sourceEvidenceId };
+}
+
+async function defaultPacketSignerRoleHolderIds(ctx: any, societyId: any) {
+  const roleHolders = await ctx.db
+    .query("roleHolders")
+    .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+    .collect();
+  return roleHolders
+    .filter((row: any) => row.status === "current" && ["director", "officer", "authorized_representative"].includes(row.roleType))
+    .map((row: any) => row._id);
+}
+
+async function createPacketSigners(ctx: any, args: {
+  societyId: any;
+  generatedDocumentId: any;
+  roleHolderIds: any[];
+  eventId?: string;
+  sourceExternalIds: string[];
+}) {
+  const signerIds: string[] = [];
+  for (const roleHolderId of args.roleHolderIds) {
+    const roleHolder = await ctx.db.get(roleHolderId);
+    if (!roleHolder) continue;
+    signerIds.push(await ctx.db.insert("legalSigners", {
+      societyId: args.societyId,
+      status: "unsigned",
+      fullName: roleHolder.fullName ?? "Unnamed signer",
+      firstName: roleHolder.firstName,
+      lastName: roleHolder.lastName,
+      email: roleHolder.email,
+      phone: roleHolder.phone,
+      signerTag: roleHolder.signerTag ?? roleHolder.roleType,
+      eventId: args.eventId,
+      generatedDocumentId: args.generatedDocumentId,
+      roleHolderId,
+      sourceExternalIds: args.sourceExternalIds,
+      notes: "Signer placeholder staged from corporation document packet.",
+      createdAtISO: new Date().toISOString(),
+      updatedAtISO: new Date().toISOString(),
+    }));
+  }
+  return signerIds;
+}
+
+async function syncRightsHoldings(ctx: any, societyId: any) {
+  const [existingHoldings, transfers] = await Promise.all([
+    ctx.db.query("rightsHoldings").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
+    ctx.db.query("rightsholdingTransfers").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
+  ]);
+  const now = new Date().toISOString();
+  const nextHoldings = materializeRightsHoldings(transfers.sort(rightsholdingTransferChronologicalSort));
+  const nextByKey = new Map(nextHoldings.map((holding) => [`${holding.rightsClassId}:${holding.holderKey}`, holding]));
+  const existingByKey = new Map<string, any>(existingHoldings.map((holding: any) => [`${holding.rightsClassId}:${holding.holderKey}`, holding]));
+
+  for (const existing of existingHoldings) {
+    const key = `${existing.rightsClassId}:${existing.holderKey}`;
+    if (!nextByKey.has(key)) {
+      await ctx.db.delete(existing._id);
+    }
+  }
+
+  for (const holding of nextHoldings) {
+    const key = `${holding.rightsClassId}:${holding.holderKey}`;
+    const existing = existingByKey.get(key);
+    const payload = {
+      societyId,
+      rightsClassId: holding.rightsClassId,
+      holderRoleHolderId: holding.holderRoleHolderId,
+      holderKey: holding.holderKey,
+      quantity: holding.quantity,
+      status: holding.status,
+      lastTransactionId: holding.lastTransactionId,
+      sourceDocumentIds: holding.sourceDocumentIds,
+      sourceExternalIds: holding.sourceExternalIds,
+      updatedAtISO: now,
+    };
+    if (existing) {
+      await ctx.db.patch(existing._id, payload);
+    } else {
+      await ctx.db.insert("rightsHoldings", { ...payload, createdAtISO: now });
+    }
+  }
+}
+
+function cleanDocumentIds(values: Array<string | undefined>) {
+  return Array.from(new Set(values.filter(Boolean))) as any[];
+}
+
 function cleanText(value: unknown) {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
 }
 
+
 function cleanList(values?: string[]) {
   return Array.from(new Set((values ?? []).map((value) => cleanText(value)).filter(Boolean))) as string[];
+}
+
+function rightsholdingTransferChronologicalSort(left: any, right: any) {
+  const leftDate = String(left.transferDate ?? left.createdAtISO ?? left._creationTime ?? "");
+  const rightDate = String(right.transferDate ?? right.createdAtISO ?? right._creationTime ?? "");
+  const dateSort = leftDate.localeCompare(rightDate);
+  if (dateSort !== 0) return dateSort;
+  return Number(left._creationTime ?? 0) - Number(right._creationTime ?? 0);
 }

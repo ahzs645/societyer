@@ -6,7 +6,7 @@ import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field, Flag } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Select } from "../components/Select";
-import { formatDate, formatDateTime, money } from "../lib/format";
+import { formatDateTime, money } from "../lib/format";
 import { isDemoMode } from "../lib/demoMode";
 import { Database, Link2, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -18,6 +18,7 @@ import {
 } from "../features/financials/components/WaveHealthPanel";
 import { WaveCacheExplorer } from "../features/financials/components/WaveCacheExplorer";
 import { OperatingSubscriptionsCard, ProviderCard, Stat } from "../features/financials/components/FinancialDashboardCards";
+import { YearOverYearFinancialsCard } from "../features/financials/components/YearOverYearFinancialsCard";
 import {
   OPERATING_SUBSCRIPTION_INTERVALS,
   OPERATING_SUBSCRIPTION_STATUSES,
@@ -30,24 +31,6 @@ import {
   type WaveAccountView,
   isBrowserBackedWaveConnection,
 } from "../features/financials/lib/waveResources";
-
-export {
-  WaveAccountDetailPage,
-  WaveResourceDetailPage,
-  WaveResourceTablePage,
-} from "../features/financials/pages/WavePages";
-export { FinancialYearDetailPage } from "../features/financials/pages/FinancialYearDetailPage";
-
-function auditStatusTone(status: string) {
-  if (status === "Audited") return "success";
-  if (["ReviewEngagement", "Review engagement", "Compilation", "Compiled", "T2/GIFI"].includes(status)) return "info";
-  return "warn";
-}
-
-function auditStatusLabel(status: string) {
-  if (status === "ReviewEngagement") return "Review engagement";
-  return status;
-}
 
 export function FinancialsPage() {
   const society = useSociety();
@@ -69,6 +52,10 @@ export function FinancialsPage() {
   const transactions = useQuery(
     api.financialHub.transactions,
     society ? { societyId: society._id, limit: 25 } : "skip",
+  );
+  const trialBalance = useQuery(
+    api.accounting.trialBalance,
+    society ? { societyId: society._id } : "skip",
   );
   const operatingSubscriptions = useQuery(
     api.financialHub.operatingSubscriptions,
@@ -147,6 +134,18 @@ export function FinancialsPage() {
     }
     return types;
   }, [waveSummary]);
+  const ledgerRevenueCents = (trialBalance ?? [])
+    .filter((row: any) => row.account?.accountType === "Income")
+    .reduce((sum: number, row: any) => sum + row.creditCents - row.debitCents, 0);
+  const ledgerExpenseCents = (trialBalance ?? [])
+    .filter((row: any) => row.account?.accountType === "Expense")
+    .reduce((sum: number, row: any) => sum + row.debitCents - row.creditCents, 0);
+  const ledgerAssetCents = (trialBalance ?? [])
+    .filter((row: any) => ["Asset", "Bank", "Credit"].includes(row.account?.accountType))
+    .reduce((sum: number, row: any) => sum + row.balanceCents, 0);
+  const ledgerRestrictedCents = (trialBalance ?? [])
+    .filter((row: any) => row.account?.isRestricted)
+    .reduce((sum: number, row: any) => sum + Math.abs(row.balanceCents), 0);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -230,6 +229,9 @@ export function FinancialsPage() {
         actions={
           activeConnection ? (
             <>
+              <Link className="btn-action" to="/app/financials/accounting">
+                <PiggyBank size={12} /> Accounting
+              </Link>
               <Badge tone="success">Connected · {activeConnection.provider}</Badge>
               <button
                 className="btn-action"
@@ -276,6 +278,9 @@ export function FinancialsPage() {
             </>
           ) : (
             <>
+              <Link className="btn-action" to="/app/financials/accounting">
+                <PiggyBank size={12} /> Accounting
+              </Link>
               <button
                 className="btn-action btn-action--primary"
                 disabled={busy || !canConnectWave}
@@ -326,6 +331,25 @@ export function FinancialsPage() {
       )}
 
       {waveHealth && <WaveHealthPanel result={waveHealth} />}
+
+      {(trialBalance ?? []).length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card__head">
+            <h2 className="card__title">Internal ledger summary</h2>
+            <span className="card__subtitle">Posted journal lines take priority for board and auditor reporting.</span>
+          </div>
+          <div className="stat-grid stat-grid--3" style={{ margin: "0 16px 16px" }}>
+            <Stat label="Ledger revenue" value={money(ledgerRevenueCents)} />
+            <Stat label="Ledger expenses" value={money(ledgerExpenseCents)} />
+            <Stat label="Ledger net" value={money(ledgerRevenueCents - ledgerExpenseCents)} tone={ledgerRevenueCents - ledgerExpenseCents < 0 ? "danger" : "ok"} />
+          </div>
+          <div className="stat-grid stat-grid--3" style={{ margin: "0 16px 16px" }}>
+            <Stat label="Ledger assets" value={money(ledgerAssetCents)} />
+            <Stat label="Restricted ledger" value={money(ledgerRestrictedCents)} />
+            <Stat label="Trial balance lines" value={String(trialBalance.length)} />
+          </div>
+        </div>
+      )}
 
       {activeConnection && hub && (
         <div className="stat-grid" style={{ marginBottom: 16 }}>
@@ -566,56 +590,7 @@ export function FinancialsPage() {
         </div>
       )}
 
-      <div className="card">
-        <div className="card__head"><h2 className="card__title">Year-over-year</h2></div>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Fiscal year</th>
-              <th>Period end</th>
-              <th>Revenue</th>
-              <th>Expenses</th>
-              <th>Net assets</th>
-              <th>Restricted</th>
-              <th>Audit</th>
-              <th>Board approval</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((f) => (
-              <tr
-                key={f._id}
-                role="button"
-                tabIndex={0}
-                aria-label={`Open FY ${f.fiscalYear} financial detail`}
-                onClick={() => openFinancialYear(f.fiscalYear)}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter" && event.key !== " ") return;
-                  event.preventDefault();
-                  openFinancialYear(f.fiscalYear);
-                }}
-              >
-                <td><strong>{f.fiscalYear}</strong></td>
-                <td className="table__cell--mono">{formatDate(f.periodEnd)}</td>
-                <td className="table__cell--mono">{money(f.revenueCents)}</td>
-                <td className="table__cell--mono">{money(f.expensesCents)}</td>
-                <td className="table__cell--mono">{money(f.netAssetsCents)}</td>
-                <td className="table__cell--mono">{money(f.restrictedFundsCents)}</td>
-                <td>
-                  <Badge tone={auditStatusTone(f.auditStatus)}>
-                    {auditStatusLabel(f.auditStatus)}
-                  </Badge>
-                  {f.auditorName && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{f.auditorName}</div>}
-                </td>
-                <td className="table__cell--mono">{f.approvedByBoardAt ? formatDate(f.approvedByBoardAt) : "—"}</td>
-              </tr>
-            ))}
-            {sorted.length === 0 && (
-              <tr><td colSpan={8} className="muted" style={{ textAlign: "center", padding: 24 }}>No financial statements yet.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <YearOverYearFinancialsCard rows={sorted} onOpenFinancialYear={openFinancialYear} />
 
       {latest && latest.remunerationDisclosures.length > 0 && (
         <>

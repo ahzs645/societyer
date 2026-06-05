@@ -1,0 +1,976 @@
+{
+  "schemaVersion": "2.0.0",
+  "packId": "ca-bc-societies",
+  "status": "draft",
+  "version": "2026.04.14",
+  "reviewedAt": "2026-04-14",
+  "maintainers": [
+    {
+      "name": "Societyer",
+      "role": "publisher"
+    }
+  ],
+  "legalDisclaimer": "Societyer jurisdiction guide packs provide source-backed operational guidance, not legal advice. Review official sources and consult qualified counsel before relying on a rule for a filing, meeting, or governance decision.",
+  "jurisdiction": {
+    "code": "CA-BC",
+    "countryCode": "CA",
+    "subdivisionCode": "BC",
+    "name": "British Columbia"
+  },
+  "entityTypes": [
+    "society"
+  ],
+  "title": "British Columbia Societies Act guide pack",
+  "description": "BC-focused guide tracks for societies, with point-in-time source links for date-sensitive checks.",
+  "defaultForJurisdiction": true,
+  "sources": [
+    {
+      "sourceId": "bc-societies-act-current",
+      "type": "statute",
+      "title": "Societies Act",
+      "citation": "Societies Act, SBC 2015, c.18",
+      "publisher": "BC Laws",
+      "retrievedAt": "2026-04-14",
+      "language": "en-CA",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01",
+      "currentTo": "2026-04-14"
+    },
+    {
+      "sourceId": "bc-societies-act-point-in-time",
+      "type": "archive",
+      "title": "Societies Act point-in-time archive",
+      "citation": "BC Societies Act point-in-time archive",
+      "publisher": "BC Laws",
+      "retrievedAt": "2026-04-14",
+      "language": "en-CA",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit"
+    },
+    {
+      "sourceId": "bc-societies-regulation-model-bylaws",
+      "type": "regulation",
+      "title": "Societies Regulation and Model Bylaws",
+      "citation": "BC Societies Regulation, B.C. Reg. 216/2015",
+      "publisher": "BC Laws",
+      "retrievedAt": "2026-04-14",
+      "language": "en-CA",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/216_2015",
+      "currentTo": "2026-04-14"
+    },
+    {
+      "sourceId": "bc-former-society-act-point-in-time",
+      "type": "archive",
+      "title": "Former Society Act point-in-time archive",
+      "citation": "Former BC Society Act point-in-time archive",
+      "publisher": "BC Laws",
+      "retrievedAt": "2026-04-14",
+      "language": "en-CA",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96433_pit"
+    },
+    {
+      "sourceId": "bc-societies-act-legislative-changes",
+      "type": "archive",
+      "title": "Societies Act legislative changes",
+      "citation": "BC Societies Act legislative changes",
+      "publisher": "BC Laws",
+      "retrievedAt": "2026-04-14",
+      "language": "en-CA",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/E3tlc15018"
+    }
+  ],
+  "rules": [
+    {
+      "ruleId": "ca-bc-former-society-act-pre-2016",
+      "stableKey": "bylaw_requirements.2016",
+      "status": "historical",
+      "ruleType": "historical_caveat",
+      "topics": [
+        "bylaw_requirements",
+        "bylaw_effective_date",
+        "general_meeting_notice",
+        "agm_timing",
+        "annual_report",
+        "member_proposals",
+        "requisitioned_meetings",
+        "quorum",
+        "electronic_participation",
+        "proxy_voting",
+        "special_resolution",
+        "records"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2000-09-06",
+        "effectiveTo": "2016-11-28"
+      },
+      "authority": {
+        "sourceId": "bc-former-society-act-point-in-time",
+        "instrument": "Former Society Act",
+        "sections": [
+          {
+            "label": "PIT archive",
+            "citation": "Former BC Society Act PIT",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96433_pit",
+            "pointInTimeUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96433_pit"
+          }
+        ]
+      },
+      "provenance": {
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Meetings before Nov 28, 2016 belong to the former Society Act track, not the current Societies Act baseline.",
+        "tooltip": "Use the former Society Act point-in-time archive for this date. Current BC Societies Act quorum, notice, electronic meeting, and proxy checks should not be applied automatically.",
+        "caveat": "This app flags the historical source track only; it does not yet encode every pre-2016 rule.",
+        "displayCitation": "Former BC Society Act PIT"
+      },
+      "priority": 0
+    },
+    {
+      "ruleId": "ca-bc-societies-act-bylaw-requirements",
+      "stableKey": "bylaw_requirements.requirements",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "bylaw_requirements"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2016-11-28"
+      },
+      "authority": {
+        "sourceId": "bc-societies-act-current",
+        "instrument": "Societies Act",
+        "sections": [
+          {
+            "label": "s.11",
+            "citation": "BC Societies Act s.11",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01",
+            "pointInTimeUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-14",
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "BC bylaws are the local rule source for meeting procedures, including any quorum greater than the statutory default.",
+        "tooltip": "Use this guide to keep society-specific bylaw rules separate from the statutory floor. A bylaw rule version should cite the filed bylaw or amendment that created it.",
+        "caveat": "A society's filed bylaws can be stricter where the Act allows.",
+        "displayCitation": "BC Societies Act s.11"
+      },
+      "priority": 10
+    },
+    {
+      "ruleId": "ca-bc-societies-act-bylaw-effective-date",
+      "stableKey": "bylaw_effective_date.date",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "bylaw_effective_date"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2016-11-28"
+      },
+      "authority": {
+        "sourceId": "bc-societies-act-current",
+        "instrument": "Societies Act",
+        "sections": [
+          {
+            "label": "s.17",
+            "citation": "BC Societies Act s.17",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01",
+            "pointInTimeUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-14",
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Bylaw changes are prospective from the filed/effective date, so old meetings should be checked against the rule in force on that date.",
+        "tooltip": "When a bylaw change occurs, create a new rule version with its effective date. Do not overwrite the old version used by earlier meetings.",
+        "caveat": "Use the actual filing/amendment source when available.",
+        "displayCitation": "BC Societies Act s.17"
+      },
+      "priority": 5
+    },
+    {
+      "ruleId": "ca-bc-societies-act-agm-timing",
+      "stableKey": "agm_timing.timing",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "agm_timing",
+        "annual_report"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2016-11-28"
+      },
+      "authority": {
+        "sourceId": "bc-societies-act-current",
+        "instrument": "Societies Act",
+        "sections": [
+          {
+            "label": "ss.71-73",
+            "citation": "BC Societies Act ss.71-73",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01",
+            "pointInTimeUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-14",
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "An AGM is generally held each calendar year, and the annual report is filed after the AGM.",
+        "tooltip": "For BC annual workflows, check the AGM date, any registrar extension, and the annual report timing against the Act for the meeting year.",
+        "caveat": "Registrar extensions and deemed AGMs can change the ordinary workflow.",
+        "displayCitation": "BC Societies Act ss.71-73"
+      },
+      "priority": 30
+    },
+    {
+      "ruleId": "ca-bc-societies-act-general-notice-2016",
+      "stableKey": "general_meeting_notice.2016",
+      "status": "historical",
+      "ruleType": "historical_caveat",
+      "topics": [
+        "general_meeting_notice"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2016-11-28",
+        "effectiveTo": "2023-05-04"
+      },
+      "authority": {
+        "sourceId": "bc-societies-act-point-in-time",
+        "instrument": "Societies Act",
+        "sections": [
+          {
+            "label": "ss.77-78 PIT",
+            "citation": "BC Societies Act ss.77-78 PIT",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit",
+            "pointInTimeUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit"
+          }
+        ]
+      },
+      "provenance": {
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Notice timing/content rules changed around electronic meeting amendments before the current 2023 wording.",
+        "tooltip": "For meetings before May 4, 2023, use the BC Laws point-in-time source for the exact notice wording in force on that date.",
+        "caveat": "The app points to the correct historical source track but does not yet encode every notice-delivery variant.",
+        "displayCitation": "BC Societies Act ss.77-78 PIT"
+      },
+      "priority": 20
+    },
+    {
+      "ruleId": "ca-bc-societies-act-general-notice-current",
+      "stableKey": "general_meeting_notice.current",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "general_meeting_notice"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2023-05-04"
+      },
+      "authority": {
+        "sourceId": "bc-societies-act-current",
+        "instrument": "Societies Act",
+        "sections": [
+          {
+            "label": "ss.77-78",
+            "citation": "BC Societies Act ss.77-78",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01",
+            "pointInTimeUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-14",
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "General meeting notice is generally 14 to 60 days before the meeting; bylaws can set at least 7 days, and notice content must include meeting details and special resolution text.",
+        "tooltip": "For current BC meetings, ss.77-78 guide notice timing and content. Electronic meetings also need attendance/participation instructions.",
+        "caveat": "Bylaws may set a longer or Act-permitted shorter notice period.",
+        "displayCitation": "BC Societies Act ss.77-78"
+      },
+      "priority": 20,
+      "parameters": [
+        {
+          "key": "general_meeting_notice.min_days",
+          "type": "integer",
+          "value": 14,
+          "unit": "days",
+          "operator": ">="
+        },
+        {
+          "key": "general_meeting_notice.max_days",
+          "type": "integer",
+          "value": 60,
+          "unit": "days",
+          "operator": "<="
+        },
+        {
+          "key": "general_meeting_notice.bylaw_min_days_floor",
+          "type": "integer",
+          "value": 7,
+          "unit": "days",
+          "operator": ">="
+        }
+      ]
+    },
+    {
+      "ruleId": "ca-bc-societies-act-member-proposals",
+      "stableKey": "member_proposals.proposals",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "member_proposals"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2016-11-28"
+      },
+      "authority": {
+        "sourceId": "bc-societies-act-current",
+        "instrument": "Societies Act",
+        "sections": [
+          {
+            "label": "s.81",
+            "citation": "BC Societies Act s.81",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01",
+            "pointInTimeUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-14",
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Member proposal thresholds are based on voting members, with bylaws able to lower the percentage where allowed.",
+        "tooltip": "Use this as the statutory baseline for AGM member-proposal intake, then apply any lower bylaw threshold stored in the bylaw rule version.",
+        "caveat": "The proposal wording and delivery rules should be checked against the point-in-time source.",
+        "displayCitation": "BC Societies Act s.81"
+      },
+      "priority": 45
+    },
+    {
+      "ruleId": "ca-bc-societies-act-requisition",
+      "stableKey": "requisitioned_meetings.requisition",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "requisitioned_meetings"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2016-11-28"
+      },
+      "authority": {
+        "sourceId": "bc-societies-act-current",
+        "instrument": "Societies Act",
+        "sections": [
+          {
+            "label": "s.75",
+            "citation": "BC Societies Act s.75",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01",
+            "pointInTimeUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-14",
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Voting members can requisition a general meeting using the Act's threshold unless bylaws provide a lower percentage.",
+        "tooltip": "This guide track supports member-requisition workflows and should be paired with the bylaw rule version for the meeting date.",
+        "caveat": "Use the point-in-time source for older requisition wording.",
+        "displayCitation": "BC Societies Act s.75"
+      },
+      "priority": 46
+    },
+    {
+      "ruleId": "ca-bc-societies-act-quorum",
+      "stableKey": "quorum.quorum",
+      "status": "draft",
+      "ruleType": "default_rule",
+      "topics": [
+        "quorum"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2016-11-28"
+      },
+      "authority": {
+        "sourceId": "bc-societies-act-current",
+        "instrument": "Societies Act",
+        "sections": [
+          {
+            "label": "s.82",
+            "citation": "BC Societies Act s.82",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01",
+            "pointInTimeUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-14",
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "The statutory quorum baseline is 3 voting members unless bylaws require more; if the society has fewer voting members, all voting members form quorum.",
+        "tooltip": "Use the meeting date to pick the society's bylaw quorum version. The Act provides the floor; the filed bylaws can require a higher number or formula.",
+        "caveat": "Court orders and adjourned-meeting bylaw provisions can affect a particular meeting.",
+        "displayCitation": "BC Societies Act s.82"
+      },
+      "priority": 1
+    },
+    {
+      "ruleId": "ca-bc-societies-act-electronic-participation-2016",
+      "stableKey": "electronic_participation.2016",
+      "status": "historical",
+      "ruleType": "historical_caveat",
+      "topics": [
+        "electronic_participation"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2016-11-28",
+        "effectiveTo": "2021-05-20"
+      },
+      "authority": {
+        "sourceId": "bc-societies-act-point-in-time",
+        "instrument": "Societies Act",
+        "sections": [
+          {
+            "label": "s.83 PIT",
+            "citation": "BC Societies Act s.83 PIT",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit",
+            "pointInTimeUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit"
+          }
+        ]
+      },
+      "provenance": {
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Before the May 20, 2021 amendments, electronic participation used older communication wording and facilitation obligations differed.",
+        "tooltip": "For meetings before May 20, 2021, use the point-in-time s.83 text rather than the current electronic-meeting rule.",
+        "caveat": "Bylaws may have restricted or shaped electronic participation.",
+        "displayCitation": "BC Societies Act s.83 PIT"
+      },
+      "priority": 31
+    },
+    {
+      "ruleId": "ca-bc-societies-act-electronic-participation-current",
+      "stableKey": "electronic_participation.current",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "electronic_participation"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2021-05-20"
+      },
+      "authority": {
+        "sourceId": "bc-societies-act-current",
+        "instrument": "Societies Act",
+        "sections": [
+          {
+            "label": "s.83",
+            "citation": "BC Societies Act s.83",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01",
+            "pointInTimeUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-14",
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Unless bylaws say otherwise, eligible participants may attend by telephone or other communications medium when participation requirements are met.",
+        "tooltip": "Electronic and hybrid meeting checks should cite the rule in force on the meeting date and any bylaw override.",
+        "caveat": "Fully electronic meetings carry separate facilitation and notice-instruction requirements.",
+        "displayCitation": "BC Societies Act s.83"
+      },
+      "priority": 31
+    },
+    {
+      "ruleId": "ca-bc-societies-act-voting-rights",
+      "stableKey": "special_resolution.rights",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "special_resolution"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2016-11-28"
+      },
+      "authority": {
+        "sourceId": "bc-societies-act-current",
+        "instrument": "Societies Act",
+        "sections": [
+          {
+            "label": "s.84",
+            "citation": "BC Societies Act s.84",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01",
+            "pointInTimeUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-14",
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Voting rights and one-vote rules start in the Act, with class and good-standing limits controlled by bylaws where allowed.",
+        "tooltip": "Use this guide when checking who could vote on resolutions before applying bylaw-specific voting-class rules.",
+        "caveat": "Voting by mail, delegate, or electronic means depends on bylaw authority.",
+        "displayCitation": "BC Societies Act s.84"
+      },
+      "priority": 55
+    },
+    {
+      "ruleId": "ca-bc-societies-act-proxies-2016",
+      "stableKey": "proxy_voting.2016",
+      "status": "historical",
+      "ruleType": "historical_caveat",
+      "topics": [
+        "proxy_voting"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2016-11-28",
+        "effectiveTo": "2021-10-28"
+      },
+      "authority": {
+        "sourceId": "bc-societies-act-point-in-time",
+        "instrument": "Societies Act",
+        "sections": [
+          {
+            "label": "s.85 PIT",
+            "citation": "BC Societies Act s.85 PIT",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit",
+            "pointInTimeUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit"
+          }
+        ]
+      },
+      "provenance": {
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Before Oct 28, 2021, the proxy rule used older wording but still depended on bylaw permission.",
+        "tooltip": "For meetings before Oct 28, 2021, use the point-in-time s.85 text and the bylaw rule version effective on the meeting date.",
+        "caveat": "Proxy authority is bylaw-dependent.",
+        "displayCitation": "BC Societies Act s.85 PIT"
+      },
+      "priority": 32
+    },
+    {
+      "ruleId": "ca-bc-societies-act-proxies-current",
+      "stableKey": "proxy_voting.current",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "proxy_voting"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2021-10-28"
+      },
+      "authority": {
+        "sourceId": "bc-societies-act-current",
+        "instrument": "Societies Act",
+        "sections": [
+          {
+            "label": "s.85",
+            "citation": "BC Societies Act s.85",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01",
+            "pointInTimeUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-14",
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Proxy voting is not available unless the society's bylaws permit it.",
+        "tooltip": "Store proxy permission in the dated bylaw rule version, then cite this statutory guide for the default BC position.",
+        "caveat": "A valid proxy appointment still has to meet Act and bylaw requirements.",
+        "displayCitation": "BC Societies Act s.85"
+      },
+      "priority": 32
+    },
+    {
+      "ruleId": "ca-bc-societies-act-special-resolution",
+      "stableKey": "special_resolution.resolution",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "special_resolution"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2016-11-28"
+      },
+      "authority": {
+        "sourceId": "bc-societies-act-current",
+        "instrument": "Societies Act",
+        "sections": [
+          {
+            "label": "s.1",
+            "citation": "BC Societies Act s.1",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01",
+            "pointInTimeUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-14",
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Special resolutions generally use a 2/3 voting threshold unless the Act or valid bylaws require more.",
+        "tooltip": "Use the meeting date's bylaw rule version for any higher threshold, especially bylaw or constitution amendments.",
+        "caveat": "Some actions have special statutory rules or limits on higher thresholds.",
+        "displayCitation": "BC Societies Act s.1"
+      },
+      "priority": 50
+    },
+    {
+      "ruleId": "ca-bc-societies-act-records",
+      "stableKey": "records.records",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "records"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2016-11-28"
+      },
+      "authority": {
+        "sourceId": "bc-societies-act-current",
+        "instrument": "Societies Act",
+        "sections": [
+          {
+            "label": "ss.20-24",
+            "citation": "BC Societies Act ss.20-24",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01",
+            "pointInTimeUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_pit"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-14",
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Society records, maintenance, and inspection rights are statutory obligations that should stay outside bylaw-only configuration.",
+        "tooltip": "Use this track for records and source-document audit checks rather than treating records access as only a society preference.",
+        "caveat": "Access restrictions and fees can vary by record type and requester.",
+        "displayCitation": "BC Societies Act ss.20-24"
+      },
+      "priority": 60
+    },
+    {
+      "ruleId": "ca-bc-model-bylaws-quorum",
+      "stableKey": "model_bylaws_quorum.quorum",
+      "status": "draft",
+      "ruleType": "model_bylaw",
+      "topics": [
+        "model_bylaws_quorum"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2016-11-28"
+      },
+      "authority": {
+        "sourceId": "bc-societies-regulation-model-bylaws",
+        "instrument": "Societies Regulation - Model Bylaws",
+        "sections": [
+          {
+            "label": "ss.3.6-3.7",
+            "citation": "BC Model Bylaws ss.3.6-3.7",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/216_2015"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-14",
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "The BC Model Bylaws quorum is 3 voting members or 10% of voting members, whichever is greater.",
+        "tooltip": "Show this only as a model-bylaw guide unless the society actually adopted the Model Bylaws or matching wording.",
+        "caveat": "The society's own filed bylaws control if they differ.",
+        "displayCitation": "BC Model Bylaws ss.3.6-3.7"
+      },
+      "priority": 2
+    },
+    {
+      "ruleId": "ca-bc-model-bylaws-proxy",
+      "stableKey": "model_bylaws_proxy.proxy",
+      "status": "draft",
+      "ruleType": "model_bylaw",
+      "topics": [
+        "model_bylaws_proxy"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2016-11-28"
+      },
+      "authority": {
+        "sourceId": "bc-societies-regulation-model-bylaws",
+        "instrument": "Societies Regulation - Model Bylaws",
+        "sections": [
+          {
+            "label": "s.3.15",
+            "citation": "BC Model Bylaws s.3.15",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/216_2015"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-14",
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "The BC Model Bylaws do not permit proxy voting.",
+        "tooltip": "Use this guide only if the society adopted the Model Bylaws or uses equivalent proxy wording.",
+        "caveat": "Other BC bylaws may permit proxies because the Act allows bylaw permission.",
+        "displayCitation": "BC Model Bylaws s.3.15"
+      },
+      "priority": 33
+    },
+    {
+      "ruleId": "ca-bc-model-bylaws-directors-quorum",
+      "stableKey": "directors_quorum.quorum",
+      "status": "draft",
+      "ruleType": "model_bylaw",
+      "topics": [
+        "directors_quorum"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "society"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2016-11-28"
+      },
+      "authority": {
+        "sourceId": "bc-societies-regulation-model-bylaws",
+        "instrument": "Societies Regulation - Model Bylaws",
+        "sections": [
+          {
+            "label": "s.5.5",
+            "citation": "BC Model Bylaws s.5.5",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/216_2015"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-14",
+        "retrievedAt": "2026-04-14",
+        "verifiedAt": "2026-04-14",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "The BC Model Bylaws directors' meeting quorum is a majority of directors.",
+        "tooltip": "Use this guide only if the society adopted the Model Bylaws or matching directors' quorum wording.",
+        "caveat": "The society's board-meeting bylaw language controls if different.",
+        "displayCitation": "BC Model Bylaws s.5.5"
+      },
+      "priority": 34,
+      "parameters": [
+        {
+          "key": "directors_quorum.model_bylaws_formula",
+          "type": "string",
+          "value": "majority_of_directors"
+        }
+      ]
+    }
+  ]
+}

@@ -1,9 +1,9 @@
 import React, { Suspense } from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { BrowserRouter, HashRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { ConvexProvider, type ConvexReactClient } from "convex/react";
-import { convex } from "./lib/convex";
-import { isStaticDemoRuntime } from "./lib/staticRuntime";
+import { isLocalDataRuntime, isStaticDemoRuntime } from "./lib/staticRuntime";
+import { getRuntimeMode } from "./lib/runtimeMode";
 import { AuthProvider } from "./auth/AuthProvider";
 import { AuthGate } from "./components/AuthGate";
 import { Layout } from "./components/Layout";
@@ -14,6 +14,7 @@ import { ToastProvider } from "./components/Toast";
 import { applyThemePreference, getStoredThemePreference } from "./lib/theme";
 
 const Dashboard = React.lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
+const DesktopSetupPage = React.lazy(() => import("./pages/DesktopSetup").then((m) => ({ default: m.DesktopSetupPage })));
 const SocietyPage = React.lazy(() => import("./pages/Society").then((m) => ({ default: m.SocietyPage })));
 const SocietyNewPage = React.lazy(() => import("./pages/Society").then((m) => ({ default: m.SocietyNewPage })));
 const OrganizationDetailsPage = React.lazy(() => import("./pages/OrganizationDetails").then((m) => ({ default: m.OrganizationDetailsPage })));
@@ -29,9 +30,10 @@ const DirectorsPage = React.lazy(() => import("./pages/Directors").then((m) => (
 const OrgChartPage = React.lazy(() => import("./pages/OrgChart").then((m) => ({ default: m.OrgChartPage })));
 const MeetingsPage = React.lazy(() => import("./pages/Meetings").then((m) => ({ default: m.MeetingsPage })));
 const MeetingDetailPage = React.lazy(() => import("./pages/MeetingDetail").then((m) => ({ default: m.MeetingDetailPage })));
-const MeetingMinutesPreviewPage = React.lazy(() => import("./pages/MeetingDetail").then((m) => ({ default: m.MeetingMinutesPreviewPage })));
+const MeetingMinutesPreviewPage = React.lazy(() => import("./features/meetings/pages/MeetingMinutesPreviewPage").then((m) => ({ default: m.MeetingMinutesPreviewPage })));
 const MinutesPage = React.lazy(() => import("./pages/Minutes").then((m) => ({ default: m.MinutesPage })));
 const FilingsPage = React.lazy(() => import("./pages/Filings").then((m) => ({ default: m.FilingsPage })));
+const ComplianceObligationsPage = React.lazy(() => import("./pages/ComplianceObligations").then((m) => ({ default: m.ComplianceObligationsPage })));
 const DeadlinesPage = React.lazy(() => import("./pages/Deadlines").then((m) => ({ default: m.DeadlinesPage })));
 const AnnualCyclePage = React.lazy(() => import("./pages/AnnualCycle").then((m) => ({ default: m.AnnualCyclePage })));
 const DocumentsPage = React.lazy(() => import("./pages/Documents").then((m) => ({ default: m.DocumentsPage })));
@@ -40,10 +42,11 @@ const LibraryPage = React.lazy(() => import("./pages/Library").then((m) => ({ de
 const MinuteBookPage = React.lazy(() => import("./pages/MinuteBook").then((m) => ({ default: m.MinuteBookPage })));
 const ConflictsPage = React.lazy(() => import("./pages/Conflicts").then((m) => ({ default: m.ConflictsPage })));
 const FinancialsPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.FinancialsPage })));
-const FinancialYearDetailPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.FinancialYearDetailPage })));
-const WaveAccountDetailPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.WaveAccountDetailPage })));
-const WaveResourceDetailPage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.WaveResourceDetailPage })));
-const WaveResourceTablePage = React.lazy(() => import("./pages/Financials").then((m) => ({ default: m.WaveResourceTablePage })));
+const AccountingWorkbenchPage = React.lazy(() => import("./features/financials/pages/AccountingWorkbenchPage").then((m) => ({ default: m.AccountingWorkbenchPage })));
+const FinancialYearDetailPage = React.lazy(() => import("./features/financials/pages/FinancialYearDetailPage").then((m) => ({ default: m.FinancialYearDetailPage })));
+const WaveAccountDetailPage = React.lazy(() => import("./features/financials/pages/WavePages").then((m) => ({ default: m.WaveAccountDetailPage })));
+const WaveResourceDetailPage = React.lazy(() => import("./features/financials/pages/WavePages").then((m) => ({ default: m.WaveResourceDetailPage })));
+const WaveResourceTablePage = React.lazy(() => import("./features/financials/pages/WavePages").then((m) => ({ default: m.WaveResourceTablePage })));
 const PrivacyPage = React.lazy(() => import("./pages/Privacy").then((m) => ({ default: m.PrivacyPage })));
 const PoliciesPage = React.lazy(() => import("./pages/Policies").then((m) => ({ default: m.PoliciesPage })));
 const SettingsPage = React.lazy(() => import("./pages/Settings").then((m) => ({ default: m.SettingsPage })));
@@ -66,6 +69,7 @@ const MotionBacklogPage = React.lazy(() => import("./pages/MotionBacklog").then(
 const MotionLibraryPage = React.lazy(() => import("./pages/MotionLibrary").then((m) => ({ default: m.MotionLibraryPage })));
 const TreasurerPage = React.lazy(() => import("./pages/Treasurer").then((m) => ({ default: m.TreasurerPage })));
 const AssetsPage = React.lazy(() => import("./pages/Assets").then((m) => ({ default: m.AssetsPage })));
+const InventoryPage = React.lazy(() => import("./pages/Inventory").then((m) => ({ default: m.InventoryPage })));
 const AssetDetailPage = React.lazy(() => import("./pages/Assets").then((m) => ({ default: m.AssetDetailPage })));
 const AssetVerificationPage = React.lazy(() => import("./pages/Assets").then((m) => ({ default: m.AssetVerificationPage })));
 const MembershipPage = React.lazy(() => import("./pages/Membership").then((m) => ({ default: m.MembershipPage })));
@@ -99,8 +103,8 @@ const VolunteersPage = React.lazy(() => import("./pages/Volunteers").then((m) =>
 const GrantsPage = React.lazy(() => import("./pages/Grants").then((m) => ({ default: m.GrantsPage })));
 const GrantSourcesPage = React.lazy(() => import("./pages/GrantSources").then((m) => ({ default: m.GrantSourcesPage })));
 const GrantSourceDetailPage = React.lazy(() => import("./pages/GrantSourceDetail").then((m) => ({ default: m.GrantSourceDetailPage })));
-const GrantDetailPage = React.lazy(() => import("./pages/Grants").then((m) => ({ default: m.GrantDetailPage })));
-const GrantEditPage = React.lazy(() => import("./pages/Grants").then((m) => ({ default: m.GrantEditPage })));
+const GrantDetailPage = React.lazy(() => import("./features/grants/pages/GrantWorkspacePage").then((m) => ({ default: m.GrantDetailPage })));
+const GrantEditPage = React.lazy(() => import("./features/grants/pages/GrantWorkspacePage").then((m) => ({ default: m.GrantEditPage })));
 const TransparencyPage = React.lazy(() => import("./pages/Transparency").then((m) => ({ default: m.TransparencyPage })));
 const PaperlessPage = React.lazy(() => import("./pages/Paperless").then((m) => ({ default: m.PaperlessPage })));
 const BrowserConnectorsPage = React.lazy(() => import("./pages/BrowserConnectors").then((m) => ({ default: m.BrowserConnectorsPage })));
@@ -123,6 +127,10 @@ import "./i18n";
 import "./theme/palette.css";
 import "./theme/tokens.css";
 import "./styles/index.scss";
+
+if (import.meta.env.VITE_E2E_TEST_HARNESS === "1") {
+  void import("./lib/e2eHarness");
+}
 
 applyThemePreference(getStoredThemePreference());
 
@@ -147,7 +155,10 @@ function AppProviders({ client }: { client: ConvexReactClient }) {
 }
 
 const staticDemoRuntime = isStaticDemoRuntime();
-const routerBasename = staticDemoRuntime ? "/demo" : import.meta.env.BASE_URL;
+const localDataRuntime = isLocalDataRuntime();
+const electronLocalRuntime = getRuntimeMode() === "electron-local";
+const Router = electronLocalRuntime ? HashRouter : BrowserRouter;
+const routerBasename = electronLocalRuntime ? undefined : staticDemoRuntime ? "/demo" : import.meta.env.BASE_URL;
 
 function PageLoader() {
   return (
@@ -156,15 +167,15 @@ function PageLoader() {
 }
 
 function AsyncAppProviders() {
-  const [convexClient, setConvexClient] = React.useState<ConvexReactClient | null>(
-    () => (staticDemoRuntime ? null : convex),
-  );
+  const [convexClient, setConvexClient] = React.useState<ConvexReactClient | null>(null);
 
   React.useEffect(() => {
-    if (!staticDemoRuntime) return;
     let active = true;
-    import("./lib/staticConvex").then(({ staticConvex }) => {
-      if (active) setConvexClient(staticConvex as unknown as ConvexReactClient);
+    const clientPromise = localDataRuntime
+      ? import("./lib/localDataClient").then(({ localDataClient }) => localDataClient)
+      : import("./lib/convex").then(({ convex }) => convex);
+    clientPromise.then((client) => {
+      if (active) setConvexClient(client as unknown as ConvexReactClient);
     });
     return () => {
       active = false;
@@ -211,15 +222,15 @@ function RootErrorFallback() {
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary label="root" fallback={<RootErrorFallback />}>
-      <BrowserRouter
+      <Router
         basename={routerBasename}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Suspense fallback={<PageLoader />}>
         <Routes>
-          {!staticDemoRuntime && <Route path="/" element={<LandingPage />} />}
+          {!localDataRuntime && <Route path="/" element={<LandingPage />} />}
           <Route element={<AsyncAppProviders />}>
-            {staticDemoRuntime && (
+            {localDataRuntime && (
               <Route
                 path="/"
                 element={
@@ -228,7 +239,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                   </AuthGate>
                 }
               >
-                <Route index element={<Dashboard />} />
+                <Route index element={electronLocalRuntime ? <DesktopSetupPage /> : <Dashboard />} />
               </Route>
             )}
             <Route path="/login" element={<LoginPage />} />
@@ -267,6 +278,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               }
             >
             <Route index element={<Dashboard />} />
+            <Route path="setup" element={<DesktopSetupPage />} />
             <Route path="society" element={<SocietyPage />} />
             <Route path="organization-details" element={<OrganizationDetailsPage />} />
             <Route path="role-holders" element={<RoleHoldersPage />} />
@@ -291,6 +303,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="meetings/:id/preview" element={<MeetingMinutesPreviewPage />} />
             <Route path="minutes" element={<MinutesPage />} />
             <Route path="filings" element={<FilingsPage />} />
+            <Route path="compliance-obligations" element={<ComplianceObligationsPage />} />
             <Route path="deadlines" element={<DeadlinesPage />} />
             <Route path="annual-cycle" element={<AnnualCyclePage />} />
             <Route path="documents" element={<DocumentsPage />} />
@@ -299,6 +312,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="minute-book" element={<MinuteBookPage />} />
             <Route path="conflicts" element={<ConflictsPage />} />
             <Route path="financials" element={<FinancialsPage />} />
+            <Route path="financials/accounting" element={<AccountingWorkbenchPage />} />
             <Route path="financials/fy/:fiscalYear" element={<FinancialYearDetailPage />} />
             <Route path="financials/wave/account/:resourceId" element={<WaveAccountDetailPage />} />
             <Route path="financials/wave/:resourceType/:resourceId" element={<WaveResourceDetailPage />} />
@@ -351,6 +365,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route
               path="assets"
               element={withModule("assets", <AssetsPage />)}
+            />
+            <Route
+              path="inventory"
+              element={withModule("assets", <InventoryPage />)}
             />
             <Route
               path="assets/verification/:runId"
@@ -483,7 +501,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>
-      </BrowserRouter>
+      </Router>
     </ErrorBoundary>
   </React.StrictMode>,
 );

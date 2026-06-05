@@ -24,10 +24,12 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
+import { directorComplianceProfile } from "../../shared/directorCompliance";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 
 export function DirectorsPage() {
   const society = useSociety();
+  const directorProfile = directorComplianceProfile(society);
   const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const orgHistory = useQuery(api.organizationHistory.list, society ? { societyId: society._id } : "skip");
@@ -51,6 +53,7 @@ export function DirectorsPage() {
   const active = (directors ?? []).filter((d: any) => d.status === "Active");
   const bcResidents = active.filter((d: any) => d.isBCResident).length;
   const missingConsent = active.filter((d: any) => !d.consentOnFile);
+  const isBcSocietyWorkspace = directorProfile.minimumActiveDirectors != null || directorProfile.requiresBcResidentDirector;
   // While the directors query is still resolving, every count is 0 and the
   // compliance flags would flash red for a frame before real data arrives.
   // Skip the warning UI until we know the actual numbers.
@@ -73,7 +76,7 @@ export function DirectorsPage() {
   const openNew = () => {
     setSelected({
       firstName: "", lastName: "", email: "",
-      position: "Director", isBCResident: true,
+      position: "Director", isBCResident: directorProfile.showBcResidentField,
       termStart: new Date().toISOString().slice(0, 10),
       consentOnFile: false, status: "Active", aliases: [],
     });
@@ -101,7 +104,7 @@ export function DirectorsPage() {
         title="Directors"
         icon={<UserCog size={16} />}
         iconColor="blue"
-        subtitle="Register of directors under s.20. Section 40 requires >= 3 directors and >= 1 BC resident unless the s.197 member-funded exception applies."
+        subtitle={directorProfile.subtitle}
         actions={
           <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <div className="segmented" role="tablist" aria-label="Director screen view">
@@ -134,13 +137,15 @@ export function DirectorsPage() {
       <div className="stat-grid">
         <div className="stat">
           <div className="stat__label">Active directors</div>
-          <div className="stat__value" style={{ color: directorsLoaded && active.length < 3 && !society.isMemberFunded ? "var(--danger)" : undefined }}>{directorsLoaded ? active.length : "—"}</div>
-          <div className="stat__sub">Minimum 3 for regular societies.</div>
+          <div className="stat__value" style={{ color: directorsLoaded && directorProfile.minimumActiveDirectors != null && active.length < directorProfile.minimumActiveDirectors && !society.isMemberFunded ? "var(--danger)" : undefined }}>{directorsLoaded ? active.length : "—"}</div>
+          <div className="stat__sub">{directorProfile.activeDirectorsSubtext}</div>
         </div>
         <div className="stat">
-          <div className="stat__label">BC residents</div>
-          <div className="stat__value" style={{ color: directorsLoaded && bcResidents < 1 && !society.isMemberFunded ? "var(--danger)" : undefined }}>{directorsLoaded ? bcResidents : "—"}</div>
-          <div className="stat__sub">{society.isMemberFunded ? "No s.40 residency requirement." : "At least one BC resident required."}</div>
+          <div className="stat__label">{directorProfile.residencyMetricLabel}</div>
+          <div className="stat__value" style={{ color: directorsLoaded && directorProfile.requiresBcResidentDirector && bcResidents < 1 && !society.isMemberFunded ? "var(--danger)" : undefined }}>
+            {directorsLoaded ? (directorProfile.showBcResidentField ? bcResidents : "Review") : "—"}
+          </div>
+          <div className="stat__sub">{society.isMemberFunded && directorProfile.requiresBcResidentDirector ? "No s.40 residency requirement." : directorProfile.residencyMetricSubtext}</div>
         </div>
         <div className="stat">
           <div className="stat__label">Consent evidence</div>
@@ -149,15 +154,15 @@ export function DirectorsPage() {
         </div>
         <div className="stat">
           <div className="stat__label">Change of directors</div>
-          <div className="stat__value">30d</div>
-          <div className="stat__sub">File within 30 days via Societies Online.</div>
+          <div className="stat__value">{directorProfile.showBcResidentField ? "30d" : "Track"}</div>
+          <div className="stat__sub">{directorProfile.directorChangeSubtext}</div>
         </div>
       </div>
 
-      {directorsLoaded && directorMode === "register" && (active.length < 3 || (bcResidents < 1 && !society.isMemberFunded) || missingConsent.length > 0) && (
+      {directorsLoaded && directorMode === "register" && ((isBcSocietyWorkspace && !society.isMemberFunded && ((directorProfile.minimumActiveDirectors != null && active.length < directorProfile.minimumActiveDirectors) || (directorProfile.requiresBcResidentDirector && bcResidents < 1))) || missingConsent.length > 0) && (
         <div className="col" style={{ marginBottom: 16, gap: 6 }}>
-          {active.length < 3 && !society.isMemberFunded && <Flag level="err">Fewer than 3 active directors — regular societies must have at least 3.</Flag>}
-          {bcResidents < 1 && !society.isMemberFunded && <Flag level="err">No BC-resident director. At least one is required for non-member-funded societies.</Flag>}
+          {directorProfile.minimumActiveDirectors != null && active.length < directorProfile.minimumActiveDirectors && !society.isMemberFunded && <Flag level="err">Fewer than {directorProfile.minimumActiveDirectors} active directors — regular societies must have at least {directorProfile.minimumActiveDirectors}.</Flag>}
+          {directorProfile.requiresBcResidentDirector && bcResidents < 1 && !society.isMemberFunded && <Flag level="err">No BC-resident director. At least one is required for non-member-funded societies.</Flag>}
           {missingConsent.length > 0 && <Flag level="warn">{missingConsent.length} director(s) without consent evidence on file.</Flag>}
         </div>
       )}
@@ -301,11 +306,13 @@ export function DirectorsPage() {
                 />
               </Field>
             </div>
-            <Checkbox
-              checked={!!selected.isBCResident}
-              onChange={(v) => setSelected({ ...selected, isBCResident: v })}
-              label="BC resident"
-            />
+            {directorProfile.showBcResidentField && (
+              <Checkbox
+                checked={!!selected.isBCResident}
+                onChange={(v) => setSelected({ ...selected, isBCResident: v })}
+                label="BC resident"
+              />
+            )}
             <Checkbox
               checked={!!selected.consentOnFile}
               onChange={(v) => setSelected({ ...selected, consentOnFile: v })}

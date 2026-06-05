@@ -1,6 +1,6 @@
 import { parseCsv, rowsToCsv } from "@/lib/csv";
 
-export const ASSET_CATEGORIES = ["IT", "Program equipment", "Furniture", "Vehicle", "Facilities", "Software/license", "Other"];
+export const ASSET_CATEGORIES = ["IT", "Program equipment", "Consumable", "Furniture", "Vehicle", "Facilities", "Software/license", "Other"];
 export const ASSET_CONDITIONS = ["New", "Good", "Fair", "Needs repair", "Damaged", "Lost"];
 export const ASSET_STATUSES = ["Available", "Checked out", "In maintenance", "Needs review", "Disposed", "Lost"];
 export const CUSTODIAN_TYPES = ["member", "director", "employee", "volunteer", "committee", "location", "other"];
@@ -97,6 +97,8 @@ export function formFromAsset(row: any) {
     supplier: row.supplier ?? "",
     purchaseDate: row.purchaseDate ?? "",
     purchaseValue: centsToInput(row.purchaseValueCents),
+    quantityOnHand: row.quantityOnHand?.toString?.() ?? "",
+    quantityUnit: row.quantityUnit ?? "",
     currency: row.currency ?? "CAD",
     fundingSource: row.fundingSource ?? "",
     grantRestrictions: row.grantRestrictions ?? "",
@@ -133,6 +135,8 @@ export function normalizeAssetForm(form: any) {
     supplier: clean(form.supplier),
     purchaseDate: clean(form.purchaseDate),
     purchaseValueCents: inputToCents(form.purchaseValue),
+    quantityOnHand: numberOrUndefined(form.quantityOnHand),
+    quantityUnit: clean(form.quantityUnit),
     currency: clean(form.currency) || "CAD",
     fundingSource: clean(form.fundingSource),
     grantRestrictions: clean(form.grantRestrictions),
@@ -173,6 +177,8 @@ export function assetsToCsv(rows: any[]) {
       "responsiblePersonName",
       "purchaseDate",
       "purchaseValue",
+      "quantityOnHand",
+      "quantityUnit",
       "fundingSource",
       "grantRestrictions",
       "insuranceNotes",
@@ -194,6 +200,8 @@ export function assetsToCsv(rows: any[]) {
       row.responsiblePersonName,
       row.purchaseDate,
       centsToInput(row.purchaseValueCents),
+      row.quantityOnHand,
+      row.quantityUnit,
       row.fundingSource,
       row.grantRestrictions,
       row.insuranceNotes,
@@ -224,6 +232,8 @@ export function parseAssetCsv(input: string) {
       responsiblePersonName: record.responsiblePersonName,
       purchaseDate: record.purchaseDate,
       purchaseValue: record.purchaseValue,
+      quantityOnHand: record.quantityOnHand,
+      quantityUnit: record.quantityUnit,
       fundingSource: record.fundingSource,
       grantRestrictions: record.grantRestrictions,
       insuranceNotes: record.insuranceNotes,

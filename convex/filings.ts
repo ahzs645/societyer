@@ -1,43 +1,15 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { filingKindDefinition } from "../shared/jurisdictionWorkspace";
 
-function filingDefaults(kind: string) {
-  const bcRegistryKinds = [
-    "AnnualReport",
-    "ChangeOfDirectors",
-    "ChangeOfAddress",
-    "BylawAmendment",
-    "ConstitutionAlteration",
-  ];
-  const registryUrl = bcRegistryKinds.includes(kind)
-    ? "https://www.bcregistry.gov.bc.ca/societies/"
-    : "https://www.canada.ca/en/revenue-agency/services/e-services/e-services-businesses/business-account.html";
+function filingDefaults(kind: string, jurisdictionCode?: string | null) {
+  const definition = filingKindDefinition(kind, jurisdictionCode);
+  return { registryUrl: definition.registryUrl, checklist: definition.checklist };
+}
 
-  const checklist =
-    kind === "AnnualReport"
-      ? [
-          "Confirm AGM date and the directors elected or continuing in office.",
-          "Verify registered and records office addresses.",
-          "Open the pre-fill packet and confirm the society number and meeting date.",
-          "Complete the filing in the portal and capture the confirmation number.",
-          "Attach receipt or submission evidence before marking filed.",
-        ]
-      : kind === "BylawAmendment"
-      ? [
-          "Confirm the special resolution passed and the text filed matches the approved bylaw wording.",
-          "Attach the signed resolution or meeting minutes.",
-          "Open the pre-fill packet and verify filing fee details.",
-          "Complete the registry filing and capture the confirmation number.",
-          "Attach receipt or acknowledgement before marking filed.",
-        ]
-      : [
-          "Review the filing packet and supporting documents.",
-          "Open the correct external portal or form.",
-          "Submit using the official government workflow.",
-          "Capture confirmation number, fee, and evidence.",
-        ];
-
-  return { registryUrl, checklist };
+async function jurisdictionCodeForSociety(ctx: any, societyId: any) {
+  const society = await ctx.db.get(societyId);
+  return society?.jurisdictionCode ?? null;
 }
 
 export const get = query({
@@ -58,9 +30,9 @@ export const list = query({
 });
 
 export const guidance = query({
-  args: { kind: v.string() },
+  args: { kind: v.string(), jurisdictionCode: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (_ctx, { kind }) => filingDefaults(kind),
+  handler: async (_ctx, { kind, jurisdictionCode }) => filingDefaults(kind, jurisdictionCode),
 });
 
 export const create = mutation({
@@ -78,7 +50,7 @@ export const create = mutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    const defaults = filingDefaults(args.kind);
+    const defaults = filingDefaults(args.kind, await jurisdictionCodeForSociety(ctx, args.societyId));
     return await ctx.db.insert("filings", {
       ...args,
       registryUrl: args.registryUrl ?? defaults.registryUrl,
@@ -105,6 +77,7 @@ export const markFiled = mutation({
   handler: async (ctx, { id, ...rest }) => {
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Filing not found.");
+    const jurisdictionCode = await jurisdictionCodeForSociety(ctx, existing.societyId);
     if (!rest.filedAt || !rest.submissionMethod) {
       throw new Error("Filed date and submission method are required.");
     }
@@ -118,11 +91,11 @@ export const markFiled = mutation({
     }
     await ctx.db.patch(id, {
       ...rest,
-      registryUrl: existing.registryUrl ?? filingDefaults(existing.kind).registryUrl,
+      registryUrl: existing.registryUrl ?? filingDefaults(existing.kind, jurisdictionCode).registryUrl,
       submissionChecklist:
         rest.submissionChecklist ??
         existing.submissionChecklist ??
-        filingDefaults(existing.kind).checklist,
+        filingDefaults(existing.kind, jurisdictionCode).checklist,
       attestedAtISO: rest.attestedByUserId ? new Date().toISOString() : existing.attestedAtISO,
       status: "Filed",
     });
@@ -156,7 +129,10 @@ export const update = mutation({
   handler: async (ctx, { id, patch }) => {
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Filing not found.");
-    const defaults = filingDefaults(patch.kind ?? existing.kind);
+    const defaults = filingDefaults(
+      patch.kind ?? existing.kind,
+      await jurisdictionCodeForSociety(ctx, existing.societyId),
+    );
     await ctx.db.patch(id, {
       ...patch,
       registryUrl: patch.registryUrl ?? existing.registryUrl ?? defaults.registryUrl,
@@ -206,7 +182,10 @@ export const importBcRegistryHistory = mutation({
     const claimed = new Set<string>();
 
     for (const record of args.records) {
-      const defaults = filingDefaults(record.kind);
+      const defaults = filingDefaults(
+        record.kind,
+        await jurisdictionCodeForSociety(ctx, args.societyId),
+      );
       const uniqueSourceIds = record.sourceExternalIds.filter(
         (sourceId) => !sourceId.startsWith("bc-registry:corp:"),
       );

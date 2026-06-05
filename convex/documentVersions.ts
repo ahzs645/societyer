@@ -155,19 +155,67 @@ export const getDownloadUrl = action({
   handler: async (ctx, { versionId }): Promise<string | null> => {
     const version = await ctx.runQuery(api.documentVersions.get, { id: versionId });
     if (!version) return null;
-    if (version.storageProvider === "local") {
-      const base =
-        process.env.SOCIETYER_API_PUBLIC_URL ??
-        process.env.BETTER_AUTH_BASE_URL?.replace(/\/$/, "").replace(/:5173$/, ":8787") ??
-        "http://127.0.0.1:8787";
-      return `${base.replace(/\/$/, "")}/api/v1/workflow-generated-documents/${encodeURIComponent(version.storageKey)}`;
-    }
-    return await createDownloadUrl({
-      provider: version.storageProvider as "demo" | "rustfs",
-      key: version.storageKey,
-    });
+    const target = await downloadTargetForVersion(version);
+    return target.kind === "url" ? (target as any).url : null;
   },
 });
+
+export const getDownloadTarget = action({
+  args: { versionId: v.id("documentVersions") },
+  returns: v.any(),
+  handler: async (ctx, { versionId }) => {
+    const version = await ctx.runQuery(api.documentVersions.get, { id: versionId });
+    if (!version) return null;
+    return await downloadTargetForVersion(version);
+  },
+});
+
+async function downloadTargetForVersion(version: any) {
+  const baseTarget = {
+    provider: version.storageProvider,
+    key: version.storageKey,
+    fileName: version.fileName,
+    mimeType: version.mimeType,
+    fileSizeBytes: version.fileSizeBytes,
+  };
+
+  if (version.storageProvider === "local-filesystem") {
+    return { kind: "local-filesystem", ...baseTarget };
+  }
+
+  if (version.storageProvider === "generated-inline") {
+    return { kind: "url", ...baseTarget, url: version.storageKey };
+  }
+
+  if (version.storageProvider === "local") {
+    const base =
+      process.env.SOCIETYER_API_PUBLIC_URL ??
+      process.env.BETTER_AUTH_BASE_URL?.replace(/\/$/, "").replace(/:5173$/, ":8787") ??
+      "http://127.0.0.1:8787";
+    return {
+      kind: "url",
+      ...baseTarget,
+      url: `${base.replace(/\/$/, "")}/api/v1/workflow-generated-documents/${encodeURIComponent(version.storageKey)}`,
+    };
+  }
+
+  if (version.storageProvider === "rustfs" || version.storageProvider === "demo") {
+    return {
+      kind: "url",
+      ...baseTarget,
+      url: await createDownloadUrl({
+        provider: version.storageProvider,
+        key: version.storageKey,
+      }),
+    };
+  }
+
+  return {
+    kind: "unavailable",
+    ...baseTarget,
+    reason: `Document version provider "${version.storageProvider}" does not expose a downloadable URL.`,
+  };
+}
 
 export const get = query({
   args: { id: v.id("documentVersions") },

@@ -32,6 +32,16 @@ import {
   grantKey,
   materialEffectiveStatus,
 } from "../features/meetings/lib/meetingMaterialAccess";
+import {
+  agendaEntriesFromRecord,
+  agendaItemsFromRecord,
+  attendanceRowsForDirectors,
+  buildEmlMessage,
+  buildMeetingOutboxEmail,
+  isCurrentDirector,
+  sanitizeAttachmentFileName,
+  slugifyFilePart,
+} from "../features/meetings/lib/meetingDetailHelpers";
 import { renderMeetingPackHtml } from "../features/meetings/lib/meetingPackExport";
 import { MeetingMaterialDrawer } from "../features/meetings/components/MeetingMaterialDrawer";
 import { MeetingPackageHub } from "../features/meetings/components/MeetingPackageHub";
@@ -39,6 +49,11 @@ import { MeetingMinutesColumn } from "../features/meetings/components/MeetingMin
 import { MeetingSidebarColumn } from "../features/meetings/components/MeetingSidebarColumn";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import {
+  MINUTES_EXPORT_PREF_PREFIX,
+  readStoredExportBool,
+  readStoredMinutesStyle,
+} from "../features/meetings/lib/minutesExportPrefs";
 import {
   addRedactionName,
   getMeetingJoinDetails,
@@ -54,184 +69,7 @@ import {
   personLinkCandidates,
   sourceExternalIdsForMinutes,
 } from "../features/meetings/components/MeetingDetailSupport";
-const MINUTES_EXPORT_PREF_PREFIX = "societyer.minutesExport.";
 type MeetingDetailTab = "overview" | "minutes" | "motions" | "package" | "export" | "sources";
-
-function readStoredMinutesStyle(): MinutesExportStyleId {
-  if (typeof window === "undefined") return "numbered-agenda";
-  const stored = window.localStorage.getItem(`${MINUTES_EXPORT_PREF_PREFIX}style`);
-  return MINUTES_EXPORT_STYLES.some((style) => style.id === stored)
-    ? stored as MinutesExportStyleId
-    : "numbered-agenda";
-}
-
-function readStoredExportBool(key: string, fallback: boolean) {
-  if (typeof window === "undefined") return fallback;
-  const stored = window.localStorage.getItem(`${MINUTES_EXPORT_PREF_PREFIX}${key}`);
-  if (stored == null) return fallback;
-  return stored === "true";
-}
-
-function slugifyFilePart(value: string) {
-  return (value || "item").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "item";
-}
-
-function isCurrentDirector(director: any) {
-  const status = String(director?.status ?? "").toLowerCase();
-  if (status && !["active", "current", "verified"].includes(status)) return false;
-  const end = director?.termEnd || director?.resignedAt;
-  return !end || String(end).slice(0, 10) >= new Date().toISOString().slice(0, 10);
-}
-
-function attendanceRowsForDirectors(directors: any[]) {
-  return directors
-    .map((director) => ({
-      name: `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim(),
-      status: "present" as const,
-    }))
-    .filter((person) => person.name);
-}
-
-function buildMeetingOutboxEmail({
-  societyName,
-  meeting,
-  joinDetails,
-  materials,
-  packageReviewStatus,
-  packageReviewBlockers,
-}: {
-  societyName: string;
-  meeting: any;
-  joinDetails: any;
-  materials: Array<{ label: string; agendaLabel: string; fileName: string | null; paperlessUrl: string | null }>;
-  packageReviewStatus: string;
-  packageReviewBlockers: string[];
-}) {
-  const lines = [
-    `Hello,`,
-    ``,
-    `Please find the meeting package for ${meeting.title}.`,
-    ``,
-    `Society: ${societyName}`,
-    `When: ${formatDateTime(meeting.scheduledAt)}`,
-    `Location: ${meeting.location ?? "Not recorded"}`,
-    joinDetails.url ? `Join link: ${joinDetails.url}` : "",
-    joinDetails.meetingId ? `Meeting ID: ${joinDetails.meetingId}` : "",
-    joinDetails.passcode ? `Passcode: ${joinDetails.passcode}` : "",
-    joinDetails.instructions ? `Instructions: ${joinDetails.instructions}` : "",
-    ``,
-    `Package status: ${packageReviewStatus}`,
-    packageReviewBlockers.length ? `Review blockers: ${packageReviewBlockers.join("; ")}` : "",
-    ``,
-    `Attachments / references:`,
-    ...(materials.length
-      ? materials.map((material, index) =>
-          `${index + 1}. ${material.label} (${material.agendaLabel})${material.fileName ? ` - ${material.fileName}` : ""}${material.paperlessUrl ? ` - ${material.paperlessUrl}` : ""}`,
-        )
-      : ["No linked materials are recorded."]),
-    ``,
-    `The ZIP also includes a meeting-pack HTML file, agenda text, and an attachment manifest for manual upload/send workflows.`,
-    ``,
-    `Regards,`,
-  ];
-  return lines.filter((line, index, array) => line || array[index - 1] !== "").join("\n");
-}
-
-function sanitizeAttachmentFileName(value: string, fallback: string) {
-  const clean = value.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim();
-  return clean || fallback;
-}
-
-function bytesToBase64(bytes: Uint8Array) {
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
-  }
-  return btoa(binary).replace(/.{1,76}/g, "$&\r\n").trim();
-}
-
-function agendaEntriesFromRecord(record: any): AgendaItemEntry[] | null {
-  const items = agendaItemsFromRecord(record);
-  return items?.map((item) => ({ title: item.title, depth: item.depth })) ?? null;
-}
-
-function agendaItemsFromRecord(record: any): Array<AgendaItemEntry & {
-  type?: string;
-  presenter?: string;
-  details?: string;
-  timeAllottedMinutes?: number;
-  motionTemplateId?: any;
-  motionBacklogId?: any;
-  motionText?: string;
-}> | null {
-  if (!record?.items?.length) return null;
-  const entries: Array<AgendaItemEntry & {
-    type?: string;
-    presenter?: string;
-    details?: string;
-    timeAllottedMinutes?: number;
-    motionTemplateId?: any;
-    motionBacklogId?: any;
-    motionText?: string;
-  }> = [];
-  let hasRoot = false;
-  for (const item of record.items) {
-    const title = String(item?.title ?? "").trim();
-    if (!title) continue;
-    const depth: 0 | 1 = item?.depth === 1 && hasRoot ? 1 : 0;
-    entries.push({
-      title,
-      depth,
-      type: item.type,
-      presenter: item.presenter,
-      details: item.details,
-      timeAllottedMinutes: item.timeAllottedMinutes,
-      motionTemplateId: item.motionTemplateId,
-      motionBacklogId: item.motionBacklogId,
-      motionText: item.motionText,
-    });
-    if (depth === 0) hasRoot = true;
-  }
-  return entries.length ? entries : null;
-}
-
-function buildEmlMessage({
-  subject,
-  body,
-  attachments,
-}: {
-  subject: string;
-  body: string;
-  attachments: Array<{ fileName: string; mimeType: string; bytes: Uint8Array }>;
-}) {
-  const boundary = `societyer-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const safeSubject = subject.replace(/\r?\n/g, " ");
-  const parts = [
-    `Subject: ${safeSubject}`,
-    "MIME-Version: 1.0",
-    `Content-Type: multipart/mixed; boundary="${boundary}"`,
-    "",
-    `--${boundary}`,
-    "Content-Type: text/plain; charset=utf-8",
-    "Content-Transfer-Encoding: 8bit",
-    "",
-    body,
-    "",
-    ...attachments.flatMap((attachment) => [
-      `--${boundary}`,
-      `Content-Type: ${attachment.mimeType || "application/octet-stream"}; name="${attachment.fileName.replace(/"/g, "'")}"`,
-      "Content-Transfer-Encoding: base64",
-      `Content-Disposition: attachment; filename="${attachment.fileName.replace(/"/g, "'")}"`,
-      "",
-      bytesToBase64(attachment.bytes),
-      "",
-    ]),
-    `--${boundary}--`,
-    "",
-  ];
-  return parts.join("\r\n");
-}
 
 export function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -240,11 +78,14 @@ export function MeetingDetailPage() {
   const meeting = useQuery(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
   const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
   const agendaRecord = useQuery(api.agendas.getForMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
-  const meetingPackage = useQuery(api.meetingMaterials.packageForMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const meetingPackage = useQuery(
+    api.meetingMaterials.packageForMeeting,
+    id ? { meetingId: id as Id<"meetings">, actingUserId } : "skip",
+  );
   const sourceDocumentIds = ((minutes as any)?.sourceDocumentIds ?? []) as Id<"documents">[];
   const sourceDocuments = useQuery(
     api.documents.getMany,
-    sourceDocumentIds.length > 0 ? { ids: sourceDocumentIds } : "skip",
+    sourceDocumentIds.length > 0 ? { ids: sourceDocumentIds, actingUserId } : "skip",
   );
   const transcriptRecord = useQuery(
     api.transcripts.getByMeeting,
@@ -266,7 +107,7 @@ export function MeetingDetailPage() {
     api.committees.list,
     society ? { societyId: society._id } : "skip",
   );
-  const allDocuments = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
+  const allDocuments = useQuery(api.documents.list, society ? { societyId: society._id, actingUserId } : "skip");
   const motionPeople = personLinkCandidates(members, directors);
   const directorNames = (directors ?? []).flatMap((d: any) => [`${d.firstName} ${d.lastName}`, ...(Array.isArray(d.aliases) ? d.aliases : [])]);
   const generate = useAction(api.minutes.generateDraft);
@@ -1969,174 +1810,4 @@ function inferAgendaSectionType(title: string) {
   if (/\bin[ -]?camera|executive session|closed session\b/.test(normalized)) return "executive_session";
   if (/\badjourn\b/.test(normalized)) return "other";
   return "discussion";
-}
-
-export function MeetingMinutesPreviewPage() {
-  const { id } = useParams<{ id: string }>();
-  const society = useSociety();
-  const meeting = useQuery(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
-  const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
-  const agendaRecord = useQuery(api.agendas.getForMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
-  const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
-  const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", false));
-  const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
-  const [includeDiscussionSummaryInExport, setIncludeDiscussionSummaryInExport] = useState(() => readStoredExportBool("includeDiscussionSummary", false));
-  const [includeApprovalInExport, setIncludeApprovalInExport] = useState(() => readStoredExportBool("includeApproval", true));
-  const [includeSignaturesInExport, setIncludeSignaturesInExport] = useState(() => readStoredExportBool("includeSignatures", true));
-  const [includePlaceholdersInExport, setIncludePlaceholdersInExport] = useState(() => readStoredExportBool("includePlaceholders", false));
-
-  useEffect(() => {
-    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}style`, minutesExportStyle);
-  }, [minutesExportStyle]);
-
-  useEffect(() => {
-    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeTranscript`, String(includeTranscriptInExport));
-    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeActionItems`, String(includeActionItemsInExport));
-    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeDiscussionSummary`, String(includeDiscussionSummaryInExport));
-    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeApproval`, String(includeApprovalInExport));
-    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeSignatures`, String(includeSignaturesInExport));
-    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includePlaceholders`, String(includePlaceholdersInExport));
-  }, [
-    includeActionItemsInExport,
-    includeApprovalInExport,
-    includeDiscussionSummaryInExport,
-    includePlaceholdersInExport,
-    includeSignaturesInExport,
-    includeTranscriptInExport,
-  ]);
-
-  if (society === undefined || !meeting || minutes === undefined) return <div className="page">Loading…</div>;
-  if (society === null) return <SeedPrompt />;
-  if (!minutes) return <div className="page">No minutes recorded for this meeting.</div>;
-
-  const agendaTree = agendaEntriesFromRecord(agendaRecord) ?? parseAgendaItems(meeting.agendaJson);
-  const quorumSnapshot = getQuorumSnapshot(minutes, meeting);
-  const selectedMinutesExportStyle =
-    MINUTES_EXPORT_STYLES.find((style) => style.id === minutesExportStyle) ??
-    MINUTES_EXPORT_STYLES[0];
-
-  const bodyHtml = renderMinutesHtml({
-    society: { name: society.name, incorporationNumber: society.incorporationNumber ?? null },
-    meeting: {
-      title: meeting.title,
-      type: meeting.type,
-      scheduledAt: meeting.scheduledAt,
-      location: meeting.location ?? null,
-      electronic: !!meeting.electronic,
-      noticeSentAt: meeting.noticeSentAt ?? null,
-      agendaItems: agendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
-      agendaItemTree: agendaTree,
-    },
-    minutes: {
-      heldAt: minutes.heldAt,
-      chairName: minutes.chairName ?? null,
-      secretaryName: minutes.secretaryName ?? null,
-      recorderName: minutes.recorderName ?? null,
-      calledToOrderAt: minutes.calledToOrderAt ?? null,
-      adjournedAt: minutes.adjournedAt ?? null,
-      remoteParticipation: minutes.remoteParticipation ?? null,
-      detailedAttendance: minutes.detailedAttendance ?? null,
-      attendees: minutes.attendees,
-      absent: minutes.absent,
-      quorumMet: minutes.quorumMet,
-      quorumRequired: quorumSnapshot.required,
-      quorumSourceLabel: quorumSnapshot.label,
-      discussion: minutes.discussion,
-      sections: minutes.sections ?? null,
-      motions: minutes.motions as any,
-      decisions: minutes.decisions,
-      actionItems: minutes.actionItems as any,
-      approvedAt: minutes.approvedAt ?? null,
-      nextMeetingAt: minutes.nextMeetingAt ?? null,
-      nextMeetingLocation: minutes.nextMeetingLocation ?? null,
-      nextMeetingNotes: minutes.nextMeetingNotes ?? null,
-      sessionSegments: minutes.sessionSegments ?? null,
-      appendices: minutes.appendices ?? null,
-      agmDetails: minutes.agmDetails ?? null,
-      draftTranscript: minutes.draftTranscript ?? null,
-    },
-    styleId: minutesExportStyle,
-    options: {
-      includeTranscript: includeTranscriptInExport,
-      includeActionItems: includeActionItemsInExport,
-      includeDiscussionSummary: includeDiscussionSummaryInExport,
-      includeApprovalBlock: includeApprovalInExport,
-      includeSignatures: includeSignaturesInExport,
-      includePlaceholders: includePlaceholdersInExport,
-    },
-  });
-
-  const exportPreviewToWord = () => {
-    const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-    exportWordDoc({
-      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.doc`,
-      title: `${meeting.title} — Minutes`,
-      bodyHtml,
-    });
-  };
-
-  const exportPreviewToPdf = async () => {
-    const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-    await exportPdfDownload({
-      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.pdf`,
-      title: `${meeting.title} — Minutes`,
-      bodyHtml,
-    });
-  };
-
-  return (
-    <div className="page page--wide meeting-preview-page">
-      <div className="meeting-preview-page__header">
-        <div>
-          <Link to={`/app/meetings/${meeting._id}`} className="row muted" style={{ marginBottom: 6, fontSize: "var(--fs-sm)" }}>
-            <ArrowLeft size={12} /> Back to meeting
-          </Link>
-          <h1>{meeting.title}</h1>
-          <p>{selectedMinutesExportStyle.label} · {selectedMinutesExportStyle.source}</p>
-        </div>
-        <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
-          <button className="btn-action" onClick={() => window.close()}>Close page</button>
-          <button className="btn-action btn-action--primary" onClick={exportPreviewToWord}>
-            <FileDown size={12} /> Export Word
-          </button>
-          <button className="btn-action" onClick={exportPreviewToPdf}>
-            <Printer size={12} /> Export PDF
-          </button>
-        </div>
-      </div>
-
-      <div className="meeting-preview-page__layout">
-        <aside className="meeting-preview-page__settings">
-          <Field label="Style">
-            <Select value={minutesExportStyle} onChange={value => setMinutesExportStyle(value as MinutesExportStyleId)} options={[...MINUTES_EXPORT_STYLES.map(style => ({
-  value: style.id,
-  label: style.label
-}))]} className="input" />
-          </Field>
-          <div className="col" style={{ gap: 6 }}>
-            <label><input type="checkbox" checked={includeTranscriptInExport} onChange={(event) => setIncludeTranscriptInExport(event.target.checked)} /> Include transcript</label>
-            <label><input type="checkbox" checked={includeActionItemsInExport} onChange={(event) => setIncludeActionItemsInExport(event.target.checked)} /> Include action items</label>
-            <label><input type="checkbox" checked={includeDiscussionSummaryInExport} onChange={(event) => setIncludeDiscussionSummaryInExport(event.target.checked)} /> Include discussion summary</label>
-            <label><input type="checkbox" checked={includeApprovalInExport} onChange={(event) => setIncludeApprovalInExport(event.target.checked)} /> Include approval block</label>
-            <label><input type="checkbox" checked={includeSignaturesInExport} onChange={(event) => setIncludeSignaturesInExport(event.target.checked)} /> Include signature lines</label>
-            <label><input type="checkbox" checked={includePlaceholdersInExport} onChange={(event) => setIncludePlaceholdersInExport(event.target.checked)} /> Show placeholders</label>
-          </div>
-        </aside>
-        <div className="minutes-preview minutes-preview--standalone">
-          {bodyHtml ? (
-            <div className="minutes-preview__page" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
-          ) : (
-            <div className="minutes-preview__empty">
-              <FileText size={20} aria-hidden="true" />
-              <strong>Nothing to render yet.</strong>
-              <p className="muted">
-                Add agenda items, discussion notes, decisions, motions, or action items
-                on this meeting and they'll appear here in the selected export style.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
 }

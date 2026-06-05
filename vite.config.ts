@@ -23,6 +23,7 @@ const output = {
 };
 const build = {
   target: "esnext" as const,
+  chunkSizeWarningLimit: 1000,
   rollupOptions: { output },
 };
 

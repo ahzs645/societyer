@@ -1,4 +1,3 @@
-/* eslint-disable */
 // Compare two V8 heap snapshots and report what GREW between them.
 // Run: node scripts/diffHeaps.cjs <before.heapsnapshot> <after.heapsnapshot>
 const fs = require("fs");

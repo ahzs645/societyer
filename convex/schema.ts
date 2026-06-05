@@ -8,6 +8,10 @@ export default defineSchema({
     incorporationDate: v.optional(v.string()),
     fiscalYearEnd: v.optional(v.string()),
     jurisdictionCode: v.optional(v.string()),
+    homeJurisdictionCode: v.optional(v.string()),
+    primaryRegistrationId: v.optional(v.id("organizationRegistrations")),
+    anniversaryDate: v.optional(v.string()),
+    corporationKeyVaultItemId: v.optional(v.id("secretVaultItems")),
     entityType: v.optional(v.string()),
     actFormedUnder: v.optional(v.string()),
     officialEmail: v.optional(v.string()),
@@ -52,6 +56,7 @@ export default defineSchema({
     publicVolunteerIntakeEnabled: v.optional(v.boolean()),
     publicGrantIntakeEnabled: v.optional(v.boolean()),
     disabledModules: v.optional(v.array(v.string())),
+    consumableIntakeCountPromptEnabled: v.optional(v.boolean()),
     demoMode: v.optional(v.boolean()),
     updatedAt: v.number(),
   }).index("by_public_slug", ["publicSlug"]),
@@ -79,7 +84,9 @@ export default defineSchema({
 
   organizationRegistrations: defineTable({
     societyId: v.id("societies"),
+    registrationType: v.optional(v.string()), // home | extra_provincial | business_name | branch | licence | deregistered
     jurisdiction: v.string(),
+    homeJurisdiction: v.optional(v.string()),
     assumedName: v.optional(v.string()),
     registrationNumber: v.optional(v.string()),
     registrationDate: v.optional(v.string()),
@@ -87,6 +94,15 @@ export default defineSchema({
     deRegistrationDate: v.optional(v.string()),
     nuansNumber: v.optional(v.string()),
     officialEmail: v.optional(v.string()),
+    annualReturnDueDate: v.optional(v.string()),
+    lastAnnualReturnFiledDate: v.optional(v.string()),
+    registryProfileReportDate: v.optional(v.string()),
+    registryPortalKey: v.optional(v.string()),
+    profileReportDocumentId: v.optional(v.id("documents")),
+    companyKeyVaultItemId: v.optional(v.id("secretVaultItems")),
+    agentForServiceName: v.optional(v.string()),
+    agentForServiceAddress: v.optional(v.string()),
+    principalOfficeAddress: v.optional(v.string()),
     representativeIds: v.array(v.string()),
     status: v.string(), // active | inactive | pending | needs_review
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
@@ -226,6 +242,23 @@ export default defineSchema({
     .index("by_society", ["societyId"])
     .index("by_society_date", ["societyId", "transferDate"])
     .index("by_society_status", ["societyId", "status"]),
+
+  rightsHoldings: defineTable({
+    societyId: v.id("societies"),
+    rightsClassId: v.id("rightsClasses"),
+    holderRoleHolderId: v.optional(v.id("roleHolders")),
+    holderKey: v.string(),
+    quantity: v.number(),
+    status: v.string(), // current | zeroed | needs_review
+    lastTransactionId: v.optional(v.id("rightsholdingTransfers")),
+    sourceDocumentIds: v.array(v.id("documents")),
+    sourceExternalIds: v.array(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_class", ["societyId", "rightsClassId"])
+    .index("by_society_holder", ["societyId", "holderKey"]),
 
   legalTemplateDataFields: defineTable({
     societyId: v.optional(v.id("societies")),
@@ -667,7 +700,7 @@ export default defineSchema({
     societyId: v.id("societies"),
     documentId: v.id("documents"),
     version: v.number(),
-    storageProvider: v.string(), // convex | rustfs | demo
+    storageProvider: v.string(), // rustfs | demo | local | local-filesystem | convex legacy
     storageKey: v.string(),
     fileName: v.string(),
     mimeType: v.optional(v.string()),
@@ -925,15 +958,143 @@ export default defineSchema({
     societyId: v.id("societies"),
     connectionId: v.id("financialConnections"),
     externalId: v.string(),
+    code: v.optional(v.string()),
     name: v.string(),
     currency: v.string(),
     accountType: v.string(), // Bank | Credit | Income | Expense | Asset | Liability | Equity
+    subtype: v.optional(v.string()),
     balanceCents: v.number(),
     isRestricted: v.boolean(),
     restrictedPurpose: v.optional(v.string()),
+    sourceSystem: v.optional(v.string()), // societyer | ledgersmb | wave | csv | browser
+    normalBalance: v.optional(v.string()), // debit | credit
   })
     .index("by_society", ["societyId"])
+    .index("by_connection", ["connectionId"])
+    .index("by_society_code", ["societyId", "code"])
+    .index("by_society_external", ["societyId", "externalId"]),
+
+  accountingFiscalPeriods: defineTable({
+    societyId: v.id("societies"),
+    fiscalYear: v.string(),
+    periodLabel: v.string(),
+    startDate: v.string(),
+    endDate: v.string(),
+    status: v.string(), // open | closed | archived
+    closedAtISO: v.optional(v.string()),
+    closedByUserId: v.optional(v.id("users")),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_fiscal_year", ["societyId", "fiscalYear"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  accountingCounterparties: defineTable({
+    societyId: v.id("societies"),
+    name: v.string(),
+    kind: v.string(), // vendor | customer | funder | member | employee | government | other
+    provider: v.optional(v.string()), // ledgersmb | wave | societyer
+    externalId: v.optional(v.string()),
+    email: v.optional(v.string()),
+    taxIdentifier: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_kind", ["societyId", "kind"])
+    .index("by_society_external", ["societyId", "externalId"]),
+
+  fundRestrictions: defineTable({
+    societyId: v.id("societies"),
+    name: v.string(),
+    purpose: v.string(),
+    status: v.string(), // active | released | archived
+    linkedGrantId: v.optional(v.id("grants")),
+    linkedFinancialAccountId: v.optional(v.id("financialAccounts")),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_grant", ["linkedGrantId"]),
+
+  accountingAccountMappings: defineTable({
+    societyId: v.id("societies"),
+    provider: v.string(), // wave | ledgersmb | csv | browser | societyer
+    externalAccountId: v.optional(v.string()),
+    externalAccountCode: v.optional(v.string()),
+    externalAccountName: v.string(),
+    externalCategory: v.optional(v.string()),
+    financialAccountId: v.id("financialAccounts"),
+    confidence: v.optional(v.string()), // manual | high | medium | low
+    status: v.string(), // active | inactive | needs_review
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_provider", ["societyId", "provider"])
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_account", ["financialAccountId"]),
+
+  journalEntries: defineTable({
+    societyId: v.id("societies"),
+    connectionId: v.optional(v.id("financialConnections")),
+    fiscalPeriodId: v.optional(v.id("accountingFiscalPeriods")),
+    entryNumber: v.optional(v.string()),
+    reference: v.optional(v.string()),
+    date: v.string(),
+    memo: v.string(),
+    source: v.string(), // manual | ledgersmb | wave | csv | browser | receipt | grant | payroll | filing
+    sourceExternalId: v.optional(v.string()),
+    status: v.string(), // draft | posted | void
+    fiscalYear: v.optional(v.string()),
+    createdByUserId: v.optional(v.id("users")),
+    postedAtISO: v.optional(v.string()),
+    voidedAtISO: v.optional(v.string()),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    rawJson: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_date", ["societyId", "date"])
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_society_source", ["societyId", "source"])
     .index("by_connection", ["connectionId"]),
+
+  journalLines: defineTable({
+    societyId: v.id("societies"),
+    journalEntryId: v.id("journalEntries"),
+    accountId: v.id("financialAccounts"),
+    lineOrder: v.number(),
+    amountCents: v.number(),
+    side: v.string(), // debit | credit
+    description: v.optional(v.string()),
+    counterpartyId: v.optional(v.id("accountingCounterparties")),
+    grantId: v.optional(v.id("grants")),
+    fundRestrictionId: v.optional(v.id("fundRestrictions")),
+    financialTransactionId: v.optional(v.id("financialTransactions")),
+    transactionCandidateId: v.optional(v.id("transactionCandidates")),
+    documentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalId: v.optional(v.string()),
+    rawJson: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_entry", ["journalEntryId"])
+    .index("by_account", ["accountId"])
+    .index("by_counterparty", ["counterpartyId"])
+    .index("by_grant", ["grantId"])
+    .index("by_fund_restriction", ["fundRestrictionId"]),
 
   financialTransactions: defineTable({
     societyId: v.id("societies"),
@@ -963,6 +1124,40 @@ export default defineSchema({
     .index("by_society_counterparty_external_type", ["societyId", "counterpartyExternalId", "counterpartyResourceType"])
     .index("by_society_category_account_external", ["societyId", "categoryAccountExternalId"])
     .index("by_society_category", ["societyId", "category"]),
+
+  reconciliationRuns: defineTable({
+    societyId: v.id("societies"),
+    financialAccountId: v.id("financialAccounts"),
+    statementDate: v.string(),
+    statementBalanceCents: v.number(),
+    bookBalanceCents: v.optional(v.number()),
+    status: v.string(), // draft | ready | reconciled | reopened
+    reconciledAtISO: v.optional(v.string()),
+    reconciledByUserId: v.optional(v.id("users")),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_account", ["financialAccountId"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  reconciliationRunLines: defineTable({
+    societyId: v.id("societies"),
+    reconciliationRunId: v.id("reconciliationRuns"),
+    journalLineId: v.optional(v.id("journalLines")),
+    financialTransactionId: v.optional(v.id("financialTransactions")),
+    status: v.string(), // included | excluded | difference | adjustment
+    amountCents: v.number(),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_run", ["reconciliationRunId"])
+    .index("by_journal_line", ["journalLineId"])
+    .index("by_financial_transaction", ["financialTransactionId"]),
 
   budgets: defineTable({
     societyId: v.id("societies"),
@@ -1106,7 +1301,7 @@ export default defineSchema({
     counterparty: v.optional(v.string()),
     category: v.optional(v.string()),
     debitCredit: v.optional(v.string()),
-    status: v.string(), // NeedsReview | Matched | Ignored | Restricted
+    status: v.string(), // NeedsReview | Matched | Posted | Ignored | Restricted
     sensitivity: v.string(),
     confidence: v.string(),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
@@ -2807,6 +3002,8 @@ export default defineSchema({
     supplier: v.optional(v.string()),
     purchaseDate: v.optional(v.string()),
     purchaseValueCents: v.optional(v.number()),
+    quantityOnHand: v.optional(v.number()),
+    quantityUnit: v.optional(v.string()),
     currency: v.optional(v.string()),
     fundingSource: v.optional(v.string()),
     grantId: v.optional(v.id("grants")),
@@ -2865,6 +3062,9 @@ export default defineSchema({
     responsiblePersonName: v.optional(v.string()),
     location: v.optional(v.string()),
     condition: v.optional(v.string()),
+    observedQuantityBefore: v.optional(v.number()),
+    quantityAdded: v.optional(v.number()),
+    quantityAfter: v.optional(v.number()),
     expectedReturnDate: v.optional(v.string()),
     acceptanceSignature: v.optional(v.string()),
     documentIds: v.array(v.id("documents")),
@@ -2925,6 +3125,238 @@ export default defineSchema({
     .index("by_run", ["runId"])
     .index("by_asset", ["assetId"])
     .index("by_run_status", ["runId", "status"]),
+
+  assetReceiptLinks: defineTable({
+    societyId: v.id("societies"),
+    assetId: v.id("assets"),
+    inventoryItemId: v.optional(v.id("inventoryItems")),
+    receiptDocumentId: v.id("documents"),
+    financialTransactionId: v.optional(v.id("financialTransactions")),
+    receiptLineLabel: v.optional(v.string()),
+    receiptLineIndex: v.optional(v.number()),
+    quantity: v.optional(v.number()),
+    unitOfMeasure: v.optional(v.string()),
+    unitCostCents: v.optional(v.number()),
+    totalCostCents: v.optional(v.number()),
+    sourceText: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_asset", ["assetId"])
+    .index("by_inventory_item", ["inventoryItemId"])
+    .index("by_receipt_document", ["receiptDocumentId"])
+    .index("by_financial_transaction", ["financialTransactionId"]),
+
+  inventoryConnections: defineTable({
+    societyId: v.id("societies"),
+    provider: v.string(), // openboxes | odoo | erpnext | snipeit | csv | receipt | manual | demo
+    displayName: v.string(),
+    status: v.string(), // active | needs_attention | disabled
+    externalOrganizationId: v.optional(v.string()),
+    baseUrl: v.optional(v.string()),
+    lastSyncedAtISO: v.optional(v.string()),
+    settingsJson: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_provider", ["societyId", "provider"])
+    .index("by_society_status", ["societyId", "status"]),
+
+  inventoryItems: defineTable({
+    societyId: v.id("societies"),
+    connectionId: v.optional(v.id("inventoryConnections")),
+    sku: v.optional(v.string()),
+    name: v.string(),
+    description: v.optional(v.string()),
+    category: v.string(),
+    itemType: v.string(), // asset | consumable | supply | software | service | other
+    unitOfMeasure: v.string(),
+    defaultCostCents: v.optional(v.number()),
+    currency: v.optional(v.string()),
+    trackSerial: v.boolean(),
+    trackLot: v.boolean(),
+    trackExpiry: v.boolean(),
+    reorderPoint: v.optional(v.number()),
+    status: v.string(), // active | archived | needs_review
+    assetId: v.optional(v.id("assets")),
+    externalId: v.optional(v.string()),
+    sourceSystem: v.optional(v.string()),
+    rawJson: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_sku", ["societyId", "sku"])
+    .index("by_society_type", ["societyId", "itemType"])
+    .index("by_asset", ["assetId"])
+    .index("by_connection_external", ["connectionId", "externalId"]),
+
+  inventoryLocations: defineTable({
+    societyId: v.id("societies"),
+    connectionId: v.optional(v.id("inventoryConnections")),
+    name: v.string(),
+    locationType: v.string(), // facility | room | shelf | bin | custody | in_transit | vendor | disposed | virtual
+    parentLocationId: v.optional(v.id("inventoryLocations")),
+    address: v.optional(v.string()),
+    active: v.boolean(),
+    externalId: v.optional(v.string()),
+    sourceSystem: v.optional(v.string()),
+    rawJson: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_type", ["societyId", "locationType"])
+    .index("by_parent", ["parentLocationId"])
+    .index("by_connection_external", ["connectionId", "externalId"]),
+
+  inventoryLots: defineTable({
+    societyId: v.id("societies"),
+    connectionId: v.optional(v.id("inventoryConnections")),
+    inventoryItemId: v.id("inventoryItems"),
+    lotNumber: v.optional(v.string()),
+    serialNumber: v.optional(v.string()),
+    expiresAt: v.optional(v.string()),
+    manufacturer: v.optional(v.string()),
+    manufacturedAt: v.optional(v.string()),
+    condition: v.optional(v.string()),
+    status: v.string(), // active | depleted | expired | disposed | needs_review
+    assetId: v.optional(v.id("assets")),
+    externalId: v.optional(v.string()),
+    sourceSystem: v.optional(v.string()),
+    rawJson: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_item", ["inventoryItemId"])
+    .index("by_asset", ["assetId"])
+    .index("by_connection_external", ["connectionId", "externalId"]),
+
+  stockMovements: defineTable({
+    societyId: v.id("societies"),
+    connectionId: v.optional(v.id("inventoryConnections")),
+    movementDate: v.string(),
+    movementType: v.string(), // receive | issue | transfer | adjustment | count | consume | return | dispose | reserve | unreserve
+    status: v.string(), // draft | posted | void | needs_review
+    inventoryItemId: v.id("inventoryItems"),
+    inventoryLotId: v.optional(v.id("inventoryLots")),
+    fromLocationId: v.optional(v.id("inventoryLocations")),
+    toLocationId: v.optional(v.id("inventoryLocations")),
+    quantity: v.number(),
+    unitOfMeasure: v.string(),
+    unitCostCents: v.optional(v.number()),
+    totalCostCents: v.optional(v.number()),
+    reason: v.optional(v.string()),
+    reference: v.optional(v.string()),
+    sourceExternalId: v.optional(v.string()),
+    sourceSystem: v.optional(v.string()),
+    assetEventId: v.optional(v.id("assetEvents")),
+    purchaseTransactionId: v.optional(v.id("financialTransactions")),
+    receiptDocumentId: v.optional(v.id("documents")),
+    grantId: v.optional(v.id("grants")),
+    fundRestrictionId: v.optional(v.id("fundRestrictions")),
+    documentIds: v.array(v.id("documents")),
+    rawJson: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society_date", ["societyId", "movementDate"])
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_item_date", ["inventoryItemId", "movementDate"])
+    .index("by_lot", ["inventoryLotId"])
+    .index("by_from_location", ["fromLocationId"])
+    .index("by_to_location", ["toLocationId"])
+    .index("by_asset_event", ["assetEventId"])
+    .index("by_connection_external", ["connectionId", "sourceExternalId"]),
+
+  inventoryBalances: defineTable({
+    societyId: v.id("societies"),
+    inventoryItemId: v.id("inventoryItems"),
+    inventoryLotId: v.optional(v.id("inventoryLots")),
+    locationId: v.id("inventoryLocations"),
+    quantityOnHand: v.number(),
+    quantityReserved: v.number(),
+    quantityAvailable: v.number(),
+    lastMovementId: v.optional(v.id("stockMovements")),
+    lastCountedAtISO: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_item", ["inventoryItemId"])
+    .index("by_location", ["locationId"])
+    .index("by_item_location", ["inventoryItemId", "locationId"]),
+
+  inventoryCounts: defineTable({
+    societyId: v.id("societies"),
+    title: v.string(),
+    status: v.string(), // open | completed | void
+    startedAtISO: v.string(),
+    completedAtISO: v.optional(v.string()),
+    reviewerName: v.optional(v.string()),
+    locationId: v.optional(v.id("inventoryLocations")),
+    scope: v.optional(v.string()),
+    sourceDocumentIds: v.array(v.id("documents")),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_location", ["locationId"]),
+
+  inventoryCountLines: defineTable({
+    societyId: v.id("societies"),
+    inventoryCountId: v.id("inventoryCounts"),
+    inventoryItemId: v.id("inventoryItems"),
+    inventoryLotId: v.optional(v.id("inventoryLots")),
+    locationId: v.id("inventoryLocations"),
+    expectedQuantity: v.optional(v.number()),
+    countedQuantity: v.optional(v.number()),
+    varianceQuantity: v.optional(v.number()),
+    condition: v.optional(v.string()),
+    status: v.string(), // pending | counted | missing | damaged | adjusted | ignored
+    notes: v.optional(v.string()),
+    adjustmentMovementId: v.optional(v.id("stockMovements")),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_count", ["inventoryCountId"])
+    .index("by_item", ["inventoryItemId"])
+    .index("by_location", ["locationId"])
+    .index("by_count_status", ["inventoryCountId", "status"]),
+
+  inventoryCandidates: defineTable({
+    societyId: v.id("societies"),
+    connectionId: v.optional(v.id("inventoryConnections")),
+    importSessionId: v.optional(v.id("importSessions")),
+    candidateType: v.string(), // item | location | lot | movement | count
+    sourceSystem: v.string(),
+    sourceExternalId: v.optional(v.string()),
+    status: v.string(), // new | matched | posted | ignored | needs_review
+    occurredAtISO: v.optional(v.string()),
+    sku: v.optional(v.string()),
+    itemName: v.optional(v.string()),
+    locationName: v.optional(v.string()),
+    quantity: v.optional(v.number()),
+    unitOfMeasure: v.optional(v.string()),
+    suggestedInventoryItemId: v.optional(v.id("inventoryItems")),
+    suggestedLocationId: v.optional(v.id("inventoryLocations")),
+    postedMovementId: v.optional(v.id("stockMovements")),
+    rawJson: v.string(),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_import_session", ["importSessionId"])
+    .index("by_connection_external", ["connectionId", "sourceExternalId"]),
 
   complianceRemediations: defineTable({
     societyId: v.id("societies"),

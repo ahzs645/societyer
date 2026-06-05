@@ -227,11 +227,11 @@ export function AgendaBuilderPage() {
                       background: active ? "var(--bg-subtle)" : undefined,
                     }}
                   >
-                    <span>
-                      <strong>{a.title}</strong>
-                      {meeting && <span className="muted"> — {formatDate(meeting.scheduledAt)}</span>}
+                    <span className="agenda-builder__agenda-copy">
+                      <strong className="agenda-builder__agenda-title">{a.title}</strong>
+                      {meeting && <span className="muted agenda-builder__agenda-date">{formatDate(meeting.scheduledAt)}</span>}
                     </span>
-                    <span className="muted">{a.status}</span>
+                    <span className="muted agenda-builder__agenda-status">{a.status}</span>
                   </button>
                 );
               })}

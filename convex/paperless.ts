@@ -690,9 +690,15 @@ export const syncDocument = action({
         blob = new Blob([`Demo Paperless document for ${title}`], {
           type: syncCtx.source.mimeType ?? "text/plain",
         });
+      } else if (syncCtx.source.provider === "local-filesystem") {
+        throw new Error("Paperless-ngx sync is unavailable for Electron local filesystem documents.");
+      } else if (syncCtx.source.provider === "local") {
+        throw new Error("Paperless-ngx sync is unavailable for API-local generated documents.");
+      } else if (syncCtx.source.provider !== "rustfs") {
+        throw new Error(`Paperless-ngx sync does not support ${syncCtx.source.provider} document versions.`);
       } else {
         const url = await createDownloadUrl({
-          provider: syncCtx.source.provider as "rustfs" | "demo",
+          provider: syncCtx.source.provider,
           key: syncCtx.source.key,
         });
         blob = await fetchBlob(url);

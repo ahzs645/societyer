@@ -1104,7 +1104,9 @@ export function MeetingMinutesColumn({
         motionIndex,
         selectedIndex: assignedSectionIndexForMotion(motion, sections),
       }))
-      .filter(({ motion }) => !isAdjournmentMotion(motion));
+      .filter(({ motion, selectedIndex }) =>
+        !isAdjournmentMotion(motion) || (selectedIndex != null && isAdjournmentSection(sections[selectedIndex])),
+      );
     const assignedMotionRows = motionRows.filter((row) => row.selectedIndex === index);
     const availableMotionRows = motionRows.filter((row) => row.selectedIndex !== index);
     const actionCount = sectionDraft.actionItems.filter((item) => item.text.trim()).length;
@@ -2731,7 +2733,7 @@ function relatedMotionsForSection(section: any, sectionIndex: number, motions: M
   const haystack = normalize(`${section?.title ?? ""} ${section?.discussion ?? ""} ${(section?.decisions ?? []).join(" ")}`);
   if (!haystack) return [];
   return motions.map((motion, index) => ({ motion, index })).filter(({ motion }) => {
-    if (isAdjournmentMotion(motion)) return false;
+    if (isAdjournmentMotion(motion)) return isAdjournmentSection(section);
     if (motion.sectionIndex === sectionIndex) return true;
     if (motion.sectionTitle && normalize(motion.sectionTitle) === normalize(section?.title ?? "")) return true;
     if (motion.sectionIndex != null || motion.sectionTitle) return false;
@@ -2747,6 +2749,10 @@ function relatedMotionsForSection(section: any, sectionIndex: number, motions: M
     const hits = words.filter((word) => haystack.includes(word)).length;
     return hits >= Math.min(3, words.length);
   });
+}
+
+function isAdjournmentSection(section: any) {
+  return /\badjourn(?:ment|ed|s)?\b/i.test(String(section?.title ?? ""));
 }
 
 function assignedSectionIndexForMotion(motion: Motion, sections: any[]): number | null {

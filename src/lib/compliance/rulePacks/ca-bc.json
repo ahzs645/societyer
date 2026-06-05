@@ -1,0 +1,95 @@
+{
+  "schemaVersion": "1.0.0",
+  "packId": "compliance-ca-bc-societies",
+  "status": "draft",
+  "version": "2026.06.04",
+  "reviewedAt": "2026-06-04",
+  "jurisdictionCode": "CA-BC",
+  "entityTypes": ["society"],
+  "title": "BC Societies Act compliance obligation pack",
+  "description": "Draft operational schedules for core BC society annual maintenance, meeting, records, and bylaw evidence obligations.",
+  "sourceGuidePackId": "ca-bc-societies",
+  "rules": [
+    {
+      "ruleId": "compliance-ca-bc-societies-annual-report",
+      "status": "draft",
+      "title": "Annual report filing deadline",
+      "summary": "Track BC annual report filing from the annual general meeting date.",
+      "obligationKey": "registry.annual_report",
+      "schedule": {
+        "kind": "annual",
+        "anchorFact": "annualMeetingDate",
+        "dueOffset": { "days": 30 }
+      },
+      "authority": {
+        "guidePackId": "ca-bc-societies",
+        "guideRuleIds": ["ca-bc-societies-act-agm-timing"],
+        "displayCitation": "BC Societies Act annual general meeting and annual report workflow"
+      },
+      "creates": {
+        "filingKind": "BCSocietyAnnualReport",
+        "requiredEvidence": ["confirmationNumber", "receiptOrAcknowledgement", "agmDateEvidence"],
+        "checklist": [
+          "Confirm the annual general meeting date and directors continuing or elected.",
+          "Verify registered office, records office, mailing address, and current directors.",
+          "Prepare the annual report filing packet.",
+          "File through BC Registries/Societies Online or the approved service path.",
+          "Capture confirmation number, receipt, and filing evidence."
+        ]
+      },
+      "caveat": "Operational filing deadline; confirm current BC Registry instructions and whether the AGM date or written resolutions affect the practical filing workflow."
+    },
+    {
+      "ruleId": "compliance-ca-bc-societies-agm-planning",
+      "status": "draft",
+      "title": "Annual general meeting planning deadline",
+      "summary": "Track annual meeting planning against the fiscal year end.",
+      "obligationKey": "agm.annual_meeting",
+      "schedule": {
+        "kind": "annual",
+        "anchorFact": "fiscalYearEnd",
+        "dueOffset": { "months": 6 }
+      },
+      "authority": {
+        "guidePackId": "ca-bc-societies",
+        "guideRuleIds": ["ca-bc-societies-act-agm-timing"],
+        "displayCitation": "BC Societies Act AGM timing guidance"
+      },
+      "creates": {
+        "requiredEvidence": ["meetingMinutes", "noticeEvidence", "financialStatements"],
+        "checklist": [
+          "Confirm AGM timing against fiscal year end and bylaws.",
+          "Prepare notice, agenda, financial statements, and director election materials.",
+          "Archive minutes, attendance, resolutions, and supporting documents."
+        ]
+      },
+      "caveat": "Meeting timing can depend on bylaws, extensions, written resolutions, and current registry guidance."
+    },
+    {
+      "ruleId": "compliance-ca-bc-societies-records-review",
+      "status": "draft",
+      "title": "Annual records and inspection readiness review",
+      "summary": "Track an annual review of records required to be kept and inspection-ready.",
+      "obligationKey": "records.annual_review",
+      "schedule": {
+        "kind": "annual",
+        "anchorFact": "fiscalYearEnd",
+        "dueOffset": { "months": 3 }
+      },
+      "authority": {
+        "guidePackId": "ca-bc-societies",
+        "guideRuleIds": ["ca-bc-societies-act-records"],
+        "displayCitation": "BC Societies Act records guidance"
+      },
+      "creates": {
+        "requiredEvidence": ["recordsRegister", "recordsLocationEvidence", "inspectionPolicy"],
+        "checklist": [
+          "Review required records, location, and access controls.",
+          "Confirm member and public inspection paths against bylaws and legislation.",
+          "Archive the review memo and any corrective tasks."
+        ]
+      },
+      "caveat": "Use as an operational review cadence; exact inspection rights depend on record type, bylaws, and current legislation."
+    }
+  ]
+}

@@ -1854,7 +1854,7 @@ function PdfPickerModal({
 
 function PdfPreviewPane({ doc }: { doc: any }) {
   const latest = useQuery(api.documentVersions.latest, { documentId: doc._id });
-  const getDownloadUrl = useAction(api.documentVersions.getDownloadUrl);
+  const getDownloadTarget = useAction(api.documentVersions.getDownloadTarget);
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -1865,8 +1865,15 @@ function PdfPreviewPane({ doc }: { doc: any }) {
     let cancelled = false;
     (async () => {
       try {
-        const next = await getDownloadUrl({ versionId: latest._id });
-        if (!cancelled) setUrl(next ?? null);
+        const target = await getDownloadTarget({ versionId: latest._id });
+        if (cancelled) return;
+        if (target?.kind === "url" && target.url) {
+          setUrl(target.url);
+        } else if (target?.kind === "local-filesystem") {
+          setError("Local filesystem documents cannot be previewed in this web iframe.");
+        } else {
+          setError(target?.reason ?? "This document version does not expose a preview URL.");
+        }
       } catch (err: any) {
         if (!cancelled) setError(err?.message ?? "Unable to load preview.");
       }
@@ -1874,7 +1881,7 @@ function PdfPreviewPane({ doc }: { doc: any }) {
     return () => {
       cancelled = true;
     };
-  }, [latest?._id, getDownloadUrl]);
+  }, [latest?._id, getDownloadTarget]);
 
   return (
     <div className="pdf-preview">

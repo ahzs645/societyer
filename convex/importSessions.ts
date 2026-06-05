@@ -1,6 +1,7 @@
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { invalidOptionIssue, invalidOptionListIssues } from "./lib/orgHubOptions";
+import { transactionImportMappingCandidates } from "./providers/accounting";
 
 const SESSION_TAG = "import-session";
 const RECORD_TAG = "import-session-record";
@@ -1391,6 +1392,7 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
   }
 
   if (record.recordKind === "transactionCandidate") {
+    const mappingNotes = await transactionCandidateMappingNotes(ctx, societyId, payload, record);
     return await ctx.db.insert("transactionCandidates", {
       societyId,
       transactionDate: cleanDate(payload.transactionDate) || cleanDate(payload.sourceDate) || todayDate(),
@@ -1415,7 +1417,7 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       confidence: confidenceFor(payload),
       sourceDocumentIds,
       sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
-      notes: sourceNote,
+      notes: [sourceNote, mappingNotes].filter(Boolean).join("\n"),
       createdAtISO: new Date().toISOString(),
     });
   }
@@ -2695,6 +2697,53 @@ function makeRecord(recordKind: string, targetModule: string, rawPayload: any) {
     confidence,
     riskFlags: riskFlagsFor(recordKind, targetModule, payload),
   };
+}
+
+async function transactionCandidateMappingNotes(ctx: any, societyId: any, payload: any, record: any) {
+  const candidates = transactionImportMappingCandidates({
+    sourceSystem: payload?.sourceSystem ?? payload?.externalSystem ?? sourceSystemFromExternalId(record?.sourceExternalIds?.[0]),
+    accountName: cleanText(payload?.accountName),
+    accountExternalId: cleanText(payload?.accountExternalId) ?? cleanText(payload?.accountId),
+    accountCode: cleanText(payload?.accountCode),
+    category: cleanText(payload?.category),
+  });
+  if (candidates.length === 0) return undefined;
+
+  const providers = unique(candidates.map((candidate) => candidate.provider));
+  const mappings = (
+    await Promise.all(
+      providers.map((provider) =>
+        ctx.db
+          .query("accountingAccountMappings")
+          .withIndex("by_society_provider", (q: any) => q.eq("societyId", societyId).eq("provider", provider))
+          .collect(),
+      ),
+    )
+  ).flat().filter((mapping: any) => mapping.status === "active");
+
+  const matches = candidates
+    .map((candidate) => {
+      const match = mappings.find((mapping: any) => mappingMatchesCandidate(mapping, candidate));
+      if (!match) return undefined;
+      return `${candidate.externalCategory ? "category" : "account"} ${candidate.externalAccountName ?? candidate.externalCategory ?? candidate.externalAccountId ?? candidate.externalAccountCode} -> ${match.financialAccountId}`;
+    })
+    .filter(Boolean);
+  if (matches.length === 0) return undefined;
+  return `Accounting mapping suggestions: ${unique(matches).join("; ")}`;
+}
+
+function mappingMatchesCandidate(mapping: any, candidate: any) {
+  const equal = (a: unknown, b: unknown) => {
+    const left = cleanText(a)?.toLowerCase();
+    const right = cleanText(b)?.toLowerCase();
+    return Boolean(left && right && left === right);
+  };
+  return (
+    equal(mapping.externalAccountId, candidate.externalAccountId) ||
+    equal(mapping.externalAccountCode, candidate.externalAccountCode) ||
+    equal(mapping.externalAccountName, candidate.externalAccountName) ||
+    equal(mapping.externalCategory, candidate.externalCategory)
+  );
 }
 
 function normalizePayload(recordKind: string, payload: any) {

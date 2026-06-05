@@ -5,6 +5,7 @@ export type OptionChoice = {
 
 export const ORG_HUB_OPTION_SETS = {
   entityTypes: [
+    { value: "corporation__business_", label: "Business Corporation" },
     { value: "corporation__nfp_", label: "Not-for-profit Corporation" },
     { value: "society", label: "Society" },
   ],
@@ -25,9 +26,13 @@ export const ORG_HUB_OPTION_SETS = {
     { value: "yukon", label: "Yukon" },
     { value: "foreign", label: "Foreign" },
     { value: "CA-BC", label: "British Columbia (Societyer code)" },
+    { value: "CA-FED-CBCA", label: "Canada federal - CBCA (Societyer code)" },
+    { value: "CA-ON-OBCA", label: "Ontario - OBCA (Societyer code)" },
   ],
   actsFormedUnder: [
+    { value: "canada_business_corporations_act", label: "Canada Business Corporations Act" },
     { value: "canada_not_for_profit_corporations_act", label: "Canada Not-for-profit Corporations Act" },
+    { value: "business_corporations_act__ontario_", label: "Business Corporations Act (Ontario)" },
     { value: "not_for_profit_corporations_act__2010__ontario_", label: "Not-for-Profit Corporations Act, 2010 (Ontario)" },
     { value: "corporations_act__ontario_", label: "Corporations Act (Ontario)" },
     { value: "companies_act__new_brunswick_", label: "Companies Act (New Brunswick)" },
@@ -137,6 +142,9 @@ export const ORG_HUB_OPTION_SETS = {
     { value: "transfer_participants", label: "Transfer Participants" },
   ],
   taxNumberTypes: [
+    { value: "corporation_key", label: "Corporation key" },
+    { value: "company_key", label: "Company key" },
+    { value: "ontario_company_key", label: "Ontario company key" },
     { value: "business_number", label: "Business Number" },
     { value: "income_tax", label: "Income Tax" },
     { value: "sales_tax", label: "Sales Tax (GST/HST/PST)" },
@@ -150,6 +158,8 @@ export const ORG_HUB_OPTION_SETS = {
   ],
   companyKeyTypes: [
     { value: "company_key", label: "Company Key" },
+    { value: "corporation_key", label: "Corporation Key" },
+    { value: "ontario_company_key", label: "Ontario Company Key" },
     { value: "password__bc_", label: "Password" },
     { value: "access_code", label: "Access Code" },
   ],
@@ -168,8 +178,12 @@ export const ORG_HUB_OPTION_SETS = {
   ],
   filingTypes: [
     { value: "annual", label: "Annual" },
+    { value: "annual_return", label: "Annual Return" },
+    { value: "initial_return", label: "Initial Return" },
     { value: "notice_of_change", label: "Notice of Change" },
     { value: "formation", label: "Formation" },
+    { value: "profile_report", label: "Profile Report" },
+    { value: "extra_provincial_registration", label: "Extra-Provincial Registration" },
   ],
   officerTitles: [
     { value: "assistant_secretary", label: "Assistant Secretary" },
@@ -217,6 +231,8 @@ export const ORG_HUB_OPTION_SETS = {
   representativeTypes: [
     { value: "officer", label: "Officer" },
     { value: "director", label: "Director" },
+    { value: "shareholder", label: "Shareholder" },
+    { value: "controller", label: "Individual with significant control" },
     { value: "member", label: "Member" },
     { value: "shareholder_representative", label: "Rep of Non-Natural Role Holder" },
     { value: "trustee", label: "Trustee" },
@@ -224,6 +240,7 @@ export const ORG_HUB_OPTION_SETS = {
     { value: "attorney_for_service", label: "Attorney for Service" },
     { value: "chief_officer___manager", label: "Chief Officer / Manager" },
     { value: "authorized_contact_person", label: "Authorized Contact Person" },
+    { value: "authorized_filer", label: "Authorized Filer" },
     { value: "authorized_representative", label: "Other" },
     { value: "treasury", label: "Treasury" },
   ],
@@ -241,6 +258,14 @@ export const LOCAL_OPTION_SETS = {
     { value: "inactive", label: "Inactive" },
     { value: "pending", label: "Pending" },
     { value: "needs_review", label: "Needs review" },
+  ],
+  registrationTypes: [
+    { value: "home", label: "Home jurisdiction" },
+    { value: "extra_provincial", label: "Extra-provincial" },
+    { value: "business_name", label: "Business name" },
+    { value: "branch", label: "Branch" },
+    { value: "licence", label: "Licence" },
+    { value: "deregistered", label: "Deregistered" },
   ],
   identifierStatuses: [
     { value: "active", label: "Active" },

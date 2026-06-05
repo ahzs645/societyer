@@ -1,4 +1,3 @@
-/* eslint-disable */
 // Parse a V8 .heaptimeline file (Allocation instrumentation on timeline) and
 // identify leak candidates: classes whose surviving instances were allocated
 // continuously over the recording rather than only at startup.

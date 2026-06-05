@@ -19,6 +19,7 @@ type OptionSetName =
   | "requiredSigners"
   | "organizationStatuses"
   | "registrationStatuses"
+  | "registrationTypes"
   | "identifierStatuses"
   | "accessLevels"
   | "policyStatuses"
@@ -47,7 +48,7 @@ type OptionSetName =
   | "suffixCompanyNames";
 
 export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
-  entityTypes: ["corporation__nfp_", "society"],
+  entityTypes: ["corporation__business_", "corporation__nfp_", "society"],
   entityJurisdictions: [
     "federal__canada_",
     "ontario",
@@ -65,9 +66,13 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
     "yukon",
     "foreign",
     "CA-BC",
+    "CA-FED-CBCA",
+    "CA-ON-OBCA",
   ],
   actsFormedUnder: [
+    "canada_business_corporations_act",
     "canada_not_for_profit_corporations_act",
+    "business_corporations_act__ontario_",
     "not_for_profit_corporations_act__2010__ontario_",
     "corporations_act__ontario_",
     "companies_act__new_brunswick_",
@@ -136,11 +141,11 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
     "company_keys",
     "paper_minute_book_archive",
   ],
-  taxNumberTypes: ["business_number", "income_tax", "sales_tax", "import___export", "payroll_tax", "charity_number", "registry_account", "gst", "payroll", "other"],
-  companyKeyTypes: ["company_key", "password__bc_", "access_code"],
+  taxNumberTypes: ["corporation_key", "company_key", "ontario_company_key", "business_number", "income_tax", "sales_tax", "import___export", "payroll_tax", "charity_number", "registry_account", "gst", "payroll", "other"],
+  companyKeyTypes: ["company_key", "corporation_key", "ontario_company_key", "password__bc_", "access_code"],
   permissionLevels: ["entity_administrator", "entity_editor", "entity_viewer"],
   signerStatuses: ["unsigned", "opened_package", "all_signed", "signed", "declined", "needs_review"],
-  filingTypes: ["annual", "notice_of_change", "formation"],
+  filingTypes: ["annual", "annual_return", "initial_return", "notice_of_change", "formation", "profile_report", "extra_provincial_registration"],
   officerTitles: [
     "assistant_secretary",
     "assistant_treasurer",
@@ -178,6 +183,8 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
   representativeTypes: [
     "officer",
     "director",
+    "shareholder",
+    "controller",
     "member",
     "shareholder_representative",
     "trustee",
@@ -185,6 +192,7 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
     "attorney_for_service",
     "chief_officer___manager",
     "authorized_contact_person",
+    "authorized_filer",
     "authorized_representative",
     "treasury",
   ],
@@ -204,6 +212,7 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
   ],
   organizationStatuses: ["active", "archived", "removed", "needs_review"],
   registrationStatuses: ["active", "inactive", "pending", "needs_review"],
+  registrationTypes: ["home", "extra_provincial", "business_name", "branch", "licence", "deregistered"],
   identifierStatuses: ["active", "inactive", "needs_review"],
   accessLevels: ["internal", "restricted"],
   policyStatuses: ["Draft", "Active", "ReviewDue", "Superseded", "Ceased"],

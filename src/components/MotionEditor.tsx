@@ -208,6 +208,8 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   sectionScope,
   onPendingDraftChange,
 }, ref) {
+  const scopedSectionTitle = sectionScope == null ? "" : agendaSectionTitle(agendaSections[sectionScope]);
+  const isAdjournmentScope = sectionScope != null && isAdjournmentSectionTitle(scopedSectionTitle);
   const sectionPatchForScope = (): Partial<Motion> =>
     sectionScope != null ? motionSectionPatch(String(sectionScope), agendaSections) : {};
   const makeDraft = (): Motion => ({ text: "", outcome: "Pending", ...sectionPatchForScope() });
@@ -311,16 +313,25 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
         text: "Adjourn the meeting",
         outcome: "Carried",
         resolutionType: "Procedural",
-        sectionTitle: "Adjournment",
+        ...sectionPatchForScope(),
+        sectionTitle: scopedSectionTitle || "Adjournment",
       },
     ]);
   };
+
+  useEffect(() => {
+    if (!isAdjournmentScope || adjournmentRows.length > 0) return;
+    addAdjournmentRecord();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdjournmentScope, adjournmentRows.length]);
 
   return (
     <div>
       {businessMotionRows.length === 0 && !adding && (
         <div className="muted">
-          {sectionScope != null
+          {isAdjournmentScope
+            ? "Adjournment is tracked as a procedural motion below."
+            : sectionScope != null
             ? "No motions assigned to this agenda item yet."
             : "No business motions recorded yet."}
         </div>
@@ -457,7 +468,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
         </div>
       )}
 
-      {sectionScope == null && (
+      {(sectionScope == null || isAdjournmentScope) && (
       <div className="motion-adjournment">
         <div className="motion-adjournment__head">
           <div>
@@ -728,7 +739,7 @@ function assignedSectionIndexForMotion(motion: Motion, agendaSections: Array<str
 }
 
 function motionBelongsToAgendaSection(motion: Motion, section: string | MotionAgendaSection) {
-  if (isAdjournmentMotion(motion)) return false;
+  if (isAdjournmentMotion(motion)) return isAdjournmentSectionTitle(agendaSectionTitle(section));
   const haystackRaw = agendaSectionSearchText(section);
   const haystack = normalizeMotionText(haystackRaw);
   const motionText = normalizeMotionText(motion.text);
@@ -775,6 +786,10 @@ function agendaSectionOptions(agendaSections: Array<string | MotionAgendaSection
 function agendaSectionSearchText(section: string | MotionAgendaSection) {
   if (typeof section === "string") return section;
   return [section.title, section.discussion ?? "", ...(section.decisions ?? [])].filter(Boolean).join(" ");
+}
+
+function isAdjournmentSectionTitle(title: string) {
+  return /\badjourn(?:ment|ed|s)?\b/i.test(title);
 }
 
 function moneyAmounts(text: string) {

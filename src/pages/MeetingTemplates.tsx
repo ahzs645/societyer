@@ -624,46 +624,48 @@ export function MeetingTemplateBuilderPage() {
           </div>
         </main>
 
-        <aside className="card meeting-template-builder__sidebar">
-          <div className="card__head">
-            <h2 className="card__title">Template details</h2>
-          </div>
-          <div className="card__body meeting-templates__form">
-            <Field label="Name">
-              <input className="input" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Regular monthly board meeting" />
-            </Field>
-            <Field label="Meeting type">
-              <select className="input" value={draft.meetingType} onChange={(event) => setDraft({ ...draft, meetingType: event.target.value })}>
-                {MEETING_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
-              </select>
-            </Field>
-            <Field label="Description">
-              <MarkdownEditor rows={4} value={draft.description} onChange={(markdown) => setDraft({ ...draft, description: markdown })} placeholder="Used for recurring board meetings" />
-            </Field>
-            <label className="meeting-templates__default-toggle">
-              <input type="checkbox" checked={draft.isDefault} onChange={(event) => setDraft({ ...draft, isDefault: event.target.checked })} />
-              Default template
-            </label>
-          </div>
-        </aside>
+        <aside className="meeting-template-builder__sidebar">
+          <section className="card">
+            <div className="card__head">
+              <h2 className="card__title">Template details</h2>
+            </div>
+            <div className="card__body meeting-templates__form">
+              <Field label="Name">
+                <input className="input" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Regular monthly board meeting" />
+              </Field>
+              <Field label="Meeting type">
+                <select className="input" value={draft.meetingType} onChange={(event) => setDraft({ ...draft, meetingType: event.target.value })}>
+                  {MEETING_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                </select>
+              </Field>
+              <Field label="Description">
+                <MarkdownEditor rows={4} value={draft.description} onChange={(markdown) => setDraft({ ...draft, description: markdown })} placeholder="Used for recurring board meetings" />
+              </Field>
+              <label className="meeting-templates__default-toggle">
+                <input type="checkbox" checked={draft.isDefault} onChange={(event) => setDraft({ ...draft, isDefault: event.target.checked })} />
+                Default template
+              </label>
+            </div>
+          </section>
 
-        <aside className="card meeting-template-builder__library">
-          <div className="card__head">
-            <h2 className="card__title">Agenda library</h2>
-          </div>
-          <div className="card__body meeting-template-library">
-            {AGENDA_ITEM_LIBRARY.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                className="meeting-template-library__item"
-                onClick={() => addLibraryEntry(entry)}
-              >
-                <strong>{entry.label}</strong>
-                <span>{entry.summary}</span>
-              </button>
-            ))}
-          </div>
+          <section className="card meeting-template-builder__library">
+            <div className="card__head">
+              <h2 className="card__title">Agenda library</h2>
+            </div>
+            <div className="card__body meeting-template-library">
+              {AGENDA_ITEM_LIBRARY.map((entry) => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  className="meeting-template-library__item"
+                  onClick={() => addLibraryEntry(entry)}
+                >
+                  <strong>{entry.label}</strong>
+                  <span>{entry.summary}</span>
+                </button>
+              ))}
+            </div>
+          </section>
         </aside>
       </div>
     </div>

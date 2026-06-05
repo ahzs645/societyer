@@ -11,6 +11,7 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import { SignaturePanel } from "../components/SignaturePanel";
 import { useToast } from "../components/Toast";
 import { formatDateTime } from "../lib/format";
+import { openDocumentDownloadTarget } from "../lib/documentStorage";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -26,7 +27,8 @@ import {
 export function DocumentWorkbenchPage() {
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
-  const document = useQuery(api.documents.get, id ? { id: id as Id<"documents"> } : "skip");
+  const userId = useCurrentUserId() ?? undefined;
+  const document = useQuery(api.documents.get, id ? { id: id as Id<"documents">, actingUserId: userId } : "skip");
   const latest = useQuery(api.documentVersions.latest, id ? { documentId: id as Id<"documents"> } : "skip");
   const legacyUrl = useQuery(api.files.getUrl, document?.storageId ? { storageId: document.storageId } : "skip");
   const comments = useQuery(api.documentComments.listForDocument, id ? { documentId: id as Id<"documents"> } : "skip");
@@ -36,9 +38,8 @@ export function DocumentWorkbenchPage() {
   const createComment = useMutation(api.documentComments.create);
   const setCommentStatus = useMutation(api.documentComments.setStatus);
   const removeComment = useMutation(api.documentComments.remove);
-  const getDownloadUrl = useAction(api.documentVersions.getDownloadUrl);
+  const getDownloadTarget = useAction(api.documentVersions.getDownloadTarget);
   const user = useCurrentUser();
-  const userId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const openedRef = useRef(false);
   const [draft, setDraft] = useState({
@@ -63,13 +64,13 @@ export function DocumentWorkbenchPage() {
 
   const openFile = async () => {
     if (latest) {
-      const url = await getDownloadUrl({ versionId: latest._id });
-      if (!url) return;
-      if (url.startsWith("demo://")) {
+      const target = await getDownloadTarget({ versionId: latest._id });
+      if (!target) return;
+      if (target.kind === "url" && target.url?.startsWith("demo://")) {
         toast.info("Demo mode — no stored file is available.");
         return;
       }
-      window.open(url, "_blank");
+      await openDocumentDownloadTarget(target);
       return;
     }
     if (legacyUrl) {

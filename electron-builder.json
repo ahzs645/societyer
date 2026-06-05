@@ -1,0 +1,37 @@
+{
+  "appId": "app.societyer.desktop",
+  "productName": "Societyer",
+  "directories": {
+    "output": "release"
+  },
+  "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+  "files": [
+    "dist/**/*",
+    "dist-electron/**/*",
+    "assets/electron/**/*",
+    "package.json"
+  ],
+  "icon": "assets/electron/icon",
+  "mac": {
+    "category": "public.app-category.business",
+    "icon": "assets/electron/icon.icns",
+    "target": ["dmg", "zip"]
+  },
+  "linux": {
+    "target": ["AppImage"],
+    "category": "Office",
+    "icon": "assets/electron/icon.png"
+  },
+  "win": {
+    "icon": "assets/electron/icon.ico",
+    "target": ["nsis"]
+  },
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "ahzs645",
+      "repo": "societyer",
+      "releaseType": "draft"
+    }
+  ]
+}

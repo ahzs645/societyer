@@ -1,0 +1,351 @@
+{
+  "schemaVersion": "2.0.0",
+  "packId": "ca-on-obca",
+  "status": "draft",
+  "version": "2026.06.02",
+  "reviewedAt": "2026-06-02",
+  "maintainers": [
+    {
+      "name": "Societyer",
+      "role": "publisher"
+    }
+  ],
+  "legalDisclaimer": "Societyer jurisdiction guide packs provide source-backed operational guidance, not legal advice. Review official sources and consult qualified counsel before relying on a rule for a filing, meeting, or governance decision.",
+  "jurisdiction": {
+    "code": "CA-ON-OBCA",
+    "countryCode": "CA",
+    "subdivisionCode": "ON",
+    "name": "Ontario - OBCA"
+  },
+  "entityTypes": [
+    "corporation__business_"
+  ],
+  "title": "Ontario OBCA guide pack",
+  "description": "Ontario business corporation guide tracks for OBR filings, corporate records, securities registers, and beneficial ownership records.",
+  "defaultForJurisdiction": false,
+  "sources": [
+    {
+      "sourceId": "on-obca-current",
+      "type": "statute",
+      "title": "Business Corporations Act",
+      "citation": "Business Corporations Act, R.S.O. 1990, c. B.16",
+      "publisher": "Ontario e-Laws",
+      "retrievedAt": "2026-06-02",
+      "currentTo": "2025-10-01",
+      "language": "en-CA",
+      "canonicalUrl": "https://www.ontario.ca/laws/statute/90b16"
+    },
+    {
+      "sourceId": "ontario-business-registry-services",
+      "type": "registry_guidance",
+      "title": "Ontario Business Registry: all services",
+      "citation": "Ontario Business Registry services",
+      "publisher": "Ontario.ca",
+      "retrievedAt": "2026-06-02",
+      "language": "en-CA",
+      "canonicalUrl": "https://www.ontario.ca/page/ontario-business-registry-all-services"
+    },
+    {
+      "sourceId": "ontario-corporation-profile-report-guide",
+      "type": "registry_guidance",
+      "title": "Guide to the corporation profile report",
+      "citation": "Ontario corporation profile report guide",
+      "publisher": "Ontario.ca",
+      "retrievedAt": "2026-06-02",
+      "language": "en-CA",
+      "canonicalUrl": "https://www.ontario.ca/page/guide-corporation-profile-report"
+    }
+  ],
+  "rules": [
+    {
+      "ruleId": "ca-on-obca-agm-timing",
+      "stableKey": "agm_timing.timing",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "agm_timing",
+        "annual_report"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-ON-OBCA",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "1990-12-31"
+      },
+      "authority": {
+        "sourceId": "on-obca-current",
+        "instrument": "Business Corporations Act",
+        "sections": [
+          {
+            "label": "ss.94, 154",
+            "citation": "OBCA ss.94, 154",
+            "url": "https://www.ontario.ca/laws/statute/90b16"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2025-10-01",
+        "retrievedAt": "2026-06-02",
+        "verifiedAt": "2026-06-02",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Ontario OBCA annual workflows include annual shareholders meeting timing and financial statements placed before the annual meeting.",
+        "tooltip": "Use this for Ontario AGM timing and financial-document presentation checks, then track OBR filings separately.",
+        "caveat": "Ontario annual return/profile filings are registry workflows and should be checked against Ontario Business Registry instructions.",
+        "displayCitation": "OBCA ss.94, 154"
+      },
+      "priority": 30
+    },
+    {
+      "ruleId": "ca-on-obca-corporate-records",
+      "stableKey": "records.records",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "records"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-ON-OBCA",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "1990-12-31"
+      },
+      "authority": {
+        "sourceId": "on-obca-current",
+        "instrument": "Business Corporations Act",
+        "sections": [
+          {
+            "label": "ss.139-140",
+            "citation": "OBCA ss.139-140",
+            "url": "https://www.ontario.ca/laws/statute/90b16"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2025-10-01",
+        "retrievedAt": "2026-06-02",
+        "verifiedAt": "2026-06-02",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Ontario corporations maintain corporate records, including articles, by-laws, minutes/resolutions, securities registers, and significant-control information.",
+        "tooltip": "Use this citation track for Ontario minute-book completeness, securities register support, beneficial-ownership review, and registered/head-office record storage.",
+        "caveat": "Some records are inspected under different access rules, and Ontario land ownership records may require separate tracking.",
+        "displayCitation": "OBCA ss.139-140"
+      },
+      "priority": 60
+    },
+    {
+      "ruleId": "ca-on-obca-directors-quorum",
+      "stableKey": "directors_quorum.quorum",
+      "status": "draft",
+      "ruleType": "default_rule",
+      "topics": [
+        "directors_quorum"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-ON-OBCA",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "1990-12-31"
+      },
+      "authority": {
+        "sourceId": "on-obca-current",
+        "instrument": "Business Corporations Act",
+        "sections": [
+          {
+            "label": "s.126(3)-(5)",
+            "citation": "OBCA s.126(3)-(5)",
+            "url": "https://www.ontario.ca/laws/statute/90b16"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2025-10-01",
+        "retrievedAt": "2026-06-02",
+        "verifiedAt": "2026-06-02",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Subject to the articles or by-laws, a majority of the directors, or the minimum number required by the articles, constitutes directors' quorum; if fewer than three directors, all directors must be present.",
+        "tooltip": "Use the articles and by-laws first, then apply the OBCA directors' quorum default and the all-directors rule for boards under three.",
+        "caveat": "Vacancies and articles/by-laws can affect whether remaining directors may act.",
+        "displayCitation": "OBCA s.126(3)-(5)"
+      },
+      "priority": 34,
+      "parameters": [
+        {
+          "key": "directors_quorum.default_formula",
+          "type": "string",
+          "value": "majority_of_directors_or_articles_minimum"
+        },
+        {
+          "key": "directors_quorum.under_three_directors_formula",
+          "type": "string",
+          "value": "all_directors_present"
+        }
+      ]
+    },
+    {
+      "ruleId": "ca-on-obca-special-resolution",
+      "stableKey": "special_resolution.resolution",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "special_resolution"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-ON-OBCA",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "1990-12-31"
+      },
+      "authority": {
+        "sourceId": "on-obca-current",
+        "instrument": "Business Corporations Act",
+        "sections": [
+          {
+            "label": "s.1(1)",
+            "citation": "OBCA s.1(1)",
+            "url": "https://www.ontario.ca/laws/statute/90b16"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2025-10-01",
+        "retrievedAt": "2026-06-02",
+        "verifiedAt": "2026-06-02",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "An OBCA special resolution generally requires at least two-thirds of votes cast, or written consent by every shareholder entitled to vote.",
+        "tooltip": "Use this for Ontario special-resolution vote-threshold checks and unanimous written-consent checks.",
+        "caveat": "Some OBCA actions require additional class, article, by-law, or dissent-right analysis.",
+        "displayCitation": "OBCA s.1(1)"
+      },
+      "priority": 50,
+      "parameters": [
+        {
+          "key": "shareholder_vote.special_resolution.min_fraction",
+          "type": "number",
+          "value": 0.6666666667,
+          "unit": "votes_cast",
+          "operator": ">="
+        },
+        {
+          "key": "shareholder_written_resolution.unanimous_required",
+          "type": "boolean",
+          "value": true
+        }
+      ]
+    },
+    {
+      "ruleId": "ca-on-obca-obr-filings",
+      "stableKey": "annual_report.filings",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "annual_report",
+        "records"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-ON-OBCA",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "1990-12-31"
+      },
+      "authority": {
+        "sourceId": "ontario-business-registry-services",
+        "instrument": "Ontario Business Registry",
+        "sections": [
+          {
+            "label": "Initial Return / Notice of Change / Annual Return",
+            "citation": "Ontario Business Registry filings",
+            "url": "https://www.ontario.ca/page/ontario-business-registry-all-services"
+          }
+        ]
+      },
+      "provenance": {
+        "retrievedAt": "2026-06-02",
+        "verifiedAt": "2026-06-02",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Ontario corporations use the Ontario Business Registry for initial returns, notices of change, annual returns, and articles amendments.",
+        "tooltip": "Track the Ontario company key, profile accuracy, initial-return status, annual returns, notices of change, and filing confirmations as registry-maintenance records.",
+        "caveat": "Ontario registry filing deadlines and available forms can depend on entity type and filing history.",
+        "displayCitation": "Ontario Business Registry filings"
+      },
+      "priority": 31
+    },
+    {
+      "ruleId": "ca-on-obca-profile-report",
+      "stableKey": "records.report",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "records"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-ON-OBCA",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "1990-12-31"
+      },
+      "authority": {
+        "sourceId": "ontario-corporation-profile-report-guide",
+        "instrument": "Ontario Business Registry",
+        "sections": [
+          {
+            "label": "Corporation Profile Report",
+            "citation": "Ontario corporation profile report",
+            "url": "https://www.ontario.ca/page/guide-corporation-profile-report"
+          }
+        ]
+      },
+      "provenance": {
+        "retrievedAt": "2026-06-02",
+        "verifiedAt": "2026-06-02",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Ontario profile reports expose registry identity and status fields that can be archived as source evidence for the organization profile.",
+        "tooltip": "Use profile reports as dated evidence for corporation number, name, status, registered/head office, directors/officers where available, and extra-provincial limitations.",
+        "caveat": "Extra-provincial Ontario profile reports may contain less director/officer detail than the home jurisdiction record.",
+        "displayCitation": "Ontario corporation profile report"
+      },
+      "priority": 65
+    }
+  ]
+}

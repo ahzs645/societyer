@@ -210,6 +210,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
 
   // ---- Compliance ----
   "/app/filings": { icon: FileCheck, group: "compliance", label: "Filings" },
+  "/app/compliance-obligations": { icon: ClipboardList, group: "compliance", label: "Obligations" },
   "/app/filings/prefill": { icon: FileCog, group: "compliance", label: "Filing pre-fill", module: "filingPrefill" },
   "/app/annual-cycle": { icon: CalendarCheck, group: "compliance", label: "Annual cycle" },
   "/app/formation-maintenance": { icon: Construction, group: "compliance", label: "Formation & annual" },
@@ -228,6 +229,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/finance-imports": { icon: ArrowDownToLine, group: "finance", label: "Finance imports" },
   "/app/treasurer": { icon: Landmark, group: "finance", label: "Treasurer" },
   "/app/assets": { icon: Package, group: "finance", label: "Assets", module: "assets" },
+  "/app/inventory": { icon: Package, group: "finance", label: "Inventory", module: "assets" },
   "/app/grants": { icon: BadgeDollarSign, group: "finance", label: "Grants", module: "grants" },
   "/app/reconciliation": { icon: Scale, group: "finance", label: "Reconciliation", module: "reconciliation" },
   "/app/receipts": { icon: Receipt, group: "finance", label: "Donation receipts", module: "donationReceipts" },

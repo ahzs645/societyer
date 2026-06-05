@@ -101,9 +101,12 @@ import { useThemePreference } from "../hooks/useThemePreference";
 import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
 import { useAiChatVisibility } from "../hooks/useAiChatVisibility";
 import type { ThemePreference } from "../lib/theme";
+import { applyResolvedTheme } from "../lib/theme";
 import { mobileSidebarMediaQuery } from "../lib/breakpoints";
 import { DEFAULT_PINNED_ROUTES } from "../lib/navConfig";
 import { useUIStore, type PinnedView } from "../lib/store";
+import { getDesktopBridge } from "../lib/desktopBridge";
+import { useToast } from "./Toast";
 
 function NotificationBellSafe() {
   return (
@@ -336,6 +339,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Compliance",
     items: [
       navItem("/app/filings"),
+      navItem("/app/compliance-obligations"),
       navItem("/app/filings/prefill"),
       navItem("/app/annual-cycle"),
       navItem("/app/formation-maintenance"),
@@ -358,6 +362,7 @@ const NAV_GROUPS: NavGroup[] = [
       navItem("/app/finance-imports"),
       navItem("/app/treasurer"),
       navItem("/app/assets"),
+      navItem("/app/inventory"),
       navItem("/app/grants"),
       navItem("/app/reconciliation"),
       navItem("/app/receipts"),
@@ -611,6 +616,7 @@ export function Layout() {
   const { t } = useTranslation();
   const loc = useLocation();
   const navigate = useNavigate();
+  const toast = useToast();
   const [isMobileNav, setIsMobileNav] = useState(() =>
     window.matchMedia(mobileSidebarMediaQuery).matches,
   );
@@ -661,6 +667,103 @@ export function Layout() {
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const navContextMenuRef = useRef<HTMLDivElement | null>(null);
   const operationsDeskMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const bridge = getDesktopBridge();
+    if (!bridge) return;
+    const cleanupTheme = bridge.onNativeThemeChanged((state) => {
+      const preference = localStorage.getItem("societyer:theme");
+      if (preference && preference !== "system") return;
+      applyResolvedTheme(state.shouldUseDarkColors ? "dark" : "light");
+    });
+    const cleanupMenu = bridge.onMenuAction((action) => {
+      if (action === "create-backup") {
+        void bridge
+          .createBackup()
+          .then((result) => {
+            toast.success("Backup created", {
+              description: result.path,
+              action: {
+                label: "Open",
+                onClick: () => {
+                  void bridge.openBackupFolder(result.path);
+                },
+              },
+            });
+          })
+          .catch((error) => {
+            toast.error("Backup failed", error instanceof Error ? error.message : undefined);
+          });
+      } else if (action === "open-settings") {
+        navigate("/app/settings");
+      } else if (action === "open-workspace") {
+        void bridge.openWorkspaceFolder().catch((error) => {
+          toast.error("Could not open workspace", error instanceof Error ? error.message : undefined);
+        });
+      } else if (action === "open-logs") {
+        void bridge.openLogFolder().catch((error) => {
+          toast.error("Could not open logs", error instanceof Error ? error.message : undefined);
+        });
+      } else if (action === "check-services") {
+        void bridge
+          .listServiceStatuses()
+          .then((services) => {
+            const available = services.filter((service) => service.ok).length;
+            toast.info("Service check complete", `${available}/${services.length} optional services available.`);
+          })
+          .catch((error) => {
+            toast.error("Service check failed", error instanceof Error ? error.message : undefined);
+          });
+      } else if (action === "check-for-updates") {
+        void bridge
+          .checkForUpdate()
+          .then((state) => {
+            if (state.status === "available") toast.success("Update available", state.availableVersion);
+            else if (state.status === "error") toast.error("Update check failed", state.error);
+            else toast.info("Update status checked", state.reason);
+          })
+          .catch((error) => {
+            toast.error("Update check failed", error instanceof Error ? error.message : undefined);
+          });
+      } else if (action === "export-workspace") {
+        import("../lib/localWorkspaceExport")
+          .then(({ downloadLocalWorkspaceSnapshot }) => {
+            downloadLocalWorkspaceSnapshot(`societyer-workspace-${new Date().toISOString().slice(0, 10)}.json`);
+            toast.success("Workspace export started");
+          })
+          .catch((error) => {
+            toast.error("Workspace export failed", error instanceof Error ? error.message : undefined);
+        });
+      }
+    });
+    const logError = (message: string, details: Record<string, unknown>) => {
+      void bridge.logRendererEvent({ level: "error", message, details }).catch(() => {});
+    };
+    const handleError = (event: ErrorEvent) => {
+      logError("renderer window error", {
+        message: event.message,
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        stack: event.error instanceof Error ? event.error.stack : undefined,
+      });
+    };
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      logError("renderer unhandled rejection", {
+        message: reason instanceof Error ? reason.message : String(reason),
+        stack: reason instanceof Error ? reason.stack : undefined,
+      });
+    };
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+    return () => {
+      cleanupTheme();
+      cleanupMenu();
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+    };
+  }, [navigate, toast]);
 
   useEffect(() => {
     if (isStaticDemoRuntime()) return;

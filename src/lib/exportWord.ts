@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import type { PDFDocument as PDFDocumentType, PDFFont, PDFPage, RGB } from "pdf-lib";
 
 const DOCUMENT_CSS = `
   body { font-family: Calibri, "Segoe UI", Arial, sans-serif; font-size: 11pt; color: #1a1a1a; }
@@ -125,6 +125,7 @@ export async function exportPdfDownload({
   title: string;
   bodyHtml: string;
 }) {
+  const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
   const pdfDoc = await PDFDocument.create();
   const regular = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -133,6 +134,7 @@ export async function exportPdfDownload({
     page: pdfDoc.addPage([612, 792]),
     regular,
     bold,
+    textColor: rgb(0.1, 0.1, 0.1),
     margin: 54,
     y: 738,
     width: 504,
@@ -217,10 +219,11 @@ type PdfLine =
   | { type: "space" };
 
 type PdfRenderState = {
-  pdfDoc: PDFDocument;
+  pdfDoc: PDFDocumentType;
   page: PDFPage;
   regular: PDFFont;
   bold: PDFFont;
+  textColor: RGB;
   margin: number;
   y: number;
   width: number;
@@ -302,7 +305,7 @@ function drawPdfLine(
       y: state.y,
       size: options.size,
       font: options.font,
-      color: rgb(0.1, 0.1, 0.1),
+      color: state.textColor,
     });
     state.y -= options.size * 1.35;
   }

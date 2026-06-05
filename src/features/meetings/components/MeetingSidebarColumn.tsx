@@ -6,7 +6,7 @@ import { LegalGuideInline, LegalGuideTrackList } from "../../../components/Legal
 import {
   MINUTES_EXPORT_STYLES,
   type MinutesExportStyleId,
-} from "../../../lib/exportWord";
+} from "../lib/minutesExportStyles";
 import { formatDate, formatDateTime } from "../../../lib/format";
 import { resolveJurisdictionCode } from "../../../lib/jurisdictionGuideTracks";
 import {

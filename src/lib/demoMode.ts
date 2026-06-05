@@ -11,7 +11,7 @@ export function isDemoMode(): boolean {
     localStorage.setItem(KEY, on ? "1" : "0");
     return on;
   }
-  return localStorage.getItem(KEY) !== "0";
+  return localStorage.getItem(KEY) === "1";
 }
 
 export function setDemoMode(on: boolean) {

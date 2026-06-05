@@ -16,7 +16,8 @@
   font-size: var(--fs-sm);
   line-height: 1.55;
   transition: border-color 0.08s ease, box-shadow 0.08s ease;
-  overflow: hidden; // keep the toolbar's top corners square against the rounded outer
+  position: relative;
+  overflow: visible; // allow Crepe popovers, including the slash menu, to escape the editor box
 
   &:focus-within {
     outline: none;
@@ -42,6 +43,7 @@
     padding: 4px 6px;
     background: var(--bg-subtle);
     border-bottom: 1px solid var(--border);
+    border-radius: var(--r-sm) var(--r-sm) 0 0;
   }
 
   &__toolbar-button {
@@ -276,4 +278,5 @@
   box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.16));
   color: var(--text-primary);
   font: inherit;
+  z-index: var(--z-popover, 40);
 }

@@ -23,12 +23,27 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
+import {
+  filingKindDefinitions,
+  jurisdictionDisplayCopy,
+  jurisdictionModuleContract,
+} from "../../shared/jurisdictionWorkspace";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 
-const KINDS = ["RegistryRecord", "AnnualReport", "ChangeOfDirectors", "ChangeOfAddress", "BylawAmendment", "T2", "T1044", "T3010", "T4", "GSTHST"] as const;
+const TAX_FILING_KINDS = ["T2", "T1044", "T3010", "T4", "GSTHST"] as const;
 
 export function FilingsPage() {
   const society = useSociety();
+  const jurisdictionCopy = jurisdictionDisplayCopy(society?.jurisdictionCode);
+  const jurisdictionModule = jurisdictionModuleContract(society?.jurisdictionCode);
+  const jurisdictionFilingKinds = filingKindDefinitions(society?.jurisdictionCode);
+  const filingKindOptions = [
+    ...jurisdictionFilingKinds.map((definition) => ({
+      value: definition.kind,
+      label: definition.label,
+    })),
+    ...TAX_FILING_KINDS.map((kind) => ({ value: kind, label: kindLabel(kind) })),
+  ];
   const actingUserId = useCurrentUserId() ?? undefined;
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
@@ -42,7 +57,12 @@ export function FilingsPage() {
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const filingGuidance = useQuery(
     api.filings.guidance,
-    completeDraft?.kind ? { kind: completeDraft.kind } : "skip",
+    completeDraft?.kind
+      ? {
+          kind: completeDraft.kind,
+          jurisdictionCode: society?.jurisdictionCode,
+        }
+      : "skip",
   );
   const create = useMutation(api.filings.create);
   const update = useMutation(api.filings.update);
@@ -87,7 +107,12 @@ export function FilingsPage() {
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
-    setForm({ kind: "AnnualReport", periodLabel: "", dueDate: new Date().toISOString().slice(0, 10), status: "Upcoming" });
+    setForm({
+      kind: jurisdictionFilingKinds[0]?.kind ?? "AnnualReport",
+      periodLabel: "",
+      dueDate: new Date().toISOString().slice(0, 10),
+      status: "Upcoming",
+    });
     setOpen(true);
   };
   const save = async () => { await create({ societyId: society._id, ...form, submittedByUserId: actingUserId }); setOpen(false); };
@@ -110,11 +135,14 @@ export function FilingsPage() {
       }
       const data = payload.data ?? {};
       toast.success(
-        "BC Registry filings imported",
+        `${jurisdictionModule.registryPortalLabel} filings imported`,
         `${data.inserted ?? 0} created, ${data.updated ?? 0} updated, ${data.documents?.created ?? 0} document(s) added`,
       );
     } catch (error: any) {
-      toast.error("Could not import BC Registry filings", error?.message ?? "Open a BC Registry browser session and try again.");
+      toast.error(
+        `Could not import ${jurisdictionModule.registryPortalLabel} filings`,
+        error?.message ?? `Open a ${jurisdictionModule.registryPortalLabel} browser session and try again.`,
+      );
     } finally {
       setImportingRegistry(false);
     }
@@ -129,12 +157,14 @@ export function FilingsPage() {
         title="Filings"
         icon={<ClipboardList size={16} />}
         iconColor="orange"
-        subtitle="BC Societies Online filings, CRA returns, payroll & GST/HST."
+        subtitle={jurisdictionCopy.filingsSubtitle}
         actions={
           <>
-            <button className="btn-action" onClick={importRegistryHistory} disabled={importingRegistry}>
-              <FileDown size={12} /> {importingRegistry ? "Importing…" : "Import registry"}
-            </button>
+            {jurisdictionModule.registryImportSupported && (
+              <button className="btn-action" onClick={importRegistryHistory} disabled={importingRegistry}>
+                <FileDown size={12} /> {importingRegistry ? "Importing…" : "Import registry"}
+              </button>
+            )}
             <button className="btn-action btn-action--primary" onClick={openNew}>
               <Plus size={12} /> New filing
             </button>
@@ -174,7 +204,7 @@ export function FilingsPage() {
             renderRowActions={(r) =>
               r.status !== "Filed" ? (
                 <>
-                  {["AnnualReport", "BylawAmendment", "ChangeOfDirectors"].includes(r.kind) && (
+                  {jurisdictionFilingKinds.some((definition) => definition.kind === r.kind && definition.botSupported) && (
                     <button
                       className="btn btn--sm"
                       onClick={() => setBotFor({ id: r._id, label: `${r.kind}: ${r.periodLabel ?? r.dueDate}` })}
@@ -230,7 +260,7 @@ export function FilingsPage() {
               <Select
                 value={form.kind}
                 onChange={(v) => setForm({ ...form, kind: v })}
-                options={KINDS.map((k) => ({ value: k, label: kindLabel(k) }))}
+                options={filingKindOptions}
               />
             </Field>
             <Field label="Period / label"><input className="input" value={form.periodLabel} onChange={(e) => setForm({ ...form, periodLabel: e.target.value })} /></Field>

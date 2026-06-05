@@ -1,4 +1,3 @@
-/* eslint-disable */
 // One-off heap snapshot inspector. Run: node scripts/analyzeHeap.js <path>
 // Heap snapshot format reference:
 // https://github.com/v8/v8/blob/main/include/v8-profiler.h (HeapSnapshotJSONSerializer)

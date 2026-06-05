@@ -14,11 +14,12 @@ import { Toggle } from "../components/Controls";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
 import { JURISDICTION_OPTIONS } from "../lib/jurisdictionGuideTracks";
-import { optionLabel } from "../lib/orgHubOptions";
+import { optionChoices, optionLabel } from "../lib/orgHubOptions";
+import { defaultsForJurisdiction, jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 
 const CORE_ONBOARDING_STEPS = [
-  "Society profile",
+  "Organization profile",
   "Registered locations",
   "Governance documents",
   "People and access",
@@ -58,9 +59,17 @@ export function SocietyNewPage() {
     privacyOfficerEmail: "",
     isCharity: false,
     isMemberFunded: false,
+    distributing: false,
   });
 
   const set = (k: string, v: any) => setForm((current) => ({ ...current, [k]: v }));
+  const setJurisdiction = (jurisdictionCode: string) => {
+    setForm((current) => ({
+      ...current,
+      jurisdictionCode,
+      ...defaultsForJurisdiction(jurisdictionCode),
+    }));
+  };
   const canSave = form.name.trim().length > 0 && !saving;
 
   const save = async () => {
@@ -87,9 +96,9 @@ export function SocietyNewPage() {
             <span>Societyer setup</span>
           </div>
           <div className="society-create__copy">
-            <h1>New society workspace</h1>
+            <h1>New organization workspace</h1>
             <p>
-              Start with the society profile. Registry verification and advanced setup stay optional
+              Start with the organization profile. Registry verification and advanced setup stay optional
               until the workspace exists.
             </p>
           </div>
@@ -118,7 +127,7 @@ export function SocietyNewPage() {
           <section className="card society-create__card">
             <div className="card__head">
               <div>
-                <h2 className="card__title">Society profile</h2>
+                <h2 className="card__title">Organization profile</h2>
                 <span className="card__subtitle">The only required field right now is the legal name.</span>
               </div>
             </div>
@@ -139,7 +148,15 @@ export function SocietyNewPage() {
               </div>
               <div className="society-field-grid">
                 <Field label="Legal jurisdiction">
-                  <Select value={form.jurisdictionCode} onChange={(v) => set("jurisdictionCode", v)} options={JURISDICTION_OPTIONS} />
+                  <Select value={form.jurisdictionCode} onChange={setJurisdiction} options={JURISDICTION_OPTIONS} />
+                </Field>
+                <Field label="Entity type">
+                  <Select value={form.entityType} onChange={(v) => set("entityType", v)} options={optionChoices("entityTypes")} />
+                </Field>
+              </div>
+              <div className="society-field-grid">
+                <Field label="Act formed under">
+                  <Select value={form.actFormedUnder} onChange={(v) => set("actFormedUnder", v)} options={optionChoices("actsFormedUnder")} />
                 </Field>
                 <Field label="Official email">
                   <input className="input" type="email" value={form.officialEmail} onChange={(e) => set("officialEmail", e.target.value)} />
@@ -151,6 +168,7 @@ export function SocietyNewPage() {
               <div className="society-toggle-stack">
                 <Toggle checked={form.isCharity} onChange={(v) => set("isCharity", v)} label="Registered CRA charity" />
                 <Toggle checked={form.isMemberFunded} onChange={(v) => set("isMemberFunded", v)} label="Member-funded society" />
+                <Toggle checked={form.distributing} onChange={(v) => set("distributing", v)} label="Distributing corporation" />
               </div>
             </div>
           </section>
@@ -236,6 +254,7 @@ export function SocietyPage() {
   if (society === null) return <SeedPrompt />;
   if (!form) return null;
 
+  const jurisdictionCopy = jurisdictionDisplayCopy(form.jurisdictionCode ?? society.jurisdictionCode);
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
   const missingGovernanceCount = [
     society.constitutionDocId,
@@ -261,7 +280,10 @@ export function SocietyPage() {
         incorporationNumber: form.incorporationNumber,
         incorporationDate: form.incorporationDate,
         fiscalYearEnd: form.fiscalYearEnd,
-        jurisdictionCode: form.jurisdictionCode ?? "CA-BC",
+        jurisdictionCode: form.jurisdictionCode || undefined,
+        entityType: form.entityType,
+        actFormedUnder: form.actFormedUnder,
+        distributing: form.distributing,
         isCharity: form.isCharity,
         isMemberFunded: form.isMemberFunded,
         registeredOfficeAddress: registeredOfficeLine,
@@ -323,8 +345,8 @@ export function SocietyPage() {
     <div className="page page--wide">
       <PageHeader
         routeKey="/app/society"
-        title="Society profile"
-        subtitle="Constitution details, registered office, and key flags."
+        title="Organization profile"
+        subtitle="Governing details, registered office, and key flags."
         actions={
           <>
             <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
@@ -344,7 +366,7 @@ export function SocietyPage() {
             <div className="card__body">
               <LockedField
                 label="Legal name"
-                reason="Changing the society's legal name requires a special resolution (≥ 2/3 vote) and a name reservation, then filed via Societies Online with the constitution alteration ($50 fee)."
+                reason="Changing the legal name can require a special resolution, name reservation, and registry filing. Review the active jurisdiction guide and governing documents first."
               >
                 {(locked) => (
                   <input
@@ -359,7 +381,7 @@ export function SocietyPage() {
               <div className="society-field-grid society-field-grid--three">
                 <LockedField
                   label="Incorporation #"
-                  reason="The incorporation number is assigned by the BC Registry and never changes for the life of the society. Edit only to fix a data-entry error."
+                  reason="The incorporation or corporation number is assigned by the registry and generally stays stable for the life of the organization. Edit only to fix a data-entry error."
                 >
                   {(locked) => (
                     <input
@@ -372,7 +394,7 @@ export function SocietyPage() {
                 </LockedField>
                 <LockedField
                   label="Incorporation date"
-                  reason="The date of incorporation is a historical fact recorded by the BC Registry. Edit only to fix a data-entry error."
+                  reason="The date of incorporation is a historical fact recorded by the registry. Edit only to fix a data-entry error."
                 >
                   {(locked) => (
                     <DatePicker
@@ -400,7 +422,7 @@ export function SocietyPage() {
 
               <LockedField
                 label="Purposes (from constitution)"
-                reason="The society's purposes are part of the constitution. Changing them requires a special resolution (≥ 2/3 vote) and a constitution alteration filed via Societies Online ($50 fee). Charities must also notify the CRA."
+                reason="Purposes or articles can require member/shareholder approval and a registry filing to change. Charities may also need CRA review."
               >
                 {(locked) => (
                   <MarkdownEditor
@@ -415,7 +437,7 @@ export function SocietyPage() {
               <div className="society-field-grid">
                 <Field label="Legal jurisdiction" hint="Used for statutory guide tracks and point-in-time legal sources.">
                   <Select
-                    value={form.jurisdictionCode ?? "CA-BC"}
+                    value={form.jurisdictionCode ?? ""}
                     onChange={(value) => set("jurisdictionCode", value)}
                     options={JURISDICTION_OPTIONS}
                   />
@@ -423,7 +445,7 @@ export function SocietyPage() {
 
                 <LockedField
                   label="Status flags"
-                  reason="Charity status is controlled by the CRA (T2050 application / revocation). Member-funded status requires a constitution amendment under s.190 and disqualifies the society from holding land for charitable purposes."
+                  reason="Charity status is controlled by the CRA. Jurisdiction-specific status flags should be reviewed against the governing statute and filed documents."
                 >
                   {(locked) => (
                     <div className="society-toggle-stack">
@@ -463,7 +485,7 @@ export function SocietyPage() {
                   label="Registered office"
                   row={currentRegisteredOffice}
                   fallback={form.registeredOfficeAddress}
-                  hint="Must be in BC. Records are kept here unless a notice says otherwise."
+                  hint={jurisdictionCopy.registeredOfficeHint}
                 />
                 <AddressSummary
                   label="Mailing address"
@@ -473,7 +495,7 @@ export function SocietyPage() {
               </div>
               <div className="hr" />
               <div className="society-field-grid society-field-grid--mobile-pair">
-                <Field label="Privacy officer (PIPA)">
+                <Field label={jurisdictionCopy.privacyOfficerLabel}>
                   <input className="input" value={form.privacyOfficerName ?? ""} onChange={(e) => set("privacyOfficerName", e.target.value)} />
                 </Field>
                 <Field label="Privacy officer email">
@@ -510,7 +532,7 @@ export function SocietyPage() {
                   <tbody>
                     <DocTableRow label="Constitution" present={!!society.constitutionDocId} />
                     <DocTableRow label="Bylaws" present={!!society.bylawsDocId} />
-                    <DocTableRow label="PIPA policy" present={!!society.privacyPolicyDocId} />
+                    <DocTableRow label={jurisdictionCopy.privacyPolicyLabel} present={!!society.privacyPolicyDocId} />
                     <DocTableRow label="Hyperpolicy" present={false} />
                   </tbody>
                 </table>

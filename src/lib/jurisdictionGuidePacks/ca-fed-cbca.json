@@ -1,0 +1,258 @@
+{
+  "schemaVersion": "2.0.0",
+  "packId": "ca-fed-cbca",
+  "status": "draft",
+  "version": "2026.06.02",
+  "reviewedAt": "2026-06-02",
+  "maintainers": [
+    {
+      "name": "Societyer",
+      "role": "publisher"
+    }
+  ],
+  "legalDisclaimer": "Societyer jurisdiction guide packs provide source-backed operational guidance, not legal advice. Review official sources and consult qualified counsel before relying on a rule for a filing, meeting, or governance decision.",
+  "jurisdiction": {
+    "code": "CA-FED-CBCA",
+    "countryCode": "CA",
+    "name": "Canada federal - CBCA"
+  },
+  "entityTypes": [
+    "corporation__business_"
+  ],
+  "title": "Canada federal CBCA guide pack",
+  "description": "Federal business corporation guide tracks for CBCA annual maintenance, corporate records, securities registers, and ISC records.",
+  "defaultForJurisdiction": false,
+  "sources": [
+    {
+      "sourceId": "ca-cbca-full-text",
+      "type": "statute",
+      "title": "Canada Business Corporations Act",
+      "citation": "Canada Business Corporations Act, R.S.C. 1985, c. C-44",
+      "publisher": "Justice Laws Website",
+      "retrievedAt": "2026-06-02",
+      "currentTo": "2026-04-28",
+      "language": "en-CA",
+      "canonicalUrl": "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+    },
+    {
+      "sourceId": "corporations-canada-annual-filings-policy",
+      "type": "policy",
+      "title": "Policy on annual filings - Canada Business Corporations Act",
+      "citation": "Corporations Canada annual filings policy",
+      "publisher": "Corporations Canada",
+      "retrievedAt": "2026-06-02",
+      "language": "en-CA",
+      "canonicalUrl": "https://ised-isde.canada.ca/site/corporations-canada/en/business-corporations/policy-filing-annual-returns-canada-business-corporations-act"
+    },
+    {
+      "sourceId": "corporations-canada-corporate-records-obligations",
+      "type": "policy",
+      "title": "Corporate records and other corporate obligations",
+      "citation": "Corporations Canada corporate records obligations",
+      "publisher": "Corporations Canada",
+      "retrievedAt": "2026-06-02",
+      "language": "en-CA",
+      "canonicalUrl": "https://ised-isde.canada.ca/site/corporations-canada/en/business-corporations/corporate-records-and-other-corporate-obligations"
+    }
+  ],
+  "rules": [
+    {
+      "ruleId": "ca-fed-cbca-annual-return",
+      "stableKey": "annual_report.return",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "annual_report",
+        "agm_timing"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-FED-CBCA",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "1975-12-15"
+      },
+      "authority": {
+        "sourceId": "ca-cbca-full-text",
+        "instrument": "Canada Business Corporations Act",
+        "sections": [
+          {
+            "label": "ss.133, 155, 159, 263",
+            "citation": "CBCA ss.133, 155, 159, 263",
+            "url": "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-28",
+        "retrievedAt": "2026-06-02",
+        "verifiedAt": "2026-06-02",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "CBCA annual workflows include AGM timing, annual financial disclosure to shareholders, and the annual return obligation.",
+        "tooltip": "Use this for federal annual meeting and filing workflows: first AGM timing, later AGM timing, annual financial statements, and annual return reminders.",
+        "caveat": "Corporations Canada policy says active CBCA corporations generally file annual returns within 60 days after the anniversary date; court extensions and Director forms can affect details.",
+        "displayCitation": "CBCA ss.133, 155, 159, 263"
+      },
+      "priority": 30
+    },
+    {
+      "ruleId": "ca-fed-cbca-corporate-records",
+      "stableKey": "records.records",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "records"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-FED-CBCA",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "1975-12-15"
+      },
+      "authority": {
+        "sourceId": "ca-cbca-full-text",
+        "instrument": "Canada Business Corporations Act",
+        "sections": [
+          {
+            "label": "ss.20-21",
+            "citation": "CBCA ss.20-21",
+            "url": "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-28",
+        "retrievedAt": "2026-06-02",
+        "verifiedAt": "2026-06-02",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "CBCA corporations must maintain core corporate records, including articles, by-laws, minutes/resolutions, filed notices, securities records, and ISC records.",
+        "tooltip": "Use this citation track for minute-book completeness, securities register, filed director/registered-office notices, and individuals-with-significant-control records.",
+        "caveat": "Access rights, privacy treatment, and retention details vary by record type and requester.",
+        "displayCitation": "CBCA ss.20-21"
+      },
+      "priority": 60
+    },
+    {
+      "ruleId": "ca-fed-cbca-directors-quorum",
+      "stableKey": "directors_quorum.quorum",
+      "status": "draft",
+      "ruleType": "default_rule",
+      "topics": [
+        "directors_quorum"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-FED-CBCA",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "1975-12-15"
+      },
+      "authority": {
+        "sourceId": "ca-cbca-full-text",
+        "instrument": "Canada Business Corporations Act",
+        "sections": [
+          {
+            "label": "s.114(2)",
+            "citation": "CBCA s.114(2)",
+            "url": "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-28",
+        "retrievedAt": "2026-06-02",
+        "verifiedAt": "2026-06-02",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "Subject to the articles or by-laws, a majority of the directors, or the minimum number required by the articles, constitutes directors' meeting quorum.",
+        "tooltip": "Use the articles and by-laws first; where they do not override, apply the CBCA directors' quorum default.",
+        "caveat": "Vacancies and article/by-law provisions can affect whether remaining directors may act.",
+        "displayCitation": "CBCA s.114(2)"
+      },
+      "priority": 34,
+      "parameters": [
+        {
+          "key": "directors_quorum.default_formula",
+          "type": "string",
+          "value": "majority_of_directors_or_articles_minimum"
+        }
+      ]
+    },
+    {
+      "ruleId": "ca-fed-cbca-special-resolution",
+      "stableKey": "special_resolution.resolution",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "special_resolution"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-FED-CBCA",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "1975-12-15"
+      },
+      "authority": {
+        "sourceId": "ca-cbca-full-text",
+        "instrument": "Canada Business Corporations Act",
+        "sections": [
+          {
+            "label": "s.2(1)",
+            "citation": "CBCA s.2(1)",
+            "url": "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+          }
+        ]
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-04-28",
+        "retrievedAt": "2026-06-02",
+        "verifiedAt": "2026-06-02",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "A CBCA special resolution generally requires at least two-thirds of the votes cast, or written signature by all shareholders entitled to vote.",
+        "tooltip": "Use this for federal special-resolution threshold checks and unanimous written special resolutions.",
+        "caveat": "Specific transactions, class votes, articles, by-laws, or unanimous shareholder agreements may add separate approval requirements.",
+        "displayCitation": "CBCA s.2(1)"
+      },
+      "priority": 50,
+      "parameters": [
+        {
+          "key": "shareholder_vote.special_resolution.min_fraction",
+          "type": "number",
+          "value": 0.6666666667,
+          "unit": "votes_cast",
+          "operator": ">="
+        },
+        {
+          "key": "shareholder_written_resolution.unanimous_required",
+          "type": "boolean",
+          "value": true
+        }
+      ]
+    }
+  ]
+}

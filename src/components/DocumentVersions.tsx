@@ -5,9 +5,10 @@ import { Id } from "../../convex/_generated/dataModel";
 import { Drawer, Field, Badge } from "./ui";
 import { useToast } from "./Toast";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
-import { isDemoMode } from "../lib/demoMode";
 import { History, Upload, RotateCcw, Download } from "lucide-react";
 import { formatDate } from "../lib/format";
+import { openDocumentDownloadTarget } from "../lib/documentStorage";
+import { uploadDocumentVersion } from "../lib/documentVersionUpload";
 
 export function DocumentVersionsDrawer({
   open,
@@ -30,7 +31,7 @@ export function DocumentVersionsDrawer({
   const beginUpload = useAction(api.documentVersions.beginUpload);
   const recordUpload = useMutation(api.documentVersions.recordUploadedVersion);
   const rollback = useMutation(api.documentVersions.rollback);
-  const getDownloadUrl = useAction(api.documentVersions.getDownloadUrl);
+  const getDownloadTarget = useAction(api.documentVersions.getDownloadTarget);
   const paperlessConnection = useQuery(api.paperless.listConnection, { societyId });
   const syncDocument = useAction(api.paperless.syncDocument);
   const actingUserId = useCurrentUserId() ?? undefined;
@@ -55,49 +56,26 @@ export function DocumentVersionsDrawer({
     if (!documentId) return;
     setBusy(true);
     try {
-      if (isDemoMode()) {
-        const versionId = await createDemoVersion({
-          societyId,
-          documentId,
-          fileName: file.name,
-          mimeType: file.type,
-          fileSizeBytes: file.size,
-          changeNote: changeNote || undefined,
-          actingUserId,
-        });
-        await maybeSyncVersionToPaperless(versionId);
-        toast.success(`Uploaded as v${(versions?.[0]?.version ?? 0) + 1} (demo)`);
+      const result = await uploadDocumentVersion({
+        societyId,
+        documentId,
+        file,
+        nextVersion: (versions?.[0]?.version ?? 0) + 1,
+        changeNote,
+        actingUserId,
+        createDemoVersion,
+        beginUpload,
+        recordUploadedVersion: recordUpload,
+      });
+      if (result.provider === "local-filesystem") {
+        if (paperlessConnection?.autoUpload) toast.info("Paperless sync is skipped for local filesystem versions.");
       } else {
-        const { version, presigned } = await beginUpload({
-          societyId,
-          documentId,
-          fileName: file.name,
-          mimeType: file.type,
-          fileSizeBytes: file.size,
-          actingUserId,
-        });
-        if (presigned.provider === "rustfs") {
-          const res = await fetch(presigned.url, {
-            method: "PUT",
-            headers: presigned.headers ?? (file.type ? { "Content-Type": file.type } : {}),
-            body: file,
-          });
-          if (!res.ok) throw new Error(`RustFS upload failed (${res.status})`);
-        }
-        const versionId = await recordUpload({
-          societyId,
-          documentId,
-          version,
-          storageProvider: presigned.provider,
-          storageKey: presigned.key,
-          fileName: file.name,
-          mimeType: file.type,
-          fileSizeBytes: file.size,
-          changeNote: changeNote || undefined,
-          actingUserId,
-        });
-        await maybeSyncVersionToPaperless(versionId);
-        toast.success(`Uploaded as v${version}`);
+        await maybeSyncVersionToPaperless(result.versionId);
+      }
+      if (result.provider === "demo") {
+        toast.success(`Uploaded as v${result.version} (demo)`);
+      } else {
+        toast.success(`Uploaded as v${result.version}`);
       }
       setChangeNote("");
     } catch (err: any) {
@@ -109,13 +87,13 @@ export function DocumentVersionsDrawer({
   };
 
   const download = async (versionId: Id<"documentVersions">) => {
-    const url = await getDownloadUrl({ versionId });
-    if (!url) return;
-    if (url.startsWith("demo://")) {
+    const target = await getDownloadTarget({ versionId });
+    if (!target) return;
+    if (target.kind === "url" && target.url?.startsWith("demo://")) {
       toast.info("Demo mode — no real file is stored, so the download URL is simulated.");
       return;
     }
-    window.open(url, "_blank");
+    await openDocumentDownloadTarget(target);
   };
 
   return (

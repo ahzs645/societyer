@@ -1224,9 +1224,15 @@
   font-size: 0.92em;
 }
 
+.agenda-builder {
+  display: grid;
+  gap: var(--s-4);
+  align-content: start;
+}
+
 .agenda-builder__workspace {
   display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
   gap: var(--s-4);
   align-items: start;
 }
@@ -1240,15 +1246,39 @@
 }
 
 .agenda-builder__agenda-button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   width: 100%;
-  justify-content: space-between;
   gap: var(--s-3);
+  height: auto;
+  min-height: 40px;
+  padding-block: var(--s-2);
   text-align: left;
+  white-space: normal;
 }
 
-.agenda-builder__agenda-button > span:first-child {
+.agenda-builder__agenda-copy,
+.agenda-builder__agenda-title,
+.agenda-builder__agenda-date {
+  display: block;
   min-width: 0;
+}
+
+.agenda-builder__agenda-title {
+  line-height: 1.25;
   overflow-wrap: anywhere;
+}
+
+.agenda-builder__agenda-date,
+.agenda-builder__agenda-status {
+  font-size: var(--fs-sm);
+  line-height: 1.3;
+}
+
+.agenda-builder__agenda-status {
+  padding-top: 1px;
+  white-space: nowrap;
 }
 
 @media (max-width: 900px) {
@@ -6406,8 +6436,7 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   grid-template-areas:
-    "agenda details"
-    "agenda library";
+    "agenda sidebar";
   gap: var(--s-4);
   align-items: start;
 }
@@ -6417,8 +6446,7 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 }
 
 .meeting-template-builder__main,
-.meeting-template-builder__sidebar,
-.meeting-template-builder__library {
+.meeting-template-builder__sidebar .card {
   overflow: hidden;
 }
 
@@ -6427,11 +6455,10 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 }
 
 .meeting-template-builder__sidebar {
-  grid-area: details;
-}
-
-.meeting-template-builder__library {
-  grid-area: library;
+  display: grid;
+  grid-area: sidebar;
+  gap: var(--s-4);
+  min-width: 0;
 }
 
 .meeting-template-builder__main .card__head {
@@ -6441,11 +6468,6 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 .meeting-template-builder__sidebar {
   position: sticky;
   top: calc(var(--topbar-height, 0px) + var(--s-4));
-}
-
-.meeting-template-builder__library {
-  position: sticky;
-  top: calc(var(--topbar-height, 0px) + 280px);
 }
 
 .meeting-template-library {
@@ -6674,8 +6696,7 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 
   .meeting-template-builder {
     grid-template-areas:
-      "details"
-      "library"
+      "sidebar"
       "agenda";
   }
 

@@ -27,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
+import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 
 const HIDDEN_ONBOARDING_FLOW_KEY = "societyer.dashboard.hiddenOnboardingFlowSocietyIds";
 
@@ -46,6 +47,7 @@ function writeHiddenOnboardingFlowSocietyIds(ids: string[]) {
 
 export function Dashboard() {
   const society = useSociety();
+  const jurisdictionCopy = jurisdictionDisplayCopy(society?.jurisdictionCode);
   const navigate = useNavigate();
   const toast = useToast();
   const data = useQuery(api.dashboard.summary, society ? { societyId: society._id } : "skip");
@@ -159,7 +161,7 @@ export function Dashboard() {
         <section className="onboarding-flow" aria-labelledby="onboarding-flow-title">
           <div className="onboarding-flow__story">
             <div>
-              <h2 id="onboarding-flow-title">Keep your BC society in good standing.</h2>
+              <h2 id="onboarding-flow-title">{jurisdictionCopy.goodStandingTitle}</h2>
               <p>
                 Societyer tells you what is due, gathers the evidence, prepares the records,
                 and keeps an audit trail.

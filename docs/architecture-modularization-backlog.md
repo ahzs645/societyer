@@ -20,6 +20,12 @@ This backlog tracks focused modularization work for the largest Societyer files.
 - [ ] Split `src/lib/staticConvex.ts` into domain fixtures, static query handlers, static mutation/action handlers, and shared lookup utilities.
 - [ ] Keep static data files small enough that feature teams can edit one domain without touching unrelated fixtures.
 
+## Corporation And Rule-Pack Expansion
+
+- [ ] Use `docs/corporation-rulepacks-project-plan.md` as the implementation plan for federal corporation support, OpenFisca-style compliance rule packs, and Captable/OCF-style equity records.
+- [ ] Keep `societies` / `societyId` as compatibility storage keys until the organization facade and jurisdiction module contract are stable.
+- [ ] Move BC-specific filing, director, and bylaw defaults into jurisdiction-aware modules before adding more province-specific behavior.
+
 ## Convex Backend Monoliths
 
 - [ ] Organize `convex/schema.ts` with reusable validators and domain sections for large repeated shapes while keeping Convex's single schema export intact.

@@ -1,7 +1,22 @@
-import Dexie, { type Table } from "dexie";
 import { RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinitions";
+import {
+  CORPORATION_DOCUMENT_PACKETS,
+  corporationPacketEntityTypes,
+  corporationPacketForComplianceObligation,
+  corporationPacketPrecedentMarker,
+  corporationPacketTemplateHtml,
+  corporationPacketTemplateMarker,
+} from "../../shared/corporationDocumentPackets";
+import {
+  corporationPacketDocxDataUrl,
+  corporationPacketDocxFileName,
+  corporationPacketDocxMimeType,
+} from "../../shared/corporationPacketDocx";
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
+import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
+import { registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
+import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "./localDexieRowStore";
 import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
 
 const FUNCTION_NAME = Symbol.for("functionName");
@@ -24,6 +39,14 @@ const FINANCIAL_CONNECTION_ID = "static_financial_connection";
 const PAPERLESS_CONNECTION_ID = "static_paperless_connection";
 const CASH_ACCOUNT_ID = "static_financial_cash";
 const GRANT_ACCOUNT_ID = "static_financial_grant";
+const ACCOUNT_RECEIVABLE_ID = "static_financial_ar";
+const ACCOUNT_PAYABLE_ID = "static_financial_ap";
+const ACCOUNT_NET_ASSETS_ID = "static_financial_net_assets";
+const ACCOUNT_GRANT_REVENUE_ID = "static_financial_grant_revenue";
+const ACCOUNT_DONATION_REVENUE_ID = "static_financial_donation_revenue";
+const ACCOUNT_PROGRAM_EXPENSE_ID = "static_financial_program_expense";
+const ACCOUNT_FACILITIES_EXPENSE_ID = "static_financial_facilities_expense";
+const ACCOUNT_EQUIPMENT_EXPENSE_ID = "static_financial_equipment_expense";
 
 type StaticArgs = Record<string, any> | undefined;
 
@@ -300,7 +323,25 @@ const evidenceRegistersOverview = {
   financialStatementImports: [],
   financialStatementImportLines: [],
   treasurerReports: [],
-  transactionCandidates: [],
+  transactionCandidates: [
+    {
+      _id: "static_candidate_supplies",
+      societyId: SOCIETY_ID,
+      transactionDate: "2026-04-18",
+      description: "Workshop supplies receipt",
+      amountCents: -18550,
+      accountName: "Operating chequing",
+      counterparty: "Harbour Office Supply",
+      category: "Program supplies",
+      status: "Matched",
+      sensitivity: "Internal",
+      confidence: "High",
+      sourceDocumentIds: ["static_document_projector_receipt"],
+      sourceExternalIds: ["demo:csv:workshop-supplies"],
+      notes: "Demo transaction candidate ready to post into the ledger.",
+      createdAtISO: "2026-04-18T18:00:00.000Z",
+    },
+  ],
   sourceEvidence: [],
   archiveAccessions: [],
 };
@@ -1486,24 +1527,40 @@ const financialAccounts = [
     societyId: SOCIETY_ID,
     connectionId: FINANCIAL_CONNECTION_ID,
     externalId: "cash",
+    code: "1000",
     name: "Operating chequing",
     currency: "CAD",
     accountType: "Bank",
+    subtype: "cash",
     balanceCents: 3490000,
     isRestricted: false,
+    sourceSystem: "societyer",
+    normalBalance: "debit",
   },
   {
     _id: GRANT_ACCOUNT_ID,
     societyId: SOCIETY_ID,
     connectionId: FINANCIAL_CONNECTION_ID,
     externalId: "grant",
+    code: "1010",
     name: "Neighbourhood grant fund",
     currency: "CAD",
     accountType: "Bank",
+    subtype: "restricted_cash",
     balanceCents: 2750000,
     isRestricted: true,
     restrictedPurpose: "Youth resilience program",
+    sourceSystem: "societyer",
+    normalBalance: "debit",
   },
+  { _id: ACCOUNT_RECEIVABLE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "ar", code: "1100", name: "Accounts receivable", currency: "CAD", accountType: "Asset", subtype: "receivable", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "debit" },
+  { _id: ACCOUNT_PAYABLE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "ap", code: "2000", name: "Accounts payable", currency: "CAD", accountType: "Liability", subtype: "payable", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "credit" },
+  { _id: ACCOUNT_NET_ASSETS_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "net_assets", code: "3000", name: "Unrestricted net assets", currency: "CAD", accountType: "Equity", subtype: "net_assets", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "credit" },
+  { _id: ACCOUNT_GRANT_REVENUE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "grant_revenue", code: "4100", name: "Grant revenue", currency: "CAD", accountType: "Income", subtype: "grants", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "credit" },
+  { _id: ACCOUNT_DONATION_REVENUE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "donations", code: "4000", name: "Donations and fundraising", currency: "CAD", accountType: "Income", subtype: "donations", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "credit" },
+  { _id: ACCOUNT_PROGRAM_EXPENSE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "program_expense", code: "5000", name: "Program supplies", currency: "CAD", accountType: "Expense", subtype: "program", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "debit" },
+  { _id: ACCOUNT_FACILITIES_EXPENSE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "facilities", code: "5200", name: "Facilities and utilities", currency: "CAD", accountType: "Expense", subtype: "facilities", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "debit" },
+  { _id: ACCOUNT_EQUIPMENT_EXPENSE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "equipment", code: "5500", name: "Equipment and technology", currency: "CAD", accountType: "Expense", subtype: "equipment", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "debit" },
 ];
 
 const financialTransactions = [
@@ -1553,6 +1610,66 @@ const financialTransactions = [
     counterpartyResourceType: "vendor",
   },
 ];
+
+const accountingFiscalPeriods = [
+  {
+    _id: "static_accounting_period_2026",
+    societyId: SOCIETY_ID,
+    fiscalYear: "2026",
+    periodLabel: "FY 2026",
+    startDate: "2026-01-01",
+    endDate: "2026-12-31",
+    status: "open",
+    createdAtISO: "2026-01-01T00:00:00.000Z",
+    updatedAtISO: "2026-01-01T00:00:00.000Z",
+  },
+];
+
+const accountingCounterparties = [
+  { _id: "static_counterparty_harbour", societyId: SOCIETY_ID, name: "Harbour Foundation", kind: "funder", provider: "societyer", externalId: "vendor_harbour", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
+  { _id: "static_counterparty_hall", societyId: SOCIETY_ID, name: "Riverside Hall", kind: "vendor", provider: "societyer", externalId: "vendor_city", createdAtISO: "2026-04-05T18:00:00.000Z", updatedAtISO: "2026-04-05T18:00:00.000Z" },
+];
+
+const fundRestrictions = [
+  {
+    _id: "static_fund_restriction_youth",
+    societyId: SOCIETY_ID,
+    name: "Youth resilience grant",
+    purpose: "Program supplies and venue costs for youth resilience workshops.",
+    status: "active",
+    linkedFinancialAccountId: GRANT_ACCOUNT_ID,
+    startDate: "2026-04-01",
+    endDate: "2026-12-31",
+    sourceDocumentIds: ["static_document_financials"],
+    createdAtISO: "2026-04-01T18:00:00.000Z",
+    updatedAtISO: "2026-04-01T18:00:00.000Z",
+  },
+];
+
+const accountingAccountMappings = [
+  { _id: "static_mapping_grant_revenue", societyId: SOCIETY_ID, provider: "wave", externalAccountName: "Grant revenue", externalCategory: "Grant revenue", financialAccountId: ACCOUNT_GRANT_REVENUE_ID, confidence: "manual", status: "active", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
+  { _id: "static_mapping_facilities", societyId: SOCIETY_ID, provider: "wave", externalAccountName: "Facilities", externalCategory: "Facilities", financialAccountId: ACCOUNT_FACILITIES_EXPENSE_ID, confidence: "manual", status: "active", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
+  { _id: "static_mapping_program", societyId: SOCIETY_ID, provider: "csv", externalAccountName: "Program supplies", externalCategory: "Program supplies", financialAccountId: ACCOUNT_PROGRAM_EXPENSE_ID, confidence: "manual", status: "active", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
+];
+
+const journalEntries = [
+  { _id: "static_journal_opening", societyId: SOCIETY_ID, fiscalPeriodId: "static_accounting_period_2026", entryNumber: "OB-2026", date: "2026-01-01", memo: "Opening balances", source: "opening_balance", status: "posted", fiscalYear: "2026", createdByUserId: USER_TREASURER_ID, postedAtISO: "2026-01-01T18:00:00.000Z", sourceDocumentIds: ["static_document_financials"], createdAtISO: "2026-01-01T18:00:00.000Z", updatedAtISO: "2026-01-01T18:00:00.000Z" },
+  { _id: "static_journal_grant", societyId: SOCIETY_ID, fiscalPeriodId: "static_accounting_period_2026", entryNumber: "JE-0001", date: "2026-04-01", memo: "Foundation grant deposit", source: "wave", sourceExternalId: "tx-grant", status: "posted", fiscalYear: "2026", createdByUserId: USER_TREASURER_ID, postedAtISO: "2026-04-01T18:00:00.000Z", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
+  { _id: "static_journal_space", societyId: SOCIETY_ID, fiscalPeriodId: "static_accounting_period_2026", entryNumber: "JE-0002", date: "2026-04-05", memo: "Community hall rental", source: "wave", sourceExternalId: "tx-space", status: "posted", fiscalYear: "2026", createdByUserId: USER_TREASURER_ID, postedAtISO: "2026-04-05T18:00:00.000Z", createdAtISO: "2026-04-05T18:00:00.000Z", updatedAtISO: "2026-04-05T18:00:00.000Z" },
+];
+
+const journalLines = [
+  { _id: "static_jline_opening_cash", societyId: SOCIETY_ID, journalEntryId: "static_journal_opening", accountId: CASH_ACCOUNT_ID, lineOrder: 0, amountCents: 3490000, side: "debit", description: "Opening operating cash", createdAtISO: "2026-01-01T18:00:00.000Z", updatedAtISO: "2026-01-01T18:00:00.000Z" },
+  { _id: "static_jline_opening_grant_cash", societyId: SOCIETY_ID, journalEntryId: "static_journal_opening", accountId: GRANT_ACCOUNT_ID, lineOrder: 1, amountCents: 2750000, side: "debit", description: "Opening restricted grant cash", fundRestrictionId: "static_fund_restriction_youth", createdAtISO: "2026-01-01T18:00:00.000Z", updatedAtISO: "2026-01-01T18:00:00.000Z" },
+  { _id: "static_jline_opening_equity", societyId: SOCIETY_ID, journalEntryId: "static_journal_opening", accountId: ACCOUNT_NET_ASSETS_ID, lineOrder: 2, amountCents: 6240000, side: "credit", description: "Opening net assets", createdAtISO: "2026-01-01T18:00:00.000Z", updatedAtISO: "2026-01-01T18:00:00.000Z" },
+  { _id: "static_jline_grant_cash", societyId: SOCIETY_ID, journalEntryId: "static_journal_grant", accountId: GRANT_ACCOUNT_ID, lineOrder: 0, amountCents: 1500000, side: "debit", description: "Grant deposit", counterpartyId: "static_counterparty_harbour", fundRestrictionId: "static_fund_restriction_youth", financialTransactionId: "static_tx_grant", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
+  { _id: "static_jline_grant_revenue", societyId: SOCIETY_ID, journalEntryId: "static_journal_grant", accountId: ACCOUNT_GRANT_REVENUE_ID, lineOrder: 1, amountCents: 1500000, side: "credit", description: "Grant revenue", counterpartyId: "static_counterparty_harbour", fundRestrictionId: "static_fund_restriction_youth", financialTransactionId: "static_tx_grant", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
+  { _id: "static_jline_space_cash", societyId: SOCIETY_ID, journalEntryId: "static_journal_space", accountId: CASH_ACCOUNT_ID, lineOrder: 0, amountCents: 42000, side: "credit", description: "Hall rental payment", counterpartyId: "static_counterparty_hall", financialTransactionId: "static_tx_space", createdAtISO: "2026-04-05T18:00:00.000Z", updatedAtISO: "2026-04-05T18:00:00.000Z" },
+  { _id: "static_jline_space_expense", societyId: SOCIETY_ID, journalEntryId: "static_journal_space", accountId: ACCOUNT_FACILITIES_EXPENSE_ID, lineOrder: 1, amountCents: 42000, side: "debit", description: "Community hall rental", counterpartyId: "static_counterparty_hall", financialTransactionId: "static_tx_space", createdAtISO: "2026-04-05T18:00:00.000Z", updatedAtISO: "2026-04-05T18:00:00.000Z" },
+];
+
+const reconciliationRuns: any[] = [];
+const reconciliationRunLines: any[] = [];
 
 const budgets = [
   {
@@ -1891,6 +2008,20 @@ const tables: Record<string, any[]> = {
   aiMessages,
   aiToolDrafts,
   aiProviderSettings,
+  accountingFiscalPeriods,
+  accountingCounterparties,
+  accountingAccountMappings,
+  generatedLegalDocuments: [],
+  legalPrecedents: [],
+  legalPrecedentRuns: [],
+  legalSigners: [],
+  legalTemplateDataFields: [],
+  legalTemplates: [],
+  fundRestrictions,
+  journalEntries,
+  journalLines,
+  reconciliationRuns,
+  reconciliationRunLines,
   motionBacklog,
   pendingEmails: [
     {
@@ -1982,6 +2113,7 @@ const tables: Record<string, any[]> = {
   conflicts,
   commitments,
   commitmentEvents,
+  complianceRemediations: [],
   courtOrders: [],
   deadlines,
   directors,
@@ -2320,6 +2452,32 @@ const tables: Record<string, any[]> = {
   ],
   assets: [
     {
+      _id: "static_asset_chocolate_milk",
+      societyId: SOCIETY_ID,
+      assetTag: "CON-0001",
+      preferredLabelType: "qr",
+      name: "Chocolate milk flats",
+      category: "Consumable",
+      supplier: "Campus Food Services",
+      purchaseDate: "2026-04-28",
+      purchaseValueCents: 4320,
+      quantityOnHand: 1,
+      quantityUnit: "flats",
+      currency: "CAD",
+      location: "Program room fridge",
+      condition: "Good",
+      status: "Available",
+      custodianType: "location",
+      custodianName: "Program room",
+      responsiblePersonName: "Jordan Lee",
+      capitalized: false,
+      sourceDocumentIds: [],
+      disposalDocumentIds: [],
+      notes: "Demo consumable for stock intake tracking.",
+      createdAtISO: "2026-04-28T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+    {
       _id: "static_asset_projector",
       societyId: SOCIETY_ID,
       assetTag: "AST-0001",
@@ -2442,6 +2600,224 @@ const tables: Record<string, any[]> = {
   ],
   assetVerificationRuns: [],
   assetVerificationItems: [],
+  assetReceiptLinks: [
+    {
+      _id: "static_asset_receipt_link_projector",
+      societyId: SOCIETY_ID,
+      assetId: "static_asset_projector",
+      inventoryItemId: "static_inventory_item_projector",
+      receiptDocumentId: "static_document_projector_receipt",
+      financialTransactionId: "static_tx_projector",
+      receiptLineLabel: "Epson community projector",
+      receiptLineIndex: 1,
+      quantity: 1,
+      unitOfMeasure: "each",
+      unitCostCents: 92000,
+      totalCostCents: 92000,
+      sourceText: "Projector purchase line from demo receipt.",
+      notes: "Seeded link from receipt line to asset and inventory item.",
+      createdByUserId: USER_TREASURER_ID,
+      createdAtISO: "2025-09-12T18:00:00.000Z",
+      updatedAtISO: "2025-09-12T18:00:00.000Z",
+    },
+  ],
+  inventoryConnections: [
+    {
+      _id: "static_inventory_connection_openboxes",
+      societyId: SOCIETY_ID,
+      provider: "openboxes",
+      displayName: "OpenBoxes reference shape",
+      status: "active",
+      externalOrganizationId: "demo-riverside",
+      baseUrl: "https://openboxes.example/demo",
+      lastSyncedAtISO: "2026-05-01T18:00:00.000Z",
+      settingsJson: JSON.stringify({ mode: "reference", sync: "manual" }),
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+  ],
+  inventoryItems: [
+    {
+      _id: "static_inventory_item_chocolate_milk",
+      societyId: SOCIETY_ID,
+      connectionId: "static_inventory_connection_openboxes",
+      sku: "CON-0001",
+      name: "Chocolate milk flats",
+      description: "Program consumable tracked through the stock ledger.",
+      category: "Consumable",
+      itemType: "consumable",
+      unitOfMeasure: "flats",
+      defaultCostCents: 4320,
+      currency: "CAD",
+      trackSerial: false,
+      trackLot: false,
+      trackExpiry: true,
+      reorderPoint: 2,
+      status: "active",
+      assetId: "static_asset_chocolate_milk",
+      externalId: "openboxes-product-chocolate-milk",
+      sourceSystem: "openboxes",
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+    {
+      _id: "static_inventory_item_projector",
+      societyId: SOCIETY_ID,
+      sku: "AST-0001",
+      name: "Epson community projector",
+      category: "Program equipment",
+      itemType: "asset",
+      unitOfMeasure: "each",
+      defaultCostCents: 92000,
+      currency: "CAD",
+      trackSerial: true,
+      trackLot: false,
+      trackExpiry: false,
+      status: "active",
+      assetId: "static_asset_projector",
+      sourceSystem: "societyer_assets",
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+  ],
+  inventoryLocations: [
+    {
+      _id: "static_inventory_location_program_fridge",
+      societyId: SOCIETY_ID,
+      connectionId: "static_inventory_connection_openboxes",
+      name: "Program room fridge",
+      locationType: "room",
+      active: true,
+      externalId: "openboxes-location-program-fridge",
+      sourceSystem: "openboxes",
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+    {
+      _id: "static_inventory_location_records_cabinet",
+      societyId: SOCIETY_ID,
+      name: "Records office equipment cabinet",
+      locationType: "bin",
+      active: true,
+      sourceSystem: "societyer_assets",
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+  ],
+  inventoryLots: [],
+  stockMovements: [
+    {
+      _id: "static_stock_movement_chocolate_receive",
+      societyId: SOCIETY_ID,
+      connectionId: "static_inventory_connection_openboxes",
+      movementDate: "2026-04-28",
+      movementType: "receive",
+      status: "posted",
+      inventoryItemId: "static_inventory_item_chocolate_milk",
+      toLocationId: "static_inventory_location_program_fridge",
+      quantity: 3,
+      unitOfMeasure: "flats",
+      unitCostCents: 1440,
+      totalCostCents: 4320,
+      reason: "Program supply purchase",
+      reference: "CON-0001",
+      sourceExternalId: "openboxes-stock-movement-1001",
+      sourceSystem: "openboxes",
+      documentIds: [],
+      createdAtISO: "2026-04-28T18:00:00.000Z",
+      updatedAtISO: "2026-04-28T18:00:00.000Z",
+    },
+    {
+      _id: "static_stock_movement_chocolate_consume",
+      societyId: SOCIETY_ID,
+      movementDate: "2026-05-01",
+      movementType: "consume",
+      status: "posted",
+      inventoryItemId: "static_inventory_item_chocolate_milk",
+      fromLocationId: "static_inventory_location_program_fridge",
+      quantity: 2,
+      unitOfMeasure: "flats",
+      reason: "Youth workshop snacks",
+      reference: "Workshop 2026-05-01",
+      sourceSystem: "societyer_assets",
+      documentIds: [],
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+    {
+      _id: "static_stock_movement_projector_intake",
+      societyId: SOCIETY_ID,
+      movementDate: "2025-09-12",
+      movementType: "receive",
+      status: "posted",
+      inventoryItemId: "static_inventory_item_projector",
+      toLocationId: "static_inventory_location_records_cabinet",
+      quantity: 1,
+      unitOfMeasure: "each",
+      unitCostCents: 92000,
+      totalCostCents: 92000,
+      reason: "Grant-funded equipment purchase",
+      reference: "AST-0001",
+      sourceSystem: "societyer_assets",
+      assetEventId: "static_asset_event_projector_intake",
+      purchaseTransactionId: "static_tx_projector",
+      receiptDocumentId: "static_document_projector_receipt",
+      documentIds: ["static_document_projector_receipt", "static_document_financials"],
+      createdAtISO: "2025-09-12T18:00:00.000Z",
+      updatedAtISO: "2025-09-12T18:00:00.000Z",
+    },
+  ],
+  inventoryBalances: [
+    {
+      _id: "static_inventory_balance_chocolate_fridge",
+      societyId: SOCIETY_ID,
+      inventoryItemId: "static_inventory_item_chocolate_milk",
+      locationId: "static_inventory_location_program_fridge",
+      quantityOnHand: 1,
+      quantityReserved: 0,
+      quantityAvailable: 1,
+      lastMovementId: "static_stock_movement_chocolate_consume",
+      lastCountedAtISO: "2026-05-01T18:00:00.000Z",
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+    {
+      _id: "static_inventory_balance_projector_cabinet",
+      societyId: SOCIETY_ID,
+      inventoryItemId: "static_inventory_item_projector",
+      locationId: "static_inventory_location_records_cabinet",
+      quantityOnHand: 1,
+      quantityReserved: 0,
+      quantityAvailable: 1,
+      lastMovementId: "static_stock_movement_projector_intake",
+      createdAtISO: "2026-05-01T18:00:00.000Z",
+      updatedAtISO: "2026-05-01T18:00:00.000Z",
+    },
+  ],
+  inventoryCounts: [],
+  inventoryCountLines: [],
+  inventoryCandidates: [
+    {
+      _id: "static_inventory_candidate_receipt_chocolate",
+      societyId: SOCIETY_ID,
+      candidateType: "movement",
+      sourceSystem: "receipt",
+      sourceExternalId: "receipt-line-chocolate-milk",
+      status: "posted",
+      occurredAtISO: "2026-04-28T18:00:00.000Z",
+      sku: "CON-0001",
+      itemName: "Chocolate milk flats",
+      locationName: "Program room fridge",
+      quantity: 3,
+      unitOfMeasure: "flats",
+      suggestedInventoryItemId: "static_inventory_item_chocolate_milk",
+      suggestedLocationId: "static_inventory_location_program_fridge",
+      postedMovementId: "static_stock_movement_chocolate_receive",
+      rawJson: JSON.stringify({ source: "demo receipt extraction", quantity: 3, unit: "flats" }),
+      createdAtISO: "2026-04-28T18:00:00.000Z",
+      updatedAtISO: "2026-04-28T18:00:00.000Z",
+    },
+  ],
   meetings,
   memberProposals: [],
   memberSubscriptions,
@@ -2733,6 +3109,145 @@ function staticCategoryAccountStats(externalId?: string, label?: string) {
   };
 }
 
+function staticTrialBalance(seed: StaticDemoSeed | Record<string, any[]> = tables, args?: StaticArgs) {
+  const entries = scopedRows(seed.journalEntries ?? [], args).filter((entry) => entry.status === "posted");
+  const entryIds = new Set(entries.map((entry) => entry._id));
+  const accounts = scopedRows(seed.financialAccounts ?? financialAccounts, args);
+  const accountById = new Map(accounts.map((account) => [account._id, account]));
+  const totals = new Map<string, { debitCents: number; creditCents: number }>();
+  for (const line of scopedRows(seed.journalLines ?? [], args)) {
+    if (!entryIds.has(line.journalEntryId)) continue;
+    const current = totals.get(line.accountId) ?? { debitCents: 0, creditCents: 0 };
+    if (line.side === "debit") current.debitCents += line.amountCents;
+    if (line.side === "credit") current.creditCents += line.amountCents;
+    totals.set(line.accountId, current);
+  }
+  return Array.from(totals.entries())
+    .map(([accountId, total]) => ({
+      account: accountById.get(accountId) ?? null,
+      ...total,
+      balanceCents: total.debitCents - total.creditCents,
+    }))
+    .sort((a, b) => String(a.account?.code ?? "").localeCompare(String(b.account?.code ?? "")));
+}
+
+function staticGeneralLedger(seed: StaticDemoSeed | Record<string, any[]> = tables, args?: StaticArgs) {
+  const entries = scopedRows(seed.journalEntries ?? [], args).filter((entry) => entry.status === "posted");
+  const entryById = new Map(entries.map((entry) => [entry._id, entry]));
+  const accounts = scopedRows(seed.financialAccounts ?? financialAccounts, args);
+  const accountById = new Map(accounts.map((account) => [account._id, account]));
+  return scopedRows(seed.journalLines ?? [], args)
+    .filter((line) => entryById.has(line.journalEntryId))
+    .map((line) => ({ ...line, entry: entryById.get(line.journalEntryId), account: accountById.get(line.accountId) ?? null }))
+    .sort((a, b) => `${a.entry.date}:${a.account?.code ?? ""}:${a.lineOrder}`.localeCompare(`${b.entry.date}:${b.account?.code ?? ""}:${b.lineOrder}`));
+}
+
+function staticRestrictedFundBalances(seed: StaticDemoSeed | Record<string, any[]> = tables, args?: StaticArgs) {
+  const restrictions = scopedRows(seed.fundRestrictions ?? fundRestrictions, args);
+  const totals = new Map<string, { debitCents: number; creditCents: number }>();
+  for (const line of staticGeneralLedger(seed, args)) {
+    if (!line.fundRestrictionId) continue;
+    const current = totals.get(line.fundRestrictionId) ?? { debitCents: 0, creditCents: 0 };
+    if (line.side === "debit") current.debitCents += line.amountCents;
+    if (line.side === "credit") current.creditCents += line.amountCents;
+    totals.set(line.fundRestrictionId, current);
+  }
+  return restrictions
+    .map((restriction) => {
+      const total = totals.get(restriction._id) ?? { debitCents: 0, creditCents: 0 };
+      return {
+        ...restriction,
+        debitCents: total.debitCents,
+        creditCents: total.creditCents,
+        balanceCents: total.debitCents - total.creditCents,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function staticAccountingCsv(seed: StaticDemoSeed | Record<string, any[]> = tables, args?: StaticArgs) {
+  const kind = args?.kind ?? "trial_balance";
+  if (kind === "chart_of_accounts") {
+    const rows = [["code", "name", "type", "subtype", "currency", "normal_balance", "external_id"]];
+    for (const account of scopedRows(seed.financialAccounts ?? financialAccounts, args).sort((a, b) => String(a.code ?? "").localeCompare(String(b.code ?? "")))) {
+      rows.push([account.code ?? "", account.name, account.accountType, account.subtype ?? "", account.currency, account.normalBalance ?? "", account.externalId]);
+    }
+    return { filename: "chart-of-accounts.csv", contentType: "text/csv", csv: staticCsvRows(rows) };
+  }
+  if (kind === "journal_entries" || kind === "general_ledger") {
+    const rows = [["entry_date", "entry_number", "reference", "memo", "status", "source", "account_code", "account_name", "side", "amount_cents", "line_description"]];
+    for (const line of staticGeneralLedger(seed, args)) {
+      rows.push([line.entry.date, line.entry.entryNumber ?? "", line.entry.reference ?? "", line.entry.memo, line.entry.status, line.entry.source, line.account?.code ?? "", line.account?.name ?? "", line.side, line.amountCents, line.description ?? ""]);
+    }
+    return { filename: kind === "journal_entries" ? "journal-entries.csv" : "general-ledger.csv", contentType: "text/csv", csv: staticCsvRows(rows) };
+  }
+  const rows = [["account_code", "account_name", "debit_cents", "credit_cents", "balance_cents"]];
+  for (const row of staticTrialBalance(seed, args)) rows.push([row.account?.code ?? "", row.account?.name ?? "", row.debitCents, row.creditCents, row.balanceCents]);
+  return { filename: "trial-balance.csv", contentType: "text/csv", csv: staticCsvRows(rows) };
+}
+
+function staticBoardAuditorPackage(seed: StaticDemoSeed | Record<string, any[]> = tables, args?: StaticArgs) {
+  const ledger = staticGeneralLedger(seed, args);
+  const documentIds = new Set<string>();
+  for (const line of ledger) for (const id of line.documentIds ?? []) documentIds.add(String(id));
+  const attachments = Array.from(documentIds)
+    .map((id) => byId(seed.documents ?? tables.documents, id))
+    .filter(Boolean)
+    .map((document: any) => ({
+      documentId: document._id,
+      title: document.title,
+      category: document.category,
+      fileName: document.fileName,
+      url: document.url,
+    }));
+  const trialRows = [["account_code", "account_name", "debit_cents", "credit_cents", "balance_cents"]];
+  for (const row of staticTrialBalance(seed, args)) trialRows.push([row.account?.code ?? "", row.account?.name ?? "", row.debitCents, row.creditCents, row.balanceCents]);
+  const ledgerRows = [["entry_date", "entry_number", "memo", "account_code", "account_name", "side", "amount_cents", "line_description", "document_ids"]];
+  for (const line of ledger) ledgerRows.push([line.entry.date, line.entry.entryNumber ?? "", line.entry.memo, line.account?.code ?? "", line.account?.name ?? "", line.side, line.amountCents, line.description ?? "", (line.documentIds ?? []).join(";")]);
+  const reconciliationRows = [["statement_date", "account_id", "statement_balance_cents", "book_balance_cents", "status"]];
+  for (const run of scopedRows(seed.reconciliationRuns ?? reconciliationRuns, args)) reconciliationRows.push([run.statementDate, run.financialAccountId, run.statementBalanceCents, run.bookBalanceCents ?? "", run.status]);
+  const manifest = {
+    packageVersion: 1,
+    packageKind: args?.packageKind ?? "board_auditor",
+    societyId: args?.societyId ?? SOCIETY_ID,
+    societyName: society.name,
+    fiscalYear: args?.fiscalYear ?? null,
+    generatedAtISO: new Date().toISOString(),
+    files: ["manifest.json", "trial-balance.csv", "general-ledger.csv", "reconciliations.csv", "attachments.json"],
+    attachmentCount: attachments.length,
+  };
+  return {
+    filename: `societyer-${args?.packageKind ?? "board-auditor"}-${args?.fiscalYear ?? "all"}-package.zip`,
+    contentType: "application/zip",
+    files: [
+      { path: "manifest.json", content: JSON.stringify(manifest, null, 2) },
+      { path: "trial-balance.csv", content: staticCsvRows(trialRows) },
+      { path: "general-ledger.csv", content: staticCsvRows(ledgerRows) },
+      { path: "reconciliations.csv", content: staticCsvRows(reconciliationRows) },
+      { path: "attachments.json", content: JSON.stringify(attachments, null, 2) },
+    ],
+    attachments,
+  };
+}
+
+function staticAccountingSeed(store?: StaticDemoDexieStore | null, args?: StaticArgs) {
+  return {
+    financialAccounts: store?.listRows("financialAccounts", args) ?? financialAccounts,
+    fundRestrictions: store?.listRows("fundRestrictions", args) ?? fundRestrictions,
+    journalEntries: store?.listRows("journalEntries", args) ?? journalEntries,
+    journalLines: store?.listRows("journalLines", args) ?? journalLines,
+    reconciliationRuns: store?.listRows("reconciliationRuns", args) ?? reconciliationRuns,
+    documents: store?.listRows("documents", args) ?? documents,
+  };
+}
+
+function staticCsvRows(rows: unknown[][]) {
+  return rows.map((row) => row.map((value) => {
+    const text = String(value ?? "");
+    return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  }).join(",")).join("\n");
+}
+
 function normalizeStaticCategoryLabel(value?: string) {
   return String(value ?? "").trim().toLowerCase();
 }
@@ -2831,6 +3346,63 @@ function dashboardSummary() {
         ],
       },
     ],
+  };
+}
+
+function dashboardSummaryFromStore(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
+  if (!store) return dashboardSummary();
+  const societyRow = store.getRow("societies", args?.societyId) ?? society;
+  const activeDirectors = store.listRows("directors", args).filter((director: any) => director.status === "Active");
+  const activeMembers = store.listRows("members", args).filter((member: any) => member.status === "Active");
+  const meetingsRows = store.listRows("meetings", args);
+  const filingsRows = store.listRows("filings", args);
+  const deadlinesRows = store.listRows("deadlines", args);
+  const conflictsRows = store.listRows("conflicts", args);
+  const committeesRows = store.listRows("committees", args);
+  const goalsRows = store.listRows("goals", args);
+  const tasksRows = store.listRows("tasks", args);
+  const documentsRows = store.listRows("documents", args);
+  const bcResidents = activeDirectors.filter((director: any) => director.isBCResident).length;
+  const today = new Date().toISOString().slice(0, 10);
+  const overdueFilings = filingsRows.filter((filing: any) => filing.status !== "Filed" && filing.dueDate < today);
+  const upcomingFilings = filingsRows.filter((filing: any) => filing.status !== "Filed" && filing.dueDate >= today);
+  return {
+    ...dashboardSummary(),
+    society: societyRow,
+    counts: {
+      members: activeMembers.length,
+      directors: activeDirectors.length,
+      bcResidents,
+      meetingsThisYear: meetingsRows.filter((meeting: any) => String(meeting.scheduledAt ?? "").startsWith(String(new Date().getFullYear()))).length,
+      overdueFilings: overdueFilings.length,
+      openDeadlines: deadlinesRows.filter((deadline: any) => !deadline.done).length,
+      openConflicts: conflictsRows.filter((conflict: any) => !conflict.resolvedAt).length,
+      committees: committeesRows.filter((committee: any) => committee.status !== "Archived").length,
+      openGoals: goalsRows.filter((goal: any) => goal.status !== "Completed").length,
+      openTasks: tasksRows.filter((task: any) => task.status !== "Done").length,
+    },
+    upcomingMeetings: meetingsRows.filter((meeting: any) => meeting.status === "Scheduled").slice(0, 3),
+    upcomingFilings,
+    overdueFilings: overdueFilings.slice(0, 12),
+    goals: goalsRows
+      .filter((goal: any) => goal.status !== "Completed")
+      .sort((a: any, b: any) => String(a.targetDate ?? "9999-12-31").localeCompare(String(b.targetDate ?? "9999-12-31")))
+      .slice(0, 4),
+    openTasks: tasksRows
+      .filter((task: any) => task.status !== "Done")
+      .sort((a: any, b: any) => String(a.dueDate ?? "9999-12-31").localeCompare(String(b.dueDate ?? "9999-12-31")))
+      .slice(0, 6),
+    evidenceChains: documentsRows.slice(0, 3).map((document: any) => ({
+      id: document._id,
+      title: document.title,
+      status: document.flaggedForDeletion ? "attention" : "verified",
+      summary: document.fileName ? "Local document metadata is stored in the workspace." : "Document record exists without an attached version.",
+      actionHref: `/app/documents/${document._id}`,
+      nodes: [
+        { label: "Document", value: document.title, status: "verified", href: `/app/documents/${document._id}` },
+        { label: "Storage", value: document.fileName ?? "No file attached", status: document.fileName ? "verified" : "attention" },
+      ],
+    })),
   };
 }
 
@@ -3062,6 +3634,43 @@ function staticDocumentReviewQueues() {
       recent: annotated.length,
       actionRequired: annotated.filter((document) => document.reviewStatus === "needs_signature" || document.openCommentCount > 0 || document.openTaskCount > 0).length,
       workInProgress: annotated.filter((document) => document.reviewStatus === "in_review" || document.linkedToMeetingPackage || document.openCommentCount > 0).length,
+    },
+  };
+}
+
+function staticDocumentReviewQueuesFromStore(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
+  if (!store) return staticDocumentReviewQueues();
+  const rows = store.listRows("documents", args).filter((document: any) => !staticIsImportSession(document) && !staticIsImportRecord(document));
+  const taskCounts = new Map<string, number>();
+  for (const task of store.listRows("tasks", args).filter((task: any) => task.status !== "Done" && task.documentId)) {
+    taskCounts.set(String(task.documentId), (taskCounts.get(String(task.documentId)) ?? 0) + 1);
+  }
+  const commentCounts = new Map<string, number>();
+  for (const comment of store.listRows("documentComments", args).filter((comment: any) => comment.status !== "resolved")) {
+    commentCounts.set(String(comment.documentId), (commentCounts.get(String(comment.documentId)) ?? 0) + 1);
+  }
+  const materialDocIds = new Set(store.listRows("meetingMaterials", args).map((row: any) => String(row.documentId)));
+  const annotated = rows.map((document: any) => ({
+    ...document,
+    openTaskCount: taskCounts.get(String(document._id)) ?? 0,
+    openCommentCount: commentCounts.get(String(document._id)) ?? 0,
+    signatureCount: 0,
+    linkedToMeetingPackage: materialDocIds.has(String(document._id)) || !!document.meetingId,
+  }));
+  const actionRequired = annotated.filter((document: any) => document.reviewStatus === "needs_signature" || document.openCommentCount > 0 || document.openTaskCount > 0);
+  const workInProgress = annotated.filter((document: any) => document.reviewStatus === "in_review" || document.linkedToMeetingPackage || document.openCommentCount > 0);
+  return {
+    recent: annotated
+      .filter((document: any) => document.lastOpenedAtISO || document.createdAtISO)
+      .sort((a: any, b: any) => String(b.lastOpenedAtISO ?? b.createdAtISO).localeCompare(String(a.lastOpenedAtISO ?? a.createdAtISO)))
+      .slice(0, 8),
+    actionRequired: actionRequired.slice(0, 8),
+    workInProgress: workInProgress.slice(0, 8),
+    counts: {
+      documents: annotated.length,
+      recent: annotated.length,
+      actionRequired: actionRequired.length,
+      workInProgress: workInProgress.length,
     },
   };
 }
@@ -3450,6 +4059,12 @@ const STATIC_EXPORT_TABLES = [
   "transactionCandidates",
   "signatures",
   "filingBotRuns",
+  "legalTemplateDataFields",
+  "legalTemplates",
+  "legalPrecedents",
+  "legalPrecedentRuns",
+  "generatedLegalDocuments",
+  "legalSigners",
   "recordLayouts",
   "workflows",
   "workflowPackages",
@@ -3482,7 +4097,12 @@ const STATIC_EXPORT_TABLES = [
   "minutes",
   "meetingAttendanceRecords",
   "motionEvidence",
+  "roleHolders",
+  "rightsClasses",
+  "rightsholdingTransfers",
+  "rightsHoldings",
   "filings",
+  "complianceRemediations",
   "grants",
   "grantApplications",
   "grantReports",
@@ -3498,6 +4118,16 @@ const STATIC_EXPORT_TABLES = [
   "policies",
   "conflicts",
   "financials",
+  "financialAccounts",
+  "financialTransactions",
+  "accountingFiscalPeriods",
+  "accountingCounterparties",
+  "accountingAccountMappings",
+  "fundRestrictions",
+  "journalEntries",
+  "journalLines",
+  "reconciliationRuns",
+  "reconciliationRunLines",
   "bylawRuleSets",
   "goals",
   "tasks",
@@ -3506,6 +4136,16 @@ const STATIC_EXPORT_TABLES = [
   "assetMaintenance",
   "assetVerificationRuns",
   "assetVerificationItems",
+  "assetReceiptLinks",
+  "inventoryConnections",
+  "inventoryItems",
+  "inventoryLocations",
+  "inventoryLots",
+  "stockMovements",
+  "inventoryBalances",
+  "inventoryCounts",
+  "inventoryCountLines",
+  "inventoryCandidates",
   "minuteBookItems",
   "activity",
   "notes",
@@ -3666,7 +4306,21 @@ function staticSanitizeExportRow(row: any) {
 function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null) {
   switch (name) {
     case "activity:list":
-      return tables.activity.slice(0, args?.limit ?? tables.activity.length);
+      return (store?.listRows("activity", args) ?? tables.activity)
+        .sort((a: any, b: any) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")))
+        .slice(0, args?.limit ?? tables.activity.length);
+    case "importSessions:list":
+      return staticImportSessionRows(store, args?.societyId);
+    case "importSessions:get": {
+      const sessionDoc = store?.getRow("documents", args?.sessionId);
+      if (!staticIsImportSession(sessionDoc)) return null;
+      const session = staticHydrateImportSession(sessionDoc);
+      const records = staticImportRecordRows(store, args?.sessionId);
+      return {
+        session: { ...session, summary: staticImportSessionSummary(session, records) },
+        records,
+      };
+    }
     case "aiAgents:listDefinitions":
       return aiAgentDefinitions;
     case "aiAgents:listSkills":
@@ -3696,6 +4350,8 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
           .sort((a: any, b: any) => b.happenedAtISO.localeCompare(a.happenedAtISO)),
         maintenance: (store?.listRows("assetMaintenance", { societyId: asset.societyId }) ?? tables.assetMaintenance)
           .filter((row: any) => row.assetId === asset._id),
+        receiptLinks: (store?.listRows("assetReceiptLinks", { societyId: asset.societyId }) ?? tables.assetReceiptLinks)
+          .filter((row: any) => row.assetId === asset._id),
       };
     }
     case "assets:events":
@@ -3709,6 +4365,43 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     case "assets:verificationItems":
       return (store?.listRows("assetVerificationItems", args) ?? tables.assetVerificationItems)
         .filter((row: any) => row.runId === args?.runId);
+    case "assets:receiptLinks": {
+      const rows = store?.listRows("assetReceiptLinks", args) ?? scopedRows(tables.assetReceiptLinks, args);
+      return args?.receiptDocumentId ? rows.filter((row: any) => row.receiptDocumentId === args.receiptDocumentId) : rows;
+    }
+    case "inventoryHub:connections":
+      return store?.listRows("inventoryConnections", args) ?? scopedRows(tables.inventoryConnections, args);
+    case "inventoryHub:items": {
+      const rows = store?.listRows("inventoryItems", args) ?? scopedRows(tables.inventoryItems, args);
+      return args?.itemType ? rows.filter((row: any) => row.itemType === args.itemType) : rows;
+    }
+    case "inventoryHub:locations":
+      return store?.listRows("inventoryLocations", args) ?? scopedRows(tables.inventoryLocations, args);
+    case "inventoryHub:balances": {
+      const rows = store?.listRows("inventoryBalances", args) ?? scopedRows(tables.inventoryBalances, args);
+      return args?.inventoryItemId ? rows.filter((row: any) => row.inventoryItemId === args.inventoryItemId) : rows;
+    }
+    case "inventoryHub:stockMovements":
+      return (store?.listRows("stockMovements", args) ?? scopedRows(tables.stockMovements, args))
+        .sort((a: any, b: any) => b.movementDate.localeCompare(a.movementDate))
+        .slice(0, args?.limit ?? 100);
+    case "inventoryHub:counts": {
+      const rows = store?.listRows("inventoryCounts", args) ?? scopedRows(tables.inventoryCounts, args);
+      const filtered = args?.status ? rows.filter((row: any) => row.status === args.status) : rows;
+      const lines = store?.listRows("inventoryCountLines", args) ?? scopedRows(tables.inventoryCountLines, args);
+      return filtered
+        .sort((a: any, b: any) => b.startedAtISO.localeCompare(a.startedAtISO))
+        .map((count: any) => ({ ...count, lines: lines.filter((line: any) => line.inventoryCountId === count._id) }));
+    }
+    case "inventoryHub:receiptLinks": {
+      const rows = store?.listRows("assetReceiptLinks", args) ?? scopedRows(tables.assetReceiptLinks, args);
+      return (args?.inventoryItemId ? rows.filter((row: any) => row.inventoryItemId === args.inventoryItemId) : rows)
+        .map((row: any) => ({
+          ...row,
+          receiptDocument: byId(store?.listRows("documents", args) ?? documents, row.receiptDocumentId),
+          asset: byId(store?.listRows("assets", args) ?? tables.assets, row.assetId),
+        }));
+    }
     case "aiAgents:getChatContext": {
       const catalog: Record<string, any[]> = {};
       aiToolCatalog.forEach((tool) => {
@@ -3831,22 +4524,25 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     case "commitments:eventsForCommitment":
       return commitmentEvents.filter((event) => event.commitmentId === args?.commitmentId);
     case "dashboard:summary":
-      return dashboardSummary();
+      return dashboardSummaryFromStore(store, args);
     case "documentComments:listForDocument":
       return documentComments
         .filter((comment) => comment.documentId === args?.documentId)
         .sort((a, b) => b.createdAtISO.localeCompare(a.createdAtISO));
     case "documents:reviewQueues":
-      return staticDocumentReviewQueues();
-    case "documentVersions:latest":
+      return staticDocumentReviewQueuesFromStore(store, args);
+    case "documentVersions:latest": {
+      const rows = store?.listRows("documentVersions", args) ?? scopedRows(tables.documentVersions, args);
+      return rows
+        .filter((row) => row.documentId === args?.documentId)
+        .sort((a, b) => b.version - a.version)[0] ?? null;
+    }
     case "documentVersions:listForDocument":
-      return [];
+      return (store?.listRows("documentVersions", args) ?? scopedRows(tables.documentVersions, args))
+        .filter((row) => row.documentId === args?.documentId)
+        .sort((a, b) => b.version - a.version);
     case "evidenceRegisters:overview":
       return evidenceRegistersOverview;
-    case "importSessions:list":
-      return [];
-    case "importSessions:get":
-      return null;
     case "organizationHistory:list":
       return orgHistoryBundle;
     case "paperless:connectionStatus":
@@ -3956,6 +4652,48 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
         presentedAtMeeting: null,
       };
     }
+    case "accounting:chartAccounts":
+      return scopedRows(store?.listRows("financialAccounts", args) ?? financialAccounts, args)
+        .sort((a, b) => String(a.code ?? "").localeCompare(String(b.code ?? "")) || a.name.localeCompare(b.name));
+    case "accounting:fiscalPeriods":
+      return scopedRows(store?.listRows("accountingFiscalPeriods", args) ?? accountingFiscalPeriods, args)
+        .sort((a, b) => a.startDate.localeCompare(b.startDate));
+    case "accounting:counterparties":
+      return scopedRows(store?.listRows("accountingCounterparties", args) ?? accountingCounterparties, args)
+        .sort((a, b) => a.name.localeCompare(b.name));
+    case "accounting:fundRestrictions":
+      return scopedRows(store?.listRows("fundRestrictions", args) ?? fundRestrictions, args)
+        .sort((a, b) => a.name.localeCompare(b.name));
+    case "accounting:restrictedFundBalances":
+      return staticRestrictedFundBalances(staticAccountingSeed(store, args), args);
+    case "accounting:accountMappings":
+      return scopedRows(store?.listRows("accountingAccountMappings", args) ?? accountingAccountMappings, args)
+        .sort((a, b) => `${a.provider}:${a.externalAccountName}`.localeCompare(`${b.provider}:${b.externalAccountName}`));
+    case "accounting:journalEntries": {
+      const entries = scopedRows(store?.listRows("journalEntries", args) ?? journalEntries, args)
+        .filter((entry) => !args?.status || entry.status === args.status)
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, args?.limit ?? 100);
+      const lines = store?.listRows("journalLines", args) ?? journalLines;
+      return entries.map((entry) => ({
+        ...entry,
+        lines: lines.filter((line) => line.journalEntryId === entry._id).sort((a, b) => a.lineOrder - b.lineOrder),
+      }));
+    }
+    case "accounting:journalEntry": {
+      const entry = byId(store?.listRows("journalEntries", args) ?? journalEntries, args?.id);
+      if (!entry) return null;
+      const lines = store?.listRows("journalLines", args) ?? journalLines;
+      return { ...entry, lines: lines.filter((line) => line.journalEntryId === entry._id).sort((a, b) => a.lineOrder - b.lineOrder) };
+    }
+    case "accounting:trialBalance":
+      return staticTrialBalance(staticAccountingSeed(store, args), args);
+    case "accounting:generalLedger":
+      return staticGeneralLedger(staticAccountingSeed(store, args), args);
+    case "accounting:exportCsv":
+      return staticAccountingCsv(staticAccountingSeed(store, args), args);
+    case "accounting:boardAuditorPackage":
+      return staticBoardAuditorPackage(staticAccountingSeed(store, args), args);
     case "financialHub:accounts":
       return financialAccounts;
     case "financialHub:connections":
@@ -4185,7 +4923,39 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
 
   const [moduleName, exportName] = name.split(":");
   const tableName = staticTableNameForModule(moduleName);
-  if (moduleName === "society" && exportName === "get") return store?.getRow("societies", args?.id ?? SOCIETY_ID) ?? society;
+  if (moduleName === "society" && exportName === "get") {
+    const localSocieties = store?.listRows("societies", {});
+    if (store && localSocieties && localSocieties.length === 0) return null;
+    return store?.getRow("societies", args?.id ?? localSocieties?.[0]?._id ?? SOCIETY_ID) ?? society;
+  }
+  if (moduleName === "complianceObligations" && exportName === "listDecisions") {
+    return store?.listRows("complianceRemediations", args) ?? [];
+  }
+  if (moduleName === "organizationDetails" && exportName === "overview") {
+    return {
+      addresses: store?.listRows("organizationAddresses", args) ?? [],
+      registrations: store?.listRows("organizationRegistrations", args) ?? [],
+      identifiers: store?.listRows("organizationIdentifiers", args) ?? [],
+    };
+  }
+  if (moduleName === "legalOperations" && exportName === "listRoleHolders") {
+    return (store?.listRows("roleHolders", args) ?? [])
+      .sort((a, b) => String(a.fullName ?? "").localeCompare(String(b.fullName ?? "")));
+  }
+  if (moduleName === "legalOperations" && exportName === "rightsLedger") {
+    const classes = (store?.listRows("rightsClasses", args) ?? [])
+      .sort((a, b) => String(a.className ?? "").localeCompare(String(b.className ?? "")));
+    const holdings = (store?.listRows("rightsHoldings", args) ?? [])
+      .sort((a, b) => String(a.rightsClassId ?? "").localeCompare(String(b.rightsClassId ?? "")) || String(a.holderKey ?? "").localeCompare(String(b.holderKey ?? "")));
+    const transfers = (store?.listRows("rightsholdingTransfers", args) ?? [])
+      .sort((a, b) => String(b.transferDate ?? b.createdAtISO ?? "").localeCompare(String(a.transferDate ?? a.createdAtISO ?? "")));
+    const roleHolders = (store?.listRows("roleHolders", args) ?? [])
+      .sort((a, b) => String(a.fullName ?? "").localeCompare(String(b.fullName ?? "")));
+    return { classes, holdings, transfers, roleHolders };
+  }
+  if (moduleName === "legalOperations" && exportName === "templateEngine") {
+    return staticTemplateEngine(store, args);
+  }
   if (moduleName === "society" && exportName === "list") return store?.listRows("societies", args) ?? [society];
   if (exportName === "list") return store?.listRows(tableName, args) ?? scopedRows(tables[tableName] ?? [], args);
   if (exportName === "get") return store?.getRow(tableName, args?.id) ?? byId(tables[tableName] ?? [], args?.id);
@@ -4199,6 +4969,212 @@ function mutableQueryResult(name: string, args: StaticArgs, store?: StaticDemoDe
 function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null) {
   const localResult = store?.mutationResult(name, args);
   if (localResult !== undefined) return localResult;
+
+  if (name === "society:createWorkspace") {
+    const now = new Date().toISOString();
+    const societyId = staticLocalId("society", "workspace");
+    const workflowId = staticLocalId("workflow", "onboarding");
+    const jurisdictionCode = args?.jurisdictionCode ?? "CA-BC";
+    const homeJurisdictionCode = args?.homeJurisdictionCode ?? jurisdictionCode;
+    const anniversaryDate = args?.anniversaryDate ?? args?.incorporationDate;
+    const homeRegistrationId = staticLocalId("organizationRegistration", "home");
+    const taskSeeds = staticWorkspaceOnboardingTaskSeeds(jurisdictionCode);
+    const taskIds = taskSeeds.map(({ key }) => staticLocalId("task", `onboarding_${key}`));
+    store?.upsertRow("societies", {
+      _id: societyId,
+      _creationTime: Date.now(),
+      name: args?.name,
+      incorporationNumber: args?.incorporationNumber,
+      incorporationDate: args?.incorporationDate,
+      fiscalYearEnd: args?.fiscalYearEnd,
+      jurisdictionCode,
+      homeJurisdictionCode,
+      primaryRegistrationId: homeRegistrationId,
+      anniversaryDate,
+      corporationKeyVaultItemId: args?.corporationKeyVaultItemId,
+      entityType: args?.entityType,
+      actFormedUnder: args?.actFormedUnder,
+      officialEmail: args?.officialEmail,
+      organizationStatus: args?.organizationStatus ?? "active",
+      registeredOfficeAddress: args?.registeredOfficeAddress,
+      mailingAddress: args?.mailingAddress,
+      purposes: args?.purposes,
+      privacyOfficerName: args?.privacyOfficerName,
+      privacyOfficerEmail: args?.privacyOfficerEmail,
+      isCharity: args?.isCharity === true,
+      isMemberFunded: args?.isMemberFunded === true,
+      distributing: args?.distributing === true,
+      disabledModules: [],
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    store?.upsertRow("organizationRegistrations", {
+      _id: homeRegistrationId,
+      _creationTime: Date.now(),
+      societyId,
+      registrationType: "home",
+      jurisdiction: homeJurisdictionCode,
+      homeJurisdiction: homeJurisdictionCode,
+      registrationNumber: args?.incorporationNumber,
+      registrationDate: args?.incorporationDate,
+      officialEmail: args?.officialEmail,
+      representativeIds: [],
+      status: "active",
+      notes: "Created automatically from the workspace home jurisdiction.",
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    store?.upsertRow("workflows", {
+      _id: workflowId,
+      _creationTime: Date.now(),
+      societyId,
+      title: "Workspace onboarding",
+      status: "Active",
+      kind: "onboarding",
+      createdByUserId: args?.actingUserId,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    taskSeeds.forEach(({ title, description }, index) => {
+      store?.upsertRow("tasks", {
+        _id: taskIds[index],
+        _creationTime: Date.now() + index,
+        societyId,
+        title,
+        description,
+        status: "Todo",
+        priority: index === 0 ? "High" : "Medium",
+        workflowId,
+        createdByUserId: args?.actingUserId,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    });
+    store?.upsertRow("activity", {
+      _id: staticLocalId("activity", "workspace"),
+      _creationTime: Date.now(),
+      societyId,
+      actor: "Desktop user",
+      entityType: "society",
+      entityId: societyId,
+      action: "workspace-created",
+      summary: `Created ${args?.name ?? "workspace"}`,
+      createdAtISO: now,
+    });
+    return { societyId, workflowId, taskIds };
+  }
+
+  if (name === "society:updateModules") {
+    const existing = store?.getRow("societies", args?.societyId) ?? society;
+    store?.upsertRow("societies", {
+      ...existing,
+      _id: args?.societyId ?? existing._id,
+      disabledModules: args?.disabledModules ?? [],
+      updatedAtISO: new Date().toISOString(),
+    });
+    return args?.societyId ?? existing._id;
+  }
+
+  if (name === "complianceObligations:markReviewed") {
+    return staticUpsertComplianceDecision(store, {
+      ...args,
+      status: "resolved",
+      resolvedAtISO: new Date().toISOString(),
+      notes: args?.notes ?? "Marked reviewed from compliance obligations.",
+    });
+  }
+
+  if (name === "complianceObligations:dismissDecision") {
+    return staticUpsertComplianceDecision(store, {
+      ...args,
+      status: "dismissed",
+      dismissedAtISO: new Date().toISOString(),
+      notes: args?.notes ?? "Dismissed from compliance obligations.",
+    });
+  }
+
+  if (name === "complianceObligations:reopenDecision") {
+    return staticUpsertComplianceDecision(store, {
+      ...args,
+      status: "open",
+      notes: "Reopened from compliance obligations.",
+    });
+  }
+
+  if (name === "legalOperations:seedCorporationDocumentPackets") {
+    return staticSeedCorporationDocumentPackets(store, args);
+  }
+
+  if (name === "legalOperations:stageCorporationDocumentPacket") {
+    return staticStageCorporationDocumentPacket(store, args);
+  }
+
+  if (name === "legalOperations:stageShareIssuancePacket") {
+    return staticStageShareIssuancePacket(store, args);
+  }
+
+  if (name === "importSessions:createFromBundle") {
+    return staticCreateImportSession(store, args);
+  }
+
+  if (name === "importSessions:updateRecord") {
+    const doc = store?.getRow("documents", args?.recordId);
+    if (!staticIsImportRecord(doc)) return null;
+    const record = staticHydrateImportRecord(doc);
+    const next = {
+      ...record,
+      status: staticReviewStatus(args?.status ?? record.status),
+      reviewNotes: args?.reviewNotes != null ? String(args.reviewNotes) : record.reviewNotes,
+      payload: args?.payload ?? record.payload,
+      sourceExternalIds: args?.sourceExternalIds ?? record.sourceExternalIds,
+      updatedAtISO: new Date().toISOString(),
+    };
+    store?.upsertRow("documents", {
+      ...doc,
+      title: next.title,
+      content: JSON.stringify(next),
+    });
+    staticPatchImportSessionUpdatedAt(store, next.sessionId);
+    return args?.recordId;
+  }
+
+  if (name === "importSessions:bulkSetStatus") {
+    const wanted = staticReviewStatus(args?.status);
+    const recordIds = Array.isArray(args?.recordIds) ? new Set(args.recordIds) : null;
+    let updated = 0;
+    store?.transaction(() => {
+      for (const doc of store.listRows("documents", {}).filter(staticIsImportRecord)) {
+        const record = staticHydrateImportRecord(doc);
+        if (record.sessionId !== args?.sessionId) continue;
+        if (recordIds && !recordIds.has(record._id)) continue;
+        store.upsertRow("documents", {
+          ...doc,
+          content: JSON.stringify({ ...record, status: wanted, updatedAtISO: new Date().toISOString() }),
+        });
+        updated += 1;
+      }
+      staticPatchImportSessionUpdatedAt(store, args?.sessionId);
+    });
+    return { updated };
+  }
+
+  if (name === "importSessions:removeSession") {
+    store?.transaction(() => {
+      for (const record of staticImportRecordRows(store, args?.sessionId)) store.removeRow("documents", record._id);
+      store.removeRow("documents", args?.sessionId);
+    });
+    return null;
+  }
+
+  if (
+    name === "importSessions:applyApprovedToOrgHistory" ||
+    name === "importSessions:applyApprovedMeetings" ||
+    name === "importSessions:backfillApprovedMeetingReferences" ||
+    name === "importSessions:applyApprovedDocuments" ||
+    name === "importSessions:applyApprovedSectionRecords"
+  ) {
+    return { deferred: true, updated: 0, applied: 0, message: "Local import apply is not enabled yet." };
+  }
 
   if (name === "aiChat:createThread") {
     const now = new Date().toISOString();
@@ -4455,6 +5431,228 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       updated: [],
     };
   }
+  if (name === "accounting:seedSocietyChartOfAccounts") {
+    return { inserted: 0, skipped: financialAccounts.length };
+  }
+  if (name === "accounting:upsertFiscalPeriod") {
+    const now = new Date().toISOString();
+    const id = args?.id ?? `static_accounting_period_${Date.now()}`;
+    store?.upsertRow("accountingFiscalPeriods", {
+      _id: id,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      fiscalYear: args?.fiscalYear,
+      periodLabel: args?.periodLabel,
+      startDate: args?.startDate,
+      endDate: args?.endDate,
+      status: args?.status ?? "open",
+      notes: args?.notes,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    return id;
+  }
+  if (name === "accounting:closeFiscalPeriod" || name === "accounting:reopenFiscalPeriod") {
+    const status = name.endsWith("closeFiscalPeriod") ? "closed" : "open";
+    store?.upsertRow("accountingFiscalPeriods", {
+      ...(store.getRow("accountingFiscalPeriods", args?.id) ?? byId(accountingFiscalPeriods, args?.id)),
+      _id: args?.id,
+      status,
+      closedAtISO: status === "closed" ? new Date().toISOString() : undefined,
+      updatedAtISO: new Date().toISOString(),
+    });
+    return args?.id;
+  }
+  if (name === "accounting:upsertJournalEntry" || name === "accounting:postOpeningBalances") {
+    const now = new Date().toISOString();
+    const id = args?.id ?? `static_journal_${Date.now()}`;
+    const lines = args?.lines ?? [];
+    store?.upsertRow("journalEntries", {
+      _id: id,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      fiscalPeriodId: args?.fiscalPeriodId,
+      date: args?.date,
+      memo: args?.memo ?? (name.endsWith("postOpeningBalances") ? "Opening balances" : "Manual journal entry"),
+      source: args?.source ?? (name.endsWith("postOpeningBalances") ? "opening_balance" : "manual"),
+      status: args?.status ?? "posted",
+      fiscalYear: args?.fiscalYear,
+      createdByUserId: args?.actingUserId,
+      postedAtISO: now,
+      sourceDocumentIds: args?.sourceDocumentIds,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    lines.forEach((line: any, index: number) => {
+      store?.upsertRow("journalLines", {
+        _id: `static_jline_${Date.now()}_${index}`,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        journalEntryId: id,
+        accountId: line.accountId,
+        lineOrder: index,
+        amountCents: line.amountCents,
+        side: line.side,
+        description: line.description,
+        fundRestrictionId: line.fundRestrictionId,
+        documentIds: args?.sourceDocumentIds,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    });
+    return id;
+  }
+  if (name === "accounting:postTransactionCandidateAllocation") {
+    const now = new Date().toISOString();
+    const candidate = evidenceRegistersOverview.transactionCandidates.find((row: any) => row._id === args?.transactionCandidateId);
+    const id = `static_journal_candidate_${Date.now()}`;
+    const total = (args?.allocations ?? []).reduce((sum: number, row: any) => sum + row.amountCents, 0);
+    store?.upsertRow("journalEntries", {
+      _id: id,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      date: candidate?.transactionDate ?? now.slice(0, 10),
+      memo: args?.memo ?? candidate?.description ?? "Posted transaction candidate",
+      source: "transactionCandidate",
+      status: "posted",
+      fiscalYear: args?.fiscalYear,
+      createdByUserId: args?.actingUserId,
+      postedAtISO: now,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    store?.upsertRow("journalLines", {
+      _id: `static_jline_candidate_cash_${Date.now()}`,
+      societyId: SOCIETY_ID,
+      journalEntryId: id,
+      accountId: args?.cashAccountId,
+      lineOrder: 0,
+      amountCents: total,
+      side: "credit",
+      description: candidate?.description,
+      transactionCandidateId: args?.transactionCandidateId,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    (args?.allocations ?? []).forEach((line: any, index: number) => {
+      store?.upsertRow("journalLines", {
+        _id: `static_jline_candidate_alloc_${Date.now()}_${index}`,
+        societyId: SOCIETY_ID,
+        journalEntryId: id,
+        accountId: line.accountId,
+        lineOrder: index + 1,
+        amountCents: line.amountCents,
+        side: "debit",
+        description: line.description,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    });
+    return id;
+  }
+  if (name === "accounting:createReconciliationRun") {
+    const now = new Date().toISOString();
+    const seed = staticAccountingSeed(store, args);
+    const ledger = staticGeneralLedger(seed, args).filter((line) => line.accountId === args?.financialAccountId && line.entry.date <= args?.statementDate);
+    const bookBalanceCents = ledger.reduce((sum, line) => sum + (line.side === "debit" ? line.amountCents : -line.amountCents), 0);
+    const differenceCents = (args?.statementBalanceCents ?? 0) - bookBalanceCents;
+    const runId = `static_reconciliation_run_${Date.now()}`;
+    store?.upsertRow("reconciliationRuns", {
+      _id: runId,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      financialAccountId: args?.financialAccountId,
+      statementDate: args?.statementDate,
+      statementBalanceCents: args?.statementBalanceCents,
+      bookBalanceCents,
+      status: differenceCents === 0 ? "ready" : "draft",
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    return { runId, bookBalanceCents, differenceCents };
+  }
+  if (name === "accounting:setReconciliationRunStatus") {
+    const existing = store?.getRow("reconciliationRuns", args?.id) ?? byId(reconciliationRuns, args?.id);
+    store?.upsertRow("reconciliationRuns", {
+      ...existing,
+      _id: args?.id,
+      status: args?.status,
+      reconciledAtISO: args?.status === "reconciled" ? new Date().toISOString() : existing?.reconciledAtISO,
+      updatedAtISO: new Date().toISOString(),
+    });
+    return args?.id;
+  }
+  if (name === "accounting:backfillFinancialTransactionsToJournal") {
+    const now = new Date().toISOString();
+    const seed = staticAccountingSeed(store, args);
+    const existingLines = store?.listRows("journalLines", args) ?? journalLines;
+    const alreadyBackfilled = new Set(existingLines.map((line: any) => String(line.financialTransactionId ?? "")));
+    const accounts = seed.financialAccounts;
+    const accountById = new Map(accounts.map((account: any) => [account._id, account]));
+    const fallbackIncome = accounts.find((account: any) => account.accountType === "Income");
+    const fallbackExpense = accounts.find((account: any) => account.accountType === "Expense");
+    let scanned = 0;
+    let posted = 0;
+    let skipped = 0;
+    let needsMapping = 0;
+    for (const transaction of scopedRows(store?.listRows("financialTransactions", args) ?? financialTransactions, args).sort((a, b) => a.date.localeCompare(b.date))) {
+      if (posted >= (args?.limit ?? 200)) break;
+      scanned += 1;
+      if (alreadyBackfilled.has(String(transaction._id))) {
+        skipped += 1;
+        continue;
+      }
+      const cashAccount = accountById.get(transaction.accountId);
+      const offsetAccount = transaction.amountCents >= 0 ? fallbackIncome : fallbackExpense;
+      if (!cashAccount || !offsetAccount || transaction.amountCents === 0) {
+        needsMapping += 1;
+        continue;
+      }
+      const amountCents = Math.abs(transaction.amountCents);
+      const entryId = `static_journal_backfill_${transaction._id}`;
+      store?.upsertRow("journalEntries", {
+        _id: entryId,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        connectionId: transaction.connectionId,
+        date: transaction.date,
+        memo: transaction.description,
+        source: "financialTransactionBackfill",
+        sourceExternalId: transaction.externalId,
+        status: "posted",
+        fiscalYear: args?.fiscalYear,
+        createdByUserId: args?.actingUserId,
+        postedAtISO: now,
+        rawJson: JSON.stringify(transaction),
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      store?.upsertRow("journalLines", {
+        _id: `static_jline_backfill_cash_${transaction._id}`,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        journalEntryId: entryId,
+        accountId: transaction.accountId,
+        lineOrder: 0,
+        amountCents,
+        side: transaction.amountCents >= 0 ? "debit" : "credit",
+        description: transaction.description,
+        financialTransactionId: transaction._id,
+        sourceExternalId: transaction.externalId,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      store?.upsertRow("journalLines", {
+        _id: `static_jline_backfill_offset_${transaction._id}`,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        journalEntryId: entryId,
+        accountId: offsetAccount._id,
+        lineOrder: 1,
+        amountCents,
+        side: transaction.amountCents >= 0 ? "credit" : "debit",
+        description: transaction.category ?? transaction.description,
+        financialTransactionId: transaction._id,
+        sourceExternalId: transaction.categoryAccountExternalId ?? transaction.externalId,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      posted += 1;
+    }
+    return { scanned, posted, skipped, needsMapping };
+  }
   if (name === "seed:run") {
     void store?.reseed();
     return { societyId: SOCIETY_ID };
@@ -4704,6 +5902,459 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     }
     return { sourceId: source._id, installed: true };
   }
+  if (name === "inventoryHub:postStockMovement") {
+    const now = new Date().toISOString();
+    const movement = {
+      _id: `static_stock_movement_manual_${Date.now()}`,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      movementDate: args?.movementDate ?? now.slice(0, 10),
+      movementType: args?.movementType ?? "receive",
+      status: args?.status ?? "posted",
+      inventoryItemId: args?.inventoryItemId,
+      inventoryLotId: args?.inventoryLotId,
+      fromLocationId: args?.fromLocationId,
+      toLocationId: args?.toLocationId,
+      quantity: Number(args?.quantity ?? 0),
+      unitOfMeasure: args?.unitOfMeasure ?? "each",
+      unitCostCents: args?.unitCostCents,
+      totalCostCents: args?.totalCostCents,
+      reason: args?.reason,
+      reference: args?.reference,
+      sourceExternalId: args?.sourceExternalId,
+      sourceSystem: args?.sourceSystem ?? "societyer_manual",
+      documentIds: args?.documentIds ?? [],
+      rawJson: args?.rawJson,
+      createdAtISO: now,
+      updatedAtISO: now,
+    };
+    store?.upsertRow("stockMovements", movement);
+    const applyDelta = (locationId: string | undefined, delta: number) => {
+      if (!locationId || delta === 0) return;
+      const balances = store?.listRows("inventoryBalances", { societyId: movement.societyId }) ?? tables.inventoryBalances;
+      const balance = balances.find((row: any) =>
+        row.inventoryItemId === movement.inventoryItemId && row.locationId === locationId && String(row.inventoryLotId ?? "") === String(movement.inventoryLotId ?? "")
+      );
+      if (balance) {
+        const quantityOnHand = (balance.quantityOnHand ?? 0) + delta;
+        const quantityReserved = balance.quantityReserved ?? 0;
+        store?.upsertRow("inventoryBalances", {
+          ...balance,
+          quantityOnHand,
+          quantityAvailable: quantityOnHand - quantityReserved,
+          lastMovementId: movement._id,
+          ...(movement.movementType === "count" ? { lastCountedAtISO: now } : {}),
+          updatedAtISO: now,
+        });
+      } else {
+        store?.upsertRow("inventoryBalances", {
+          _id: `static_inventory_balance_${Date.now()}_${locationId}`,
+          societyId: movement.societyId,
+          inventoryItemId: movement.inventoryItemId,
+          inventoryLotId: movement.inventoryLotId,
+          locationId,
+          quantityOnHand: delta,
+          quantityReserved: 0,
+          quantityAvailable: delta,
+          lastMovementId: movement._id,
+          ...(movement.movementType === "count" ? { lastCountedAtISO: now } : {}),
+          createdAtISO: now,
+          updatedAtISO: now,
+        });
+      }
+    };
+    const quantity = Number(movement.quantity ?? 0);
+    if (movement.fromLocationId) applyDelta(movement.fromLocationId, -quantity);
+    if (movement.toLocationId) applyDelta(movement.toLocationId, quantity);
+    if (!movement.fromLocationId && !movement.toLocationId) throw new Error("Stock movement needs a source or destination location.");
+    return movement._id;
+  }
+  if (name === "inventoryHub:backfillAssets") {
+    const now = new Date().toISOString();
+    const assets = store?.listRows("assets", args) ?? scopedRows(tables.assets, args);
+    let itemsCreated = 0;
+    let locationsCreated = 0;
+    let movementsCreated = 0;
+    let balancesCreated = 0;
+    for (const asset of assets) {
+      let item = (store?.listRows("inventoryItems", { societyId: asset.societyId }) ?? tables.inventoryItems).find((row: any) => row.assetId === asset._id);
+      if (!item) {
+        item = {
+          _id: `static_inventory_item_${asset._id}_${Date.now()}`,
+          societyId: asset.societyId,
+          sku: asset.assetTag,
+          name: asset.name,
+          category: asset.category,
+          itemType: asset.category === "Consumable" ? "consumable" : "asset",
+          unitOfMeasure: asset.quantityUnit ?? "each",
+          currency: asset.currency ?? "CAD",
+          trackSerial: Boolean(asset.serialNumber),
+          trackLot: false,
+          trackExpiry: false,
+          status: "active",
+          assetId: asset._id,
+          sourceSystem: "societyer_assets",
+          createdAtISO: now,
+          updatedAtISO: now,
+        };
+        store?.upsertRow("inventoryItems", item);
+        itemsCreated += 1;
+      }
+      const locationName = String(asset.location ?? asset.custodianName ?? "Inventory").trim() || "Inventory";
+      let location = (store?.listRows("inventoryLocations", { societyId: asset.societyId }) ?? tables.inventoryLocations).find((row: any) => row.name === locationName);
+      if (!location) {
+        location = {
+          _id: `static_inventory_location_${Date.now()}_${asset._id}`,
+          societyId: asset.societyId,
+          name: locationName,
+          locationType: asset.location ? "facility" : "virtual",
+          active: true,
+          sourceSystem: "societyer_assets",
+          createdAtISO: now,
+          updatedAtISO: now,
+        };
+        store?.upsertRow("inventoryLocations", location);
+        locationsCreated += 1;
+      }
+      const existingMovement = (store?.listRows("stockMovements", { societyId: asset.societyId }) ?? tables.stockMovements).find((row: any) => row.inventoryItemId === item._id);
+      if (existingMovement) continue;
+      const quantity = asset.category === "Consumable" ? asset.quantityOnHand ?? 0 : asset.status === "Disposed" || asset.status === "Lost" ? 0 : 1;
+      if (quantity <= 0) continue;
+      mutationResult("inventoryHub:postStockMovement", {
+        societyId: asset.societyId,
+        movementDate: asset.purchaseDate ?? now.slice(0, 10),
+        movementType: "receive",
+        inventoryItemId: item._id,
+        toLocationId: location._id,
+        quantity,
+        unitOfMeasure: item.unitOfMeasure,
+        reason: "Backfilled from Societyer asset register",
+        reference: asset.assetTag,
+        sourceSystem: "societyer_assets",
+      }, store);
+      movementsCreated += 1;
+      balancesCreated += 1;
+    }
+    return { itemsCreated, locationsCreated, movementsCreated, balancesCreated };
+  }
+  if (name === "inventoryHub:postCountVarianceAdjustments") {
+    const now = new Date().toISOString();
+    const count = store?.getRow("inventoryCounts", args?.inventoryCountId) ?? byId(tables.inventoryCounts, args?.inventoryCountId);
+    if (!count) return { adjusted: 0 };
+    const lines = (store?.listRows("inventoryCountLines", { societyId: count.societyId }) ?? tables.inventoryCountLines).filter((line: any) => line.inventoryCountId === count._id);
+    let adjusted = 0;
+    for (const line of lines) {
+      if (line.adjustmentMovementId || line.countedQuantity == null || line.expectedQuantity == null) continue;
+      const variance = line.countedQuantity - line.expectedQuantity;
+      if (variance === 0) continue;
+      const movementId = mutationResult("inventoryHub:postStockMovement", {
+        societyId: count.societyId,
+        movementDate: now.slice(0, 10),
+        movementType: "adjustment",
+        inventoryItemId: line.inventoryItemId,
+        fromLocationId: variance < 0 ? line.locationId : undefined,
+        toLocationId: variance > 0 ? line.locationId : undefined,
+        quantity: Math.abs(variance),
+        unitOfMeasure: "each",
+        reason: args?.reason ?? `Physical count variance: ${count.title}`,
+        reference: count.title,
+        sourceSystem: "societyer_count",
+      }, store);
+      store?.upsertRow("inventoryCountLines", { ...line, varianceQuantity: variance, adjustmentMovementId: movementId, status: "adjusted", updatedAtISO: now });
+      adjusted += 1;
+    }
+    store?.upsertRow("inventoryCounts", { ...count, status: "completed", completedAtISO: count.completedAtISO ?? now, updatedAtISO: now });
+    return { adjusted };
+  }
+  if (name === "inventoryHub:importOpenBoxesSnapshot") {
+    const now = new Date().toISOString();
+    const connectionId = args?.connectionId ?? "static_inventory_connection_openboxes";
+    store?.upsertRow("inventoryConnections", {
+      _id: connectionId,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      provider: "openboxes",
+      displayName: "OpenBoxes",
+      status: "active",
+      lastSyncedAtISO: now,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    let itemsUpserted = 0;
+    let locationsUpserted = 0;
+    let movementsPosted = 0;
+    for (const product of args?.products ?? []) {
+      store?.upsertRow("inventoryItems", {
+        _id: `static_openboxes_item_${product.id}`,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        connectionId,
+        sku: product.productCode,
+        name: product.name,
+        category: product.category ?? "OpenBoxes",
+        itemType: "supply",
+        unitOfMeasure: product.unitOfMeasure ?? "each",
+        currency: "CAD",
+        trackSerial: Boolean(product.serialized),
+        trackLot: Boolean(product.lotAndExpiryControl),
+        trackExpiry: Boolean(product.lotAndExpiryControl),
+        status: "active",
+        externalId: product.id,
+        sourceSystem: "openboxes",
+        rawJson: product.rawJson,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      itemsUpserted += 1;
+    }
+    for (const location of args?.locations ?? []) {
+      store?.upsertRow("inventoryLocations", {
+        _id: `static_openboxes_location_${location.id}`,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        connectionId,
+        name: location.name,
+        locationType: location.locationType ?? "facility",
+        active: true,
+        externalId: location.id,
+        sourceSystem: "openboxes",
+        rawJson: location.rawJson,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      locationsUpserted += 1;
+    }
+    for (const movement of args?.movements ?? []) {
+      const itemId = `static_openboxes_item_${movement.productId}`;
+      const fromLocationId = movement.originLocationId ? `static_openboxes_location_${movement.originLocationId}` : undefined;
+      const toLocationId = movement.destinationLocationId ? `static_openboxes_location_${movement.destinationLocationId}` : undefined;
+      mutationResult("inventoryHub:postStockMovement", {
+        societyId: args?.societyId ?? SOCIETY_ID,
+        movementDate: movement.date,
+        movementType: movement.type,
+        inventoryItemId: itemId,
+        fromLocationId,
+        toLocationId,
+        quantity: movement.quantity,
+        unitOfMeasure: movement.unitOfMeasure ?? "each",
+        reason: movement.reason,
+        sourceExternalId: movement.id,
+        sourceSystem: "openboxes",
+        rawJson: movement.rawJson,
+      }, store);
+      movementsPosted += 1;
+    }
+    return { connectionId, itemsUpserted, locationsUpserted, movementsPosted };
+  }
+  if (name === "society:updateInventorySettings") {
+    const societyId = args?.societyId ?? SOCIETY_ID;
+    const existing = store?.getRow("societies", societyId) ?? society;
+    store?.upsertRow("societies", {
+      ...existing,
+      _id: societyId,
+      consumableIntakeCountPromptEnabled: Boolean(args?.consumableIntakeCountPromptEnabled),
+      updatedAt: Date.now(),
+    });
+    return societyId;
+  }
+  if (name === "assets:addConsumableStock") {
+    const asset = store?.getRow("assets", args?.assetId) ?? byId(tables.assets, args?.assetId);
+    if (!asset) return null;
+    if (asset.category !== "Consumable") throw new Error("Stock intake can only be recorded for consumable items.");
+    const observedQuantityBefore = Number(args?.observedQuantityBefore);
+    const quantityAdded = Number(args?.quantityAdded);
+    if (!Number.isFinite(observedQuantityBefore) || observedQuantityBefore < 0 || !Number.isFinite(quantityAdded) || quantityAdded < 0) {
+      throw new Error("Consumable quantities cannot be negative.");
+    }
+    const now = new Date().toISOString();
+    const quantityAfter = observedQuantityBefore + quantityAdded;
+    const event = {
+      _id: `static_asset_event_stock_intake_${Date.now()}`,
+      societyId: asset.societyId,
+      assetId: asset._id,
+      eventType: "stock_intake",
+      happenedAtISO: now,
+      condition: asset.condition,
+      observedQuantityBefore,
+      quantityAdded,
+      quantityAfter,
+      documentIds: [],
+      notes: args?.notes,
+      createdAtISO: now,
+    };
+    store?.upsertRow("assetEvents", event);
+    const existingItems = store?.listRows("inventoryItems", { societyId: asset.societyId }) ?? tables.inventoryItems;
+    let inventoryItem = existingItems.find((row: any) => row.assetId === asset._id);
+    if (!inventoryItem) {
+      inventoryItem = {
+        _id: `static_inventory_item_${asset._id}_${Date.now()}`,
+        societyId: asset.societyId,
+        sku: asset.assetTag,
+        name: asset.name,
+        description: asset.notes,
+        category: asset.category,
+        itemType: asset.category === "Consumable" ? "consumable" : "asset",
+        unitOfMeasure: asset.quantityUnit ?? "each",
+        defaultCostCents: asset.purchaseValueCents,
+        currency: asset.currency ?? "CAD",
+        trackSerial: Boolean(asset.serialNumber),
+        trackLot: false,
+        trackExpiry: false,
+        status: asset.status === "Disposed" ? "archived" : "active",
+        assetId: asset._id,
+        sourceSystem: "societyer_assets",
+        createdAtISO: now,
+        updatedAtISO: now,
+      };
+      store?.upsertRow("inventoryItems", inventoryItem);
+    }
+    const locationName = String(asset.location ?? asset.custodianName ?? "Inventory").trim() || "Inventory";
+    const existingLocations = store?.listRows("inventoryLocations", { societyId: asset.societyId }) ?? tables.inventoryLocations;
+    let location = existingLocations.find((row: any) => row.name.toLowerCase() === locationName.toLowerCase());
+    if (!location) {
+      location = {
+        _id: `static_inventory_location_${Date.now()}`,
+        societyId: asset.societyId,
+        name: locationName,
+        locationType: asset.location ? "facility" : "virtual",
+        active: true,
+        sourceSystem: "societyer_assets",
+        createdAtISO: now,
+        updatedAtISO: now,
+      };
+      store?.upsertRow("inventoryLocations", location);
+    }
+    const movement = {
+      _id: `static_stock_movement_${Date.now()}`,
+      societyId: asset.societyId,
+      movementDate: now.slice(0, 10),
+      movementType: "receive",
+      status: "posted",
+      inventoryItemId: inventoryItem._id,
+      toLocationId: location._id,
+      quantity: quantityAdded,
+      unitOfMeasure: asset.quantityUnit ?? "each",
+      reference: asset.assetTag,
+      sourceSystem: "societyer_assets",
+      assetEventId: event._id,
+      purchaseTransactionId: asset.purchaseTransactionId,
+      receiptDocumentId: asset.receiptDocumentId,
+      grantId: asset.grantId,
+      documentIds: asset.sourceDocumentIds ?? [],
+      rawJson: JSON.stringify({ observedQuantityBefore, quantityAdded }),
+      createdAtISO: now,
+      updatedAtISO: now,
+    };
+    store?.upsertRow("stockMovements", movement);
+    const existingBalances = store?.listRows("inventoryBalances", { societyId: asset.societyId }) ?? tables.inventoryBalances;
+    const balance = existingBalances.find((row: any) =>
+      row.inventoryItemId === inventoryItem._id && row.locationId === location._id && !row.inventoryLotId
+    );
+    if (balance) {
+      const quantityOnHand = (balance.quantityOnHand ?? 0) + quantityAdded;
+      const quantityReserved = balance.quantityReserved ?? 0;
+      store?.upsertRow("inventoryBalances", {
+        ...balance,
+        quantityOnHand,
+        quantityAvailable: quantityOnHand - quantityReserved,
+        lastMovementId: movement._id,
+        updatedAtISO: now,
+      });
+    } else {
+      store?.upsertRow("inventoryBalances", {
+        _id: `static_inventory_balance_${Date.now()}`,
+        societyId: asset.societyId,
+        inventoryItemId: inventoryItem._id,
+        locationId: location._id,
+        quantityOnHand: quantityAdded,
+        quantityReserved: 0,
+        quantityAvailable: quantityAdded,
+        lastMovementId: movement._id,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    }
+    store?.upsertRow("assets", { ...asset, quantityOnHand: quantityAfter, updatedAtISO: now });
+    store?.upsertRow("activity", {
+      _id: `static_activity_asset_stock_intake_${Date.now()}`,
+      societyId: asset.societyId,
+      actor: "You",
+      entityType: "asset",
+      entityId: asset._id,
+      action: "stock_intake",
+      summary: `Added ${quantityAdded} ${asset.quantityUnit ?? "unit"}${quantityAdded === 1 ? "" : "s"} to ${asset.assetTag}; ${quantityAfter} now on hand`,
+      createdAtISO: now,
+    });
+    return event._id;
+  }
+  if (name === "assets:linkReceiptLine") {
+    const asset = store?.getRow("assets", args?.assetId) ?? byId(tables.assets, args?.assetId);
+    if (!asset) return null;
+    const now = new Date().toISOString();
+    let inventoryItemId;
+    if (args?.createInventoryItem) {
+      let inventoryItem = (store?.listRows("inventoryItems", { societyId: asset.societyId }) ?? tables.inventoryItems)
+        .find((row: any) => row.assetId === asset._id);
+      if (!inventoryItem) {
+        inventoryItem = {
+          _id: `static_inventory_item_${asset._id}_${Date.now()}`,
+          societyId: asset.societyId,
+          sku: asset.assetTag,
+          name: asset.name,
+          description: asset.notes,
+          category: asset.category,
+          itemType: asset.category === "Consumable" ? "consumable" : "asset",
+          unitOfMeasure: asset.quantityUnit ?? args?.unitOfMeasure ?? "each",
+          defaultCostCents: asset.purchaseValueCents,
+          currency: asset.currency ?? "CAD",
+          trackSerial: Boolean(asset.serialNumber),
+          trackLot: false,
+          trackExpiry: false,
+          status: asset.status === "Disposed" ? "archived" : "active",
+          assetId: asset._id,
+          sourceSystem: "societyer_assets",
+          createdAtISO: now,
+          updatedAtISO: now,
+        };
+        store?.upsertRow("inventoryItems", inventoryItem);
+      }
+      inventoryItemId = inventoryItem._id;
+    }
+    const linkId = `static_asset_receipt_link_${Date.now()}`;
+    store?.upsertRow("assetReceiptLinks", {
+      _id: linkId,
+      societyId: args?.societyId ?? asset.societyId,
+      assetId: asset._id,
+      inventoryItemId,
+      receiptDocumentId: args?.receiptDocumentId,
+      financialTransactionId: args?.financialTransactionId,
+      receiptLineLabel: args?.receiptLineLabel,
+      receiptLineIndex: args?.receiptLineIndex,
+      quantity: args?.quantity,
+      unitOfMeasure: args?.unitOfMeasure,
+      unitCostCents: args?.unitCostCents,
+      totalCostCents: args?.totalCostCents,
+      sourceText: args?.sourceText,
+      notes: args?.notes,
+      createdByUserId: args?.actingUserId,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    store?.upsertRow("assets", {
+      ...asset,
+      receiptDocumentId: asset.receiptDocumentId ?? args?.receiptDocumentId,
+      purchaseTransactionId: asset.purchaseTransactionId ?? args?.financialTransactionId,
+      sourceDocumentIds: Array.from(new Set([...(asset.sourceDocumentIds ?? []), args?.receiptDocumentId].filter(Boolean))),
+      updatedAtISO: now,
+    });
+    store?.upsertRow("assetEvents", {
+      _id: `static_asset_event_receipt_link_${Date.now()}`,
+      societyId: asset.societyId,
+      assetId: asset._id,
+      eventType: "receipt_link",
+      happenedAtISO: now,
+      documentIds: [args?.receiptDocumentId].filter(Boolean),
+      notes: [args?.receiptLineLabel, args?.notes].filter(Boolean).join(" — "),
+      createdAtISO: now,
+    });
+    return { linkId, inventoryItemId };
+  }
   if (name === "assets:recordEvent") {
     const asset = store?.getRow("assets", args?.assetId) ?? byId(tables.assets, args?.assetId);
     if (!asset) return null;
@@ -4778,6 +6429,7 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     const now = new Date().toISOString();
     const assets = store?.listRows("assets", args) ?? scopedRows(tables.assets, args);
     const runId = `static_asset_verification_${Date.now()}`;
+    const inventoryCountId = `static_inventory_count_${Date.now()}`;
     store?.upsertRow("assetVerificationRuns", {
       _id: runId,
       societyId: args?.societyId ?? SOCIETY_ID,
@@ -4789,7 +6441,76 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       createdAtISO: now,
       updatedAtISO: now,
     });
+    store?.upsertRow("inventoryCounts", {
+      _id: inventoryCountId,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      title: args?.title,
+      status: "open",
+      startedAtISO: now,
+      reviewerName: args?.reviewerName,
+      scope: "assets",
+      sourceDocumentIds: [],
+      notes: args?.notes,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
     assets.forEach((asset: any) => {
+      const existingItems = store?.listRows("inventoryItems", { societyId: asset.societyId }) ?? tables.inventoryItems;
+      let inventoryItem = existingItems.find((row: any) => row.assetId === asset._id);
+      if (!inventoryItem) {
+        inventoryItem = {
+          _id: `static_inventory_item_${asset._id}_${Date.now()}`,
+          societyId: asset.societyId,
+          sku: asset.assetTag,
+          name: asset.name,
+          description: asset.notes,
+          category: asset.category,
+          itemType: asset.category === "Consumable" ? "consumable" : "asset",
+          unitOfMeasure: asset.quantityUnit ?? "each",
+          currency: asset.currency ?? "CAD",
+          trackSerial: Boolean(asset.serialNumber),
+          trackLot: false,
+          trackExpiry: false,
+          status: asset.status === "Disposed" ? "archived" : "active",
+          assetId: asset._id,
+          sourceSystem: "societyer_assets",
+          createdAtISO: now,
+          updatedAtISO: now,
+        };
+        store?.upsertRow("inventoryItems", inventoryItem);
+      }
+      const locationName = String(asset.location ?? asset.custodianName ?? "Inventory").trim() || "Inventory";
+      const existingLocations = store?.listRows("inventoryLocations", { societyId: asset.societyId }) ?? tables.inventoryLocations;
+      let location = existingLocations.find((row: any) => row.name.toLowerCase() === locationName.toLowerCase());
+      if (!location) {
+        location = {
+          _id: `static_inventory_location_${asset._id}_${Date.now()}`,
+          societyId: asset.societyId,
+          name: locationName,
+          locationType: asset.location ? "facility" : "virtual",
+          active: true,
+          sourceSystem: "societyer_assets",
+          createdAtISO: now,
+          updatedAtISO: now,
+        };
+        store?.upsertRow("inventoryLocations", location);
+      }
+      const expectedQuantity = asset.category === "Consumable"
+        ? asset.quantityOnHand ?? 0
+        : asset.status === "Disposed" || asset.status === "Lost"
+          ? 0
+          : 1;
+      store?.upsertRow("inventoryCountLines", {
+        _id: `static_inventory_count_line_${asset._id}_${Date.now()}`,
+        societyId: asset.societyId,
+        inventoryCountId,
+        inventoryItemId: inventoryItem._id,
+        locationId: location._id,
+        expectedQuantity,
+        status: "pending",
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
       store?.upsertRow("assetVerificationItems", {
         _id: `static_asset_verification_item_${asset._id}_${Date.now()}`,
         societyId: asset.societyId,
@@ -4816,6 +6537,28 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       notes: args?.notes,
       updatedAtISO: now,
     });
+    const run = store?.getRow("assetVerificationRuns", item.runId) ?? byId(tables.assetVerificationRuns, item.runId);
+    const asset = store?.getRow("assets", item.assetId) ?? byId(tables.assets, item.assetId);
+    const inventoryItem = (store?.listRows("inventoryItems", { societyId: item.societyId }) ?? tables.inventoryItems)
+      .find((row: any) => row.assetId === item.assetId);
+    const count = (store?.listRows("inventoryCounts", { societyId: item.societyId }) ?? tables.inventoryCounts)
+      .find((row: any) => row.status === "open" && row.title === run?.title && row.startedAtISO === run?.startedAtISO);
+    const countLine = count && inventoryItem
+      ? (store?.listRows("inventoryCountLines", { societyId: item.societyId }) ?? tables.inventoryCountLines)
+          .find((row: any) => row.inventoryCountId === count._id && row.inventoryItemId === inventoryItem._id)
+      : null;
+    if (countLine) {
+      const countedQuantity = args?.status === "missing" ? 0 : countLine.expectedQuantity ?? (asset?.category === "Consumable" ? asset?.quantityOnHand ?? 0 : 1);
+      store?.upsertRow("inventoryCountLines", {
+        ...countLine,
+        countedQuantity,
+        varianceQuantity: countedQuantity - (countLine.expectedQuantity ?? 0),
+        condition: args?.observedCondition,
+        status: args?.status === "verified" ? "counted" : args?.status,
+        notes: args?.notes,
+        updatedAtISO: now,
+      });
+    }
     return args?.itemId;
   }
   if (name === "assets:completeVerificationRun") {
@@ -4823,6 +6566,9 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     if (!run) return null;
     const now = new Date().toISOString();
     store?.upsertRow("assetVerificationRuns", { ...run, status: "Completed", completedAtISO: now, updatedAtISO: now });
+    const count = (store?.listRows("inventoryCounts", { societyId: run.societyId }) ?? tables.inventoryCounts)
+      .find((row: any) => row.status === "open" && row.title === run.title && row.startedAtISO === run.startedAtISO);
+    if (count) store?.upsertRow("inventoryCounts", { ...count, status: "completed", completedAtISO: now, updatedAtISO: now });
     return args?.id;
   }
   if (name === "assets:dispose") {
@@ -4840,14 +6586,168 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     });
     return args?.assetId;
   }
-  const [moduleName, exportName] = name.split(":");
+  if (name === "documentVersions:recordUploadedVersion") {
+    const now = new Date().toISOString();
+    const id = `static_documentVersion_${Date.now()}`;
+    const existing = store?.listRows("documentVersions", { documentId: args?.documentId }) ?? [];
+    store?.transaction(() => {
+      for (const row of existing) {
+        if (row.isCurrent) store.upsertRow("documentVersions", { ...row, isCurrent: false });
+      }
+      const versionRow = {
+        _id: id,
+        _creationTime: Date.now(),
+        societyId: args?.societyId ?? SOCIETY_ID,
+        documentId: args?.documentId,
+        version: args?.version ?? Math.max(0, ...existing.map((row) => Number(row.version) || 0)) + 1,
+        storageProvider: args?.storageProvider ?? "demo",
+        storageKey: args?.storageKey ?? `demo://document-version/${id}`,
+        fileName: args?.fileName ?? "document",
+        mimeType: args?.mimeType,
+        fileSizeBytes: args?.fileSizeBytes,
+        sha256: args?.sha256,
+        uploadedByUserId: args?.actingUserId,
+        uploadedByName: "Static user",
+        uploadedAtISO: now,
+        changeNote: args?.changeNote,
+        isCurrent: true,
+      };
+      store.upsertRow("documentVersions", versionRow);
+      if (versionRow.storageProvider === "local-filesystem" && versionRow.storageKey) {
+        store.upsertAttachment({
+          societyId: versionRow.societyId,
+          documentId: versionRow.documentId,
+          versionId: versionRow._id,
+          provider: versionRow.storageProvider,
+          storageKey: versionRow.storageKey,
+          fileName: versionRow.fileName,
+          mimeType: versionRow.mimeType,
+          fileSizeBytes: versionRow.fileSizeBytes,
+          sha256: versionRow.sha256,
+        });
+      }
+      const document = store.getRow("documents", args?.documentId);
+      if (document) {
+        store.upsertRow("documents", {
+          ...document,
+          storageId: undefined,
+          fileName: args?.fileName,
+          mimeType: args?.mimeType,
+          fileSizeBytes: args?.fileSizeBytes,
+          updatedAtISO: now,
+        });
+      }
+    });
+    return id;
+  }
+  if (name === "documentVersions:rollback") {
+    const target = store?.getRow("documentVersions", args?.versionId);
+    if (!target) return null;
+    const now = new Date().toISOString();
+    const existing = store?.listRows("documentVersions", { documentId: target.documentId }) ?? [];
+    store?.transaction(() => {
+      for (const row of existing) {
+        store.upsertRow("documentVersions", { ...row, isCurrent: row._id === target._id });
+      }
+      const document = store.getRow("documents", target.documentId);
+      if (document) {
+        store.upsertRow("documents", {
+          ...document,
+          fileName: target.fileName,
+          mimeType: target.mimeType,
+          fileSizeBytes: target.fileSizeBytes,
+          updatedAtISO: now,
+        });
+      }
+      store.upsertRow("activity", {
+        _id: `static_activity_document_rollback_${Date.now()}`,
+        _creationTime: Date.now(),
+        societyId: target.societyId,
+        actor: "Desktop user",
+        entityType: "document",
+        entityId: target.documentId,
+        action: "version-rollback",
+        summary: `Rolled back to ${target.fileName ?? `v${target.version}`}`,
+        createdAtISO: now,
+      });
+    });
+    return target._id;
+  }
+  if (name === "documentVersions:createDemoVersion") {
+    return mutationResult("documentVersions:recordUploadedVersion", {
+      ...args,
+      version: undefined,
+      storageProvider: "demo",
+      storageKey: `demo://upload/${encodeURIComponent(args?.fileName ?? "document")}`,
+    }, store);
+  }
+  if (name === "documentVersions:getDownloadUrl") {
+    const version = store?.getRow("documentVersions", args?.versionId);
+    if (!version) return null;
+    if (version.storageProvider === "local-filesystem") {
+      return `local-file://${encodeURIComponent(version.storageKey)}`;
+    }
+    if (version.storageProvider === "generated-inline") {
+      return version.storageKey;
+    }
+    if (version.storageProvider === "demo") {
+      return `demo://download/${encodeURIComponent(version.storageKey)}`;
+    }
+    return version.storageKey ? `static://${encodeURIComponent(version.storageKey)}` : null;
+  }
+  if (name === "documentVersions:getDownloadTarget") {
+    const version = store?.getRow("documentVersions", args?.versionId);
+    if (!version) return null;
+    if (version.storageProvider === "local-filesystem") {
+      return {
+        kind: "local-filesystem",
+        provider: version.storageProvider,
+        key: version.storageKey,
+        fileName: version.fileName,
+        mimeType: version.mimeType,
+        fileSizeBytes: version.fileSizeBytes,
+      };
+    }
+    return {
+      kind: "url",
+      provider: version.storageProvider,
+      key: version.storageKey,
+      url: mutationResult("documentVersions:getDownloadUrl", args, store),
+      fileName: version.fileName,
+      mimeType: version.mimeType,
+      fileSizeBytes: version.fileSizeBytes,
+    };
+  }
+  if (name === "documents:flagForDeletion") {
+    const existing = store?.getRow("documents", args?.id);
+    if (!existing) return null;
+    store?.upsertRow("documents", {
+      ...existing,
+      flaggedForDeletion: args?.flagged === true,
+      updatedAtISO: new Date().toISOString(),
+    });
+    return args?.id;
+  }
+  if (name === "documents:remove") {
+    const existing = store?.getRow("documents", args?.id);
+    if (!existing) return null;
+    const versions = store?.listRows("documentVersions", { documentId: args?.id }) ?? [];
+    for (const version of versions) store?.removeRow("documentVersions", version._id);
+    store?.removeRow("documents", args?.id);
+    return null;
+  }
+    const [moduleName, exportName] = name.split(":");
   if (exportName && /^(create|update|upsert|issue|setStatus|remove)/.test(exportName)) {
     const tableName = staticMutationTableName(moduleName, exportName);
     if (exportName.startsWith("remove")) {
+      const existing = store?.getRow(tableName, args?.id);
       store?.removeRow(tableName, args?.id);
+      if (tableName === "rightsholdingTransfers" && existing?.societyId) {
+        staticSyncRightsHoldings(store, existing.societyId);
+      }
       return null;
     }
-    const id = args?.id ?? `static_${moduleName}_${Date.now()}`;
+    const id = args?.id ?? staticLocalId(moduleName, exportName);
     const existing = store?.getRow(tableName, id) ?? {};
     const patch = args?.patch && typeof args.patch === "object" ? args.patch : {};
     const row = {
@@ -4861,10 +6761,669 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     };
     delete row.id;
     delete row.patch;
+    if (tableName === "rightsholdingTransfers") {
+      const proposedTransfers = (store?.listRows("rightsholdingTransfers", { societyId: row.societyId }) ?? [])
+        .filter((transfer) => String(transfer._id) !== String(id))
+        .concat([row])
+        .sort(staticRightsholdingTransferChronologicalSort);
+      validateLedger(proposedTransfers);
+    }
     store?.upsertRow(tableName, row);
+    if (tableName === "rightsholdingTransfers") {
+      staticSyncRightsHoldings(store, row.societyId);
+    }
     return id;
   }
   return null;
+}
+
+function staticUpsertComplianceDecision(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
+  const nowISO = new Date().toISOString();
+  const societyId = args?.societyId ?? SOCIETY_ID;
+  const ruleId = String(args?.ruleId ?? "");
+  const existing = (store?.listRows("complianceRemediations", { societyId }) ?? [])
+    .find((row) => row.ruleId === ruleId);
+  const remediationId = existing?._id ?? `static_compliance_remediation_${Date.now()}`;
+  store?.upsertRow("complianceRemediations", {
+    ...existing,
+    _id: remediationId,
+    _creationTime: existing?._creationTime ?? Date.now(),
+    societyId,
+    ruleId,
+    flagLevel: args?.flagLevel ?? "info",
+    flagText: args?.flagText ?? ruleId,
+    evidenceRequired: Array.isArray(args?.evidenceRequired) ? args.evidenceRequired : [],
+    status: args?.status ?? "open",
+    targetTable: args?.targetTable,
+    targetId: args?.targetId,
+    resolvedAtISO: args?.resolvedAtISO,
+    dismissedAtISO: args?.dismissedAtISO,
+    notes: args?.notes,
+    createdAtISO: existing?.createdAtISO ?? nowISO,
+    updatedAtISO: nowISO,
+  });
+  return { remediationId, status: args?.status ?? "open", updated: Boolean(existing) };
+}
+
+function staticTemplateEngine(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
+  const dataFields = (store?.listRows("legalTemplateDataFields", args) ?? [])
+    .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
+  const templates = (store?.listRows("legalTemplates", args) ?? [])
+    .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
+  const precedents = (store?.listRows("legalPrecedents", args) ?? [])
+    .sort((a, b) => String(a.packageName ?? "").localeCompare(String(b.packageName ?? "")));
+  const runs = (store?.listRows("legalPrecedentRuns", args) ?? [])
+    .sort((a, b) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
+  const generatedDocuments = (store?.listRows("generatedLegalDocuments", args) ?? [])
+    .sort((a, b) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
+  const signers = (store?.listRows("legalSigners", args) ?? [])
+    .sort((a, b) => String(a.fullName ?? "").localeCompare(String(b.fullName ?? "")));
+  return { dataFields, templates, precedents, runs, generatedDocuments, signers };
+}
+
+function staticSyncRightsHoldings(store: StaticDemoDexieStore | null | undefined, societyId: string) {
+  if (!store) return;
+  const existingHoldings = store.listRows("rightsHoldings", { societyId });
+  const transfers = store.listRows("rightsholdingTransfers", { societyId }).sort(staticRightsholdingTransferChronologicalSort);
+  const nextHoldings = materializeRightsHoldings(transfers);
+  const nextByKey = new Map(nextHoldings.map((holding) => [`${holding.rightsClassId}:${holding.holderKey}`, holding]));
+  const existingByKey = new Map(existingHoldings.map((holding: any) => [`${holding.rightsClassId}:${holding.holderKey}`, holding]));
+  const now = new Date().toISOString();
+
+  store.transaction(() => {
+    for (const existing of existingHoldings) {
+      const key = `${existing.rightsClassId}:${existing.holderKey}`;
+      if (!nextByKey.has(key)) store.removeRow("rightsHoldings", existing._id);
+    }
+    for (const holding of nextHoldings) {
+      const key = `${holding.rightsClassId}:${holding.holderKey}`;
+      const existing = existingByKey.get(key);
+      store.upsertRow("rightsHoldings", {
+        ...existing,
+        _id: existing?._id ?? staticLocalId("rightsHoldings", `${holding.rightsClassId}_${holding.holderKey}`),
+        _creationTime: existing?._creationTime ?? Date.now(),
+        societyId,
+        rightsClassId: holding.rightsClassId,
+        holderRoleHolderId: holding.holderRoleHolderId,
+        holderKey: holding.holderKey,
+        quantity: holding.quantity,
+        status: holding.status,
+        lastTransactionId: holding.lastTransactionId,
+        sourceDocumentIds: holding.sourceDocumentIds,
+        sourceExternalIds: holding.sourceExternalIds,
+        createdAtISO: existing?.createdAtISO ?? now,
+        updatedAtISO: now,
+      });
+    }
+  });
+}
+
+function staticCreatePacketRunArtifacts(store: StaticDemoDexieStore | null | undefined, args: {
+  societyId: string;
+  packet: (typeof CORPORATION_DOCUMENT_PACKETS)[number];
+  runId: string;
+  eventId?: string;
+  effectiveDate?: string;
+  filingId?: string;
+  signerRoleHolderIds?: string[];
+  dataJson?: string;
+  notes?: string;
+}) {
+  const now = new Date().toISOString();
+  const run = store?.getRow("legalPrecedentRuns", args.runId);
+  const signerRoleHolderIds = args.signerRoleHolderIds?.length
+    ? args.signerRoleHolderIds
+    : (store?.listRows("roleHolders", { societyId: args.societyId }) ?? [])
+      .filter((row: any) => row.status === "current" && ["director", "officer", "authorized_representative"].includes(row.roleType))
+      .map((row: any) => row._id);
+  const sourceExternalIds = staticUniqueStrings([
+    ...(run?.sourceExternalIds ?? []),
+    `societyer:corporation-packet-run:${args.packet.key}`,
+    `societyer:legal-precedent-run:${args.runId}`,
+  ]);
+  const docxDataUrl = corporationPacketDocxDataUrl(args.packet);
+  const docxFileName = corporationPacketDocxFileName(args.packet);
+  const docxMimeType = corporationPacketDocxMimeType();
+  const draftDocumentId = staticLocalId("document", `${args.packet.key}_editable_docx`);
+  const draftDocumentVersionId = staticLocalId("documentVersion", `${args.packet.key}_editable_docx`);
+  const generatedDocumentId = staticLocalId("generatedLegalDocument", args.packet.key);
+  const sourceEvidenceId = staticLocalId("sourceEvidence", args.packet.key);
+  const minuteBookItemId = staticLocalId("minuteBookItem", args.packet.key);
+  const signerIds: string[] = [];
+
+  store?.transaction(() => {
+    store.upsertRow("documents", {
+      _id: draftDocumentId,
+      _creationTime: Date.now(),
+      societyId: args.societyId,
+      title: `${args.packet.packageName} - editable draft`,
+      category: "governance",
+      fileName: docxFileName,
+      mimeType: docxMimeType,
+      content: corporationPacketTemplateHtml(args.packet),
+      url: docxDataUrl,
+      fileSizeBytes: docxDataUrl.length,
+      retentionYears: 7,
+      createdAtISO: now,
+      reviewStatus: "needs_signature",
+      librarySection: "governance",
+      flaggedForDeletion: false,
+      sourceExternalIds,
+      sourcePayloadJson: args.dataJson,
+      tags: ["corporation-packet", args.packet.key, "editable-docx"],
+    });
+    store.upsertRow("documentVersions", {
+      _id: draftDocumentVersionId,
+      _creationTime: Date.now(),
+      societyId: args.societyId,
+      documentId: draftDocumentId,
+      version: 1,
+      storageProvider: "generated-inline",
+      storageKey: docxDataUrl,
+      fileName: docxFileName,
+      mimeType: docxMimeType,
+      fileSizeBytes: docxDataUrl.length,
+      uploadedByName: "Societyer packet generator",
+      uploadedAtISO: now,
+      changeNote: `Generated editable DOCX for ${args.packet.packageName}.`,
+      isCurrent: true,
+    });
+    store.upsertRow("generatedLegalDocuments", {
+      _id: generatedDocumentId,
+      _creationTime: Date.now(),
+      societyId: args.societyId,
+      title: args.packet.packageName,
+      status: "draft",
+      draftDocumentId,
+      sourceTemplateName: args.packet.templateName,
+      precedentRunId: args.runId,
+      eventId: args.eventId,
+      effectiveDate: args.effectiveDate,
+      documentTag: args.packet.documentTag,
+      dataJson: args.dataJson,
+      subloopJsonList: [],
+      signersRequiredRoleHolderIds: signerRoleHolderIds,
+      signersWhoSignedIds: [],
+      signerTagsRequired: args.packet.requiredSigners ?? [],
+      signerTagsSigned: [],
+      sourceDocumentIds: [draftDocumentId],
+      sourceExternalIds: staticUniqueStrings([
+        ...sourceExternalIds,
+        `societyer:editable-document:${draftDocumentId}`,
+        `societyer:document-version:${draftDocumentVersionId}`,
+      ]),
+      notes: args.notes,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    for (const roleHolderId of signerRoleHolderIds) {
+      const roleHolder = store.getRow("roleHolders", roleHolderId);
+      if (!roleHolder) continue;
+      const signerId = staticLocalId("legalSigner", roleHolderId);
+      signerIds.push(signerId);
+      store.upsertRow("legalSigners", {
+        _id: signerId,
+        _creationTime: Date.now(),
+        societyId: args.societyId,
+        status: "unsigned",
+        fullName: roleHolder.fullName ?? "Unnamed signer",
+        firstName: roleHolder.firstName,
+        lastName: roleHolder.lastName,
+        email: roleHolder.email,
+        phone: roleHolder.phone,
+        signerTag: roleHolder.signerTag ?? roleHolder.roleType,
+        eventId: args.eventId,
+        generatedDocumentId,
+        roleHolderId,
+        sourceExternalIds: staticUniqueStrings([...sourceExternalIds, `societyer:generated-legal-document:${generatedDocumentId}`]),
+        notes: "Signer placeholder staged from corporation document packet.",
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    }
+    store.upsertRow("sourceEvidence", {
+      _id: sourceEvidenceId,
+      _creationTime: Date.now(),
+      societyId: args.societyId,
+      sourceDocumentId: draftDocumentId,
+      externalSystem: "societyer",
+      externalId: `corporation-packet:${args.packet.key}:${args.runId}`,
+      sourceTitle: `${args.packet.packageName} editable packet`,
+      sourceDate: args.effectiveDate,
+      evidenceKind: "provenance",
+      targetTable: "generatedLegalDocuments",
+      targetId: generatedDocumentId,
+      sensitivity: "standard",
+      accessLevel: "internal",
+      summary: `Editable document, generated-document row, signer placeholders, and minute-book record staged for ${args.packet.packageName}.`,
+      status: "Linked",
+      notes: args.notes,
+      createdAtISO: now,
+    });
+    store.upsertRow("minuteBookItems", {
+      _id: minuteBookItemId,
+      _creationTime: Date.now(),
+      societyId: args.societyId,
+      title: args.packet.packageName,
+      recordType: args.packet.requiresAnnualMaintenanceRecord ? "filing" : "package",
+      effectiveDate: args.effectiveDate,
+      status: "Draft",
+      documentIds: [draftDocumentId],
+      filingId: args.filingId,
+      signatureIds: [],
+      sourceEvidenceIds: [sourceEvidenceId],
+      notes: args.notes ?? `Minute-book item staged from corporation packet ${args.packet.key}.`,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    store.upsertRow("legalPrecedentRuns", {
+      ...run,
+      _id: args.runId,
+      generatedDocumentIds: [generatedDocumentId],
+      signerRoleHolderIds,
+      sourceExternalIds: staticUniqueStrings([
+        ...sourceExternalIds,
+        `societyer:editable-document:${draftDocumentId}`,
+        `societyer:document-version:${draftDocumentVersionId}`,
+        `societyer:generated-legal-document:${generatedDocumentId}`,
+        `societyer:minute-book-item:${minuteBookItemId}`,
+        `societyer:source-evidence:${sourceEvidenceId}`,
+        ...signerIds.map((signerId) => `societyer:legal-signer:${signerId}`),
+      ]),
+      updatedAtISO: now,
+    });
+    if (args.filingId) {
+      const filing = store.getRow("filings", args.filingId);
+      if (filing) {
+        store.upsertRow("filings", {
+          ...filing,
+          stagedPacketDocumentId: draftDocumentId,
+          relatedPrecedentRunId: args.runId,
+          updatedAtISO: now,
+        });
+      }
+    }
+  });
+
+  return { draftDocumentId, draftDocumentVersionId, generatedDocumentId, signerIds, minuteBookItemId, sourceEvidenceId };
+}
+
+function staticSeedCorporationDocumentPackets(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
+  const now = new Date().toISOString();
+  const societyId = args?.societyId ?? SOCIETY_ID;
+  const existingTemplates = store?.listRows("legalTemplates", { societyId }) ?? [];
+  const existingPrecedents = store?.listRows("legalPrecedents", { societyId }) ?? [];
+  let insertedTemplates = 0;
+  let updatedTemplates = 0;
+  let skippedTemplates = 0;
+  let insertedPrecedents = 0;
+  let updatedPrecedents = 0;
+  let skippedPrecedents = 0;
+  const templateIdByPacketKey = new Map<string, string>();
+
+  store?.transaction(() => {
+    for (const packet of CORPORATION_DOCUMENT_PACKETS) {
+      const marker = corporationPacketTemplateMarker(packet);
+      const existingByMarker = existingTemplates.find((row: any) => (row.sourceExternalIds ?? []).includes(marker));
+      const existingByName = existingTemplates.find((row: any) => String(row.name ?? "").toLowerCase() === packet.templateName.toLowerCase());
+      const id = existingByMarker?._id ?? `static_legal_template_${packet.key}`;
+      const payload = {
+        _id: id,
+        _creationTime: existingByMarker?._creationTime ?? Date.now(),
+        societyId,
+        templateType: "document",
+        name: packet.templateName,
+        status: "active",
+        html: corporationPacketTemplateHtml(packet),
+        notes: [
+          packet.summary,
+          "Catalog packet for corporation minute book, registers, filings, and compliance evidence.",
+          `Packet key: ${packet.key}`,
+        ].join("\n"),
+        owner: "Societyer corporation packet catalog",
+        ownerIsTobuso: false,
+        signatureRequired: packet.signatureRequired,
+        documentTag: packet.documentTag,
+        entityTypes: corporationPacketEntityTypes(),
+        jurisdictions: packet.jurisdictions,
+        requiredSigners: packet.requiredSigners,
+        requiredDataFieldIds: [],
+        optionalDataFieldIds: [],
+        reviewDataFieldIds: [],
+        requiredDataFields: packet.requiredDataFields,
+        optionalDataFields: packet.optionalDataFields,
+        reviewDataFields: packet.reviewDataFields,
+        timeline: packet.timeline,
+        deliverable: packet.deliverable,
+        terms: packet.terms,
+        filingType: packet.filingType,
+        priceItems: [],
+        sourceExternalIds: [marker],
+        createdAtISO: existingByMarker?.createdAtISO ?? now,
+        updatedAtISO: now,
+      };
+      if (existingByMarker) {
+        store.upsertRow("legalTemplates", payload);
+        updatedTemplates += 1;
+        templateIdByPacketKey.set(packet.key, id);
+      } else if (existingByName) {
+        skippedTemplates += 1;
+        templateIdByPacketKey.set(packet.key, existingByName._id);
+      } else {
+        store.upsertRow("legalTemplates", payload);
+        insertedTemplates += 1;
+        templateIdByPacketKey.set(packet.key, id);
+      }
+    }
+
+    const latestTemplates = store?.listRows("legalTemplates", { societyId }) ?? [];
+    for (const packet of CORPORATION_DOCUMENT_PACKETS) {
+      const marker = corporationPacketPrecedentMarker(packet);
+      const existingByMarker = existingPrecedents.find((row: any) => (row.sourceExternalIds ?? []).includes(marker));
+      const existingByName = existingPrecedents.find((row: any) => String(row.packageName ?? "").toLowerCase() === packet.packageName.toLowerCase());
+      const id = existingByMarker?._id ?? `static_legal_precedent_${packet.key}`;
+      const templateId = templateIdByPacketKey.get(packet.key) ??
+        latestTemplates.find((row: any) => String(row.name ?? "").toLowerCase() === packet.templateName.toLowerCase())?._id;
+      const payload = {
+        _id: id,
+        _creationTime: existingByMarker?._creationTime ?? Date.now(),
+        societyId,
+        packageName: packet.packageName,
+        partType: packet.partType,
+        status: "active",
+        description: packet.terms,
+        shortDescription: packet.summary,
+        timeline: packet.timeline,
+        deliverables: packet.deliverable,
+        internalNotes: `Catalog packet key: ${packet.key}`,
+        addOnTerms: packet.terms,
+        templateIds: templateId ? [templateId] : [],
+        templateNames: [packet.templateName],
+        templateFilingNames: packet.templateFilingNames ?? [],
+        templateSearchNames: [],
+        templateRegistrationNames: packet.templateRegistrationNames ?? [],
+        requiresAmendmentRecord: packet.requiresAmendmentRecord,
+        requiresAnnualMaintenanceRecord: packet.requiresAnnualMaintenanceRecord,
+        priceItems: [],
+        entityTypes: corporationPacketEntityTypes(),
+        jurisdictions: packet.jurisdictions,
+        subloopPairs: [],
+        sourceExternalIds: [marker],
+        createdAtISO: existingByMarker?.createdAtISO ?? now,
+        updatedAtISO: now,
+      };
+      if (existingByMarker) {
+        store.upsertRow("legalPrecedents", payload);
+        updatedPrecedents += 1;
+      } else if (existingByName) {
+        skippedPrecedents += 1;
+      } else {
+        store.upsertRow("legalPrecedents", payload);
+        insertedPrecedents += 1;
+      }
+    }
+  });
+
+  return {
+    insertedTemplates,
+    updatedTemplates,
+    skippedTemplates,
+    insertedPrecedents,
+    updatedPrecedents,
+    skippedPrecedents,
+    total: CORPORATION_DOCUMENT_PACKETS.length,
+  };
+}
+
+function staticStageCorporationDocumentPacket(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
+  const societyId = args?.societyId ?? SOCIETY_ID;
+  staticSeedCorporationDocumentPackets(store, { societyId });
+  const packet = args?.packetKey
+    ? CORPORATION_DOCUMENT_PACKETS.find((candidate) => candidate.key === args.packetKey)
+    : corporationPacketForComplianceObligation({
+        filingKind: args?.filingKind,
+        obligationKey: args?.obligationKey,
+        ruleId: args?.obligationRuleId,
+      });
+  if (!packet) throw new Error("No corporation document packet matches this obligation.");
+
+  const marker = corporationPacketPrecedentMarker(packet);
+  const precedent = (store?.listRows("legalPrecedents", { societyId }) ?? [])
+    .find((row: any) => (row.sourceExternalIds ?? []).includes(marker));
+  if (!precedent) throw new Error(`Corporation document packet precedent was not seeded: ${packet.key}`);
+
+  const now = new Date().toISOString();
+  const runId = staticLocalId("legalPrecedentRuns", packet.key);
+  store?.upsertRow("legalPrecedentRuns", {
+    _id: runId,
+    _creationTime: Date.now(),
+    societyId,
+    name: `${packet.packageName}${args?.dueDate ? ` - ${args.dueDate}` : ""}`,
+    status: "draft",
+    precedentId: precedent._id,
+    eventId: args?.obligationRuleId,
+    dateTime: args?.dueDate,
+    dataJson: JSON.stringify({
+      packetKey: packet.key,
+      obligationKey: args?.obligationKey,
+      obligationRuleId: args?.obligationRuleId,
+      obligationTitle: args?.obligationTitle,
+      filingKind: args?.filingKind,
+      dueDate: args?.dueDate,
+      sourceRegistrationId: args?.sourceRegistrationId,
+    }),
+    dataJsonList: [],
+    dataReviewed: false,
+    externalNotes: args?.obligationTitle,
+    searchIds: [],
+    registrationIds: args?.sourceRegistrationId ? [args.sourceRegistrationId] : [],
+    filingIds: args?.filingId ? [args.filingId] : [],
+    generatedDocumentIds: [],
+    signerRoleHolderIds: [],
+    priceItems: [],
+    abstainingDirectorIds: [],
+    abstainingRightsholderIds: [],
+    sourceExternalIds: [
+      `societyer:compliance-obligation:${args?.obligationRuleId ?? args?.obligationKey ?? packet.key}`,
+      `societyer:corporation-packet-run:${packet.key}`,
+    ],
+    notes: args?.notes ?? `Staged from compliance obligation ${args?.obligationKey ?? args?.obligationRuleId ?? packet.key}.`,
+    createdAtISO: now,
+    updatedAtISO: now,
+  });
+  const artifacts = staticCreatePacketRunArtifacts(store, {
+    societyId,
+    packet,
+    runId,
+    eventId: args?.obligationRuleId ?? args?.obligationKey,
+    effectiveDate: args?.dueDate,
+    filingId: args?.filingId,
+    dataJson: JSON.stringify({
+      packetKey: packet.key,
+      obligationKey: args?.obligationKey,
+      obligationRuleId: args?.obligationRuleId,
+      obligationTitle: args?.obligationTitle,
+      filingKind: args?.filingKind,
+      dueDate: args?.dueDate,
+      sourceRegistrationId: args?.sourceRegistrationId,
+    }),
+    notes: args?.notes ?? `Editable packet output staged from compliance obligation ${args?.obligationKey ?? args?.obligationRuleId ?? packet.key}.`,
+  });
+  return { runId, packetKey: packet.key, precedentId: precedent._id, ...artifacts };
+}
+
+function staticStageShareIssuancePacket(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
+  const societyId = args?.societyId ?? SOCIETY_ID;
+  const transfer = store?.getRow("rightsholdingTransfers", args?.transferId);
+  if (!transfer || transfer.societyId !== societyId) {
+    throw new Error("Share issuance transfer was not found for this workspace.");
+  }
+  if (transfer.transferType !== "issuance") {
+    throw new Error("Only issuance transfers can stage the share issuance packet.");
+  }
+  staticSeedCorporationDocumentPackets(store, { societyId });
+  const packet = CORPORATION_DOCUMENT_PACKETS.find((candidate) => candidate.key === "issue-shares");
+  if (!packet) throw new Error("Share issuance packet is not configured.");
+
+  const marker = corporationPacketPrecedentMarker(packet);
+  const precedent = (store?.listRows("legalPrecedents", { societyId }) ?? [])
+    .find((row: any) => (row.sourceExternalIds ?? []).includes(marker));
+  if (!precedent) throw new Error(`Corporation document packet precedent was not seeded: ${packet.key}`);
+
+  const now = new Date().toISOString();
+  const runId = staticLocalId("legalPrecedentRuns", packet.key);
+  store?.transaction(() => {
+    store.upsertRow("legalPrecedentRuns", {
+      _id: runId,
+      _creationTime: Date.now(),
+      societyId,
+      name: `${packet.packageName}${transfer.transferDate ? ` - ${transfer.transferDate}` : ""}`,
+      status: "draft",
+      precedentId: precedent._id,
+      eventId: String(args?.transferId),
+      dateTime: transfer.transferDate,
+      dataJson: JSON.stringify({
+        packetKey: packet.key,
+        transferId: args?.transferId,
+        transferType: transfer.transferType,
+        transferDate: transfer.transferDate,
+        rightsClassId: transfer.rightsClassId,
+        destinationRoleHolderId: transfer.destinationRoleHolderId,
+        destinationHolderName: transfer.destinationHolderName,
+        quantity: transfer.quantity,
+        considerationType: transfer.considerationType,
+        considerationDescription: transfer.considerationDescription,
+      }),
+      dataJsonList: [],
+      dataReviewed: false,
+      externalNotes: "Share issuance packet staged from the share register.",
+      searchIds: [],
+      registrationIds: [],
+      filingIds: [],
+      generatedDocumentIds: [],
+      signerRoleHolderIds: transfer.destinationRoleHolderId ? [transfer.destinationRoleHolderId] : [],
+      priceItems: [],
+      abstainingDirectorIds: [],
+      abstainingRightsholderIds: [],
+      sourceExternalIds: [
+        `societyer:rightsholding-transfer:${args?.transferId}`,
+        `societyer:corporation-packet-run:${packet.key}`,
+      ],
+      notes: args?.notes ?? `Staged share issuance packet for ledger transfer ${args?.transferId}.`,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    const artifacts = staticCreatePacketRunArtifacts(store, {
+      societyId,
+      packet,
+      runId,
+      eventId: String(args?.transferId),
+      effectiveDate: transfer.transferDate,
+      signerRoleHolderIds: transfer.destinationRoleHolderId ? [transfer.destinationRoleHolderId] : [],
+      dataJson: JSON.stringify({
+        packetKey: packet.key,
+        transferId: args?.transferId,
+        transferType: transfer.transferType,
+        transferDate: transfer.transferDate,
+        rightsClassId: transfer.rightsClassId,
+        destinationRoleHolderId: transfer.destinationRoleHolderId,
+        destinationHolderName: transfer.destinationHolderName,
+        quantity: transfer.quantity,
+        considerationType: transfer.considerationType,
+        considerationDescription: transfer.considerationDescription,
+      }),
+      notes: args?.notes ?? `Editable share issuance packet output staged for ledger transfer ${args?.transferId}.`,
+    });
+    store.upsertRow("rightsholdingTransfers", {
+      ...transfer,
+      precedentRunId: runId,
+      sourceDocumentIds: staticUniqueStrings([...(transfer.sourceDocumentIds ?? []), artifacts.draftDocumentId]),
+      sourceExternalIds: staticUniqueStrings([
+        ...(transfer.sourceExternalIds ?? []),
+        `societyer:corporation-packet-run:${packet.key}`,
+        `societyer:legal-precedent-run:${runId}`,
+        `societyer:generated-legal-document:${artifacts.generatedDocumentId}`,
+        `societyer:minute-book-item:${artifacts.minuteBookItemId}`,
+        `societyer:source-evidence:${artifacts.sourceEvidenceId}`,
+        ...artifacts.signerIds.map((signerId: string) => `societyer:legal-signer:${signerId}`),
+      ]),
+      notes: [transfer.notes, args?.notes ?? "Share issuance packet staged in Template Engine."].filter(Boolean).join("\n\n"),
+      updatedAtISO: now,
+    });
+    staticSyncRightsHoldings(store, societyId);
+  });
+  const updatedRun = store?.getRow("legalPrecedentRuns", runId);
+  const generatedDocumentId = updatedRun?.generatedDocumentIds?.[0];
+  const generatedDocument = generatedDocumentId ? store?.getRow("generatedLegalDocuments", generatedDocumentId) : undefined;
+  const draftDocumentVersionId = (generatedDocument?.sourceExternalIds ?? [])
+    .map((sourceId: string) => sourceId.match(/^societyer:document-version:(.+)$/)?.[1])
+    .find(Boolean);
+  const signerIds = (store?.listRows("legalSigners", { societyId }) ?? [])
+    .filter((row: any) => row.generatedDocumentId === generatedDocumentId)
+    .map((row: any) => row._id);
+  const minuteBookItem = (store?.listRows("minuteBookItems", { societyId }) ?? [])
+    .find((row: any) => (row.documentIds ?? []).includes(generatedDocument?.draftDocumentId));
+  const sourceEvidence = (store?.listRows("sourceEvidence", { societyId }) ?? [])
+    .find((row: any) => row.sourceDocumentId === generatedDocument?.draftDocumentId);
+  return {
+    runId,
+    packetKey: packet.key,
+    precedentId: precedent._id,
+    transferId: args?.transferId,
+    draftDocumentId: generatedDocument?.draftDocumentId,
+    draftDocumentVersionId,
+    generatedDocumentId,
+    signerIds,
+    minuteBookItemId: minuteBookItem?._id,
+    sourceEvidenceId: sourceEvidence?._id,
+  };
+}
+
+function staticLocalId(moduleName: string, exportName = "row") {
+  return `static_${moduleName}_${exportName}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function staticUniqueStrings(values: Array<string | undefined>) {
+  return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]));
+}
+
+function staticRightsholdingTransferChronologicalSort(left: any, right: any) {
+  const leftDate = String(left.transferDate ?? left.createdAtISO ?? left._creationTime ?? "");
+  const rightDate = String(right.transferDate ?? right.createdAtISO ?? right._creationTime ?? "");
+  const dateSort = leftDate.localeCompare(rightDate);
+  if (dateSort !== 0) return dateSort;
+  return Number(left._creationTime ?? 0) - Number(right._creationTime ?? 0);
+}
+
+function staticWorkspaceOnboardingTaskSeeds(jurisdictionCode?: string | null) {
+  const registry = registryOnboardingCopy(jurisdictionCode);
+  return [
+    {
+      key: "profile",
+      title: "Review organization profile",
+      description: "Confirm legal name, incorporation number, incorporation date, fiscal year end, jurisdiction, and entity type.",
+    },
+    {
+      key: "registry",
+      title: registry.taskTitle,
+      description: registry.taskDescription,
+    },
+    {
+      key: "locations",
+      title: "Add registered and mailing locations",
+      description: "Record registered office, records office, mailing address, and any jurisdiction-specific location evidence.",
+    },
+    {
+      key: "documents",
+      title: "Upload governing documents",
+      description: "Attach articles, bylaws, constitution, registers, resolutions, or equivalent governing records for this entity.",
+    },
+    {
+      key: "people",
+      title: "Add directors, members, shareholders, and access",
+      description: "Invite operators and record the people/registers relevant to this workspace type.",
+    },
+  ];
 }
 
 function staticAgentOutput(agent: any, input: string) {
@@ -4880,55 +7439,252 @@ function staticAgentOutput(agent: any, input: string) {
   ].join("\n");
 }
 
-type StaticDemoSeed = Record<string, any[]>;
+const STATIC_IMPORT_SESSION_TAG = "import-session";
+const STATIC_IMPORT_RECORD_TAG = "import-session-record";
+const STATIC_IMPORT_SESSION_CATEGORY = "Import Session";
+const STATIC_IMPORT_RECORD_CATEGORY = "Import Candidate";
+
+function staticImportSessionRows(store?: StaticDemoDexieStore | null, societyId?: string) {
+  return (store?.listRows("documents", societyId ? { societyId } : undefined) ?? [])
+    .filter(staticIsImportSession)
+    .map(staticHydrateImportSession)
+    .map((session) => ({ ...session, summary: staticImportSessionSummary(session, staticImportRecordRows(store, session._id)) }))
+    .sort((a, b) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
+}
+
+function staticImportRecordRows(store?: StaticDemoDexieStore | null, sessionId?: string) {
+  return (store?.listRows("documents", {}) ?? [])
+    .filter(staticIsImportRecord)
+    .map(staticHydrateImportRecord)
+    .filter((record) => !sessionId || record.sessionId === sessionId)
+    .sort((a, b) => String(a.recordKind ?? "").localeCompare(String(b.recordKind ?? "")) || String(a.title ?? "").localeCompare(String(b.title ?? "")));
+}
+
+function staticHydrateImportSession(doc: any) {
+  const payload = staticParseJson(doc?.content);
+  return {
+    ...payload,
+    _id: doc._id,
+    _creationTime: doc._creationTime,
+    name: payload.name ?? doc.title,
+    createdAtISO: payload.createdAtISO ?? doc.createdAtISO,
+  };
+}
+
+function staticHydrateImportRecord(doc: any) {
+  const payload = staticParseJson(doc?.content);
+  return {
+    ...payload,
+    _id: doc._id,
+    _creationTime: doc._creationTime,
+    title: payload.title ?? doc.title,
+    status: staticReviewStatus(payload.status),
+    sourceExternalIds: Array.isArray(payload.sourceExternalIds) ? payload.sourceExternalIds : [],
+    riskFlags: Array.isArray(payload.riskFlags) ? payload.riskFlags : [],
+    importedTargets: payload.importedTargets ?? {},
+  };
+}
+
+function staticImportSessionSummary(session: any, records: any[] = []) {
+  const summary = session?.summary;
+  if (summary && typeof summary === "object" && Number.isFinite(Number(summary.total))) return summary;
+  return staticSummarizeImportRecords(records);
+}
+
+function staticSummarizeImportRecords(records: any[]) {
+  const byKind: Record<string, number> = {};
+  const byStatus: Record<string, number> = {};
+  const byTarget: Record<string, number> = {};
+  let riskCount = 0;
+  for (const record of records) {
+    byKind[record.recordKind] = (byKind[record.recordKind] ?? 0) + 1;
+    byStatus[record.status] = (byStatus[record.status] ?? 0) + 1;
+    byTarget[record.targetModule] = (byTarget[record.targetModule] ?? 0) + 1;
+    if ((record.riskFlags ?? []).length > 0) riskCount += 1;
+  }
+  return {
+    total: records.length,
+    byKind,
+    byStatus,
+    byTarget,
+    riskCount,
+    orgHistoryApplied: 0,
+    meetingsApplied: 0,
+    documentsApplied: 0,
+    sectionsApplied: 0,
+  };
+}
+
+function staticRecordsFromImportBundle(bundle: any) {
+  const records: any[] = [];
+  const pushRows = (key: string, recordKind: string, targetModule: string) => {
+    for (const payload of staticArrayOf(bundle?.[key])) {
+      records.push(staticImportRecord(recordKind, targetModule, payload));
+    }
+  };
+  pushRows("sources", "source", "Org history sources");
+  pushRows("facts", "fact", "Org history");
+  pushRows("events", "event", "Org history");
+  pushRows("boardTerms", "boardTerm", "Directors and roles");
+  pushRows("motions", "motion", "Meetings and minutes");
+  pushRows("meetingMinutes", "meetingMinutes", "Meetings and minutes");
+  pushRows("documents", "documentCandidate", "Documents");
+  pushRows("documentMap", "documentCandidate", "Documents");
+  pushRows("filings", "filing", "filings");
+  pushRows("deadlines", "deadline", "deadlines");
+  pushRows("policies", "policy", "policies");
+  pushRows("grants", "grant", "grants");
+  pushRows("employees", "employee", "employees");
+  pushRows("volunteers", "volunteer", "volunteers");
+  for (const [key, value] of Object.entries(bundle ?? {})) {
+    if (!Array.isArray(value) || records.some((record) => record.sourceCollection === key)) continue;
+    for (const payload of value) records.push(staticImportRecord(staticSingularKind(key), key, payload, key));
+  }
+  return records;
+}
+
+function staticImportRecord(recordKind: string, targetModule: string, payload: any, sourceCollection?: string) {
+  const title = staticImportRecordTitle(recordKind, payload);
+  return {
+    recordKind,
+    targetModule,
+    title,
+    description: staticCleanText(payload?.description ?? payload?.summary ?? payload?.notes) ?? "",
+    payload: payload && typeof payload === "object" ? payload : { value: payload },
+    sourceExternalIds: staticArrayOf(payload?.sourceExternalIds ?? payload?.externalId ?? payload?.id).map(String),
+    confidence: Number(payload?.confidence ?? 0.8),
+    riskFlags: [],
+    sourceCollection,
+  };
+}
+
+function staticCreateImportSession(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
+  const records = staticRecordsFromImportBundle(args?.bundle);
+  if (records.length === 0) throw new Error("Import bundle did not contain any supported records.");
+  const now = new Date().toISOString();
+  const sessionId = `static_import_session_${Date.now()}`;
+  const sessionPayload = {
+    kind: "importSession",
+    name: staticCleanText(args?.name) || staticCleanText(args?.bundle?.metadata?.name) || "Local import session",
+    sourceSystem: staticCleanText(args?.bundle?.metadata?.sourceSystem ?? args?.bundle?.sourceSystem) || "local",
+    bundleMetadata: args?.bundle?.metadata ?? null,
+    createdAtISO: now,
+    updatedAtISO: now,
+    status: "Reviewing",
+    summary: staticSummarizeImportRecords(records.map((record) => ({ ...record, status: "Pending", importedTargets: {} }))),
+  };
+  store?.transaction(() => {
+    store.upsertRow("documents", {
+      _id: sessionId,
+      _creationTime: Date.now(),
+      societyId: args?.societyId ?? SOCIETY_ID,
+      title: sessionPayload.name,
+      category: STATIC_IMPORT_SESSION_CATEGORY,
+      content: JSON.stringify(sessionPayload),
+      createdAtISO: now,
+      flaggedForDeletion: false,
+      tags: [STATIC_IMPORT_SESSION_TAG, `source:${sessionPayload.sourceSystem}`],
+    });
+    records.forEach((record, index) => {
+      const recordId = `static_import_record_${Date.now()}_${index}`;
+      const payload = {
+        ...record,
+        sessionId,
+        kind: "importRecord",
+        status: "Pending",
+        reviewNotes: staticCleanText(record.payload?.reviewNotes) || "",
+        importedTargets: {},
+        createdAtISO: now,
+        updatedAtISO: now,
+      };
+      store.upsertRow("documents", {
+        _id: recordId,
+        _creationTime: Date.now() + index + 1,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        title: record.title,
+        category: STATIC_IMPORT_RECORD_CATEGORY,
+        importSessionId: sessionId,
+        importRecordKind: record.recordKind,
+        content: JSON.stringify(payload),
+        createdAtISO: now,
+        flaggedForDeletion: false,
+        tags: [STATIC_IMPORT_SESSION_TAG, STATIC_IMPORT_RECORD_TAG, `kind:${record.recordKind}`, `target:${record.targetModule}`],
+      });
+    });
+  });
+  return sessionId;
+}
+
+function staticPatchImportSessionUpdatedAt(store: StaticDemoDexieStore | null | undefined, sessionId: string | undefined) {
+  const sessionDoc = store?.getRow("documents", sessionId);
+  if (!sessionDoc || !staticIsImportSession(sessionDoc)) return;
+  const session = staticHydrateImportSession(sessionDoc);
+  store?.upsertRow("documents", {
+    ...sessionDoc,
+    content: JSON.stringify({ ...session, updatedAtISO: new Date().toISOString() }),
+  });
+}
+
+function staticIsImportSession(doc: any) {
+  return Boolean(doc?.tags?.includes(STATIC_IMPORT_SESSION_TAG) && !doc?.tags?.includes(STATIC_IMPORT_RECORD_TAG));
+}
+
+function staticIsImportRecord(doc: any) {
+  return Boolean(doc?.tags?.includes(STATIC_IMPORT_SESSION_TAG) && doc?.tags?.includes(STATIC_IMPORT_RECORD_TAG));
+}
+
+function staticParseJson(value: unknown) {
+  if (!value || typeof value !== "string") return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function staticReviewStatus(value: unknown) {
+  return value === "Approved" || value === "Rejected" ? value : "Pending";
+}
+
+function staticArrayOf(value: unknown) {
+  if (Array.isArray(value)) return value;
+  if (value == null) return [];
+  return [value];
+}
+
+function staticCleanText(value: unknown) {
+  const text = String(value ?? "").trim();
+  return text || undefined;
+}
+
+function staticImportRecordTitle(recordKind: string, payload: any) {
+  return staticCleanText(payload?.title ?? payload?.name ?? payload?.label ?? payload?.description) ?? `${recordKind} import`;
+}
+
+function staticSingularKind(value: string) {
+  return value.replace(/ies$/, "y").replace(/s$/, "") || "record";
+}
+
+export type StaticDemoSeed = LocalSeed;
 
 const STATIC_DEMO_SEED: StaticDemoSeed = {
   ...tables,
   societies: [society],
 };
 
-class StaticDemoDexieDatabase extends Dexie {
-  meetings!: Table<any, string>;
-  minutes!: Table<any, string>;
-  records!: Table<any, string>;
-
-  constructor() {
-    super("societyer-static-demo");
-    this.version(1).stores({
-      meetings: "_id, societyId, scheduledAt, status",
-      minutes: "_id, meetingId, societyId, heldAt, status",
-    });
-    this.version(2).stores({
-      meetings: "_id, societyId, scheduledAt, status",
-      minutes: "_id, meetingId, societyId, heldAt, status",
-      records: "&key, table, id, societyId",
-    });
-  }
-}
-
 class StaticDemoDexieStore {
-  private db: StaticDemoDexieDatabase | null = null;
-  private cache: StaticDemoSeed;
-  private seed: StaticDemoSeed;
-  private listeners = new Set<() => void>();
+  private rowsStore: LocalDexieRowStore;
 
-  constructor(seed: StaticDemoSeed) {
-    this.seed = cloneStaticSeed(seed);
-    this.cache = cloneStaticSeed(seed);
-
-    if (typeof window === "undefined" || !("indexedDB" in window)) return;
-
-    this.db = new StaticDemoDexieDatabase();
-    void this.hydrate(seed).catch((error) => {
-      console.warn("[societyer-demo] Dexie hydrate failed; using in-memory static data.", error);
+  constructor(seed: StaticDemoSeed, options?: { databaseName?: string }) {
+    this.rowsStore = new LocalDexieRowStore(seed, {
+      databaseName: options?.databaseName ?? "societyer-static-demo",
+      logLabel: "societyer-demo",
     });
   }
 
   onUpdate(listener: () => void) {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
+    return this.rowsStore.onUpdate(listener);
   }
 
   queryResult(name: string, args: StaticArgs) {
@@ -4944,7 +7700,7 @@ class StaticDemoDexieStore {
         return record ? [record.agenda] : [];
       }
       case "agendas:listForSociety":
-        return scopedRows(this.cache.meetings, args).map((meeting) => this.agendaSummaryForMeeting(meeting));
+        return scopedRows(this.rows("meetings"), args).map((meeting) => this.agendaSummaryForMeeting(meeting));
       case "meetings:get":
         return this.getRow("meetings", args?.id) ?? this.listRows("meetings", args)[0] ?? null;
       case "meetings:list":
@@ -4974,7 +7730,7 @@ class StaticDemoDexieStore {
         motionText: item?.motionText,
       })).filter((item: any) => item.title));
       const updated = this.patchRow("meetings", args?.meetingId, { agendaJson });
-      const minute = this.cache.minutes.find((row) => row.meetingId === args?.meetingId);
+      const minute = this.rows("minutes").find((row) => row.meetingId === args?.meetingId);
       if (minute) {
         this.patchRow("minutes", minute._id, {
           sections: items.filter((item: any) => String(item?.title ?? "").trim()).map((item: any) => ({
@@ -5002,9 +7758,9 @@ class StaticDemoDexieStore {
 
     if (name === "agendas:startMinutesFromAgenda") {
       const meetingId = String(args?.agendaId ?? "").replace(/^static_agenda_/, "");
-      const meeting = byId(this.cache.meetings, meetingId);
+      const meeting = byId(this.rows("meetings"), meetingId);
       if (!meeting) return { minutesId: null, reused: false };
-      const existing = this.cache.minutes.find((row) => row.meetingId === meetingId);
+      const existing = this.rows("minutes").find((row) => row.meetingId === meetingId);
       if (existing) return { minutesId: existing._id, reused: true };
       const items = parseStaticAgendaItems(meeting.agendaJson);
       const now = Date.now();
@@ -5031,10 +7787,8 @@ class StaticDemoDexieStore {
         decisions: [],
         actionItems: [],
       };
-      this.cache.minutes = upsertStaticRow(this.cache.minutes, row);
-      void this.db?.minutes.put(cloneStaticRow(row));
+      this.upsertRow("minutes", row);
       this.patchRow("meetings", meetingId, { minutesId: row._id });
-      this.notify();
       return { minutesId: row._id, reused: false };
     }
 
@@ -5054,7 +7808,6 @@ class StaticDemoDexieStore {
         ...args,
       };
       this.upsertRow("minutes", row);
-      this.notify();
       return row._id;
     }
 
@@ -5062,45 +7815,39 @@ class StaticDemoDexieStore {
   }
 
   listRows(table: string, args?: StaticArgs) {
-    return scopedRows(this.rows(table), args);
+    return this.rowsStore.listRows(table, args);
   }
 
   getRow(table: string, id: string | undefined) {
-    return byId(this.rows(table), id);
+    return this.rowsStore.getRow(table, id);
   }
 
   upsertRow(table: string, row: any) {
-    if (!row?._id) return null;
-    this.cache[table] = upsertStaticRow(this.rows(table), row);
-    this.persistRow(table, row);
-    this.notify();
-    return row;
+    return this.rowsStore.upsertRow(table, row);
   }
 
   removeRow(table: string, id: string | undefined) {
-    if (!id) return null;
-    const previous = this.getRow(table, id);
-    this.cache[table] = this.rows(table).filter((row) => row._id !== id);
-    void this.db?.records.delete(staticRecordKey(table, id));
-    if (table === "meetings" || table === "minutes") void this.db?.[table].delete(id);
-    this.notify();
-    return previous;
+    return this.rowsStore.removeRow(table, id);
   }
 
   async reseed() {
-    this.cache = cloneStaticSeed(this.seed);
-    if (!this.db) {
-      this.notify();
-      return;
-    }
-    await this.db.open();
-    await Promise.all([
-      this.db.records.clear(),
-      this.db.meetings.clear(),
-      this.db.minutes.clear(),
-    ]);
-    await this.writeSeed(this.seed);
-    this.notify();
+    await this.rowsStore.reseed();
+  }
+
+  async importSnapshot(snapshot: LocalWorkspaceSnapshot) {
+    await this.rowsStore.importSnapshot(snapshot);
+  }
+
+  transaction<T>(mutate: () => T): T {
+    return this.rowsStore.transaction(mutate);
+  }
+
+  exportSnapshot() {
+    return this.rowsStore.exportSnapshot();
+  }
+
+  upsertAttachment(attachment: Parameters<LocalDexieRowStore["upsertAttachment"]>[0]) {
+    return this.rowsStore.upsertAttachment(attachment);
   }
 
   private agendaSummaryForMeeting(meeting: any) {
@@ -5116,7 +7863,7 @@ class StaticDemoDexieStore {
   }
 
   private agendaForMeeting(meetingId: string | undefined) {
-    const meeting = byId(this.cache.meetings, meetingId);
+    const meeting = byId(this.rows("meetings"), meetingId);
     if (!meeting) return null;
     const items = parseStaticAgendaItems(meeting.agendaJson).map((entry, order) => ({
       _id: `static_agenda_item_${meeting._id}_${order}`,
@@ -5132,107 +7879,13 @@ class StaticDemoDexieStore {
     return { agenda: this.agendaSummaryForMeeting(meeting), items };
   }
 
-  private async hydrate(seed: StaticDemoSeed) {
-    if (!this.db) return;
-
-    await this.db.open();
-    if ((await this.db.records.count()) === 0) {
-      const [legacyMeetings, legacyMinutes] = await Promise.all([
-        this.db.meetings.toArray(),
-        this.db.minutes.toArray(),
-      ]);
-      await this.writeSeed({
-        ...seed,
-        meetings: legacyMeetings.length ? legacyMeetings : seed.meetings,
-        minutes: legacyMinutes.length ? legacyMinutes : seed.minutes,
-      });
-    } else {
-      await this.putMissingSeedRows(seed);
-    }
-
-    const localRecords = await this.db.records.toArray();
-    const next = cloneStaticSeed(seed);
-    for (const record of localRecords) {
-      if (!record?.table || !record?.value?._id) continue;
-      next[record.table] = upsertStaticRow(next[record.table] ?? [], record.value);
-    }
-
-    this.cache = next;
-    this.notify();
-  }
-
-  private async writeSeed(seed: StaticDemoSeed) {
-    if (!this.db) return;
-    const records = Object.entries(seed).flatMap(([table, rows]) =>
-      rows.filter((row) => row?._id).map((row) => staticRecord(table, row)),
-    );
-    if (records.length) await this.db.records.bulkPut(records);
-    await Promise.all([
-      seed.meetings?.length ? this.db.meetings.bulkPut(cloneStaticRows(seed.meetings)) : Promise.resolve(),
-      seed.minutes?.length ? this.db.minutes.bulkPut(cloneStaticRows(seed.minutes)) : Promise.resolve(),
-    ]);
-  }
-
-  private async putMissingSeedRows(seed: StaticDemoSeed) {
-    if (!this.db) return;
-    const missing: any[] = [];
-    for (const [table, rows] of Object.entries(seed)) {
-      for (const row of rows) {
-        if (!row?._id) continue;
-        if (!(await this.db.records.get(staticRecordKey(table, row._id)))) missing.push(staticRecord(table, row));
-      }
-    }
-    if (missing.length) await this.db.records.bulkPut(missing);
-  }
-
   private rows(table: string) {
-    return this.cache[table] ?? [];
+    return this.rowsStore.rows(table);
   }
 
   private patchRow(table: string, id: string | undefined, patch: Record<string, any>) {
-    if (!id) return null;
-    const existing = this.rows(table).find((row) => row._id === id);
-    if (!existing) return null;
-    const updated = { ...existing, ...patch, updatedAtISO: new Date().toISOString() };
-    this.upsertRow(table, updated);
-    this.notify();
-    return updated;
+    return this.rowsStore.patchRow(table, id, patch);
   }
-
-  private persistRow(table: string, row: any) {
-    void this.db?.records.put(staticRecord(table, row));
-    if (table === "meetings" || table === "minutes") void this.db?.[table].put(cloneStaticRow(row));
-  }
-
-  private notify() {
-    for (const listener of this.listeners) listener();
-  }
-}
-
-function cloneStaticRow<T>(row: T): T {
-  return JSON.parse(JSON.stringify(row));
-}
-
-function cloneStaticRows<T>(rows: T[]): T[] {
-  return rows.map((row) => cloneStaticRow(row));
-}
-
-function cloneStaticSeed(seed: StaticDemoSeed): StaticDemoSeed {
-  return Object.fromEntries(Object.entries(seed).map(([table, rows]) => [table, cloneStaticRows(rows)]));
-}
-
-function staticRecordKey(table: string, id: string) {
-  return `${table}:${id}`;
-}
-
-function staticRecord(table: string, row: any) {
-  return {
-    key: staticRecordKey(table, row._id),
-    table,
-    id: row._id,
-    societyId: row.societyId,
-    value: cloneStaticRow(row),
-  };
 }
 
 function staticTableNameForModule(moduleName: string) {
@@ -5242,6 +7895,15 @@ function staticTableNameForModule(moduleName: string) {
 
 function staticMutationTableName(moduleName: string, exportName: string) {
   if (moduleName === "society") return "societies";
+  if (moduleName === "legalOperations" && exportName.includes("RoleHolder")) return "roleHolders";
+  if (moduleName === "legalOperations" && exportName.includes("RightsClass")) return "rightsClasses";
+  if (moduleName === "legalOperations" && exportName.includes("RightsholdingTransfer")) return "rightsholdingTransfers";
+  if (moduleName === "legalOperations" && exportName.includes("TemplateDataField")) return "legalTemplateDataFields";
+  if (moduleName === "legalOperations" && exportName.includes("LegalTemplate")) return "legalTemplates";
+  if (moduleName === "legalOperations" && exportName.includes("LegalPrecedentRun")) return "legalPrecedentRuns";
+  if (moduleName === "legalOperations" && exportName.includes("LegalPrecedent")) return "legalPrecedents";
+  if (moduleName === "legalOperations" && exportName.includes("GeneratedLegalDocument")) return "generatedLegalDocuments";
+  if (moduleName === "legalOperations" && exportName.includes("LegalSigner")) return "legalSigners";
   if (moduleName === "organizationDetails" && exportName.includes("Address")) return "organizationAddresses";
   if (moduleName === "organizationDetails" && exportName.includes("Registration")) return "organizationRegistrations";
   if (moduleName === "organizationDetails" && exportName.includes("Identifier")) return "organizationIdentifiers";
@@ -5253,22 +7915,6 @@ function staticMutationTableName(moduleName: string, exportName: string) {
   if (moduleName === "financialHub" && exportName.includes("OperatingSubscription")) return "operatingSubscriptions";
   if (moduleName === "transparency") return "transparency";
   return staticTableNameForModule(moduleName);
-}
-
-function upsertStaticRow(rows: any[], row: any) {
-  const index = rows.findIndex((candidate) => candidate._id === row._id);
-  if (index === -1) return [...rows, row];
-  const next = rows.slice();
-  next[index] = row;
-  return next;
-}
-
-async function putMissingStaticRows(table: Table<any, string>, seedRows: any[]) {
-  const missing: any[] = [];
-  for (const row of seedRows) {
-    if (!(await table.get(row._id))) missing.push(cloneStaticRow(row));
-  }
-  if (missing.length) await table.bulkPut(missing);
 }
 
 function staticModelCatalog(provider: string) {
@@ -5334,10 +7980,16 @@ function staticModel(
 }
 
 export class StaticConvexClient {
-  private store = new StaticDemoDexieStore(STATIC_DEMO_SEED);
+  private store: StaticDemoDexieStore;
+  private clientUrl: string;
+
+  constructor(options?: { databaseName?: string; seed?: StaticDemoSeed; url?: string }) {
+    this.store = new StaticDemoDexieStore(options?.seed ?? STATIC_DEMO_SEED, options);
+    this.clientUrl = options?.url ?? "static://societyer-demo";
+  }
 
   get url() {
-    return "static://societyer-demo";
+    return this.clientUrl;
   }
 
   watchQuery(query: any, args?: StaticArgs) {
@@ -5408,6 +8060,14 @@ export class StaticConvexClient {
 
   reseedStaticDemo() {
     return this.store.reseed();
+  }
+
+  exportLocalWorkspaceSnapshot() {
+    return this.store.exportSnapshot();
+  }
+
+  importLocalWorkspaceSnapshot(snapshot: LocalWorkspaceSnapshot) {
+    return this.store.importSnapshot(snapshot);
   }
 }
 
