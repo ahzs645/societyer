@@ -183,6 +183,10 @@ async function downloadTargetForVersion(version: any) {
     return { kind: "local-filesystem", ...baseTarget };
   }
 
+  if (version.storageProvider === "generated-inline") {
+    return { kind: "url", ...baseTarget, url: version.storageKey };
+  }
+
   if (version.storageProvider === "local") {
     const base =
       process.env.SOCIETYER_API_PUBLIC_URL ??

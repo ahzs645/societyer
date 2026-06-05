@@ -218,6 +218,7 @@ export const upsertRegistration = mutation({
   args: {
     id: v.optional(v.id("organizationRegistrations")),
     societyId: v.id("societies"),
+    registrationType: v.optional(v.string()),
     jurisdiction: v.string(),
     homeJurisdiction: v.optional(v.string()),
     assumedName: v.optional(v.string()),
@@ -230,6 +231,9 @@ export const upsertRegistration = mutation({
     annualReturnDueDate: v.optional(v.string()),
     lastAnnualReturnFiledDate: v.optional(v.string()),
     registryProfileReportDate: v.optional(v.string()),
+    registryPortalKey: v.optional(v.string()),
+    profileReportDocumentId: v.optional(v.id("documents")),
+    companyKeyVaultItemId: v.optional(v.id("secretVaultItems")),
     agentForServiceName: v.optional(v.string()),
     agentForServiceAddress: v.optional(v.string()),
     principalOfficeAddress: v.optional(v.string()),
@@ -242,10 +246,12 @@ export const upsertRegistration = mutation({
   handler: async (ctx, { id, ...args }) => {
     assertAllowedOption("entityJurisdictions", args.jurisdiction, "Registration jurisdiction", false);
     assertAllowedOption("entityJurisdictions", args.homeJurisdiction, "Home jurisdiction");
+    assertAllowedOption("registrationTypes", args.registrationType, "Registration type");
     assertAllowedOption("registrationStatuses", args.status, "Registration status");
     const now = new Date().toISOString();
     const payload = {
       ...cleanObject(args),
+      registrationType: cleanText(args.registrationType) || "extra_provincial",
       jurisdiction: cleanText(args.jurisdiction) || "Needs review",
       representativeIds: args.representativeIds ?? [],
       status: cleanText(args.status) || "needs_review",

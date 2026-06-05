@@ -15,6 +15,7 @@ import { Building2, KeyRound, Landmark, MapPin, Plus, Trash2 } from "lucide-reac
 import { formatDate } from "../lib/format";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { optionLabel } from "../lib/orgHubOptions";
+import { homeJurisdictionCode } from "../../shared/organizationDomain";
 
 type DrawerKind = "address" | "registration" | "identifier";
 type LifecycleDateKey = "incorporationDate" | "continuanceDate" | "amalgamationDate" | "archivedAtISO" | "removedAtISO";
@@ -89,7 +90,7 @@ export function OrganizationDetailsPage() {
       incorporationNumber: profile.incorporationNumber,
       incorporationDate: profile.incorporationDate,
       fiscalYearEnd: profile.fiscalYearEnd,
-      jurisdictionCode: profile.jurisdictionCode ?? "CA-BC",
+      jurisdictionCode: profile.jurisdictionCode || undefined,
       entityType: profile.entityType,
       actFormedUnder: profile.actFormedUnder,
       officialEmail: profile.officialEmail,
@@ -157,8 +158,9 @@ export function OrganizationDetailsPage() {
     }
     if (kind === "registration") {
       setDraft({
-        jurisdiction: society.jurisdictionCode ?? "CA-BC",
-        homeJurisdiction: society.jurisdictionCode ?? "CA-BC",
+        registrationType: "extra_provincial",
+        jurisdiction: homeJurisdictionCode(society),
+        homeJurisdiction: homeJurisdictionCode(society),
         representativeIds: [],
         status: "active",
       });
@@ -196,6 +198,7 @@ export function OrganizationDetailsPage() {
       await upsertRegistration({
         id: draft._id,
         societyId: society._id,
+        registrationType: draft.registrationType || "extra_provincial",
         jurisdiction: draft.jurisdiction || "Needs review",
         homeJurisdiction: draft.homeJurisdiction || undefined,
         assumedName: draft.assumedName || undefined,
@@ -208,6 +211,7 @@ export function OrganizationDetailsPage() {
         annualReturnDueDate: draft.annualReturnDueDate || undefined,
         lastAnnualReturnFiledDate: draft.lastAnnualReturnFiledDate || undefined,
         registryProfileReportDate: draft.registryProfileReportDate || undefined,
+        registryPortalKey: draft.registryPortalKey || undefined,
         agentForServiceName: draft.agentForServiceName || undefined,
         agentForServiceAddress: draft.agentForServiceAddress || undefined,
         principalOfficeAddress: draft.principalOfficeAddress || undefined,
@@ -395,7 +399,10 @@ export function OrganizationDetailsPage() {
               empty="No external or extra-provincial registrations yet."
               columns={["Jurisdiction", "Registration", "Dates", "Status", ""]}
               render={(row: any) => [
-                optionLabel("entityJurisdictions", row.jurisdiction),
+                <div key="j">
+                  <strong>{optionLabel("entityJurisdictions", row.jurisdiction)}</strong>
+                  <div className="muted">{optionLabel("registrationTypes", row.registrationType ?? "extra_provincial")}</div>
+                </div>,
                 <div key="r"><strong>{row.assumedName || "Legal name"}</strong><div className="mono muted">{row.registrationNumber ?? "No number"}{row.nuansNumber ? ` · NUANS ${row.nuansNumber}` : ""}</div></div>,
                 dateRange(row.registrationDate, row.deRegistrationDate || row.activityCommencementDate),
                 <Badge key="s" tone={row.status === "active" ? "success" : "warn"}>{optionLabel("registrationStatuses", row.status)}</Badge>,
@@ -506,7 +513,10 @@ function RegistrationFields({ draft, setDraft }: any) {
   return (
     <>
       <div className="row" style={{ gap: 12 }}>
+        <OptionSelect label="Registration type" setName="registrationTypes" value={draft.registrationType ?? ""} onChange={(value) => setDraft({ ...draft, registrationType: value })} emptyLabel="No type" />
         <OptionSelect label="Registration jurisdiction" setName="entityJurisdictions" value={draft.jurisdiction ?? ""} onChange={(value) => setDraft({ ...draft, jurisdiction: value })} emptyLabel="No jurisdiction" />
+      </div>
+      <div className="row" style={{ gap: 12 }}>
         <OptionSelect label="Home jurisdiction" setName="entityJurisdictions" value={draft.homeJurisdiction ?? ""} onChange={(value) => setDraft({ ...draft, homeJurisdiction: value })} emptyLabel="No home jurisdiction" />
       </div>
       <Field label="Assumed name"><input className="input" value={draft.assumedName ?? ""} onChange={(e) => setDraft({ ...draft, assumedName: e.target.value })} /></Field>
@@ -526,7 +536,10 @@ function RegistrationFields({ draft, setDraft }: any) {
         <Field label="Annual return due"><DatePicker value={draft.annualReturnDueDate ?? ""} onChange={(value) => setDraft({ ...draft, annualReturnDueDate: value })} /></Field>
         <Field label="Last annual return filed"><DatePicker value={draft.lastAnnualReturnFiledDate ?? ""} onChange={(value) => setDraft({ ...draft, lastAnnualReturnFiledDate: value })} /></Field>
       </div>
-      <Field label="Profile report date"><DatePicker value={draft.registryProfileReportDate ?? ""} onChange={(value) => setDraft({ ...draft, registryProfileReportDate: value })} /></Field>
+      <div className="row" style={{ gap: 12 }}>
+        <Field label="Profile report date"><DatePicker value={draft.registryProfileReportDate ?? ""} onChange={(value) => setDraft({ ...draft, registryProfileReportDate: value })} /></Field>
+        <Field label="Registry portal key"><input className="input" value={draft.registryPortalKey ?? ""} onChange={(e) => setDraft({ ...draft, registryPortalKey: e.target.value })} /></Field>
+      </div>
       <Field label="Principal office"><input className="input" value={draft.principalOfficeAddress ?? ""} onChange={(e) => setDraft({ ...draft, principalOfficeAddress: e.target.value })} /></Field>
       <div className="row" style={{ gap: 12 }}>
         <Field label="Agent for service"><input className="input" value={draft.agentForServiceName ?? ""} onChange={(e) => setDraft({ ...draft, agentForServiceName: e.target.value })} /></Field>

@@ -8,6 +8,10 @@ export default defineSchema({
     incorporationDate: v.optional(v.string()),
     fiscalYearEnd: v.optional(v.string()),
     jurisdictionCode: v.optional(v.string()),
+    homeJurisdictionCode: v.optional(v.string()),
+    primaryRegistrationId: v.optional(v.id("organizationRegistrations")),
+    anniversaryDate: v.optional(v.string()),
+    corporationKeyVaultItemId: v.optional(v.id("secretVaultItems")),
     entityType: v.optional(v.string()),
     actFormedUnder: v.optional(v.string()),
     officialEmail: v.optional(v.string()),
@@ -80,6 +84,7 @@ export default defineSchema({
 
   organizationRegistrations: defineTable({
     societyId: v.id("societies"),
+    registrationType: v.optional(v.string()), // home | extra_provincial | business_name | branch | licence | deregistered
     jurisdiction: v.string(),
     homeJurisdiction: v.optional(v.string()),
     assumedName: v.optional(v.string()),
@@ -92,6 +97,9 @@ export default defineSchema({
     annualReturnDueDate: v.optional(v.string()),
     lastAnnualReturnFiledDate: v.optional(v.string()),
     registryProfileReportDate: v.optional(v.string()),
+    registryPortalKey: v.optional(v.string()),
+    profileReportDocumentId: v.optional(v.id("documents")),
+    companyKeyVaultItemId: v.optional(v.id("secretVaultItems")),
     agentForServiceName: v.optional(v.string()),
     agentForServiceAddress: v.optional(v.string()),
     principalOfficeAddress: v.optional(v.string()),
@@ -234,6 +242,23 @@ export default defineSchema({
     .index("by_society", ["societyId"])
     .index("by_society_date", ["societyId", "transferDate"])
     .index("by_society_status", ["societyId", "status"]),
+
+  rightsHoldings: defineTable({
+    societyId: v.id("societies"),
+    rightsClassId: v.id("rightsClasses"),
+    holderRoleHolderId: v.optional(v.id("roleHolders")),
+    holderKey: v.string(),
+    quantity: v.number(),
+    status: v.string(), // current | zeroed | needs_review
+    lastTransactionId: v.optional(v.id("rightsholdingTransfers")),
+    sourceDocumentIds: v.array(v.id("documents")),
+    sourceExternalIds: v.array(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_class", ["societyId", "rightsClassId"])
+    .index("by_society_holder", ["societyId", "holderKey"]),
 
   legalTemplateDataFields: defineTable({
     societyId: v.optional(v.id("societies")),

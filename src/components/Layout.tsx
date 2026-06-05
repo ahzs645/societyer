@@ -339,6 +339,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Compliance",
     items: [
       navItem("/app/filings"),
+      navItem("/app/compliance-obligations"),
       navItem("/app/filings/prefill"),
       navItem("/app/annual-cycle"),
       navItem("/app/formation-maintenance"),

@@ -35,6 +35,10 @@ export const upsert = mutation({
     incorporationDate: v.optional(v.string()),
     fiscalYearEnd: v.optional(v.string()),
     jurisdictionCode: v.optional(v.string()),
+    homeJurisdictionCode: v.optional(v.string()),
+    primaryRegistrationId: v.optional(v.id("organizationRegistrations")),
+    anniversaryDate: v.optional(v.string()),
+    corporationKeyVaultItemId: v.optional(v.id("secretVaultItems")),
     entityType: v.optional(v.string()),
     actFormedUnder: v.optional(v.string()),
     officialEmail: v.optional(v.string()),
@@ -92,7 +96,12 @@ export const upsert = mutation({
         throw new Error("Public slug is already in use by another society.");
       }
     }
-    const payload = { ...rest, updatedAt: Date.now() };
+    const payload = {
+      ...rest,
+      homeJurisdictionCode: rest.homeJurisdictionCode ?? rest.jurisdictionCode,
+      anniversaryDate: rest.anniversaryDate ?? rest.incorporationDate,
+      updatedAt: Date.now(),
+    };
     if (id) {
       await ctx.db.patch(id, payload);
       return id;
@@ -113,6 +122,9 @@ export const createWorkspace = mutation({
     incorporationDate: v.optional(v.string()),
     fiscalYearEnd: v.optional(v.string()),
     jurisdictionCode: v.optional(v.string()),
+    homeJurisdictionCode: v.optional(v.string()),
+    anniversaryDate: v.optional(v.string()),
+    corporationKeyVaultItemId: v.optional(v.id("secretVaultItems")),
     entityType: v.optional(v.string()),
     actFormedUnder: v.optional(v.string()),
     officialEmail: v.optional(v.string()),
@@ -145,12 +157,19 @@ export const createWorkspace = mutation({
     assertAllowedOption("organizationStatuses", args.organizationStatus, "Organization status");
 
     const now = new Date().toISOString();
+    const jurisdictionCode = args.jurisdictionCode ?? "CA-BC";
+    const homeJurisdictionCode = args.homeJurisdictionCode ?? jurisdictionCode;
+    const anniversaryDate = blankToUndefined(args.anniversaryDate) ?? blankToUndefined(args.incorporationDate);
+
     const societyId = await ctx.db.insert("societies", {
       name,
       incorporationNumber: blankToUndefined(args.incorporationNumber),
       incorporationDate: blankToUndefined(args.incorporationDate),
       fiscalYearEnd: blankToUndefined(args.fiscalYearEnd),
-      jurisdictionCode: args.jurisdictionCode ?? "CA-BC",
+      jurisdictionCode,
+      homeJurisdictionCode,
+      anniversaryDate,
+      corporationKeyVaultItemId: args.corporationKeyVaultItemId,
       entityType: blankToUndefined(args.entityType),
       actFormedUnder: blankToUndefined(args.actFormedUnder),
       officialEmail: blankToUndefined(args.officialEmail),
@@ -167,6 +186,21 @@ export const createWorkspace = mutation({
       isMemberFunded: args.isMemberFunded ?? false,
       updatedAt: Date.now(),
     });
+    const homeRegistrationId = await ctx.db.insert("organizationRegistrations", {
+      societyId,
+      registrationType: "home",
+      jurisdiction: homeJurisdictionCode,
+      homeJurisdiction: homeJurisdictionCode,
+      registrationNumber: blankToUndefined(args.incorporationNumber),
+      registrationDate: blankToUndefined(args.incorporationDate),
+      officialEmail: blankToUndefined(args.officialEmail),
+      representativeIds: [],
+      status: "active",
+      notes: "Created automatically from the workspace home jurisdiction.",
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    await ctx.db.patch(societyId, { primaryRegistrationId: homeRegistrationId });
     await seedSociety(ctx, societyId);
 
     const workflowId = await ctx.db.insert("workflows", {

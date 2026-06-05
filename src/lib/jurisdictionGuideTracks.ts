@@ -87,7 +87,7 @@ export const JURISDICTION_OPTIONS = JURISDICTION_GUIDE_PACKS.map((pack) => ({
 export function resolveJurisdictionCode(society?: {
   jurisdictionCode?: string | null;
 } | null): JurisdictionCode {
-  return society?.jurisdictionCode || "CA-BC";
+  return society?.jurisdictionCode || "unknown";
 }
 
 export function getJurisdictionGuidePack(

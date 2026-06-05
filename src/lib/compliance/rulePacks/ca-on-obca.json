@@ -1,0 +1,103 @@
+{
+  "schemaVersion": "1.0.0",
+  "packId": "compliance-ca-on-obca",
+  "status": "draft",
+  "version": "2026.06.04",
+  "reviewedAt": "2026-06-04",
+  "jurisdictionCode": "CA-ON-OBCA",
+  "entityTypes": ["corporation__business_"],
+  "title": "Ontario OBCA compliance obligation pack",
+  "description": "Draft operational schedules for core Ontario OBCA and Ontario Business Registry maintenance obligations.",
+  "sourceGuidePackId": "ca-on-obca",
+  "rules": [
+    {
+      "ruleId": "compliance-ca-on-obca-annual-meeting",
+      "status": "draft",
+      "title": "Annual meeting planning deadline",
+      "summary": "Track annual meeting planning against the fiscal year end.",
+      "obligationKey": "agm.annual_meeting",
+      "schedule": {
+        "kind": "annual",
+        "anchorFact": "fiscalYearEnd",
+        "dueOffset": { "months": 6 }
+      },
+      "authority": {
+        "guidePackId": "ca-on-obca",
+        "guideRuleIds": ["ca-on-obca-agm-timing"],
+        "displayCitation": "OBCA ss.94, 154"
+      },
+      "creates": {
+        "requiredEvidence": ["meetingMinutes", "shareholderResolution"],
+        "checklist": [
+          "Confirm annual meeting timing against fiscal year end.",
+          "Prepare notice, agenda, and shareholder package.",
+          "Archive minutes or written resolutions."
+        ]
+      },
+      "caveat": "Operational date only; articles, by-laws, waivers, and meeting history can affect the workflow."
+    },
+    {
+      "ruleId": "compliance-ca-on-obca-initial-return",
+      "status": "draft",
+      "title": "Initial return deadline",
+      "summary": "Track the initial Ontario Business Registry return from incorporation.",
+      "obligationKey": "registry.initial_return",
+      "schedule": {
+        "kind": "offset",
+        "anchorFact": "incorporationDate",
+        "dueOffset": { "days": 60 }
+      },
+      "authority": {
+        "guidePackId": "ca-on-obca",
+        "guideRuleIds": ["ca-on-obca-obr-filings"],
+        "displayCitation": "Ontario Business Registry filings"
+      },
+      "creates": {
+        "filingKind": "OntarioInitialReturn",
+        "requiredEvidence": ["confirmationNumber", "profileReportEvidence"],
+        "checklist": [
+          "Verify corporation number, registered/head office, directors, officers, and company key custody.",
+          "Prepare the initial return filing packet.",
+          "File through the Ontario Business Registry or approved service path.",
+          "Capture confirmation number, receipt, and profile-report evidence."
+        ]
+      },
+      "caveat": "Confirm entity-specific Ontario Business Registry instructions and filing status."
+    },
+    {
+      "ruleId": "compliance-ca-on-obca-annual-return-window",
+      "status": "draft",
+      "title": "Annual return filing window",
+      "summary": "Track an annual return filing window from fiscal year end to an operational six-month due date.",
+      "obligationKey": "registry.annual_return",
+      "schedule": {
+        "kind": "window",
+        "recurrence": "annual",
+        "opens": {
+          "anchorFact": "fiscalYearEnd",
+          "offset": { "days": 1 }
+        },
+        "closes": {
+          "anchorFact": "fiscalYearEnd",
+          "offset": { "months": 6 }
+        }
+      },
+      "authority": {
+        "guidePackId": "ca-on-obca",
+        "guideRuleIds": ["ca-on-obca-obr-filings"],
+        "displayCitation": "Ontario Business Registry filings"
+      },
+      "creates": {
+        "filingKind": "OntarioAnnualReturn",
+        "requiredEvidence": ["confirmationNumber", "receiptOrAcknowledgement"],
+        "checklist": [
+          "Review Ontario Business Registry profile data.",
+          "Prepare the annual return filing packet.",
+          "File through the Ontario Business Registry or approved service path.",
+          "Archive confirmation, receipt, and profile-report evidence."
+        ]
+      },
+      "caveat": "Draft operational window; confirm current Ontario Business Registry annual-return instructions before filing."
+    }
+  ]
+}

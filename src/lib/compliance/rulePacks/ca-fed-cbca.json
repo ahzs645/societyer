@@ -1,0 +1,212 @@
+{
+  "schemaVersion": "1.0.0",
+  "packId": "compliance-ca-fed-cbca",
+  "status": "draft",
+  "version": "2026.06.04",
+  "reviewedAt": "2026-06-04",
+  "jurisdictionCode": "CA-FED-CBCA",
+  "entityTypes": ["corporation__business_"],
+  "title": "CBCA compliance obligation pack",
+  "description": "Draft operational schedules for core CBCA annual maintenance obligations.",
+  "sourceGuidePackId": "ca-fed-cbca",
+  "rules": [
+    {
+      "ruleId": "compliance-ca-fed-cbca-annual-return-window",
+      "status": "draft",
+      "title": "Annual return filing window",
+      "summary": "Track the annual return filing window from the corporation anniversary date to the operational due date.",
+      "obligationKey": "annual_return.filing",
+      "schedule": {
+        "kind": "window",
+        "recurrence": "annual",
+        "opens": {
+          "anchorFact": "anniversaryDate",
+          "offset": { "days": 0 }
+        },
+        "closes": {
+          "anchorFact": "anniversaryDate",
+          "offset": { "days": 60 }
+        }
+      },
+      "authority": {
+        "guidePackId": "ca-fed-cbca",
+        "guideRuleIds": ["ca-fed-cbca-annual-return"],
+        "displayCitation": "CBCA annual return guidance"
+      },
+      "creates": {
+        "filingKind": "FederalAnnualReturn",
+        "requiredEvidence": ["confirmationNumber", "receiptOrAcknowledgement"],
+        "checklist": [
+          "Verify corporation number, anniversary date, registered office, directors, and key custody.",
+          "Prepare the annual return filing packet.",
+          "File through Corporations Canada or the approved service path.",
+          "Capture confirmation number, receipt, and any profile-report evidence."
+        ]
+      },
+      "caveat": "Operational date only; confirm current Corporations Canada filing instructions before submission."
+    },
+    {
+      "ruleId": "compliance-ca-fed-cbca-financials-to-shareholders",
+      "status": "draft",
+      "title": "Annual financial statements workflow",
+      "summary": "Track annual financial-statement preparation against the fiscal year end.",
+      "obligationKey": "annual_financials.shareholder_package",
+      "schedule": {
+        "kind": "annual",
+        "anchorFact": "fiscalYearEnd",
+        "dueOffset": { "months": 6 }
+      },
+      "authority": {
+        "guidePackId": "ca-fed-cbca",
+        "guideRuleIds": ["ca-fed-cbca-annual-return"],
+        "displayCitation": "CBCA ss.133, 155, 159, 263"
+      },
+      "creates": {
+        "requiredEvidence": ["financialStatements", "shareholderPackageEvidence"],
+        "checklist": [
+          "Prepare annual financial statements.",
+          "Confirm shareholder delivery or waiver path.",
+          "Archive signed approvals, waivers, or meeting evidence."
+        ]
+      },
+      "caveat": "Meeting timing, waivers, exemptions, and filing history may change the practical workflow."
+    },
+    {
+      "ruleId": "compliance-ca-fed-cbca-first-agm",
+      "status": "draft",
+      "title": "First annual meeting deadline",
+      "summary": "Track the first annual meeting from the incorporation date.",
+      "obligationKey": "agm.first_meeting",
+      "schedule": {
+        "kind": "offset",
+        "anchorFact": "incorporationDate",
+        "dueOffset": { "months": 18 }
+      },
+      "authority": {
+        "guidePackId": "ca-fed-cbca",
+        "guideRuleIds": ["ca-fed-cbca-annual-return"],
+        "displayCitation": "CBCA annual meeting guidance"
+      },
+      "creates": {
+        "requiredEvidence": ["meetingMinutes", "shareholderResolution"],
+        "checklist": [
+          "Confirm first annual meeting deadline.",
+          "Prepare notice, agenda, and shareholder package.",
+          "Archive minutes or written resolutions."
+        ]
+      },
+      "caveat": "Use as an initial planning deadline; confirm exceptions and current status before relying on it."
+    },
+    {
+      "ruleId": "compliance-ca-fed-cbca-isc-annual-review",
+      "status": "draft",
+      "title": "ISC register annual review",
+      "summary": "Review individuals with significant control, supporting notices, and change evidence at least annually.",
+      "obligationKey": "isc.annual_review",
+      "schedule": {
+        "kind": "annual",
+        "anchorFact": "fiscalYearEnd",
+        "dueOffset": { "months": 6 }
+      },
+      "authority": {
+        "guidePackId": "ca-fed-cbca",
+        "guideRuleIds": ["ca-fed-cbca-corporate-records"],
+        "displayCitation": "CBCA ISC register guidance"
+      },
+      "creates": {
+        "filingKind": "FederalIscUpdate",
+        "requiredEvidence": ["iscRegister", "controlReviewMemo", "noticeEvidence"],
+        "checklist": [
+          "Review shareholders, controllers, and significant-control thresholds.",
+          "Confirm notices or reasonable steps taken to update ISC information.",
+          "Update the ISC register or document that no changes were required.",
+          "Archive the review memo and supporting evidence."
+        ]
+      },
+      "caveat": "Use as an annual control-review reminder; confirm whether any public filing or exemption applies."
+    },
+    {
+      "ruleId": "compliance-ca-fed-cbca-director-change-review",
+      "status": "draft",
+      "title": "Director change review",
+      "summary": "Review director changes, consents, register updates, and any Corporations Canada notice obligations.",
+      "obligationKey": "directors.change_review",
+      "schedule": {
+        "kind": "annual",
+        "anchorFact": "fiscalYearEnd",
+        "dueOffset": { "months": 1 }
+      },
+      "authority": {
+        "guidePackId": "ca-fed-cbca",
+        "guideRuleIds": ["ca-fed-cbca-corporate-records"],
+        "displayCitation": "CBCA corporate records guidance"
+      },
+      "creates": {
+        "filingKind": "FederalDirectorChange",
+        "requiredEvidence": ["directorRegister", "directorConsent", "registryNoticeEvidence"],
+        "checklist": [
+          "Compare current directors against the director register and registry profile.",
+          "Confirm consents, resignations, appointments, or resolutions are archived.",
+          "Prepare and track any required director-change filing.",
+          "Link confirmation or profile evidence after filing."
+        ]
+      },
+      "caveat": "Review cadence is operational; actual filing deadlines depend on the specific director change."
+    },
+    {
+      "ruleId": "compliance-ca-fed-cbca-registered-office-change-review",
+      "status": "draft",
+      "title": "Registered office change review",
+      "summary": "Review registered office, records location, and any registry notice or articles amendment path.",
+      "obligationKey": "registered_office.change_review",
+      "schedule": {
+        "kind": "annual",
+        "anchorFact": "fiscalYearEnd",
+        "dueOffset": { "months": 1 }
+      },
+      "authority": {
+        "guidePackId": "ca-fed-cbca",
+        "guideRuleIds": ["ca-fed-cbca-corporate-records"],
+        "displayCitation": "CBCA registered office and records guidance"
+      },
+      "creates": {
+        "filingKind": "FederalRegisteredOfficeChange",
+        "requiredEvidence": ["registeredOfficeEvidence", "recordsLocationEvidence", "registryNoticeEvidence"],
+        "checklist": [
+          "Confirm registered office, records office/location, and mailing details.",
+          "Check whether the change requires a registry notice, articles update, or internal resolution.",
+          "Prepare and track any registered-office filing.",
+          "Archive profile or confirmation evidence after filing."
+        ]
+      },
+      "caveat": "Review cadence is operational; confirm current Corporations Canada requirements for the actual change."
+    },
+    {
+      "ruleId": "compliance-ca-fed-cbca-corporation-key-custody",
+      "status": "draft",
+      "title": "Corporation key custody review",
+      "summary": "Review custody of registry keys, authorized filers, backup custodians, and restricted evidence handling.",
+      "obligationKey": "registry_key.custody_review",
+      "schedule": {
+        "kind": "annual",
+        "anchorFact": "anniversaryDate",
+        "dueOffset": { "days": 60 }
+      },
+      "authority": {
+        "guidePackId": "ca-fed-cbca",
+        "guideRuleIds": ["ca-fed-cbca-annual-return", "ca-fed-cbca-corporate-records"],
+        "displayCitation": "CBCA annual filing and records guidance"
+      },
+      "creates": {
+        "requiredEvidence": ["keyCustodyRecord", "authorizedFilerReview", "backupCustodianEvidence"],
+        "checklist": [
+          "Confirm who holds the corporation key or registry credential.",
+          "Review authorized filers and backup custodian access.",
+          "Store key custody evidence in restricted records.",
+          "Record any access change or missing credential remediation."
+        ]
+      },
+      "caveat": "Operational custody control only; do not store secrets in ordinary notes or public records."
+    }
+  ]
+}

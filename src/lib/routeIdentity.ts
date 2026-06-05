@@ -210,6 +210,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
 
   // ---- Compliance ----
   "/app/filings": { icon: FileCheck, group: "compliance", label: "Filings" },
+  "/app/compliance-obligations": { icon: ClipboardList, group: "compliance", label: "Obligations" },
   "/app/filings/prefill": { icon: FileCog, group: "compliance", label: "Filing pre-fill", module: "filingPrefill" },
   "/app/annual-cycle": { icon: CalendarCheck, group: "compliance", label: "Annual cycle" },
   "/app/formation-maintenance": { icon: Construction, group: "compliance", label: "Formation & annual" },

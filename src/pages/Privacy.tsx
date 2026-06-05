@@ -305,7 +305,7 @@ export function PrivacyPage() {
         incorporationNumber: society.incorporationNumber,
         incorporationDate: society.incorporationDate,
         fiscalYearEnd: society.fiscalYearEnd,
-        jurisdictionCode: society.jurisdictionCode ?? "CA-BC",
+        jurisdictionCode: society.jurisdictionCode || undefined,
         isCharity: !!society.isCharity,
         isMemberFunded: !!society.isMemberFunded,
         registeredOfficeAddress: society.registeredOfficeAddress,

@@ -231,6 +231,8 @@ export const ORG_HUB_OPTION_SETS = {
   representativeTypes: [
     { value: "officer", label: "Officer" },
     { value: "director", label: "Director" },
+    { value: "shareholder", label: "Shareholder" },
+    { value: "controller", label: "Individual with significant control" },
     { value: "member", label: "Member" },
     { value: "shareholder_representative", label: "Rep of Non-Natural Role Holder" },
     { value: "trustee", label: "Trustee" },
@@ -238,6 +240,7 @@ export const ORG_HUB_OPTION_SETS = {
     { value: "attorney_for_service", label: "Attorney for Service" },
     { value: "chief_officer___manager", label: "Chief Officer / Manager" },
     { value: "authorized_contact_person", label: "Authorized Contact Person" },
+    { value: "authorized_filer", label: "Authorized Filer" },
     { value: "authorized_representative", label: "Other" },
     { value: "treasury", label: "Treasury" },
   ],
@@ -255,6 +258,14 @@ export const LOCAL_OPTION_SETS = {
     { value: "inactive", label: "Inactive" },
     { value: "pending", label: "Pending" },
     { value: "needs_review", label: "Needs review" },
+  ],
+  registrationTypes: [
+    { value: "home", label: "Home jurisdiction" },
+    { value: "extra_provincial", label: "Extra-provincial" },
+    { value: "business_name", label: "Business name" },
+    { value: "branch", label: "Branch" },
+    { value: "licence", label: "Licence" },
+    { value: "deregistered", label: "Deregistered" },
   ],
   identifierStatuses: [
     { value: "active", label: "Active" },

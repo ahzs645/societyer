@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
@@ -8,11 +9,18 @@ import { DatePicker } from "../components/DatePicker";
 import { OptionMultiSelect, OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { BookTemplate, FileSignature, Landmark, Plus, Scale, Trash2, UsersRound } from "lucide-react";
+import { BookTemplate, FileSignature, Landmark, Plus, Scale, Trash2, UserCheck, UsersRound } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
 import { StructuredAddressFields } from "../components/StructuredAddressFields";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import {
+  homeJurisdictionCode,
+  isCorporation,
+  organizationLabel,
+} from "../../shared/organizationDomain";
+import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
+import { deriveCurrentHoldings } from "../lib/equity";
 
 export function RoleHoldersPage() {
   const society = useSociety();
@@ -26,7 +34,11 @@ export function RoleHoldersPage() {
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
 
-  const openNew = () => setDraft({ roleType: "authorized_representative", status: "current", fullName: "" });
+  const corporationWorkspace = isCorporation(society);
+  const jurisdictionCopy = jurisdictionDisplayCopy(homeJurisdictionCode(society));
+  const roleSummary = summarizeCorporationRoles(rows ?? []);
+  const openNew = (roleType = corporationWorkspace ? "director" : "authorized_representative") =>
+    setDraft(defaultRoleHolderDraft(roleType, corporationWorkspace));
   const save = async () => {
     if (!draft) return;
     await upsert({
@@ -95,12 +107,75 @@ export function RoleHoldersPage() {
   return (
     <div className="page page--wide">
       <PageHeader
-        title="Role-holder register"
+        title={corporationWorkspace ? "Corporation people" : "Role-holder register"}
         icon={<UsersRound size={16} />}
         iconColor="blue"
-        subtitle="Canonical register for directors, officers, incorporators, attorneys for service, authorized representatives, members, rightsholders, and control relationships."
-        actions={<button className="btn-action btn-action--primary" onClick={openNew}><Plus size={12} /> New holder</button>}
+        subtitle={
+          corporationWorkspace
+            ? `Directors, officers, shareholders, controllers, and authorized filers for ${organizationLabel(society)}.`
+            : "Canonical register for directors, officers, incorporators, attorneys for service, authorized representatives, members, rightsholders, and control relationships."
+        }
+        actions={
+          <div className="row" style={{ flexWrap: "wrap" }}>
+            {corporationWorkspace && (
+              <>
+                <button className="btn-action" onClick={() => openNew("officer")}><Plus size={12} /> Officer</button>
+                <button className="btn-action" onClick={() => openNew("shareholder")}><Plus size={12} /> Shareholder</button>
+                <button className="btn-action" onClick={() => openNew("controller")}><Plus size={12} /> Controller</button>
+              </>
+            )}
+            <button className="btn-action btn-action--primary" onClick={() => openNew()}>
+              <Plus size={12} /> {corporationWorkspace ? "Director" : "New holder"}
+            </button>
+          </div>
+        }
       />
+
+      {corporationWorkspace && (
+        <>
+          <div className="stat-grid" style={{ marginBottom: 16 }}>
+            <div className="stat-card">
+              <span className="stat-card__label">Directors</span>
+              <strong>{roleSummary.directors}</strong>
+            </div>
+            <div className="stat-card">
+              <span className="stat-card__label">Officers</span>
+              <strong>{roleSummary.officers}</strong>
+            </div>
+            <div className="stat-card">
+              <span className="stat-card__label">Shareholders</span>
+              <strong>{roleSummary.shareholders}</strong>
+            </div>
+            <div className="stat-card">
+              <span className="stat-card__label">Controllers</span>
+              <strong>{roleSummary.controllers}</strong>
+            </div>
+          </div>
+
+          <section className="card" style={{ marginBottom: 16 }}>
+            <div className="card__head">
+              <div>
+                <h2 className="card__title">{jurisdictionCopy.entityLabel} register</h2>
+                <span className="card__subtitle">
+                  {homeJurisdictionCode(society)} people register. Link shareholders to the share register once shares are issued.
+                </span>
+              </div>
+              <Link className="btn-action" to="/app/rights-ledger">
+                <UserCheck size={12} /> Open share register
+              </Link>
+            </div>
+            <div className="card__body">
+              <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                <Badge tone={roleSummary.directors ? "success" : "warn"}>{roleSummary.directors ? "Directors recorded" : "Add directors"}</Badge>
+                <Badge tone={roleSummary.officers ? "success" : "neutral"}>{roleSummary.officers ? "Officers recorded" : "Add officers"}</Badge>
+                <Badge tone={roleSummary.shareholders ? "success" : "warn"}>{roleSummary.shareholders ? "Shareholders recorded" : "Add shareholders"}</Badge>
+                <Badge tone={roleSummary.controllers ? "success" : "neutral"}>{roleSummary.controllers ? "Controllers recorded" : "Add controllers"}</Badge>
+                <Badge tone={roleSummary.authorizedFilers ? "success" : "neutral"}>{roleSummary.authorizedFilers ? "Authorized filers recorded" : "Add authorized filers"}</Badge>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
 
       <Section title="People and controllers" count={rows?.length ?? 0}>
         <div className="table-wrap">
@@ -219,12 +294,15 @@ export function RightsLedgerPage() {
   const data = useQuery(api.legalOperations.rightsLedger, society ? { societyId: society._id } : "skip");
   const upsertClass = useMutation(api.legalOperations.upsertRightsClass);
   const upsertTransfer = useMutation(api.legalOperations.upsertRightsholdingTransfer);
+  const stageShareIssuancePacket = useMutation(api.legalOperations.stageShareIssuancePacket);
   const removeClass = useMutation(api.legalOperations.removeRightsClass);
   const removeTransfer = useMutation(api.legalOperations.removeRightsholdingTransfer);
   const toast = useToast();
   const confirm = useConfirm();
   const [classDraft, setClassDraft] = useState<any>(null);
   const [transferDraft, setTransferDraft] = useState<any>(null);
+  const currentHoldings = useMemo(() => deriveCurrentHoldings(data?.transfers ?? []), [data?.transfers]);
+  const corporationWorkspace = society ? isCorporation(society) : false;
 
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
@@ -261,6 +339,8 @@ export function RightsLedgerPage() {
       transferType: transferDraft.transferType || "transfer",
       status: transferDraft.status || "draft",
       transferDate: empty(transferDraft.transferDate),
+      eventId: empty(transferDraft.eventId),
+      precedentRunId: empty(transferDraft.precedentRunId) as any,
       rightsClassId: empty(transferDraft.rightsClassId) as any,
       sourceRoleHolderId: empty(transferDraft.sourceRoleHolderId) as any,
       destinationRoleHolderId: empty(transferDraft.destinationRoleHolderId) as any,
@@ -273,6 +353,7 @@ export function RightsLedgerPage() {
       priceToOrganizationCurrency: empty(transferDraft.priceToOrganizationCurrency),
       priceToVendorCents: cents(transferDraft.priceToVendor),
       priceToVendorCurrency: empty(transferDraft.priceToVendorCurrency),
+      sourceDocumentIds: transferDraft.sourceDocumentIds ?? [],
       sourceExternalIds: csv(transferDraft.sourceExternalIdsText ?? transferDraft.sourceExternalIds),
       notes: empty(transferDraft.notes),
     });
@@ -293,22 +374,35 @@ export function RightsLedgerPage() {
     toast.success("Ledger row deleted");
   };
 
+  const stageIssuancePacket = async (row: any) => {
+    await stageShareIssuancePacket({
+      societyId: society._id,
+      transferId: row._id,
+      notes: `Staged from share register issuance ${row._id}.`,
+    });
+    toast.success("Packet staged", "The share issuance packet is ready in Template Engine.");
+  };
+
   return (
     <div className="page page--wide">
       <PageHeader
-        title="Rights ledger"
+        title={corporationWorkspace ? "Share register" : "Rights ledger"}
         icon={<Scale size={16} />}
         iconColor="purple"
-        subtitle="Membership/right classes plus issuance, transfer, redemption, cancellation, and adjustment history."
+        subtitle={
+          corporationWorkspace
+            ? "Share classes, current holdings, issuance, transfers, redemptions, cancellations, and supporting evidence."
+            : "Membership/right classes plus current holdings, issuance, transfer, redemption, cancellation, and adjustment history."
+        }
         actions={
           <div className="row">
-            <button className="btn-action" onClick={() => setTransferDraft({ transferType: "transfer", status: "draft", priceToOrganizationCurrency: "cad", priceToVendorCurrency: "cad" })}><Plus size={12} /> Transfer</button>
-            <button className="btn-action btn-action--primary" onClick={() => setClassDraft({ classType: "membership", status: "active" })}><Plus size={12} /> Class</button>
+            <button className="btn-action" onClick={() => setTransferDraft({ transferType: corporationWorkspace ? "issuance" : "transfer", status: "draft", priceToOrganizationCurrency: "cad", priceToVendorCurrency: "cad" })}><Plus size={12} /> {corporationWorkspace ? "Issuance" : "Transfer"}</button>
+            <button className="btn-action btn-action--primary" onClick={() => setClassDraft({ classType: corporationWorkspace ? "share" : "membership", status: "active" })}><Plus size={12} /> {corporationWorkspace ? "Share class" : "Class"}</button>
           </div>
         }
       />
 
-      <Section title="Rights and membership classes" count={data?.classes?.length ?? 0}>
+      <Section title={corporationWorkspace ? "Share classes" : "Rights and membership classes"} count={data?.classes?.length ?? 0}>
         <div className="table-wrap">
           <table className="table">
             <thead><tr><th>Class</th><th>Type</th><th>Voting/conditions</th><th>Dates</th><th>Status</th><th /></tr></thead>
@@ -329,10 +423,33 @@ export function RightsLedgerPage() {
         </div>
       </Section>
 
+      <Section title={corporationWorkspace ? "Current share holdings" : "Current holdings"} count={currentHoldings.length}>
+        <div className="table-wrap">
+          <table className="table">
+            <thead><tr><th>Holder</th><th>Class</th><th>Quantity</th><th>Source</th></tr></thead>
+            <tbody>
+              {currentHoldings.map((holding: any) => {
+                const rightsClass = data?.classes?.find((item: any) => item._id === holding.rightsClassId);
+                const holder = roleHolderForHolding(data?.roleHolders ?? [], holding.holderKey);
+                return (
+                  <tr key={`${holding.rightsClassId}:${holding.holderKey}`}>
+                    <td><strong>{holder?.fullName || holding.holderKey}</strong><div className="muted">{holder?.roleType ? optionLabel("representativeTypes", holder.roleType) : "Unlinked holder"}</div></td>
+                    <td>{rightsClass?.className || holding.rightsClassId}<div className="muted">{rightsClass?.classType ? optionLabel("rightsClassTypes", rightsClass.classType) : "No class record"}</div></td>
+                    <td>{holding.quantity}</td>
+                    <td><Badge tone="success">Posted ledger</Badge></td>
+                  </tr>
+                );
+              })}
+              {currentHoldings.length === 0 && <EmptyRow cols={4} label={corporationWorkspace ? "No posted share holdings yet." : "No posted holdings yet."} />}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
       <Section title="Holding and transfer events" count={data?.transfers?.length ?? 0}>
         <div className="table-wrap">
           <table className="table">
-            <thead><tr><th>Date</th><th>Type</th><th>Class</th><th>From</th><th>To</th><th>Quantity</th><th>Status</th><th /></tr></thead>
+            <thead><tr><th>Date</th><th>Type</th><th>Class</th><th>From</th><th>To</th><th>Quantity</th><th>Status</th><th>Evidence</th><th /></tr></thead>
             <tbody>
               {(data?.transfers ?? []).map((row: any) => {
                 const rightsClass = data?.classes?.find((item: any) => item._id === row.rightsClassId);
@@ -347,11 +464,22 @@ export function RightsLedgerPage() {
                     <td>{destination?.fullName || row.destinationHolderName || "No destination"}</td>
                     <td>{row.quantity ?? "-"}</td>
                     <td><Badge tone={toneForStatus(row.status)}>{optionLabel("rightsholdingTransferStatuses", row.status)}</Badge></td>
+                    <td>
+                      {row.precedentRunId ? (
+                        <Link className="btn btn--sm" to="/app/template-engine"><BookTemplate size={12} /> Packet</Link>
+                      ) : corporationWorkspace && row.transferType === "issuance" ? (
+                        <button className="btn btn--sm" onClick={() => stageIssuancePacket(row)}>
+                          <BookTemplate size={12} /> Packet
+                        </button>
+                      ) : (
+                        <span className="muted">No packet</span>
+                      )}
+                    </td>
                     <td><RowActions onEdit={() => setTransferDraft(editTransfer(row))} onDelete={() => deleteRow("transfer", row)} label="ledger transfer" /></td>
                   </tr>
                 );
               })}
-              {(data?.transfers ?? []).length === 0 && <EmptyRow cols={8} label="No holding transfers yet." />}
+              {(data?.transfers ?? []).length === 0 && <EmptyRow cols={9} label="No holding transfers yet." />}
             </tbody>
           </table>
         </div>
@@ -417,6 +545,7 @@ export function TemplateEnginePage() {
   const upsertDocument = useMutation(api.legalOperations.upsertGeneratedLegalDocument);
   const upsertSigner = useMutation(api.legalOperations.upsertLegalSigner);
   const seedStarterTemplates = useMutation(api.legalOperations.seedStarterPolicyTemplates);
+  const seedCorporationPackets = useMutation(api.legalOperations.seedCorporationDocumentPackets);
   const toast = useToast();
   const [draft, setDraft] = useState<any>(null);
 
@@ -536,6 +665,17 @@ export function TemplateEnginePage() {
     );
   };
 
+  const addCorporationPackets = async () => {
+    const result = await seedCorporationPackets({ societyId: society._id });
+    const changed = result.insertedTemplates + result.updatedTemplates + result.insertedPrecedents + result.updatedPrecedents;
+    toast.success(
+      changed
+        ? `Seeded ${result.insertedTemplates} templates and ${result.insertedPrecedents} precedents`
+        : "Corporation packets already exist",
+      `${result.total} packet definitions checked.`,
+    );
+  };
+
   return (
     <div className="page page--wide">
       <PageHeader
@@ -546,6 +686,7 @@ export function TemplateEnginePage() {
         actions={
           <div className="row" style={{ flexWrap: "wrap" }}>
             <button className="btn-action" onClick={addStarterTemplates}><FileSignature size={12} /> Starter templates</button>
+            <button className="btn-action" onClick={addCorporationPackets}><FileSignature size={12} /> Corporation packets</button>
             <button className="btn-action" onClick={() => setDraft({ kind: "field" })}><Plus size={12} /> Field</button>
             <button className="btn-action" onClick={() => setDraft({ kind: "precedent", status: "draft" })}><Plus size={12} /> Precedent</button>
             <button className="btn-action" onClick={() => setDraft({ kind: "run", status: "draft" })}><Plus size={12} /> Run</button>
@@ -928,6 +1069,11 @@ function RecordTitle({ title, subtitle }: { title: string; subtitle?: string }) 
   return <><strong>{title}</strong><div className="muted">{subtitle || "-"}</div></>;
 }
 
+function roleHolderForHolding(roleHolders: any[], holderKey: string) {
+  const roleHolderId = holderKey.startsWith("roleHolder:") ? holderKey.slice("roleHolder:".length) : holderKey;
+  return roleHolders.find((row) => row._id === roleHolderId);
+}
+
 function RowActions({ onEdit, onDelete, label }: { onEdit: () => void; onDelete: () => void; label: string }) {
   return (
     <div className="row" style={{ justifyContent: "flex-end" }}>
@@ -959,6 +1105,35 @@ function formationDraftTitle(draft?: any) {
     jurisdiction: "Jurisdiction metadata",
     log: "Operational log",
   }[draft.kind] ?? "Formation record";
+}
+
+function defaultRoleHolderDraft(roleType: string, corporationWorkspace: boolean) {
+  const base = { roleType, status: "current", fullName: "" };
+  if (!corporationWorkspace) return base;
+  if (roleType === "director") return { ...base, ageOver18: true, directorTerm: "none_specified" };
+  if (roleType === "officer") return { ...base, officerTitle: "president" };
+  if (roleType === "shareholder") return { ...base, membershipClassName: "Common shares" };
+  if (roleType === "controller") return { ...base, natureOfControl: "Review and document significant-control basis." };
+  if (roleType === "authorized_filer") return { ...base, authorizedRepresentative: true };
+  return base;
+}
+
+function summarizeCorporationRoles(rows: any[]) {
+  return {
+    directors: countCurrentRoles(rows, ["director"]),
+    officers: countCurrentRoles(rows, ["officer", "chief_officer___manager"]),
+    shareholders: countCurrentRoles(rows, ["shareholder", "shareholder_representative"]),
+    controllers: countCurrentRoles(rows, ["controller"]),
+    authorizedFilers: countCurrentRoles(rows, ["authorized_filer", "authorized_contact_person", "authorized_representative"]),
+  };
+}
+
+function countCurrentRoles(rows: any[], roleTypes: string[]) {
+  return rows.filter((row) =>
+    roleTypes.includes(row.roleType) &&
+    row.status !== "former" &&
+    row.status !== "inactive",
+  ).length;
 }
 
 function editRoleHolder(row: any) {

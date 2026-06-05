@@ -280,7 +280,7 @@ export function SocietyPage() {
         incorporationNumber: form.incorporationNumber,
         incorporationDate: form.incorporationDate,
         fiscalYearEnd: form.fiscalYearEnd,
-        jurisdictionCode: form.jurisdictionCode ?? "CA-BC",
+        jurisdictionCode: form.jurisdictionCode || undefined,
         entityType: form.entityType,
         actFormedUnder: form.actFormedUnder,
         distributing: form.distributing,
@@ -437,7 +437,7 @@ export function SocietyPage() {
               <div className="society-field-grid">
                 <Field label="Legal jurisdiction" hint="Used for statutory guide tracks and point-in-time legal sources.">
                   <Select
-                    value={form.jurisdictionCode ?? "CA-BC"}
+                    value={form.jurisdictionCode ?? ""}
                     onChange={(value) => set("jurisdictionCode", value)}
                     options={JURISDICTION_OPTIONS}
                   />

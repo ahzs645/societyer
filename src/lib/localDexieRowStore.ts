@@ -57,6 +57,8 @@ export type LocalWorkspaceSnapshot = {
   changes: LocalChangeEnvelope[];
 };
 
+const CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION = 2;
+
 export class LocalDexieDatabase extends Dexie {
   meta!: Table<any, string>;
   records!: Table<LocalRecordEnvelope, string>;
@@ -104,7 +106,7 @@ export class LocalDexieRowStore {
     this.workspaceMeta = {
       id: options?.databaseName ?? "societyer-local-workspace",
       name: "Societyer Local Workspace",
-      schemaVersion: 1,
+      schemaVersion: CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION,
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     };
@@ -194,7 +196,7 @@ export class LocalDexieRowStore {
   async importSnapshot(snapshot: LocalWorkspaceSnapshot | { tables?: LocalSeed; attachments?: LocalAttachmentEnvelope[]; workspace?: Partial<LocalWorkspaceMeta> }) {
     const tables = snapshot?.tables;
     if (!tables || typeof tables !== "object") throw new Error("Local workspace snapshot is missing tables.");
-    this.cache = cloneLocalSeed(tables);
+    this.cache = migrateLocalWorkspaceSnapshotTables(cloneLocalSeed(tables));
     this.attachmentsCache = cloneLocalRows(snapshot.attachments ?? []);
     this.workspaceMeta = normalizeWorkspaceMeta(snapshot.workspace, this.workspaceMeta);
     if (!this.db) {
@@ -304,7 +306,7 @@ export class LocalDexieRowStore {
     );
     if (records.length) await this.db.records.bulkPut(records);
     await Promise.all([
-      this.db.meta.put({ key: "schemaVersion", value: 1 }),
+      this.db.meta.put({ key: "schemaVersion", value: CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION }),
       this.db.meta.put({ key: "workspace", value: this.workspaceMeta }),
       seed.meetings?.length ? this.db.meetings.bulkPut(cloneLocalRows(seed.meetings)) : Promise.resolve(),
       seed.minutes?.length ? this.db.minutes.bulkPut(cloneLocalRows(seed.minutes)) : Promise.resolve(),
@@ -392,6 +394,76 @@ export function cloneLocalSeed(seed: LocalSeed): LocalSeed {
   );
 }
 
+export function migrateLocalWorkspaceSnapshotTables(seed: LocalSeed): LocalSeed {
+  const migrated = cloneLocalSeed(seed);
+  const now = new Date().toISOString();
+  const hasRegistrationTable = Array.isArray(seed.organizationRegistrations);
+  migrated.societies = (migrated.societies ?? []).map((row) => migrateSocietyWorkspaceRow(row, now));
+  if (!hasRegistrationTable) {
+    migrated.organizationRegistrations = migrateHomeRegistrations(
+      migrated.societies ?? [],
+      [],
+      now,
+    );
+  }
+  return migrated;
+}
+
+function migrateSocietyWorkspaceRow(row: any, now: string) {
+  const jurisdictionCode = cleanSnapshotText(row?.jurisdictionCode) || "CA-BC";
+  const entityType = cleanSnapshotText(row?.entityType) || "society";
+  const actFormedUnder =
+    cleanSnapshotText(row?.actFormedUnder) ||
+    (jurisdictionCode === "CA-BC" && entityType === "society" ? "societies_act" : undefined);
+  return {
+    ...row,
+    jurisdictionCode,
+    entityType,
+    actFormedUnder,
+    updatedAtISO: cleanSnapshotText(row?.updatedAtISO) || now,
+  };
+}
+
+function migrateHomeRegistrations(societies: any[], registrations: any[], now: string) {
+  const next = cloneLocalRows(registrations);
+  const hasHomeRegistration = new Set(
+    next
+      .filter((row) => row.registrationType === "home")
+      .map((row) => row.societyId)
+      .filter(Boolean),
+  );
+
+  for (const society of societies) {
+    if (!society?._id || hasHomeRegistration.has(society._id)) continue;
+    const jurisdictionCode = cleanSnapshotText(society.jurisdictionCode) || "CA-BC";
+    next.push({
+      _id: `local_home_registration_${society._id}`,
+      _creationTime: Date.now(),
+      societyId: society._id,
+      registrationType: "home",
+      jurisdiction: jurisdictionCode,
+      homeJurisdiction: jurisdictionCode,
+      registrationNumber: cleanSnapshotText(society.incorporationNumber),
+      registrationDate: cleanSnapshotText(society.incorporationDate),
+      registryPortalKey: jurisdictionCode === "CA-BC" ? "bc_registry_societies" : undefined,
+      status: cleanSnapshotText(society.status) || "active",
+      notes: "Seeded during local snapshot migration from legacy workspace fields.",
+      sourceExternalIds: ["societyer:local-snapshot-migration:home-registration"],
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    hasHomeRegistration.add(society._id);
+  }
+
+  return next;
+}
+
+function cleanSnapshotText(value: unknown) {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 export function localRecordKey(table: string, id: string) {
   return `${table}:${id}`;
 }
@@ -417,7 +489,10 @@ function normalizeWorkspaceMeta(value: Partial<LocalWorkspaceMeta> | undefined, 
   return {
     id: String(value?.id ?? fallback.id),
     name: String(value?.name ?? fallback.name),
-    schemaVersion: Number(value?.schemaVersion ?? fallback.schemaVersion ?? 1),
+    schemaVersion: Math.max(
+      Number(value?.schemaVersion ?? fallback.schemaVersion ?? CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION),
+      CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION,
+    ),
     createdAtISO: String(value?.createdAtISO ?? fallback.createdAtISO ?? now),
     updatedAtISO: String(value?.updatedAtISO ?? now),
   };

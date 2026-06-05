@@ -5,6 +5,7 @@ import {
   getLegalGuideRules,
   JURISDICTION_GUIDE_PACKS,
   JURISDICTION_OPTIONS,
+  resolveJurisdictionCode,
 } from "../src/lib/jurisdictionGuideTracks";
 
 for (const pack of JURISDICTION_GUIDE_PACKS) {
@@ -50,6 +51,9 @@ assert.equal(unknown.code, "CA-XX-TEST");
 assert.equal(unknown.rules.length, 0);
 assert.notEqual(unknown.name, bc.name);
 assert.deepEqual(getLegalGuideRules({ jurisdictionCode: "CA-XX-TEST" }), []);
+assert.equal(resolveJurisdictionCode(null), "unknown");
+assert.equal(resolveJurisdictionCode({ jurisdictionCode: "" }), "unknown");
+assert.equal(resolveJurisdictionCode({ jurisdictionCode: "CA-FED-CBCA" }), "CA-FED-CBCA");
 
 assert.ok(JURISDICTION_OPTIONS.some((option) => option.value === "CA-FED-CBCA"));
 assert.ok(JURISDICTION_OPTIONS.some((option) => option.value === "CA-ON-OBCA"));

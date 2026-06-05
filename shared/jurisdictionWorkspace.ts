@@ -11,10 +11,29 @@ export type RegistryOnboardingCopy = {
   taskDescription: string;
 };
 
-type JurisdictionWorkspaceConfig = {
+export type FilingKindDefinition = {
+  kind: string;
+  label: string;
+  registryUrl: string;
+  checklist: string[];
+  botSupported?: boolean;
+};
+
+export type JurisdictionModuleContract = {
+  registryPortalKey: string;
+  registryPortalLabel: string;
+  registryImportSupported: boolean;
+  compliancePackIds: string[];
+  filingKinds: FilingKindDefinition[];
+  bylawBaselineLabel: string;
+  enabledModuleHints: string[];
+};
+
+export type JurisdictionWorkspaceConfig = {
   code: string;
   defaults: JurisdictionWorkspaceDefaults;
   registry: RegistryOnboardingCopy;
+  module: JurisdictionModuleContract;
   display: {
     entityLabel: string;
     goodStandingTitle: string;
@@ -37,6 +56,167 @@ const GENERIC_REGISTRY_COPY: RegistryOnboardingCopy = {
     "Confirm registry status, filing history, key custody, authorized filers, and source-document evidence for this jurisdiction.",
 };
 
+const GENERIC_FILING_PORTAL =
+  "https://www.canada.ca/en/revenue-agency/services/e-services/e-services-businesses/business-account.html";
+
+const GENERIC_FILING_CHECKLIST = [
+  "Review the filing packet and supporting documents.",
+  "Open the correct external portal or form.",
+  "Submit using the official government workflow.",
+  "Capture confirmation number, fee, and evidence.",
+];
+
+const BC_REGISTRY_URL = "https://www.bcregistry.gov.bc.ca/societies/";
+const CORPORATIONS_CANADA_URL =
+  "https://ised-isde.canada.ca/site/corporations-canada/en/online-filing-centre";
+const ONTARIO_BUSINESS_REGISTRY_URL = "https://www.ontario.ca/page/ontario-business-registry";
+
+const BC_FILING_KINDS: FilingKindDefinition[] = [
+  {
+    kind: "BCSocietyAnnualReport",
+    label: "BC society annual report",
+    registryUrl: BC_REGISTRY_URL,
+    checklist: [
+      "Confirm AGM date and the directors elected or continuing in office.",
+      "Verify registered and records office addresses.",
+      "Prepare the annual report filing packet.",
+      "Complete the filing in BC Registries/Societies Online and capture the confirmation number.",
+      "Attach receipt or submission evidence before marking filed.",
+    ],
+    botSupported: true,
+  },
+  {
+    kind: "BCExtraProvincialAnnualReport",
+    label: "BC extra-provincial annual report",
+    registryUrl: BC_REGISTRY_URL,
+    checklist: [
+      "Review the BC extra-provincial registration profile.",
+      "Confirm attorney/agent, registered office or mailing details, and corporation status.",
+      "Prepare the annual report or maintenance filing packet.",
+      "Complete the filing in BC Registries or the approved service path.",
+      "Attach confirmation, receipt, and profile-report evidence.",
+    ],
+    botSupported: false,
+  },
+  {
+    kind: "RegistryRecord",
+    label: "Registry record",
+    registryUrl: BC_REGISTRY_URL,
+    checklist: GENERIC_FILING_CHECKLIST,
+    botSupported: false,
+  },
+  {
+    kind: "AnnualReport",
+    label: "Annual report",
+    registryUrl: BC_REGISTRY_URL,
+    checklist: [
+      "Confirm AGM date and the directors elected or continuing in office.",
+      "Verify registered and records office addresses.",
+      "Open the pre-fill packet and confirm the society number and meeting date.",
+      "Complete the filing in the portal and capture the confirmation number.",
+      "Attach receipt or submission evidence before marking filed.",
+    ],
+    botSupported: true,
+  },
+  {
+    kind: "ChangeOfDirectors",
+    label: "Change of directors",
+    registryUrl: BC_REGISTRY_URL,
+    checklist: GENERIC_FILING_CHECKLIST,
+    botSupported: true,
+  },
+  {
+    kind: "ChangeOfAddress",
+    label: "Change of address",
+    registryUrl: BC_REGISTRY_URL,
+    checklist: GENERIC_FILING_CHECKLIST,
+    botSupported: false,
+  },
+  {
+    kind: "BylawAmendment",
+    label: "Bylaw amendment",
+    registryUrl: BC_REGISTRY_URL,
+    checklist: [
+      "Confirm the special resolution passed and the text filed matches the approved bylaw wording.",
+      "Attach the signed resolution or meeting minutes.",
+      "Open the pre-fill packet and verify filing fee details.",
+      "Complete the registry filing and capture the confirmation number.",
+      "Attach receipt or acknowledgement before marking filed.",
+    ],
+    botSupported: true,
+  },
+  {
+    kind: "ConstitutionAlteration",
+    label: "Constitution alteration",
+    registryUrl: BC_REGISTRY_URL,
+    checklist: GENERIC_FILING_CHECKLIST,
+    botSupported: false,
+  },
+];
+
+const FEDERAL_CBCA_FILING_KINDS: FilingKindDefinition[] = [
+  {
+    kind: "FederalAnnualReturn",
+    label: "Federal annual return",
+    registryUrl: CORPORATIONS_CANADA_URL,
+    checklist: [
+      "Verify corporation number, anniversary date, registered office, directors, and key custody.",
+      "Prepare the annual return filing packet.",
+      "File through Corporations Canada or the approved service path.",
+      "Capture confirmation number, receipt, and any profile-report evidence.",
+    ],
+  },
+  {
+    kind: "FederalIscUpdate",
+    label: "ISC register update",
+    registryUrl: CORPORATIONS_CANADA_URL,
+    checklist: [
+      "Review individuals with significant control and nature of control.",
+      "Confirm source documents for any ownership or control change.",
+      "Update the ISC register and any required registry filing.",
+      "Archive confirmation, signed register update, or review memo.",
+    ],
+  },
+  {
+    kind: "FederalDirectorChange",
+    label: "Federal director change",
+    registryUrl: CORPORATIONS_CANADA_URL,
+    checklist: GENERIC_FILING_CHECKLIST,
+  },
+  {
+    kind: "FederalRegisteredOfficeChange",
+    label: "Federal registered office change",
+    registryUrl: CORPORATIONS_CANADA_URL,
+    checklist: GENERIC_FILING_CHECKLIST,
+  },
+];
+
+const ONTARIO_OBCA_FILING_KINDS: FilingKindDefinition[] = [
+  {
+    kind: "OntarioInitialReturn",
+    label: "Ontario initial return",
+    registryUrl: ONTARIO_BUSINESS_REGISTRY_URL,
+    checklist: [
+      "Verify corporation number, registered/head office, directors, officers, and company key custody.",
+      "Prepare the initial return filing packet.",
+      "File through the Ontario Business Registry or approved service path.",
+      "Capture confirmation number, receipt, and profile-report evidence.",
+    ],
+  },
+  {
+    kind: "OntarioAnnualReturn",
+    label: "Ontario annual return",
+    registryUrl: ONTARIO_BUSINESS_REGISTRY_URL,
+    checklist: GENERIC_FILING_CHECKLIST,
+  },
+  {
+    kind: "OntarioNoticeOfChange",
+    label: "Ontario notice of change",
+    registryUrl: ONTARIO_BUSINESS_REGISTRY_URL,
+    checklist: GENERIC_FILING_CHECKLIST,
+  },
+];
+
 export const JURISDICTION_WORKSPACE_CONFIGS: JurisdictionWorkspaceConfig[] = [
   {
     code: "CA-BC",
@@ -51,6 +231,15 @@ export const JURISDICTION_WORKSPACE_CONFIGS: JurisdictionWorkspaceConfig[] = [
       taskTitle: "Optional: verify BC Registry access",
       taskDescription:
         "Confirm registry status, last annual report, filing history, registry key custody, authorized filers, and whether to connect the BC Registry browser workspace.",
+    },
+    module: {
+      registryPortalKey: "bc_registry_societies",
+      registryPortalLabel: "BC Registry",
+      registryImportSupported: true,
+      compliancePackIds: ["compliance-ca-bc-societies"],
+      filingKinds: BC_FILING_KINDS,
+      bylawBaselineLabel: "BC Model Bylaw baseline",
+      enabledModuleHints: ["members", "voting", "recordsInspection", "pipaTraining"],
     },
     display: {
       entityLabel: "society",
@@ -79,6 +268,15 @@ export const JURISDICTION_WORKSPACE_CONFIGS: JurisdictionWorkspaceConfig[] = [
       taskDescription:
         "Confirm federal corporation status, anniversary date, annual-return history, corporation key custody, authorized filers, and whether source documents should be archived.",
     },
+    module: {
+      registryPortalKey: "corporations_canada",
+      registryPortalLabel: "Corporations Canada",
+      registryImportSupported: false,
+      compliancePackIds: ["compliance-ca-fed-cbca"],
+      filingKinds: FEDERAL_CBCA_FILING_KINDS,
+      bylawBaselineLabel: "CBCA by-law and articles baseline",
+      enabledModuleHints: ["filingPrefill", "secrets", "attestations"],
+    },
     display: {
       entityLabel: "corporation",
       goodStandingTitle: "Keep your federal corporation in good standing.",
@@ -105,6 +303,15 @@ export const JURISDICTION_WORKSPACE_CONFIGS: JurisdictionWorkspaceConfig[] = [
       taskTitle: "Optional: verify Ontario Business Registry access",
       taskDescription:
         "Confirm Ontario registry status, initial return, annual returns, notices of change, company key custody, authorized filers, and whether profile-report evidence should be archived.",
+    },
+    module: {
+      registryPortalKey: "ontario_business_registry",
+      registryPortalLabel: "Ontario Business Registry",
+      registryImportSupported: false,
+      compliancePackIds: ["compliance-ca-on-obca"],
+      filingKinds: ONTARIO_OBCA_FILING_KINDS,
+      bylawBaselineLabel: "OBCA by-law and articles baseline",
+      enabledModuleHints: ["filingPrefill", "secrets", "attestations"],
     },
     display: {
       entityLabel: "corporation",
@@ -144,6 +351,39 @@ export function jurisdictionDisplayCopy(jurisdictionCode?: string | null) {
   );
 }
 
-function findJurisdictionWorkspaceConfig(jurisdictionCode?: string | null) {
+export function jurisdictionModuleContract(jurisdictionCode?: string | null): JurisdictionModuleContract {
+  return (
+    findJurisdictionWorkspaceConfig(jurisdictionCode)?.module ?? {
+      registryPortalKey: "generic_registry",
+      registryPortalLabel: "Registry",
+      registryImportSupported: false,
+      compliancePackIds: [],
+      filingKinds: [],
+      bylawBaselineLabel: "Governing-document baseline",
+      enabledModuleHints: [],
+    }
+  );
+}
+
+export function filingKindDefinitions(jurisdictionCode?: string | null): FilingKindDefinition[] {
+  return jurisdictionModuleContract(jurisdictionCode).filingKinds;
+}
+
+export function filingKindDefinition(
+  kind: string,
+  jurisdictionCode?: string | null,
+): FilingKindDefinition {
+  return (
+    filingKindDefinitions(jurisdictionCode).find((definition) => definition.kind === kind) ?? {
+      kind,
+      label: kind,
+      registryUrl: GENERIC_FILING_PORTAL,
+      checklist: GENERIC_FILING_CHECKLIST,
+      botSupported: false,
+    }
+  );
+}
+
+export function findJurisdictionWorkspaceConfig(jurisdictionCode?: string | null) {
   return JURISDICTION_WORKSPACE_CONFIGS.find((config) => config.code === jurisdictionCode);
 }

@@ -19,6 +19,7 @@ type OptionSetName =
   | "requiredSigners"
   | "organizationStatuses"
   | "registrationStatuses"
+  | "registrationTypes"
   | "identifierStatuses"
   | "accessLevels"
   | "policyStatuses"
@@ -182,6 +183,8 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
   representativeTypes: [
     "officer",
     "director",
+    "shareholder",
+    "controller",
     "member",
     "shareholder_representative",
     "trustee",
@@ -189,6 +192,7 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
     "attorney_for_service",
     "chief_officer___manager",
     "authorized_contact_person",
+    "authorized_filer",
     "authorized_representative",
     "treasury",
   ],
@@ -208,6 +212,7 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
   ],
   organizationStatuses: ["active", "archived", "removed", "needs_review"],
   registrationStatuses: ["active", "inactive", "pending", "needs_review"],
+  registrationTypes: ["home", "extra_provincial", "business_name", "branch", "licence", "deregistered"],
   identifierStatuses: ["active", "inactive", "needs_review"],
   accessLevels: ["internal", "restricted"],
   policyStatuses: ["Draft", "Active", "ReviewDue", "Superseded", "Ceased"],
