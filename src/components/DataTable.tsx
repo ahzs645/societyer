@@ -29,17 +29,21 @@ import { useUIStore } from "../lib/store";
 import { cellToText, copyAsTsv } from "../lib/clipboard";
 import { useToast } from "./Toast";
 import { api } from "../lib/convexApi";
+import { Select } from "./Select";
+import { NameAutocomplete } from "./NameAutocomplete";
 
 const EMPTY_ARR: string[] = [];
 
 export type EditableCellConfig<T> = {
-  type: "text" | "number" | "select" | "date";
+  type: "text" | "number" | "select" | "date" | "autocomplete";
   /** Current value (pre-edit). Defaults to the column accessor. */
   getValue?: (row: T) => string | number | null | undefined;
-  /** For `select`, the option list. Can be static or per-row. */
+  /** For `select` and `autocomplete`, the option list. Can be static or per-row. */
   options?: string[] | ((row: T) => string[]);
   /** Commit callback — return a Promise to show loading state. Reject to show error. */
   onCommit: (row: T, value: string) => void | Promise<void>;
+  /** For `autocomplete`: handler invoked when user clicks ✕ on a suggestion. */
+  onRemoveOption?: (value: string) => void;
   /** Placeholder shown in the empty input. */
   placeholder?: string;
 };
@@ -80,6 +84,9 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   filterFields,
   rowKey,
   onRowClick,
+  onPrimaryCellClick,
+  onRowContextMenu,
+  rowClickScope = "row",
   searchPlaceholder,
   emptyMessage = "No rows.",
   defaultSort,
@@ -104,6 +111,16 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
   filterFields?: FilterField<T>[];
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
+  /** Overrides the first-cell button click. Falls back to onRowClick. Use when
+   * the primary cell (typically the title) should navigate to a detail page
+   * while the rest of the row does something else (e.g. open an edit drawer). */
+  onPrimaryCellClick?: (row: T) => void;
+  /** Fires on row right-click. Caller should preventDefault and show its own menu. */
+  onRowContextMenu?: (event: React.MouseEvent, row: T) => void;
+  /** "row" (default) makes the whole tr clickable. "first-cell" only wraps the
+   * first cell in a button — useful when you want a context menu / kebab to
+   * provide other row actions without the whole row swallowing clicks. */
+  rowClickScope?: "row" | "first-cell";
   searchPlaceholder?: string;
   emptyMessage?: ReactNode;
   defaultSort?: SortState;
@@ -845,8 +862,9 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
               key={id}
               data-row-index={rowIndex}
               className={`${renderRowActions ? "table__row--actions " : ""}${isSelected ? "is-selected" : ""}`.trim() || undefined}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
-              style={{ cursor: onRowClick ? "pointer" : undefined }}
+              onClick={onRowClick && rowClickScope === "row" ? () => onRowClick(row) : undefined}
+              onContextMenu={onRowContextMenu ? (e) => onRowContextMenu(e, row) : undefined}
+              style={{ cursor: onRowClick && rowClickScope === "row" ? "pointer" : undefined }}
               aria-selected={selectable ? isSelected : undefined}
             >
               {selectable && (
@@ -877,20 +895,35 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
                   className={`${col.className ?? ""}${isFocused ? " is-focused" : ""}`.trim() || undefined}
                   style={{ textAlign: col.align }}
                   onClick={(e) => {
+                    if (isEditable) {
+                      setFocusedCell({ row: rowIndex, col: index });
+                      e.stopPropagation();
+                      return;
+                    }
+                    // For the first cell, the inner button stops propagation
+                    // when hit directly. This branch only runs when the click
+                    // landed on td padding around the button — treat that as
+                    // the same action so it doesn't fall through to the row
+                    // click (which usually opens an edit drawer). Skip the
+                    // focus ring since we're about to navigate away.
+                    if (index === 0 && (onPrimaryCellClick || onRowClick)) {
+                      e.stopPropagation();
+                      (onPrimaryCellClick ?? onRowClick)!(row);
+                      return;
+                    }
                     setFocusedCell({ row: rowIndex, col: index });
-                    if (isEditable) e.stopPropagation();
                   }}
                 >
                   {isEditable ? (
                     <EditableCell row={row} column={col} display={cell} />
-                  ) : onRowClick && index === 0 ? (
+                  ) : (onPrimaryCellClick || onRowClick) && index === 0 ? (
                     <button
                       type="button"
                       className="table__cell-button"
                       aria-label={rowActionLabel?.(row) ?? `Open ${label} row`}
                       onClick={(event) => {
                         event.stopPropagation();
-                        onRowClick(row);
+                        (onPrimaryCellClick ?? onRowClick)!(row);
                       }}
                     >
                       {cell}
@@ -1304,15 +1337,16 @@ function EditableCell<T>({
     setError(null);
   };
 
-  const commit = async () => {
+  const commit = async (override?: string) => {
     if (saving) return;
-    if (value === initialValue) {
+    const final = override ?? value;
+    if (final === initialValue) {
       close();
       return;
     }
     setSaving(true);
     try {
-      await config.onCommit(row, value);
+      await config.onCommit(row, final);
       setEditing(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't save");
@@ -1339,50 +1373,63 @@ function EditableCell<T>({
           {display || <span className="editable-cell__placeholder">—</span>}
         </span>
       </button>
-      {editing && rect &&
-        createPortal(
-          <EditPopover
-            rect={rect}
-            onDismiss={close}
-            onCommit={commit}
-          >
-            {config.type === "select" ? (
-              <select
-                className="editable-cell__input"
-                autoFocus
-                value={value}
-                disabled={saving}
-                onChange={(e) => setValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") { e.preventDefault(); commit(); }
-                  if (e.key === "Escape") { e.preventDefault(); close(); }
-                }}
-              >
-                <option value="">—</option>
-                {options.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                className="editable-cell__input"
-                autoFocus
-                type={config.type === "number" ? "number" : config.type === "date" ? "date" : "text"}
-                value={value}
-                placeholder={config.placeholder}
-                disabled={saving}
-                onChange={(e) => setValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") { e.preventDefault(); commit(); }
-                  if (e.key === "Escape") { e.preventDefault(); close(); }
-                }}
-              />
-            )}
-            {saving && <span className="editable-cell__spinner" aria-label="Saving" />}
-            {error && <div className="editable-cell__error" role="alert">{error}</div>}
-          </EditPopover>,
-          document.body,
-        )}
+      {editing && rect && (
+        config.type === "select" ? (
+          <Select<string>
+            triggerless
+            defaultOpen
+            anchorRect={{ top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width }}
+            value={value}
+            onChange={(v) => { setValue(v); void commit(v); }}
+            onClose={close}
+            options={options.map((opt) => ({ value: opt, label: opt }))}
+          />
+        ) : (
+          createPortal(
+            <EditPopover
+              rect={rect}
+              onDismiss={close}
+              onCommit={() => commit()}
+            >
+              {config.type === "autocomplete" ? (
+                <NameAutocomplete
+                  value={value}
+                  onChange={setValue}
+                  options={options}
+                  onRemoveOption={config.onRemoveOption}
+                  onCommit={(v) => { setValue(v); void commit(v); }}
+                  placeholder={config.placeholder}
+                  ariaLabel="Edit cell"
+                  inputProps={{
+                    autoFocus: true,
+                    disabled: saving,
+                    onKeyDown: (e) => {
+                      if (e.key === "Escape") { e.preventDefault(); close(); }
+                    },
+                  }}
+                />
+              ) : (
+                <input
+                  className="editable-cell__input"
+                  autoFocus
+                  type={config.type === "number" ? "number" : config.type === "date" ? "date" : "text"}
+                  value={value}
+                  placeholder={config.placeholder}
+                  disabled={saving}
+                  onChange={(e) => setValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); void commit(); }
+                    if (e.key === "Escape") { e.preventDefault(); close(); }
+                  }}
+                />
+              )}
+              {saving && <span className="editable-cell__spinner" aria-label="Saving" />}
+              {error && <div className="editable-cell__error" role="alert">{error}</div>}
+            </EditPopover>,
+            document.body,
+          )
+        )
+      )}
     </>
   );
 }

@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useMemo, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { Check, X, Plus, Trash2, MinusCircle, PlusCircle, Pencil } from "lucide-react";
 
 function DinnerTableIcon({ size = 12 }: { size?: number }) {
@@ -20,6 +20,7 @@ function DinnerTableIcon({ size = 12 }: { size?: number }) {
   );
 }
 import { Badge, Field } from "./ui";
+import { MarkdownEditor } from "./MarkdownEditor";
 import { NameAutocomplete } from "./NameAutocomplete";
 import { Select, type SelectOption } from "./Select";
 
@@ -107,9 +108,11 @@ function NameInput({
 function OutcomePicker({
   value,
   onChange,
+  compact = false,
 }: {
   value: string;
   onChange: (v: Motion["outcome"]) => void;
+  compact?: boolean;
 }) {
   const opts: { id: Motion["outcome"]; label: string; tone: "success" | "danger" | "warn" | "accent" }[] = [
     { id: "Pending", label: "Pending", tone: "warn" },
@@ -118,7 +121,7 @@ function OutcomePicker({
     { id: "Tabled", label: "Tabled", tone: "warn" },
   ];
   return (
-    <div className="segmented">
+    <div className={`segmented${compact ? " segmented--compact" : ""}`}>
       {opts.map((o) => (
         <button
           key={o.id}
@@ -169,6 +172,11 @@ function VoteProgress({ motion }: { motion: Motion }) {
 
 export type MotionEditorHandle = {
   startAdding: () => void;
+  /** Commit any in-progress motion draft. Returns true if a non-empty draft
+   * was committed, false if there was nothing to commit. Used by parents that
+   * own a "Save" button outside the editor — they can flush a pending draft
+   * before persisting their own state so it doesn't get silently dropped. */
+  commitDraft: () => boolean;
 };
 
 export const MotionEditor = forwardRef<MotionEditorHandle, {
@@ -181,6 +189,14 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   onAddToBacklog?: (motion: Motion, index: number) => void | Promise<void>;
   /** Hide the inline "Add motion" button; parent provides its own trigger via ref. */
   hideInlineAdd?: boolean;
+  /** Restrict the editor to a single agenda section: only motions assigned to
+   * that section are listed, new drafts are pre-assigned to it, and the
+   * adjournment block is hidden (not relevant within an agenda item). */
+  sectionScope?: number;
+  /** Fires whenever the in-progress draft toggles between "empty/closed" and
+   * "open with text". Lets parents reflect the pending state in their own
+   * UI (e.g. an outer Save button that should also flush the draft). */
+  onPendingDraftChange?: (hasPending: boolean) => void;
 }>(function MotionEditor({
   motions,
   onChange,
@@ -189,10 +205,21 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   agendaSections = [],
   onAddToBacklog,
   hideInlineAdd = false,
+  sectionScope,
+  onPendingDraftChange,
 }, ref) {
+  const sectionPatchForScope = (): Partial<Motion> =>
+    sectionScope != null ? motionSectionPatch(String(sectionScope), agendaSections) : {};
+  const makeDraft = (): Motion => ({ text: "", outcome: "Pending", ...sectionPatchForScope() });
   const [adding, setAdding] = useState(false);
-  useImperativeHandle(ref, () => ({ startAdding: () => setAdding(true) }), []);
-  const [draft, setDraft] = useState<Motion>({ text: "", outcome: "Pending" });
+  const [draft, setDraft] = useState<Motion>(makeDraft);
+  const beginAdding = () => {
+    // When scoped to a section, force the draft's sectionIndex/sectionTitle to
+    // that section every time the user opens the add form — otherwise stale
+    // values from a previous cancelled draft could leak in.
+    if (sectionScope != null) setDraft((current) => ({ ...current, ...sectionPatchForScope() }));
+    setAdding(true);
+  };
   // While true, votesFor auto-tracks (movedBy ? 1 : 0) + (secondedBy ? 1 : 0).
   // The user breaks this binding the moment they edit votesFor manually.
   const [votesAutoFill, setVotesAutoFill] = useState(true);
@@ -214,7 +241,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   };
 
   const resetDraft = () => {
-    setDraft({ text: "", outcome: "Pending" });
+    setDraft(makeDraft());
     setVotesAutoFill(true);
   };
 
@@ -222,7 +249,15 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
     () => Array.from(new Set([...directorNames, ...people.flatMap((person) => [person.name, ...(person.aliases ?? [])])])).filter(Boolean).sort(),
     [directorNames, people],
   );
-  const motionRows = motions.map((motion, index) => ({ motion, index }));
+  const allMotionRows = motions.map((motion, index) => ({ motion, index }));
+  // Filter to the scoped section when embedded inside the section editor; the
+  // onChange callback still emits the full motions array, so array indexes
+  // remain stable and the parent stays the source of truth.
+  const motionRows = sectionScope == null
+    ? allMotionRows
+    : allMotionRows.filter(({ motion }) =>
+        assignedSectionIndexForMotion(motion, agendaSections) === sectionScope,
+      );
   const businessMotionRows = motionRows.filter(({ motion }) => !isAdjournmentMotion(motion));
   const adjournmentRows = motionRows.filter(({ motion }) => isAdjournmentMotion(motion));
 
@@ -232,6 +267,33 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
     resetDraft();
     setAdding(false);
   };
+
+  // Notify the parent whenever the in-progress draft has typed text. Used by
+  // outer save buttons (e.g. "Save section") to flip their label and to know
+  // when to call commitDraft() before persisting their own state.
+  const hasPendingDraft = adding && draft.text.trim().length > 0;
+  useEffect(() => {
+    onPendingDraftChange?.(hasPendingDraft);
+  }, [hasPendingDraft, onPendingDraftChange]);
+  // Make sure the parent's "pending" indicator clears when MotionEditor goes
+  // away — otherwise a stale "+ add motion" label could stick around.
+  useEffect(() => {
+    return () => onPendingDraftChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useImperativeHandle(ref, () => ({
+    startAdding: beginAdding,
+    commitDraft: () => {
+      const text = draft.text.trim();
+      if (!adding || !text) return false;
+      onChange([...motions, { ...draft, text }]);
+      resetDraft();
+      setAdding(false);
+      return true;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [adding, draft, motions, onChange, sectionScope, agendaSections]);
 
   const patch = (idx: number, diff: Partial<Motion>) => {
     const next = motions.map((m, i) => (i === idx ? { ...m, ...diff } : m));
@@ -256,7 +318,13 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
 
   return (
     <div>
-      {businessMotionRows.length === 0 && !adding && <div className="muted">No business motions recorded yet.</div>}
+      {businessMotionRows.length === 0 && !adding && (
+        <div className="muted">
+          {sectionScope != null
+            ? "No motions assigned to this agenda item yet."
+            : "No business motions recorded yet."}
+        </div>
+      )}
 
       {businessMotionRows.map(({ motion: m, index: i }) => (
         <MotionRow
@@ -275,24 +343,42 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
 
       {!adding && !hideInlineAdd && (
         <div className="motion-add-before-adjournment">
-          <button className="btn-action" onClick={() => setAdding(true)}>
+          <button className="btn-action" onClick={beginAdding}>
             <Plus size={12} /> Add motion
           </button>
         </div>
       )}
 
       {adding && (
-        <div className="motion" style={{ borderColor: "var(--accent)" }}>
-          <Field label="Motion">
-            <textarea
-              className="textarea"
-              autoFocus
-              value={draft.text}
-              onChange={(e) => setDraft({ ...draft, text: e.target.value })}
-              placeholder="That the board approve the 2024–25 financial statements as presented."
-            />
-          </Field>
-          <div className="row" style={{ gap: 12 }}>
+        <div className="motion motion-draft" style={{ borderColor: "var(--accent)" }}>
+          <div className="motion-draft__header">
+            <div>
+              <strong>Add motion</strong>
+              <div className="muted">Record the wording first, then capture movers and outcome.</div>
+            </div>
+            <div className="motion-draft__actions">
+              <button className="btn-action" onClick={() => { setAdding(false); resetDraft(); }}>
+                <X size={12} /> Cancel
+              </button>
+              <button className="btn-action btn-action--primary" onClick={saveDraft} disabled={!draft.text.trim()}>
+                <Check size={12} /> Add
+              </button>
+            </div>
+          </div>
+
+          <div className="motion-draft__motion-field">
+            <Field label="Motion">
+              <textarea
+                className="textarea"
+                autoFocus
+                value={draft.text}
+                onChange={(e) => setDraft({ ...draft, text: e.target.value })}
+                placeholder="That the board approve the 2024–25 financial statements as presented."
+              />
+            </Field>
+          </div>
+
+          <div className="motion-draft__grid">
             <Field label="Moved by">
               <NameInput
                 nameOptions={nameOptions}
@@ -313,62 +399,65 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
                 placeholder="Optional"
               />
             </Field>
-          </div>
-          <div className="row" style={{ gap: 12 }}>
+
             <Field label="Resolution type">
               <Select
                 value={draft.resolutionType ?? "Ordinary"}
                 onChange={(resolutionType) => setDraft({ ...draft, resolutionType })}
                 options={RESOLUTION_TYPE_OPTIONS}
+                size="sm"
               />
             </Field>
+
             <Field label="Outcome">
-              <OutcomePicker value={draft.outcome} onChange={(v) => setDraft({ ...draft, outcome: v })} />
+              <OutcomePicker compact value={draft.outcome} onChange={(v) => setDraft({ ...draft, outcome: v })} />
             </Field>
-          </div>
-          {agendaSections.length > 0 && (
-            <Field label="Agenda item">
-              <Select
-                value={draft.sectionIndex == null ? "" : String(draft.sectionIndex)}
-                onChange={(value) => setDraft((current) => ({ ...current, ...motionSectionPatch(value, agendaSections) }))}
-                options={agendaSectionOptions(agendaSections)}
-              />
-            </Field>
-          )}
-          <div className="row" style={{ gap: 12, alignItems: "flex-end" }}>
-            <VoteStepper
-              label="For"
-              value={draft.votesFor ?? 0}
-              onChange={(n) => {
-                setVotesAutoFill(false);
-                setDraft((current) => ({ ...current, votesFor: n }));
-              }}
-              tone="success"
-            />
-            <VoteStepper
-              label="Against"
-              value={draft.votesAgainst ?? 0}
-              onChange={(n) => setDraft((current) => ({ ...current, votesAgainst: n }))}
-              tone="danger"
-            />
-            <VoteStepper
-              label="Abstain"
-              value={draft.abstentions ?? 0}
-              onChange={(n) => setDraft((current) => ({ ...current, abstentions: n }))}
-              tone="warn"
-            />
-          </div>
-          <div className="row" style={{ justifyContent: "flex-end", gap: 6 }}>
-            <button className="btn-action" onClick={() => { setAdding(false); resetDraft(); }}>
-              <X size={12} /> Cancel
-            </button>
-            <button className="btn-action btn-action--primary" onClick={saveDraft} disabled={!draft.text.trim()}>
-              <Check size={12} /> Add motion
-            </button>
+
+            {agendaSections.length > 0 && (
+              <Field label="Agenda item">
+                <Select
+                  value={draft.sectionIndex == null ? "" : String(draft.sectionIndex)}
+                  onChange={(value) => setDraft((current) => ({ ...current, ...motionSectionPatch(value, agendaSections) }))}
+                  options={agendaSectionOptions(agendaSections)}
+                  size="sm"
+                />
+              </Field>
+            )}
+
+            <div className="motion-draft__votes">
+              <span className="field__label">Votes</span>
+              <div className="motion-draft__vote-row">
+                <VoteStepper
+                  label="For"
+                  value={draft.votesFor ?? 0}
+                  onChange={(n) => {
+                    setVotesAutoFill(false);
+                    setDraft((current) => ({ ...current, votesFor: n }));
+                  }}
+                  tone="success"
+                  compact
+                />
+                <VoteStepper
+                  label="Against"
+                  value={draft.votesAgainst ?? 0}
+                  onChange={(n) => setDraft((current) => ({ ...current, votesAgainst: n }))}
+                  tone="danger"
+                  compact
+                />
+                <VoteStepper
+                  label="Abstain"
+                  value={draft.abstentions ?? 0}
+                  onChange={(n) => setDraft((current) => ({ ...current, abstentions: n }))}
+                  tone="warn"
+                  compact
+                />
+              </div>
+            </div>
           </div>
         </div>
       )}
 
+      {sectionScope == null && (
       <div className="motion-adjournment">
         <div className="motion-adjournment__head">
           <div>
@@ -396,6 +485,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
           />
         ))}
       </div>
+      )}
     </div>
   );
 });
@@ -540,7 +630,7 @@ function MotionRow({
       {expanded && (
         <div style={{ marginTop: 10, borderTop: "1px dashed var(--border)", paddingTop: 10 }}>
           <Field label="Motion text">
-            <textarea className="textarea" value={motion.text} onChange={(e) => onPatch({ text: e.target.value })} />
+            <MarkdownEditor rows={4} value={motion.text} onChange={(markdown) => onPatch({ text: markdown })} />
           </Field>
           <div className="row" style={{ gap: 12 }}>
             <Field label="Moved by">
@@ -740,14 +830,16 @@ function VoteStepper({
   value,
   onChange,
   tone,
+  compact = false,
 }: {
   label: string;
   value: number;
   onChange: (next: number) => void;
   tone: "success" | "danger" | "warn";
+  compact?: boolean;
 }) {
   return (
-    <div className="field vote-stepper" style={{ marginBottom: 0 }}>
+    <div className={`field vote-stepper${compact ? " vote-stepper--compact" : ""}`} style={{ marginBottom: 0 }}>
       <label className="field__label" style={{ color: `var(--${tone})` }}>{label}</label>
       <div className="row" style={{ gap: 4 }}>
         <button

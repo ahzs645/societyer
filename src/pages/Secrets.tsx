@@ -7,6 +7,7 @@ import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import {
   CheckCircle2,
   Copy,
@@ -419,7 +420,7 @@ export function SecretsPage() {
               <Field label="Last reviewed"><input className="input" type="date" value={form.lastVerifiedAtISO ?? ""} onChange={(e) => setForm({ ...form, lastVerifiedAtISO: e.target.value })} /></Field>
               <Field label="Next review"><input className="input" type="date" value={form.rotationDueAtISO ?? ""} onChange={(e) => setForm({ ...form, rotationDueAtISO: e.target.value })} /></Field>
             </div>
-            <Field label="Notes"><textarea className="textarea" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
           </div>
         )}
       </Drawer>

@@ -63,6 +63,7 @@ import {
   Sun,
   Bot,
   Plug,
+  Plus,
 } from "lucide-react";
 import {
   ComponentType,
@@ -81,6 +82,7 @@ import { DemoBanner } from "./DemoBanner";
 import { CommandPalette } from "./CommandPalette";
 import { DraftMinutesPicker } from "./DraftMinutesPicker";
 import { GlobalTaskCreate } from "./GlobalTaskCreate";
+import { GlobalAssetCreate } from "./GlobalAssetCreate";
 import { ShortcutHelp } from "./ShortcutHelp";
 import { NotificationBell } from "./NotificationBell";
 import { GlobalAiAssistant, openGlobalAiAssistant } from "../features/ai/GlobalAiAssistant";
@@ -97,6 +99,7 @@ import { useTranslation } from "react-i18next";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { useThemePreference } from "../hooks/useThemePreference";
 import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
+import { useAiChatVisibility } from "../hooks/useAiChatVisibility";
 import type { ThemePreference } from "../lib/theme";
 import { mobileSidebarMediaQuery } from "../lib/breakpoints";
 import { DEFAULT_PINNED_ROUTES } from "../lib/navConfig";
@@ -354,6 +357,7 @@ const NAV_GROUPS: NavGroup[] = [
       navItem("/app/financials"),
       navItem("/app/finance-imports"),
       navItem("/app/treasurer"),
+      navItem("/app/assets"),
       navItem("/app/grants"),
       navItem("/app/reconciliation"),
       navItem("/app/receipts"),
@@ -566,6 +570,7 @@ const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   "Public transparency": "nav.transparency",
   Financials: "nav.financials",
   Treasurer: "nav.treasurer",
+  Assets: "nav.assets",
   Grants: "nav.grants",
   Reconciliation: "nav.reconciliation",
   "Donation receipts": "nav.donationReceipts",
@@ -646,6 +651,7 @@ export function Layout() {
   const [navContextMenu, setNavContextMenu] = useState<SidebarContextMenu | null>(null);
   const { hidden: operationsDeskHidden, setHidden: setOperationsDeskHidden } =
     useOperationsDeskVisibility();
+  const { hidden: aiChatHidden } = useAiChatVisibility();
   const [operationsDeskMenu, setOperationsDeskMenu] = useState<
     { top: number; left: number } | null
   >(null);
@@ -1155,6 +1161,7 @@ export function Layout() {
       <CommandPaletteSafe />
       <DraftMinutesPicker />
       <GlobalTaskCreate />
+      <GlobalAssetCreate />
       <ShortcutHelp />
       <div className={shellClassName}>
         {isMobileNav && mobileSidebarOpen && (
@@ -1194,14 +1201,16 @@ export function Layout() {
             </button>
             <div className="sidebar__brand-actions">
               <NotificationBellSafe />
-              <button
-                className="sidebar__icon-btn"
-                onClick={openGlobalAiAssistant}
-                title="AI assistant"
-                aria-label="AI assistant"
-              >
-                <Bot size={14} />
-              </button>
+              {!aiChatHidden && (
+                <button
+                  className="sidebar__icon-btn"
+                  onClick={openGlobalAiAssistant}
+                  title="AI assistant"
+                  aria-label="AI assistant"
+                >
+                  <Bot size={14} />
+                </button>
+              )}
               <button
                 className="sidebar__icon-btn"
                 onClick={() => window.dispatchEvent(new Event("kbar:open"))}
@@ -1535,6 +1544,19 @@ export function Layout() {
                 </div>
               )}
             </div>
+            <div style={{ padding: 8, borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+              <button
+                type="button"
+                className="btn btn--accent"
+                style={{ width: "100%", justifyContent: "center" }}
+                onClick={() => {
+                  setWorkspaceOpen(false);
+                  navigate("/app/society/new");
+                }}
+              >
+                <Plus size={14} /> {t("sidebar.addWorkspace")}
+              </button>
+            </div>
           </div>,
           document.body,
         )}
@@ -1666,7 +1688,7 @@ export function Layout() {
             </div>
           </div>
         </div>
-        <GlobalAiAssistantSafe />
+        {!aiChatHidden && <GlobalAiAssistantSafe />}
         {isMobileNav && (
           <nav className="bottom-nav" aria-label={t("sidebar.navigation")}>
             {/* Icon size 16px matches twenty's icon.size.md — the CSS also

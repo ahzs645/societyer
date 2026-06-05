@@ -1,5 +1,6 @@
 import { Field } from "./ui";
 import { OptionSetName, optionChoices } from "../lib/orgHubOptions";
+import { Select } from "./Select";
 
 type OptionSelectProps = {
   label: string;
@@ -13,14 +14,15 @@ export function OptionSelect({ label, setName, value, onChange, emptyLabel }: Op
   const options = optionChoices(setName, value ? [value] : []);
   return (
     <Field label={label}>
-      <select className="input" value={value ?? ""} onChange={(event) => onChange(event.target.value || undefined)}>
-        {emptyLabel && <option value="">{emptyLabel}</option>}
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      <Select
+        value={value ?? ""}
+        onChange={(next) => onChange(next || undefined)}
+        options={options}
+        placeholder={emptyLabel ?? "Select…"}
+        searchable
+        clearable={!!emptyLabel}
+        clearLabel={emptyLabel}
+      />
     </Field>
   );
 }

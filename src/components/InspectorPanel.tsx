@@ -220,7 +220,11 @@ export function InspectorHost() {
           aria-label="Close inspector"
         />
       )}
-      <aside className="inspector" aria-hidden={!isOpen}>
+      {/* `inert` instead of `aria-hidden` — the latter is blocked by the browser
+        * when a descendant has focus (e.g. closing the inspector while the user
+        * is typing in an input inside it). `inert` removes the element from the
+        * a11y tree AND prevents focus, which is the correct semantics here. */}
+      <aside className="inspector" {...(!isOpen ? { inert: "" } : {})}>
         {isOpen && (
           <div
             className="inspector__resizer"

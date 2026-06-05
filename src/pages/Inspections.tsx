@@ -9,6 +9,7 @@ import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { Plus, Eye, Trash2, Tag } from "lucide-react";
 import { dollarInputToCents, formatDate, money } from "../lib/format";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 const FIELDS: FilterField<any>[] = [
   { id: "inspector", label: "Inspector", icon: <Tag size={14} />, match: (r, q) => r.inspectorName.toLowerCase().includes(q.toLowerCase()) },
@@ -124,7 +125,7 @@ export function InspectionsPage() {
               <input type="checkbox" checked={form.isMember} onChange={(e) => setForm({ ...form, isMember: e.target.checked })} /> Member of the society (no fee)
             </label>
             <Field label="Records requested" hint="e.g. members register (excluded from public), bylaws, 2025 AGM minutes">
-              <textarea className="textarea" value={form.recordsRequested} onChange={(e) => setForm({ ...form, recordsRequested: e.target.value })} />
+              <MarkdownEditor rows={4} value={form.recordsRequested} onChange={(markdown) => setForm({ ...form, recordsRequested: markdown })} />
             </Field>
             <Field label="Related document (optional)">
               <select className="input" value={form.documentId ?? ""} onChange={(e) => setForm({ ...form, documentId: e.target.value || undefined })}>
@@ -152,7 +153,7 @@ export function InspectionsPage() {
                 <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.copyFeeDollars} onChange={(e) => setForm({ ...form, copyFeeDollars: e.target.value })} />
               </Field>
             </div>
-            <Field label="Notes"><textarea className="textarea" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
           </div>
         )}
       </Drawer>

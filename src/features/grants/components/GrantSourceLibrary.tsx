@@ -8,6 +8,7 @@ import { DataTable } from "../../../components/DataTable";
 import type { Column } from "../../../components/DataTable";
 import type { FilterField } from "../../../components/FilterBar";
 import { Badge, Drawer, Field } from "../../../components/ui";
+import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { useToast } from "../../../components/Toast";
 
 type GrantSourceLibrarySectionProps = {
@@ -449,7 +450,7 @@ function GrantSourceDrawer({
             <input className="input" value={sourceDraft.topicTagsText} onChange={(event) => setSourceDraft({ ...sourceDraft, topicTagsText: event.target.value })} placeholder="cihr, community, youth" />
           </Field>
           <Field label="Notes">
-            <textarea className="textarea" rows={4} value={sourceDraft.notes} onChange={(event) => setSourceDraft({ ...sourceDraft, notes: event.target.value })} />
+            <MarkdownEditor rows={4} value={sourceDraft.notes} onChange={(markdown) => setSourceDraft({ ...sourceDraft, notes: markdown })} />
           </Field>
         </div>
       )}

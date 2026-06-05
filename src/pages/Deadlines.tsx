@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -9,7 +9,8 @@ import { Segmented } from "../components/primitives";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
-import { Plus, Trash2, Calendar } from "lucide-react";
+import { useConfirm } from "../components/Modal";
+import { Plus, Trash2, Calendar, Archive, RotateCcw } from "lucide-react";
 import { patchInList } from "../lib/optimistic";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
@@ -21,21 +22,37 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
+import { MarkdownEditor } from "../components/MarkdownEditor";
+
+type DeadlineStatus = "open" | "complete" | "closed";
+type StatusFilter = "open" | "complete" | "closed" | "all";
+
+function statusOf(record: any): DeadlineStatus {
+  if (record?.status === "open" || record?.status === "complete" || record?.status === "closed") {
+    return record.status;
+  }
+  return record?.done ? "complete" : "open";
+}
 
 export function DeadlinesPage() {
   const society = useSociety();
   const items = useQuery(api.deadlines.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.deadlines.create);
-  const toggle = useMutation(api.deadlines.toggleDone).withOptimisticUpdate(
+  const setStatus = useMutation(api.deadlines.setStatus).withOptimisticUpdate(
     (store, args) => {
-      patchInList(store, api.deadlines.list, String(args.id), { done: args.done });
+      patchInList(store, api.deadlines.list, String(args.id), {
+        status: args.status,
+        done: args.status === "complete",
+      });
     },
   );
   const update = useMutation(api.deadlines.update);
   const remove = useMutation(api.deadlines.remove);
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [view, setView] = useState<"list" | "calendar">("list");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
 
@@ -44,6 +61,12 @@ export function DeadlinesPage() {
     nameSingular: "deadline",
     viewId: currentViewId,
   });
+
+  const allRecords = (items ?? []) as any[];
+  const records = useMemo(() => {
+    if (statusFilter === "all") return allRecords;
+    return allRecords.filter((r) => statusOf(r) === statusFilter);
+  }, [allRecords, statusFilter]);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -54,8 +77,18 @@ export function DeadlinesPage() {
   };
   const save = async () => { await create({ societyId: society._id, ...form }); setOpen(false); };
 
+  const handleDelete = async (record: any) => {
+    const ok = await confirm({
+      title: "Delete deadline?",
+      message: `"${record.title}" will be permanently removed.`,
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (!ok) return;
+    await remove({ id: record._id });
+  };
+
   const now = Date.now();
-  const records = (items ?? []) as any[];
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   return (
@@ -82,14 +115,31 @@ export function DeadlinesPage() {
         }
       />
 
+      {view === "list" && (
+        <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "var(--s-2)" }}>
+          <Segmented<StatusFilter>
+            value={statusFilter}
+            onChange={setStatusFilter}
+            items={[
+              { id: "open", label: "Open" },
+              { id: "complete", label: "Complete" },
+              { id: "closed", label: "Closed" },
+              { id: "all", label: "All" },
+            ]}
+          />
+        </div>
+      )}
+
       {view === "calendar" && (
         <CalendarView
-          items={(items ?? []) as any[]}
+          items={allRecords}
           getId={(r) => r._id}
           getLabel={(r) => r.title}
           getDate={(r) => r.dueDate}
           getTone={(r) => {
-            if (r.done) return "success";
+            const s = statusOf(r);
+            if (s === "complete") return "success";
+            if (s === "closed") return "neutral";
             const overdue = new Date(r.dueDate).getTime() < now;
             return overdue ? "danger" : "info";
           }}
@@ -106,6 +156,13 @@ export function DeadlinesPage() {
             hydratedView={tableData.hydratedView}
             records={records}
             onUpdate={async ({ recordId, fieldName, value }) => {
+              if (fieldName === "status") {
+                await setStatus({
+                  id: recordId as Id<"deadlines">,
+                  status: value as DeadlineStatus,
+                });
+                return;
+              }
               await update({
                 id: recordId as Id<"deadlines">,
                 patch: { [fieldName]: value } as any,
@@ -127,21 +184,39 @@ export function DeadlinesPage() {
             <RecordTable
               loading={tableData.loading || items === undefined}
               renderCell={({ record, field }) => {
-                if (field.name === "done") {
+                if (field.name === "status") {
+                  const s = statusOf(record);
+                  if (s === "closed") {
+                    return <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>Closed</span>;
+                  }
                   return (
                     <span onClick={(e) => e.stopPropagation()}>
                       <Checkbox
-                        checked={!!record.done}
-                        onChange={() => toggle({ id: record._id, done: !record.done })}
+                        checked={s === "complete"}
+                        onChange={() =>
+                          setStatus({
+                            id: record._id,
+                            status: s === "complete" ? "open" : "complete",
+                          })
+                        }
                         bare
                       />
                     </span>
                   );
                 }
                 if (field.name === "title") {
+                  const s = statusOf(record);
+                  const isComplete = s === "complete";
+                  const isClosed = s === "closed";
                   return (
                     <div>
-                      <strong style={{ textDecoration: record.done ? "line-through" : "none", color: record.done ? "var(--text-tertiary)" : undefined }}>
+                      <strong
+                        style={{
+                          textDecoration: isComplete ? "line-through" : "none",
+                          color: isComplete || isClosed ? "var(--text-tertiary)" : undefined,
+                          fontStyle: isClosed ? "italic" : undefined,
+                        }}
+                      >
                         {record.title}
                       </strong>
                       {record.description && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{record.description}</div>}
@@ -150,11 +225,29 @@ export function DeadlinesPage() {
                 }
                 return undefined;
               }}
-              renderRowActions={(r) => (
-                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete deadline ${r.title}`} onClick={() => remove({ id: r._id })}>
-                  <Trash2 size={12} />
-                </button>
-              )}
+              renderRowActions={(r) => {
+                const s = statusOf(r);
+                const isClosed = s === "closed";
+                return (
+                  <>
+                    <button
+                      className="btn btn--ghost btn--sm btn--icon"
+                      aria-label={isClosed ? `Reopen deadline ${r.title}` : `Mark deadline ${r.title} as closed`}
+                      title={isClosed ? "Reopen" : "Mark as closed"}
+                      onClick={() => setStatus({ id: r._id, status: isClosed ? "open" : "closed" })}
+                    >
+                      {isClosed ? <RotateCcw size={12} /> : <Archive size={12} />}
+                    </button>
+                    <button
+                      className="btn btn--ghost btn--sm btn--icon"
+                      aria-label={`Delete deadline ${r.title}`}
+                      onClick={() => handleDelete(r)}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </>
+                );
+              }}
             />
           </RecordTableScope>
         ) : (
@@ -173,7 +266,7 @@ export function DeadlinesPage() {
         {form && (
           <div>
             <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
-            <Field label="Description"><textarea className="textarea" value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
+            <Field label="Description"><MarkdownEditor rows={4} value={form.description ?? ""} onChange={(markdown) => setForm({ ...form, description: markdown })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Category">
                 <Select

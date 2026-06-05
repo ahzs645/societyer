@@ -8,10 +8,12 @@ import { DatePicker } from "../components/DatePicker";
 import { Toggle } from "../components/Controls";
 import { OptionSelect } from "../components/OptionSelect";
 import { Select } from "../components/Select";
+import { StructuredAddressFields } from "../components/StructuredAddressFields";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Building2, KeyRound, Landmark, MapPin, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { optionLabel } from "../lib/orgHubOptions";
 
 type DrawerKind = "address" | "registration" | "identifier";
@@ -482,21 +484,12 @@ function AddressFields({ draft, setDraft }: any) {
         <OptionSelect label="Type" setName="addressTypes" value={draft.type ?? ""} onChange={(value) => setDraft({ ...draft, type: value })} />
         <OptionSelect label="Status" setName="addressStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} />
       </div>
-      <Field label="Street"><input className="input" value={draft.street ?? ""} onChange={(e) => setDraft({ ...draft, street: e.target.value })} /></Field>
-      <div className="row" style={{ gap: 12 }}>
-        <Field label="Unit"><input className="input" value={draft.unit ?? ""} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} /></Field>
-        <Field label="City"><input className="input" value={draft.city ?? ""} onChange={(e) => setDraft({ ...draft, city: e.target.value })} /></Field>
-      </div>
-      <div className="row" style={{ gap: 12 }}>
-        <Field label="Province/state"><input className="input" value={draft.provinceState ?? ""} onChange={(e) => setDraft({ ...draft, provinceState: e.target.value })} /></Field>
-        <Field label="Postal code"><input className="input" value={draft.postalCode ?? ""} onChange={(e) => setDraft({ ...draft, postalCode: e.target.value })} /></Field>
-        <Field label="Country"><input className="input" value={draft.country ?? ""} onChange={(e) => setDraft({ ...draft, country: e.target.value })} /></Field>
-      </div>
+      <StructuredAddressFields value={draft} onChange={(value) => setDraft({ ...draft, ...value })} />
       <div className="row" style={{ gap: 12 }}>
         <Field label="Effective from"><DatePicker value={draft.effectiveFrom ?? ""} onChange={(value) => setDraft({ ...draft, effectiveFrom: value })} /></Field>
         <Field label="Effective to"><DatePicker value={draft.effectiveTo ?? ""} onChange={(value) => setDraft({ ...draft, effectiveTo: value })} /></Field>
       </div>
-      <Field label="Notes"><textarea className="textarea" value={draft.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></Field>
+      <Field label="Notes"><MarkdownEditor rows={4} value={draft.notes ?? ""} onChange={(markdown) => setDraft({ ...draft, notes: markdown })} /></Field>
     </>
   );
 }
@@ -520,7 +513,7 @@ function RegistrationFields({ draft, setDraft }: any) {
       </div>
       <Field label="Official email"><input className="input" value={draft.officialEmail ?? ""} onChange={(e) => setDraft({ ...draft, officialEmail: e.target.value })} /></Field>
       <Field label="Representatives"><input className="input" value={draft.representativeIdsText ?? (draft.representativeIds ?? []).join(", ")} onChange={(e) => setDraft({ ...draft, representativeIdsText: e.target.value })} placeholder="Name or record IDs, comma separated" /></Field>
-      <Field label="Notes"><textarea className="textarea" value={draft.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></Field>
+      <Field label="Notes"><MarkdownEditor rows={4} value={draft.notes ?? ""} onChange={(markdown) => setDraft({ ...draft, notes: markdown })} /></Field>
     </>
   );
 }
@@ -541,7 +534,7 @@ function IdentifierFields({ draft, setDraft }: any) {
         <Field label="Registered at"><DatePicker value={draft.registeredAt ?? ""} onChange={(value) => setDraft({ ...draft, registeredAt: value })} /></Field>
         <OptionSelect label="Access level" setName="accessLevels" value={draft.accessLevel ?? ""} onChange={(value) => setDraft({ ...draft, accessLevel: value })} />
       </div>
-      <Field label="Notes"><textarea className="textarea" value={draft.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></Field>
+      <Field label="Notes"><MarkdownEditor rows={4} value={draft.notes ?? ""} onChange={(markdown) => setDraft({ ...draft, notes: markdown })} /></Field>
     </>
   );
 }

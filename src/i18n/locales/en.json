@@ -70,6 +70,7 @@
     "accessCustody": "Access custody",
     "transparency": "Public transparency",
     "financials": "Financials",
+    "assets": "Assets",
     "grants": "Grants",
     "reconciliation": "Reconciliation",
     "donationReceipts": "Donation receipts",
@@ -111,6 +112,7 @@
     "unpinFromFavorites": "Unpin from favorites",
     "openInNewTab": "Open in new tab",
     "activeWorkspace": "Active",
+    "addWorkspace": "Add workspace",
     "noSocieties": "No societies available yet."
   },
   "settings": {

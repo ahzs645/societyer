@@ -38,6 +38,7 @@ import { MeetingPackageHub } from "../features/meetings/components/MeetingPackag
 import { MeetingMinutesColumn } from "../features/meetings/components/MeetingMinutesColumn";
 import { MeetingSidebarColumn } from "../features/meetings/components/MeetingSidebarColumn";
 import { Select } from "../components/Select";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import {
   addRedactionName,
   getMeetingJoinDetails,
@@ -297,6 +298,10 @@ export function MeetingDetailPage() {
   const vttInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const motionEditorRef = useRef<MotionEditorHandle | null>(null);
+  // Dedupes concurrent ensureMinutes() calls — without this, rapid motion
+  // saves before the `minutes` query refreshes would each trigger their own
+  // createMinutes insert, leaving orphan records.
+  const ensureMinutesInFlight = useRef<Promise<Id<"minutes"> | null> | null>(null);
   const [transcript, setTranscript] = useState("");
   const [busy, setBusy] = useState(false);
   const [pipelineBusy, setPipelineBusy] = useState(false);
@@ -399,49 +404,51 @@ export function MeetingDetailPage() {
   const selectedMinutesExportStyle =
     MINUTES_EXPORT_STYLES.find((style) => style.id === minutesExportStyle) ??
     MINUTES_EXPORT_STYLES[0];
-  const minutesExportGaps = minutes
-    ? getMinutesStyleGaps({
-        styleId: minutesExportStyle,
-        meeting: {
-          title: meeting.title,
-          type: meeting.type,
-          scheduledAt: meeting.scheduledAt,
-          location: meeting.location ?? null,
-          electronic: !!meeting.electronic,
-          noticeSentAt: meeting.noticeSentAt ?? null,
-          agendaItems: agendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
-          agendaItemTree: agendaTree,
-        },
-        minutes: {
-          heldAt: minutes.heldAt,
-          chairName: minutes.chairName ?? null,
-          secretaryName: minutes.secretaryName ?? null,
-          recorderName: minutes.recorderName ?? null,
-          calledToOrderAt: minutes.calledToOrderAt ?? null,
-          adjournedAt: minutes.adjournedAt ?? null,
-          remoteParticipation: minutes.remoteParticipation ?? null,
-          detailedAttendance: minutes.detailedAttendance ?? null,
-          attendees: minutes.attendees,
-          absent: minutes.absent,
-          quorumMet: minutes.quorumMet,
-          quorumRequired: quorumSnapshot.required,
-          quorumSourceLabel: quorumSnapshot.label,
-          discussion: minutes.discussion,
-          sections: minutes.sections ?? null,
-          motions: minutes.motions as any,
-          decisions: minutes.decisions,
-          actionItems: minutes.actionItems as any,
-          approvedAt: minutes.approvedAt ?? null,
-          nextMeetingAt: minutes.nextMeetingAt ?? null,
-          nextMeetingLocation: minutes.nextMeetingLocation ?? null,
-          nextMeetingNotes: minutes.nextMeetingNotes ?? null,
-          sessionSegments: minutes.sessionSegments ?? null,
-          appendices: minutes.appendices ?? null,
-          agmDetails: minutes.agmDetails ?? null,
-          draftTranscript: minutes.draftTranscript ?? null,
-        },
-      })
-    : [];
+  // Compute the gap report against a stub minutes when none has been
+  // bootstrapped yet, so the Overview/Export panel surfaces what's missing
+  // from the start (attendance, motions, chair/secretary, etc.) instead of
+  // showing an empty placeholder until the user saves the agenda.
+  const minutesExportGaps = getMinutesStyleGaps({
+    styleId: minutesExportStyle,
+    meeting: {
+      title: meeting.title,
+      type: meeting.type,
+      scheduledAt: meeting.scheduledAt,
+      location: meeting.location ?? null,
+      electronic: !!meeting.electronic,
+      noticeSentAt: meeting.noticeSentAt ?? null,
+      agendaItems: agendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
+      agendaItemTree: agendaTree,
+    },
+    minutes: {
+      heldAt: minutes?.heldAt ?? meeting.scheduledAt,
+      chairName: minutes?.chairName ?? null,
+      secretaryName: minutes?.secretaryName ?? null,
+      recorderName: minutes?.recorderName ?? null,
+      calledToOrderAt: minutes?.calledToOrderAt ?? null,
+      adjournedAt: minutes?.adjournedAt ?? null,
+      remoteParticipation: minutes?.remoteParticipation ?? null,
+      detailedAttendance: minutes?.detailedAttendance ?? null,
+      attendees: minutes?.attendees ?? [],
+      absent: minutes?.absent ?? [],
+      quorumMet: minutes?.quorumMet ?? false,
+      quorumRequired: quorumSnapshot.required,
+      quorumSourceLabel: quorumSnapshot.label,
+      discussion: minutes?.discussion ?? "",
+      sections: minutes?.sections ?? null,
+      motions: (minutes?.motions ?? []) as any,
+      decisions: minutes?.decisions ?? [],
+      actionItems: (minutes?.actionItems ?? []) as any,
+      approvedAt: minutes?.approvedAt ?? null,
+      nextMeetingAt: minutes?.nextMeetingAt ?? null,
+      nextMeetingLocation: minutes?.nextMeetingLocation ?? null,
+      nextMeetingNotes: minutes?.nextMeetingNotes ?? null,
+      sessionSegments: minutes?.sessionSegments ?? null,
+      appendices: minutes?.appendices ?? null,
+      agmDetails: minutes?.agmDetails ?? null,
+      draftTranscript: minutes?.draftTranscript ?? null,
+    },
+  });
   const transcriptStatusTone =
     transcriptionJob?.status === "complete"
       ? "success"
@@ -644,9 +651,32 @@ export function MeetingDetailPage() {
     };
   };
 
+  // True when there's anything worth putting in the export: at least one
+  // agenda item, a non-empty section, a motion, a decision, an action item,
+  // or some discussion text. Once a user deletes every agenda item, an
+  // auto-bootstrapped minutes record can still produce a "valid" but
+  // contentless preview (just attendance + quorum) — this check folds that
+  // case back into the empty state.
+  const hasExportableContent = (() => {
+    if (agendaTree.length > 0) return true;
+    if (!minutes) return false;
+    if ((minutes.discussion ?? "").trim()) return true;
+    const sections = (minutes.sections ?? []) as any[];
+    if (sections.some((section) =>
+      (section.title ?? "").trim() ||
+      (section.discussion ?? "").trim() ||
+      (section.decisions ?? []).some((d: string) => (d ?? "").trim()) ||
+      (section.actionItems ?? []).length > 0,
+    )) return true;
+    if (((minutes.motions ?? []) as any[]).length > 0) return true;
+    if (((minutes.decisions ?? []) as string[]).some((d) => (d ?? "").trim())) return true;
+    if (((minutes.actionItems ?? []) as any[]).length > 0) return true;
+    return false;
+  })();
+
   const renderExportBody = (redact?: (value: string) => string) => {
     const payload = minutesRenderPayload(redact);
-    if (!payload) return "";
+    if (!payload || !hasExportableContent) return "";
     return renderMinutesHtml({
       society: { name: society.name, incorporationNumber: society.incorporationNumber ?? null },
       meeting: {
@@ -740,8 +770,43 @@ export function MeetingDetailPage() {
     return { names: Array.from(new Set(names)), typeLabels: true };
   };
 
-  const saveMotions = (next: Motion[]) =>
-    minutes ? updateMinutes({ id: minutes._id, patch: { motions: next } }) : undefined;
+  // Auto-bootstrap a minimal minutes record so motions can be recorded even
+  // before an agenda has been saved. Mirrors the bootstrap done by saveAgenda
+  // but with empty sections, so the Motions tab is no longer a dead end when
+  // the user hasn't touched the agenda yet.
+  const ensureMinutes = async (): Promise<Id<"minutes"> | null> => {
+    if (minutes) return minutes._id;
+    if (ensureMinutesInFlight.current) return ensureMinutesInFlight.current;
+    const attendees = Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds.map(String) : [];
+    const quorumRequired = quorumSnapshot.required ?? meeting.quorumRequired;
+    const promise = (async () =>
+      await createMinutes({
+        societyId: meeting.societyId,
+        meetingId: meeting._id,
+        heldAt: meeting.scheduledAt,
+        attendees,
+        absent: [],
+        quorumMet: quorumRequired == null ? false : attendees.length >= quorumRequired,
+        quorumRequired: quorumRequired ?? undefined,
+        discussion: "",
+        sections: [],
+        motions: [],
+        decisions: [],
+        actionItems: [],
+      }))();
+    ensureMinutesInFlight.current = promise;
+    try {
+      return await promise;
+    } finally {
+      ensureMinutesInFlight.current = null;
+    }
+  };
+
+  const saveMotions = async (next: Motion[]) => {
+    const minutesId = minutes?._id ?? (await ensureMinutes());
+    if (!minutesId) return;
+    await updateMinutes({ id: minutesId, patch: { motions: next } });
+  };
 
   const saveMinuteSections = async (next: any[]) => {
     if (!minutes) return;
@@ -977,11 +1042,8 @@ export function MeetingDetailPage() {
       ...minutes.attendees.map((name: string) => ({ name, status: "present" as const })),
       ...minutes.absent.map((name: string) => ({ name, status: "absent" as const })),
     ];
-    const seedDirectors = existing.length === 0
-      ? attendanceRowsForDirectors(currentDirectors)
-      : [];
     setAttendanceEdit({
-      people: [...existing, ...seedDirectors],
+      people: existing,
       quorumMet: minutes.quorumMet,
     });
   };
@@ -1658,37 +1720,31 @@ export function MeetingDetailPage() {
                   {businessMotions.filter((motion: any) => motion.outcome === "Tabled").length} tabled
                 </span>
               ) : null}
-              {minutes && (
-                <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-                  <button
-                    className="btn-action btn-action--primary"
-                    type="button"
-                    onClick={() => motionEditorRef.current?.startAdding()}
-                  >
-                    <Plus size={12} /> Add motion
-                  </button>
-                </div>
-              )}
+              <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                <button
+                  className="btn-action btn-action--primary"
+                  type="button"
+                  onClick={() => motionEditorRef.current?.startAdding()}
+                >
+                  <Plus size={12} /> Add motion
+                </button>
+              </div>
             </div>
             <div className="card__body">
-              {minutes ? (
-                <MotionEditor
-                  ref={motionEditorRef}
-                  motions={minutes.motions as Motion[]}
-                  directorNames={directorNames}
-                  people={motionPeople}
-                  agendaSections={(minutes.sections ?? []).map((section: any) => ({
-                    title: section.title || "Untitled section",
-                    discussion: section.discussion ?? "",
-                    decisions: section.decisions ?? [],
-                  }))}
-                  onChange={saveMotions}
-                  onAddToBacklog={addMotionToBacklog}
-                  hideInlineAdd
-                />
-              ) : (
-                <div className="muted">Create minutes before recording motions.</div>
-              )}
+              <MotionEditor
+                ref={motionEditorRef}
+                motions={(minutes?.motions ?? []) as Motion[]}
+                directorNames={directorNames}
+                people={motionPeople}
+                agendaSections={(minutes?.sections ?? []).map((section: any) => ({
+                  title: section.title || "Untitled section",
+                  discussion: section.discussion ?? "",
+                  decisions: section.decisions ?? [],
+                }))}
+                onChange={saveMotions}
+                onAddToBacklog={addMotionToBacklog}
+                hideInlineAdd
+              />
             </div>
           </div>
         )}
@@ -1896,7 +1952,7 @@ export function MeetingDetailPage() {
               </Field>
             </div>
             <Field label="Instructions">
-              <textarea className="textarea" rows={3} value={joinEdit.remoteInstructions} onChange={(event) => setJoinEdit({ ...joinEdit, remoteInstructions: event.target.value })} />
+              <MarkdownEditor rows={3} value={joinEdit.remoteInstructions} onChange={(markdown) => setJoinEdit({ ...joinEdit, remoteInstructions: markdown })} />
             </Field>
           </div>
         )}

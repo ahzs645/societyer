@@ -596,6 +596,209 @@
   overflow-wrap: anywhere;
 }
 
+.link-audit {
+  display: grid;
+  gap: var(--s-4);
+}
+
+.link-audit__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+
+.link-audit-stat {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 8px;
+  align-items: center;
+  min-width: 0;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-panel);
+}
+
+.link-audit-stat__icon {
+  display: inline-flex;
+  color: var(--accent);
+}
+
+.link-audit-stat__value {
+  color: var(--text-primary);
+  font-size: var(--fs-xl);
+  font-weight: 750;
+  line-height: 1;
+}
+
+.link-audit-stat__label {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+
+.link-audit__section {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.link-audit__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.link-audit__section-head h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--fs-md);
+  line-height: 1.25;
+}
+
+.link-audit__section-head span {
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.link-audit__list {
+  display: grid;
+  gap: 8px;
+}
+
+.link-audit-targets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.link-audit-target {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  align-items: center;
+  min-width: 0;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-panel);
+}
+
+.link-audit-target span {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.link-audit-target strong {
+  color: var(--text-primary);
+  font-size: var(--fs-lg);
+  line-height: 1;
+}
+
+.link-audit-target em {
+  grid-column: 1 / -1;
+  color: var(--danger);
+  font-size: var(--fs-xs);
+  font-style: normal;
+  font-weight: 700;
+}
+
+.link-audit__list--compact {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.link-audit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s-3);
+  align-items: start;
+  min-width: 0;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-panel);
+}
+
+.link-audit-row--compact {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.link-audit-row__main {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.link-audit-row__title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  color: var(--text-primary);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.link-audit-row__title code {
+  max-width: 100%;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+.link-audit-row__reason {
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+}
+
+.link-audit-row__fix {
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+}
+
+.link-audit-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+}
+
+.link-audit-row__meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
+  line-height: 1.2;
+}
+
+.link-audit-row__priority--high {
+  color: var(--danger);
+}
+
+.link-audit-row__priority--medium {
+  color: var(--warn);
+}
+
+.link-audit-row__priority--low {
+  color: var(--text-tertiary);
+}
+
 @media (max-width: 760px) {
   .dashboard-compliance {
     gap: var(--s-3);
@@ -711,6 +914,19 @@
   .custom-fields-mobile-list {
     display: grid;
     gap: var(--s-2);
+  }
+
+  .link-audit__summary,
+  .link-audit__list--compact {
+    grid-template-columns: 1fr;
+  }
+
+  .link-audit-row {
+    grid-template-columns: 1fr;
+  }
+
+  .link-audit-row__meta {
+    justify-content: flex-start;
   }
 }
 
@@ -1153,6 +1369,76 @@
   margin-bottom: var(--s-2);
   background: var(--bg-base);
 }
+.motion-draft {
+  display: grid;
+  gap: var(--s-2);
+  background: color-mix(in srgb, var(--accent-soft) 16%, var(--bg-base));
+}
+.motion-draft__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.motion-draft__header strong {
+  font-size: var(--fs-sm);
+}
+.motion-draft__header .muted {
+  font-size: var(--fs-xs);
+  margin-top: 2px;
+}
+.motion-draft__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.motion-draft .field,
+.motion-draft__motion-field .field {
+  margin-bottom: 0;
+}
+.motion-draft__motion-field .textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+.motion-draft__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: var(--s-2);
+  align-items: end;
+}
+.motion-draft__votes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.motion-draft__vote-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.vote-stepper--compact {
+  flex: 0 1 auto;
+  gap: 4px;
+}
+.vote-stepper--compact .field__label {
+  font-size: var(--fs-xxs);
+}
+.vote-stepper--compact .row {
+  gap: 2px !important;
+  flex-wrap: nowrap;
+}
+.vote-stepper--compact .vote-stepper__btn {
+  width: 22px !important;
+  height: 22px !important;
+}
+.vote-stepper--compact .vote-stepper__input {
+  width: 40px !important;
+  height: 22px;
+  padding: 0 3px !important;
+  font-size: var(--fs-xs);
+}
 .motion__text { font-weight: 500; margin-bottom: 4px; }
 .motion__meta { font-size: var(--fs-sm); color: var(--text-tertiary); display: flex; gap: var(--s-3); flex-wrap: wrap; }
 .motion__head {
@@ -1197,6 +1483,16 @@
 // Container-query fallback for narrow cards (sidebar squeeze, etc.) — same
 // stacked layout, applied automatically when the .motion card itself shrinks.
 @container (max-width: 700px) {
+  .motion-draft__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .motion-draft__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .motion-draft__actions {
+    justify-content: flex-end;
+  }
   .motion__head {
     flex-direction: column;
     align-items: stretch;
@@ -1329,7 +1625,7 @@
 }
 .meeting-minutes-agenda-editor__row {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
   gap: 6px;
   align-items: center;
   position: relative;
@@ -1338,7 +1634,7 @@
   min-width: 0;
 }
 .meeting-minutes-agenda-editor__row.is-locked {
-  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
 }
 .meeting-minutes-agenda-editor__row.is-dragging {
   opacity: 0.4;
@@ -1359,8 +1655,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  width: 32px;
+  width: 36px;
   height: 32px;
   min-width: 0;
   color: var(--text-secondary);
@@ -1369,23 +1664,29 @@
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
+  border-radius: var(--r-sm);
+  transition: background 120ms ease;
 }
 .meeting-minutes-agenda-editor__index.is-drag-handle {
   cursor: grab;
 }
+.meeting-minutes-agenda-editor__index.is-drag-handle:hover,
+.meeting-minutes-agenda-editor__index.is-drag-handle:focus-visible {
+  background: var(--bg-subtle);
+}
 .meeting-minutes-agenda-editor__index.is-drag-handle:active {
   cursor: grabbing;
 }
-.meeting-minutes-agenda-editor__grip {
-  opacity: 0.35;
-  flex-shrink: 0;
-  transition: opacity 120ms ease;
-}
-.meeting-minutes-agenda-editor__row:hover .meeting-minutes-agenda-editor__grip,
-.meeting-minutes-agenda-editor__index.is-drag-handle:focus-visible .meeting-minutes-agenda-editor__grip {
-  opacity: 0.8;
-}
 .meeting-minutes-agenda-editor__row > .btn-action--icon {
+  width: 32px;
+  height: 32px;
+}
+.meeting-minutes-agenda-editor__actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.meeting-minutes-agenda-editor__actions > .btn-action--icon {
   width: 32px;
   height: 32px;
 }
@@ -1602,6 +1903,43 @@
 .name-autocomplete__option.is-highlighted {
   background: var(--bg-hover);
 }
+.name-autocomplete__option.has-remove {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 4px;
+}
+.name-autocomplete__option-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.name-autocomplete__remove {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 80ms ease, background 80ms ease, color 80ms ease;
+}
+.name-autocomplete__option:hover .name-autocomplete__remove,
+.name-autocomplete__option.is-highlighted .name-autocomplete__remove,
+.name-autocomplete__remove:focus-visible {
+  opacity: 1;
+}
+.name-autocomplete__remove:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
 .meeting-reminder-chip {
   // Match the .badge--success / .badge--accent visual treatment: soft tinted
   // background, bold tone-coloured text, transparent border. This resolves
@@ -1683,6 +2021,13 @@
 }
 .meeting-minutes-section-item.is-dragging {
   opacity: 0.5;
+}
+.meeting-minutes-section-item.is-editing > .meeting-minutes-section-item__summary {
+  cursor: default;
+  list-style: none;
+}
+.meeting-minutes-section-item.is-editing > .meeting-minutes-section-item__summary::-webkit-details-marker {
+  display: none;
 }
 /* Drop indicators — a thin accent line above (or below, for the last row)
  * the target. Drawn outside the row's box-model via offsets so it doesn't
@@ -1874,9 +2219,6 @@
   align-items: center;
   gap: 6px;
   flex: 0 0 auto;
-}
-.meeting-minutes-section-item__action-tooltip {
-  display: inline-flex;
 }
 .meeting-minutes-section-item__body {
   display: grid;
@@ -2900,20 +3242,6 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   text-align: center;
   font-size: var(--fs-sm);
 }
-.attendance-details {
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bg-base);
-  padding: var(--s-3);
-}
-.attendance-details__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-2);
-  font-size: var(--fs-sm);
-  margin-bottom: var(--s-2);
-}
 .attendance-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -3910,6 +4238,7 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 /* Segmented control */
 .segmented {
   display: inline-flex;
+  align-self: flex-start;
   background: var(--bg-subtle);
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
@@ -3922,6 +4251,17 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   color: var(--text-secondary);
   border-radius: var(--r-pill);
   font-weight: 500;
+}
+.segmented--compact {
+  padding: 2px;
+  gap: 2px;
+  border-radius: var(--r-sm);
+}
+.segmented--compact .segmented__btn {
+  min-height: 22px;
+  padding: 2px 7px;
+  border-radius: calc(var(--r-sm) - 1px);
+  font-size: var(--fs-xs);
 }
 .segmented__btn.is-active {
   background: var(--bg-panel);

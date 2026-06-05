@@ -4,6 +4,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field, Flag } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Select } from "../components/Select";
 import { formatDate, formatDateTime, money } from "../lib/format";
 import { isDemoMode } from "../lib/demoMode";
@@ -740,10 +741,10 @@ export function FinancialsPage() {
               />
             </Field>
             <Field label="Notes">
-              <textarea
-                className="textarea"
+              <MarkdownEditor
+                rows={4}
                 value={subscriptionForm.notes ?? ""}
-                onChange={(e) => setSubscriptionForm({ ...subscriptionForm, notes: e.target.value })}
+                onChange={(markdown) => setSubscriptionForm({ ...subscriptionForm, notes: markdown })}
                 placeholder="Seats, contract notes, cancellation owner, or review reminder."
               />
             </Field>

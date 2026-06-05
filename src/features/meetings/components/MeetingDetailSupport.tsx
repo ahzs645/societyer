@@ -6,6 +6,7 @@ import { api } from "@/lib/convexApi";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { useToast } from "../../../components/Toast";
 import { Badge, Field } from "../../../components/ui";
+import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { Checkbox } from "../../../components/Controls";
 import { formatDate } from "../../../lib/format";
 import { type StructuredMinutesEdit } from "../lib/structuredMinutes";
@@ -34,22 +35,16 @@ export function AttendanceDetails({
   }
 
   return (
-    <div className="attendance-details">
-      <div className="attendance-details__head">
-        <strong>Attendance list</strong>
-        <span className="muted">{present.length} present · {absent.length} absent / regrets</span>
-      </div>
-      <div className="attendance-list">
-        {rows.map((row, index) => (
-          <div key={`${row.status}-${row.name}-${index}`} className="attendance-list__item">
-            <div className="attendance-list__person">
-              <LinkedPersonName name={row.name} people={people} />
-              {row.role && <span className="muted">{row.role}</span>}
-            </div>
-            <Badge tone={row.status === "Present" ? "success" : "neutral"}>{row.status}</Badge>
+    <div className="attendance-list">
+      {rows.map((row, index) => (
+        <div key={`${row.status}-${row.name}-${index}`} className="attendance-list__item">
+          <div className="attendance-list__person">
+            <LinkedPersonName name={row.name} people={people} />
+            {row.role && <span className="muted">{row.role}</span>}
           </div>
-        ))}
-      </div>
+          <Badge tone={row.status === "Present" ? "success" : "neutral"}>{row.status}</Badge>
+        </div>
+      ))}
     </div>
   );
 }
@@ -133,7 +128,7 @@ export function StructuredMinutesEditor({
       </div>
 
       <Field label="Remote instructions">
-        <textarea className="textarea" rows={2} value={value.remoteInstructions} onChange={(event) => patch({ remoteInstructions: event.target.value })} />
+        <MarkdownEditor rows={2} value={value.remoteInstructions} onChange={(markdown) => patch({ remoteInstructions: markdown })} />
       </Field>
 
       <Field label="Detailed attendance" hint="One row per person: status | name | role | affiliation | member ID | proxy for | quorum yes/no | notes">
@@ -169,10 +164,10 @@ export function StructuredMinutesEditor({
             label="Financial statements were presented"
           />
           <Field label="Financial statement notes">
-            <textarea className="textarea" rows={3} value={value.financialStatementsNotes} onChange={(event) => patch({ financialStatementsNotes: event.target.value })} />
+            <MarkdownEditor rows={3} value={value.financialStatementsNotes} onChange={(markdown) => patch({ financialStatementsNotes: markdown })} />
           </Field>
           <Field label="Director election / appointment notes">
-            <textarea className="textarea" rows={3} value={value.directorElectionNotes} onChange={(event) => patch({ directorElectionNotes: event.target.value })} />
+            <MarkdownEditor rows={3} value={value.directorElectionNotes} onChange={(markdown) => patch({ directorElectionNotes: markdown })} />
           </Field>
           <Field label="Director appointments" hint="One row: status | name | role | affiliation | term | consent yes/no | votes | elected yes/no | notes">
             <textarea className="textarea" rows={4} value={value.directorAppointments} onChange={(event) => patch({ directorAppointments: event.target.value })} />

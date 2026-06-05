@@ -133,7 +133,16 @@ export function Select<T extends string>({
       if (menuRef.current?.contains(t)) return;
       setOpen(false);
     };
-    const onScroll = () => setOpen(false);
+    // Close the menu when the page scrolls (so it doesn't drift away from
+    // its trigger), but NOT when the user scrolls inside the menu list —
+    // capture-phase scroll fires for every scroll container including this
+    // one, which previously made the dropdown close as soon as you tried to
+    // scroll its items.
+    const onScroll = (e: Event) => {
+      if (menuRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    const onResize = () => setOpen(false);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -143,12 +152,12 @@ export function Select<T extends string>({
     };
     document.addEventListener("mousedown", onDoc);
     window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onScroll);
+    window.addEventListener("resize", onResize);
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousedown", onDoc);
       window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("resize", onResize);
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);

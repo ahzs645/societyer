@@ -296,7 +296,19 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           ],
         },
       },
-      { name: "done", label: "Done", fieldType: FIELD_TYPES.BOOLEAN, icon: "CheckCircle" },
+      {
+        name: "status",
+        label: "Status",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "CheckCircle",
+        config: {
+          options: [
+            { value: "open", label: "Open", color: "blue" },
+            { value: "complete", label: "Complete", color: "green" },
+            { value: "closed", label: "Closed", color: "gray" },
+          ],
+        },
+      },
       {
         name: "recurrence",
         label: "Recurrence",
@@ -315,7 +327,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
     defaultView: {
       name: "All deadlines",
       columns: [
-        { fieldName: "done", size: 80 },
+        { fieldName: "status", size: 120 },
         { fieldName: "title", size: 260 },
         { fieldName: "dueDate", size: 140 },
         { fieldName: "category", size: 140 },

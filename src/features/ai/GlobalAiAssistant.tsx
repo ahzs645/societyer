@@ -2,7 +2,6 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import {
   AlertTriangle,
   ArrowDown,
-  Bot,
   Building2,
   Check,
   ChevronDown,
@@ -403,17 +402,6 @@ export function GlobalAiAssistant() {
 
   return (
     <>
-      <button
-        type="button"
-        className="global-ai-trigger"
-        onClick={() => setOpen(true)}
-        aria-label="Open AI assistant"
-        title="AI assistant"
-      >
-        <Bot size={16} />
-        {draftCount > 0 && <span className="global-ai-trigger__dot">{draftCount}</span>}
-      </button>
-
       {open && (
         <div className="global-ai-shell" role="dialog" aria-modal="true" aria-label="Societyer AI assistant">
           <button className="global-ai-backdrop" type="button" aria-label="Close AI assistant" onClick={() => setOpen(false)} />

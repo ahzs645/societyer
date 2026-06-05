@@ -9,6 +9,7 @@ import { FilterField } from "../components/FilterBar";
 import { Plus, Vote, Trash2, Tag } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 const FIELDS: FilterField<any>[] = [
   { id: "status", label: "Status", icon: <Tag size={14} />, options: ["Submitted", "MeetsThreshold", "Rejected", "Included"], match: (r, q) => r.status === q },
@@ -110,7 +111,7 @@ export function MemberProposalsPage() {
         {form && (
           <div>
             <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
-            <Field label="Proposal text"><textarea className="textarea" value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} /></Field>
+            <Field label="Proposal text"><MarkdownEditor rows={4} value={form.text} onChange={(markdown) => setForm({ ...form, text: markdown })} /></Field>
             <Field label="Submitted by"><input className="input" value={form.submittedByName} onChange={(e) => setForm({ ...form, submittedByName: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Submitted on"><input className="input" type="date" value={form.submittedAtISO} onChange={(e) => setForm({ ...form, submittedAtISO: e.target.value })} /></Field>

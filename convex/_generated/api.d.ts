@@ -18,6 +18,7 @@ import type * as aiSettings from "../aiSettings.js";
 import type * as aiSettingsActions from "../aiSettingsActions.js";
 import type * as annualCycle from "../annualCycle.js";
 import type * as apiPlatform from "../apiPlatform.js";
+import type * as assets from "../assets.js";
 import type * as attestations from "../attestations.js";
 import type * as auditors from "../auditors.js";
 import type * as bylawAmendments from "../bylawAmendments.js";
@@ -148,6 +149,7 @@ declare const fullApi: ApiFromModules<{
   aiSettingsActions: typeof aiSettingsActions;
   annualCycle: typeof annualCycle;
   apiPlatform: typeof apiPlatform;
+  assets: typeof assets;
   attestations: typeof attestations;
   auditors: typeof auditors;
   bylawAmendments: typeof bylawAmendments;

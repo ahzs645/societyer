@@ -23,6 +23,7 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 
 const KINDS = ["RegistryRecord", "AnnualReport", "ChangeOfDirectors", "ChangeOfAddress", "BylawAmendment", "T2", "T1044", "T3010", "T4", "GSTHST"] as const;
 
@@ -236,7 +237,7 @@ export function FilingsPage() {
             <Field label="Due date">
               <DatePicker value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
             </Field>
-            <Field label="Notes"><textarea className="textarea" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+            <Field label="Notes"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
           </div>
         )}
       </Drawer>
@@ -356,7 +357,7 @@ export function FilingsPage() {
               </select>
             </Field>
             <Field label="Evidence notes">
-              <textarea className="textarea" value={completeDraft.evidenceNotes ?? ""} onChange={(e) => setCompleteDraft({ ...completeDraft, evidenceNotes: e.target.value })} />
+              <MarkdownEditor rows={4} value={completeDraft.evidenceNotes ?? ""} onChange={(markdown) => setCompleteDraft({ ...completeDraft, evidenceNotes: markdown })} />
             </Field>
           </div>
         )}

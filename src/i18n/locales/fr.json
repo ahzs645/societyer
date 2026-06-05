@@ -70,6 +70,7 @@
     "accessCustody": "Garde des accès",
     "transparency": "Transparence publique",
     "financials": "États financiers",
+    "assets": "Actifs",
     "grants": "Subventions",
     "reconciliation": "Rapprochement",
     "donationReceipts": "Reçus de don",
@@ -111,6 +112,7 @@
     "unpinFromFavorites": "Retirer des favoris",
     "openInNewTab": "Ouvrir dans un nouvel onglet",
     "activeWorkspace": "Actif",
+    "addWorkspace": "Ajouter un espace",
     "noSocieties": "Aucune société disponible pour le moment."
   },
   "settings": {

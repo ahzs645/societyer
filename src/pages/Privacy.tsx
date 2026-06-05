@@ -24,6 +24,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Banner, Field } from "../components/ui";
+import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Modal, useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { useBylawRules } from "../hooks/useBylawRules";
@@ -472,10 +473,10 @@ export function PrivacyPage() {
                     </Field>
                   </div>
                   <Field label="Notes" hint="Examples: complaint process location, access-request procedure, retention schedule, training owner.">
-                    <textarea
-                      className="textarea"
+                    <MarkdownEditor
+                      rows={4}
                       value={privacyOpsForm.privacyProgramNotes ?? ""}
-                      onChange={(event) => setPrivacyField("privacyProgramNotes", event.target.value)}
+                      onChange={(markdown) => setPrivacyField("privacyProgramNotes", markdown)}
                     />
                   </Field>
                 </section>
@@ -503,10 +504,10 @@ export function PrivacyPage() {
                     label="Member data-access gap documented"
                   />
                   <Field label="Notes" hint="Record source requests, refusal/limits, aggregate remittances, direct collection paths, and next review.">
-                    <textarea
-                      className="textarea"
+                    <MarkdownEditor
+                      rows={4}
                       value={privacyOpsForm.memberDataAccessNotes ?? ""}
-                      onChange={(event) => setPrivacyField("memberDataAccessNotes", event.target.value)}
+                      onChange={(markdown) => setPrivacyField("memberDataAccessNotes", markdown)}
                     />
                   </Field>
                 </section>
@@ -775,10 +776,11 @@ export function PrivacyPage() {
             </div>
             {draftViewMode === "edit" ? (
               <Field label="Markdown draft" hint="Replace bracketed placeholders before adoption.">
-                <textarea
-                  className="textarea privacy-editor__textarea"
+                <MarkdownEditor
+                  rows={4}
+                  className="privacy-editor__textarea"
                   value={draftEditor.content}
-                  onChange={(event) => setDraftEditor({ ...draftEditor, content: event.target.value })}
+                  onChange={(markdown) => setDraftEditor({ ...draftEditor, content: markdown })}
                 />
               </Field>
             ) : (

@@ -115,10 +115,10 @@
   border-radius: var(--r-md);
   box-shadow: var(--shadow-lg);
   padding: 4px;
-  max-height: 280px;
+  max-height: min(70vh, 420px);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: hidden auto;
   animation: menuIn 0.08s ease-out;
 }
 @keyframes menuIn {
@@ -709,8 +709,9 @@
 .tooltip {
   position: fixed;
   z-index: var(--z-tooltip);
-  background: var(--bg-inverse);
-  color: var(--text-inverse);
+  background: var(--bg-floating);
+  color: var(--text-floating);
+  border: 1px solid var(--border-floating);
   padding: 4px 8px;
   border-radius: var(--r-sm);
   font-size: var(--fs-xs);
@@ -862,8 +863,9 @@
   min-width: min(320px, calc(100vw - 16px));
   max-width: min(440px, calc(100vw - 16px));
   padding: 12px 14px;
-  background: var(--bg-inverse);
-  color: var(--text-inverse);
+  background: var(--bg-floating);
+  color: var(--text-floating);
+  border: 1px solid var(--border-floating);
   border-radius: var(--r-md, 10px);
   box-shadow: var(--shadow-md);
   font-size: var(--fs-sm);

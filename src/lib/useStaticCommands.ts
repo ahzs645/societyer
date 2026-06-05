@@ -11,7 +11,7 @@
 import { useMemo } from "react";
 import { useMutation } from "convex/react";
 import { useNavigate } from "react-router-dom";
-import { Calendar, Download, Eye, FileCheck2, FileCog, ListTodo, PenLine, Settings, ShieldCheck, Sparkles } from "lucide-react";
+import { Calendar, Download, Eye, FileCheck2, FileCog, ListTodo, Package, PenLine, Settings, ShieldCheck, Sparkles } from "lucide-react";
 import type { ComponentType } from "react";
 import { api } from "./convexApi";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
@@ -69,6 +69,14 @@ export function useStaticCommands(): StaticCommand[] {
         // The GlobalTaskCreate drawer (mounted in Layout) listens for this
         // event and pops the task-creation form in the inspector slot.
         run: () => window.dispatchEvent(new Event("quickaction:add-task")),
+      },
+      {
+        id: "action-add-asset",
+        label: "Add asset",
+        icon: Package,
+        // The GlobalAssetCreate modal (mounted in Layout) listens for this
+        // event and pops the asset-creation form.
+        run: () => window.dispatchEvent(new Event("quickaction:add-asset")),
       },
       {
         id: "action-request-director-attestation",
