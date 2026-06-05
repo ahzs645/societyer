@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as accounting from "../accounting.js";
 import type * as activity from "../activity.js";
 import type * as agendas from "../agendas.js";
 import type * as agm from "../agm.js";
@@ -28,6 +29,7 @@ import type * as commandMenuItems from "../commandMenuItems.js";
 import type * as commitments from "../commitments.js";
 import type * as committees from "../committees.js";
 import type * as communications from "../communications.js";
+import type * as complianceObligations from "../complianceObligations.js";
 import type * as conflicts from "../conflicts.js";
 import type * as courtOrders from "../courtOrders.js";
 import type * as crons from "../crons.js";
@@ -59,10 +61,12 @@ import type * as http from "../http.js";
 import type * as importSessions from "../importSessions.js";
 import type * as inspections from "../inspections.js";
 import type * as insurance from "../insurance.js";
+import type * as inventoryHub from "../inventoryHub.js";
 import type * as invitations from "../invitations.js";
 import type * as legalOperations from "../legalOperations.js";
 import type * as lib_access_documentAccess from "../lib/access/documentAccess.js";
 import type * as lib_access_materialAccess from "../lib/access/materialAccess.js";
+import type * as lib_accountingCore from "../lib/accountingCore.js";
 import type * as lib_bylawRules from "../lib/bylawRules.js";
 import type * as lib_dashboardComplianceRules from "../lib/dashboardComplianceRules.js";
 import type * as lib_moduleSettings from "../lib/moduleSettings.js";
@@ -96,6 +100,7 @@ import type * as providers_accounting from "../providers/accounting.js";
 import type * as providers_billing from "../providers/billing.js";
 import type * as providers_email from "../providers/email.js";
 import type * as providers_env from "../providers/env.js";
+import type * as providers_ledgersmbAdapter from "../providers/ledgersmbAdapter.js";
 import type * as providers_llm from "../providers/llm.js";
 import type * as providers_paperless from "../providers/paperless.js";
 import type * as providers_sms from "../providers/sms.js";
@@ -139,6 +144,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  accounting: typeof accounting;
   activity: typeof activity;
   agendas: typeof agendas;
   agm: typeof agm;
@@ -159,6 +165,7 @@ declare const fullApi: ApiFromModules<{
   commitments: typeof commitments;
   committees: typeof committees;
   communications: typeof communications;
+  complianceObligations: typeof complianceObligations;
   conflicts: typeof conflicts;
   courtOrders: typeof courtOrders;
   crons: typeof crons;
@@ -190,10 +197,12 @@ declare const fullApi: ApiFromModules<{
   importSessions: typeof importSessions;
   inspections: typeof inspections;
   insurance: typeof insurance;
+  inventoryHub: typeof inventoryHub;
   invitations: typeof invitations;
   legalOperations: typeof legalOperations;
   "lib/access/documentAccess": typeof lib_access_documentAccess;
   "lib/access/materialAccess": typeof lib_access_materialAccess;
+  "lib/accountingCore": typeof lib_accountingCore;
   "lib/bylawRules": typeof lib_bylawRules;
   "lib/dashboardComplianceRules": typeof lib_dashboardComplianceRules;
   "lib/moduleSettings": typeof lib_moduleSettings;
@@ -227,6 +236,7 @@ declare const fullApi: ApiFromModules<{
   "providers/billing": typeof providers_billing;
   "providers/email": typeof providers_email;
   "providers/env": typeof providers_env;
+  "providers/ledgersmbAdapter": typeof providers_ledgersmbAdapter;
   "providers/llm": typeof providers_llm;
   "providers/paperless": typeof providers_paperless;
   "providers/sms": typeof providers_sms;

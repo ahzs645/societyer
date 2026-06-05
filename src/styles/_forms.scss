@@ -322,6 +322,39 @@ select.editable-cell__input:hover:not(:disabled) {
   text-align: left;
 }
 .kbar__item.is-active { background: var(--bg-hover); }
+/* Row wraps the command button + its inline pin toggle so the pin is a real
+ * sibling (not a nested <button>) anchored to the right edge. */
+.kbar__row { position: relative; }
+.kbar__row .kbar__item { padding-right: 32px; }
+.kbar__pin {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s ease, color 0.1s ease, background 0.1s ease;
+}
+.kbar__pin svg { width: 14px; height: 14px; }
+/* Reveal on row hover or when the row is keyboard-active; pinned rows always
+ * show the filled accent pin so pinned state is legible at a glance. */
+.kbar__row:hover .kbar__pin,
+.kbar__item.is-active ~ .kbar__pin,
+.kbar__pin.is-pinned { opacity: 1; }
+.kbar__pin:hover { background: var(--bg-base); color: var(--text-primary); }
+.kbar__pin.is-pinned,
+.kbar__pin.is-pinned:hover { color: var(--accent); }
+.kbar__pin.is-pinned svg { fill: currentColor; }
 /* Each row sets `--kbar-item-tone` inline based on its registered route's
  * group color (see CommandPalette.tsx). The SCSS only knows how to consume
  * the variable — never how to map a group name to a color, which is the
