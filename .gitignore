@@ -22,3 +22,4 @@ scripts/paperless-*.py
 /test-results
 tmp/
 .claude/worktrees/
+.claude/settings.local.json
