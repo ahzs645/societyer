@@ -5,11 +5,45 @@ const nonEmptyStringSchema = z.string().trim().min(1);
 
 export const complianceRulePackStatusSchema = z.enum(["draft", "reviewed", "accepted", "deprecated"]);
 export const complianceObligationScheduleKindSchema = z.enum(["annual", "offset", "window"]);
+export const complianceContextKindSchema = z.enum(["home", "extra_provincial", "branch", "business_name"]);
+export const complianceSourceKindSchema = z.enum([
+  "statute",
+  "regulation",
+  "government_guidance",
+  "form",
+  "policy",
+  "archive",
+]);
+
+export const complianceSourceSchema = z
+  .object({
+    sourceId: nonEmptyStringSchema,
+    title: nonEmptyStringSchema,
+    url: nonEmptyStringSchema,
+    sourceKind: complianceSourceKindSchema,
+    citation: nonEmptyStringSchema.optional(),
+    retrievedAt: dateSchema,
+    effectiveFrom: dateSchema.optional(),
+    effectiveTo: dateSchema.optional(),
+  })
+  .strict();
+
+export const complianceRuleAppliesToSchema = z
+  .object({
+    entityTypes: z.array(nonEmptyStringSchema).optional(),
+    entitySubtypes: z.array(nonEmptyStringSchema).optional(),
+    contextKinds: z.array(complianceContextKindSchema).optional(),
+    homeJurisdictionCodes: z.array(nonEmptyStringSchema).optional(),
+    registrationTypes: z.array(nonEmptyStringSchema).optional(),
+    corporationClasses: z.array(nonEmptyStringSchema).optional(),
+  })
+  .strict();
 
 export const complianceRuleAuthoritySchema = z
   .object({
     guidePackId: nonEmptyStringSchema,
     guideRuleIds: z.array(nonEmptyStringSchema).min(1),
+    sourceIds: z.array(nonEmptyStringSchema).optional(),
     displayCitation: nonEmptyStringSchema,
   })
   .strict();
@@ -79,6 +113,7 @@ export const complianceRuleSchema = z
     title: nonEmptyStringSchema,
     summary: nonEmptyStringSchema,
     obligationKey: nonEmptyStringSchema,
+    appliesTo: complianceRuleAppliesToSchema.optional(),
     schedule: complianceObligationScheduleSchema,
     authority: complianceRuleAuthoritySchema,
     creates: complianceRuleCreatesSchema.optional(),
@@ -98,6 +133,7 @@ export const complianceRulePackSchema = z
     title: nonEmptyStringSchema,
     description: nonEmptyStringSchema,
     sourceGuidePackId: nonEmptyStringSchema,
+    sources: z.array(complianceSourceSchema).default([]),
     rules: z.array(complianceRuleSchema).min(1),
   })
   .strict()
@@ -118,6 +154,16 @@ export const complianceRulePackSchema = z
           path: ["rules", rule.ruleId, "authority", "guidePackId"],
           message: "Rule authority guidePackId must match sourceGuidePackId",
         });
+      }
+      const packSourceIds = new Set(pack.sources.map((source) => source.sourceId));
+      for (const sourceId of rule.authority.sourceIds ?? []) {
+        if (!packSourceIds.has(sourceId)) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["rules", rule.ruleId, "authority", "sourceIds"],
+            message: `Rule authority sourceId ${sourceId} must exist in pack sources`,
+          });
+        }
       }
     }
   });
@@ -148,3 +194,5 @@ export type ComplianceRule = z.infer<typeof complianceRuleSchema>;
 export type ComplianceRuleCreates = z.infer<typeof complianceRuleCreatesSchema>;
 export type ComplianceObligationSchedule = z.infer<typeof complianceObligationScheduleSchema>;
 export type ComplianceDateOffset = z.infer<typeof dateOffsetSchema>;
+export type ComplianceContextKind = z.infer<typeof complianceContextKindSchema>;
+export type ComplianceSource = z.infer<typeof complianceSourceSchema>;

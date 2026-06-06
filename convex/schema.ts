@@ -2326,6 +2326,9 @@ export default defineSchema({
   filings: defineTable({
     societyId: v.id("societies"),
     kind: v.string(),
+    jurisdictionCode: v.optional(v.string()),
+    contextKind: v.optional(v.string()),
+    sourceRegistrationId: v.optional(v.string()),
     periodLabel: v.optional(v.string()),
     dueDate: v.string(),
     filedAt: v.optional(v.string()),

@@ -8,7 +8,25 @@
   "entityTypes": ["corporation__business_"],
   "title": "BC extra-provincial company compliance obligation pack",
   "description": "Draft operational schedules for federal or foreign corporations registered extra-provincially in British Columbia.",
-  "sourceGuidePackId": "ca-bc-societies",
+  "sourceGuidePackId": "ca-bc-bca",
+  "sources": [
+    {
+      "sourceId": "bc-business-corporations-act",
+      "title": "Business Corporations Act",
+      "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00",
+      "sourceKind": "statute",
+      "citation": "Business Corporations Act, SBC 2002, c.57",
+      "retrievedAt": "2026-06-05"
+    },
+    {
+      "sourceId": "bc-registry-annual-report-company",
+      "title": "Annual Report - BC Company",
+      "url": "https://www.corporateonline.gov.bc.ca/WebHelp/overview_annbc.htm",
+      "sourceKind": "government_guidance",
+      "citation": "BC Registry annual report guidance",
+      "retrievedAt": "2026-06-05"
+    }
+  ],
   "rules": [
     {
       "ruleId": "compliance-ca-bc-extra-provincial-annual-report",
@@ -16,15 +34,21 @@
       "title": "BC extra-provincial annual report",
       "summary": "Track the BC extra-provincial registration annual report or registry maintenance due date.",
       "obligationKey": "registry.extra_provincial_annual_report",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["extra_provincial"],
+        "registrationTypes": ["extra_provincial"]
+      },
       "schedule": {
         "kind": "annual",
         "anchorFact": "annualReturnDueDate",
         "dueOffset": { "days": 0 }
       },
       "authority": {
-        "guidePackId": "ca-bc-societies",
-        "guideRuleIds": ["ca-bc-societies-act-records"],
-        "displayCitation": "BC registry records and extra-provincial registration evidence workflow"
+        "guidePackId": "ca-bc-bca",
+        "guideRuleIds": ["ca-bc-bca-annual-report"],
+        "sourceIds": ["bc-business-corporations-act", "bc-registry-annual-report-company"],
+        "displayCitation": "BC Business Corporations Act and registry annual report workflow"
       },
       "creates": {
         "filingKind": "BCExtraProvincialAnnualReport",
@@ -45,15 +69,21 @@
       "title": "BC extra-provincial profile evidence review",
       "summary": "Track annual evidence review for BC extra-provincial registration details.",
       "obligationKey": "registry.extra_provincial_profile_evidence",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["extra_provincial"],
+        "registrationTypes": ["extra_provincial"]
+      },
       "schedule": {
         "kind": "annual",
         "anchorFact": "registrationDate",
         "dueOffset": { "years": 1 }
       },
       "authority": {
-        "guidePackId": "ca-bc-societies",
-        "guideRuleIds": ["ca-bc-societies-act-records"],
-        "displayCitation": "BC records and registry evidence workflow"
+        "guidePackId": "ca-bc-bca",
+        "guideRuleIds": ["ca-bc-bca-records"],
+        "sourceIds": ["bc-business-corporations-act"],
+        "displayCitation": "BC Business Corporations Act records and registry evidence workflow"
       },
       "creates": {
         "requiredEvidence": ["profileReportEvidence", "attorneyForServiceEvidence"],

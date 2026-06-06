@@ -1,0 +1,139 @@
+{
+  "schemaVersion": "1.0.0",
+  "packId": "compliance-ca-bc-company",
+  "status": "draft",
+  "version": "2026.06.05",
+  "reviewedAt": "2026-06-05",
+  "jurisdictionCode": "CA-BC",
+  "entityTypes": ["corporation__business_"],
+  "title": "BC Business Corporations Act company compliance obligation pack",
+  "description": "Draft operational schedules for BC company annual maintenance, records, and securities-register evidence.",
+  "sourceGuidePackId": "ca-bc-bca",
+  "sources": [
+    {
+      "sourceId": "bc-business-corporations-act",
+      "title": "Business Corporations Act",
+      "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00",
+      "sourceKind": "statute",
+      "citation": "Business Corporations Act, SBC 2002, c.57",
+      "retrievedAt": "2026-06-05"
+    },
+    {
+      "sourceId": "bc-registry-annual-report-company",
+      "title": "Annual Report - BC Company",
+      "url": "https://www.corporateonline.gov.bc.ca/WebHelp/overview_annbc.htm",
+      "sourceKind": "government_guidance",
+      "citation": "BC Registry annual report guidance",
+      "retrievedAt": "2026-06-05"
+    }
+  ],
+  "rules": [
+    {
+      "ruleId": "compliance-ca-bc-company-annual-report",
+      "status": "draft",
+      "title": "BC company annual report",
+      "summary": "Track a BC company annual report from the incorporation or recognition anniversary.",
+      "obligationKey": "registry.company_annual_report",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-BC"]
+      },
+      "schedule": {
+        "kind": "window",
+        "recurrence": "annual",
+        "opens": {
+          "anchorFact": "anniversaryDate",
+          "offset": { "days": 0 }
+        },
+        "closes": {
+          "anchorFact": "anniversaryDate",
+          "offset": { "months": 2 }
+        }
+      },
+      "authority": {
+        "guidePackId": "ca-bc-bca",
+        "guideRuleIds": ["ca-bc-bca-annual-report"],
+        "sourceIds": ["bc-business-corporations-act", "bc-registry-annual-report-company"],
+        "displayCitation": "BC Business Corporations Act s.51"
+      },
+      "creates": {
+        "filingKind": "BCCompanyAnnualReport",
+        "requiredEvidence": ["confirmationNumber", "receiptOrAcknowledgement", "profileReportEvidence"],
+        "checklist": [
+          "Review the BC company registry profile as of the anniversary date.",
+          "Confirm directors, registered office, records office, and company status.",
+          "File the annual report through the BC Registry path.",
+          "Archive confirmation, receipt, and profile-report evidence."
+        ]
+      },
+      "caveat": "Draft operational workflow; confirm current BC Registry instructions for the company subtype."
+    },
+    {
+      "ruleId": "compliance-ca-bc-company-director-minimum-review",
+      "status": "draft",
+      "title": "BC company director minimum review",
+      "summary": "Review director count and eligibility for a BC company.",
+      "obligationKey": "directors.company_minimum_review",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-BC"]
+      },
+      "schedule": {
+        "kind": "annual",
+        "anchorFact": "fiscalYearEnd",
+        "dueOffset": { "months": 1 }
+      },
+      "authority": {
+        "guidePackId": "ca-bc-bca",
+        "guideRuleIds": ["ca-bc-bca-records"],
+        "sourceIds": ["bc-business-corporations-act"],
+        "displayCitation": "BC Business Corporations Act director and records guidance"
+      },
+      "creates": {
+        "requiredEvidence": ["directorRegister", "directorConsent"],
+        "checklist": [
+          "Confirm the company has at least one director, or three if public-company rules apply.",
+          "Confirm directors are individuals and eligibility evidence is archived.",
+          "Archive director consents, resignations, and register updates.",
+          "Create corrective tasks for vacancies or missing evidence."
+        ]
+      },
+      "caveat": "Public company and subtype rules can change the minimum director count."
+    },
+    {
+      "ruleId": "compliance-ca-bc-company-records-review",
+      "status": "draft",
+      "title": "BC company records and securities register review",
+      "summary": "Review BC company records, articles, incorporation agreement, resolutions, and central securities register annually.",
+      "obligationKey": "records.company_records_review",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-BC"]
+      },
+      "schedule": {
+        "kind": "annual",
+        "anchorFact": "fiscalYearEnd",
+        "dueOffset": { "months": 3 }
+      },
+      "authority": {
+        "guidePackId": "ca-bc-bca",
+        "guideRuleIds": ["ca-bc-bca-records"],
+        "sourceIds": ["bc-business-corporations-act"],
+        "displayCitation": "BC Business Corporations Act ss.42-49"
+      },
+      "creates": {
+        "requiredEvidence": ["centralSecuritiesRegister", "articles", "incorporationAgreement", "minutesAndResolutions"],
+        "checklist": [
+          "Confirm certificates, orders, notice of articles, articles, and incorporation agreement are archived.",
+          "Review the central securities register against share transactions.",
+          "Confirm shareholder and director minutes or resolutions are archived.",
+          "Record corrective tasks for missing records."
+        ]
+      },
+      "caveat": "Operational review cadence only; inspection and retention duties depend on record type and company subtype."
+    }
+  ]
+}

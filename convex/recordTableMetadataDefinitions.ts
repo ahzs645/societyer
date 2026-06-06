@@ -210,6 +210,22 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         },
       },
       { name: "periodLabel", label: "Period", fieldType: FIELD_TYPES.TEXT, icon: "Calendar" },
+      { name: "jurisdictionCode", label: "Jurisdiction", fieldType: FIELD_TYPES.TEXT, icon: "MapPin" },
+      {
+        name: "contextKind",
+        label: "Context",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Network",
+        config: {
+          options: [
+            { value: "home", label: "Home", color: "blue" },
+            { value: "extra_provincial", label: "Extra-provincial", color: "purple" },
+            { value: "branch", label: "Branch", color: "teal" },
+            { value: "business_name", label: "Business name", color: "amber" },
+          ],
+        },
+      },
+      { name: "sourceRegistrationId", label: "Source registration", fieldType: FIELD_TYPES.TEXT, icon: "Link", isReadOnly: true },
       { name: "dueDate", label: "Due", fieldType: FIELD_TYPES.DATE, icon: "CalendarClock" },
       { name: "filedAt", label: "Filed", fieldType: FIELD_TYPES.DATE, icon: "Check" },
       {
@@ -259,6 +275,8 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       columns: [
         { fieldName: "kind", size: 200 },
         { fieldName: "periodLabel", size: 120 },
+        { fieldName: "jurisdictionCode", size: 130 },
+        { fieldName: "contextKind", size: 150 },
         { fieldName: "status", size: 130 },
         { fieldName: "dueDate", size: 140 },
         { fieldName: "filedAt", size: 140 },

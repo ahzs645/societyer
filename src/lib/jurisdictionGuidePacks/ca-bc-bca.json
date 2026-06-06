@@ -1,0 +1,136 @@
+{
+  "schemaVersion": "2.0.0",
+  "packId": "ca-bc-bca",
+  "status": "draft",
+  "version": "2026.06.05",
+  "reviewedAt": "2026-06-05",
+  "maintainers": [
+    {
+      "name": "Societyer",
+      "role": "publisher"
+    }
+  ],
+  "legalDisclaimer": "Societyer jurisdiction guide packs provide source-backed operational guidance, not legal advice. Review official sources and consult qualified counsel before relying on a rule for a filing, meeting, or governance decision.",
+  "jurisdiction": {
+    "code": "CA-BC",
+    "countryCode": "CA",
+    "subdivisionCode": "BC",
+    "name": "British Columbia"
+  },
+  "entityTypes": [
+    "corporation__business_"
+  ],
+  "title": "British Columbia Business Corporations Act guide pack",
+  "description": "BC company and extra-provincial company guide tracks for annual reports, records, and registry evidence.",
+  "defaultForJurisdiction": false,
+  "sources": [
+    {
+      "sourceId": "bc-business-corporations-act-current",
+      "type": "statute",
+      "title": "Business Corporations Act",
+      "citation": "Business Corporations Act, SBC 2002, c.57",
+      "publisher": "BC Laws",
+      "retrievedAt": "2026-06-05",
+      "language": "en-CA",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00"
+    },
+    {
+      "sourceId": "bc-registry-annual-report-company",
+      "type": "registry_guidance",
+      "title": "Annual Report - BC Company",
+      "citation": "BC Registry annual report guidance",
+      "publisher": "BC Registry Services",
+      "retrievedAt": "2026-06-05",
+      "language": "en-CA",
+      "canonicalUrl": "https://www.corporateonline.gov.bc.ca/WebHelp/overview_annbc.htm"
+    }
+  ],
+  "rules": [
+    {
+      "ruleId": "ca-bc-bca-annual-report",
+      "stableKey": "annual_report.company",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "annual_report"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2004-03-29"
+      },
+      "authority": {
+        "sourceId": "bc-business-corporations-act-current",
+        "instrument": "Business Corporations Act",
+        "sections": [
+          {
+            "label": "s.51",
+            "citation": "BC Business Corporations Act s.51",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_02"
+          }
+        ]
+      },
+      "provenance": {
+        "retrievedAt": "2026-06-05",
+        "verifiedAt": "2026-06-05",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "BC companies file an annual report after each anniversary of incorporation or recognition.",
+        "tooltip": "Use this guide for BC company and extra-provincial company annual-report tracking.",
+        "caveat": "Confirm the current registry profile and company subtype before relying on a filing due date.",
+        "displayCitation": "BC Business Corporations Act s.51"
+      },
+      "priority": 30
+    },
+    {
+      "ruleId": "ca-bc-bca-records",
+      "stableKey": "records.company",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "records"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2004-03-29"
+      },
+      "authority": {
+        "sourceId": "bc-business-corporations-act-current",
+        "instrument": "Business Corporations Act",
+        "sections": [
+          {
+            "label": "ss.42-49",
+            "citation": "BC Business Corporations Act ss.42-49",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_02"
+          }
+        ]
+      },
+      "provenance": {
+        "retrievedAt": "2026-06-05",
+        "verifiedAt": "2026-06-05",
+        "verificationMethod": "manual_review",
+        "confidence": "medium"
+      },
+      "content": {
+        "summary": "BC companies keep core records including certificates, orders, securities registers, director records, minutes, resolutions, financial statements, articles, and incorporation agreement.",
+        "tooltip": "Use this guide for BC company records and evidence checklists.",
+        "caveat": "Inspection rights and subtype-specific records can vary.",
+        "displayCitation": "BC Business Corporations Act ss.42-49"
+      },
+      "priority": 60
+    }
+  ]
+}

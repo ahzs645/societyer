@@ -82,6 +82,32 @@ assert.ok(
   "CBCA corporation key custody review should require key custody evidence",
 );
 
+const cbcaEventObligations = computeComplianceObligations({
+  ...cbcaFacts,
+  asOfDate: "2026-06-04",
+  eventDates: {
+    iscChangeDate: "2026-06-01",
+    directorChangeDate: "2026-06-02",
+    registeredOfficeChangeDate: "2026-06-03",
+  },
+}, packs);
+const cbcaEventByRule = new Map(cbcaEventObligations.map((obligation) => [obligation.ruleId, obligation]));
+assert.equal(
+  cbcaEventByRule.get("compliance-ca-fed-cbca-isc-change-filing")?.dueDate,
+  "2026-06-16",
+  "CBCA ISC change filing should compute 15 days from the ISC change date",
+);
+assert.equal(
+  cbcaEventByRule.get("compliance-ca-fed-cbca-director-change-filing")?.dueDate,
+  "2026-06-17",
+  "CBCA director change filing should compute 15 days from the director change date",
+);
+assert.equal(
+  cbcaEventByRule.get("compliance-ca-fed-cbca-registered-office-change-filing")?.dueDate,
+  "2026-06-18",
+  "CBCA registered-office change filing should compute 15 days from the registered office change date",
+);
+
 const obcaFacts = {
   jurisdictionCode: "CA-ON-OBCA",
   entityType: "corporation__business_",
@@ -137,8 +163,12 @@ assert.deepEqual(
 const bcModule = jurisdictionModuleContract("CA-BC");
 assert.deepEqual(
   bcModule.compliancePackIds,
-  ["compliance-ca-bc-societies"],
-  "BC module should point at the BC societies compliance pack",
+  [
+    "compliance-ca-bc-societies",
+    "compliance-ca-bc-company",
+    "compliance-ca-bc-extra-provincial-company",
+  ],
+  "BC module should point at society, company, and extra-provincial compliance packs",
 );
 assert.equal(
   filingKindDefinition("BCSocietyAnnualReport", "CA-BC").registryUrl.includes("bcregistry.gov.bc.ca"),
@@ -156,6 +186,53 @@ assert.equal(
   bcSocietyByRule.get("compliance-ca-bc-societies-annual-report")?.creates?.filingKind,
   "BCSocietyAnnualReport",
   "BC annual report should create a BC society annual report filing",
+);
+assert.equal(
+  bcSocietyByRule.has("compliance-ca-bc-company-annual-report"),
+  false,
+  "BC society facts should not receive BC company obligations",
+);
+
+const bcNoAgmObligations = computeComplianceObligations({
+  ...bcSocietyFacts,
+  annualMeetingDate: undefined,
+  eventDates: {
+    noAgmCalendarYearEnd: "2026-12-31",
+  },
+}, packs);
+const bcNoAgmByRule = new Map(bcNoAgmObligations.map((obligation) => [obligation.ruleId, obligation]));
+assert.equal(
+  bcNoAgmByRule.get("compliance-ca-bc-societies-no-agm-annual-report")?.dueDate,
+  "2027-01-31",
+  "BC society no-AGM fallback annual report should compute to January 31 of the following year",
+);
+
+const bcCompanyFacts = {
+  jurisdictionCode: "CA-BC",
+  entityType: "corporation__business_",
+  homeJurisdictionCode: "CA-BC",
+  contextKind: "home" as const,
+  asOfDate: "2026-06-04",
+  incorporationDate: "2024-03-01",
+  anniversaryDate: "2024-03-01",
+  fiscalYearEnd: "2025-12-31",
+};
+const bcCompanyObligations = computeComplianceObligations(bcCompanyFacts, packs);
+const bcCompanyByRule = new Map(bcCompanyObligations.map((obligation) => [obligation.ruleId, obligation]));
+assert.equal(
+  bcCompanyByRule.get("compliance-ca-bc-company-annual-report")?.dueDate,
+  "2027-05-01",
+  "BC company annual report should compute within two months after the next anniversary",
+);
+assert.equal(
+  bcCompanyByRule.get("compliance-ca-bc-company-annual-report")?.creates?.filingKind,
+  "BCCompanyAnnualReport",
+  "BC company annual report should create a BC company filing",
+);
+assert.equal(
+  bcCompanyByRule.has("compliance-ca-bc-societies-annual-report"),
+  false,
+  "BC company facts should not receive BC society obligations",
 );
 
 const federalWithOntarioRegistration = {
@@ -197,6 +274,14 @@ assert.equal(
   "registration:reg-on:compliance-ca-on-obca-initial-return",
   "Registration-backed obligations should have registration-specific decision keys",
 );
+assert.equal(
+  federalPlusOntarioObligations.some((obligation) =>
+    obligation.ruleId === "compliance-ca-on-obca-annual-return-window" &&
+    obligation.sourceRegistrationId === "reg-on"
+  ),
+  false,
+  "Ontario annual return should not be applied to federal extra-provincial registration facts",
+);
 
 const federalWithBcRegistration = {
   _id: "corp-fed-bc",
@@ -237,5 +322,13 @@ assert.equal(
   "BCExtraProvincialAnnualReport",
   "BC extra-provincial obligation should create a BC extra-provincial annual report filing",
 );
+assert.equal(
+  federalPlusBcObligations.some((obligation) =>
+    obligation.ruleId === "compliance-ca-bc-company-annual-report" &&
+    obligation.sourceRegistrationId === "reg-bc"
+  ),
+  false,
+  "BC company home annual report should not be emitted for BC extra-provincial registration facts",
+);
 
-console.log(`Checked ${cbcaObligations.length + obcaObligations.length + bcSocietyObligations.length + federalPlusOntarioObligations.length + federalPlusBcObligations.length} computed compliance obligation fixtures.`);
+console.log(`Checked ${cbcaObligations.length + cbcaEventObligations.length + obcaObligations.length + bcSocietyObligations.length + bcNoAgmObligations.length + bcCompanyObligations.length + federalPlusOntarioObligations.length + federalPlusBcObligations.length} computed compliance obligation fixtures.`);

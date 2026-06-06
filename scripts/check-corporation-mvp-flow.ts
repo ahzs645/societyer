@@ -153,11 +153,19 @@ assert.ok(annualReturn);
 const filingId = await source.mutation("filings:create", {
   societyId: created.societyId,
   kind: annualReturn.creates?.filingKind,
+  jurisdictionCode: annualReturn.jurisdictionCode,
+  contextKind: annualReturn.contextKind,
+  sourceRegistrationId: annualReturn.sourceRegistrationId,
   periodLabel: annualReturn.title,
   dueDate: annualReturn.dueDate,
   status: "Upcoming",
   submissionChecklist: annualReturn.creates?.checklist,
 });
+const [trackedAnnualReturn] = (await source.query("filings:list", { societyId: created.societyId }))
+  .filter((filing: any) => filing._id === filingId);
+assert.equal(trackedAnnualReturn.jurisdictionCode, "CA-FED-CBCA");
+assert.equal(trackedAnnualReturn.contextKind, "home");
+assert.equal(trackedAnnualReturn.sourceRegistrationId, undefined);
 const annualPacket = await source.mutation("legalOperations:stageCorporationDocumentPacket", {
   societyId: created.societyId,
   obligationKey: annualReturn.obligationKey,

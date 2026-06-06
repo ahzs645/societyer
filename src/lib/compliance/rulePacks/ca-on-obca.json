@@ -9,6 +9,40 @@
   "title": "Ontario OBCA compliance obligation pack",
   "description": "Draft operational schedules for core Ontario OBCA and Ontario Business Registry maintenance obligations.",
   "sourceGuidePackId": "ca-on-obca",
+  "sources": [
+    {
+      "sourceId": "ontario-business-registry",
+      "title": "Ontario Business Registry",
+      "url": "https://www.ontario.ca/page/ontario-business-registry",
+      "sourceKind": "government_guidance",
+      "citation": "Ontario Business Registry guidance",
+      "retrievedAt": "2026-06-05"
+    },
+    {
+      "sourceId": "ontario-cia-initial-notice-change-corporation",
+      "title": "CIA Initial Return/Notice of Change, Ontario corporations",
+      "url": "https://forms.mgcs.gov.on.ca/en/dataset/on00230",
+      "sourceKind": "form",
+      "citation": "Ontario CIA Initial Return/Notice of Change",
+      "retrievedAt": "2026-06-05"
+    },
+    {
+      "sourceId": "ontario-cia-initial-notice-change-extra-provincial",
+      "title": "CIA Initial Return/Notice of Change, extra-provincial corporations",
+      "url": "https://forms.mgcs.gov.on.ca/en/dataset/on00231",
+      "sourceKind": "form",
+      "citation": "Ontario CIA Initial Return/Notice of Change for extra-provincial corporations",
+      "retrievedAt": "2026-06-05"
+    },
+    {
+      "sourceId": "ontario-cia-annual-return",
+      "title": "CIA Annual Return",
+      "url": "https://forms.mgcs.gov.on.ca/en/dataset/on00229",
+      "sourceKind": "form",
+      "citation": "Ontario CIA Annual Return",
+      "retrievedAt": "2026-06-05"
+    }
+  ],
   "rules": [
     {
       "ruleId": "compliance-ca-on-obca-annual-meeting",
@@ -16,6 +50,11 @@
       "title": "Annual meeting planning deadline",
       "summary": "Track annual meeting planning against the fiscal year end.",
       "obligationKey": "agm.annual_meeting",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-ON-OBCA"]
+      },
       "schedule": {
         "kind": "annual",
         "anchorFact": "fiscalYearEnd",
@@ -24,6 +63,7 @@
       "authority": {
         "guidePackId": "ca-on-obca",
         "guideRuleIds": ["ca-on-obca-agm-timing"],
+        "sourceIds": ["ontario-business-registry"],
         "displayCitation": "OBCA ss.94, 154"
       },
       "creates": {
@@ -42,6 +82,10 @@
       "title": "Initial return deadline",
       "summary": "Track the initial Ontario Business Registry return from incorporation.",
       "obligationKey": "registry.initial_return",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home", "extra_provincial"]
+      },
       "schedule": {
         "kind": "offset",
         "anchorFact": "incorporationDate",
@@ -50,6 +94,7 @@
       "authority": {
         "guidePackId": "ca-on-obca",
         "guideRuleIds": ["ca-on-obca-obr-filings"],
+        "sourceIds": ["ontario-cia-initial-notice-change-corporation", "ontario-cia-initial-notice-change-extra-provincial"],
         "displayCitation": "Ontario Business Registry filings"
       },
       "creates": {
@@ -70,6 +115,11 @@
       "title": "Annual return filing window",
       "summary": "Track an annual return filing window from fiscal year end to an operational six-month due date.",
       "obligationKey": "registry.annual_return",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-ON-OBCA"]
+      },
       "schedule": {
         "kind": "window",
         "recurrence": "annual",
@@ -85,6 +135,7 @@
       "authority": {
         "guidePackId": "ca-on-obca",
         "guideRuleIds": ["ca-on-obca-obr-filings"],
+        "sourceIds": ["ontario-cia-annual-return"],
         "displayCitation": "Ontario Business Registry filings"
       },
       "creates": {

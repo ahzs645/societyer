@@ -54,14 +54,14 @@ export function ComplianceObligationsPage() {
   const overdue = obligations.filter((obligation) => obligation.status === "overdue").length;
   const dueToday = obligations.filter((obligation) => obligation.status === "due_today").length;
   const filingMatches = new Map(
-    (filings ?? []).map((filing) => [filingMatchKey(filing.kind, filing.dueDate), filing]),
+    (filings ?? []).map((filing) => [filingMatchKey(filing.kind, filing.dueDate, filing.sourceRegistrationId), filing]),
   );
   const decisionsByRuleId = new Map((decisions ?? []).map((decision) => [decision.ruleId, decision]));
 
   const trackFiling = async (obligation: (typeof obligations)[number]) => {
     const filingKind = obligation.creates?.filingKind;
     if (!filingKind) return;
-    const existing = filingMatches.get(filingMatchKey(filingKind, obligation.dueDate));
+    const existing = filingMatches.get(filingMatchKey(filingKind, obligation.dueDate, obligation.sourceRegistrationId));
     if (existing) {
       await markObligationReviewed(obligation, {
         targetTable: "filings",
@@ -74,6 +74,9 @@ export function ComplianceObligationsPage() {
     const filingId = await createFiling({
       societyId: society._id,
       kind: filingKind,
+      jurisdictionCode: obligation.jurisdictionCode,
+      contextKind: obligation.contextKind,
+      sourceRegistrationId: obligation.sourceRegistrationId,
       periodLabel: obligation.title,
       dueDate: obligation.dueDate,
       status: "Upcoming",
@@ -229,7 +232,7 @@ export function ComplianceObligationsPage() {
             </div>
             {obligations.map((obligation) => {
               const filingKind = obligation.creates?.filingKind;
-              const existingFiling = filingKind ? filingMatches.get(filingMatchKey(filingKind, obligation.dueDate)) : null;
+              const existingFiling = filingKind ? filingMatches.get(filingMatchKey(filingKind, obligation.dueDate, obligation.sourceRegistrationId)) : null;
               const packet = corporationPacketForComplianceObligation({
                 filingKind,
                 obligationKey: obligation.obligationKey,
@@ -248,9 +251,14 @@ export function ComplianceObligationsPage() {
                   <div>
                     <strong>{obligation.title}</strong>
                     <div className="muted" style={{ fontSize: 12 }}>
-                      {obligation.contextLabel && obligation.contextKey !== obligation.ruleId ? `${obligation.contextLabel} · ` : ""}{obligation.obligationKey}
+                      {obligation.contextLabel && obligation.contextKey !== obligation.ruleId ? `${obligation.contextLabel} · ` : ""}{contextKindLabel(obligation.contextKind)} · {obligation.jurisdictionCode} · {obligation.obligationKey}
                       {obligation.windowStartDate ? ` · window opens ${formatDate(obligation.windowStartDate)}` : ""}
                     </div>
+                    {filingKind ? (
+                      <div className="muted" style={{ fontSize: 12 }}>
+                        Filing kind: {filingKind}
+                      </div>
+                    ) : null}
                     {obligation.creates?.requiredEvidence?.length ? (
                       <div className="muted" style={{ fontSize: 12 }}>
                         Evidence: {obligation.creates.requiredEvidence.join(", ")}
@@ -274,6 +282,16 @@ export function ComplianceObligationsPage() {
                     <div className="muted" style={{ fontSize: 12 }}>
                       {obligation.authority.guideRuleIds.join(", ")}
                     </div>
+                    {obligation.sources.length ? (
+                      <div className="muted" style={{ fontSize: 12 }}>
+                        {obligation.sources.slice(0, 2).map((source, index) => (
+                          <span key={source.sourceId}>
+                            {index > 0 ? " · " : ""}
+                            <a href={source.url} target="_blank" rel="noreferrer">{source.title}</a>
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                   <div>
                     {isDismissed ? (
@@ -328,8 +346,8 @@ export function ComplianceObligationsPage() {
   );
 }
 
-function filingMatchKey(kind: string, dueDate: string) {
-  return `${kind}\u0000${dueDate}`;
+function filingMatchKey(kind: string, dueDate: string, sourceRegistrationId?: string | null) {
+  return `${kind}\u0000${dueDate}\u0000${sourceRegistrationId ?? "home"}`;
 }
 
 function decisionPayload(societyId: any, obligation: ReturnType<typeof computeComplianceObligations>[number]) {
@@ -360,4 +378,11 @@ function statusTone(status: ComplianceObligationStatus) {
 function statusLabel(status: ComplianceObligationStatus) {
   if (status === "due_today") return "Due today";
   return status[0].toUpperCase() + status.slice(1);
+}
+
+function contextKindLabel(contextKind: ReturnType<typeof computeComplianceObligations>[number]["contextKind"]) {
+  if (contextKind === "extra_provincial") return "Extra-provincial";
+  if (contextKind === "branch") return "Branch";
+  if (contextKind === "business_name") return "Business name";
+  return "Home";
 }

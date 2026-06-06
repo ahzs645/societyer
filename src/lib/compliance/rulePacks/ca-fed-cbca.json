@@ -9,6 +9,41 @@
   "title": "CBCA compliance obligation pack",
   "description": "Draft operational schedules for core CBCA annual maintenance obligations.",
   "sourceGuidePackId": "ca-fed-cbca",
+  "sources": [
+    {
+      "sourceId": "corporations-canada-annual-return",
+      "title": "Annual return - Business corporations",
+      "url": "https://ised-isde.canada.ca/site/corporations-canada/en/keep-your-corporation-good-shape/annual-return",
+      "sourceKind": "government_guidance",
+      "citation": "Corporations Canada annual return guidance",
+      "retrievedAt": "2026-06-05"
+    },
+    {
+      "sourceId": "corporations-canada-corporate-records",
+      "title": "Corporate records and other corporate obligations",
+      "url": "https://ised-isde.canada.ca/site/corporations-canada/en/business-corporations/corporate-records-and-other-corporate-obligations",
+      "sourceKind": "government_guidance",
+      "citation": "Corporations Canada corporate records guidance",
+      "retrievedAt": "2026-06-05"
+    },
+    {
+      "sourceId": "corporations-canada-isc-file",
+      "title": "Individuals with significant control - File your information",
+      "url": "https://ised-isde.canada.ca/site/corporations-canada/en/individuals-significant-control/individuals-significant-control-file-your-information",
+      "sourceKind": "government_guidance",
+      "citation": "Corporations Canada ISC filing guidance",
+      "retrievedAt": "2026-06-05"
+    },
+    {
+      "sourceId": "cbca-full-text",
+      "title": "Canada Business Corporations Act",
+      "url": "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html",
+      "sourceKind": "statute",
+      "citation": "Canada Business Corporations Act, R.S.C. 1985, c. C-44",
+      "retrievedAt": "2026-06-05",
+      "effectiveFrom": "1975-12-15"
+    }
+  ],
   "rules": [
     {
       "ruleId": "compliance-ca-fed-cbca-annual-return-window",
@@ -16,6 +51,11 @@
       "title": "Annual return filing window",
       "summary": "Track the annual return filing window from the corporation anniversary date to the operational due date.",
       "obligationKey": "annual_return.filing",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-FED-CBCA"]
+      },
       "schedule": {
         "kind": "window",
         "recurrence": "annual",
@@ -31,6 +71,7 @@
       "authority": {
         "guidePackId": "ca-fed-cbca",
         "guideRuleIds": ["ca-fed-cbca-annual-return"],
+        "sourceIds": ["corporations-canada-annual-return", "corporations-canada-isc-file"],
         "displayCitation": "CBCA annual return guidance"
       },
       "creates": {
@@ -51,6 +92,11 @@
       "title": "Annual financial statements workflow",
       "summary": "Track annual financial-statement preparation against the fiscal year end.",
       "obligationKey": "annual_financials.shareholder_package",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-FED-CBCA"]
+      },
       "schedule": {
         "kind": "annual",
         "anchorFact": "fiscalYearEnd",
@@ -59,6 +105,7 @@
       "authority": {
         "guidePackId": "ca-fed-cbca",
         "guideRuleIds": ["ca-fed-cbca-annual-return"],
+        "sourceIds": ["cbca-full-text"],
         "displayCitation": "CBCA ss.133, 155, 159, 263"
       },
       "creates": {
@@ -77,6 +124,11 @@
       "title": "First annual meeting deadline",
       "summary": "Track the first annual meeting from the incorporation date.",
       "obligationKey": "agm.first_meeting",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-FED-CBCA"]
+      },
       "schedule": {
         "kind": "offset",
         "anchorFact": "incorporationDate",
@@ -85,6 +137,7 @@
       "authority": {
         "guidePackId": "ca-fed-cbca",
         "guideRuleIds": ["ca-fed-cbca-annual-return"],
+        "sourceIds": ["cbca-full-text"],
         "displayCitation": "CBCA annual meeting guidance"
       },
       "creates": {
@@ -103,6 +156,11 @@
       "title": "ISC register annual review",
       "summary": "Review individuals with significant control, supporting notices, and change evidence at least annually.",
       "obligationKey": "isc.annual_review",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-FED-CBCA"]
+      },
       "schedule": {
         "kind": "annual",
         "anchorFact": "fiscalYearEnd",
@@ -111,6 +169,7 @@
       "authority": {
         "guidePackId": "ca-fed-cbca",
         "guideRuleIds": ["ca-fed-cbca-corporate-records"],
+        "sourceIds": ["corporations-canada-isc-file", "corporations-canada-corporate-records"],
         "displayCitation": "CBCA ISC register guidance"
       },
       "creates": {
@@ -131,6 +190,11 @@
       "title": "Director change review",
       "summary": "Review director changes, consents, register updates, and any Corporations Canada notice obligations.",
       "obligationKey": "directors.change_review",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-FED-CBCA"]
+      },
       "schedule": {
         "kind": "annual",
         "anchorFact": "fiscalYearEnd",
@@ -139,6 +203,7 @@
       "authority": {
         "guidePackId": "ca-fed-cbca",
         "guideRuleIds": ["ca-fed-cbca-corporate-records"],
+        "sourceIds": ["corporations-canada-corporate-records"],
         "displayCitation": "CBCA corporate records guidance"
       },
       "creates": {
@@ -159,6 +224,11 @@
       "title": "Registered office change review",
       "summary": "Review registered office, records location, and any registry notice or articles amendment path.",
       "obligationKey": "registered_office.change_review",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-FED-CBCA"]
+      },
       "schedule": {
         "kind": "annual",
         "anchorFact": "fiscalYearEnd",
@@ -167,6 +237,7 @@
       "authority": {
         "guidePackId": "ca-fed-cbca",
         "guideRuleIds": ["ca-fed-cbca-corporate-records"],
+        "sourceIds": ["corporations-canada-corporate-records"],
         "displayCitation": "CBCA registered office and records guidance"
       },
       "creates": {
@@ -187,6 +258,11 @@
       "title": "Corporation key custody review",
       "summary": "Review custody of registry keys, authorized filers, backup custodians, and restricted evidence handling.",
       "obligationKey": "registry_key.custody_review",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-FED-CBCA"]
+      },
       "schedule": {
         "kind": "annual",
         "anchorFact": "anniversaryDate",
@@ -195,6 +271,7 @@
       "authority": {
         "guidePackId": "ca-fed-cbca",
         "guideRuleIds": ["ca-fed-cbca-annual-return", "ca-fed-cbca-corporate-records"],
+        "sourceIds": ["corporations-canada-annual-return", "corporations-canada-corporate-records"],
         "displayCitation": "CBCA annual filing and records guidance"
       },
       "creates": {
@@ -207,6 +284,175 @@
         ]
       },
       "caveat": "Operational custody control only; do not store secrets in ordinary notes or public records."
+    },
+    {
+      "ruleId": "compliance-ca-fed-cbca-isc-change-filing",
+      "status": "draft",
+      "title": "ISC change filing deadline",
+      "summary": "Track a 15-day filing workflow after becoming aware of changes to the ISC register.",
+      "obligationKey": "isc.change_filing",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-FED-CBCA"]
+      },
+      "schedule": {
+        "kind": "offset",
+        "anchorFact": "iscChangeDate",
+        "dueOffset": { "days": 15 }
+      },
+      "authority": {
+        "guidePackId": "ca-fed-cbca",
+        "guideRuleIds": ["ca-fed-cbca-corporate-records"],
+        "sourceIds": ["corporations-canada-isc-file"],
+        "displayCitation": "Corporations Canada ISC filing guidance"
+      },
+      "creates": {
+        "filingKind": "FederalIscUpdate",
+        "requiredEvidence": ["iscRegister", "controlChangeEvidence", "registryConfirmation"],
+        "checklist": [
+          "Confirm the date the corporation became aware of the ISC change.",
+          "Update the ISC register and supporting control records.",
+          "File the updated ISC information through Corporations Canada if required.",
+          "Archive confirmation and the updated ISC register."
+        ]
+      },
+      "caveat": "Triggered only when an ISC change date is available in the workspace facts."
+    },
+    {
+      "ruleId": "compliance-ca-fed-cbca-initial-isc-filing",
+      "status": "draft",
+      "title": "Initial ISC filing workflow",
+      "summary": "Track initial ISC setup and filing from incorporation, amalgamation, or continuance.",
+      "obligationKey": "isc.initial_filing",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-FED-CBCA"]
+      },
+      "schedule": {
+        "kind": "offset",
+        "anchorFact": "incorporationDate",
+        "dueOffset": { "days": 30 }
+      },
+      "authority": {
+        "guidePackId": "ca-fed-cbca",
+        "guideRuleIds": ["ca-fed-cbca-corporate-records"],
+        "sourceIds": ["corporations-canada-isc-file"],
+        "displayCitation": "Corporations Canada ISC initial filing guidance"
+      },
+      "creates": {
+        "filingKind": "FederalIscUpdate",
+        "requiredEvidence": ["initialIscRegister", "controlQuestionnaire", "registryConfirmation"],
+        "checklist": [
+          "Create the initial ISC register or document why no ISC was identified.",
+          "Collect shareholder and controller evidence.",
+          "File initial ISC information through the required Corporations Canada path.",
+          "Archive confirmation and source evidence."
+        ]
+      },
+      "caveat": "Use incorporation date as the default operational anchor; validate amalgamation and continuance timelines separately."
+    },
+    {
+      "ruleId": "compliance-ca-fed-cbca-director-change-filing",
+      "status": "draft",
+      "title": "Director change filing deadline",
+      "summary": "Track a 15-day filing workflow after a director change or director address change.",
+      "obligationKey": "directors.change_filing",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-FED-CBCA"]
+      },
+      "schedule": {
+        "kind": "offset",
+        "anchorFact": "directorChangeDate",
+        "dueOffset": { "days": 15 }
+      },
+      "authority": {
+        "guidePackId": "ca-fed-cbca",
+        "guideRuleIds": ["ca-fed-cbca-corporate-records"],
+        "sourceIds": ["corporations-canada-corporate-records"],
+        "displayCitation": "CBCA director change filing guidance"
+      },
+      "creates": {
+        "filingKind": "FederalDirectorChange",
+        "requiredEvidence": ["directorRegister", "directorConsent", "registryConfirmation"],
+        "checklist": [
+          "Confirm appointment, resignation, or address-change evidence.",
+          "Update the director register and minute-book records.",
+          "File the director change through Corporations Canada if required.",
+          "Archive confirmation and updated registry profile evidence."
+        ]
+      },
+      "caveat": "Triggered only when a director change date is available in the workspace facts."
+    },
+    {
+      "ruleId": "compliance-ca-fed-cbca-registered-office-change-filing",
+      "status": "draft",
+      "title": "Registered office change filing deadline",
+      "summary": "Track a 15-day filing workflow after a registered office change.",
+      "obligationKey": "registered_office.change_filing",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-FED-CBCA"]
+      },
+      "schedule": {
+        "kind": "offset",
+        "anchorFact": "registeredOfficeChangeDate",
+        "dueOffset": { "days": 15 }
+      },
+      "authority": {
+        "guidePackId": "ca-fed-cbca",
+        "guideRuleIds": ["ca-fed-cbca-corporate-records"],
+        "sourceIds": ["corporations-canada-corporate-records"],
+        "displayCitation": "CBCA registered office filing guidance"
+      },
+      "creates": {
+        "filingKind": "FederalRegisteredOfficeChange",
+        "requiredEvidence": ["registeredOfficeEvidence", "recordsLocationEvidence", "registryConfirmation"],
+        "checklist": [
+          "Confirm registered office and records location details.",
+          "Update internal records and resolutions where required.",
+          "File the registered office change through Corporations Canada if required.",
+          "Archive confirmation and profile evidence."
+        ]
+      },
+      "caveat": "Triggered only when a registered office change date is available in the workspace facts."
+    },
+    {
+      "ruleId": "compliance-ca-fed-cbca-corporate-records-review",
+      "status": "draft",
+      "title": "Corporate records completeness review",
+      "summary": "Review CBCA minute-book and corporate records completeness annually.",
+      "obligationKey": "records.corporate_records_review",
+      "appliesTo": {
+        "entityTypes": ["corporation__business_"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-FED-CBCA"]
+      },
+      "schedule": {
+        "kind": "annual",
+        "anchorFact": "fiscalYearEnd",
+        "dueOffset": { "months": 3 }
+      },
+      "authority": {
+        "guidePackId": "ca-fed-cbca",
+        "guideRuleIds": ["ca-fed-cbca-corporate-records"],
+        "sourceIds": ["corporations-canada-corporate-records", "cbca-full-text"],
+        "displayCitation": "CBCA corporate records guidance"
+      },
+      "creates": {
+        "requiredEvidence": ["minuteBookChecklist", "shareRegister", "securitiesRegister", "iscRegister"],
+        "checklist": [
+          "Confirm articles, by-laws, resolutions, filed notices, and registers are archived.",
+          "Review share and securities registers against the equity ledger.",
+          "Review ISC register and supporting control evidence.",
+          "Record corrective tasks for missing records."
+        ]
+      },
+      "caveat": "Operational review cadence only; inspection and retention duties depend on record type."
     }
   ]
 }

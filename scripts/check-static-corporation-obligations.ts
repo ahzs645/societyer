@@ -89,23 +89,49 @@ assert.ok(
   ),
   "Static local corporation should compute Ontario registration obligations",
 );
-assert.ok(
-  registrationObligations.some((obligation) =>
+const bcRegistrationObligation = registrationObligations.find((obligation) =>
     obligation.sourceRegistrationId === bcRegistrationId &&
     obligation.creates?.filingKind === "BCExtraProvincialAnnualReport"
-  ),
+);
+assert.ok(
+  bcRegistrationObligation,
   "Static local corporation should compute BC extra-provincial registration obligations",
 );
 
 const filingId = await client.mutation("filings:create", {
   societyId: created.societyId,
   kind: annualReturn.creates?.filingKind,
+  jurisdictionCode: annualReturn.jurisdictionCode,
+  contextKind: annualReturn.contextKind,
+  sourceRegistrationId: annualReturn.sourceRegistrationId,
   periodLabel: annualReturn.title,
   dueDate: annualReturn.dueDate,
   status: "Upcoming",
   submissionChecklist: annualReturn.creates?.checklist,
 });
 assert.ok(filingId);
+const [createdFiling] = (await client.query("filings:list", { societyId: created.societyId }))
+  .filter((filing: any) => filing._id === filingId);
+assert.equal(createdFiling.jurisdictionCode, "CA-FED-CBCA");
+assert.equal(createdFiling.contextKind, "home");
+assert.equal(createdFiling.sourceRegistrationId, undefined);
+
+const bcRegistrationFilingId = await client.mutation("filings:create", {
+  societyId: created.societyId,
+  kind: bcRegistrationObligation.creates?.filingKind,
+  jurisdictionCode: bcRegistrationObligation.jurisdictionCode,
+  contextKind: bcRegistrationObligation.contextKind,
+  sourceRegistrationId: bcRegistrationObligation.sourceRegistrationId,
+  periodLabel: bcRegistrationObligation.title,
+  dueDate: bcRegistrationObligation.dueDate,
+  status: "Upcoming",
+  submissionChecklist: bcRegistrationObligation.creates?.checklist,
+});
+const [bcRegistrationFiling] = (await client.query("filings:list", { societyId: created.societyId }))
+  .filter((filing: any) => filing._id === bcRegistrationFilingId);
+assert.equal(bcRegistrationFiling.jurisdictionCode, "CA-BC");
+assert.equal(bcRegistrationFiling.contextKind, "extra_provincial");
+assert.equal(bcRegistrationFiling.sourceRegistrationId, bcRegistrationId);
 
 await client.mutation("complianceObligations:markReviewed", {
   societyId: created.societyId,

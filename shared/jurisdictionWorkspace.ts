@@ -99,6 +99,19 @@ const BC_FILING_KINDS: FilingKindDefinition[] = [
     botSupported: false,
   },
   {
+    kind: "BCCompanyAnnualReport",
+    label: "BC company annual report",
+    registryUrl: BC_REGISTRY_URL,
+    checklist: [
+      "Review the BC company registry profile as of the anniversary date.",
+      "Confirm directors, registered office, records office, and company status.",
+      "Prepare the annual report filing packet.",
+      "Complete the filing in BC Registries or the approved service path.",
+      "Attach confirmation, receipt, and profile-report evidence.",
+    ],
+    botSupported: false,
+  },
+  {
     kind: "RegistryRecord",
     label: "Registry record",
     registryUrl: BC_REGISTRY_URL,
@@ -236,7 +249,11 @@ export const JURISDICTION_WORKSPACE_CONFIGS: JurisdictionWorkspaceConfig[] = [
       registryPortalKey: "bc_registry_societies",
       registryPortalLabel: "BC Registry",
       registryImportSupported: true,
-      compliancePackIds: ["compliance-ca-bc-societies"],
+      compliancePackIds: [
+        "compliance-ca-bc-societies",
+        "compliance-ca-bc-company",
+        "compliance-ca-bc-extra-provincial-company",
+      ],
       filingKinds: BC_FILING_KINDS,
       bylawBaselineLabel: "BC Model Bylaw baseline",
       enabledModuleHints: ["members", "voting", "recordsInspection", "pipaTraining"],

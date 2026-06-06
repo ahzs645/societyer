@@ -39,6 +39,9 @@ export const create = mutation({
   args: {
     societyId: v.id("societies"),
     kind: v.string(),
+    jurisdictionCode: v.optional(v.string()),
+    contextKind: v.optional(v.string()),
+    sourceRegistrationId: v.optional(v.string()),
     periodLabel: v.optional(v.string()),
     dueDate: v.string(),
     status: v.string(),
@@ -50,7 +53,10 @@ export const create = mutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    const defaults = filingDefaults(args.kind, await jurisdictionCodeForSociety(ctx, args.societyId));
+    const defaults = filingDefaults(
+      args.kind,
+      args.jurisdictionCode ?? await jurisdictionCodeForSociety(ctx, args.societyId),
+    );
     return await ctx.db.insert("filings", {
       ...args,
       registryUrl: args.registryUrl ?? defaults.registryUrl,
@@ -107,6 +113,9 @@ export const update = mutation({
     id: v.id("filings"),
     patch: v.object({
       kind: v.optional(v.string()),
+      jurisdictionCode: v.optional(v.string()),
+      contextKind: v.optional(v.string()),
+      sourceRegistrationId: v.optional(v.string()),
       periodLabel: v.optional(v.string()),
       dueDate: v.optional(v.string()),
       status: v.optional(v.string()),
@@ -131,7 +140,7 @@ export const update = mutation({
     if (!existing) throw new Error("Filing not found.");
     const defaults = filingDefaults(
       patch.kind ?? existing.kind,
-      await jurisdictionCodeForSociety(ctx, existing.societyId),
+      patch.jurisdictionCode ?? existing.jurisdictionCode ?? await jurisdictionCodeForSociety(ctx, existing.societyId),
     );
     await ctx.db.patch(id, {
       ...patch,
@@ -150,6 +159,9 @@ export const importBcRegistryHistory = mutation({
     records: v.array(
       v.object({
         kind: v.string(),
+        jurisdictionCode: v.optional(v.string()),
+        contextKind: v.optional(v.string()),
+        sourceRegistrationId: v.optional(v.string()),
         periodLabel: v.optional(v.string()),
         dueDate: v.string(),
         filedAt: v.optional(v.string()),
@@ -184,7 +196,7 @@ export const importBcRegistryHistory = mutation({
     for (const record of args.records) {
       const defaults = filingDefaults(
         record.kind,
-        await jurisdictionCodeForSociety(ctx, args.societyId),
+        record.jurisdictionCode ?? await jurisdictionCodeForSociety(ctx, args.societyId),
       );
       const uniqueSourceIds = record.sourceExternalIds.filter(
         (sourceId) => !sourceId.startsWith("bc-registry:corp:"),

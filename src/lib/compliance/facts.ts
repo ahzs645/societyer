@@ -10,6 +10,8 @@ export type RegistrationComplianceSource = {
   registrationType?: string | null;
   jurisdiction?: string | null;
   homeJurisdiction?: string | null;
+  corporationClass?: string | null;
+  entitySubtype?: string | null;
   assumedName?: string | null;
   registrationNumber?: string | null;
   registrationDate?: string | null;
@@ -28,13 +30,20 @@ export function complianceFactsForOrganization(
 ): ComplianceFacts[] {
   const asOfDate = options.asOfDate ?? new Date().toISOString().slice(0, 10);
   const entityType = organizationEntityType(organization);
+  const homeJurisdiction = homeJurisdictionCode(organization);
   const homeFacts: ComplianceFacts = {
-    jurisdictionCode: homeJurisdictionCode(organization),
+    jurisdictionCode: homeJurisdiction,
     entityType,
+    entitySubtype: cleanText(organization.entitySubtype) || cleanText(organization.subtype) || undefined,
+    homeJurisdictionCode: homeJurisdiction,
+    contextKind: "home",
+    registrationType: "home",
+    status: cleanText(organization.status) || undefined,
     asOfDate,
     incorporationDate: organization.incorporationDate,
     anniversaryDate: organization.anniversaryDate ?? organization.incorporationDate,
     fiscalYearEnd: fiscalYearEndDateForCurrentCycle(organization.fiscalYearEnd, asOfDate),
+    eventDates: organizationEventDates(organization),
     contextLabel: organizationLabel(organization),
   };
 
@@ -66,13 +75,22 @@ function complianceFactsForRegistration(
   return {
     jurisdictionCode,
     entityType: organizationEntityType(organization),
+    entitySubtype: cleanText(registration.entitySubtype) || cleanText(organization.entitySubtype) || undefined,
+    homeJurisdictionCode: registrationJurisdictionCode(registration.homeJurisdiction) ?? homeJurisdictionCode(organization),
+    contextKind: registrationTypeToContextKind(registration.registrationType),
+    registrationType: registration.registrationType ?? "extra_provincial",
+    corporationClass: registration.corporationClass ?? undefined,
+    status: registration.status ?? undefined,
     asOfDate,
     incorporationDate: registrationAnchor,
     anniversaryDate: registration.annualReturnDueDate ?? registrationAnchor,
     fiscalYearEnd: fiscalYearEndDateForCurrentCycle(organization.fiscalYearEnd, asOfDate),
+    registrationDate: registration.registrationDate ?? undefined,
+    commencedBusinessDate: registration.activityCommencementDate ?? undefined,
     eventDates: {
       registrationDate: registration.registrationDate ?? undefined,
       activityCommencementDate: registration.activityCommencementDate ?? undefined,
+      commencedBusinessDate: registration.activityCommencementDate ?? undefined,
       annualReturnDueDate: registration.annualReturnDueDate ?? undefined,
       lastAnnualReturnFiledDate: (registration as any).lastAnnualReturnFiledDate ?? undefined,
     },
@@ -92,6 +110,12 @@ function registrationIsComplianceRelevant(registration: RegistrationComplianceSo
   return type !== "home" && type !== "business_name" && type !== "licence" && type !== "deregistered";
 }
 
+function registrationTypeToContextKind(registrationType?: string | null): ComplianceFacts["contextKind"] {
+  if (registrationType === "branch") return "branch";
+  if (registrationType === "business_name") return "business_name";
+  return "extra_provincial";
+}
+
 function registrationJurisdictionCode(value?: string | null) {
   if (!value) return null;
   if (value === "CA-BC" || value === "british_columbia") return "CA-BC";
@@ -102,4 +126,20 @@ function registrationJurisdictionCode(value?: string | null) {
 
 function registrationNumberLabel(registration: RegistrationComplianceSource) {
   return registration.registrationNumber ? `${registration.jurisdiction ?? "registration"} ${registration.registrationNumber}` : null;
+}
+
+function organizationEventDates(organization: any): Record<string, string | undefined> {
+  return {
+    iscChangeDate: cleanText(organization.iscChangeDate) || cleanText(organization.lastIscChangeDate) || undefined,
+    directorChangeDate: cleanText(organization.directorChangeDate) || cleanText(organization.lastDirectorChangeDate) || undefined,
+    registeredOfficeChangeDate:
+      cleanText(organization.registeredOfficeChangeDate) ||
+      cleanText(organization.lastRegisteredOfficeChangeDate) ||
+      undefined,
+    noAgmCalendarYearEnd: cleanText(organization.noAgmCalendarYearEnd) || undefined,
+  };
+}
+
+function cleanText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }

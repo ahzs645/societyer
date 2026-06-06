@@ -33,9 +33,6 @@ const guidePacksById = new Map(
 );
 
 for (const pack of packs) {
-  const expectedFile = `${pack.jurisdictionCode.toLowerCase()}.json`;
-  assert.ok(files.includes(expectedFile), `${pack.packId}: expected file ${expectedFile}`);
-
   const guidePack = guidePacksById.get(pack.sourceGuidePackId);
   assert.ok(guidePack, `${pack.packId}: sourceGuidePackId must reference an existing jurisdiction guide pack`);
   assert.equal(pack.jurisdictionCode, guidePack.jurisdiction.code, `${pack.packId}: jurisdiction must match source guide pack`);

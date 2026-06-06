@@ -9,6 +9,25 @@
   "title": "BC Societies Act compliance obligation pack",
   "description": "Draft operational schedules for core BC society annual maintenance, meeting, records, and bylaw evidence obligations.",
   "sourceGuidePackId": "ca-bc-societies",
+  "sources": [
+    {
+      "sourceId": "bc-societies-act",
+      "title": "Societies Act",
+      "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01",
+      "sourceKind": "statute",
+      "citation": "Societies Act, SBC 2015, c.18",
+      "retrievedAt": "2026-06-05",
+      "effectiveFrom": "2016-11-28"
+    },
+    {
+      "sourceId": "bc-societies-maintaining-guide",
+      "title": "Maintaining Your B.C. Society",
+      "url": "https://www2.gov.bc.ca/assets/gov/employment-business-and-economic-development/business-management/permits-licences-and-registration/registries-guides/info_01_soc_-_maintaining_your_bc_society.pdf",
+      "sourceKind": "government_guidance",
+      "citation": "BC Registry Services maintaining your BC society guide",
+      "retrievedAt": "2026-06-05"
+    }
+  ],
   "rules": [
     {
       "ruleId": "compliance-ca-bc-societies-annual-report",
@@ -16,6 +35,11 @@
       "title": "Annual report filing deadline",
       "summary": "Track BC annual report filing from the annual general meeting date.",
       "obligationKey": "registry.annual_report",
+      "appliesTo": {
+        "entityTypes": ["society"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-BC"]
+      },
       "schedule": {
         "kind": "annual",
         "anchorFact": "annualMeetingDate",
@@ -24,6 +48,7 @@
       "authority": {
         "guidePackId": "ca-bc-societies",
         "guideRuleIds": ["ca-bc-societies-act-agm-timing"],
+        "sourceIds": ["bc-societies-act", "bc-societies-maintaining-guide"],
         "displayCitation": "BC Societies Act annual general meeting and annual report workflow"
       },
       "creates": {
@@ -45,6 +70,11 @@
       "title": "Annual general meeting planning deadline",
       "summary": "Track annual meeting planning against the fiscal year end.",
       "obligationKey": "agm.annual_meeting",
+      "appliesTo": {
+        "entityTypes": ["society"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-BC"]
+      },
       "schedule": {
         "kind": "annual",
         "anchorFact": "fiscalYearEnd",
@@ -53,6 +83,7 @@
       "authority": {
         "guidePackId": "ca-bc-societies",
         "guideRuleIds": ["ca-bc-societies-act-agm-timing"],
+        "sourceIds": ["bc-societies-act"],
         "displayCitation": "BC Societies Act AGM timing guidance"
       },
       "creates": {
@@ -71,6 +102,11 @@
       "title": "Annual records and inspection readiness review",
       "summary": "Track an annual review of records required to be kept and inspection-ready.",
       "obligationKey": "records.annual_review",
+      "appliesTo": {
+        "entityTypes": ["society"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-BC"]
+      },
       "schedule": {
         "kind": "annual",
         "anchorFact": "fiscalYearEnd",
@@ -79,6 +115,7 @@
       "authority": {
         "guidePackId": "ca-bc-societies",
         "guideRuleIds": ["ca-bc-societies-act-records"],
+        "sourceIds": ["bc-societies-act"],
         "displayCitation": "BC Societies Act records guidance"
       },
       "creates": {
@@ -90,6 +127,73 @@
         ]
       },
       "caveat": "Use as an operational review cadence; exact inspection rights depend on record type, bylaws, and current legislation."
+    },
+    {
+      "ruleId": "compliance-ca-bc-societies-no-agm-annual-report",
+      "status": "draft",
+      "title": "No-AGM annual report fallback",
+      "summary": "Track the fallback annual report workflow when no AGM was held in the calendar year.",
+      "obligationKey": "registry.no_agm_annual_report",
+      "appliesTo": {
+        "entityTypes": ["society"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-BC"]
+      },
+      "schedule": {
+        "kind": "offset",
+        "anchorFact": "noAgmCalendarYearEnd",
+        "dueOffset": { "days": 31 }
+      },
+      "authority": {
+        "guidePackId": "ca-bc-societies",
+        "guideRuleIds": ["ca-bc-societies-act-agm-timing"],
+        "sourceIds": ["bc-societies-act", "bc-societies-maintaining-guide"],
+        "displayCitation": "BC Societies Act no-AGM annual report workflow"
+      },
+      "creates": {
+        "filingKind": "BCSocietyAnnualReport",
+        "requiredEvidence": ["noAgmStatement", "registryConfirmation"],
+        "checklist": [
+          "Confirm no AGM was held in the calendar year.",
+          "Prepare the annual report indicating no AGM was held.",
+          "File by the January 31 fallback date unless a registrar extension applies.",
+          "Archive confirmation and any extension evidence."
+        ]
+      },
+      "caveat": "Triggered only when noAgmCalendarYearEnd is available in workspace facts."
+    },
+    {
+      "ruleId": "compliance-ca-bc-societies-director-minimum-review",
+      "status": "draft",
+      "title": "Director minimum and BC residency review",
+      "summary": "Review BC society director count and ordinarily-resident-in-BC evidence annually.",
+      "obligationKey": "directors.minimum_residency_review",
+      "appliesTo": {
+        "entityTypes": ["society"],
+        "contextKinds": ["home"],
+        "homeJurisdictionCodes": ["CA-BC"]
+      },
+      "schedule": {
+        "kind": "annual",
+        "anchorFact": "fiscalYearEnd",
+        "dueOffset": { "months": 1 }
+      },
+      "authority": {
+        "guidePackId": "ca-bc-societies",
+        "guideRuleIds": ["ca-bc-societies-act-records"],
+        "sourceIds": ["bc-societies-act"],
+        "displayCitation": "BC Societies Act director requirements"
+      },
+      "creates": {
+        "requiredEvidence": ["directorRegister", "bcResidencyEvidence"],
+        "checklist": [
+          "Confirm the society has at least three directors.",
+          "Confirm at least one director is ordinarily resident in BC.",
+          "Archive director consents, resignations, and residency evidence.",
+          "Create corrective tasks for vacancies or missing evidence."
+        ]
+      },
+      "caveat": "Operational review only; confirm current director qualifications against the Act and bylaws."
     }
   ]
 }

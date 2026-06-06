@@ -60,7 +60,7 @@ export function FilingsPage() {
     completeDraft?.kind
       ? {
           kind: completeDraft.kind,
-          jurisdictionCode: society?.jurisdictionCode,
+          jurisdictionCode: completeDraft.jurisdictionCode ?? society?.jurisdictionCode,
         }
       : "skip",
   );
@@ -91,6 +91,9 @@ export function FilingsPage() {
     setCompleteDraft({
       id: target._id,
       kind: target.kind,
+      jurisdictionCode: target.jurisdictionCode,
+      contextKind: target.contextKind,
+      sourceRegistrationId: target.sourceRegistrationId,
       filedAt: new Date().toISOString().slice(0, 10),
       submissionMethod: target.submissionMethod ?? "ManualPortal",
       confirmationNumber: target.confirmationNumber ?? "",
@@ -112,6 +115,8 @@ export function FilingsPage() {
       periodLabel: "",
       dueDate: new Date().toISOString().slice(0, 10),
       status: "Upcoming",
+      jurisdictionCode: society.jurisdictionCode,
+      contextKind: "home",
     });
     setOpen(true);
   };
@@ -219,6 +224,9 @@ export function FilingsPage() {
                       setCompleteDraft({
                         id: r._id,
                         kind: r.kind,
+                        jurisdictionCode: r.jurisdictionCode,
+                        contextKind: r.contextKind,
+                        sourceRegistrationId: r.sourceRegistrationId,
                         filedAt: new Date().toISOString().slice(0, 10),
                         submissionMethod: r.submissionMethod ?? "ManualPortal",
                         confirmationNumber: r.confirmationNumber ?? "",
@@ -263,6 +271,31 @@ export function FilingsPage() {
                 options={filingKindOptions}
               />
             </Field>
+            <Field label="Jurisdiction">
+              <Select
+                value={form.jurisdictionCode ?? society.jurisdictionCode ?? ""}
+                onChange={(v) => setForm({ ...form, jurisdictionCode: v })}
+                options={[
+                  { value: society.jurisdictionCode ?? "", label: `${society.jurisdictionCode ?? "Workspace"} home jurisdiction` },
+                  { value: "CA-FED-CBCA", label: "Canada federal - CBCA" },
+                  { value: "CA-BC", label: "British Columbia" },
+                  { value: "CA-ON-OBCA", label: "Ontario" },
+                ].filter((option, index, options) => option.value && options.findIndex((item) => item.value === option.value) === index)}
+              />
+            </Field>
+            <Field label="Context">
+              <select className="input" value={form.contextKind ?? "home"} onChange={(e) => setForm({ ...form, contextKind: e.target.value })}>
+                <option value="home">Home jurisdiction</option>
+                <option value="extra_provincial">Extra-provincial registration</option>
+                <option value="branch">Branch</option>
+                <option value="business_name">Business name</option>
+              </select>
+            </Field>
+            {form.contextKind === "extra_provincial" && (
+              <Field label="Source registration ID" hint="Optional internal registration row ID for traceability">
+                <input className="input" value={form.sourceRegistrationId ?? ""} onChange={(e) => setForm({ ...form, sourceRegistrationId: e.target.value })} />
+              </Field>
+            )}
             <Field label="Period / label"><input className="input" value={form.periodLabel} onChange={(e) => setForm({ ...form, periodLabel: e.target.value })} /></Field>
             <Field label="Due date">
               <DatePicker value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
@@ -335,6 +368,10 @@ export function FilingsPage() {
                 </a>
               </div>
             )}
+            <div className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
+              Filing context: {contextKindLabel(completeDraft.contextKind)} · {completeDraft.jurisdictionCode ?? society.jurisdictionCode}
+              {completeDraft.sourceRegistrationId ? ` · registration ${completeDraft.sourceRegistrationId}` : ""}
+            </div>
             <Field label="Filed date"><input className="input" type="date" value={completeDraft.filedAt} onChange={(e) => setCompleteDraft({ ...completeDraft, filedAt: e.target.value })} /></Field>
             <Field label="Submission method">
               <select className="input" value={completeDraft.submissionMethod ?? ""} onChange={(e) => setCompleteDraft({ ...completeDraft, submissionMethod: e.target.value })}>
@@ -394,4 +431,11 @@ export function FilingsPage() {
       </Drawer>
     </div>
   );
+}
+
+function contextKindLabel(contextKind?: string | null) {
+  if (contextKind === "extra_provincial") return "Extra-provincial";
+  if (contextKind === "branch") return "Branch";
+  if (contextKind === "business_name") return "Business name";
+  return "Home";
 }

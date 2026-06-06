@@ -200,7 +200,6 @@ export const jurisdictionGuidePacksSchema = z
   .array(jurisdictionGuidePackSchema)
   .superRefine((packs, ctx) => {
     const packIds = new Set<string>();
-    const jurisdictionCodes = new Set<string>();
     const ruleIds = new Set<string>();
     let defaultCount = 0;
     for (const pack of packs) {
@@ -209,14 +208,6 @@ export const jurisdictionGuidePacksSchema = z
         ctx.addIssue({ code: "custom", path: [pack.packId], message: "Duplicate packId" });
       }
       packIds.add(pack.packId);
-      if (jurisdictionCodes.has(pack.jurisdiction.code)) {
-        ctx.addIssue({
-          code: "custom",
-          path: [pack.jurisdiction.code],
-          message: "Duplicate jurisdiction code",
-        });
-      }
-      jurisdictionCodes.add(pack.jurisdiction.code);
       for (const rule of pack.rules) {
         if (ruleIds.has(rule.ruleId)) {
           ctx.addIssue({

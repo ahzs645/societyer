@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 
 import {
   jurisdictionGuidePackSchema,
@@ -16,12 +16,6 @@ const packs = files.map((file) => {
   const fullPath = join(packsDir, file);
   const raw = JSON.parse(readFileSync(fullPath, "utf8"));
   const pack = jurisdictionGuidePackSchema.parse(raw);
-  const expectedFilename = `${pack.jurisdiction.code.toLowerCase()}.json`;
-  assert.equal(
-    basename(file),
-    expectedFilename,
-    `${file}: filename must match jurisdiction code (${expectedFilename})`,
-  );
   return pack;
 });
 

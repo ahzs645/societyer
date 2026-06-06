@@ -1,13 +1,28 @@
 import { loadComplianceRulePacks } from "./registry";
-import type { ComplianceDateOffset, ComplianceObligationSchedule, ComplianceRule, ComplianceRulePack } from "./rulePackSchema";
+import type {
+  ComplianceContextKind,
+  ComplianceDateOffset,
+  ComplianceObligationSchedule,
+  ComplianceRule,
+  ComplianceRulePack,
+  ComplianceSource,
+} from "./rulePackSchema";
 
 export type ComplianceFacts = {
   jurisdictionCode: string;
   entityType: string;
+  entitySubtype?: string;
+  homeJurisdictionCode?: string;
+  contextKind?: ComplianceContextKind;
+  registrationType?: string;
+  corporationClass?: string;
+  status?: string;
   asOfDate?: string;
   incorporationDate?: string;
   anniversaryDate?: string;
   fiscalYearEnd?: string;
+  registrationDate?: string;
+  commencedBusinessDate?: string;
   annualMeetingDate?: string;
   eventDates?: Record<string, string | undefined>;
   contextKey?: string;
@@ -27,8 +42,11 @@ export type ComplianceObligation = {
   status: ComplianceObligationStatus;
   windowStartDate?: string;
   authority: ComplianceRule["authority"];
+  sources: ComplianceSource[];
   creates?: ComplianceRule["creates"];
   caveat?: string;
+  jurisdictionCode: string;
+  contextKind?: ComplianceContextKind;
   contextKey: string;
   contextLabel?: string;
   sourceRegistrationId?: string;
@@ -73,6 +91,8 @@ function getFactDate(facts: ComplianceFacts, factKey: string): string | undefine
   if (factKey === "incorporationDate") return facts.incorporationDate;
   if (factKey === "anniversaryDate") return facts.anniversaryDate;
   if (factKey === "fiscalYearEnd") return facts.fiscalYearEnd;
+  if (factKey === "registrationDate") return facts.registrationDate;
+  if (factKey === "commencedBusinessDate") return facts.commencedBusinessDate;
   if (factKey === "annualMeetingDate") return facts.annualMeetingDate;
   return facts.eventDates?.[factKey];
 }
@@ -144,14 +164,44 @@ export function filterApplicableCompliancePacks(facts: Pick<ComplianceFacts, "ju
   );
 }
 
+function stringMatches(value: string | undefined, candidates: string[] | undefined): boolean {
+  return !candidates?.length || Boolean(value && candidates.includes(value));
+}
+
+function ruleAppliesToFacts(rule: ComplianceRule, pack: ComplianceRulePack, facts: ComplianceFacts): boolean {
+  const appliesTo = rule.appliesTo;
+  if (!appliesTo) {
+    return pack.entityTypes.includes(facts.entityType);
+  }
+  const contextKind = facts.contextKind ?? "home";
+  const homeJurisdictionCode = facts.homeJurisdictionCode ?? (contextKind === "home" ? facts.jurisdictionCode : undefined);
+  return (
+    stringMatches(facts.entityType, appliesTo.entityTypes ?? pack.entityTypes) &&
+    stringMatches(facts.entitySubtype, appliesTo.entitySubtypes) &&
+    stringMatches(contextKind, appliesTo.contextKinds) &&
+    stringMatches(homeJurisdictionCode, appliesTo.homeJurisdictionCodes) &&
+    stringMatches(facts.registrationType, appliesTo.registrationTypes) &&
+    stringMatches(facts.corporationClass, appliesTo.corporationClasses)
+  );
+}
+
+function sourcesForRule(rule: ComplianceRule, pack: ComplianceRulePack): ComplianceSource[] {
+  const sourceIds = rule.authority.sourceIds ?? [];
+  if (!sourceIds.length) return [];
+  const sourcesById = new Map(pack.sources.map((source) => [source.sourceId, source]));
+  return sourceIds.map((sourceId) => sourcesById.get(sourceId)).filter((source): source is ComplianceSource => Boolean(source));
+}
+
 export function computeComplianceObligations(facts: ComplianceFacts, packs: ComplianceRulePack[] = loadComplianceRulePacks()): ComplianceObligation[] {
   const asOfDate = facts.asOfDate ?? formatDate(new Date());
+  const contextKind = facts.contextKind ?? "home";
   const applicablePacks = filterApplicableCompliancePacks(facts, packs);
   const obligations: ComplianceObligation[] = [];
 
   for (const pack of applicablePacks) {
     for (const rule of pack.rules) {
       if (rule.status === "deprecated") continue;
+      if (!ruleAppliesToFacts(rule, pack, facts)) continue;
       const dates = computeRuleDates(rule, facts, asOfDate);
       if (!dates) continue;
       obligations.push({
@@ -164,8 +214,11 @@ export function computeComplianceObligations(facts: ComplianceFacts, packs: Comp
         windowStartDate: dates.windowStartDate,
         status: statusFor(dates.dueDate, asOfDate),
         authority: rule.authority,
+        sources: sourcesForRule(rule, pack),
         creates: rule.creates,
         caveat: rule.caveat,
+        jurisdictionCode: facts.jurisdictionCode,
+        contextKind,
         contextKey: facts.contextKey ? `${facts.contextKey}:${rule.ruleId}` : rule.ruleId,
         contextLabel: facts.contextLabel,
         sourceRegistrationId: facts.sourceRegistrationId,
