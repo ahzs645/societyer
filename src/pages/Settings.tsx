@@ -2,10 +2,11 @@ import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { SeedPrompt } from "./_helpers";
 import { isDemoMode, setDemoMode } from "../lib/demoMode";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { RadioGroup, Toggle } from "../components/Controls";
+import { Select } from "../components/Select";
 import { SettingsShell } from "../components/ui";
 import { Settings as SettingsIcon } from "lucide-react";
 import { LocaleSwitcher } from "../components/LocaleSwitcher";
@@ -34,6 +35,13 @@ export function SettingsPage() {
   const authMode = getAuthMode();
   const updateModules = useMutation(api.society.updateModules);
   const updateInventorySettings = useMutation(api.society.updateInventorySettings);
+  const updateNotificationSettings = useMutation(api.society.updateNotificationSettings);
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  const setLogo = useMutation(api.society.setLogo);
+  const clearLogo = useMutation(api.society.clearLogo);
+  const setDarkLogo = useMutation(api.society.setDarkLogo);
+  const clearDarkLogo = useMutation(api.society.clearDarkLogo);
+  const setLogoInvertInDarkMode = useMutation(api.society.setLogoInvertInDarkMode);
   const seedSharedViews = useMutation(api.views.seedGovernanceDataTableViews);
   const confirm = useConfirm();
   const toast = useToast();
@@ -45,13 +53,19 @@ export function SettingsPage() {
   const [savingModule, setSavingModule] = useState<ModuleKey | null>(null);
   const [inventoryPromptEnabled, setInventoryPromptEnabled] = useState(false);
   const [savingInventorySettings, setSavingInventorySettings] = useState(false);
+  const [retentionDays, setRetentionDays] = useState("30");
+  const [savingRetention, setSavingRetention] = useState(false);
   const [maintenanceBusy, setMaintenanceBusy] = useState<"seed" | "reset" | null>(null);
   const [sharedViewsBusy, setSharedViewsBusy] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState<"light" | "dark" | null>(null);
+  const lightLogoInputRef = useRef<HTMLInputElement>(null);
+  const darkLogoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!society) return;
     setModuleSettings(normalizeModuleSettings(society));
     setInventoryPromptEnabled(Boolean(society.consumableIntakeCountPromptEnabled));
+    setRetentionDays(String(society.notificationRetentionDays ?? 30));
   }, [society]);
 
   const modulesByCategory = useMemo(
@@ -124,6 +138,108 @@ export function SettingsPage() {
     }
   };
 
+  const LOGO_ALLOWED_TYPES = ["image/svg+xml", "image/png", "image/jpeg"];
+  const LOGO_MAX_BYTES = 2 * 1024 * 1024;
+
+  const uploadLogoVariant = async (variant: "light" | "dark", file: File) => {
+    if (!society) return;
+    if (!LOGO_ALLOWED_TYPES.includes(file.type)) {
+      toast.error("Unsupported file type", "Please upload an SVG, PNG, or JPG.");
+      return;
+    }
+    if (file.size > LOGO_MAX_BYTES) {
+      toast.error("File too large", "Logo must be under 2 MB.");
+      return;
+    }
+    setUploadingLogo(variant);
+    try {
+      const uploadUrl = await generateUploadUrl({});
+      const res = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+      const { storageId } = await res.json();
+      if (variant === "light") {
+        await setLogo({ societyId: society._id, storageId });
+      } else {
+        await setDarkLogo({ societyId: society._id, storageId });
+      }
+      toast.success(variant === "light" ? "Logo updated" : "Dark-mode logo updated");
+    } catch (error) {
+      toast.error("Couldn't upload logo", error instanceof Error ? error.message : undefined);
+    } finally {
+      setUploadingLogo(null);
+    }
+  };
+
+  const onLightLogoChosen = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) void uploadLogoVariant("light", file);
+  };
+
+  const onDarkLogoChosen = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) void uploadLogoVariant("dark", file);
+  };
+
+  const removeLogoVariant = async (variant: "light" | "dark") => {
+    if (!society) return;
+    const ok = await confirm({
+      title: variant === "light" ? "Remove logo?" : "Remove dark-mode logo?",
+      message:
+        variant === "light"
+          ? "The letter avatar will be shown instead until you upload a new logo."
+          : "The light-mode logo will be used in dark mode until you upload a new variant.",
+      confirmLabel: "Remove",
+    });
+    if (!ok) return;
+    try {
+      if (variant === "light") {
+        await clearLogo({ societyId: society._id });
+      } else {
+        await clearDarkLogo({ societyId: society._id });
+      }
+      toast.success(variant === "light" ? "Logo removed" : "Dark-mode logo removed");
+    } catch (error) {
+      toast.error("Couldn't remove logo", error instanceof Error ? error.message : undefined);
+    }
+  };
+
+  const toggleLogoInvert = async (checked: boolean) => {
+    if (!society) return;
+    try {
+      await setLogoInvertInDarkMode({ societyId: society._id, invert: checked });
+    } catch (error) {
+      toast.error("Couldn't update setting", error instanceof Error ? error.message : undefined);
+    }
+  };
+
+  const changeRetention = async (value: string) => {
+    const previous = retentionDays;
+    setRetentionDays(value);
+    setSavingRetention(true);
+    try {
+      await updateNotificationSettings({
+        societyId: society._id,
+        notificationRetentionDays: Number(value),
+      });
+      toast.success(
+        value === "0"
+          ? "Cleared notifications will be kept until deleted manually"
+          : `Cleared notifications will be kept for ${value} days`,
+      );
+    } catch (error) {
+      setRetentionDays(previous);
+      toast.error("Couldn't update notification settings");
+    } finally {
+      setSavingRetention(false);
+    }
+  };
+
   return (
     <div className="page page--wide">
       <SettingsShell
@@ -138,6 +254,135 @@ export function SettingsPage() {
         ]}
         activeTab="workspace"
       >
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">Organization profile</h2>
+          <span className="card__subtitle">
+            Logo shown in the sidebar and on exported documents.
+          </span>
+        </div>
+        <div className="card__body col" style={{ gap: 16 }}>
+          <div className="row" style={{ gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+            <div
+              className="organization-logo-preview organization-logo-preview--light"
+              aria-label="Light mode preview"
+            >
+              {society.logoUrl ? (
+                <img src={society.logoUrl} alt="" className="organization-logo-preview__img" />
+              ) : (
+                <span className="organization-logo-preview__placeholder">
+                  {(society.name ?? "S")[0].toUpperCase()}
+                </span>
+              )}
+            </div>
+            <div className="col" style={{ gap: 6, flex: "1 1 auto", minWidth: 200 }}>
+              <strong style={{ fontSize: "var(--fs-sm)" }}>Light mode</strong>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <input
+                  ref={lightLogoInputRef}
+                  type="file"
+                  accept=".svg,.png,.jpg,.jpeg,image/svg+xml,image/png,image/jpeg"
+                  style={{ display: "none" }}
+                  onChange={onLightLogoChosen}
+                />
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={uploadingLogo === "light"}
+                  onClick={() => lightLogoInputRef.current?.click()}
+                >
+                  {uploadingLogo === "light"
+                    ? "Uploading…"
+                    : society.logoUrl
+                      ? "Replace logo"
+                      : "Upload logo"}
+                </button>
+                {society.logoUrl && (
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={uploadingLogo === "light"}
+                    onClick={() => { void removeLogoVariant("light"); }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                SVG, PNG, or JPG. Max 2 MB.
+              </p>
+            </div>
+          </div>
+
+          <div className="row" style={{ gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+            <div
+              className={`organization-logo-preview organization-logo-preview--dark${
+                !society.logoDarkUrl && society.logoUrl && society.logoInvertInDarkMode
+                  ? " organization-logo-preview--invert"
+                  : ""
+              }`}
+              aria-label="Dark mode preview"
+            >
+              {society.logoDarkUrl ? (
+                <img src={society.logoDarkUrl} alt="" className="organization-logo-preview__img" />
+              ) : society.logoUrl ? (
+                <img src={society.logoUrl} alt="" className="organization-logo-preview__img" />
+              ) : (
+                <span className="organization-logo-preview__placeholder organization-logo-preview__placeholder--dark">
+                  {(society.name ?? "S")[0].toUpperCase()}
+                </span>
+              )}
+            </div>
+            <div className="col" style={{ gap: 6, flex: "1 1 auto", minWidth: 200 }}>
+              <strong style={{ fontSize: "var(--fs-sm)" }}>Dark mode (optional)</strong>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <input
+                  ref={darkLogoInputRef}
+                  type="file"
+                  accept=".svg,.png,.jpg,.jpeg,image/svg+xml,image/png,image/jpeg"
+                  style={{ display: "none" }}
+                  onChange={onDarkLogoChosen}
+                />
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={uploadingLogo === "dark"}
+                  onClick={() => darkLogoInputRef.current?.click()}
+                >
+                  {uploadingLogo === "dark"
+                    ? "Uploading…"
+                    : society.logoDarkUrl
+                      ? "Replace logo"
+                      : "Upload logo"}
+                </button>
+                {society.logoDarkUrl && (
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={uploadingLogo === "dark"}
+                    onClick={() => { void removeLogoVariant("dark"); }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                Used in dark mode if provided. Falls back to the light-mode logo otherwise.
+              </p>
+            </div>
+          </div>
+
+          {society.logoUrl && !society.logoDarkUrl && (
+            <Toggle
+              checked={Boolean(society.logoInvertInDarkMode)}
+              onChange={(checked) => { void toggleLogoInvert(checked); }}
+              label="Invert light-mode logo for dark mode"
+              hint="Works best for monochrome (black-line) logos. Skip if your logo has color."
+            />
+          )}
+        </div>
+      </div>
 
       <div className="settings-pair" style={{ marginBottom: 16 }}>
         <div className="card">
@@ -256,6 +501,39 @@ export function SettingsPage() {
             label="Prompt for current count when adding consumables"
             hint="When adding stock to a consumable item, ask how many are left first, then add the new amount to that observed count."
           />
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">Notifications</h2>
+          <span className="card__subtitle">Controls for the in-app notification center.</span>
+        </div>
+        <div className="card__body col" style={{ gap: 12 }}>
+          <div className="settings-row" style={{ display: "flex", alignItems: "center", gap: 16, justifyContent: "space-between" }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 500 }}>Keep cleared notifications for</div>
+              <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>
+                When you clear a notification it leaves the bell immediately, but stays on the
+                Notifications page under “Dismissed” for this long before it’s permanently deleted.
+              </div>
+            </div>
+            <div style={{ flexShrink: 0, minWidth: 160 }}>
+              <Select
+                value={retentionDays}
+                onChange={changeRetention}
+                disabled={savingRetention}
+                options={[
+                  { value: "7", label: "7 days" },
+                  { value: "14", label: "14 days" },
+                  { value: "30", label: "30 days" },
+                  { value: "60", label: "60 days" },
+                  { value: "90", label: "90 days" },
+                  { value: "0", label: "Keep until deleted" },
+                ]}
+              />
+            </div>
+          </div>
         </div>
       </div>
 

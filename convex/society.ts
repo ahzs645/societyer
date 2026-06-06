@@ -6,25 +6,138 @@ import { assertAllowedOption } from "./lib/orgHubOptions";
 import { seedSociety } from "./seedRecordTableMetadata";
 import { registryOnboardingCopy } from "../shared/jurisdictionWorkspace";
 
+async function withLogoUrl(ctx, society) {
+  if (!society) return society;
+  const logoUrl = society.logoStorageId
+    ? await ctx.storage.getUrl(society.logoStorageId)
+    : undefined;
+  const logoDarkUrl = society.logoDarkStorageId
+    ? await ctx.storage.getUrl(society.logoDarkStorageId)
+    : undefined;
+  return {
+    ...society,
+    logoUrl: logoUrl ?? undefined,
+    logoDarkUrl: logoDarkUrl ?? undefined,
+  };
+}
+
 export const get = query({
   args: {},
   returns: v.any(),
   handler: async (ctx) => {
     const all = await ctx.db.query("societies").collect();
-    return all[0] ?? null;
+    return withLogoUrl(ctx, all[0] ?? null);
   },
 });
 
 export const list = query({
   args: {},
   returns: v.any(),
-  handler: async (ctx) => ctx.db.query("societies").collect(),
+  handler: async (ctx) => {
+    const all = await ctx.db.query("societies").collect();
+    return Promise.all(all.map((society) => withLogoUrl(ctx, society)));
+  },
 });
 
 export const getById = query({
   args: { id: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: async (ctx, { id }) => withLogoUrl(ctx, await ctx.db.get(id)),
+});
+
+export const setLogo = mutation({
+  args: {
+    societyId: v.id("societies"),
+    storageId: v.id("_storage"),
+  },
+  returns: v.id("societies"),
+  handler: async (ctx, { societyId, storageId }) => {
+    const society = await ctx.db.get(societyId);
+    if (!society) throw new Error("Society not found.");
+    if (society.logoStorageId && society.logoStorageId !== storageId) {
+      try {
+        await ctx.storage.delete(society.logoStorageId);
+      } catch {
+        // Old blob may have already been removed; not fatal.
+      }
+    }
+    await ctx.db.patch(societyId, { logoStorageId: storageId, updatedAt: Date.now() });
+    return societyId;
+  },
+});
+
+export const clearLogo = mutation({
+  args: { societyId: v.id("societies") },
+  returns: v.id("societies"),
+  handler: async (ctx, { societyId }) => {
+    const society = await ctx.db.get(societyId);
+    if (!society) throw new Error("Society not found.");
+    if (society.logoStorageId) {
+      try {
+        await ctx.storage.delete(society.logoStorageId);
+      } catch {
+        // Already gone — no-op.
+      }
+    }
+    await ctx.db.patch(societyId, { logoStorageId: undefined, updatedAt: Date.now() });
+    return societyId;
+  },
+});
+
+export const setDarkLogo = mutation({
+  args: {
+    societyId: v.id("societies"),
+    storageId: v.id("_storage"),
+  },
+  returns: v.id("societies"),
+  handler: async (ctx, { societyId, storageId }) => {
+    const society = await ctx.db.get(societyId);
+    if (!society) throw new Error("Society not found.");
+    if (society.logoDarkStorageId && society.logoDarkStorageId !== storageId) {
+      try {
+        await ctx.storage.delete(society.logoDarkStorageId);
+      } catch {
+        // Already gone — no-op.
+      }
+    }
+    await ctx.db.patch(societyId, { logoDarkStorageId: storageId, updatedAt: Date.now() });
+    return societyId;
+  },
+});
+
+export const clearDarkLogo = mutation({
+  args: { societyId: v.id("societies") },
+  returns: v.id("societies"),
+  handler: async (ctx, { societyId }) => {
+    const society = await ctx.db.get(societyId);
+    if (!society) throw new Error("Society not found.");
+    if (society.logoDarkStorageId) {
+      try {
+        await ctx.storage.delete(society.logoDarkStorageId);
+      } catch {
+        // Already gone — no-op.
+      }
+    }
+    await ctx.db.patch(societyId, { logoDarkStorageId: undefined, updatedAt: Date.now() });
+    return societyId;
+  },
+});
+
+export const setLogoInvertInDarkMode = mutation({
+  args: {
+    societyId: v.id("societies"),
+    invert: v.boolean(),
+  },
+  returns: v.id("societies"),
+  handler: async (ctx, { societyId, invert }) => {
+    const society = await ctx.db.get(societyId);
+    if (!society) throw new Error("Society not found.");
+    await ctx.db.patch(societyId, {
+      logoInvertInDarkMode: invert,
+      updatedAt: Date.now(),
+    });
+    return societyId;
+  },
 });
 
 export const upsert = mutation({
@@ -297,6 +410,22 @@ export const updateInventorySettings = mutation({
   handler: async (ctx, { societyId, consumableIntakeCountPromptEnabled }) => {
     await ctx.db.patch(societyId, {
       consumableIntakeCountPromptEnabled,
+      updatedAt: Date.now(),
+    });
+    return societyId;
+  },
+});
+
+export const updateNotificationSettings = mutation({
+  args: {
+    societyId: v.id("societies"),
+    // Days dismissed notifications are retained before purge. 0 = keep forever.
+    notificationRetentionDays: v.number(),
+  },
+  returns: v.id("societies"),
+  handler: async (ctx, { societyId, notificationRetentionDays }) => {
+    await ctx.db.patch(societyId, {
+      notificationRetentionDays: Math.max(0, Math.round(notificationRetentionDays)),
       updatedAt: Date.now(),
     });
     return societyId;

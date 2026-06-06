@@ -221,9 +221,8 @@ export const createSharedDataTableView = mutation({
   returns: v.any(),
   handler: async (ctx, args) => {
     const object = await resolveObjectMetadata(ctx, args);
-    if (!object) {
-      throw new Error("Object metadata not found for shared saved view.");
-    }
+    // No objectMetadata seeded for this table — caller falls back to local-only saved views.
+    if (!object) return null;
     const now = new Date().toISOString();
     const existing = await ctx.db
       .query("views")

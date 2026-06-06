@@ -2,6 +2,7 @@ import {
   Children,
   cloneElement,
   createElement,
+  forwardRef,
   Fragment,
   isValidElement,
   ButtonHTMLAttributes,
@@ -187,22 +188,22 @@ export function Badge({
   return <span className={klass}>{children}</span>;
 }
 
-export function Pill({
-  tone = "neutral",
-  size = "md",
-  className,
-  children,
-}: {
+type PillProps = {
   tone?: ToneVariant;
   size?: "sm" | "md";
   className?: string;
   children: ReactNode;
-}) {
+};
+
+export const Pill = forwardRef<HTMLSpanElement, PillProps>(function Pill(
+  { tone = "neutral", size = "md", className, children },
+  ref,
+) {
   const classes = ["pill", `pill--${size}`];
   if (tone !== "neutral") classes.push(`pill--${tone}`);
   if (className) classes.push(className);
-  return <span className={classes.join(" ")}>{children}</span>;
-}
+  return <span ref={ref} className={classes.join(" ")}>{children}</span>;
+});
 
 /** Twenty-style chip with leftComponent / rightComponent slots.
  * Uses the .badge CSS for its base look and extends it via tone/size/variant. */

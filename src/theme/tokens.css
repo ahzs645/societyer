@@ -9,12 +9,12 @@
   color-scheme: light;
 
   /* ---------------- Backgrounds (BACKGROUND_LIGHT) ---------------- */
-  --bg-primary:        var(--gray-1);     /* app canvas */
-  --bg-secondary:      var(--gray-2);     /* sidebar, topbar */
-  --bg-tertiary:       var(--gray-4);     /* subtle wells */
-  --bg-quaternary:     var(--gray-5);     /* deepest surface */
-  --bg-inverted-primary:   var(--gray-12);
-  --bg-inverted-secondary: var(--gray-11);
+  --bg-primary:        var(--slate-1);     /* app canvas */
+  --bg-secondary:      var(--slate-2);     /* sidebar, topbar */
+  --bg-tertiary:       var(--slate-4);     /* subtle wells */
+  --bg-quaternary:     var(--slate-5);     /* deepest surface */
+  --bg-inverted-primary:   var(--slate-12);
+  --bg-inverted-secondary: var(--slate-11);
   --bg-danger:         var(--red-3);
   --bg-transparent-primary:   rgba(255, 255, 255, 0.64);
   --bg-transparent-secondary: rgba(255, 255, 255, 0.48);
@@ -32,24 +32,24 @@
   --bg-panel:  var(--bg-primary);
   --bg-subtle: var(--bg-secondary);
   --bg-muted:  var(--bg-tertiary);
-  --bg-hover:  var(--gray-3);
-  --bg-active: var(--gray-4);
+  --bg-hover:  var(--slate-3);
+  --bg-active: var(--slate-4);
   --bg-inverse: var(--bg-inverted-primary);
 
   /* Floating overlay surfaces (tooltips, popovers). Unlike --bg-inverse, these
      stay themed in both modes — a dark chip in light mode, a slightly
      elevated dark surface in dark mode — so floating overlays don't flip to
      a bright surface when the rest of the UI is dark. */
-  --bg-floating:     var(--gray-12);
-  --text-floating:   var(--gray-1);
+  --bg-floating:     var(--slate-12);
+  --text-floating:   var(--slate-1);
   --border-floating: transparent;
 
   /* ---------------- Borders (BORDER_LIGHT) ---------------- */
-  --border-color-strong:            var(--gray-6);
-  --border-color-medium:            var(--gray-5);
-  --border-color-light:             var(--gray-4);
-  --border-color-inverted:          var(--gray-12);
-  --border-color-secondary-inverted: var(--gray-11);
+  --border-color-strong:            var(--slate-6);
+  --border-color-medium:            var(--slate-5);
+  --border-color-light:             var(--slate-4);
+  --border-color-inverted:          var(--slate-12);
+  --border-color-secondary-inverted: var(--slate-11);
   --border-color-danger:            var(--red-5);
   --border-color-blue:              var(--blue-7);
   --border-color-transparent-strong: var(--gray-a-4);
@@ -60,13 +60,13 @@
   --border-focus:  var(--blue-8);
 
   /* ---------------- Text (FONT_LIGHT) ---------------- */
-  --font-color-primary:   var(--gray-12);
-  --font-color-secondary: var(--gray-11);
-  --font-color-tertiary:  var(--gray-10);
-  --font-color-light:     var(--gray-9);
-  --font-color-extra-light: var(--gray-8);
-  --font-color-inverted-primary:   var(--gray-1);
-  --font-color-inverted-secondary: var(--gray-3);
+  --font-color-primary:   var(--slate-12);
+  --font-color-secondary: var(--slate-11);
+  --font-color-tertiary:  var(--slate-10);
+  --font-color-light:     var(--slate-9);
+  --font-color-extra-light: var(--slate-8);
+  --font-color-inverted-primary:   var(--slate-1);
+  --font-color-inverted-secondary: var(--slate-3);
   --font-color-danger:    var(--red-9);
   --font-color-success:   var(--green-11);
 
@@ -84,7 +84,7 @@
   --accent-quaternary: var(--blue-3);
   --accent-accent-4: var(--blue-4);
   --accent-on-accent: #ffffff;
-  --accent-on-accent-inverted: var(--gray-12);
+  --accent-on-accent-inverted: var(--slate-12);
 
   /* Legacy aliases */
   --accent:              var(--accent-primary);
@@ -243,12 +243,12 @@
   color-scheme: dark;
 
   /* Backgrounds */
-  --bg-primary:        var(--gray-1);
-  --bg-secondary:      var(--gray-2);
-  --bg-tertiary:       var(--gray-4);
-  --bg-quaternary:     var(--gray-5);
-  --bg-inverted-primary:   var(--gray-12);
-  --bg-inverted-secondary: var(--gray-11);
+  --bg-primary:        var(--slate-1);
+  --bg-secondary:      var(--slate-2);
+  --bg-tertiary:       var(--slate-4);
+  --bg-quaternary:     var(--slate-5);
+  --bg-inverted-primary:   var(--slate-12);
+  --bg-inverted-secondary: var(--slate-11);
   --bg-danger:         var(--red-3);
   --bg-transparent-primary:   rgba(0, 0, 0, 0.48);
   --bg-transparent-secondary: rgba(0, 0, 0, 0.40);
@@ -265,21 +265,21 @@
   --bg-panel:  var(--bg-primary);
   --bg-subtle: var(--bg-secondary);
   --bg-muted:  var(--bg-tertiary);
-  --bg-hover:  var(--gray-3);
-  --bg-active: var(--gray-4);
+  --bg-hover:  var(--slate-3);
+  --bg-active: var(--slate-4);
   --bg-inverse: var(--bg-inverted-primary);
 
   /* Floating overlay surfaces — elevated dark panel that stays themed. */
-  --bg-floating:     var(--gray-4);
-  --text-floating:   var(--gray-12);
+  --bg-floating:     var(--slate-4);
+  --text-floating:   var(--slate-12);
   --border-floating: var(--border-color-medium);
 
   /* Borders */
-  --border-color-strong:            var(--gray-6);
-  --border-color-medium:            var(--gray-5);
-  --border-color-light:             var(--gray-4);
-  --border-color-inverted:          var(--gray-12);
-  --border-color-secondary-inverted: var(--gray-11);
+  --border-color-strong:            var(--slate-6);
+  --border-color-medium:            var(--slate-5);
+  --border-color-light:             var(--slate-4);
+  --border-color-inverted:          var(--slate-12);
+  --border-color-secondary-inverted: var(--slate-11);
   --border-color-danger:            var(--red-5);
   --border-color-blue:              var(--blue-7);
   --border-color-transparent-strong: var(--gray-a-4);
@@ -289,13 +289,13 @@
   --border-focus:  var(--blue-8);
 
   /* Text */
-  --font-color-primary:   var(--gray-12);
-  --font-color-secondary: var(--gray-11);
-  --font-color-tertiary:  var(--gray-10);
-  --font-color-light:     var(--gray-9);
-  --font-color-extra-light: var(--gray-8);
-  --font-color-inverted-primary:   var(--gray-1);
-  --font-color-inverted-secondary: var(--gray-3);
+  --font-color-primary:   var(--slate-12);
+  --font-color-secondary: var(--slate-11);
+  --font-color-tertiary:  var(--slate-10);
+  --font-color-light:     var(--slate-9);
+  --font-color-extra-light: var(--slate-8);
+  --font-color-inverted-primary:   var(--slate-1);
+  --font-color-inverted-secondary: var(--slate-3);
   --font-color-danger:    var(--red-11);
   --font-color-success:   var(--green-11);
 
@@ -311,7 +311,7 @@
   --accent-quaternary: var(--blue-3);
   --accent-accent-4:  var(--blue-4);
   --accent-on-accent: #ffffff;
-  --accent-on-accent-inverted: var(--gray-12);
+  --accent-on-accent-inverted: var(--slate-12);
 
   --accent:              var(--accent-primary);
   --accent-hover:        var(--blue-10);

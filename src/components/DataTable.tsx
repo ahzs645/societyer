@@ -1,6 +1,6 @@
 import { ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Pin, PinOff, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { ViewBar } from "./primitives";
@@ -479,6 +479,8 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
       const optimistic = { ...view, isShared: true };
       setSavedViews((current) => [...current, optimistic]);
       setActiveViewId(optimistic.id);
+      let workspaceId: string | null = null;
+      let workspaceError: unknown = null;
       try {
         const id = await createWorkspaceView({
           societyId: sharedViewsContext.societyId as any,
@@ -493,14 +495,21 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
             : {}),
           ...savedViewToWorkspacePayload(view),
         });
-        setActiveViewId(String(id));
+        if (id != null) workspaceId = String(id);
       } catch (error) {
-        setSavedViews((current) => current.filter((candidate) => candidate.id !== optimistic.id));
-        toast.error("Saved locally", error instanceof Error ? error.message : "Shared view could not be saved.");
-        const localNext = [...readSavedViews(viewsKey), view];
-        writeSavedViews(viewsKey, localNext);
-        setSavedViews(localNext);
+        workspaceError = error;
       }
+      if (workspaceId) {
+        setActiveViewId(workspaceId);
+        return;
+      }
+      setSavedViews((current) => current.filter((candidate) => candidate.id !== optimistic.id));
+      if (workspaceError) {
+        toast.error("Saved locally", workspaceError instanceof Error ? workspaceError.message : "Shared view could not be saved.");
+      }
+      const localNext = [...readSavedViews(viewsKey), view];
+      writeSavedViews(viewsKey, localNext);
+      setSavedViews(localNext);
       return;
     }
     const next = [...savedViews, view];
@@ -576,6 +585,13 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
         filterBtnRef={filterBtnRef}
         sortBtnRef={sortBtnRef}
         optionsBtnRef={optionsBtnRef}
+        savedViews={viewsKey ? savedViews : undefined}
+        activeViewId={activeViewId}
+        viewsKey={viewsKey}
+        onApplyView={applyView}
+        onSaveView={saveView}
+        onDeleteView={deleteView}
+        onTogglePinView={togglePin}
         onFilter={
           filterFields?.length
             ? () => {
@@ -621,13 +637,6 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
           onResetColumns={() => setHiddenColumns(new Set())}
           density={density}
           onDensity={setDensity}
-          savedViews={viewsKey ? savedViews : undefined}
-          activeViewId={activeViewId}
-          viewsKey={viewsKey}
-          onTogglePinView={togglePin}
-          onApplyView={applyView}
-          onSaveView={saveView}
-          onDeleteView={deleteView}
           anchorRef={optionsBtnRef as any}
           onClose={() => setOptionsOpen(false)}
         />
@@ -717,12 +726,13 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
             const primaryCell = primaryCol.render
               ? primaryCol.render(row)
               : String(primaryCol.accessor?.(row) ?? "");
+            const cardClick = onPrimaryCellClick ?? onRowClick;
             return (
               <div
                 key={rowKey(row)}
-                className={`card-list__item${onRowClick ? " card-list__item--interactive" : ""}`}
+                className={`card-list__item${cardClick ? " card-list__item--interactive" : ""}`}
                 role="listitem"
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                onClick={cardClick ? () => cardClick(row) : undefined}
               >
                 <div className="card-list__primary">
                   <div className="card-list__primary-cell">{primaryCell}</div>
@@ -1112,13 +1122,6 @@ function OptionsPopover<T>({
   onResetColumns,
   density,
   onDensity,
-  savedViews,
-  activeViewId,
-  viewsKey,
-  onApplyView,
-  onSaveView,
-  onDeleteView,
-  onTogglePinView,
   anchorRef,
   onClose,
 }: {
@@ -1128,17 +1131,9 @@ function OptionsPopover<T>({
   onResetColumns: () => void;
   density: "compact" | "comfortable";
   onDensity: (d: "compact" | "comfortable") => void;
-  savedViews?: SavedView[];
-  activeViewId?: string | null;
-  viewsKey?: string;
-  onApplyView?: (view: SavedView) => void;
-  onSaveView?: (name: string) => void;
-  onDeleteView?: (id: string) => void;
-  onTogglePinView?: (view: SavedView) => void;
   anchorRef: React.RefObject<HTMLElement>;
   onClose: () => void;
 }) {
-  const [newViewName, setNewViewName] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -1168,78 +1163,6 @@ function OptionsPopover<T>({
 
   return (
     <div className="popover" ref={ref} style={style}>
-      {savedViews && (
-        <>
-          <MenuSectionLabel>Saved views</MenuSectionLabel>
-          {savedViews.length === 0 && (
-            <div className="empty-state empty-state--sm empty-state--start">
-              No saved views yet.
-            </div>
-          )}
-          {savedViews.map((view) => {
-            const pinned = viewsKey ? useUIStore.getState().isViewPinned(viewsKey, view.id) : false;
-            return (
-            <div key={view.id} className="options-popover__view-row">
-              <button
-                type="button"
-                className={`options-popover__view-name${activeViewId === view.id ? " is-active" : ""}`}
-                onClick={() => onApplyView?.(view)}
-                title="Apply this view"
-              >
-                {view.name}
-              </button>
-              {onTogglePinView && (
-                <button
-                  type="button"
-                  className="options-popover__view-del"
-                  onClick={() => onTogglePinView(view)}
-                  aria-label={pinned ? `Unpin ${view.name}` : `Pin ${view.name} to sidebar`}
-                  title={pinned ? "Unpin from sidebar" : "Pin to sidebar"}
-                >
-                  {pinned ? <PinOff size={10} /> : <Pin size={10} />}
-                </button>
-              )}
-              {!view.isSystem && (
-                <button
-                  type="button"
-                  className="options-popover__view-del"
-                  onClick={() => onDeleteView?.(view.id)}
-                  aria-label={`Delete view ${view.name}`}
-                >
-                  <X size={10} />
-                </button>
-              )}
-            </div>
-            );
-          })}
-          <div className="options-popover__save-row">
-            <input
-              className="options-popover__save-input"
-              placeholder="Save current view as…"
-              value={newViewName}
-              onChange={(e) => setNewViewName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && newViewName.trim()) {
-                  onSaveView?.(newViewName);
-                  setNewViewName("");
-                }
-              }}
-            />
-            <button
-              type="button"
-              className="btn-action btn-action--primary"
-              disabled={!newViewName.trim()}
-              onClick={() => {
-                onSaveView?.(newViewName);
-                setNewViewName("");
-              }}
-            >
-              Save
-            </button>
-          </div>
-          <div className="menu__separator" />
-        </>
-      )}
       <MenuSectionLabel>Density</MenuSectionLabel>
       <div className="options-popover__segmented" role="radiogroup" aria-label="Density">
         <button

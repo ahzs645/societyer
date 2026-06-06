@@ -10,21 +10,34 @@ import { Crepe, CrepeFeature } from "@milkdown/crepe";
 import { editorViewCtx } from "@milkdown/kit/core";
 import { callCommand, replaceAll } from "@milkdown/kit/utils";
 import { lift } from "@milkdown/kit/prose/commands";
+import { TextSelection } from "@milkdown/kit/prose/state";
+import type { MarkType, ResolvedPos } from "@milkdown/kit/prose/model";
 import {
   Bold,
   Code,
   Heading1,
   Heading2,
   Italic,
+  Link2,
   List,
   ListOrdered,
   Quote,
   Strikethrough,
 } from "lucide-react";
+import { usePrompt } from "./Modal";
 
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
 import "./MarkdownEditor.scss";
+
+/** Modal URL prompt — the app's `usePrompt`, narrowed to what the link
+ * toolbar button needs. */
+type LinkPrompt = (opts: {
+  title: string;
+  placeholder?: string;
+  confirmLabel?: string;
+  required?: boolean;
+}) => Promise<string | null>;
 
 export interface MarkdownEditorProps {
   value: string;
@@ -72,8 +85,16 @@ interface ToolbarItem {
   icon: typeof Bold;
   isActive: ActiveCheck;
   /** Invoked on click. `isActive` reflects state at click time so the button
-   *  can choose between, e.g., "wrap in blockquote" and "lift out of it". */
-  run: (args: { editor: Crepe["editor"]; isActive: boolean }) => void;
+   *  can choose between, e.g., "wrap in blockquote" and "lift out of it".
+   *  `prompt` opens the app's modal text prompt (used by the link button). */
+  // Returns `unknown` so the simple items can keep returning the command's
+  // boolean directly, while the link item can return a Promise (awaited in
+  // runItem). The result is never consumed beyond `await`.
+  run: (args: {
+    editor: Crepe["editor"];
+    isActive: boolean;
+    prompt: LinkPrompt;
+  }) => unknown;
 }
 
 // Names below match the Milkdown schema for @milkdown/preset-commonmark and
@@ -81,6 +102,50 @@ interface ToolbarItem {
 // (`$command("ToggleStrong", …)`) because Crepe bundles its own copies of
 // those plugins — the Slice Symbols differ between our import and the copy
 // Crepe registers, but the names are stable.
+
+/**
+ * Finds the contiguous range of `markType` (a link) around a collapsed cursor.
+ * Checks the node on both sides of the caret so it works whether the cursor is
+ * inside the link or sitting right at its trailing edge. Returns null if there
+ * is no such mark adjacent to the position.
+ */
+function getMarkRange(
+  $pos: ResolvedPos,
+  markType: MarkType,
+): { from: number; to: number } | null {
+  const parent = $pos.parent;
+  const offset = $pos.parentOffset;
+  const after = parent.childAfter(offset);
+  let index: number;
+  let startPos: number;
+  if (after.node && markType.isInSet(after.node.marks)) {
+    index = after.index;
+    startPos = $pos.start() + after.offset;
+  } else {
+    const before = parent.childBefore(offset);
+    if (!before.node || !markType.isInSet(before.node.marks)) return null;
+    index = before.index;
+    startPos = $pos.start() + before.offset;
+  }
+  // Match the exact mark (type + href) so two adjacent but different links
+  // aren't merged into one range.
+  const mark = markType.isInSet(parent.child(index).marks);
+  if (!mark) return null;
+
+  let from = startPos;
+  let startIndex = index;
+  while (startIndex > 0 && mark.isInSet(parent.child(startIndex - 1).marks)) {
+    startIndex -= 1;
+    from -= parent.child(startIndex).nodeSize;
+  }
+  let to = startPos + parent.child(index).nodeSize;
+  let endIndex = index;
+  while (endIndex + 1 < parent.childCount && mark.isInSet(parent.child(endIndex + 1).marks)) {
+    endIndex += 1;
+    to += parent.child(endIndex).nodeSize;
+  }
+  return { from, to };
+}
 
 const TOOLBAR_ITEMS: ToolbarItem[] = [
   {
@@ -112,6 +177,69 @@ const TOOLBAR_ITEMS: ToolbarItem[] = [
     icon: Code,
     isActive: ({ marks }) => marks.has("inlineCode"),
     run: ({ editor }) => editor.action(callCommand("ToggleInlineCode")),
+  },
+  {
+    id: "link",
+    label: "Link",
+    hint: "Click again on a link to remove it",
+    icon: Link2,
+    isActive: ({ marks }) => marks.has("link"),
+    run: async ({ editor, isActive, prompt }) => {
+      // Clicking while the cursor is in a link removes the whole link: expand a
+      // collapsed cursor to the full link range first, then strip the mark and
+      // leave that text selected.
+      if (isActive) {
+        editor.action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          if (!view) return;
+          const { state } = view;
+          const linkType = state.schema.marks.link;
+          if (!linkType) return;
+          const { selection } = state;
+          let from = selection.from;
+          let to = selection.to;
+          if (selection.empty) {
+            const range = getMarkRange(selection.$from, linkType);
+            if (!range) return;
+            from = range.from;
+            to = range.to;
+          }
+          const tr = state.tr.removeMark(from, to, linkType);
+          tr.setSelection(TextSelection.create(tr.doc, from, to));
+          view.dispatch(tr);
+          view.focus();
+        });
+        return;
+      }
+      const input = await prompt({
+        title: "Add link",
+        placeholder: "https://example.com",
+        confirmLabel: "Add link",
+        required: true,
+      });
+      const raw = input?.trim();
+      if (!raw) return;
+      // Bare domains get https://; leave schemes (mailto:, https:), absolute
+      // paths, and anchors as-is.
+      const href = /^([a-z][a-z0-9+.-]*:|\/|#)/i.test(raw) ? raw : `https://${raw}`;
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        if (!view) return;
+        const { state } = view;
+        const linkType = state.schema.marks.link;
+        if (!linkType) return;
+        const { from, to, empty } = state.selection;
+        if (empty) {
+          // No selection — drop the URL in as its own linked text.
+          const tr = state.tr.insertText(raw, from);
+          tr.addMark(from, from + raw.length, linkType.create({ href }));
+          view.dispatch(tr);
+        } else {
+          view.dispatch(state.tr.addMark(from, to, linkType.create({ href })));
+        }
+        view.focus();
+      });
+    },
   },
   {
     id: "h1",
@@ -194,7 +322,7 @@ const EMPTY_ACTIVE: ActiveState = {
   blocks: new Set<string>(),
 };
 
-const TRACKED_MARK_NAMES = ["strong", "emphasis", "strike_through", "inlineCode"];
+const TRACKED_MARK_NAMES = ["strong", "emphasis", "strike_through", "inlineCode", "link"];
 const TRACKED_BLOCK_NAMES = ["bullet_list", "ordered_list", "blockquote"];
 
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
@@ -222,6 +350,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const placeholderRef = useRef(placeholder);
 
     const [active, setActive] = useState<ActiveState>(EMPTY_ACTIVE);
+    const prompt = usePrompt();
 
     useEffect(() => {
       onChangeRef.current = onChange;
@@ -297,11 +426,21 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           [CrepeFeature.CodeMirror]: false,
           [CrepeFeature.ImageBlock]: false,
           [CrepeFeature.Table]: false,
+          // The slash (/) menu + block drag-handle. Disabled because the menu
+          // gets clipped by the scrollable editor body when it flips upward,
+          // and the toolbar already exposes the formatting we need here.
+          [CrepeFeature.BlockEdit]: false,
+          // The on-selection floating toolbar. Its only unique action was
+          // links, which the top toolbar's Link button now provides.
+          [CrepeFeature.Toolbar]: false,
         },
         featureConfigs: {
           [CrepeFeature.Placeholder]: {
             text: placeholderRef.current ?? "",
-            mode: "block",
+            // "doc" shows the placeholder only when the whole document is
+            // empty. "block" paints it on every empty paragraph, so it
+            // reappeared on each new line as the user pressed Enter.
+            mode: "doc",
           },
         },
       });
@@ -335,6 +474,35 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             originalDispatch(tr);
             recomputeActive();
           };
+
+          // Links delete as a unit at their boundary: backspacing right after a
+          // link (or forward-deleting right before one) removes the whole link
+          // in one keystroke. Editing *inside* the link text deletes character
+          // by character as normal — the whole-link delete only fires when the
+          // cursor sits at the link's edge.
+          view.dom.addEventListener("keydown", (event: KeyboardEvent) => {
+            if (event.key !== "Backspace" && event.key !== "Delete") return;
+            if (event.metaKey || event.ctrlKey || event.altKey) return;
+            const { state } = view;
+            if (!state.selection.empty) return; // ranged deletes behave normally
+            const linkType = state.schema.marks.link;
+            if (!linkType) return;
+            const $pos = state.selection.$from;
+            const backspace = event.key === "Backspace";
+            // `inner` is the node toward the deletion direction (where the link
+            // would be); `outer` is the node on the far side of the cursor.
+            const inner = backspace ? $pos.nodeBefore : $pos.nodeAfter;
+            const outer = backspace ? $pos.nodeAfter : $pos.nodeBefore;
+            const mark = inner && linkType.isInSet(inner.marks);
+            if (!mark) return;
+            // Cursor is *inside* the link if the same link also continues on the
+            // far side — let those keystrokes edit normally.
+            if (outer && mark.isInSet(outer.marks)) return;
+            const range = getMarkRange($pos, linkType);
+            if (!range) return;
+            event.preventDefault();
+            view.dispatch(state.tr.delete(range.from, range.to));
+          });
         });
 
         recomputeActive();
@@ -387,13 +555,14 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         // selection rather than the (now-blurred) toolbar button.
         const editable = editorHostRef.current?.querySelector<HTMLElement>(".ProseMirror");
         editable?.focus();
-        item.run({ editor: crepe.editor, isActive });
-        // The wrapped view.dispatch already triggers a recompute, but call
-        // through one more time so single-click feedback feels instant even
-        // if the command bailed before dispatching.
-        recomputeActive();
+        // run() may be async (the link button awaits a modal prompt); recompute
+        // once it resolves. The wrapped view.dispatch also recomputes on any
+        // transaction, so synchronous commands feel instant either way.
+        void Promise.resolve(item.run({ editor: crepe.editor, isActive, prompt })).then(
+          () => recomputeActive(),
+        );
       },
-      [recomputeActive],
+      [recomputeActive, prompt],
     );
 
     const computedMinHeight = minHeight ?? `calc(${rows} * 1.55em + 28px)`;

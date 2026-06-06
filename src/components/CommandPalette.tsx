@@ -1,5 +1,4 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useConvex } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -48,13 +47,11 @@ import {
   Workflow,
   Plug,
   Pin,
-  PinOff,
 } from "lucide-react";
 import { api } from "../lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { useUIStore } from "../lib/store";
-import { MenuRow } from "./ui";
 import { useRegisteredCommands } from "../lib/commands";
 import { useStaticCommands } from "../lib/useStaticCommands";
 import { ROUTE_IDENTITY, groupToneCssVar, type RouteGroup } from "../lib/routeIdentity";
@@ -322,12 +319,6 @@ function writeStringArray(key: string, value: string[]) {
   }
 }
 
-type PaletteContextMenu = {
-  item: CommandItem;
-  top: number;
-  left: number;
-};
-
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -336,8 +327,6 @@ export function CommandPalette() {
   const [metadataCommands, setMetadataCommands] = useState<any[]>([]);
   const [pinnedCommandIds, setPinnedCommandIds] = useState<string[]>(() => readStringArray(PINNED_COMMAND_IDS_KEY));
   const [pinnedRoutes, setPinnedRoutes] = useState<string[]>(() => readStringArray(PINNED_ROUTES_KEY));
-  const [contextMenu, setContextMenu] = useState<PaletteContextMenu | null>(null);
-  const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const listId = useId();
@@ -388,7 +377,6 @@ export function CommandPalette() {
         return next;
       });
     }
-    setContextMenu(null);
   };
 
   // When pinning happens elsewhere (the sidebar's own context menu, another
@@ -402,24 +390,6 @@ export function CommandPalette() {
     window.addEventListener("kbar:pinned-changed", onPinChange);
     return () => window.removeEventListener("kbar:pinned-changed", onPinChange);
   }, []);
-
-  // Dismiss the right-click context menu on outside click or Escape.
-  useEffect(() => {
-    if (!contextMenu) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (contextMenuRef.current?.contains(event.target as Node)) return;
-      setContextMenu(null);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setContextMenu(null);
-    };
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [contextMenu]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -619,38 +589,46 @@ export function CommandPalette() {
                   // navigation entries, action entries, and Recent rows
                   // (which preserve the underlying `to`/`run`).
                   const canPin = canPinItem(item);
+                  const pinned = canPin && isItemPinned(item);
                   return (
-                    <button
-                      type="button"
-                      key={item.id}
-                      id={`${listId}-${idx}`}
-                      role="option"
-                      aria-selected={idx === active}
-                      className={`kbar__item${idx === active ? " is-active" : ""}`}
-                      style={itemStyle}
-                      onMouseEnter={() => setActive(idx)}
-                      onClick={() => run(item)}
-                      onContextMenu={
-                        canPin
-                          ? (event) => {
-                              event.preventDefault();
-                              const x = Math.min(event.clientX, window.innerWidth - 220);
-                              const y = Math.min(event.clientY, window.innerHeight - 80);
-                              setContextMenu({ item, top: y, left: x });
-                            }
-                          : undefined
-                      }
-                    >
-                      <Icon />
-                      <span>{item.label}</span>
-                      {item.shortcut ? (
-                        <span className="kbar__hint">
-                          <span className="kbar__kbd">{item.shortcut}</span>
-                        </span>
-                      ) : (
-                        <span className="kbar__hint">{item.run ? "Action" : "Navigate"}</span>
+                    <div className="kbar__row" key={item.id}>
+                      <button
+                        type="button"
+                        id={`${listId}-${idx}`}
+                        role="option"
+                        aria-selected={idx === active}
+                        className={`kbar__item${idx === active ? " is-active" : ""}`}
+                        style={itemStyle}
+                        onMouseEnter={() => setActive(idx)}
+                        onClick={() => run(item)}
+                      >
+                        <Icon />
+                        <span>{item.label}</span>
+                        {item.shortcut ? (
+                          <span className="kbar__hint">
+                            <span className="kbar__kbd">{item.shortcut}</span>
+                          </span>
+                        ) : (
+                          <span className="kbar__hint">{item.run ? "Action" : "Navigate"}</span>
+                        )}
+                      </button>
+                      {canPin && (
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          className={`kbar__pin${pinned ? " is-pinned" : ""}`}
+                          aria-label={pinned ? "Unpin from Favorites" : "Pin to Favorites"}
+                          aria-pressed={pinned}
+                          title={pinned ? "Unpin from Favorites" : "Pin to Favorites"}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            togglePinned(item);
+                          }}
+                        >
+                          <Pin />
+                        </button>
                       )}
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -664,25 +642,6 @@ export function CommandPalette() {
           <span style={{ marginLeft: "auto" }}><kbd>alt</kbd>+<kbd>o</kbd> inspector</span>
         </div>
       </div>
-
-      {contextMenu && createPortal(
-        <div
-          ref={contextMenuRef}
-          className="menu menu--actions"
-          role="menu"
-          style={{ position: "fixed", top: contextMenu.top, left: contextMenu.left, width: 200, zIndex: 1100 }}
-        >
-          <div className="menu__section">
-            <MenuRow
-              role="menuitem"
-              icon={isItemPinned(contextMenu.item) ? <PinOff size={14} /> : <Pin size={14} />}
-              label={isItemPinned(contextMenu.item) ? "Unpin from Favorites" : "Pin to Favorites"}
-              onClick={() => togglePinned(contextMenu.item)}
-            />
-          </div>
-        </div>,
-        document.body,
-      )}
     </div>
   );
 }

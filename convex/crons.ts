@@ -40,6 +40,15 @@ crons.cron(
   {},
 );
 
+// Daily 6am UTC — permanently delete notifications the user cleared from the
+// bell more than the retention window ago (see DISMISSED_RETENTION_DAYS).
+crons.daily(
+  "purge dismissed notifications",
+  { hourUTC: 6, minuteUTC: 0 },
+  internal.notifications.purgeDismissed,
+  {},
+);
+
 // Every 15 minutes — pick up any workflow whose nextRunAtISO has elapsed
 // and fire its runner. This is the only scheduler for configured workflows;
 // per-workflow cadence is stored on the workflow row itself.

@@ -1822,39 +1822,64 @@
   border-radius: var(--r-sm);
   background: var(--bg-subtle);
 }
-.attendance-roster {
+// Attendance-specific row content (rendered inside the shared .list-editor).
+.attendance-roster__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attendance-roster__status {
+  flex: 0 0 auto;
+}
+// Generic editable list shell — shared by ListEditor consumers (the meeting
+// AttendanceRoster and the Decisions LineListEditor). Owns list/row/remove/add
+// layout; consumers add their own per-row content styles.
+.list-editor {
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
 }
-.attendance-roster__head {
+.list-editor__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--s-2);
 }
-.attendance-roster__list {
+// Scoped with the parent class (specificity defense-in-depth) so a greedy
+// descendant `ul` rule in a host context can't indent the rows and misalign
+// them with the add footer.
+.list-editor .list-editor__list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
+  gap: 6px;
 }
-.attendance-roster__row {
+.list-editor__row {
   display: flex;
   align-items: center;
   gap: var(--s-2);
+}
+// Divided variant (Attendance): row separators instead of gaps.
+.list-editor--divided .list-editor__list { gap: 0; }
+.list-editor--divided .list-editor__row {
   padding: 6px 0;
   border-bottom: 1px solid var(--border);
 
   &:last-child { border-bottom: 0; }
 }
-.attendance-roster__remove {
+// Fills the row / add footer (an input that should take the remaining width).
+.list-editor__grow { flex: 1; min-width: 0; }
+.list-editor__remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 24px;
   height: 24px;
+  flex: 0 0 auto;
   padding: 0;
   border: 0;
   border-radius: 999px;
@@ -1869,25 +1894,15 @@
     outline-offset: 2px;
   }
 }
-.attendance-roster__name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.attendance-roster__status {
-  flex: 0 0 auto;
-}
-.attendance-roster__add {
+.list-editor__add {
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  margin-top: var(--s-2);
 }
-.attendance-roster__add .btn-action {
-  height: 32px;
-}
+.list-editor__add .name-autocomplete,
+.list-editor__add .input { flex: 1; min-width: 0; }
+.list-editor__add .btn-action { height: 32px; }
+
 // Shared name-autocomplete styles — used by AttendanceRoster, MotionEditor's
 // NameInput, and the section action item Assignee field. Custom dropdown that
 // replaces the browser-native datalist popup with themed UI.
@@ -2179,6 +2194,14 @@
   color: var(--text-primary);
   white-space: nowrap;
 }
+.meeting-minutes-section-item__title-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 0;
+}
 .meeting-minutes-section-item__title-type {
   flex: 0 0 auto;
   min-width: 0;
@@ -2271,7 +2294,11 @@
   color: var(--text-tertiary);
   text-transform: uppercase;
 }
-.meeting-minutes-section-item ul,
+// Bullet lists in the read view. Scoped to the specific content containers
+// (rendered-markdown bullets + the Decisions block) rather than every `ul`
+// under a section item, so it can't reach into editor controls like the
+// shared .list-editor.
+.meeting-minutes-section-block ul,
 .meeting-minutes-section-bullets {
   margin: 0;
   padding-left: 18px;
@@ -2932,10 +2959,11 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary::after {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.meeting-package-task-create {
+.quick-add-task__form {
   display: grid;
   gap: var(--s-2);
   padding: var(--s-2);
+  margin-top: var(--s-2);
   border: 1px dashed var(--border);
   border-radius: var(--r-sm);
 }
@@ -4269,7 +4297,7 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 .segmented {
   display: inline-flex;
   align-self: flex-start;
-  background: var(--bg-subtle);
+  background: var(--bg-muted);
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
   padding: 3px;
@@ -4279,8 +4307,14 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   padding: 5px 12px;
   font-size: var(--fs-sm);
   color: var(--text-secondary);
+  border: 1px solid transparent;
   border-radius: var(--r-pill);
   font-weight: 500;
+  transition: background var(--anim-fast) var(--anim-ease), color var(--anim-fast) var(--anim-ease), border-color var(--anim-fast) var(--anim-ease);
+}
+.segmented__btn:hover:not(.is-active) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 .segmented--compact {
   padding: 2px;
@@ -4295,8 +4329,9 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 }
 .segmented__btn.is-active {
   background: var(--bg-panel);
+  border-color: var(--border-strong);
   color: var(--text-primary);
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Import sessions */
@@ -5953,7 +5988,7 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   padding: 2px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  background: var(--bg-subtle);
+  background: var(--bg-muted);
 }
 
 .segmented-control__item {
@@ -5962,16 +5997,17 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   gap: 5px;
   min-height: 26px;
   padding: 0 8px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: calc(var(--r-sm) - 2px);
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
   font-size: var(--fs-sm);
   cursor: pointer;
+  transition: background var(--anim-fast) var(--anim-ease), color var(--anim-fast) var(--anim-ease), border-color var(--anim-fast) var(--anim-ease);
 }
 
-.segmented-control__item:hover {
+.segmented-control__item:hover:not(.is-active) {
   color: var(--text-primary);
   background: var(--bg-hover);
 }
@@ -5979,7 +6015,8 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 .segmented-control__item.is-active {
   color: var(--text-primary);
   background: var(--bg-panel);
-  box-shadow: var(--shadow-xs);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
 }
 
 .grant-edit-grid--2 {

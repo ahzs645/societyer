@@ -17,7 +17,7 @@
   line-height: 1.55;
   transition: border-color 0.08s ease, box-shadow 0.08s ease;
   position: relative;
-  overflow: visible; // allow Crepe popovers, including the slash menu, to escape the editor box
+  overflow: visible; // allow Crepe popovers (link tooltip, selection toolbar) to escape the editor box
 
   &:focus-within {
     outline: none;
