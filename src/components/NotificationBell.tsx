@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
-import { Bell, CheckCircle2, AlertTriangle, Info, XCircle } from "lucide-react";
+import { Bell, CheckCircle2, AlertTriangle, Info, XCircle, X } from "lucide-react";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { Link } from "react-router-dom";
 import { formatDateTime } from "../lib/format";
@@ -21,6 +21,8 @@ export function NotificationBell() {
   );
   const markRead = useMutation(api.notifications.markRead);
   const markAllRead = useMutation(api.notifications.markAllRead);
+  const dismiss = useMutation(api.notifications.dismiss);
+  const dismissAll = useMutation(api.notifications.dismissAll);
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
@@ -128,14 +130,27 @@ export function NotificationBell() {
             >
               <strong style={{ fontSize: "var(--fs-md)" }}>Notifications</strong>
               <div style={{ flex: 1 }} />
-              <button
-                className="btn btn--ghost btn--sm"
-                onClick={async () => {
-                  await markAllRead({ societyId: society._id, userId });
-                }}
-              >
-                Mark all read
-              </button>
+              {(notifications ?? []).length > 0 && (
+                <>
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    onClick={async () => {
+                      await markAllRead({ societyId: society._id, userId });
+                    }}
+                  >
+                    Mark all read
+                  </button>
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    title="Clear all notifications from this list"
+                    onClick={async () => {
+                      await dismissAll({ societyId: society._id, userId });
+                    }}
+                  >
+                    Clear all
+                  </button>
+                </>
+              )}
             </div>
 
             {(notifications ?? []).length === 0 && (
@@ -166,7 +181,7 @@ export function NotificationBell() {
                   style={{
                     display: "flex",
                     gap: 10,
-                    padding: "10px 12px",
+                    padding: "10px 32px 10px 12px",
                     borderBottom: "1px solid var(--border)",
                     background: n.readAt ? "var(--bg-panel)" : "var(--bg-subtle)",
                     cursor: "pointer",
@@ -196,16 +211,50 @@ export function NotificationBell() {
                   </div>
                 </div>
               );
-              return n.linkHref ? (
-                <Link
-                  key={n._id}
-                  to={n.linkHref}
-                  style={{ color: "inherit", textDecoration: "none" }}
+              const clearButton = (
+                <button
+                  className="notif-clear"
+                  aria-label="Clear notification"
+                  title="Clear notification"
+                  onClick={(event) => {
+                    // Sibling of the row body, but guard anyway so a click never
+                    // navigates the link or marks-read underneath.
+                    event.preventDefault();
+                    event.stopPropagation();
+                    void dismiss({ id: n._id });
+                  }}
+                  style={{
+                    position: "absolute",
+                    top: 8,
+                    right: 6,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 20,
+                    height: 20,
+                    padding: 0,
+                    border: 0,
+                    borderRadius: "var(--r-sm)",
+                    background: "transparent",
+                    color: "var(--text-tertiary)",
+                    cursor: "pointer",
+                    zIndex: 1,
+                  }}
                 >
-                  {body}
-                </Link>
-              ) : (
-                <div key={n._id}>{body}</div>
+                  <X size={13} />
+                </button>
+              );
+              return (
+                <div key={n._id} style={{ position: "relative" }}>
+                  {n.linkHref ? (
+                    <Link to={n.linkHref} style={{ color: "inherit", textDecoration: "none" }}>
+                      {body}
+                    </Link>
+                  ) : (
+                    body
+                  )}
+                  {clearButton}
+                </div>
               );
             })}
 

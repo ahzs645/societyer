@@ -4,25 +4,46 @@ import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { sendEmail } from "./providers/email";
 
+/**
+ * Notifications historically stored app-relative links as bare paths
+ * (e.g. "/filings"), but every real route lives under "/app". Normalize on
+ * READ so every click target resolves, without rewriting stored rows — which
+ * keeps the scan dedup keys and `financialHub`'s demo-notification matcher
+ * (both compare the raw stored value) working untouched.
+ */
+export function normalizeNotificationLink(href?: string): string | undefined {
+  if (!href) return href;
+  if (href.startsWith("/app") || href.startsWith("/demo") || href.startsWith("http")) {
+    return href;
+  }
+  return href.startsWith("/") ? `/app${href}` : `/app/${href}`;
+}
+
 export const list = query({
   args: {
     societyId: v.id("societies"),
     userId: v.optional(v.id("users")),
     limit: v.optional(v.number()),
     unreadOnly: v.optional(v.boolean()),
+    // The bell omits this (dismissed rows stay hidden); the full Notifications
+    // page passes true so cleared items remain visible until the purge.
+    includeDismissed: v.optional(v.boolean()),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, userId, limit, unreadOnly }) => {
+  handler: async (ctx, { societyId, userId, limit, unreadOnly, includeDismissed }) => {
     const rows = await ctx.db
       .query("notifications")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
       .order("desc")
       .take(limit ?? 100);
-    return rows.filter((r) => {
-      if (userId && r.userId && r.userId !== userId) return false;
-      if (unreadOnly && r.readAt) return false;
-      return true;
-    });
+    return rows
+      .filter((r) => {
+        if (userId && r.userId && r.userId !== userId) return false;
+        if (unreadOnly && r.readAt) return false;
+        if (!includeDismissed && r.dismissedAt) return false;
+        return true;
+      })
+      .map((r) => ({ ...r, linkHref: normalizeNotificationLink(r.linkHref) }));
   },
 });
 
@@ -37,6 +58,7 @@ export const unreadCount = query({
       .take(200);
     return rows.filter((r) => {
       if (r.readAt) return false;
+      if (r.dismissedAt) return false;
       if (userId && r.userId && r.userId !== userId) return false;
       return true;
     }).length;
@@ -84,6 +106,109 @@ export const markAllRead = mutation({
       if (userId && r.userId && r.userId !== userId) continue;
       await ctx.db.patch(r._id, { readAt: now });
     }
+  },
+});
+
+/** Clear a single notification from the bell. Stamps dismissedAt (and readAt
+ * if not already read) so it leaves the bell + unread count immediately, but
+ * the row survives on the Notifications page until `purgeDismissed` runs. */
+export const dismiss = mutation({
+  args: { id: v.id("notifications") },
+  returns: v.any(),
+  handler: async (ctx, { id }) => {
+    const now = new Date().toISOString();
+    const existing = await ctx.db.get(id);
+    await ctx.db.patch(id, {
+      dismissedAt: now,
+      readAt: existing?.readAt ?? now,
+    });
+  },
+});
+
+/** Clear every (non-dismissed) notification for this user/society from the bell. */
+export const dismissAll = mutation({
+  args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
+  returns: v.any(),
+  handler: async (ctx, { societyId, userId }) => {
+    const rows = await ctx.db
+      .query("notifications")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+    const now = new Date().toISOString();
+    for (const r of rows) {
+      if (r.dismissedAt) continue;
+      if (userId && r.userId && r.userId !== userId) continue;
+      await ctx.db.patch(r._id, { dismissedAt: now, readAt: r.readAt ?? now });
+    }
+  },
+});
+
+/** Permanently delete a single notification now, without waiting for the
+ * retention purge. Used by the "Delete permanently" action on the
+ * Notifications page (Dismissed tab). */
+export const remove = mutation({
+  args: { id: v.id("notifications") },
+  returns: v.any(),
+  handler: async (ctx, { id }) => {
+    await ctx.db.delete(id);
+  },
+});
+
+/** Permanently delete every dismissed notification for this user/society now. */
+export const removeAllDismissed = mutation({
+  args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
+  returns: v.any(),
+  handler: async (ctx, { societyId, userId }) => {
+    const rows = await ctx.db
+      .query("notifications")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+    let removed = 0;
+    for (const r of rows) {
+      if (!r.dismissedAt) continue;
+      if (userId && r.userId && r.userId !== userId) continue;
+      await ctx.db.delete(r._id);
+      removed++;
+    }
+    return { removed };
+  },
+});
+
+/** Default retention window (days) when a society hasn't set its own. Mirrored
+ * by the default in the Settings UI. */
+export const DEFAULT_DISMISSED_RETENTION_DAYS = 30;
+
+/** Daily cleanup — hard-delete notifications dismissed longer ago than each
+ * society's configured retention window. A retention of 0 means "keep forever",
+ * so those societies are skipped. Driven by the cron in `crons.ts`. */
+export const purgeDismissed = internalMutation({
+  args: {},
+  returns: v.any(),
+  handler: async (ctx) => {
+    const now = Date.now();
+    // Per-society cutoff ISO string, computed once. null = keep forever.
+    const cutoffBySociety = new Map<string, string | null>();
+    const cutoffFor = async (societyId: Id<"societies">): Promise<string | null> => {
+      const key = societyId;
+      if (cutoffBySociety.has(key)) return cutoffBySociety.get(key)!;
+      const society = await ctx.db.get(societyId);
+      const days = society?.notificationRetentionDays ?? DEFAULT_DISMISSED_RETENTION_DAYS;
+      const cutoff = days <= 0 ? null : new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
+      cutoffBySociety.set(key, cutoff);
+      return cutoff;
+    };
+
+    const rows = await ctx.db.query("notifications").collect();
+    let purged = 0;
+    for (const r of rows) {
+      if (!r.dismissedAt) continue;
+      const cutoff = await cutoffFor(r.societyId);
+      if (cutoff && r.dismissedAt < cutoff) {
+        await ctx.db.delete(r._id);
+        purged++;
+      }
+    }
+    return { purged };
   },
 });
 
@@ -212,7 +337,11 @@ export const scanUpcoming = internalMutation({
         const due = new Date(report.dueAtISO).getTime();
         if (due > cutoff) continue;
         const overdue = due < now;
-        const key = `general:/grants:${report.title}`;
+        // Deep-link to the specific grant. Stored bare; normalized to
+        // /app/grants/{id} on read. The dedup key uses the same value so it
+        // stays consistent with what's stored.
+        const linkHref = `/grants/${report.grantId}`;
+        const key = `general:${linkHref}:${report.title}`;
         if (alreadyNotified.has(key)) continue;
         await ctx.db.insert("notifications", {
           societyId: s._id,
@@ -222,7 +351,7 @@ export const scanUpcoming = internalMutation({
           body: overdue
             ? `Grant reporting deadline passed on ${report.dueAtISO}.`
             : `Grant reporting deadline is ${report.dueAtISO}.`,
-          linkHref: "/grants",
+          linkHref,
           createdAtISO: new Date().toISOString(),
         });
       }

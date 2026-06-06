@@ -1,9 +1,10 @@
 import { type DragEvent as ReactDragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
-import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, ExternalLink, FileText, GripVertical, IndentDecrease, IndentIncrease, ListChecks, Mic, MinusCircle, MoreHorizontal, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, FileText, GripVertical, IndentDecrease, IndentIncrease, ListChecks, Mic, MinusCircle, MoreHorizontal, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
 import { Badge, Field, MenuRow } from "../../../components/ui";
 import { MarkdownEditor, type MarkdownEditorHandle } from "../../../components/MarkdownEditor";
+import { LineListEditor } from "../../../components/LineListEditor";
+import { ListEditor } from "../../../components/ListEditor";
 import { useConfirm } from "../../../components/Modal";
 import { Checkbox } from "../../../components/Controls";
 import { LegalGuideInline } from "../../../components/LegalGuide";
@@ -11,7 +12,9 @@ import { Segmented } from "../../../components/primitives";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../../../components/MotionEditor";
 import { NameAutocomplete } from "../../../components/NameAutocomplete";
 import { Select } from "../../../components/Select";
+import { DatePicker } from "../../../components/DatePicker";
 import { SignaturePanel } from "../../../components/SignaturePanel";
+import { QuickAddTaskForm } from "../../tasks/QuickAddTaskForm";
 import {
   AttendanceDetails,
   formatSourceReferences,
@@ -105,6 +108,7 @@ export function MeetingMinutesColumn({
   onOpenMotions,
   meetingTasks,
   applyTaskUpdate,
+  createTaskForMeeting,
   transcriptOnFile,
   transcriptEdit,
   setTranscriptEdit,
@@ -132,6 +136,7 @@ export function MeetingMinutesColumn({
   onOpenMotions?: () => void;
   meetingTasks: any[];
   applyTaskUpdate: (taskId: string, patch: { status?: string; completionNote?: string }) => void | Promise<void>;
+  createTaskForMeeting?: (input: { title: string; priority: string; status: string; dueDate?: string }) => Promise<string | undefined | void> | string | undefined | void;
   transcriptOnFile: string;
   transcriptEdit: string | null;
   setTranscriptEdit: (value: string | null) => void;
@@ -251,7 +256,7 @@ export function MeetingMinutesColumn({
       type: "discussion",
       presenter: "",
       discussion: "",
-      decisions: "",
+      decisions: [],
       actionItems: [],
       linkedTaskIds: [],
       taskUpdates: {},
@@ -932,7 +937,7 @@ export function MeetingMinutesColumn({
       type: section.type ?? "discussion",
       presenter: section.presenter ?? "",
       discussion: section.discussion ?? "",
-      decisions: (section.decisions ?? []).join("\n"),
+      decisions: Array.isArray(section.decisions) ? section.decisions : [],
       actionItems: normalizeActionDrafts(section.actionItems ?? []),
       linkedTaskIds: Array.isArray(section.linkedTaskIds) ? section.linkedTaskIds : [],
       taskUpdates: {},
@@ -952,7 +957,7 @@ export function MeetingMinutesColumn({
       type: sectionDraft.type.trim() || undefined,
       presenter: cleanOptional(sectionDraft.presenter),
       discussion: cleanOptional(sectionDraft.discussion),
-      decisions: parseMultiline(sectionDraft.decisions),
+      decisions: sectionDraft.decisions.map((d) => d.trim()).filter(Boolean),
       actionItems: sectionDraft.actionItems
         .map((item) => ({
           text: item.text.trim(),
@@ -1180,7 +1185,7 @@ export function MeetingMinutesColumn({
 
         {sectionEditorTab === "notes" && (
           <div className="meeting-minutes-section-editor__panel">
-            <Field label="Discussion notes" hint="Discussion/report points only. Press / for headings, lists, and more.">
+            <Field label="Discussion notes" hint="Discussion/report points only. Use the toolbar for headings, lists, and more.">
               <MarkdownEditor
                 ref={isMobile ? undefined : sectionDiscussionRef}
                 rows={8}
@@ -1189,8 +1194,14 @@ export function MeetingMinutesColumn({
                 placeholder="Expenses incurred by Ahmad: $80.00 for notary signing, $33.01 for posters. Receipts are recorded on Teams under Expenses."
               />
             </Field>
-            <Field label="Decisions" hint="One per line.">
-              <textarea className="textarea" rows={8} value={sectionDraft.decisions} onChange={(event) => setSectionDraft({ ...sectionDraft, decisions: event.target.value })} />
+            <Field label="Decisions">
+              <LineListEditor
+                items={sectionDraft.decisions}
+                onChange={(next) => setSectionDraft({ ...sectionDraft, decisions: next })}
+                placeholder="Add a decision…"
+                addLabel="Add decision"
+                aria-label="Decisions"
+              />
             </Field>
           </div>
         )}
@@ -1271,11 +1282,9 @@ export function MeetingMinutesColumn({
                       />
                     </Field>
                     <Field label="Due">
-                      <input
-                        className="input"
-                        type="date"
-                        value={item.dueDate}
-                        onChange={(event) => updateActionDraft(actionIndex, { dueDate: event.target.value })}
+                      <DatePicker
+                        value={item.dueDate ?? ""}
+                        onChange={(value) => updateActionDraft(actionIndex, { dueDate: value })}
                       />
                     </Field>
                     <button className="btn-action" type="button" title="Remove action" onClick={() => removeActionDraft(actionIndex)}>
@@ -1357,16 +1366,19 @@ export function MeetingMinutesColumn({
                   ))}
                 </select>
               ) : (meetingTasks?.length ?? 0) === 0 ? (
-                <div className="muted" style={{ fontSize: "var(--fs-sm)", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
-                  <span>No tasks linked to this meeting yet. Add tasks on the Package tab to make them available here.</span>
-                  <Link to="/app/tasks" className="btn-action">
-                    <ExternalLink size={12} /> Open Tasks page
-                  </Link>
+                <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  No tasks linked to this meeting yet — create one below to attach it to this section.
                 </div>
               ) : (
                 <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
                   All meeting tasks are linked to this section.
                 </div>
+              )}
+              {createTaskForMeeting && (
+                <QuickAddTaskForm
+                  onSubmit={createTaskForMeeting}
+                  onCreated={(taskId) => attachLinkedTask(taskId)}
+                />
               )}
             </div>
           </div>
@@ -2071,20 +2083,22 @@ export function MeetingMinutesColumn({
                                       placeholder="Section title"
                                       aria-label="Title"
                                     />
-                                    <span className="meeting-minutes-section-item__title-type">
-                                      <Select
-                                        value={sectionDraft.type as SectionTypeId}
-                                        onChange={(next) => setSectionDraft({ ...sectionDraft, type: next })}
-                                        options={SECTION_TYPE_OPTIONS}
-                                      />
-                                    </span>
-                                    <span className="meeting-minutes-section-item__title-presenter">
-                                      <NameAutocomplete
-                                        value={sectionDraft.presenter}
-                                        onChange={(next) => setSectionDraft({ ...sectionDraft, presenter: next })}
-                                        options={assigneeOptions}
-                                        placeholder="Presenter…"
-                                      />
+                                    <span className="meeting-minutes-section-item__title-meta">
+                                      <span className="meeting-minutes-section-item__title-type">
+                                        <Select
+                                          value={sectionDraft.type as SectionTypeId}
+                                          onChange={(next) => setSectionDraft({ ...sectionDraft, type: next })}
+                                          options={SECTION_TYPE_OPTIONS}
+                                        />
+                                      </span>
+                                      <span className="meeting-minutes-section-item__title-presenter">
+                                        <NameAutocomplete
+                                          value={sectionDraft.presenter}
+                                          onChange={(next) => setSectionDraft({ ...sectionDraft, presenter: next })}
+                                          options={assigneeOptions}
+                                          placeholder="Presenter…"
+                                        />
+                                      </span>
                                     </span>
                                   </span>
                                 ) : (
@@ -2477,7 +2491,7 @@ type SectionDraft = {
   type: string;
   presenter: string;
   discussion: string;
-  decisions: string;
+  decisions: string[];
   actionItems: SectionActionDraft[];
   linkedTaskIds: string[];
   taskUpdates: Record<string, { status?: string; completionNote?: string }>;
@@ -2536,79 +2550,67 @@ function AttendanceRoster({
   const absentCount = people.length - presentCount;
 
   return (
-    <div className="attendance-roster">
-      <div className="attendance-roster__head">
-        <strong>Attendance</strong>
-        <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-          {presentCount} present · {absentCount} absent / regrets
-        </span>
-      </div>
-      {people.length > 0 && (
-        <ul className="attendance-roster__list">
-          {people.map((person, index) => (
-            <li key={`${index}-${person.name}`} className="attendance-roster__row">
-              <button
-                type="button"
-                className="attendance-roster__remove"
-                onClick={() => remove(index)}
-                aria-label={`Remove ${person.name}`}
-                title={`Remove ${person.name}`}
-              >
-                <MinusCircle size={16} />
-              </button>
-              <span className="attendance-roster__name">{person.name}</span>
-              <div className="attendance-roster__status segmented">
-                <button
-                  type="button"
-                  className={`segmented__btn${person.status === "present" ? " is-active" : ""}`}
-                  onClick={() => setStatus(index, "present")}
-                >
-                  Present
-                </button>
-                <button
-                  type="button"
-                  className={`segmented__btn${person.status === "absent" ? " is-active" : ""}`}
-                  onClick={() => setStatus(index, "absent")}
-                >
-                  Absent / regrets
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+    <ListEditor
+      items={people}
+      divided
+      onRemove={remove}
+      getRemoveLabel={(person) => `Remove ${person.name}`}
+      header={
+        <>
+          <strong>Attendance</strong>
+          <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+            {presentCount} present · {absentCount} absent / regrets
+          </span>
+        </>
+      }
+      renderItem={(person, index) => (
+        <>
+          <span className="attendance-roster__name">{person.name}</span>
+          <div className="attendance-roster__status segmented">
+            <button
+              type="button"
+              className={`segmented__btn${person.status === "present" ? " is-active" : ""}`}
+              onClick={() => setStatus(index, "present")}
+            >
+              Present
+            </button>
+            <button
+              type="button"
+              className={`segmented__btn${person.status === "absent" ? " is-active" : ""}`}
+              onClick={() => setStatus(index, "absent")}
+            >
+              Absent / regrets
+            </button>
+          </div>
+        </>
       )}
-      <div className="attendance-roster__add">
-        <NameAutocomplete
-          value={draft}
-          onChange={setDraft}
-          options={suggestions}
-          excludeOptions={takenNames}
-          placeholder="Type a name"
-          onCommit={(name) => commit(name)}
-        />
-        <button
-          type="button"
-          className="btn-action"
-          onClick={() => commit()}
-          disabled={!draft.trim()}
-        >
-          <Plus size={12} /> Add
-        </button>
-      </div>
-    </div>
+      footer={
+        <>
+          <NameAutocomplete
+            value={draft}
+            onChange={setDraft}
+            options={suggestions}
+            excludeOptions={takenNames}
+            placeholder="Type a name"
+            onCommit={(name) => commit(name)}
+          />
+          <button
+            type="button"
+            className="btn-action"
+            onClick={() => commit()}
+            disabled={!draft.trim()}
+          >
+            <Plus size={12} /> Add
+          </button>
+        </>
+      }
+    />
   );
 }
 
 function cleanOptional(value: string | undefined | null) {
   const text = String(value ?? "").trim();
   return text || undefined;
-}
-
-function parseMultiline(value: string) {
-  return String(value ?? "")
-    .split(/\r?\n/)
-    .map((line) => line.trim().replace(/^[-*•]\s*/, ""))
-    .filter(Boolean);
 }
 
 function normalizeActionDrafts(items: any[]): SectionActionDraft[] {
