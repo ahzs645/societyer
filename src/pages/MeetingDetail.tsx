@@ -563,12 +563,10 @@ export function MeetingDetailPage() {
   const exportToPdf = async () => {
     if (!meeting || !minutes || !society) return;
     const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-    const headerImageUrl = (society as any).letterheadUrl ?? null;
     await exportPdfDownload({
       filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.pdf`,
       title: `${meeting.title} — Minutes`,
       bodyHtml: renderExportBody(),
-      headerImageUrl,
     });
     toast.success("PDF exported", "Downloaded as a PDF file.");
   };
