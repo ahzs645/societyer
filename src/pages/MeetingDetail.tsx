@@ -1248,9 +1248,9 @@ export function MeetingDetailPage() {
     if (patch.status === "Done" && actingUserId) update.completedByUserId = actingUserId;
     await updateTask({ id: taskId as Id<"tasks">, patch: update });
   };
-  const createTaskForMeeting = async (input: { title: string; priority: string; status: string; dueDate?: string }) => {
-    if (!society || !meeting?._id) return;
-    await createTask({
+  const createTaskForMeeting = async (input: { title: string; priority: string; status: string; dueDate?: string }): Promise<string | undefined> => {
+    if (!society || !meeting?._id) return undefined;
+    const taskId = await createTask({
       societyId: society._id,
       title: input.title,
       status: input.status,
@@ -1261,6 +1261,7 @@ export function MeetingDetailPage() {
       tags: [],
     });
     toast.success("Task created", input.title);
+    return taskId ? String(taskId) : undefined;
   };
 
   const saveCurrentMeetingAsTemplate = async () => {
@@ -1537,6 +1538,7 @@ export function MeetingDetailPage() {
             onOpenMotions={() => setActiveTab("motions")}
             meetingTasks={linkedTasks}
             applyTaskUpdate={applyTaskUpdate}
+            createTaskForMeeting={createTaskForMeeting}
             transcriptOnFile={transcriptOnFile}
             transcriptEdit={transcriptEdit}
             setTranscriptEdit={setTranscriptEdit}

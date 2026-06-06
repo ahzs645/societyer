@@ -43,16 +43,39 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
   const triggerRef = useRef<HTMLElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; triggerWidth: number } | null>(null);
+  const [posClamped, setPosClamped] = useState(false);
 
   const flat = useMemo(() => sections.flatMap((s) => s.items.filter((i) => !i.disabled)), [sections]);
   const [activeIdx, setActiveIdx] = useState(0);
 
   useLayoutEffect(() => {
-    if (!open || !triggerRef.current) return;
+    if (!open) {
+      setPos(null);
+      setPosClamped(false);
+      return;
+    }
+    if (!triggerRef.current) return;
     const r = triggerRef.current.getBoundingClientRect();
     const left = align === "right" ? r.right : r.left;
     setPos({ top: r.bottom + 4, left, triggerWidth: r.width });
+    setPosClamped(false);
   }, [open, align]);
+
+  useLayoutEffect(() => {
+    if (!open || !pos || posClamped || !menuRef.current || !triggerRef.current) return;
+    const menu = menuRef.current.getBoundingClientRect();
+    const trig = triggerRef.current.getBoundingClientRect();
+    const margin = 8;
+    let left = align === "right" ? trig.right - menu.width : trig.left;
+    left = Math.max(margin, Math.min(left, window.innerWidth - menu.width - margin));
+    let top = trig.bottom + 4;
+    if (top + menu.height > window.innerHeight - margin) {
+      const upward = trig.top - menu.height - 4;
+      top = upward >= margin ? upward : Math.max(margin, window.innerHeight - menu.height - margin);
+    }
+    setPos({ top, left, triggerWidth: trig.width });
+    setPosClamped(true);
+  }, [open, pos, posClamped, align]);
 
   useEffect(() => {
     if (!open) return;
@@ -160,9 +183,10 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
               role="menu"
               style={{
                 top: pos.top,
-                left: align === "right" ? undefined : pos.left,
-                right: align === "right" ? window.innerWidth - pos.left : undefined,
+                left: posClamped ? pos.left : (align === "right" ? undefined : pos.left),
+                right: posClamped ? undefined : (align === "right" ? window.innerWidth - pos.left : undefined),
                 minWidth: Math.max(minWidth ?? 0, pos.triggerWidth),
+                visibility: posClamped ? "visible" : "hidden",
               }}
             >
               {renderSections()}

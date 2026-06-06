@@ -726,12 +726,13 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
             const primaryCell = primaryCol.render
               ? primaryCol.render(row)
               : String(primaryCol.accessor?.(row) ?? "");
+            const cardClick = onPrimaryCellClick ?? onRowClick;
             return (
               <div
                 key={rowKey(row)}
-                className={`card-list__item${onRowClick ? " card-list__item--interactive" : ""}`}
+                className={`card-list__item${cardClick ? " card-list__item--interactive" : ""}`}
                 role="listitem"
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                onClick={cardClick ? () => cardClick(row) : undefined}
               >
                 <div className="card-list__primary">
                   <div className="card-list__primary-cell">{primaryCell}</div>

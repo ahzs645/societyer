@@ -2951,10 +2951,11 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary::after {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.meeting-package-task-create {
+.quick-add-task__form {
   display: grid;
   gap: var(--s-2);
   padding: var(--s-2);
+  margin-top: var(--s-2);
   border: 1px dashed var(--border);
   border-radius: var(--r-sm);
 }

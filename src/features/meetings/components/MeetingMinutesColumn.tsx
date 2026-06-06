@@ -1,7 +1,6 @@
 import { type DragEvent as ReactDragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
-import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, ExternalLink, FileText, GripVertical, IndentDecrease, IndentIncrease, ListChecks, Mic, MinusCircle, MoreHorizontal, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, FileText, GripVertical, IndentDecrease, IndentIncrease, ListChecks, Mic, MinusCircle, MoreHorizontal, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
 import { Badge, Field, MenuRow } from "../../../components/ui";
 import { MarkdownEditor, type MarkdownEditorHandle } from "../../../components/MarkdownEditor";
 import { LineListEditor } from "../../../components/LineListEditor";
@@ -13,7 +12,9 @@ import { Segmented } from "../../../components/primitives";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../../../components/MotionEditor";
 import { NameAutocomplete } from "../../../components/NameAutocomplete";
 import { Select } from "../../../components/Select";
+import { DatePicker } from "../../../components/DatePicker";
 import { SignaturePanel } from "../../../components/SignaturePanel";
+import { QuickAddTaskForm } from "../../tasks/QuickAddTaskForm";
 import {
   AttendanceDetails,
   formatSourceReferences,
@@ -107,6 +108,7 @@ export function MeetingMinutesColumn({
   onOpenMotions,
   meetingTasks,
   applyTaskUpdate,
+  createTaskForMeeting,
   transcriptOnFile,
   transcriptEdit,
   setTranscriptEdit,
@@ -134,6 +136,7 @@ export function MeetingMinutesColumn({
   onOpenMotions?: () => void;
   meetingTasks: any[];
   applyTaskUpdate: (taskId: string, patch: { status?: string; completionNote?: string }) => void | Promise<void>;
+  createTaskForMeeting?: (input: { title: string; priority: string; status: string; dueDate?: string }) => Promise<string | undefined | void> | string | undefined | void;
   transcriptOnFile: string;
   transcriptEdit: string | null;
   setTranscriptEdit: (value: string | null) => void;
@@ -1279,11 +1282,9 @@ export function MeetingMinutesColumn({
                       />
                     </Field>
                     <Field label="Due">
-                      <input
-                        className="input"
-                        type="date"
-                        value={item.dueDate}
-                        onChange={(event) => updateActionDraft(actionIndex, { dueDate: event.target.value })}
+                      <DatePicker
+                        value={item.dueDate ?? ""}
+                        onChange={(value) => updateActionDraft(actionIndex, { dueDate: value })}
                       />
                     </Field>
                     <button className="btn-action" type="button" title="Remove action" onClick={() => removeActionDraft(actionIndex)}>
@@ -1365,16 +1366,19 @@ export function MeetingMinutesColumn({
                   ))}
                 </select>
               ) : (meetingTasks?.length ?? 0) === 0 ? (
-                <div className="muted" style={{ fontSize: "var(--fs-sm)", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
-                  <span>No tasks linked to this meeting yet. Add tasks on the Package tab to make them available here.</span>
-                  <Link to="/app/tasks" className="btn-action">
-                    <ExternalLink size={12} /> Open Tasks page
-                  </Link>
+                <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  No tasks linked to this meeting yet — create one below to attach it to this section.
                 </div>
               ) : (
                 <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
                   All meeting tasks are linked to this section.
                 </div>
+              )}
+              {createTaskForMeeting && (
+                <QuickAddTaskForm
+                  onSubmit={createTaskForMeeting}
+                  onCreated={(taskId) => attachLinkedTask(taskId)}
+                />
               )}
             </div>
           </div>

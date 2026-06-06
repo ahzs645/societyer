@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, ClipboardCheck, Download, ExternalLink, FileText, ListChecks, Plus, ShieldCheck, Unlink, X } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, Download, ExternalLink, FileText, ListChecks, Plus, ShieldCheck, Unlink } from "lucide-react";
 import { Badge } from "../../../components/ui";
 import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { Segmented } from "../../../components/primitives";
+import { QuickAddTaskForm } from "../../tasks/QuickAddTaskForm";
 import { formatDate } from "../../../lib/format";
 
 const TASK_STATUS_ITEMS: { id: string; label: string }[] = [
@@ -12,8 +13,6 @@ const TASK_STATUS_ITEMS: { id: string; label: string }[] = [
   { id: "Blocked", label: "Blocked" },
   { id: "Done", label: "Done" },
 ];
-const TASK_PRIORITIES = ["Low", "Medium", "High"] as const;
-
 function priorityTone(priority?: string) {
   if (priority === "High") return "danger" as const;
   if (priority === "Medium") return "warn" as const;
@@ -94,10 +93,8 @@ export function MeetingPackageHub({
   setLinkedTaskStatus: (taskId: string, status: string) => void | Promise<void>;
   linkTaskToMeeting: (taskId: string) => void | Promise<void>;
   unlinkTaskFromMeeting: (taskId: string) => void | Promise<void>;
-  createTaskForMeeting: (input: { title: string; priority: string; status: string; dueDate?: string }) => void | Promise<void>;
+  createTaskForMeeting: (input: { title: string; priority: string; status: string; dueDate?: string }) => Promise<string | undefined | void> | string | undefined | void;
 }) {
-  const [creatingTask, setCreatingTask] = useState(false);
-  const [taskDraft, setTaskDraft] = useState({ title: "", priority: "Medium", status: "Todo", dueDate: "" });
   const [pickerValue, setPickerValue] = useState("");
   const todayISO = new Date().toISOString().slice(0, 10);
   const sortedLinkedTasks = [...linkedTasks].sort((a, b) => {
@@ -110,17 +107,6 @@ export function MeetingPackageHub({
     InProgress: linkedTasks.filter((task) => task.status === "InProgress").length,
     Blocked: linkedTasks.filter((task) => task.status === "Blocked").length,
     Done: linkedTasks.filter((task) => task.status === "Done").length,
-  };
-  const submitTaskDraft = async () => {
-    const title = taskDraft.title.trim();
-    if (!title) return;
-    await createTaskForMeeting({
-      title,
-      priority: taskDraft.priority,
-      status: taskDraft.status,
-      dueDate: taskDraft.dueDate || undefined,
-    });
-    setTaskDraft({ ...taskDraft, title: "" });
   };
   const handlePick = async (value: string) => {
     setPickerValue("");
@@ -347,73 +333,9 @@ export function MeetingPackageHub({
                     ) : (
                       <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>No unlinked tasks available.</span>
                     )}
-                    <button
-                      className="btn-action"
-                      type="button"
-                      onClick={() => setCreatingTask((open) => !open)}
-                    >
-                      {creatingTask ? <X size={12} /> : <Plus size={12} />}
-                      {creatingTask ? "Cancel" : "Create task"}
-                    </button>
                   </div>
 
-                  {creatingTask && (
-                    <div className="meeting-package-task-create">
-                      <input
-                        className="input"
-                        placeholder="Task title (Enter to add another)"
-                        value={taskDraft.title}
-                        onChange={(event) => setTaskDraft({ ...taskDraft, title: event.target.value })}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" && taskDraft.title.trim()) {
-                            event.preventDefault();
-                            void submitTaskDraft();
-                          }
-                        }}
-                        autoFocus
-                      />
-                      <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                        <select
-                          className="input"
-                          style={{ width: 130 }}
-                          value={taskDraft.priority}
-                          onChange={(event) => setTaskDraft({ ...taskDraft, priority: event.target.value })}
-                          aria-label="Priority"
-                        >
-                          {TASK_PRIORITIES.map((priority) => (
-                            <option key={priority} value={priority}>{priority}</option>
-                          ))}
-                        </select>
-                        <select
-                          className="input"
-                          style={{ width: 140 }}
-                          value={taskDraft.status}
-                          onChange={(event) => setTaskDraft({ ...taskDraft, status: event.target.value })}
-                          aria-label="Status"
-                        >
-                          {TASK_STATUS_ITEMS.map((status) => (
-                            <option key={status.id} value={status.id}>{status.label}</option>
-                          ))}
-                        </select>
-                        <input
-                          className="input"
-                          type="date"
-                          style={{ width: 150 }}
-                          value={taskDraft.dueDate}
-                          onChange={(event) => setTaskDraft({ ...taskDraft, dueDate: event.target.value })}
-                          aria-label="Due date"
-                        />
-                        <button
-                          className="btn-action btn-action--primary"
-                          type="button"
-                          onClick={submitTaskDraft}
-                          disabled={!taskDraft.title.trim()}
-                        >
-                          <Plus size={12} /> Add task
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  <QuickAddTaskForm onSubmit={createTaskForMeeting} />
                 </div>
               </details>
             </div>
