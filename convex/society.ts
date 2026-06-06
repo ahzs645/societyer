@@ -14,10 +14,14 @@ async function withLogoUrl(ctx, society) {
   const logoDarkUrl = society.logoDarkStorageId
     ? await ctx.storage.getUrl(society.logoDarkStorageId)
     : undefined;
+  const letterheadUrl = society.letterheadStorageId
+    ? await ctx.storage.getUrl(society.letterheadStorageId)
+    : undefined;
   return {
     ...society,
     logoUrl: logoUrl ?? undefined,
     logoDarkUrl: logoDarkUrl ?? undefined,
+    letterheadUrl: letterheadUrl ?? undefined,
   };
 }
 
@@ -119,6 +123,45 @@ export const clearDarkLogo = mutation({
       }
     }
     await ctx.db.patch(societyId, { logoDarkStorageId: undefined, updatedAt: Date.now() });
+    return societyId;
+  },
+});
+
+export const setLetterhead = mutation({
+  args: {
+    societyId: v.id("societies"),
+    storageId: v.id("_storage"),
+  },
+  returns: v.id("societies"),
+  handler: async (ctx, { societyId, storageId }) => {
+    const society = await ctx.db.get(societyId);
+    if (!society) throw new Error("Society not found.");
+    if (society.letterheadStorageId && society.letterheadStorageId !== storageId) {
+      try {
+        await ctx.storage.delete(society.letterheadStorageId);
+      } catch {
+        // Already gone — no-op.
+      }
+    }
+    await ctx.db.patch(societyId, { letterheadStorageId: storageId, updatedAt: Date.now() });
+    return societyId;
+  },
+});
+
+export const clearLetterhead = mutation({
+  args: { societyId: v.id("societies") },
+  returns: v.id("societies"),
+  handler: async (ctx, { societyId }) => {
+    const society = await ctx.db.get(societyId);
+    if (!society) throw new Error("Society not found.");
+    if (society.letterheadStorageId) {
+      try {
+        await ctx.storage.delete(society.letterheadStorageId);
+      } catch {
+        // Already gone — no-op.
+      }
+    }
+    await ctx.db.patch(societyId, { letterheadStorageId: undefined, updatedAt: Date.now() });
     return societyId;
   },
 });

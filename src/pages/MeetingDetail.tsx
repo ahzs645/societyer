@@ -519,7 +519,12 @@ export function MeetingDetailPage() {
     const payload = minutesRenderPayload(redact);
     if (!payload || !hasExportableContent) return "";
     return renderMinutesHtml({
-      society: { name: society.name, incorporationNumber: society.incorporationNumber ?? null },
+      society: {
+        name: society.name,
+        incorporationNumber: society.incorporationNumber ?? null,
+        logoUrl: (society as any).logoUrl ?? null,
+        letterheadUrl: (society as any).letterheadUrl ?? null,
+      },
       meeting: {
         title: meeting.title,
         type: meeting.type,
@@ -558,10 +563,12 @@ export function MeetingDetailPage() {
   const exportToPdf = async () => {
     if (!meeting || !minutes || !society) return;
     const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    const headerImageUrl = (society as any).letterheadUrl ?? null;
     await exportPdfDownload({
       filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.pdf`,
       title: `${meeting.title} — Minutes`,
       bodyHtml: renderExportBody(),
+      headerImageUrl,
     });
     toast.success("PDF exported", "Downloaded as a PDF file.");
   };
@@ -1075,6 +1082,14 @@ export function MeetingDetailPage() {
   const downloadMeetingPack = () => {
     const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
     const html = renderMeetingPackHtml({
+      society: society
+        ? {
+            name: society.name,
+            incorporationNumber: society.incorporationNumber ?? null,
+            logoUrl: (society as any).logoUrl ?? null,
+            letterheadUrl: (society as any).letterheadUrl ?? null,
+          }
+        : undefined,
       meeting,
       agenda,
       materials: packageMaterials,
@@ -1114,6 +1129,12 @@ export function MeetingDetailPage() {
       };
     });
     const packHtml = renderMeetingPackHtml({
+      society: {
+        name: society.name,
+        incorporationNumber: society.incorporationNumber ?? null,
+        logoUrl: (society as any).logoUrl ?? null,
+        letterheadUrl: (society as any).letterheadUrl ?? null,
+      },
       meeting,
       agenda,
       materials: packageMaterials,

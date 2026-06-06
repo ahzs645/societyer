@@ -120,10 +120,16 @@ export async function exportPdfDownload({
   filename,
   title,
   bodyHtml,
+  headerImageUrl,
+  headerImageMaxHeight = 64,
 }: {
   filename: string;
   title: string;
   bodyHtml: string;
+  /** Optional logo/letterhead image rendered at the top-left of page 1. */
+  headerImageUrl?: string | null;
+  /** Max image height in points (default 64). */
+  headerImageMaxHeight?: number;
 }) {
   const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
   const pdfDoc = await PDFDocument.create();
@@ -139,6 +145,32 @@ export async function exportPdfDownload({
     y: 738,
     width: 504,
   };
+
+  if (headerImageUrl) {
+    try {
+      const res = await fetch(headerImageUrl);
+      if (res.ok) {
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        const contentType = res.headers.get("content-type") ?? "";
+        let image: any = null;
+        if (contentType.includes("png") || isPngMagic(bytes)) {
+          image = await pdfDoc.embedPng(bytes);
+        } else if (contentType.includes("jpeg") || contentType.includes("jpg") || isJpegMagic(bytes)) {
+          image = await pdfDoc.embedJpg(bytes);
+        }
+        // pdf-lib doesn't natively render SVG; SVGs are silently skipped here.
+        if (image) {
+          const scale = Math.min(1, headerImageMaxHeight / image.height, 180 / image.width);
+          const w = image.width * scale;
+          const h = image.height * scale;
+          state.page.drawImage(image, { x: state.margin, y: state.y - h, width: w, height: h });
+          state.y -= h + 12;
+        }
+      }
+    } catch {
+      // Non-fatal: continue without header image.
+    }
+  }
 
   drawPdfLine(state, title, { font: bold, size: 18, gapAfter: 14 });
   const lines = htmlToPdfLines(bodyHtml);
@@ -212,6 +244,24 @@ export function openPrintableDocument({
   };
   iframe.srcdoc = html;
   return true;
+}
+
+function isPngMagic(bytes: Uint8Array): boolean {
+  return (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  );
+}
+
+function isJpegMagic(bytes: Uint8Array): boolean {
+  return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
 }
 
 type PdfLine =
@@ -814,7 +864,12 @@ type DetailedAttendance = {
 };
 
 type MinutesRenderArgs = {
-  society: { name: string; incorporationNumber?: string | null };
+  society: {
+    name: string;
+    incorporationNumber?: string | null;
+    logoUrl?: string | null;
+    letterheadUrl?: string | null;
+  };
   meeting: {
     title: string;
     type: string;
@@ -930,12 +985,35 @@ export function renderMinutesHtml(args: MinutesRenderArgs): string {
   const styleId = normalizeMinutesStyleId(args.styleId);
   const options = { ...DEFAULT_MINUTES_EXPORT_OPTIONS, ...(args.options ?? {}) };
 
-  if (styleId === "formal-agm") return renderFormalAgmMinutes(args, options);
-  if (styleId === "executive-agenda") return renderExecutiveAgendaMinutes(args, options);
-  if (styleId === "numbered-agenda") return renderNumberedAgendaMinutes(args, options);
-  if (styleId === "action-table") return renderActionTableMinutes(args, options);
-  if (styleId === "board-public") return renderBoardPublicMinutes(args, options);
-  return renderStandardMinutes(args, options);
+  let body: string;
+  if (styleId === "formal-agm") body = renderFormalAgmMinutes(args, options);
+  else if (styleId === "executive-agenda") body = renderExecutiveAgendaMinutes(args, options);
+  else if (styleId === "numbered-agenda") body = renderNumberedAgendaMinutes(args, options);
+  else if (styleId === "action-table") body = renderActionTableMinutes(args, options);
+  else if (styleId === "board-public") body = renderBoardPublicMinutes(args, options);
+  else body = renderStandardMinutes(args, options);
+
+  return renderDocumentHeader(args.society) + body;
+}
+
+/**
+ * Returns an HTML header for the top of an exported document.
+ * Uses the uploaded letterhead only — the chrome logo is intentionally NOT a
+ * fallback so the export header has a clear semantic role (formal branding)
+ * distinct from the app chrome avatar.
+ * Renders a single right-aligned image with inline styles so it displays
+ * correctly in every export context (Word .doc, in-app preview, meeting
+ * pack) without relying on an external stylesheet.
+ * Returns an empty string when no letterhead is uploaded.
+ */
+export function renderDocumentHeader(society: {
+  name?: string;
+  incorporationNumber?: string | null;
+  letterheadUrl?: string | null;
+}): string {
+  const eh = escapeHtml;
+  if (!society.letterheadUrl) return "";
+  return `<img src="${eh(society.letterheadUrl)}" alt="" style="float: right; height: 28pt; width: auto; max-height: 28pt; max-width: 120pt; margin: 0 0 6pt 12pt;" />`;
 }
 
 export function getMinutesStyleGaps({
