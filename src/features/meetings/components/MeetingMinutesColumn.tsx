@@ -2083,20 +2083,22 @@ export function MeetingMinutesColumn({
                                       placeholder="Section title"
                                       aria-label="Title"
                                     />
-                                    <span className="meeting-minutes-section-item__title-type">
-                                      <Select
-                                        value={sectionDraft.type as SectionTypeId}
-                                        onChange={(next) => setSectionDraft({ ...sectionDraft, type: next })}
-                                        options={SECTION_TYPE_OPTIONS}
-                                      />
-                                    </span>
-                                    <span className="meeting-minutes-section-item__title-presenter">
-                                      <NameAutocomplete
-                                        value={sectionDraft.presenter}
-                                        onChange={(next) => setSectionDraft({ ...sectionDraft, presenter: next })}
-                                        options={assigneeOptions}
-                                        placeholder="Presenter…"
-                                      />
+                                    <span className="meeting-minutes-section-item__title-meta">
+                                      <span className="meeting-minutes-section-item__title-type">
+                                        <Select
+                                          value={sectionDraft.type as SectionTypeId}
+                                          onChange={(next) => setSectionDraft({ ...sectionDraft, type: next })}
+                                          options={SECTION_TYPE_OPTIONS}
+                                        />
+                                      </span>
+                                      <span className="meeting-minutes-section-item__title-presenter">
+                                        <NameAutocomplete
+                                          value={sectionDraft.presenter}
+                                          onChange={(next) => setSectionDraft({ ...sectionDraft, presenter: next })}
+                                          options={assigneeOptions}
+                                          placeholder="Presenter…"
+                                        />
+                                      </span>
                                     </span>
                                   </span>
                                 ) : (

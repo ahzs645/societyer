@@ -2194,6 +2194,14 @@
   color: var(--text-primary);
   white-space: nowrap;
 }
+.meeting-minutes-section-item__title-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 0;
+}
 .meeting-minutes-section-item__title-type {
   flex: 0 0 auto;
   min-width: 0;

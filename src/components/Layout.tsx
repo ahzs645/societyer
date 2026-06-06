@@ -1294,9 +1294,32 @@ export function Layout() {
               aria-expanded={workspaceOpen}
               onClick={() => setWorkspaceOpen((v) => !v)}
             >
-              <div className="sidebar__brand-logo">
-                {(society?.name ?? "S")[0].toUpperCase()}
-              </div>
+              {(() => {
+                const lightSrc = society?.logoUrl;
+                const darkSrc = society?.logoDarkUrl ?? society?.logoUrl;
+                const darkNeedsInvert = !society?.logoDarkUrl && !!society?.logoInvertInDarkMode;
+                const hasLogo = !!lightSrc;
+                return (
+                  <div className={`sidebar__brand-logo${hasLogo ? " sidebar__brand-logo--image" : ""}`}>
+                    {hasLogo ? (
+                      <>
+                        <img
+                          src={lightSrc}
+                          alt=""
+                          className="sidebar__brand-logo-img sidebar__brand-logo-img--light"
+                        />
+                        <img
+                          src={darkSrc}
+                          alt=""
+                          className={`sidebar__brand-logo-img sidebar__brand-logo-img--dark${darkNeedsInvert ? " sidebar__brand-logo-img--invert" : ""}`}
+                        />
+                      </>
+                    ) : (
+                      (society?.name ?? "S")[0].toUpperCase()
+                    )}
+                  </div>
+                );
+              })()}
               <span className="sidebar__brand-name">{society?.name ?? t("sidebar.selectWorkspace")}</span>
               <span className="sidebar__brand-workspace">
                 <ChevronDown size={12} />
