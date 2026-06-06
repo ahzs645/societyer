@@ -2189,6 +2189,7 @@ export default defineSchema({
     ),
     motions: v.array(
       v.object({
+        name: v.optional(v.string()),
         text: v.string(),
         movedBy: v.optional(v.string()),
         movedByMemberId: v.optional(v.id("members")),

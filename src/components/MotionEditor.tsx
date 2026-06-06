@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
-import { Check, X, Plus, Trash2, MinusCircle, PlusCircle, Pencil } from "lucide-react";
+import { Check, X, Plus, Trash2, MinusCircle, PlusCircle, Pencil, Clock } from "lucide-react";
 
 function DinnerTableIcon({ size = 12 }: { size?: number }) {
   return (
@@ -23,8 +23,11 @@ import { Badge, Field } from "./ui";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { NameAutocomplete } from "./NameAutocomplete";
 import { Select, type SelectOption } from "./Select";
+import { Tooltip } from "./Tooltip";
+import { Modal, useConfirm } from "./Modal";
 
 export type Motion = {
+  name?: string;
   text: string;
   movedBy?: string;
   movedByMemberId?: string;
@@ -109,32 +112,41 @@ function OutcomePicker({
   value,
   onChange,
   compact = false,
+  stretch = false,
 }: {
   value: string;
   onChange: (v: Motion["outcome"]) => void;
   compact?: boolean;
+  /** Buttons grow to fill the available row width and only collapse to
+   *  icon-only when the labels can't stay on a single line. */
+  stretch?: boolean;
 }) {
-  const opts: { id: Motion["outcome"]; label: string; tone: "success" | "danger" | "warn" | "accent" }[] = [
-    { id: "Pending", label: "Pending", tone: "warn" },
-    { id: "Carried", label: "Carried", tone: "success" },
-    { id: "Defeated", label: "Defeated", tone: "danger" },
-    { id: "Tabled", label: "Tabled", tone: "warn" },
+  const opts: { id: Motion["outcome"]; label: string; toneClass: string; renderIcon: () => React.ReactNode }[] = [
+    { id: "Pending", label: "Pending", toneClass: "", renderIcon: () => <Clock size={12} aria-hidden="true" /> },
+    { id: "Carried", label: "Carried", toneClass: "btn-action--success", renderIcon: () => <Check size={12} aria-hidden="true" /> },
+    { id: "Defeated", label: "Defeated", toneClass: "btn-action--danger", renderIcon: () => <X size={12} aria-hidden="true" /> },
+    { id: "Tabled", label: "Tabled", toneClass: "btn-action--warn", renderIcon: () => <DinnerTableIcon size={12} /> },
   ];
   return (
-    <div className={`segmented${compact ? " segmented--compact" : ""}`}>
-      {opts.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          className={`segmented__btn${value === o.id ? " is-active" : ""}`}
-          onClick={() => onChange(o.id)}
-          style={{
-            color: value === o.id ? `var(--${o.tone})` : undefined,
-          }}
-        >
-          {o.label}
-        </button>
-      ))}
+    <div className={`motion-outcome-picker${compact ? " motion-outcome-picker--compact" : ""}${stretch ? " motion-outcome-picker--stretch" : ""}`} role="radiogroup" aria-label="Outcome">
+      {opts.map(({ id, label, toneClass, renderIcon }) => {
+        const isSelected = value === id;
+        return (
+          <Tooltip key={id} content={label}>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={isSelected}
+              className={`btn-action ${toneClass}${isSelected ? " is-active" : ""}`.trim()}
+              onClick={() => onChange(id)}
+              aria-label={label}
+            >
+              {renderIcon()}
+              <span className="btn-action__label">{label}</span>
+            </button>
+          </Tooltip>
+        );
+      })}
     </div>
   );
 }
@@ -215,6 +227,10 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   const makeDraft = (): Motion => ({ text: "", outcome: "Pending", ...sectionPatchForScope() });
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<Motion>(makeDraft);
+  // Index of the motion the user is editing inline. Lifted out of MotionRow
+  // so the parent can enforce one-at-a-time editing and so the bottom
+  // "Add motion" button can swap to "Done" while an edit is open.
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const beginAdding = () => {
     // When scoped to a section, force the draft's sectionIndex/sectionTitle to
     // that section every time the user opens the add form — otherwise stale
@@ -345,18 +361,29 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
           directorNames={directorNames}
           people={people}
           agendaSections={agendaSections}
+          expanded={editingIndex === i}
+          onSetExpanded={(next) => setEditingIndex(next ? i : null)}
           onPatch={(diff) => patch(i, diff)}
           onSetVote={(k, n) => setVote(i, k, n)}
-          onDelete={() => onChange(motions.filter((_, j) => j !== i))}
+          onDelete={() => {
+            if (editingIndex === i) setEditingIndex(null);
+            onChange(motions.filter((_, j) => j !== i));
+          }}
           onAddToBacklog={onAddToBacklog ? () => onAddToBacklog(m, i) : undefined}
         />
       ))}
 
       {!adding && !hideInlineAdd && (
         <div className="motion-add-before-adjournment">
-          <button className="btn-action" onClick={beginAdding}>
-            <Plus size={12} /> Add motion
-          </button>
+          {editingIndex != null ? (
+            <button className="btn-action btn-action--primary" onClick={() => setEditingIndex(null)}>
+              <Check size={12} /> Done
+            </button>
+          ) : (
+            <button className="btn-action" onClick={beginAdding}>
+              <Plus size={12} /> Add motion
+            </button>
+          )}
         </div>
       )}
 
@@ -378,19 +405,27 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
           </div>
 
           <div className="motion-draft__motion-field">
-            <Field label="Motion">
-              <textarea
-                className="textarea"
-                autoFocus
-                value={draft.text}
-                onChange={(e) => setDraft({ ...draft, text: e.target.value })}
-                placeholder="That the board approve the 2024–25 financial statements as presented."
-              />
-            </Field>
+            <input
+              className="input motion-draft__name-input"
+              autoFocus
+              value={draft.name ?? ""}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              placeholder="Motion name — e.g. Approve 2024–25 financial statements"
+              aria-label="Motion name"
+            />
+            <textarea
+              className="textarea"
+              value={draft.text}
+              onChange={(e) => setDraft({ ...draft, text: e.target.value })}
+              placeholder="Details — extra context, e.g. That the board approve the 2024–25 financial statements as presented."
+              aria-label="Details"
+            />
           </div>
 
-          <div className="motion-draft__grid">
-            <Field label="Moved by">
+          <details className="motion-draft__details">
+            <summary className="motion-draft__details-summary">Details</summary>
+            <div className="motion-draft__grid">
+              <Field label="Moved by">
               <NameInput
                 nameOptions={nameOptions}
                 value={draft.movedBy}
@@ -420,9 +455,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
               />
             </Field>
 
-            <Field label="Outcome">
-              <OutcomePicker compact value={draft.outcome} onChange={(v) => setDraft({ ...draft, outcome: v })} />
-            </Field>
+            <OutcomePicker stretch value={draft.outcome} onChange={(v) => setDraft({ ...draft, outcome: v })} />
 
             {agendaSections.length > 0 && (
               <Field label="Agenda item">
@@ -436,7 +469,6 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
             )}
 
             <div className="motion-draft__votes">
-              <span className="field__label">Votes</span>
               <div className="motion-draft__vote-row">
                 <VoteStepper
                   label="For"
@@ -446,25 +478,23 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
                     setDraft((current) => ({ ...current, votesFor: n }));
                   }}
                   tone="success"
-                  compact
                 />
                 <VoteStepper
                   label="Against"
                   value={draft.votesAgainst ?? 0}
                   onChange={(n) => setDraft((current) => ({ ...current, votesAgainst: n }))}
                   tone="danger"
-                  compact
                 />
                 <VoteStepper
                   label="Abstain"
                   value={draft.abstentions ?? 0}
                   onChange={(n) => setDraft((current) => ({ ...current, abstentions: n }))}
                   tone="warn"
-                  compact
                 />
               </div>
             </div>
           </div>
+          </details>
         </div>
       )}
 
@@ -490,9 +520,14 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
             people={people}
             agendaSections={agendaSections}
             procedural
+            expanded={editingIndex === i}
+            onSetExpanded={(next) => setEditingIndex(next ? i : null)}
             onPatch={(diff) => patch(i, diff)}
             onSetVote={(k, n) => setVote(i, k, n)}
-            onDelete={() => onChange(motions.filter((_, j) => j !== i))}
+            onDelete={() => {
+              if (editingIndex === i) setEditingIndex(null);
+              onChange(motions.filter((_, j) => j !== i));
+            }}
           />
         ))}
       </div>
@@ -508,6 +543,8 @@ function MotionRow({
   people,
   agendaSections,
   procedural = false,
+  expanded = false,
+  onSetExpanded,
   onPatch,
   onSetVote,
   onDelete,
@@ -519,37 +556,62 @@ function MotionRow({
   people: MotionPerson[];
   agendaSections: Array<string | MotionAgendaSection>;
   procedural?: boolean;
+  expanded?: boolean;
+  onSetExpanded?: (next: boolean) => void;
   onPatch: (diff: Partial<Motion>) => void;
   onSetVote: (k: "votesFor" | "votesAgainst" | "abstentions", next: number) => void;
   onDelete: () => void;
   onAddToBacklog?: () => void | Promise<void>;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [showRemoveDialog, setShowRemoveDialog] = useState(false);
+  const confirm = useConfirm();
 
   const tone =
     motion.outcome === "Carried" ? "success" :
     motion.outcome === "Defeated" ? "danger" :
     motion.outcome === "Pending" ? "warn" : "warn";
   const isPending = motion.outcome === "Pending";
-  const thresholdMet = motionMeetsThreshold(motion);
-  const movedByLink = resolveMotionPerson(motion.movedBy, people, {
-    memberId: motion.movedByMemberId,
-    directorId: motion.movedByDirectorId,
-  });
-  const secondedByLink = resolveMotionPerson(motion.secondedBy, people, {
-    memberId: motion.secondedByMemberId,
-    directorId: motion.secondedByDirectorId,
-  });
   const assignedAgendaLabel = agendaLabelForMotion(motion, agendaSections);
   const selectedAgendaIndex = assignedSectionIndexForMotion(motion, agendaSections);
   // Heuristic: title is "long" when it has more than ~80 chars or contains an
   // unbroken run of >30 non-space chars (URLs, ids, junk strings). When that's
   // the case, the action buttons stack below the title so the title gets the
   // full card width to breathe instead of wrapping inside a narrow column.
-  const titleText = motion.text ?? "";
+  const titleText = motion.name ?? "";
   const isLongTitle =
     titleText.length > 80 ||
     titleText.split(/\s+/).some((word) => word.length > 30);
+
+  const motionHasContent =
+    !!motion.name?.trim() ||
+    !!motion.text?.trim() ||
+    !!motion.movedBy?.trim() ||
+    !!motion.secondedBy?.trim() ||
+    (motion.votesFor ?? 0) > 0 ||
+    (motion.votesAgainst ?? 0) > 0 ||
+    (motion.abstentions ?? 0) > 0 ||
+    (motion.outcome != null && motion.outcome !== "Pending");
+
+  const handleRemoveClick = async () => {
+    // Attached motions deserve an unlink-vs-delete prompt so users don't
+    // accidentally lose the motion when they just wanted to detach it from
+    // an agenda item. Empty unattached motions delete with no prompt.
+    if (selectedAgendaIndex != null) {
+      setShowRemoveDialog(true);
+      return;
+    }
+    if (!motionHasContent) {
+      onDelete();
+      return;
+    }
+    const ok = await confirm({
+      title: "Delete this motion?",
+      message: "The motion text, votes, and outcome will be removed.",
+      confirmLabel: "Delete motion",
+      tone: "danger",
+    });
+    if (ok) onDelete();
+  };
 
   return (
     <div
@@ -558,36 +620,20 @@ function MotionRow({
     >
       <div className={`motion__head${isLongTitle ? " motion__head--stacked" : ""}`}>
         <div className="motion__head-main">
-          <div className="motion__text">{motion.text}</div>
+          <input
+            className="motion__name-input"
+            value={motion.name ?? ""}
+            onChange={(event) => onPatch({ name: event.target.value })}
+            placeholder="Motion name"
+            aria-label="Motion name"
+          />
           <div className="motion__meta">
-            {!expanded && (motion.movedBy || motion.secondedBy) && (
-              // Single span so movedBy + secondedBy stay together as one flex
-              // item — when the action column on the right is wide, they stack
-              // as a unit instead of each landing on its own line.
-              <span>
-                {motion.movedBy && (
-                  <>Moved by <strong>{movedByLink?.name ?? motion.movedBy}</strong></>
-                )}
-                {motion.movedBy && motion.secondedBy && " · "}
-                {motion.secondedBy && (
-                  <>Seconded by <strong>{secondedByLink?.name ?? motion.secondedBy}</strong></>
-                )}
-              </span>
-            )}
             {!expanded && <Badge tone={tone as any}>{motion.outcome}</Badge>}
-            {assignedAgendaLabel && !procedural && (
-              <Badge tone="neutral">Agenda: {assignedAgendaLabel}</Badge>
-            )}
-            {thresholdMet != null && (
-              <Badge tone={thresholdMet ? "success" : "danger"}>
-                {thresholdMet ? "Threshold met" : "Below threshold"}
-              </Badge>
-            )}
           </div>
         </div>
         <div className="motion__actions">
           <div className="motion__action-strip">
-            {isPending && (
+            {isPending && !expanded && (
               <>
                 <button
                   className="btn-action btn-action--success"
@@ -621,15 +667,17 @@ function MotionRow({
                 <span className="btn-action__label">Add to backlog</span>
               </button>
             )}
-            <button
-              className="btn-action"
-              onClick={() => setExpanded((v) => !v)}
-              title={expanded ? "Done editing" : "Edit motion"}
-            >
-              <Pencil size={12} />
-              <span className="btn-action__label">{expanded ? "Done" : "Edit"}</span>
-            </button>
-            <button className="btn-action" onClick={onDelete} title="Remove motion">
+            {!expanded && (
+              <button
+                className="btn-action"
+                onClick={() => onSetExpanded?.(true)}
+                title="Edit motion"
+              >
+                <Pencil size={12} />
+                <span className="btn-action__label">Edit</span>
+              </button>
+            )}
+            <button className="btn-action" onClick={handleRemoveClick} title="Remove motion" aria-label="Remove motion">
               <Trash2 size={12} />
             </button>
           </div>
@@ -640,7 +688,7 @@ function MotionRow({
 
       {expanded && (
         <div style={{ marginTop: 10, borderTop: "1px dashed var(--border)", paddingTop: 10 }}>
-          <Field label="Motion text">
+          <Field label="Details">
             <MarkdownEditor rows={4} value={motion.text} onChange={(markdown) => onPatch({ text: markdown })} />
           </Field>
           <div className="row" style={{ gap: 12 }}>
@@ -659,18 +707,14 @@ function MotionRow({
               />
             </Field>
           </div>
-          <div className="row" style={{ gap: 12 }}>
-            <Field label="Resolution type">
-              <Select
-                value={motion.resolutionType ?? "Ordinary"}
-                onChange={(resolutionType) => onPatch({ resolutionType })}
-                options={RESOLUTION_TYPE_OPTIONS}
-              />
-            </Field>
-            <Field label="Outcome">
-              <OutcomePicker value={motion.outcome} onChange={(v) => onPatch({ outcome: v })} />
-            </Field>
-          </div>
+          <Field label="Resolution type">
+            <Select
+              value={motion.resolutionType ?? "Ordinary"}
+              onChange={(resolutionType) => onPatch({ resolutionType })}
+              options={RESOLUTION_TYPE_OPTIONS}
+            />
+          </Field>
+          <OutcomePicker stretch value={motion.outcome} onChange={(v) => onPatch({ outcome: v })} />
           {agendaSections.length > 0 && (
             <Field label="Agenda item">
               <Select
@@ -687,6 +731,41 @@ function MotionRow({
           </div>
         </div>
       )}
+      <Modal
+        open={showRemoveDialog}
+        onClose={() => setShowRemoveDialog(false)}
+        title="Remove motion?"
+        size="sm"
+        footer={
+          <>
+            <button className="btn" onClick={() => setShowRemoveDialog(false)}>Cancel</button>
+            <button
+              className="btn btn--accent"
+              onClick={() => {
+                setShowRemoveDialog(false);
+                onPatch({ sectionIndex: undefined, sectionTitle: undefined });
+              }}
+            >
+              Unlink from agenda
+            </button>
+            <button
+              className="btn btn--danger"
+              onClick={() => {
+                setShowRemoveDialog(false);
+                onDelete();
+              }}
+            >
+              Delete motion
+            </button>
+          </>
+        }
+      >
+        <p>
+          This motion is attached to <strong>{assignedAgendaLabel || "an agenda item"}</strong>.
+          Unlink it to keep the motion on the meeting without an agenda assignment, or delete it
+          to remove the motion entirely.
+        </p>
+      </Modal>
     </div>
   );
 }

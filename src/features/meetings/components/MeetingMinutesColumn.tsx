@@ -1,6 +1,6 @@
 import { type DragEvent as ReactDragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, FileText, GripVertical, IndentDecrease, IndentIncrease, ListChecks, Mic, MinusCircle, MoreHorizontal, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, FileText, GripVertical, IndentDecrease, IndentIncrease, ListChecks, Mic, MoreHorizontal, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
 import { Badge, Field, MenuRow } from "../../../components/ui";
 import { MarkdownEditor, type MarkdownEditorHandle } from "../../../components/MarkdownEditor";
 import { LineListEditor } from "../../../components/LineListEditor";
@@ -1040,32 +1040,6 @@ export function MeetingMinutesColumn({
     await saveMinuteMotions(next);
   };
 
-  const updateActionDraft = (actionIndex: number, patch: Partial<SectionActionDraft>) => {
-    if (!sectionDraft) return;
-    setSectionDraft({
-      ...sectionDraft,
-      actionItems: sectionDraft.actionItems.map((item, index) =>
-        index === actionIndex ? { ...item, ...patch } : item,
-      ),
-    });
-  };
-
-  const addActionDraft = () => {
-    if (!sectionDraft) return;
-    setSectionDraft({
-      ...sectionDraft,
-      actionItems: [...sectionDraft.actionItems, emptyActionDraft()],
-    });
-  };
-
-  const removeActionDraft = (actionIndex: number) => {
-    if (!sectionDraft) return;
-    setSectionDraft({
-      ...sectionDraft,
-      actionItems: sectionDraft.actionItems.filter((_, index) => index !== actionIndex),
-    });
-  };
-
   const attachLinkedTask = (taskId: string) => {
     if (!sectionDraft || !taskId) return;
     if (sectionDraft.linkedTaskIds.includes(taskId)) return;
@@ -1114,7 +1088,6 @@ export function MeetingMinutesColumn({
       );
     const assignedMotionRows = motionRows.filter((row) => row.selectedIndex === index);
     const availableMotionRows = motionRows.filter((row) => row.selectedIndex !== index);
-    const actionCount = sectionDraft.actionItems.filter((item) => item.text.trim()).length;
     const linkedTaskRecords = sectionDraft.linkedTaskIds
       .map((taskId) => meetingTaskById.get(taskId))
       .filter(Boolean);
@@ -1135,6 +1108,14 @@ export function MeetingMinutesColumn({
                 <h2>Edit agenda item</h2>
                 <span>{agendaEntryLabel(sections.map((section: any) => ({ title: section.title ?? "", depth: section.depth === 1 ? 1 : 0 })), index, agendaNumberingMode)}</span>
               </div>
+              <button
+                className="btn-action btn-action--danger"
+                type="button"
+                onClick={() => void confirmAndRemoveSection(index)}
+                aria-label="Remove section"
+              >
+                <Trash2 size={12} /> Remove
+              </button>
               <button className="btn-action btn-action--primary" type="button" onClick={saveSectionEdit}>
                 <Save size={12} /> Save
               </button>
@@ -1175,11 +1156,8 @@ export function MeetingMinutesColumn({
           <button type="button" className={`meeting-minutes-section-editor-tab${sectionEditorTab === "motions" ? " is-active" : ""}`} onClick={() => setSectionEditorTab("motions")}>
             Motions{assignedMotionRows.length ? ` (${assignedMotionRows.length})` : ""}
           </button>
-          <button type="button" className={`meeting-minutes-section-editor-tab${sectionEditorTab === "actions" ? " is-active" : ""}`} onClick={() => setSectionEditorTab("actions")}>
-            Actions{actionCount ? ` (${actionCount})` : ""}
-          </button>
           <button type="button" className={`meeting-minutes-section-editor-tab${sectionEditorTab === "tasks" ? " is-active" : ""}`} onClick={() => setSectionEditorTab("tasks")}>
-            Tasks{linkedTaskRecords.length ? ` (${linkedTaskRecords.length})` : ""}
+            Actions{linkedTaskRecords.length ? ` (${linkedTaskRecords.length})` : ""}
           </button>
         </div>
 
@@ -1259,49 +1237,6 @@ export function MeetingMinutesColumn({
           </div>
         )}
 
-        {sectionEditorTab === "actions" && (
-          <div className="meeting-minutes-section-editor__panel">
-            <div className="meeting-minutes-action-editor">
-              {sectionDraft.actionItems.length ? (
-                sectionDraft.actionItems.map((item, actionIndex) => (
-                  <div className="meeting-minutes-action-editor__row" key={actionIndex}>
-                    <Field label="Action">
-                      <input
-                        className="input"
-                        value={item.text}
-                        onChange={(event) => updateActionDraft(actionIndex, { text: event.target.value })}
-                        placeholder="Follow up on insurance renewal"
-                      />
-                    </Field>
-                    <Field label="Assignee">
-                      <NameAutocomplete
-                        value={item.assignee}
-                        onChange={(next) => updateActionDraft(actionIndex, { assignee: next })}
-                        options={assigneeOptions}
-                        placeholder="First name Last name"
-                      />
-                    </Field>
-                    <Field label="Due">
-                      <DatePicker
-                        value={item.dueDate ?? ""}
-                        onChange={(value) => updateActionDraft(actionIndex, { dueDate: value })}
-                      />
-                    </Field>
-                    <button className="btn-action" type="button" title="Remove action" onClick={() => removeActionDraft(actionIndex)}>
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <div className="muted">No section-specific action rows yet.</div>
-              )}
-              <button className="btn-action" type="button" onClick={addActionDraft}>
-                <Plus size={12} /> Add action
-              </button>
-            </div>
-          </div>
-        )}
-
         {sectionEditorTab === "tasks" && (
           <div className="meeting-minutes-section-editor__panel">
             <div className="meeting-minutes-section-tasks">
@@ -1350,21 +1285,18 @@ export function MeetingMinutesColumn({
               )}
 
               {availableMeetingTasks.length > 0 ? (
-                <select
-                  className="input"
+                <Select
                   value=""
-                  onChange={(event) => {
-                    attachLinkedTask(event.target.value);
-                    event.target.value = "";
+                  onChange={(taskId) => {
+                    if (!taskId) return;
+                    attachLinkedTask(taskId);
                   }}
-                >
-                  <option value="">Link a meeting task...</option>
-                  {availableMeetingTasks.map((task: any) => (
-                    <option key={task._id} value={task._id}>
-                      {task.title}{task.status ? ` · ${task.status}` : ""}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Link a meeting task…"
+                  options={availableMeetingTasks.map((task: any) => ({
+                    value: task._id,
+                    label: `${task.title}${task.status ? ` · ${task.status}` : ""}`,
+                  }))}
+                />
               ) : (meetingTasks?.length ?? 0) === 0 ? (
                 <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
                   No tasks linked to this meeting yet — create one below to attach it to this section.
@@ -1385,11 +1317,20 @@ export function MeetingMinutesColumn({
         )}
 
         {!isMobile && (
-          <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
-            <button className="btn-action" onClick={cancelSectionEdit}>Cancel</button>
-            <button className="btn-action btn-action--primary" onClick={saveSectionEdit}>
-              <Save size={12} /> {hasPendingSectionMotion ? "Save section + add motion" : "Save section"}
+          <div className="row" style={{ gap: 6, justifyContent: "space-between", alignItems: "center" }}>
+            <button
+              className="btn-action btn-action--danger"
+              type="button"
+              onClick={() => void confirmAndRemoveSection(index)}
+            >
+              <Trash2 size={12} /> Remove section
             </button>
+            <div className="row" style={{ gap: 6 }}>
+              <button className="btn-action" onClick={cancelSectionEdit}>Cancel</button>
+              <button className="btn-action btn-action--primary" onClick={saveSectionEdit}>
+                <Save size={12} /> {hasPendingSectionMotion ? "Save section + add motion" : "Save section"}
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -2109,32 +2050,36 @@ export function MeetingMinutesColumn({
                                 {sectionSummaryMeta(section, motionMatchesBySection[index]?.length ?? 0)}
                               </span>
                               <span className="meeting-minutes-section-item__actions">
-                                <button
-                                  className="btn-action btn-action--icon"
-                                  type="button"
-                                  disabled={agendaEdit !== null}
-                                  aria-label="Edit agenda item"
-                                  onClick={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    startSectionEdit(index);
-                                  }}
-                                >
-                                  <Pencil size={12} />
-                                </button>
-                                <button
-                                  className="btn-action btn-action--icon"
-                                  type="button"
-                                  disabled={agendaEdit !== null}
-                                  aria-label="Remove section"
-                                  onClick={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    void confirmAndRemoveSection(index);
-                                  }}
-                                >
-                                  <MinusCircle size={12} />
-                                </button>
+                                {sectionEditIndex !== index && (
+                                  <>
+                                    <button
+                                      className="btn-action btn-action--icon"
+                                      type="button"
+                                      disabled={agendaEdit !== null}
+                                      aria-label="Edit agenda item"
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        startSectionEdit(index);
+                                      }}
+                                    >
+                                      <Pencil size={12} />
+                                    </button>
+                                    <button
+                                      className="btn-action btn-action--icon"
+                                      type="button"
+                                      disabled={agendaEdit !== null}
+                                      aria-label="Remove section"
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        void confirmAndRemoveSection(index);
+                                      }}
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </>
+                                )}
                               </span>
                             </summary>
 
@@ -2497,7 +2442,7 @@ type SectionDraft = {
   taskUpdates: Record<string, { status?: string; completionNote?: string }>;
 };
 
-type SectionEditorTab = "notes" | "motions" | "actions" | "tasks";
+type SectionEditorTab = "notes" | "motions" | "tasks";
 
 type SectionActionDraft = {
   text: string;
@@ -2769,9 +2714,8 @@ function assignedSectionIndexForMotion(motion: Motion, sections: any[]): number 
   return inferred >= 0 ? inferred : null;
 }
 
-function sectionSummaryMeta(section: any, motionCount: number) {
+function sectionSummaryMeta(section: any, _motionCount: number) {
   const parts = [
-    motionCount ? `${motionCount} motion${motionCount === 1 ? "" : "s"}` : "",
     (section?.decisions ?? []).length ? `${section.decisions.length} decision${section.decisions.length === 1 ? "" : "s"}` : "",
     (section?.actionItems ?? []).length ? `${section.actionItems.length} action${section.actionItems.length === 1 ? "" : "s"}` : "",
   ].filter(Boolean);

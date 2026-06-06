@@ -609,6 +609,29 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           ref={editorHostRef}
           className="markdown-editor__body"
           style={{ minHeight: computedMinHeight }}
+          onMouseDown={(event) => {
+            if (readOnly) return;
+            const target = event.target as Element | null;
+            if (!target || target.closest(".ProseMirror")) return;
+            event.preventDefault();
+            const crepe = crepeRef.current;
+            if (!crepe) return;
+            crepe.editor.action((ctx) => {
+              const view = ctx.get(editorViewCtx);
+              if (!view) return;
+              const endPos = view.state.doc.content.size;
+              view.dispatch(
+                view.state.tr.setSelection(
+                  TextSelection.near(view.state.doc.resolve(endPos), -1),
+                ),
+              );
+              view.focus();
+            });
+          }}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
         />
       </div>
     );
