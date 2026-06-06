@@ -1,8 +1,10 @@
 import { isStaticDemoRuntime } from "./staticRuntime";
+import { isPwaLaunch } from "./pwa";
 
 const KEY = "societyer.demo";
 
 export function isDemoMode(): boolean {
+  if (isPwaLaunch()) return false;
   if (isStaticDemoRuntime()) return true;
   const url = new URLSearchParams(window.location.search);
   if (url.has("demo")) {

@@ -287,3 +287,244 @@ For the MVP, do not automate government login or filing submission. The safer sc
 
 Government connector automation can remain a local-only advanced tool until trust, security, and legal boundaries are clearer.
 
+## Remaining Work Backlog - 2026-06-06
+
+This section updates the original backlog after the BC + federal rule-engine implementation pass. The engine, pack split, source metadata, obligation UI, and filing traceability are now largely in place. The remaining work is about trust controls, data capture, evidence workflows, and carrying jurisdiction context through the rest of the product.
+
+### 1. Legal/source Review and Rule Acceptance
+
+Goal: make rule trust explicit before expanding more executable legal content.
+
+Codebase gaps:
+
+- `src/lib/compliance/rulePackSchema.ts` has rule statuses, but status does not yet require review or approval metadata.
+- `scripts/validate-compliance-rule-packs.ts` validates source IDs, but does not enforce reviewer/approver evidence for `reviewed` or `accepted` rules.
+- `src/pages/ComplianceObligations.tsx` shows sources, but should also surface rule status so users can distinguish draft guidance from reviewed/accepted rules.
+
+Implementation tasks:
+
+1. Add optional review metadata to rule schema: `reviewedBy`, `reviewedAt`, `reviewNotes`, `acceptedBy`, `acceptedAt`, `approvalReference`.
+2. Update validation so:
+   - `draft` can omit approval metadata;
+   - `reviewed` requires source-review metadata;
+   - `accepted` requires explicit approval metadata;
+   - every executable rule still requires source metadata and `appliesTo`.
+3. Show rule status in obligation rows and treat `draft` rules as guidance, not approved compliance advice.
+4. Add contributor docs explaining who can move a rule from `draft` to `reviewed` to `accepted`.
+
+Acceptance criteria:
+
+- Validation fails for `accepted` rules without approval metadata.
+- Compliance obligations visibly show draft/reviewed/accepted status.
+- Rule packs remain usable, but unaccepted rules are not silently presented as approved obligations.
+
+Suggested tests:
+
+- `npm run test:compliance-rules`
+- Add validator fixtures for missing source metadata, missing applicability, reviewed-without-reviewer, and accepted-without-approver.
+
+Official-source review queue:
+
+- CBCA annual return: active CBCA business corporations file within 60 days after incorporation/amalgamation/continuance anniversary. Source: https://ised-isde.canada.ca/site/corporations-canada/en/annual-return-business-corporations
+- CBCA annual filing policy/status exclusions. Source: https://ised-isde.canada.ca/site/corporations-canada/en/business-corporations/policy-filing-annual-returns-canada-business-corporations-act
+- CBCA ISC filing: annual filing with annual return, changes within 15 days, initial filing on incorporation or within 30 days after amalgamation/continuance. Source: https://ised-isde.canada.ca/site/corporations-canada/en/individuals-significant-control/individuals-significant-control-file-your-information
+- CBCA director change notice within 15 days. Source: https://laws-lois.justice.gc.ca/eng/acts/C-44/section-113.html
+- CBCA registered office and director address change guidance. Source: https://ised-isde.canada.ca/site/corporations-canada/en/business-corporations/next-steps-following-incorporation-your-business
+- BC company annual report within 2 months after recognition anniversary. Source: https://www.bclaws.gov.bc.ca/civix/document/id/lc/statreg/02057_02
+- BC extraprovincial company annual report within 2 months after BC registration anniversary. Source: https://www.bclaws.gov.bc.ca/civix/document/id/consol21/consol21/02057_12
+
+Keep as `draft` until legal review:
+
+- CBCA financial-statement filing for distributing corporations and securities-law exceptions.
+- BC extraprovincial "carrying on business" registration trigger.
+- BC extraprovincial change notices where the statute uses non-fixed timing such as "promptly".
+
+### 2. Data Capture UI for Compliance Facts
+
+Goal: expose the facts the engine already supports so users do not need seed scripts or hidden fields to trigger corporation obligations.
+
+Codebase gaps:
+
+- `src/lib/compliance/facts.ts` reads event dates such as `iscChangeDate`, `directorChangeDate`, `registeredOfficeChangeDate`, and `noAgmCalendarYearEnd`, but these are not first-class schema/UI fields.
+- `convex/schema.ts` has some corporation-oriented fields on `societies`, including `homeJurisdictionCode`, `primaryRegistrationId`, `anniversaryDate`, and `corporationKeyVaultItemId`, but not all rule facts are persisted.
+- `src/pages/OrganizationDetails.tsx` does not yet save all compliance fact fields.
+
+Implementation tasks:
+
+1. Add schema and mutation support for:
+   - `entitySubtype`
+   - `corporationClass`
+   - `anniversaryDate`
+   - `corporationKeyVaultItemId`
+   - `iscChangeDate`
+   - `directorChangeDate`
+   - `registeredOfficeChangeDate`
+   - `noAgmCalendarYearEnd`
+2. Add a focused "Compliance facts" panel to organization details rather than overloading the basic profile.
+3. Add field-level copy making clear that event dates are legal trigger facts, not filing confirmations.
+4. Link missing-fact notices from Compliance Obligations to the relevant field location.
+
+Acceptance criteria:
+
+- A federal corporation user can enter facts that trigger ISC, director-change, registered-office-change, and annual-return obligations through normal UI.
+- A BC society user can enter the no-AGM fallback fact through normal UI.
+- Current computed-rule fixtures can be reproduced from stored workspace data.
+
+Suggested tests:
+
+- `npm run test:organization-domain`
+- `npm run test:compliance-rules`
+- Add a mutation-backed fixture that persists event dates and then computes obligations.
+
+### 3. Federal Evidence Workflows
+
+Goal: turn CBCA evidence requirements from rule-pack text into usable checklist/document-packet workflows.
+
+Codebase gaps:
+
+- `shared/corporationDocumentPackets.ts` has generic annual, ISC, share issuance, and extra-provincial packet concepts, but ISC is not split into initial filing, change filing, and annual confirmation evidence.
+- `convex/legalOperations.ts` stages corporation document packets with `sourceRegistrationId`, but should also preserve `jurisdictionCode` and `contextKind`.
+
+Implementation tasks:
+
+1. Add dedicated packet/checklist keys:
+   - `federal-initial-isc-filing`
+   - `federal-isc-change-filing`
+   - `federal-annual-return-evidence`
+   - `financial-statement-delivery`
+   - `corporate-records-review`
+2. Link CBCA rules to packet keys where a rule has evidence requirements.
+3. Ensure staged packets preserve `ruleId`, `obligationKey`, `filingId`, `jurisdictionCode`, `contextKind`, and `sourceRegistrationId`.
+4. Add evidence items for corporation number, business number, corporation key custody, registered office, records location, directors/officers, share classes, securities/share register, ISC register, annual-return confirmation, and financial-statement delivery.
+
+Acceptance criteria:
+
+- Each major CBCA obligation has a packet/checklist path.
+- Evidence requirements shown in Compliance Obligations match packet sections.
+- Staged packets retain home vs registration context.
+
+Suggested tests:
+
+- `npm run test:corporation-mvp`
+- `tsx scripts/check-corporation-document-packets.ts`
+- Add a fixture for ISC change -> obligation -> packet -> evidence linkage.
+
+Official-source anchors:
+
+- CBCA corporate records obligations: https://ised-isde.canada.ca/site/corporations-canada/en/business-corporations/corporate-records-and-other-corporate-obligations
+- CBCA ISC register and filing obligations: https://ised-isde.canada.ca/site/corporations-canada/en/individuals-significant-control
+- CBCA annual shareholder meeting timing: https://laws-lois.justice.gc.ca/eng/acts/C-44/section-133.html
+- CBCA financial statements at annual meeting: https://laws-lois.justice.gc.ca/eng/acts/C-44/section-155.html
+- CBCA copies to Director for distributing corporations: https://laws-lois.justice.gc.ca/eng/acts/C-44/section-160.html
+
+### 4. BC Company Polish
+
+Goal: make BC company support feel first-class, separate from BC societies and BC extra-provincial registrations.
+
+Codebase gaps:
+
+- `src/lib/compliance/rulePacks/ca-bc-company.json` exists, but BC company evidence and packet workflows are still thinner than federal workflows.
+- `shared/corporationDocumentPackets.ts` should include `CA-BC` where company and extra-provincial packet support applies.
+- Existing share/rights storage can support central securities register concepts, but BC company workflow copy and fixtures need to point users there.
+
+Implementation tasks:
+
+1. Add BC company packet/checklist content for:
+   - notice of articles
+   - articles
+   - incorporation agreement
+   - central securities register
+   - director register
+   - shareholder/director resolutions and minutes
+   - annual report confirmation evidence
+2. Add `CA-BC` to relevant corporation packet jurisdictions.
+3. Add deeper BC company fixtures and source-backed evidence requirements.
+4. Keep BC society and BC company language separate in UI copy.
+
+Acceptance criteria:
+
+- BC company workspaces receive BC company obligations only.
+- BC society workspaces do not receive BC company records obligations.
+- BC company records review links to a relevant packet/checklist.
+- Federal CBCA workspaces with BC extra-provincial registration still receive separate BC registration obligations.
+
+Suggested tests:
+
+- `npm run test:compliance-rules`
+- `npm run test:corporation-mvp`
+- Add BC company records/evidence fixture and society/company cross-regression.
+
+Official-source anchors:
+
+- BC Business Corporations Act, annual report section 51 and records sections 42-44: https://www.bclaws.gov.bc.ca/civix/document/id/lc/statreg/02057_02
+- BC transparency register guidance, including central securities register and articles as key evidence: https://www2.gov.bc.ca/gov/content/employment-business/business/bc-companies/transparency-register/transparency-register
+
+### 5. Registration Selection UX
+
+Goal: replace raw `sourceRegistrationId` text entry with a registration picker tied to organization registration rows.
+
+Codebase gaps:
+
+- `src/pages/Filings.tsx` currently exposes `sourceRegistrationId` as a text input for extra-provincial filings.
+- `convex/organizationDetails.ts` already returns organization registrations, so the data source is available.
+
+Implementation tasks:
+
+1. Query `api.organizationDetails.overview` in `FilingsPage`.
+2. When `contextKind === "extra_provincial"`, show a dropdown of active extra-provincial registrations.
+3. Auto-fill `jurisdictionCode` from the selected registration.
+4. Display registration labels using jurisdiction, registration number, assumed name, and status.
+5. Keep raw `sourceRegistrationId` hidden or read-only.
+
+Acceptance criteria:
+
+- Extra-provincial filing creation requires or strongly prompts a selected registration.
+- Selecting a registration sets both `sourceRegistrationId` and `jurisdictionCode`.
+- Home filings do not show the registration picker.
+- Compliance-created filings continue to link correctly.
+
+Suggested tests:
+
+- Extend `scripts/check-static-corporation-obligations.ts`.
+- Add regression checks for federal home filings with no `sourceRegistrationId` and BC extra-provincial filings with a registration ID.
+
+### 6. More Product Surfaces
+
+Goal: carry home vs registration context beyond Compliance Obligations and Filings.
+
+Codebase gaps:
+
+- `convex/dashboard.ts` filing summaries omit `jurisdictionCode`, `contextKind`, and `sourceRegistrationId`.
+- `src/pages/Dashboard.tsx` still has BC-society-specific compliance copy in places.
+- `src/pages/Timeline.tsx` filing events omit jurisdiction/context and use older local filing labels.
+- `src/pages/MinuteBook.tsx` and `convex/minuteBook.ts` show filing kind/status/due date but do not badge home vs extra-provincial context.
+
+Implementation tasks:
+
+1. Dashboard: group or badge filings/obligations by home vs extra-provincial context.
+2. Timeline/annual cycle: show jurisdiction and context on filing milestones.
+3. Minute book/evidence overview: show context for filings and packets.
+4. Notifications: include jurisdiction/context where filing labels could be ambiguous.
+5. Prefer `filingKindDefinition(kind, jurisdictionCode)` over local hard-coded filing labels.
+
+Acceptance criteria:
+
+- Dashboard does not flatten federal home and BC extra-provincial obligations into one generic "annual report".
+- Minute-book bundle shows whether a filing belongs to the home jurisdiction or a registration.
+- Reminder text includes jurisdiction when ambiguity exists.
+
+Suggested tests:
+
+- `npm run test:local-snapshots`
+- Add a dashboard/timeline fixture for a federal home corporation with BC extra-provincial registration.
+
+### 7. Recommended MVP Sequence
+
+1. Enforce rule approval/source status.
+2. Replace filing registration text input with a registration picker.
+3. Add first-class data capture fields for currently executable rules.
+4. Expand federal evidence packets.
+5. Add BC company packet/checklist polish.
+6. Carry jurisdiction/context labels into dashboard, timeline, minute book, and notifications.
+
+This sequence keeps the legal trust boundary clear before adding more obligations, then improves the highest-friction user path: linking filings and evidence to actual registration rows.

@@ -110,6 +110,12 @@ export const complianceRuleSchema = z
   .object({
     ruleId: nonEmptyStringSchema,
     status: complianceRulePackStatusSchema,
+    reviewedBy: nonEmptyStringSchema.optional(),
+    reviewedAt: dateSchema.optional(),
+    reviewNotes: nonEmptyStringSchema.optional(),
+    acceptedBy: nonEmptyStringSchema.optional(),
+    acceptedAt: dateSchema.optional(),
+    approvalReference: nonEmptyStringSchema.optional(),
     title: nonEmptyStringSchema,
     summary: nonEmptyStringSchema,
     obligationKey: nonEmptyStringSchema,
@@ -156,6 +162,34 @@ export const complianceRulePackSchema = z
         });
       }
       const packSourceIds = new Set(pack.sources.map((source) => source.sourceId));
+      if (rule.status !== "deprecated" && !rule.appliesTo) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["rules", rule.ruleId, "appliesTo"],
+          message: "Non-deprecated rules must declare appliesTo",
+        });
+      }
+      if (rule.status !== "deprecated" && !(rule.authority.sourceIds ?? []).length) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["rules", rule.ruleId, "authority", "sourceIds"],
+          message: "Non-deprecated rules must cite at least one sourceId",
+        });
+      }
+      if ((rule.status === "reviewed" || rule.status === "accepted") && (!rule.reviewedBy || !rule.reviewedAt)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["rules", rule.ruleId],
+          message: "Reviewed and accepted rules must include reviewedBy and reviewedAt",
+        });
+      }
+      if (rule.status === "accepted" && (!rule.acceptedBy || !rule.acceptedAt || !rule.approvalReference)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["rules", rule.ruleId],
+          message: "Accepted rules must include acceptedBy, acceptedAt, and approvalReference",
+        });
+      }
       for (const sourceId of rule.authority.sourceIds ?? []) {
         if (!packSourceIds.has(sourceId)) {
           ctx.addIssue({

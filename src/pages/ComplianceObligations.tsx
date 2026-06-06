@@ -278,7 +278,10 @@ export function ComplianceObligationsPage() {
                     ) : null}
                   </div>
                   <div>
-                    <span>{obligation.authority.displayCitation}</span>
+                    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                      <span>{obligation.authority.displayCitation}</span>
+                      <Badge tone={ruleStatusTone(obligation.ruleStatus)}>{ruleStatusLabel(obligation.ruleStatus)}</Badge>
+                    </div>
                     <div className="muted" style={{ fontSize: 12 }}>
                       {obligation.authority.guideRuleIds.join(", ")}
                     </div>
@@ -378,6 +381,20 @@ function statusTone(status: ComplianceObligationStatus) {
 function statusLabel(status: ComplianceObligationStatus) {
   if (status === "due_today") return "Due today";
   return status[0].toUpperCase() + status.slice(1);
+}
+
+function ruleStatusTone(status: ReturnType<typeof computeComplianceObligations>[number]["ruleStatus"]) {
+  if (status === "accepted") return "success";
+  if (status === "reviewed") return "info";
+  if (status === "deprecated") return "neutral";
+  return "warn";
+}
+
+function ruleStatusLabel(status: ReturnType<typeof computeComplianceObligations>[number]["ruleStatus"]) {
+  if (status === "accepted") return "Accepted";
+  if (status === "reviewed") return "Reviewed rule";
+  if (status === "deprecated") return "Deprecated";
+  return "Draft rule";
 }
 
 function contextKindLabel(contextKind: ReturnType<typeof computeComplianceObligations>[number]["contextKind"]) {

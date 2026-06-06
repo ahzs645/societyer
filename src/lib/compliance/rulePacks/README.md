@@ -53,4 +53,11 @@ official government or statutory sources:
 Use `draft` for legally uncertain rules. Move to `reviewed` only after source
 review. Reserve `accepted` for rules that have explicit legal/product approval.
 
+Promotion metadata is enforced:
+
+- `reviewed` rules require `reviewedBy` and `reviewedAt`
+- `accepted` rules require `reviewedBy`, `reviewedAt`, `acceptedBy`, `acceptedAt`, and `approvalReference`
+- non-deprecated rules must declare `appliesTo`
+- non-deprecated rules must cite at least one `authority.sourceIds` entry
+
 Run `npm run test:compliance-rules` after editing packs.

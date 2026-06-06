@@ -586,6 +586,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
         sortBtnRef={sortBtnRef}
         optionsBtnRef={optionsBtnRef}
         savedViews={viewsKey ? savedViews : undefined}
+        sharedViews={sharedViewsEnabled}
         activeViewId={activeViewId}
         viewsKey={viewsKey}
         onApplyView={applyView}

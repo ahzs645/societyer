@@ -2167,6 +2167,17 @@
 .options-popover__col-row input { accent-color: var(--accent); }
 
 /* Saved views list in options popover */
+.options-popover__views-head {
+  display: grid;
+  gap: 2px;
+  padding-bottom: 4px;
+}
+.options-popover__views-scope {
+  padding: 0 8px 4px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  line-height: 1.3;
+}
 .options-popover__view-row {
   display: flex;
   align-items: center;
@@ -2174,6 +2185,8 @@
   padding: 0 4px;
 }
 .options-popover__view-name {
+  display: grid;
+  gap: 1px;
   flex: 1;
   text-align: left;
   padding: 6px 8px;
@@ -2190,6 +2203,21 @@
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 500;
+}
+.options-popover__view-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.options-popover__view-scope {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: 1.2;
+}
+.options-popover__view-name.is-active .options-popover__view-scope {
+  color: var(--accent);
 }
 .options-popover__view-del {
   display: inline-flex;

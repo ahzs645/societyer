@@ -35,6 +35,7 @@ export type ComplianceObligationStatus = "upcoming" | "due_today" | "overdue";
 export type ComplianceObligation = {
   packId: string;
   ruleId: string;
+  ruleStatus: ComplianceRule["status"];
   obligationKey: string;
   title: string;
   scheduleKind: ComplianceObligationSchedule["kind"];
@@ -207,6 +208,7 @@ export function computeComplianceObligations(facts: ComplianceFacts, packs: Comp
       obligations.push({
         packId: pack.packId,
         ruleId: rule.ruleId,
+        ruleStatus: rule.status,
         obligationKey: rule.obligationKey,
         title: rule.title,
         scheduleKind: rule.schedule.kind,

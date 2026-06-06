@@ -12,6 +12,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ConfirmProvider, PromptProvider } from "./components/Modal";
 import { ToastProvider } from "./components/Toast";
 import { applyThemePreference, getStoredThemePreference } from "./lib/theme";
+import { isStandalonePwa, registerServiceWorker } from "./lib/pwa";
 
 const Dashboard = React.lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
 const DesktopSetupPage = React.lazy(() => import("./pages/DesktopSetup").then((m) => ({ default: m.DesktopSetupPage })));
@@ -133,6 +134,7 @@ if (import.meta.env.VITE_E2E_TEST_HARNESS === "1") {
 }
 
 applyThemePreference(getStoredThemePreference());
+registerServiceWorker();
 
 function withModule(moduleKey: React.ComponentProps<typeof ModuleGate>["moduleKey"], element: React.ReactNode) {
   return <ModuleGate moduleKey={moduleKey}>{element}</ModuleGate>;
@@ -219,6 +221,13 @@ function RootErrorFallback() {
   );
 }
 
+function LandingEntry() {
+  if (isStandalonePwa()) {
+    return <Navigate to="/app/society/new?pwa=1" replace />;
+  }
+  return <LandingPage />;
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary label="root" fallback={<RootErrorFallback />}>
@@ -228,7 +237,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       >
         <Suspense fallback={<PageLoader />}>
         <Routes>
-          {!localDataRuntime && <Route path="/" element={<LandingPage />} />}
+          {!localDataRuntime && <Route path="/" element={<LandingEntry />} />}
           <Route element={<AsyncAppProviders />}>
             {localDataRuntime && (
               <Route

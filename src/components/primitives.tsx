@@ -18,6 +18,7 @@ export function ViewBar({
   sortBtnRef,
   optionsBtnRef,
   savedViews,
+  sharedViews,
   activeViewId,
   viewsKey,
   onApplyView,
@@ -38,6 +39,7 @@ export function ViewBar({
   sortBtnRef?: React.RefObject<HTMLButtonElement>;
   optionsBtnRef?: React.RefObject<HTMLButtonElement>;
   savedViews?: SavedView[];
+  sharedViews?: boolean;
   activeViewId?: string | null;
   viewsKey?: string;
   onApplyView?: (view: SavedView) => void;
@@ -89,6 +91,7 @@ export function ViewBar({
       {viewsOpen && viewsEnabled && (
         <ViewsPopover
           savedViews={savedViews ?? []}
+          sharedViews={sharedViews === true}
           activeViewId={activeViewId ?? null}
           viewsKey={viewsKey}
           onApplyView={(view) => {
@@ -150,6 +153,7 @@ export function ViewBar({
 
 function ViewsPopover({
   savedViews,
+  sharedViews,
   activeViewId,
   viewsKey,
   onApplyView,
@@ -160,6 +164,7 @@ function ViewsPopover({
   onClose,
 }: {
   savedViews: SavedView[];
+  sharedViews: boolean;
   activeViewId: string | null;
   viewsKey?: string;
   onApplyView: (view: SavedView) => void;
@@ -196,10 +201,15 @@ function ViewsPopover({
 
   return (
     <div className="popover" ref={ref} style={style}>
-      <MenuSectionLabel>Saved views</MenuSectionLabel>
+      <div className="options-popover__views-head">
+        <MenuSectionLabel>Saved views</MenuSectionLabel>
+        <div className="options-popover__views-scope">
+          {sharedViews ? "Saved views are shared with this workspace." : "Saved views are stored on this device."}
+        </div>
+      </div>
       {savedViews.length === 0 && (
         <div className="empty-state empty-state--sm empty-state--start">
-          No saved views yet.
+          {sharedViews ? "No shared views yet." : "No local views yet."}
         </div>
       )}
       {savedViews.map((view) => {
@@ -212,7 +222,10 @@ function ViewsPopover({
               onClick={() => onApplyView(view)}
               title="Apply this view"
             >
-              {view.name}
+              <span className="options-popover__view-label">{view.name}</span>
+              <span className="options-popover__view-scope">
+                {view.isSystem ? "System" : view.isShared ? "Shared" : "Local"}
+              </span>
             </button>
             <button
               type="button"
@@ -239,7 +252,7 @@ function ViewsPopover({
       <div className="options-popover__save-row">
         <input
           className="options-popover__save-input"
-          placeholder="Save current view as…"
+          placeholder={sharedViews ? "Save shared view as..." : "Save local view as..."}
           value={newViewName}
           onChange={(e) => setNewViewName(e.target.value)}
           onKeyDown={(e) => {
