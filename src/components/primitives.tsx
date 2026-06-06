@@ -1,6 +1,8 @@
-import { ReactNode } from "react";
-import { List, Filter, FilterX, ArrowUpDown, MoreHorizontal, ChevronDown } from "lucide-react";
-import { Pill, TintedIconTile } from "./ui";
+import { ReactNode, useEffect, useRef, useState } from "react";
+import { List, Filter, FilterX, ArrowUpDown, MoreHorizontal, ChevronDown, Pin, PinOff, X } from "lucide-react";
+import { MenuSectionLabel, Pill, TintedIconTile } from "./ui";
+import type { SavedView } from "../lib/savedViews";
+import { useUIStore } from "../lib/store";
 
 export function ViewBar({
   label,
@@ -15,6 +17,13 @@ export function ViewBar({
   filterBtnRef,
   sortBtnRef,
   optionsBtnRef,
+  savedViews,
+  activeViewId,
+  viewsKey,
+  onApplyView,
+  onSaveView,
+  onDeleteView,
+  onTogglePinView,
 }: {
   label: string;
   count?: number;
@@ -28,21 +37,71 @@ export function ViewBar({
   filterBtnRef?: React.RefObject<HTMLButtonElement>;
   sortBtnRef?: React.RefObject<HTMLButtonElement>;
   optionsBtnRef?: React.RefObject<HTMLButtonElement>;
+  savedViews?: SavedView[];
+  activeViewId?: string | null;
+  viewsKey?: string;
+  onApplyView?: (view: SavedView) => void;
+  onSaveView?: (name: string) => void;
+  onDeleteView?: (id: string) => void;
+  onTogglePinView?: (view: SavedView) => void;
 }) {
+  const viewsEnabled = Boolean(savedViews);
+  const [viewsOpen, setViewsOpen] = useState(false);
+  const viewPillRef = useRef<HTMLButtonElement>(null);
+  const activeView = savedViews?.find((v) => v.id === activeViewId);
+  const displayLabel = activeView?.name ?? label;
+
   return (
     <div className="view-bar">
-      <button className="view-pill" type="button">
-        <TintedIconTile tone="gray" size="sm" className="view-pill__icon">
-          {icon ?? <List size={14} />}
-        </TintedIconTile>
-        <span>{label}</span>
-        {count != null && (
-          <Pill size="sm" className="view-pill__count">
-            {count}
-          </Pill>
-        )}
-        <ChevronDown size={12} style={{ color: "var(--text-tertiary)" }} />
-      </button>
+      {viewsEnabled ? (
+        <button
+          className="view-pill"
+          type="button"
+          ref={viewPillRef}
+          onClick={() => setViewsOpen((v) => !v)}
+          aria-haspopup="menu"
+          aria-expanded={viewsOpen}
+        >
+          <TintedIconTile tone="gray" size="sm" className="view-pill__icon">
+            {icon ?? <List size={14} />}
+          </TintedIconTile>
+          <span>{displayLabel}</span>
+          {count != null && (
+            <Pill size="sm" className="view-pill__count">
+              {count}
+            </Pill>
+          )}
+          <ChevronDown size={12} style={{ color: "var(--text-tertiary)" }} />
+        </button>
+      ) : (
+        <span className="view-pill view-pill--static">
+          <TintedIconTile tone="gray" size="sm" className="view-pill__icon">
+            {icon ?? <List size={14} />}
+          </TintedIconTile>
+          <span>{displayLabel}</span>
+          {count != null && (
+            <Pill size="sm" className="view-pill__count">
+              {count}
+            </Pill>
+          )}
+        </span>
+      )}
+      {viewsOpen && viewsEnabled && (
+        <ViewsPopover
+          savedViews={savedViews ?? []}
+          activeViewId={activeViewId ?? null}
+          viewsKey={viewsKey}
+          onApplyView={(view) => {
+            onApplyView?.(view);
+            setViewsOpen(false);
+          }}
+          onSaveView={(name) => onSaveView?.(name)}
+          onDeleteView={(id) => onDeleteView?.(id)}
+          onTogglePinView={(view) => onTogglePinView?.(view)}
+          anchorRef={viewPillRef}
+          onClose={() => setViewsOpen(false)}
+        />
+      )}
       {(onFilter || onAdvanced || onSort || onOptions) && (
         <>
           <div className="view-bar__sep" />
@@ -85,6 +144,123 @@ export function ViewBar({
           <div className="view-bar__group">{extra}</div>
         </>
       )}
+    </div>
+  );
+}
+
+function ViewsPopover({
+  savedViews,
+  activeViewId,
+  viewsKey,
+  onApplyView,
+  onSaveView,
+  onDeleteView,
+  onTogglePinView,
+  anchorRef,
+  onClose,
+}: {
+  savedViews: SavedView[];
+  activeViewId: string | null;
+  viewsKey?: string;
+  onApplyView: (view: SavedView) => void;
+  onSaveView: (name: string) => void;
+  onDeleteView: (id: string) => void;
+  onTogglePinView: (view: SavedView) => void;
+  anchorRef: React.RefObject<HTMLElement>;
+  onClose: () => void;
+}) {
+  const [newViewName, setNewViewName] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!ref.current) return;
+      if (ref.current.contains(e.target as Node)) return;
+      if (anchorRef.current?.contains(e.target as Node)) return;
+      onClose();
+    };
+    const timer = window.setTimeout(() => document.addEventListener("mousedown", onDoc), 0);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("mousedown", onDoc);
+    };
+  }, [onClose, anchorRef]);
+
+  const rect = anchorRef.current?.getBoundingClientRect();
+  const margin = 8;
+  const style = rect
+    ? {
+        top: Math.max(margin, Math.min(rect.bottom + 4, window.innerHeight - 320 - margin)),
+        left: Math.max(margin, Math.min(rect.left, window.innerWidth - 260 - margin)),
+      }
+    : { top: 48, left: 16 };
+
+  return (
+    <div className="popover" ref={ref} style={style}>
+      <MenuSectionLabel>Saved views</MenuSectionLabel>
+      {savedViews.length === 0 && (
+        <div className="empty-state empty-state--sm empty-state--start">
+          No saved views yet.
+        </div>
+      )}
+      {savedViews.map((view) => {
+        const pinned = viewsKey ? useUIStore.getState().isViewPinned(viewsKey, view.id) : false;
+        return (
+          <div key={view.id} className="options-popover__view-row">
+            <button
+              type="button"
+              className={`options-popover__view-name${activeViewId === view.id ? " is-active" : ""}`}
+              onClick={() => onApplyView(view)}
+              title="Apply this view"
+            >
+              {view.name}
+            </button>
+            <button
+              type="button"
+              className="options-popover__view-del"
+              onClick={() => onTogglePinView(view)}
+              aria-label={pinned ? `Unpin ${view.name}` : `Pin ${view.name} to sidebar`}
+              title={pinned ? "Unpin from sidebar" : "Pin to sidebar"}
+            >
+              {pinned ? <PinOff size={10} /> : <Pin size={10} />}
+            </button>
+            {!view.isSystem && (
+              <button
+                type="button"
+                className="options-popover__view-del"
+                onClick={() => onDeleteView(view.id)}
+                aria-label={`Delete view ${view.name}`}
+              >
+                <X size={10} />
+              </button>
+            )}
+          </div>
+        );
+      })}
+      <div className="options-popover__save-row">
+        <input
+          className="options-popover__save-input"
+          placeholder="Save current view as…"
+          value={newViewName}
+          onChange={(e) => setNewViewName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && newViewName.trim()) {
+              onSaveView(newViewName);
+              setNewViewName("");
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="btn-action btn-action--primary"
+          disabled={!newViewName.trim()}
+          onClick={() => {
+            onSaveView(newViewName);
+            setNewViewName("");
+          }}
+        >
+          Save
+        </button>
+      </div>
     </div>
   );
 }

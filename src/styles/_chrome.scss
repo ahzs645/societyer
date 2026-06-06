@@ -165,6 +165,13 @@
   background: var(--bg-hover);
   border-color: var(--border-strong);
 }
+.view-pill--static {
+  cursor: default;
+}
+.view-pill--static:hover {
+  background: var(--bg-panel);
+  border-color: var(--border);
+}
 .view-pill svg { width: 14px; height: 14px; color: var(--text-secondary); }
 .view-pill__icon {
   margin-left: -2px;

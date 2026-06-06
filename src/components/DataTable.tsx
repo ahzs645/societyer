@@ -1,6 +1,6 @@
 import { ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Pin, PinOff, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { ViewBar } from "./primitives";
@@ -576,6 +576,13 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
         filterBtnRef={filterBtnRef}
         sortBtnRef={sortBtnRef}
         optionsBtnRef={optionsBtnRef}
+        savedViews={viewsKey ? savedViews : undefined}
+        activeViewId={activeViewId}
+        viewsKey={viewsKey}
+        onApplyView={applyView}
+        onSaveView={saveView}
+        onDeleteView={deleteView}
+        onTogglePinView={togglePin}
         onFilter={
           filterFields?.length
             ? () => {
@@ -621,13 +628,6 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
           onResetColumns={() => setHiddenColumns(new Set())}
           density={density}
           onDensity={setDensity}
-          savedViews={viewsKey ? savedViews : undefined}
-          activeViewId={activeViewId}
-          viewsKey={viewsKey}
-          onTogglePinView={togglePin}
-          onApplyView={applyView}
-          onSaveView={saveView}
-          onDeleteView={deleteView}
           anchorRef={optionsBtnRef as any}
           onClose={() => setOptionsOpen(false)}
         />
@@ -1112,13 +1112,6 @@ function OptionsPopover<T>({
   onResetColumns,
   density,
   onDensity,
-  savedViews,
-  activeViewId,
-  viewsKey,
-  onApplyView,
-  onSaveView,
-  onDeleteView,
-  onTogglePinView,
   anchorRef,
   onClose,
 }: {
@@ -1128,17 +1121,9 @@ function OptionsPopover<T>({
   onResetColumns: () => void;
   density: "compact" | "comfortable";
   onDensity: (d: "compact" | "comfortable") => void;
-  savedViews?: SavedView[];
-  activeViewId?: string | null;
-  viewsKey?: string;
-  onApplyView?: (view: SavedView) => void;
-  onSaveView?: (name: string) => void;
-  onDeleteView?: (id: string) => void;
-  onTogglePinView?: (view: SavedView) => void;
   anchorRef: React.RefObject<HTMLElement>;
   onClose: () => void;
 }) {
-  const [newViewName, setNewViewName] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -1168,78 +1153,6 @@ function OptionsPopover<T>({
 
   return (
     <div className="popover" ref={ref} style={style}>
-      {savedViews && (
-        <>
-          <MenuSectionLabel>Saved views</MenuSectionLabel>
-          {savedViews.length === 0 && (
-            <div className="empty-state empty-state--sm empty-state--start">
-              No saved views yet.
-            </div>
-          )}
-          {savedViews.map((view) => {
-            const pinned = viewsKey ? useUIStore.getState().isViewPinned(viewsKey, view.id) : false;
-            return (
-            <div key={view.id} className="options-popover__view-row">
-              <button
-                type="button"
-                className={`options-popover__view-name${activeViewId === view.id ? " is-active" : ""}`}
-                onClick={() => onApplyView?.(view)}
-                title="Apply this view"
-              >
-                {view.name}
-              </button>
-              {onTogglePinView && (
-                <button
-                  type="button"
-                  className="options-popover__view-del"
-                  onClick={() => onTogglePinView(view)}
-                  aria-label={pinned ? `Unpin ${view.name}` : `Pin ${view.name} to sidebar`}
-                  title={pinned ? "Unpin from sidebar" : "Pin to sidebar"}
-                >
-                  {pinned ? <PinOff size={10} /> : <Pin size={10} />}
-                </button>
-              )}
-              {!view.isSystem && (
-                <button
-                  type="button"
-                  className="options-popover__view-del"
-                  onClick={() => onDeleteView?.(view.id)}
-                  aria-label={`Delete view ${view.name}`}
-                >
-                  <X size={10} />
-                </button>
-              )}
-            </div>
-            );
-          })}
-          <div className="options-popover__save-row">
-            <input
-              className="options-popover__save-input"
-              placeholder="Save current view as…"
-              value={newViewName}
-              onChange={(e) => setNewViewName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && newViewName.trim()) {
-                  onSaveView?.(newViewName);
-                  setNewViewName("");
-                }
-              }}
-            />
-            <button
-              type="button"
-              className="btn-action btn-action--primary"
-              disabled={!newViewName.trim()}
-              onClick={() => {
-                onSaveView?.(newViewName);
-                setNewViewName("");
-              }}
-            >
-              Save
-            </button>
-          </div>
-          <div className="menu__separator" />
-        </>
-      )}
       <MenuSectionLabel>Density</MenuSectionLabel>
       <div className="options-popover__segmented" role="radiogroup" aria-label="Density">
         <button
