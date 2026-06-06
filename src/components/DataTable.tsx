@@ -479,6 +479,8 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
       const optimistic = { ...view, isShared: true };
       setSavedViews((current) => [...current, optimistic]);
       setActiveViewId(optimistic.id);
+      let workspaceId: string | null = null;
+      let workspaceError: unknown = null;
       try {
         const id = await createWorkspaceView({
           societyId: sharedViewsContext.societyId as any,
@@ -493,14 +495,21 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>({
             : {}),
           ...savedViewToWorkspacePayload(view),
         });
-        setActiveViewId(String(id));
+        if (id != null) workspaceId = String(id);
       } catch (error) {
-        setSavedViews((current) => current.filter((candidate) => candidate.id !== optimistic.id));
-        toast.error("Saved locally", error instanceof Error ? error.message : "Shared view could not be saved.");
-        const localNext = [...readSavedViews(viewsKey), view];
-        writeSavedViews(viewsKey, localNext);
-        setSavedViews(localNext);
+        workspaceError = error;
       }
+      if (workspaceId) {
+        setActiveViewId(workspaceId);
+        return;
+      }
+      setSavedViews((current) => current.filter((candidate) => candidate.id !== optimistic.id));
+      if (workspaceError) {
+        toast.error("Saved locally", workspaceError instanceof Error ? workspaceError.message : "Shared view could not be saved.");
+      }
+      const localNext = [...readSavedViews(viewsKey), view];
+      writeSavedViews(viewsKey, localNext);
+      setSavedViews(localNext);
       return;
     }
     const next = [...savedViews, view];

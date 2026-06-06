@@ -72,23 +72,23 @@
   height: 20px;
   padding: 0 7px;
 }
-.pill--success { background: var(--success-soft); color: var(--success); border-color: transparent; }
-.pill--warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
-.pill--danger { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
-.pill--info { background: var(--info-soft); color: var(--info); border-color: transparent; }
-.pill--accent { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.pill--success { background: var(--success-soft); color: var(--success); border-color: var(--green-6); }
+.pill--warn { background: var(--warn-soft); color: var(--warn); border-color: var(--orange-6); }
+.pill--danger { background: var(--danger-soft); color: var(--danger); border-color: var(--red-6); }
+.pill--info { background: var(--info-soft); color: var(--info); border-color: var(--blue-6); }
+.pill--accent { background: var(--accent-soft); color: var(--accent); border-color: var(--blue-6); }
 
 /* Palette-driven tones — track Twenty's tag colours. Each uses step-3 bg +
  * step-11 text so contrast holds across light and dark automatically. */
-.pill--blue      { background: var(--blue-3);      color: var(--blue-11);      border-color: transparent; }
-.pill--red       { background: var(--red-3);       color: var(--red-11);       border-color: transparent; }
-.pill--turquoise { background: var(--turquoise-3); color: var(--turquoise-11); border-color: transparent; }
-.pill--gray      { background: var(--gray-3);      color: var(--gray-11);      border-color: transparent; }
-.pill--orange    { background: var(--orange-3);    color: var(--orange-11);    border-color: transparent; }
-.pill--purple    { background: var(--purple-3);    color: var(--purple-11);    border-color: transparent; }
-.pill--green     { background: var(--green-3);     color: var(--green-11);     border-color: transparent; }
-.pill--pink      { background: var(--pink-3);      color: var(--pink-11);      border-color: transparent; }
-.pill--yellow    { background: var(--yellow-3);    color: var(--yellow-11);    border-color: transparent; }
+.pill--blue      { background: var(--blue-3);      color: var(--blue-11);      border-color: var(--blue-6); }
+.pill--red       { background: var(--red-3);       color: var(--red-11);       border-color: var(--red-6); }
+.pill--turquoise { background: var(--turquoise-3); color: var(--turquoise-11); border-color: var(--turquoise-6); }
+.pill--gray      { background: var(--gray-3);      color: var(--gray-11);      border-color: var(--gray-6); }
+.pill--orange    { background: var(--orange-3);    color: var(--orange-11);    border-color: var(--orange-6); }
+.pill--purple    { background: var(--purple-3);    color: var(--purple-11);    border-color: var(--purple-6); }
+.pill--green     { background: var(--green-3);     color: var(--green-11);     border-color: var(--green-6); }
+.pill--pink      { background: var(--pink-3);      color: var(--pink-11);      border-color: var(--pink-6); }
+.pill--yellow    { background: var(--yellow-3);    color: var(--yellow-11);    border-color: var(--yellow-6); }
 
 .tinted-icon-tile {
   display: inline-grid;
@@ -515,21 +515,21 @@
   border: 1px solid var(--border);
   white-space: nowrap;
 }
-.badge--success { background: var(--success-soft); color: var(--success); border-color: transparent; }
-.badge--warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
-.badge--danger { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
-.badge--info { background: var(--info-soft); color: var(--info); border-color: transparent; }
-.badge--accent { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.badge--success { background: var(--success-soft); color: var(--success); border-color: var(--green-6); }
+.badge--warn { background: var(--warn-soft); color: var(--warn); border-color: var(--orange-6); }
+.badge--danger { background: var(--danger-soft); color: var(--danger); border-color: var(--red-6); }
+.badge--info { background: var(--info-soft); color: var(--info); border-color: var(--blue-6); }
+.badge--accent { background: var(--accent-soft); color: var(--accent); border-color: var(--blue-6); }
 
-.badge--blue      { background: var(--blue-3);      color: var(--blue-11);      border-color: transparent; }
-.badge--red       { background: var(--red-3);       color: var(--red-11);       border-color: transparent; }
-.badge--turquoise { background: var(--turquoise-3); color: var(--turquoise-11); border-color: transparent; }
-.badge--gray      { background: var(--gray-3);      color: var(--gray-11);      border-color: transparent; }
-.badge--orange    { background: var(--orange-3);    color: var(--orange-11);    border-color: transparent; }
-.badge--purple    { background: var(--purple-3);    color: var(--purple-11);    border-color: transparent; }
-.badge--green     { background: var(--green-3);     color: var(--green-11);     border-color: transparent; }
-.badge--pink      { background: var(--pink-3);      color: var(--pink-11);      border-color: transparent; }
-.badge--yellow    { background: var(--yellow-3);    color: var(--yellow-11);    border-color: transparent; }
+.badge--blue      { background: var(--blue-3);      color: var(--blue-11);      border-color: var(--blue-6); }
+.badge--red       { background: var(--red-3);       color: var(--red-11);       border-color: var(--red-6); }
+.badge--turquoise { background: var(--turquoise-3); color: var(--turquoise-11); border-color: var(--turquoise-6); }
+.badge--gray      { background: var(--gray-3);      color: var(--gray-11);      border-color: var(--gray-6); }
+.badge--orange    { background: var(--orange-3);    color: var(--orange-11);    border-color: var(--orange-6); }
+.badge--purple    { background: var(--purple-3);    color: var(--purple-11);    border-color: var(--purple-6); }
+.badge--green     { background: var(--green-3);     color: var(--green-11);     border-color: var(--green-6); }
+.badge--pink      { background: var(--pink-3);      color: var(--pink-11);      border-color: var(--pink-6); }
+.badge--yellow    { background: var(--yellow-3);    color: var(--yellow-11);    border-color: var(--yellow-6); }
 
 /* Chip — Twenty's general-purpose tag with slots for left/right components.
  * Shares the base look of .badge but supports richer compositions. */
@@ -589,18 +589,18 @@
   text-overflow: ellipsis;
 }
 
-.chip--tone-blue      { background: var(--blue-3);      color: var(--blue-11);      border-color: transparent; }
-.chip--tone-red       { background: var(--red-3);       color: var(--red-11);       border-color: transparent; }
-.chip--tone-turquoise { background: var(--turquoise-3); color: var(--turquoise-11); border-color: transparent; }
-.chip--tone-gray      { background: var(--gray-3);      color: var(--gray-11);      border-color: transparent; }
-.chip--tone-orange    { background: var(--orange-3);    color: var(--orange-11);    border-color: transparent; }
-.chip--tone-purple    { background: var(--purple-3);    color: var(--purple-11);    border-color: transparent; }
-.chip--tone-green     { background: var(--green-3);     color: var(--green-11);     border-color: transparent; }
-.chip--tone-pink      { background: var(--pink-3);      color: var(--pink-11);      border-color: transparent; }
-.chip--tone-yellow    { background: var(--yellow-3);    color: var(--yellow-11);    border-color: transparent; }
-.chip--tone-success { background: var(--success-soft); color: var(--success); border-color: transparent; }
-.chip--tone-warn    { background: var(--warn-soft);    color: var(--warn);    border-color: transparent; }
-.chip--tone-danger  { background: var(--danger-soft);  color: var(--danger);  border-color: transparent; }
+.chip--tone-blue      { background: var(--blue-3);      color: var(--blue-11);      border-color: var(--blue-6); }
+.chip--tone-red       { background: var(--red-3);       color: var(--red-11);       border-color: var(--red-6); }
+.chip--tone-turquoise { background: var(--turquoise-3); color: var(--turquoise-11); border-color: var(--turquoise-6); }
+.chip--tone-gray      { background: var(--gray-3);      color: var(--gray-11);      border-color: var(--gray-6); }
+.chip--tone-orange    { background: var(--orange-3);    color: var(--orange-11);    border-color: var(--orange-6); }
+.chip--tone-purple    { background: var(--purple-3);    color: var(--purple-11);    border-color: var(--purple-6); }
+.chip--tone-green     { background: var(--green-3);     color: var(--green-11);     border-color: var(--green-6); }
+.chip--tone-pink      { background: var(--pink-3);      color: var(--pink-11);      border-color: var(--pink-6); }
+.chip--tone-yellow    { background: var(--yellow-3);    color: var(--yellow-11);    border-color: var(--yellow-6); }
+.chip--tone-success { background: var(--success-soft); color: var(--success); border-color: var(--green-6); }
+.chip--tone-warn    { background: var(--warn-soft);    color: var(--warn);    border-color: var(--orange-6); }
+.chip--tone-danger  { background: var(--danger-soft);  color: var(--danger);  border-color: var(--red-6); }
 .chip--tone-info    { background: var(--info-soft);    color: var(--info);    border-color: transparent; }
 .chip--tone-accent  { background: var(--accent-soft);  color: var(--accent);  border-color: transparent; }
 
@@ -2127,25 +2127,31 @@
   display: flex;
   gap: 2px;
   padding: 2px;
-  background: var(--bg-subtle);
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
   border-radius: var(--r-sm);
   margin-bottom: var(--s-1);
 }
 .options-popover__seg {
   flex: 1;
   height: 24px;
-  border: 0;
+  border: 1px solid transparent;
   background: transparent;
   border-radius: var(--r-xs);
   color: var(--text-secondary);
   font-size: var(--fs-sm);
   cursor: pointer;
-  transition: background var(--anim-fast) var(--anim-ease), color var(--anim-fast) var(--anim-ease);
+  transition: background var(--anim-fast) var(--anim-ease), color var(--anim-fast) var(--anim-ease), border-color var(--anim-fast) var(--anim-ease);
+}
+.options-popover__seg:hover:not(.is-active) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 .options-popover__seg.is-active {
   background: var(--bg-panel);
+  border-color: var(--border-strong);
   color: var(--text-primary);
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--shadow-sm);
 }
 .options-popover__col-row {
   display: flex;

@@ -4288,7 +4288,7 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 .segmented {
   display: inline-flex;
   align-self: flex-start;
-  background: var(--bg-subtle);
+  background: var(--bg-muted);
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
   padding: 3px;
@@ -4298,8 +4298,14 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   padding: 5px 12px;
   font-size: var(--fs-sm);
   color: var(--text-secondary);
+  border: 1px solid transparent;
   border-radius: var(--r-pill);
   font-weight: 500;
+  transition: background var(--anim-fast) var(--anim-ease), color var(--anim-fast) var(--anim-ease), border-color var(--anim-fast) var(--anim-ease);
+}
+.segmented__btn:hover:not(.is-active) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 .segmented--compact {
   padding: 2px;
@@ -4314,8 +4320,9 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 }
 .segmented__btn.is-active {
   background: var(--bg-panel);
+  border-color: var(--border-strong);
   color: var(--text-primary);
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Import sessions */
@@ -5972,7 +5979,7 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   padding: 2px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  background: var(--bg-subtle);
+  background: var(--bg-muted);
 }
 
 .segmented-control__item {
@@ -5981,16 +5988,17 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   gap: 5px;
   min-height: 26px;
   padding: 0 8px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: calc(var(--r-sm) - 2px);
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
   font-size: var(--fs-sm);
   cursor: pointer;
+  transition: background var(--anim-fast) var(--anim-ease), color var(--anim-fast) var(--anim-ease), border-color var(--anim-fast) var(--anim-ease);
 }
 
-.segmented-control__item:hover {
+.segmented-control__item:hover:not(.is-active) {
   color: var(--text-primary);
   background: var(--bg-hover);
 }
@@ -5998,7 +6006,8 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 .segmented-control__item.is-active {
   color: var(--text-primary);
   background: var(--bg-panel);
-  box-shadow: var(--shadow-xs);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
 }
 
 .grant-edit-grid--2 {
