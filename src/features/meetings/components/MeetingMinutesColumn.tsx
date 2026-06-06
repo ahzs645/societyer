@@ -1182,7 +1182,7 @@ export function MeetingMinutesColumn({
 
         {sectionEditorTab === "notes" && (
           <div className="meeting-minutes-section-editor__panel">
-            <Field label="Discussion notes" hint="Discussion/report points only. Press / for headings, lists, and more.">
+            <Field label="Discussion notes" hint="Discussion/report points only. Use the toolbar for headings, lists, and more.">
               <MarkdownEditor
                 ref={isMobile ? undefined : sectionDiscussionRef}
                 rows={8}
