@@ -782,7 +782,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                     <GripVertical size={12} />
                                   </span>
                                 )}
-                                {!isEditingThis && <ChevronDown size={13} aria-hidden="true" />}
+                                {!isEditingThis && <ChevronDown size={13} aria-hidden="true" className="meeting-minutes-section-item__expand" />}
                                 {sectionEditIndex === index && sectionDraft && !isMobileSectionEditor ? (
                                   <span
                                     className="meeting-minutes-section-item__title-edit"

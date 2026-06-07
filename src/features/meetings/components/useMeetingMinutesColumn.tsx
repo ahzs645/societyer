@@ -130,14 +130,15 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     );
   const detailedSectionTitles = useMemo(() => {
     const set = new Set<string>();
-    for (const section of sections) {
-      if (!sectionHasDetails(section)) continue;
+    sections.forEach((section: any, index: number) => {
+      const hasMotion = relatedMotionsForSection(section, index, motions).length > 0;
+      if (!sectionHasDetails(section) && !hasMotion) return;
       const title = String(section?.title ?? "").trim().toLowerCase();
       if (title) set.add(title);
-    }
+    });
     return set;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections]);
+  }, [sections, motions]);
   const [sectionEditIndex, setSectionEditIndex] = useState<number | null>(null);
   const [sectionDraft, setSectionDraft] = useState<SectionDraft | null>(null);
   const [agendaNumberingMode, setAgendaNumberingMode] = useState<AgendaNumberingMode>(readStoredAgendaNumberingMode);
@@ -829,6 +830,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       !section?.presenter &&
       !(section?.decisions ?? []).length &&
       !(section?.actionItems ?? []).length &&
+      !(section?.linkedTaskIds ?? []).length &&
       !(motionMatchesBySection[index]?.length);
     const draftEmpty = !isEditingThis || (
       !sectionDraft?.discussion &&
@@ -941,13 +943,25 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     // we close the editor. commitDraft is a no-op when there's nothing to
     // commit (empty text or no open draft), so it's safe to always call.
     sectionMotionEditorRef.current?.commitDraft();
+    // Read the editor's current markdown directly — Milkdown's onChange flows
+    // through React state, and a fast Save click can land before that
+    // re-render has flushed.
+    const latestDiscussion =
+      sectionDiscussionRef.current?.getMarkdown() ?? sectionDraft.discussion;
+    const existing = sections[sectionEditIndex] ?? {};
     const next = [...sections];
+    // Build the section explicitly rather than spreading `existing` so we don't
+    // pass through fields the `update` mutation validator doesn't accept
+    // (motionText/motionTemplateId/motionBacklogId etc. live on storage but not
+    // on the mutation arg). `depth` and `reportSubmitted` are the only legacy
+    // fields we need to preserve.
     next[sectionEditIndex] = {
-      ...next[sectionEditIndex],
-      title: sectionDraft.title.trim() || next[sectionEditIndex]?.title || "Untitled section",
+      title: sectionDraft.title.trim() || existing.title || "Untitled section",
       type: sectionDraft.type.trim() || undefined,
       presenter: cleanOptional(sectionDraft.presenter),
-      discussion: cleanOptional(sectionDraft.discussion),
+      discussion: cleanOptional(latestDiscussion),
+      reportSubmitted: existing.reportSubmitted,
+      depth: existing.depth,
       decisions: sectionDraft.decisions.map((d) => d.trim()).filter(Boolean),
       actionItems: sectionDraft.actionItems
         .map((item) => ({
@@ -1230,7 +1244,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
             <div className="meeting-minutes-section-tasks">
               {linkedTaskRecords.length === 0 ? (
                 <div className="muted">
-                  Link a task from this meeting to capture status updates and a completion note here. Status changes apply to the kanban when you save the section.
+                  Link a task to update its status here.
                 </div>
               ) : (
                 linkedTaskRecords.map((task) => {

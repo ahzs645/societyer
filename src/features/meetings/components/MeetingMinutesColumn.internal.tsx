@@ -2,7 +2,7 @@
 
 import { type DragEvent as ReactDragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, FileText, GripVertical, IndentDecrease, IndentIncrease, ListChecks, Mic, MoreHorizontal, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, ClipboardList, FileText, GripVertical, IndentDecrease, IndentIncrease, ListChecks, Mic, MoreHorizontal, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
 import { Badge, Field, MenuRow } from "../../../components/ui";
 import { MarkdownEditor, type MarkdownEditorHandle } from "../../../components/MarkdownEditor";
 import { LineListEditor } from "../../../components/LineListEditor";
@@ -125,6 +125,41 @@ type SectionActionDraft = {
 type AttendancePerson = { name: string; status: "present" | "absent" };
 
 
+function AttendanceRosterRow({
+  person,
+  onSetStatus,
+}: {
+  person: AttendancePerson;
+  onSetStatus: (status: AttendancePerson["status"]) => void;
+}) {
+  return (
+    <>
+      <span className="attendance-roster__name">{person.name}</span>
+      <div className="attendance-roster__status segmented">
+        <button
+          type="button"
+          className={`segmented__btn${person.status === "present" ? " is-active" : ""}`}
+          onClick={() => onSetStatus("present")}
+          aria-label="Present"
+          title="Present"
+        >
+          <Check size={14} aria-hidden />
+        </button>
+        <button
+          type="button"
+          className={`segmented__btn${person.status === "absent" ? " is-active" : ""}`}
+          onClick={() => onSetStatus("absent")}
+          aria-label="Absent / regrets"
+          title="Absent / regrets"
+        >
+          <X size={14} aria-hidden />
+        </button>
+      </div>
+    </>
+  );
+}
+
+
 function AttendanceRoster({
   people,
   peopleNames,
@@ -163,43 +198,17 @@ function AttendanceRoster({
     onChange(people.filter((_, i) => i !== index));
   };
 
-  const presentCount = people.filter((p) => p.status === "present").length;
-  const absentCount = people.length - presentCount;
-
   return (
     <ListEditor
       items={people}
       divided
       onRemove={remove}
       getRemoveLabel={(person) => `Remove ${person.name}`}
-      header={
-        <>
-          <strong>Attendance</strong>
-          <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-            {presentCount} present · {absentCount} absent / regrets
-          </span>
-        </>
-      }
       renderItem={(person, index) => (
-        <>
-          <span className="attendance-roster__name">{person.name}</span>
-          <div className="attendance-roster__status segmented">
-            <button
-              type="button"
-              className={`segmented__btn${person.status === "present" ? " is-active" : ""}`}
-              onClick={() => setStatus(index, "present")}
-            >
-              Present
-            </button>
-            <button
-              type="button"
-              className={`segmented__btn${person.status === "absent" ? " is-active" : ""}`}
-              onClick={() => setStatus(index, "absent")}
-            >
-              Absent / regrets
-            </button>
-          </div>
-        </>
+        <AttendanceRosterRow
+          person={person}
+          onSetStatus={(status) => setStatus(index, status)}
+        />
       )}
       footer={
         <>
@@ -359,9 +368,13 @@ function relatedMotionsForSection(section: any, sectionIndex: number, motions: M
   if (!haystack) return [];
   return motions.map((motion, index) => ({ motion, index })).filter(({ motion }) => {
     if (isAdjournmentMotion(motion)) return isAdjournmentSection(section);
-    if (motion.sectionIndex === sectionIndex) return true;
+    // When the motion has been bound to a specific section index, that index
+    // alone determines its home — don't also match every same-titled sibling
+    // (sections frequently share a title like "New section" before they're
+    // renamed).
+    if (motion.sectionIndex != null) return motion.sectionIndex === sectionIndex;
     if (motion.sectionTitle && normalize(motion.sectionTitle) === normalize(section?.title ?? "")) return true;
-    if (motion.sectionIndex != null || motion.sectionTitle) return false;
+    if (motion.sectionTitle) return false;
     const motionText = normalize(motion.text);
     if (!motionText) return false;
     if (haystack.includes(motionText.slice(0, 32))) return true;
