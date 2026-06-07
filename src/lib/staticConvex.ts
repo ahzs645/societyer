@@ -1451,7 +1451,9 @@ function staticSanitizeExportRow(row: any) {
   return copy;
 }
 
-function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null) {
+const QUERY_NOT_HANDLED = Symbol("staticConvex.queryNotHandled");
+
+function queryCasesActivity1(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   switch (name) {
     case "activity:list":
       return (store?.listRows("activity", args) ?? tables.activity)
@@ -1529,6 +1531,12 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
       const rows = store?.listRows("inventoryBalances", args) ?? scopedRows(tables.inventoryBalances, args);
       return args?.inventoryItemId ? rows.filter((row: any) => row.inventoryItemId === args.inventoryItemId) : rows;
     }
+  }
+  return QUERY_NOT_HANDLED;
+}
+
+function queryCasesInventoryHub2(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
+  switch (name) {
     case "inventoryHub:stockMovements":
       return (store?.listRows("stockMovements", args) ?? scopedRows(tables.stockMovements, args))
         .sort((a: any, b: any) => b.movementDate.localeCompare(a.movementDate))
@@ -1647,6 +1655,12 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
         items,
       };
     }
+  }
+  return QUERY_NOT_HANDLED;
+}
+
+function queryCasesAgendas3(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
+  switch (name) {
     case "agendas:listForSociety":
       return scopedRows(meetings, args)
         .map((meeting) => ({
@@ -1715,6 +1729,12 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
         }));
     case "paperless:syncForDocument":
       return paperlessDocumentSyncs.find((sync) => sync.documentId === args?.documentId) ?? null;
+  }
+  return QUERY_NOT_HANDLED;
+}
+
+function queryCasesPaperless4(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
+  switch (name) {
     case "paperless:tagProfiles":
       return [
         {
@@ -1809,6 +1829,12 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     case "accounting:counterparties":
       return scopedRows(store?.listRows("accountingCounterparties", args) ?? accountingCounterparties, args)
         .sort((a, b) => a.name.localeCompare(b.name));
+  }
+  return QUERY_NOT_HANDLED;
+}
+
+function queryCasesAccounting5(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
+  switch (name) {
     case "accounting:fundRestrictions":
       return scopedRows(store?.listRows("fundRestrictions", args) ?? fundRestrictions, args)
         .sort((a, b) => a.name.localeCompare(b.name));
@@ -1904,6 +1930,12 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
         linkedTotalCents: rows.reduce((sum, row) => sum + row.amountCents, 0),
       };
     }
+  }
+  return QUERY_NOT_HANDLED;
+}
+
+function queryCasesFinancialHub6(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
+  switch (name) {
     case "financialHub:operatingSubscriptions":
       return operatingSubscriptions.map((row) => {
         const monthlyEstimateCents = staticMonthlyEstimateCents(row.amountCents, row.interval);
@@ -1985,6 +2017,12 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
       };
     case "grantSources:candidates":
       return tables.grantOpportunityCandidates;
+  }
+  return QUERY_NOT_HANDLED;
+}
+
+function queryCasesMembers7(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
+  switch (name) {
     case "members:get":
       return store?.getRow("members", args?.id) ?? byId(members, args?.id);
     case "meetings:get":
@@ -2035,6 +2073,12 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     case "transcripts:getByMeeting":
     case "transcripts:jobForMeeting":
       return null;
+  }
+  return QUERY_NOT_HANDLED;
+}
+
+function queryCasesTransparency8(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
+  switch (name) {
     case "transparency:listPublications":
       return tables.transparency;
     case "transparency:publicCenter":
@@ -2067,6 +2111,25 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
       return workflowRuns.filter((run) => run.workflowId === args?.workflowId);
     case "workflows:getRun":
       return byId(workflowRuns, args?.id);
+  }
+  return QUERY_NOT_HANDLED;
+}
+
+const QUERY_DISPATCHERS = [
+  queryCasesActivity1,
+  queryCasesInventoryHub2,
+  queryCasesAgendas3,
+  queryCasesPaperless4,
+  queryCasesAccounting5,
+  queryCasesFinancialHub6,
+  queryCasesMembers7,
+  queryCasesTransparency8,
+];
+
+function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
+  for (const dispatch of QUERY_DISPATCHERS) {
+    const result = dispatch(name, args, store);
+    if (result !== QUERY_NOT_HANDLED) return result;
   }
 
   const [moduleName, exportName] = name.split(":");
@@ -2110,14 +2173,14 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
   return [];
 }
 
+
 function mutableQueryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null) {
   return store?.queryResult(name, args) ?? queryResult(name, args, store);
 }
 
-function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null) {
-  const localResult = store?.mutationResult(name, args);
-  if (localResult !== undefined) return localResult;
+const MUT_NOT_HANDLED = Symbol("staticConvex.mutationNotHandled");
 
+function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   if (name === "society:createWorkspace") {
     const now = new Date().toISOString();
     const societyId = staticLocalId("society", "workspace");
@@ -2306,6 +2369,10 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     return { updated };
   }
 
+  return MUT_NOT_HANDLED;
+}
+
+function mutCasesImportSessions2(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   if (name === "importSessions:removeSession") {
     store?.transaction(() => {
       for (const record of staticImportRecordRows(store, args?.sessionId)) store.removeRow("documents", record._id);
@@ -2455,6 +2522,10 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     if (idx >= 0) aiSkills.splice(idx, 1);
     return args?.id;
   }
+  return MUT_NOT_HANDLED;
+}
+
+function mutCasesAiAgents3(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   if (name === "aiAgents:executeTool") {
     if (args?.toolName === "draft_task") {
       const now = new Date().toISOString();
@@ -2579,6 +2650,10 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       updated: [],
     };
   }
+  return MUT_NOT_HANDLED;
+}
+
+function mutCasesAccounting4(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   if (name === "accounting:seedSocietyChartOfAccounts") {
     return { inserted: 0, skipped: financialAccounts.length };
   }
@@ -2810,6 +2885,10 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     return { ok: true };
   }
   if (name === "users:resolveAuthSession") return { userId: USER_OWNER_ID };
+  return MUT_NOT_HANDLED;
+}
+
+function mutCasesPaperless5(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   if (name === "paperless:testConnection") {
     return {
       ok: true,
@@ -2848,6 +2927,10 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
   if (name === "documentComments:create") return "static_document_comment_new";
   if (name === "documentComments:setStatus") return null;
   if (name === "documentComments:remove") return null;
+  return MUT_NOT_HANDLED;
+}
+
+function mutCasesMeetings6(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   if (name === "meetings:markSourceReview") return null;
   if (name === "meetings:setPackageReviewStatus") return null;
   if (name === "meetingMaterials:attach") return "static_material_new";
@@ -2887,6 +2970,10 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       tags: ["privacy", "privacy-policy", "pipa", "draft", "societyer-template", "society-filled"],
     };
   }
+  return MUT_NOT_HANDLED;
+}
+
+function mutCasesDocuments7(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   if (name === "documents:createMemberDataGapMemoDraft") {
     return {
       reused: false,
@@ -2990,6 +3077,10 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
   if (name === "secrets:revealSecret") {
     return { value: "demo-registry-recovery-key", revealedAtISO: new Date().toISOString() };
   }
+  return MUT_NOT_HANDLED;
+}
+
+function mutCasesSubscriptions8(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   if (name === "subscriptions:beginCheckout") {
     return {
       url: `demo://checkout/${args?.planId ?? "membership"}`,
@@ -3546,6 +3637,10 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     store?.upsertRow("assets", { ...asset, ...patch });
     return event._id;
   }
+  return MUT_NOT_HANDLED;
+}
+
+function mutCasesAssets9(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   if (name === "assets:scheduleMaintenance") {
     const asset = store?.getRow("assets", args?.assetId) ?? byId(tables.assets, args?.assetId);
     if (!asset) return null;
@@ -3866,6 +3961,10 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
       fileSizeBytes: version.fileSizeBytes,
     };
   }
+  return MUT_NOT_HANDLED;
+}
+
+function mutCasesDocuments10(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   if (name === "documents:flagForDeletion") {
     const existing = store?.getRow("documents", args?.id);
     if (!existing) return null;
@@ -3884,6 +3983,32 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     store?.removeRow("documents", args?.id);
     return null;
   }
+  return MUT_NOT_HANDLED;
+}
+
+const MUT_DISPATCHERS = [
+  mutCasesSociety1,
+  mutCasesImportSessions2,
+  mutCasesAiAgents3,
+  mutCasesAccounting4,
+  mutCasesPaperless5,
+  mutCasesMeetings6,
+  mutCasesDocuments7,
+  mutCasesSubscriptions8,
+  mutCasesAssets9,
+  mutCasesDocuments10,
+];
+
+function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
+  const localResult = store?.mutationResult(name, args);
+  if (localResult !== undefined) return localResult;
+
+
+  for (const dispatch of MUT_DISPATCHERS) {
+    const result = dispatch(name, args, store);
+    if (result !== MUT_NOT_HANDLED) return result;
+  }
+
     const [moduleName, exportName] = name.split(":");
   if (exportName && /^(create|update|upsert|issue|setStatus|remove)/.test(exportName)) {
     const tableName = staticMutationTableName(moduleName, exportName);
