@@ -91,7 +91,7 @@ test.describe("Meeting agenda minutes workflow", () => {
     page.on("pageerror", (err) => errors.push(err.message));
 
     await page.goto("/demo/app/meetings/static_meeting_board_q2", { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Minutes" }).click();
+    await page.getByRole("button", { name: "Agenda & minutes" }).click();
     await page.getByRole("button", { name: "Edit agenda", exact: true }).click();
     await page.getByRole("button", { name: "Add item" }).click();
     await page.locator(".meeting-minutes-agenda-editor input.input").last().fill("Volunteer program update");
@@ -102,7 +102,7 @@ test.describe("Meeting agenda minutes workflow", () => {
     await expect(page.locator("#meeting-minutes-section-3")).toContainText("Volunteer program update");
 
     await page.goto("/demo/app/agendas", { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Q2 board meeting agenda — Apr 23, 2026 Draft" }).click();
+    await page.getByRole("button", { name: /Q2 board meeting agenda.*Apr 23, 2026.*Draft/ }).click();
     const agendaInputValues = await page.locator("input.input").evaluateAll((inputs) =>
       inputs.map((input) => (input as HTMLInputElement).value),
     );
