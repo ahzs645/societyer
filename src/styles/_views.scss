@@ -2416,21 +2416,67 @@
 }
 .meeting-minutes-section-tasks {
   display: grid;
-  gap: var(--s-3);
+  gap: 0;
 }
+/* Flat list rows instead of card-in-card. A thin top border separates rows;
+   the first one gets no rule so it sits flush with whatever sits above. */
 .meeting-minutes-section-task {
   display: grid;
-  gap: var(--s-2);
-  padding: var(--s-2) var(--s-3);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bg-base);
+  gap: 6px;
+  padding: var(--s-2) 0;
+  border-top: 1px solid var(--border-subtle, var(--border));
+}
+.meeting-minutes-section-task:first-child {
+  border-top: 0;
+  padding-top: 0;
 }
 .meeting-minutes-section-task__head {
   display: flex;
   align-items: center;
   gap: var(--s-2);
   flex-wrap: wrap;
+}
+.meeting-minutes-section-task__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meeting-minutes-section-task__note {
+  display: grid;
+  gap: 6px;
+}
+.meeting-minutes-section-task__note-toggle {
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--text-tertiary);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  user-select: none;
+}
+.meeting-minutes-section-task__note-toggle::-webkit-details-marker {
+  display: none;
+}
+.meeting-minutes-section-task__note-toggle::before {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 4px solid var(--text-tertiary);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.12s ease;
+}
+.meeting-minutes-section-task__note[open] > .meeting-minutes-section-task__note-toggle::before {
+  transform: rotate(90deg);
+}
+.meeting-minutes-section-task__note-toggle:hover {
+  color: var(--text-primary);
 }
 .meeting-minutes-section-motion {
   display: grid;

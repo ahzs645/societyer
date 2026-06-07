@@ -845,19 +845,35 @@ export function MeetingMinutesColumn({
   const confirmAndRemoveSection = async (index: number) => {
     const section = sections[index];
     if (!section) return;
-    const isEmpty =
+    // When the user is mid-edit on this section, evaluate the in-progress
+    // draft instead of the persisted section — otherwise unsaved notes,
+    // decisions, or task changes would be silently discarded.
+    const isEditingThis = sectionEditIndex === index && !!sectionDraft;
+    const sectionEmpty =
       !section?.discussion &&
       !section?.presenter &&
       !(section?.decisions ?? []).length &&
       !(section?.actionItems ?? []).length &&
       !(motionMatchesBySection[index]?.length);
-    if (isEmpty) {
+    const draftEmpty = !isEditingThis || (
+      !sectionDraft?.discussion &&
+      !sectionDraft?.presenter &&
+      !(sectionDraft?.decisions ?? []).filter((line) => line.trim()).length &&
+      !(sectionDraft?.actionItems ?? []).filter((item) => item.text.trim()).length &&
+      !(sectionDraft?.linkedTaskIds ?? []).length &&
+      Object.keys(sectionDraft?.taskUpdates ?? {}).length === 0
+    );
+    if (sectionEmpty && draftEmpty) {
       void removeSection(index);
       return;
     }
+    const hasUnsavedDraftChanges = isEditingThis && !draftEmpty;
+    const titleForPrompt = (isEditingThis ? sectionDraft?.title : section.title) || "Untitled section";
     const ok = await confirm({
-      title: `Delete "${section.title || "Untitled section"}"?`,
-      message: "Notes, decisions, and action items in this section will be removed.",
+      title: `Delete "${titleForPrompt}"?`,
+      message: hasUnsavedDraftChanges
+        ? "This section has unsaved changes. Removing it will discard those edits along with any existing notes, decisions, and action items."
+        : "Notes, decisions, and action items in this section will be removed.",
       confirmLabel: "Delete section",
       tone: "danger",
     });
@@ -1091,9 +1107,6 @@ export function MeetingMinutesColumn({
     const linkedTaskRecords = sectionDraft.linkedTaskIds
       .map((taskId) => meetingTaskById.get(taskId))
       .filter(Boolean);
-    const availableMeetingTasks = (meetingTasks ?? []).filter(
-      (task: any) => !sectionDraft.linkedTaskIds.includes(task._id),
-    );
     const isMobile = mode === "mobile";
 
     const editor = (
@@ -1249,63 +1262,50 @@ export function MeetingMinutesColumn({
                   const draft = sectionDraft.taskUpdates[task._id] ?? {};
                   const currentStatus = draft.status ?? task.status ?? "Todo";
                   const noteValue = draft.completionNote ?? task.completionNote ?? "";
+                  // Default the note open when there's already content — users
+                  // shouldn't have to hunt for an existing note. Empty notes
+                  // stay collapsed so the row condenses to one line.
+                  const hasNote = !!noteValue.trim();
                   return (
                     <div className="meeting-minutes-section-task" key={task._id}>
                       <div className="meeting-minutes-section-task__head">
-                        <strong>{task.title}</strong>
-                        <div className="row" style={{ gap: 6, alignItems: "center", marginLeft: "auto" }}>
-                          {task.priority && <Badge tone={task.priority === "High" ? "danger" : task.priority === "Medium" ? "warn" : "neutral"}>{task.priority}</Badge>}
-                          <button
-                            className="btn-action btn-action--icon"
-                            type="button"
-                            title="Unlink from this section"
-                            aria-label={`Unlink ${task.title}`}
-                            onClick={() => detachLinkedTask(task._id)}
-                          >
-                            <Unlink size={12} />
-                          </button>
-                        </div>
+                        <strong className="meeting-minutes-section-task__title">{task.title}</strong>
+                        <Segmented
+                          value={currentStatus}
+                          onChange={(next) => updateTaskDraft(task._id, { status: next })}
+                          items={SECTION_TASK_STATUS_ITEMS}
+                        />
+                        {task.priority && (
+                          <Badge tone={task.priority === "High" ? "danger" : task.priority === "Medium" ? "warn" : "neutral"}>
+                            {task.priority}
+                          </Badge>
+                        )}
+                        <button
+                          className="btn-action btn-action--icon"
+                          type="button"
+                          title="Unlink from this section"
+                          aria-label={`Unlink ${task.title}`}
+                          onClick={() => detachLinkedTask(task._id)}
+                        >
+                          <Unlink size={12} />
+                        </button>
                       </div>
-                      <Segmented
-                        value={currentStatus}
-                        onChange={(next) => updateTaskDraft(task._id, { status: next })}
-                        items={SECTION_TASK_STATUS_ITEMS}
-                      />
-                      <Field label="Completion note" hint="Saved to the task when this section is saved.">
+                      <details className="meeting-minutes-section-task__note" open={hasNote}>
+                        <summary className="meeting-minutes-section-task__note-toggle">
+                          {hasNote ? "Completion note" : "Add completion note"}
+                        </summary>
                         <MarkdownEditor
                           rows={2}
                           value={noteValue}
                           onChange={(markdown) => updateTaskDraft(task._id, { completionNote: markdown })}
                           placeholder="Outcome, blockers, or notes for the kanban card."
                         />
-                      </Field>
+                      </details>
                     </div>
                   );
                 })
               )}
 
-              {availableMeetingTasks.length > 0 ? (
-                <Select
-                  value=""
-                  onChange={(taskId) => {
-                    if (!taskId) return;
-                    attachLinkedTask(taskId);
-                  }}
-                  placeholder="Link a meeting task…"
-                  options={availableMeetingTasks.map((task: any) => ({
-                    value: task._id,
-                    label: `${task.title}${task.status ? ` · ${task.status}` : ""}`,
-                  }))}
-                />
-              ) : (meetingTasks?.length ?? 0) === 0 ? (
-                <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                  No tasks linked to this meeting yet — create one below to attach it to this section.
-                </div>
-              ) : (
-                <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                  All meeting tasks are linked to this section.
-                </div>
-              )}
               {createTaskForMeeting && (
                 <QuickAddTaskForm
                   onSubmit={createTaskForMeeting}
@@ -1912,13 +1912,21 @@ export function MeetingMinutesColumn({
                             key={`${section.title ?? "section"}-${index}`}
                             id={`meeting-minutes-section-${index}`}
                             className={`meeting-minutes-section-item${agendaPreviewRemovals.has(index) ? " meeting-minutes-section-item--pending-remove" : ""}${isChild ? " meeting-minutes-section-item--child" : ""}${isDragging ? " is-dragging" : ""}${showDropAbove ? " is-drop-above" : ""}${showDropBelow ? " is-drop-below" : ""}${isEditingThis ? " is-editing" : ""}`}
-                            open={isEditingThis || openSectionIndexes.has(index)}
+                            open={isEditingThis || (sectionEditIndex == null && openSectionIndexes.has(index))}
                             onToggle={(event) => {
                               // Lock the section open while the inline editor is
                               // mounted inside it — collapsing would hide every
                               // field the user is currently filling out.
                               if (isEditingThis && !event.currentTarget.open) {
                                 event.currentTarget.open = true;
+                                return;
+                              }
+                              // While another section is being edited, ignore
+                              // open toggles — focus stays on the edited section
+                              // so the editor isn't competing with adjacent
+                              // expanded rows for attention.
+                              if (sectionEditIndex != null && !isEditingThis) {
+                                if (event.currentTarget.open) event.currentTarget.open = false;
                                 return;
                               }
                               toggleSection(index, event.currentTarget.open);

@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
-import { Check, X, Plus, Trash2, MinusCircle, PlusCircle, Pencil, Clock } from "lucide-react";
+import { Check, X, Plus, Trash2, MinusCircle, PlusCircle, Pencil, Clock, Unlink } from "lucide-react";
 
 function DinnerTableIcon({ size = 12 }: { size?: number }) {
   return (
@@ -373,17 +373,11 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
         />
       ))}
 
-      {!adding && !hideInlineAdd && (
+      {!adding && !hideInlineAdd && editingIndex == null && (
         <div className="motion-add-before-adjournment">
-          {editingIndex != null ? (
-            <button className="btn-action btn-action--primary" onClick={() => setEditingIndex(null)}>
-              <Check size={12} /> Done
-            </button>
-          ) : (
-            <button className="btn-action" onClick={beginAdding}>
-              <Plus size={12} /> Add motion
-            </button>
-          )}
+          <button className="btn-action" onClick={beginAdding}>
+            <Plus size={12} /> Add motion
+          </button>
         </div>
       )}
 
@@ -677,6 +671,16 @@ function MotionRow({
                 <span className="btn-action__label">Edit</span>
               </button>
             )}
+            {selectedAgendaIndex != null && (
+              <button
+                className="btn-action"
+                onClick={() => onPatch({ sectionIndex: undefined, sectionTitle: undefined })}
+                title="Unlink from agenda item"
+                aria-label="Unlink motion from agenda item"
+              >
+                <Unlink size={12} />
+              </button>
+            )}
             <button className="btn-action" onClick={handleRemoveClick} title="Remove motion" aria-label="Remove motion">
               <Trash2 size={12} />
             </button>
@@ -729,13 +733,18 @@ function MotionRow({
             <VoteStepper label="Against" value={motion.votesAgainst ?? 0} onChange={(n) => onSetVote("votesAgainst", n)} tone="danger" />
             <VoteStepper label="Abstain" value={motion.abstentions ?? 0} onChange={(n) => onSetVote("abstentions", n)} tone="warn" />
           </div>
+          <div className="row" style={{ gap: 6, justifyContent: "flex-end", marginTop: 10 }}>
+            <button className="btn-action btn-action--primary" onClick={() => onSetExpanded?.(false)}>
+              <Check size={12} /> Done
+            </button>
+          </div>
         </div>
       )}
       <Modal
         open={showRemoveDialog}
         onClose={() => setShowRemoveDialog(false)}
         title="Remove motion?"
-        size="sm"
+        size="md"
         footer={
           <>
             <button className="btn" onClick={() => setShowRemoveDialog(false)}>Cancel</button>
@@ -746,7 +755,7 @@ function MotionRow({
                 onPatch({ sectionIndex: undefined, sectionTitle: undefined });
               }}
             >
-              Unlink from agenda
+              Unlink
             </button>
             <button
               className="btn btn--danger"
@@ -755,7 +764,7 @@ function MotionRow({
                 onDelete();
               }}
             >
-              Delete motion
+              Delete
             </button>
           </>
         }
