@@ -55,21 +55,23 @@ export function QuickAddTaskForm({
     reset();
   };
 
+  const closeAndReset = () => {
+    reset();
+    setOpen(false);
+  };
+
   return (
     <div className="quick-add-task">
-      <button
-        className="btn-action"
-        type="button"
-        onClick={() => {
-          setOpen((value) => {
-            if (value) reset();
-            return !value;
-          });
-        }}
-      >
-        {open ? <X size={12} /> : <Plus size={12} />}
-        {open ? "Cancel" : triggerLabel}
-      </button>
+      {!open && (
+        <button
+          className="btn-action"
+          type="button"
+          onClick={() => setOpen(true)}
+        >
+          <Plus size={12} />
+          {triggerLabel}
+        </button>
+      )}
       {open && (
         <div className="quick-add-task__form">
           <input
@@ -81,6 +83,9 @@ export function QuickAddTaskForm({
               if (event.key === "Enter" && draft.title.trim()) {
                 event.preventDefault();
                 void submit();
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                closeAndReset();
               }
             }}
             autoFocus
@@ -109,6 +114,13 @@ export function QuickAddTaskForm({
                 placeholder="Due date"
               />
             </div>
+            <button
+              className="btn-action"
+              type="button"
+              onClick={closeAndReset}
+            >
+              <X size={12} /> Cancel
+            </button>
             <button
               className="btn-action btn-action--primary"
               type="button"

@@ -6,6 +6,7 @@ import { buildQuorumSnapshot, QuorumSnapshot } from "./lib/bylawRules";
 import { Doc } from "./_generated/dataModel";
 
 const motion = v.object({
+  name: v.optional(v.string()),
   text: v.string(),
   movedBy: v.optional(v.string()),
   movedByMemberId: v.optional(v.id("members")),

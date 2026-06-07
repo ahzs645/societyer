@@ -68,7 +68,12 @@ export function MeetingMinutesPreviewPage() {
     MINUTES_EXPORT_STYLES[0];
 
   const bodyHtml = renderMinutesHtml({
-    society: { name: society.name, incorporationNumber: society.incorporationNumber ?? null },
+    society: {
+      name: society.name,
+      incorporationNumber: society.incorporationNumber ?? null,
+      logoUrl: (society as any).logoUrl ?? null,
+      letterheadUrl: (society as any).letterheadUrl ?? null,
+    },
     meeting: {
       title: meeting.title,
       type: meeting.type,

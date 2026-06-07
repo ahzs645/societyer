@@ -1,4 +1,5 @@
 import { formatDate, formatDateTime } from "../../../lib/format";
+import { renderDocumentHeader } from "../../../lib/exportWord";
 import {
   accessLevelLabel,
   availabilityLabel,
@@ -6,6 +7,7 @@ import {
 } from "./meetingMaterialAccess";
 
 export function renderMeetingPackHtml({
+  society,
   meeting,
   agenda,
   materials,
@@ -13,6 +15,12 @@ export function renderMeetingPackHtml({
   minutes,
   joinDetails,
 }: {
+  society?: {
+    name?: string;
+    incorporationNumber?: string | null;
+    logoUrl?: string | null;
+    letterheadUrl?: string | null;
+  };
   meeting: any;
   agenda: string[];
   materials: any[];
@@ -38,6 +46,7 @@ export function renderMeetingPackHtml({
   const taskHtml = tasks.length
     ? `<ul>${tasks.map((task) => `<li>${escapeHtml(task.title)} - ${escapeHtml(task.status)}${task.dueDate ? `, due ${escapeHtml(task.dueDate)}` : ""}</li>`).join("")}</ul>`
     : "<p>No linked tasks.</p>";
+  const headerHtml = society ? renderDocumentHeader(society) : "";
   return `<!doctype html>
 <html>
   <head>
@@ -52,6 +61,7 @@ export function renderMeetingPackHtml({
     </style>
   </head>
   <body>
+    ${headerHtml}
     <h1>${escapeHtml(meeting.title)}</h1>
     <div class="meta">${escapeHtml(meeting.type)} - ${escapeHtml(formatDateTime(meeting.scheduledAt))} - ${escapeHtml(meeting.location ?? "")}</div>
     <section>

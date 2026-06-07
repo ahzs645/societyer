@@ -1,5 +1,3 @@
-import type { PDFDocument as PDFDocumentType, PDFFont, PDFPage, RGB } from "pdf-lib";
-
 const DOCUMENT_CSS = `
   body { font-family: Calibri, "Segoe UI", Arial, sans-serif; font-size: 11pt; color: #1a1a1a; }
   h1 { font-size: 20pt; margin: 0 0 4pt; }
@@ -116,55 +114,52 @@ export function downloadStoredZip({
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/**
+ * Generates a PDF from the same HTML body the .doc export uses, via
+ * html2pdf.js (which composes html2canvas + jsPDF under the hood).
+ * Full CSS fidelity: tables, lists, bold, inline styles, embedded images,
+ * page breaks. Trades selectable text for one-click download — text is
+ * rasterized as part of the canvas snapshot, so the resulting PDF is not
+ * text-searchable. (Use the Word export when text searchability matters.)
+ */
 export async function exportPdfDownload({
   filename,
-  title,
+  title: _title,
   bodyHtml,
 }: {
   filename: string;
   title: string;
   bodyHtml: string;
 }) {
-  const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
-  const pdfDoc = await PDFDocument.create();
-  const regular = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const state: PdfRenderState = {
-    pdfDoc,
-    page: pdfDoc.addPage([612, 792]),
-    regular,
-    bold,
-    textColor: rgb(0.1, 0.1, 0.1),
-    margin: 54,
-    y: 738,
-    width: 504,
-  };
+  const html2pdf = ((await import("html2pdf.js")) as any).default;
 
-  drawPdfLine(state, title, { font: bold, size: 18, gapAfter: 14 });
-  const lines = htmlToPdfLines(bodyHtml);
-  for (const line of lines) {
-    if (line.type === "space") {
-      state.y -= 8;
-      continue;
-    }
-    drawPdfLine(state, line.text, {
-      font: line.bold ? bold : regular,
-      size: line.size,
-      indent: line.indent,
-      gapAfter: line.gapAfter,
-    });
+  // Render off-screen so the user doesn't see a flash of the document.
+  // Letter width minus default 0.65in margins = 7.2in of content area,
+  // matching the @page margin set in DOCUMENT_CSS.
+  const wrapper = document.createElement("div");
+  wrapper.style.position = "fixed";
+  wrapper.style.left = "-10000px";
+  wrapper.style.top = "0";
+  wrapper.style.width = "7.2in";
+  wrapper.style.background = "#ffffff";
+  wrapper.innerHTML = `<style>${DOCUMENT_CSS}</style>${bodyHtml}`;
+  document.body.appendChild(wrapper);
+
+  try {
+    await html2pdf()
+      .set({
+        filename: filename.endsWith(".pdf") ? filename : `${filename}.pdf`,
+        margin: [0.65, 0.65, 0.65, 0.65],
+        image: { type: "jpeg", quality: 0.95 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
+        jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
+        pagebreak: { mode: ["css", "legacy"] },
+      })
+      .from(wrapper)
+      .save();
+  } finally {
+    wrapper.remove();
   }
-
-  const bytes = await pdfDoc.save();
-  const blob = new Blob([bytes], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename.endsWith(".pdf") ? filename : `${filename}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function openPrintableDocument({
@@ -212,125 +207,6 @@ export function openPrintableDocument({
   };
   iframe.srcdoc = html;
   return true;
-}
-
-type PdfLine =
-  | { type: "text"; text: string; bold?: boolean; size: number; indent?: number; gapAfter?: number }
-  | { type: "space" };
-
-type PdfRenderState = {
-  pdfDoc: PDFDocumentType;
-  page: PDFPage;
-  regular: PDFFont;
-  bold: PDFFont;
-  textColor: RGB;
-  margin: number;
-  y: number;
-  width: number;
-};
-
-function htmlToPdfLines(bodyHtml: string): PdfLine[] {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(`<body>${bodyHtml}</body>`, "text/html");
-  const lines: PdfLine[] = [];
-  for (const node of Array.from(doc.body.childNodes)) {
-    appendPdfLines(node, lines, 0);
-  }
-  return lines;
-}
-
-function appendPdfLines(node: ChildNode, lines: PdfLine[], indent: number) {
-  if (node.nodeType === Node.TEXT_NODE) {
-    const text = normalizePdfText(node.textContent ?? "");
-    if (text) lines.push({ type: "text", text, size: 10, indent });
-    return;
-  }
-  if (!(node instanceof HTMLElement)) return;
-  const tag = node.tagName.toLowerCase();
-  if (tag === "h1") {
-    lines.push({ type: "text", text: normalizePdfText(node.textContent ?? ""), bold: true, size: 16, gapAfter: 8 });
-    return;
-  }
-  if (tag === "h2") {
-    lines.push({ type: "space" });
-    lines.push({ type: "text", text: normalizePdfText(node.textContent ?? ""), bold: true, size: 13, gapAfter: 6 });
-    return;
-  }
-  if (tag === "h3") {
-    lines.push({ type: "text", text: normalizePdfText(node.textContent ?? ""), bold: true, size: 11.5, gapAfter: 4 });
-    return;
-  }
-  if (tag === "p" || tag === "blockquote") {
-    const text = normalizePdfText(node.textContent ?? "");
-    if (text) lines.push({ type: "text", text, size: 10.5, indent, gapAfter: 4 });
-    return;
-  }
-  if (tag === "li") {
-    const text = normalizePdfText(node.textContent ?? "");
-    if (text) lines.push({ type: "text", text: `• ${text}`, size: 10.5, indent: indent + 14, gapAfter: 3 });
-    return;
-  }
-  if (tag === "tr") {
-    const cells = Array.from(node.children).map((cell) => normalizePdfText(cell.textContent ?? "")).filter(Boolean);
-    if (cells.length) lines.push({ type: "text", text: cells.join(" | "), size: 9.5, indent, gapAfter: 3 });
-    return;
-  }
-  if (tag === "br" || tag === "hr") {
-    lines.push({ type: "space" });
-    return;
-  }
-  for (const child of Array.from(node.childNodes)) {
-    appendPdfLines(child, lines, tag === "ul" || tag === "ol" ? indent + 10 : indent);
-  }
-  if (["section", "div", "table", "ul", "ol"].includes(tag)) lines.push({ type: "space" });
-}
-
-function drawPdfLine(
-  state: PdfRenderState,
-  text: string,
-  options: { font: PDFFont; size: number; indent?: number; gapAfter?: number },
-) {
-  const normalized = normalizePdfText(text);
-  if (!normalized) return;
-  const x = state.margin + (options.indent ?? 0);
-  const maxWidth = state.width - (options.indent ?? 0);
-  const wrapped = wrapPdfText(normalized, options.font, options.size, maxWidth);
-  for (const line of wrapped) {
-    if (state.y < state.margin + options.size * 2) {
-      state.page = state.pdfDoc.addPage([612, 792]);
-      state.y = 738;
-    }
-    state.page.drawText(line, {
-      x,
-      y: state.y,
-      size: options.size,
-      font: options.font,
-      color: state.textColor,
-    });
-    state.y -= options.size * 1.35;
-  }
-  state.y -= options.gapAfter ?? 2;
-}
-
-function wrapPdfText(text: string, font: PDFFont, size: number, maxWidth: number) {
-  const words = text.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let line = "";
-  for (const word of words) {
-    const candidate = line ? `${line} ${word}` : word;
-    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
-      line = candidate;
-      continue;
-    }
-    if (line) lines.push(line);
-    line = word;
-  }
-  if (line) lines.push(line);
-  return lines.length ? lines : [text];
-}
-
-function normalizePdfText(value: string) {
-  return value.replace(/\s+/g, " ").trim();
 }
 
 export function escapeHtml(s: string | undefined | null): string {
@@ -814,7 +690,12 @@ type DetailedAttendance = {
 };
 
 type MinutesRenderArgs = {
-  society: { name: string; incorporationNumber?: string | null };
+  society: {
+    name: string;
+    incorporationNumber?: string | null;
+    logoUrl?: string | null;
+    letterheadUrl?: string | null;
+  };
   meeting: {
     title: string;
     type: string;
@@ -930,12 +811,38 @@ export function renderMinutesHtml(args: MinutesRenderArgs): string {
   const styleId = normalizeMinutesStyleId(args.styleId);
   const options = { ...DEFAULT_MINUTES_EXPORT_OPTIONS, ...(args.options ?? {}) };
 
-  if (styleId === "formal-agm") return renderFormalAgmMinutes(args, options);
-  if (styleId === "executive-agenda") return renderExecutiveAgendaMinutes(args, options);
-  if (styleId === "numbered-agenda") return renderNumberedAgendaMinutes(args, options);
-  if (styleId === "action-table") return renderActionTableMinutes(args, options);
-  if (styleId === "board-public") return renderBoardPublicMinutes(args, options);
-  return renderStandardMinutes(args, options);
+  let body: string;
+  if (styleId === "formal-agm") body = renderFormalAgmMinutes(args, options);
+  else if (styleId === "executive-agenda") body = renderExecutiveAgendaMinutes(args, options);
+  else if (styleId === "numbered-agenda") body = renderNumberedAgendaMinutes(args, options);
+  else if (styleId === "action-table") body = renderActionTableMinutes(args, options);
+  else if (styleId === "board-public") body = renderBoardPublicMinutes(args, options);
+  else body = renderStandardMinutes(args, options);
+
+  return renderDocumentHeader(args.society) + body;
+}
+
+/**
+ * Returns an HTML header for the top of an exported document.
+ * Uses the uploaded letterhead only — the chrome logo is intentionally NOT a
+ * fallback so the export header has a clear semantic role (formal branding)
+ * distinct from the app chrome avatar.
+ * Renders a single right-aligned image with inline styles so it displays
+ * correctly in every export context (Word .doc, in-app preview, meeting
+ * pack) without relying on an external stylesheet.
+ * Returns an empty string when no letterhead is uploaded.
+ */
+export function renderDocumentHeader(society: {
+  name?: string;
+  incorporationNumber?: string | null;
+  letterheadUrl?: string | null;
+}): string {
+  const eh = escapeHtml;
+  if (!society.letterheadUrl) return "";
+  // align="right" + hspace are deprecated HTML attributes that Word honors
+  // reliably across versions for inline float layout. Inline CSS covers
+  // modern browsers (preview page + print).
+  return `<img src="${eh(society.letterheadUrl)}" alt="" align="right" hspace="12" style="float: right; height: 28pt; width: auto; max-height: 28pt; max-width: 120pt; margin: 0 0 6pt 12pt;" />`;
 }
 
 export function getMinutesStyleGaps({

@@ -1431,6 +1431,58 @@
   min-height: 76px;
   resize: vertical;
 }
+.motion-draft__motion-field {
+  display: grid;
+  gap: var(--s-2);
+}
+.motion-draft__name-input {
+  width: 100%;
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.motion-draft__details {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-base);
+  padding: 0;
+  overflow: hidden;
+}
+.motion-draft__details > .motion-draft__grid {
+  padding: var(--s-2);
+  border-top: 1px solid var(--border);
+}
+.motion-draft__details-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 6px var(--s-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+.motion-draft__details-summary::-webkit-details-marker {
+  display: none;
+}
+.motion-draft__details-summary::before {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 4px solid var(--text-tertiary);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.12s ease;
+}
+.motion-draft__details[open] > .motion-draft__details-summary::before {
+  transform: rotate(90deg);
+}
+.motion-draft__details-summary:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
 .motion-draft__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(180px, 1fr));
@@ -1446,7 +1498,11 @@
 .motion-draft__vote-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--s-3);
+}
+.motion-draft__vote-row .vote-stepper .field__label {
+  font-size: var(--fs-sm);
+  font-weight: 600;
 }
 .vote-stepper--compact {
   flex: 0 1 auto;
@@ -1468,6 +1524,43 @@
   height: 22px;
   padding: 0 3px !important;
   font-size: var(--fs-xs);
+}
+.motion__name {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  margin-bottom: 2px;
+  color: var(--text-primary);
+}
+/* Inline-editable motion name — mirrors the section title input pattern:
+   reads as a bold heading, hover hints editability with a dotted underline,
+   focus solidifies the accent. */
+.motion__name-input {
+  field-sizing: content;
+  width: 100%;
+  max-width: 100%;
+  min-width: 12ch;
+  margin: 0 0 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+  border-bottom: 1px dashed transparent;
+  transition: border-color 120ms ease;
+}
+.motion__name-input::placeholder {
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+.motion__name-input:hover {
+  border-bottom-color: var(--border);
+}
+.motion__name-input:focus,
+.motion__name-input:focus-visible {
+  outline: none;
+  border-bottom: 1px solid var(--accent);
 }
 .motion__text { font-weight: 500; margin-bottom: 4px; }
 .motion__meta { font-size: var(--fs-sm); color: var(--text-tertiary); display: flex; gap: var(--s-3); flex-wrap: wrap; }
@@ -2323,21 +2416,67 @@
 }
 .meeting-minutes-section-tasks {
   display: grid;
-  gap: var(--s-3);
+  gap: 0;
 }
+/* Flat list rows instead of card-in-card. A thin top border separates rows;
+   the first one gets no rule so it sits flush with whatever sits above. */
 .meeting-minutes-section-task {
   display: grid;
-  gap: var(--s-2);
-  padding: var(--s-2) var(--s-3);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bg-base);
+  gap: 6px;
+  padding: var(--s-2) 0;
+  border-top: 1px solid var(--border-subtle, var(--border));
+}
+.meeting-minutes-section-task:first-child {
+  border-top: 0;
+  padding-top: 0;
 }
 .meeting-minutes-section-task__head {
   display: flex;
   align-items: center;
   gap: var(--s-2);
   flex-wrap: wrap;
+}
+.meeting-minutes-section-task__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meeting-minutes-section-task__note {
+  display: grid;
+  gap: 6px;
+}
+.meeting-minutes-section-task__note-toggle {
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--text-tertiary);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  user-select: none;
+}
+.meeting-minutes-section-task__note-toggle::-webkit-details-marker {
+  display: none;
+}
+.meeting-minutes-section-task__note-toggle::before {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 4px solid var(--text-tertiary);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.12s ease;
+}
+.meeting-minutes-section-task__note[open] > .meeting-minutes-section-task__note-toggle::before {
+  transform: rotate(90deg);
+}
+.meeting-minutes-section-task__note-toggle:hover {
+  color: var(--text-primary);
 }
 .meeting-minutes-section-motion {
   display: grid;
@@ -4332,6 +4471,93 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   border-color: var(--border-strong);
   color: var(--text-primary);
   box-shadow: var(--shadow-sm);
+}
+
+/* Outcome picker: row of independent .btn-action buttons (matches the
+   motion action strip pattern). The active outcome gets a tinted-fill
+   treatment so the selection reads at a glance, and the picker collapses
+   to icon-only via container query when it's narrower than the label row
+   would need. */
+.motion-outcome-picker {
+  container-type: inline-size;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.motion-outcome-picker .btn-action {
+  flex: 0 0 auto;
+}
+.motion-outcome-picker .btn-action.is-active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.motion-outcome-picker .btn-action--success.is-active {
+  background: var(--success-soft);
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 60%, transparent);
+}
+.motion-outcome-picker .btn-action--danger.is-active {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 60%, transparent);
+}
+.motion-outcome-picker .btn-action--warn.is-active {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 60%, transparent);
+}
+@container (max-width: 360px) {
+  .motion-outcome-picker .btn-action__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .motion-outcome-picker .btn-action {
+    width: 24px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
+/* Stretch variant: each button takes an equal share of the row and grows
+   to fill the available width. When the row is narrow enough that the
+   widest label ("Defeated") would no longer fit on a single line, the
+   labels are visually hidden and the buttons collapse to icon-only tiles. */
+.motion-outcome-picker--stretch {
+  width: 100%;
+  flex-wrap: nowrap;
+}
+.motion-outcome-picker--stretch .btn-action {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+  /* `nowrap` keeps the label on one line; if it can't fit, the container
+     query below kicks in and removes the label entirely instead of
+     wrapping or truncating mid-word. */
+  white-space: nowrap;
+}
+@container (max-width: 380px) {
+  .motion-outcome-picker--stretch .btn-action__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .motion-outcome-picker--stretch .btn-action {
+    padding: 0 8px;
+  }
 }
 
 /* Import sessions */

@@ -41,6 +41,8 @@ export function SettingsPage() {
   const clearLogo = useMutation(api.society.clearLogo);
   const setDarkLogo = useMutation(api.society.setDarkLogo);
   const clearDarkLogo = useMutation(api.society.clearDarkLogo);
+  const setLetterhead = useMutation(api.society.setLetterhead);
+  const clearLetterhead = useMutation(api.society.clearLetterhead);
   const setLogoInvertInDarkMode = useMutation(api.society.setLogoInvertInDarkMode);
   const seedSharedViews = useMutation(api.views.seedGovernanceDataTableViews);
   const confirm = useConfirm();
@@ -57,9 +59,10 @@ export function SettingsPage() {
   const [savingRetention, setSavingRetention] = useState(false);
   const [maintenanceBusy, setMaintenanceBusy] = useState<"seed" | "reset" | null>(null);
   const [sharedViewsBusy, setSharedViewsBusy] = useState(false);
-  const [uploadingLogo, setUploadingLogo] = useState<"light" | "dark" | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState<"light" | "dark" | "letterhead" | null>(null);
   const lightLogoInputRef = useRef<HTMLInputElement>(null);
   const darkLogoInputRef = useRef<HTMLInputElement>(null);
+  const letterheadInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!society) return;
@@ -141,7 +144,7 @@ export function SettingsPage() {
   const LOGO_ALLOWED_TYPES = ["image/svg+xml", "image/png", "image/jpeg"];
   const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 
-  const uploadLogoVariant = async (variant: "light" | "dark", file: File) => {
+  const uploadLogoVariant = async (variant: "light" | "dark" | "letterhead", file: File) => {
     if (!society) return;
     if (!LOGO_ALLOWED_TYPES.includes(file.type)) {
       toast.error("Unsupported file type", "Please upload an SVG, PNG, or JPG.");
@@ -163,10 +166,18 @@ export function SettingsPage() {
       const { storageId } = await res.json();
       if (variant === "light") {
         await setLogo({ societyId: society._id, storageId });
-      } else {
+      } else if (variant === "dark") {
         await setDarkLogo({ societyId: society._id, storageId });
+      } else {
+        await setLetterhead({ societyId: society._id, storageId });
       }
-      toast.success(variant === "light" ? "Logo updated" : "Dark-mode logo updated");
+      toast.success(
+        variant === "light"
+          ? "Logo updated"
+          : variant === "dark"
+            ? "Dark-mode logo updated"
+            : "Letterhead updated",
+      );
     } catch (error) {
       toast.error("Couldn't upload logo", error instanceof Error ? error.message : undefined);
     } finally {
@@ -186,24 +197,40 @@ export function SettingsPage() {
     if (file) void uploadLogoVariant("dark", file);
   };
 
-  const removeLogoVariant = async (variant: "light" | "dark") => {
+  const onLetterheadChosen = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) void uploadLogoVariant("letterhead", file);
+  };
+
+  const removeLogoVariant = async (variant: "light" | "dark" | "letterhead") => {
     if (!society) return;
+    const messages = {
+      light: { title: "Remove logo?", body: "The letter avatar will be shown instead until you upload a new logo." },
+      dark: { title: "Remove dark-mode logo?", body: "The light-mode logo will be used in dark mode until you upload a new variant." },
+      letterhead: { title: "Remove letterhead?", body: "Exports will fall back to your light-mode logo plus the society name." },
+    } as const;
     const ok = await confirm({
-      title: variant === "light" ? "Remove logo?" : "Remove dark-mode logo?",
-      message:
-        variant === "light"
-          ? "The letter avatar will be shown instead until you upload a new logo."
-          : "The light-mode logo will be used in dark mode until you upload a new variant.",
+      title: messages[variant].title,
+      message: messages[variant].body,
       confirmLabel: "Remove",
     });
     if (!ok) return;
     try {
       if (variant === "light") {
         await clearLogo({ societyId: society._id });
-      } else {
+      } else if (variant === "dark") {
         await clearDarkLogo({ societyId: society._id });
+      } else {
+        await clearLetterhead({ societyId: society._id });
       }
-      toast.success(variant === "light" ? "Logo removed" : "Dark-mode logo removed");
+      toast.success(
+        variant === "light"
+          ? "Logo removed"
+          : variant === "dark"
+            ? "Dark-mode logo removed"
+            : "Letterhead removed",
+      );
     } catch (error) {
       toast.error("Couldn't remove logo", error instanceof Error ? error.message : undefined);
     }
@@ -381,6 +408,58 @@ export function SettingsPage() {
               hint="Works best for monochrome (black-line) logos. Skip if your logo has color."
             />
           )}
+
+          <div className="row" style={{ gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+            <div
+              className="organization-logo-preview organization-logo-preview--letterhead organization-logo-preview--light"
+              aria-label="Letterhead preview"
+            >
+              {society.letterheadUrl ? (
+                <img src={society.letterheadUrl} alt="" className="organization-logo-preview__img" />
+              ) : (
+                <span className="organization-logo-preview__placeholder">
+                  {(society.name ?? "S").toUpperCase()}
+                </span>
+              )}
+            </div>
+            <div className="col" style={{ gap: 6, flex: "1 1 auto", minWidth: 200 }}>
+              <strong style={{ fontSize: "var(--fs-sm)" }}>Document letterhead (optional)</strong>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <input
+                  ref={letterheadInputRef}
+                  type="file"
+                  accept=".svg,.png,.jpg,.jpeg,image/svg+xml,image/png,image/jpeg"
+                  style={{ display: "none" }}
+                  onChange={onLetterheadChosen}
+                />
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={uploadingLogo === "letterhead"}
+                  onClick={() => letterheadInputRef.current?.click()}
+                >
+                  {uploadingLogo === "letterhead"
+                    ? "Uploading…"
+                    : society.letterheadUrl
+                      ? "Replace letterhead"
+                      : "Upload letterhead"}
+                </button>
+                {society.letterheadUrl && (
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={uploadingLogo === "letterhead"}
+                    onClick={() => { void removeLogoVariant("letterhead"); }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                Shown as the header on exported minutes, meeting packs, and the public copy. Leave empty for unbranded exports — the sidebar logo is not used here.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 

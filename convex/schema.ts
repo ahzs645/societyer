@@ -49,6 +49,7 @@ export default defineSchema({
     logoStorageId: v.optional(v.id("_storage")),
     logoDarkStorageId: v.optional(v.id("_storage")),
     logoInvertInDarkMode: v.optional(v.boolean()),
+    letterheadStorageId: v.optional(v.id("_storage")),
     publicSlug: v.optional(v.string()),
     publicSummary: v.optional(v.string()),
     publicContactEmail: v.optional(v.string()),
@@ -2188,6 +2189,7 @@ export default defineSchema({
     ),
     motions: v.array(
       v.object({
+        name: v.optional(v.string()),
         text: v.string(),
         movedBy: v.optional(v.string()),
         movedByMemberId: v.optional(v.id("members")),
