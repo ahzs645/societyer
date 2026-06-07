@@ -65,6 +65,10 @@ export interface MarkdownEditorHandle {
   focus: () => void;
   /** Replace the editor's content imperatively. */
   setMarkdown: (markdown: string) => void;
+  /** Read the editor's current content as markdown. Useful right before saving
+   * so callers don't depend on the `onChange`→`setState`→re-render cycle having
+   * flushed first. */
+  getMarkdown: () => string;
 }
 
 /**
@@ -505,7 +509,12 @@ function TableButton({
                     aria-label={`${r + 1} rows by ${c + 1} columns`}
                     onMouseEnter={() => handleHover(r, c)}
                     onFocus={() => handleHover(r, c)}
-                    onClick={() => {
+                    // Use mouseup instead of click so drag-to-size works:
+                    // pressing on one cell and releasing on another (different
+                    // mousedown/mouseup targets) does not fire `click`, which
+                    // would leave the picker open with no insertion. mouseup
+                    // fires on whichever cell the cursor is over at release.
+                    onMouseUp={() => {
                       onInsert(r + 1, c + 1);
                       setOpen(false);
                     }}
@@ -748,6 +757,11 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           if (!crepe) return;
           crepe.editor.action(replaceAll(markdown));
           lastEmittedRef.current = markdown;
+        },
+        getMarkdown: () => {
+          const crepe = crepeRef.current;
+          if (!crepe) return lastEmittedRef.current;
+          return crepe.getMarkdown();
         },
       }),
       [],

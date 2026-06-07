@@ -659,7 +659,10 @@ export function MeetingDetailPage() {
     await updateMinutes({ id: minutes._id, patch: { sections: next } });
     // Keep meeting.agendaJson in sync with section titles AND depth so the
     // sidebar agenda card and the right-side Agenda record never drift apart.
-    const nextAgenda: AgendaItemEntry[] = [];
+    // Tracked alongside the source section so duplicate-titled sections each
+    // contribute their own presenter/details instead of all collapsing to the
+    // first match via title-based find().
+    const nextAgenda: Array<AgendaItemEntry & { source: any }> = [];
     let hasRoot = false;
     for (const section of next) {
       const title = String(section?.title ?? "").trim();
@@ -668,7 +671,7 @@ export function MeetingDetailPage() {
       // A child without a preceding root is impossible on the agenda side, so
       // demote leading children to roots to stay consistent.
       const depth: 0 | 1 = rawDepth === 1 && hasRoot ? 1 : 0;
-      nextAgenda.push({ title, depth });
+      nextAgenda.push({ title, depth, source: section });
       if (depth === 0) hasRoot = true;
     }
     await syncAgendaForMeeting({
@@ -679,13 +682,17 @@ export function MeetingDetailPage() {
         title: entry.title,
         depth: entry.depth,
         type: inferAgendaSectionType(entry.title),
-        presenter: next.find((section: any) => section?.title === entry.title)?.presenter || undefined,
-        details: next.find((section: any) => section?.title === entry.title)?.discussion || undefined,
+        presenter: entry.source?.presenter || undefined,
+        details: entry.source?.discussion || undefined,
       })),
     });
     await updateMeeting({
       id: meeting._id,
-      patch: { agendaJson: JSON.stringify(nextAgenda) },
+      patch: {
+        agendaJson: JSON.stringify(
+          nextAgenda.map(({ title, depth }) => ({ title, depth })),
+        ),
+      },
     });
   };
 
@@ -818,10 +825,16 @@ export function MeetingDetailPage() {
           (section?.linkedTaskIds ?? []).length
         );
 
-      const sectionsByTitle = new Map<string, any>();
+      // Queue per-title so each duplicate-titled agenda entry consumes its own
+      // matching section instead of all resolving to the first one (which
+      // would clobber sibling sections' content).
+      const sectionsByTitle = new Map<string, any[]>();
       for (const section of existingSections) {
         const key = normalize(section?.title ?? "");
-        if (key && !sectionsByTitle.has(key)) sectionsByTitle.set(key, section);
+        if (!key) continue;
+        const queue = sectionsByTitle.get(key) ?? [];
+        queue.push(section);
+        sectionsByTitle.set(key, queue);
       }
 
       // Preserve existing section content when titles match; always overwrite
@@ -829,7 +842,7 @@ export function MeetingDetailPage() {
       // hierarchy. Brand-new titles get a fresh empty section at the correct
       // depth.
       const aligned = next.map((entry) => {
-        const existing = sectionsByTitle.get(normalize(entry.title));
+        const existing = sectionsByTitle.get(normalize(entry.title))?.shift();
         return existing
           ? { ...existing, depth: entry.depth }
           : buildSectionFromTitle(entry.title, entry.depth);

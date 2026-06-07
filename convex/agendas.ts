@@ -509,13 +509,21 @@ async function syncMeetingAndMinutesFromAgenda(ctx: any, meeting: any, items: an
   if (!minutes) return;
 
   const existingSections = Array.isArray(minutes.sections) ? minutes.sections : [];
-  const byTitle = new Map<string, any>();
+  // Queue per-title so duplicate-titled sections each consume one matching
+  // entry. Without this, multiple "New section" entries would all resolve to
+  // the first section and the others would be silently overwritten with its
+  // content (discussion, decisions, etc.), wiping out edits the user just
+  // saved to sections 2+.
+  const byTitle = new Map<string, any[]>();
   for (const section of existingSections) {
     const key = normalizeTitle(section?.title ?? "");
-    if (key && !byTitle.has(key)) byTitle.set(key, section);
+    if (!key) continue;
+    const queue = byTitle.get(key) ?? [];
+    queue.push(section);
+    byTitle.set(key, queue);
   }
   const nextSections = items.map((item) => {
-    const existing = byTitle.get(normalizeTitle(item.title));
+    const existing = byTitle.get(normalizeTitle(item.title))?.shift();
     const base = sectionFromAgendaItem(item);
     if (!existing) return base;
     const merged: Record<string, unknown> = {
