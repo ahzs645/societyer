@@ -2259,13 +2259,13 @@
   min-width: 0;
   flex: 1 1 auto;
 }
-.meeting-minutes-section-item__title svg {
+.meeting-minutes-section-item__expand {
   margin-top: 0;
   color: var(--text-tertiary);
   transition: transform 120ms ease;
   flex: 0 0 auto;
 }
-.meeting-minutes-section-item[open] .meeting-minutes-section-item__title svg {
+.meeting-minutes-section-item[open] .meeting-minutes-section-item__expand {
   transform: rotate(180deg);
 }
 /* Flex-wrap (not grid) so the title input can size to its content via
@@ -3098,6 +3098,12 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary::after {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.quick-add-task {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--s-2);
+}
 .quick-add-task__form {
   display: grid;
   gap: var(--s-2);
@@ -3105,6 +3111,7 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary::after {
   margin-top: var(--s-2);
   border: 1px dashed var(--border);
   border-radius: var(--r-sm);
+  align-self: stretch;
 }
 details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting-package-task-counts {
   display: none;

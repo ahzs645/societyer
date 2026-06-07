@@ -90,6 +90,55 @@
     cursor: not-allowed;
   }
 
+  // ----- Table size picker -----
+  &__table-anchor {
+    position: relative;
+    display: inline-flex;
+  }
+  &__table-picker {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: var(--z-popover, 40);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    background: var(--bg-panel, var(--bg-base));
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.16));
+  }
+  &__table-picker-grid {
+    display: grid;
+    gap: 2px;
+  }
+  &__table-picker-cell {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    background: var(--bg-base);
+    cursor: pointer;
+    transition: background 0.08s ease, border-color 0.08s ease;
+  }
+  &__table-picker-cell:hover,
+  &__table-picker-cell.is-active {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+  }
+  &__table-picker-cell:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+  }
+  &__table-picker-label {
+    text-align: center;
+    font-size: var(--fs-sm);
+    color: var(--text-secondary);
+  }
+
   // ----- Editor body -----
   // This is the host element Crepe mounts the .milkdown root inside. Make
   // it the resizable region so users can drag the bottom edge to grow.
@@ -239,11 +288,58 @@
     text-underline-offset: 2px;
   }
 
+  .milkdown .ProseMirror table {
+    border-collapse: collapse;
+    margin: 0.4em 0;
+    width: 100%;
+  }
+  .milkdown .ProseMirror th,
+  .milkdown .ProseMirror td {
+    border: 1px solid var(--border);
+    padding: 4px 8px;
+    vertical-align: top;
+    min-width: 40px;
+  }
+  .milkdown .ProseMirror th {
+    background: var(--bg-subtle);
+    text-align: left;
+    font-weight: 600;
+  }
+
+  .milkdown .ProseMirror hr {
+    border: 0;
+    border-top: 1px solid var(--border);
+    margin: 0.6em 0;
+  }
+
+  // GFM task list items render as li[data-item-type="task"] with a leading
+  // checkbox; align it with the list bullet column.
+  .milkdown .ProseMirror li[data-item-type="task"] {
+    list-style: none;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin-left: -1.2em;
+  }
+  .milkdown .ProseMirror li[data-item-type="task"] > input[type="checkbox"] {
+    margin-top: 0.35em;
+    flex-shrink: 0;
+  }
+
   // Placeholder uses Crepe's `data-placeholder` attribute on the empty doc.
   .milkdown .crepe-placeholder::before {
     color: var(--text-tertiary);
     opacity: 1;
   }
+}
+
+// Tooltip body has a faint hint line under the primary label (e.g. "Click
+// again to turn back into paragraph"). The Tooltip component portals to body,
+// so this class lives at the top level rather than nested under .markdown-editor.
+.markdown-editor__tooltip-hint {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 0.9em;
 }
 
 // Bubble toolbar that appears on selection — anchored relative to the

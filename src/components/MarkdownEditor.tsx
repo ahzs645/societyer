@@ -14,17 +14,23 @@ import { TextSelection } from "@milkdown/kit/prose/state";
 import type { MarkType, ResolvedPos } from "@milkdown/kit/prose/model";
 import {
   Bold,
+  Braces,
   Code,
   Heading1,
   Heading2,
+  Heading3,
   Italic,
   Link2,
   List,
+  ListChecks,
   ListOrdered,
+  Minus,
   Quote,
   Strikethrough,
+  Table as TableIcon,
 } from "lucide-react";
 import { usePrompt } from "./Modal";
+import { Tooltip } from "./Tooltip";
 
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
@@ -179,6 +185,15 @@ const TOOLBAR_ITEMS: ToolbarItem[] = [
     run: ({ editor }) => editor.action(callCommand("ToggleInlineCode")),
   },
   {
+    id: "code-block",
+    label: "Code block",
+    hint: "Click again to turn back into paragraph",
+    icon: Braces,
+    isActive: ({ blocks }) => blocks.has("code_block"),
+    run: ({ editor, isActive }) =>
+      editor.action(callCommand(isActive ? "TurnIntoText" : "CreateCodeBlock", "")),
+  },
+  {
     id: "link",
     label: "Link",
     hint: "Click again on a link to remove it",
@@ -262,6 +277,15 @@ const TOOLBAR_ITEMS: ToolbarItem[] = [
       editor.action(callCommand("WrapInHeading", isActive ? 0 : 2)),
   },
   {
+    id: "h3",
+    label: "Heading 3",
+    hint: "Click again to turn back into paragraph",
+    icon: Heading3,
+    isActive: ({ blocks }) => blocks.has("heading:3"),
+    run: ({ editor, isActive }) =>
+      editor.action(callCommand("WrapInHeading", isActive ? 0 : 3)),
+  },
+  {
     id: "bullet",
     label: "Bullet list",
     hint: "Click again to exit the list",
@@ -293,6 +317,46 @@ const TOOLBAR_ITEMS: ToolbarItem[] = [
     },
   },
   {
+    id: "task",
+    // GFM task lists are a `list_item` with a `checked` attr (null = regular,
+    // false/true = unchecked/checked task). There's no first-class command,
+    // so we toggle the attribute directly — wrapping into a bullet list first
+    // if the cursor isn't already inside one.
+    label: "Task list",
+    hint: "Click again to convert back to a regular list",
+    icon: ListChecks,
+    isActive: ({ blocks }) => blocks.has("task_list"),
+    run: ({ editor, isActive }) => {
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        if (!view) return;
+        const setListItemChecked = (checked: boolean | null) => {
+          const { state } = view;
+          const $from = state.selection.$from;
+          for (let depth = $from.depth; depth > 0; depth -= 1) {
+            const node = $from.node(depth);
+            if (node.type.name === "list_item") {
+              const pos = $from.before(depth);
+              view.dispatch(
+                state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, checked }),
+              );
+              return true;
+            }
+          }
+          return false;
+        };
+        if (isActive) {
+          setListItemChecked(null);
+          return;
+        }
+        if (!setListItemChecked(false)) {
+          editor.action(callCommand("WrapInBulletList"));
+          setListItemChecked(false);
+        }
+      });
+    },
+  },
+  {
     id: "quote",
     label: "Quote",
     hint: "Click again to exit the quote",
@@ -315,6 +379,15 @@ const TOOLBAR_ITEMS: ToolbarItem[] = [
       }
     },
   },
+  {
+    id: "hr",
+    label: "Horizontal rule",
+    icon: Minus,
+    // HR is a transient insertion, not a containing block — there's no
+    // meaningful "active" state to highlight.
+    isActive: () => false,
+    run: ({ editor }) => editor.action(callCommand("InsertHr")),
+  },
 ];
 
 const EMPTY_ACTIVE: ActiveState = {
@@ -322,8 +395,136 @@ const EMPTY_ACTIVE: ActiveState = {
   blocks: new Set<string>(),
 };
 
+// Grid starts compact and grows as the user hovers toward the bottom-right
+// corner — Google Docs style — so there's no hard cap visible up front but the
+// initial footprint stays small. Hard cap protects against runaway growth from
+// a stray hover on the edge.
+const TABLE_PICKER_INITIAL_ROWS = 5;
+const TABLE_PICKER_INITIAL_COLS = 5;
+const TABLE_PICKER_MAX_ROWS = 20;
+const TABLE_PICKER_MAX_COLS = 20;
+
+function TableButton({
+  onInsert,
+  disabled,
+}: {
+  onInsert: (rows: number, cols: number) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState<{ row: number; col: number } | null>(null);
+  const [size, setSize] = useState<{ rows: number; cols: number }>({
+    rows: TABLE_PICKER_INITIAL_ROWS,
+    cols: TABLE_PICKER_INITIAL_COLS,
+  });
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (popoverRef.current?.contains(target)) return;
+      if (buttonRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+    window.addEventListener("pointerdown", onPointer);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointer);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (open) return;
+    setHover(null);
+    setSize({ rows: TABLE_PICKER_INITIAL_ROWS, cols: TABLE_PICKER_INITIAL_COLS });
+  }, [open]);
+
+  const handleHover = (row: number, col: number) => {
+    setHover({ row, col });
+    setSize((current) => {
+      let { rows, cols } = current;
+      // Reach the last visible row/col -> grow by one (up to the cap) so the
+      // user can keep dragging outward without hitting a wall.
+      if (row >= rows - 1 && rows < TABLE_PICKER_MAX_ROWS) rows = Math.min(rows + 1, TABLE_PICKER_MAX_ROWS);
+      if (col >= cols - 1 && cols < TABLE_PICKER_MAX_COLS) cols = Math.min(cols + 1, TABLE_PICKER_MAX_COLS);
+      if (rows === current.rows && cols === current.cols) return current;
+      return { rows, cols };
+    });
+  };
+
+  return (
+    <div className="markdown-editor__table-anchor">
+      <Tooltip content="Insert table">
+        <button
+          ref={buttonRef}
+          type="button"
+          className={`markdown-editor__toolbar-button${open ? " is-active" : ""}`}
+          aria-label="Insert table"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          disabled={disabled}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            setOpen((value) => !value);
+          }}
+        >
+          <TableIcon size={14} aria-hidden="true" />
+        </button>
+      </Tooltip>
+      {open && (
+        <div
+          ref={popoverRef}
+          className="markdown-editor__table-picker"
+          role="dialog"
+          aria-label="Choose table size"
+          onMouseDown={(event) => event.preventDefault()}
+          onMouseLeave={() => setHover(null)}
+        >
+          <div
+            className="markdown-editor__table-picker-grid"
+            style={{ gridTemplateColumns: `repeat(${size.cols}, 18px)` }}
+          >
+            {Array.from({ length: size.rows }, (_, r) =>
+              Array.from({ length: size.cols }, (_, c) => {
+                const active = !!hover && r <= hover.row && c <= hover.col;
+                return (
+                  <button
+                    key={`${r}-${c}`}
+                    type="button"
+                    className={`markdown-editor__table-picker-cell${active ? " is-active" : ""}`}
+                    aria-label={`${r + 1} rows by ${c + 1} columns`}
+                    onMouseEnter={() => handleHover(r, c)}
+                    onFocus={() => handleHover(r, c)}
+                    onClick={() => {
+                      onInsert(r + 1, c + 1);
+                      setOpen(false);
+                    }}
+                  />
+                );
+              }),
+            )}
+          </div>
+          <div className="markdown-editor__table-picker-label">
+            {hover ? `${hover.row + 1} × ${hover.col + 1}` : "Pick a size"}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const TRACKED_MARK_NAMES = ["strong", "emphasis", "strike_through", "inlineCode", "link"];
-const TRACKED_BLOCK_NAMES = ["bullet_list", "ordered_list", "blockquote"];
+const TRACKED_BLOCK_NAMES = ["bullet_list", "ordered_list", "blockquote", "code_block"];
 
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
   function MarkdownEditor(
@@ -396,6 +597,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             blocks.add(typeName);
           } else if (typeName === "heading") {
             blocks.add(`heading:${node.attrs.level}`);
+          } else if (typeName === "list_item" && node.attrs.checked != null) {
+            // GFM tasks are list_items with a non-null `checked` attr.
+            blocks.add("task_list");
           }
         }
 
@@ -425,7 +629,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           [CrepeFeature.Latex]: false,
           [CrepeFeature.CodeMirror]: false,
           [CrepeFeature.ImageBlock]: false,
-          [CrepeFeature.Table]: false,
+          // Tables are inserted via the toolbar's grid picker; once present,
+          // Crepe's in-cell handles handle add/remove rows + cols.
+          [CrepeFeature.Table]: true,
           // The slash (/) menu + block drag-handle. Disabled because the menu
           // gets clipped by the scrollable editor body when it flips upward,
           // and the toolbar already exposes the formatting we need here.
@@ -565,6 +771,40 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       [recomputeActive, prompt],
     );
 
+    const insertTable = useCallback((rows: number, cols: number) => {
+      const crepe = crepeRef.current;
+      if (!crepe) return;
+      const editable = editorHostRef.current?.querySelector<HTMLElement>(".ProseMirror");
+      editable?.focus();
+      crepe.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        if (!view) return;
+        const { schema } = view.state;
+        const tableType = schema.nodes.table;
+        const rowType = schema.nodes.table_row;
+        const cellType = schema.nodes.table_cell;
+        const headerType = schema.nodes.table_header ?? cellType;
+        const paragraph = schema.nodes.paragraph;
+        if (!tableType || !rowType || !cellType || !paragraph) return;
+        const safeRows = Math.max(1, rows);
+        const safeCols = Math.max(1, cols);
+        const headerCells = Array.from({ length: safeCols }, () =>
+          headerType.create(null, paragraph.create()),
+        );
+        const headerRow = rowType.create(null, headerCells);
+        const bodyRows = Array.from({ length: safeRows - 1 }, () => {
+          const cells = Array.from({ length: safeCols }, () =>
+            cellType.create(null, paragraph.create()),
+          );
+          return rowType.create(null, cells);
+        });
+        const tableNode = tableType.create(null, [headerRow, ...bodyRows]);
+        view.dispatch(view.state.tr.replaceSelectionWith(tableNode));
+        view.focus();
+      });
+      recomputeActive();
+    }, [recomputeActive]);
+
     const computedMinHeight = minHeight ?? `calc(${rows} * 1.55em + 28px)`;
 
     return (
@@ -580,30 +820,34 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           {TOOLBAR_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = item.isActive(active);
-            const titleParts = [item.label];
-            if (item.shortcut) titleParts[0] = `${item.label} (${item.shortcut})`;
-            if (item.hint) titleParts.push(item.hint);
-            const title = titleParts.join("\n");
+            const headline = item.shortcut ? `${item.label} (${item.shortcut})` : item.label;
+            const tooltip = (
+              <>
+                <div>{headline}</div>
+                {item.hint && <div className="markdown-editor__tooltip-hint">{item.hint}</div>}
+              </>
+            );
             return (
-              <button
-                key={item.id}
-                type="button"
-                className={`markdown-editor__toolbar-button${isActive ? " is-active" : ""}`}
-                title={title}
-                aria-label={item.label}
-                aria-pressed={isActive}
-                disabled={readOnly}
-                // Use onMouseDown so the editor selection isn't lost before
-                // the command fires (default button focus would blur the doc).
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  runItem(item, isActive);
-                }}
-              >
-                <Icon size={14} aria-hidden="true" />
-              </button>
+              <Tooltip key={item.id} content={tooltip}>
+                <button
+                  type="button"
+                  className={`markdown-editor__toolbar-button${isActive ? " is-active" : ""}`}
+                  aria-label={item.label}
+                  aria-pressed={isActive}
+                  disabled={readOnly}
+                  // Use onMouseDown so the editor selection isn't lost before
+                  // the command fires (default button focus would blur the doc).
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    runItem(item, isActive);
+                  }}
+                >
+                  <Icon size={14} aria-hidden="true" />
+                </button>
+              </Tooltip>
             );
           })}
+          <TableButton onInsert={insertTable} disabled={readOnly} />
         </div>
         <div
           ref={editorHostRef}

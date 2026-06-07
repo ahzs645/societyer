@@ -60,6 +60,9 @@ export function SettingsPage() {
   const [maintenanceBusy, setMaintenanceBusy] = useState<"seed" | "reset" | null>(null);
   const [sharedViewsBusy, setSharedViewsBusy] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState<"light" | "dark" | "letterhead" | null>(null);
+  const [showDarkLogoSection, setShowDarkLogoSection] = useState(Boolean(society?.logoDarkUrl || society?.logoInvertInDarkMode));
+  const [darkLogoMode, setDarkLogoMode] = useState<"invert" | "upload">(society?.logoDarkUrl ? "upload" : "invert");
+  const [showLetterheadSection, setShowLetterheadSection] = useState(Boolean(society?.letterheadUrl));
   const lightLogoInputRef = useRef<HTMLInputElement>(null);
   const darkLogoInputRef = useRef<HTMLInputElement>(null);
   const letterheadInputRef = useRef<HTMLInputElement>(null);
@@ -284,16 +287,16 @@ export function SettingsPage() {
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
-          <h2 className="card__title">Organization profile</h2>
+          <h2 className="card__title">Organization logo</h2>
           <span className="card__subtitle">
-            Logo shown in the sidebar and on exported documents.
+            Shown in the sidebar and on exported documents.
           </span>
         </div>
         <div className="card__body col" style={{ gap: 16 }}>
           <div className="row" style={{ gap: 16, alignItems: "center", flexWrap: "wrap" }}>
             <div
               className="organization-logo-preview organization-logo-preview--light"
-              aria-label="Light mode preview"
+              aria-label="Logo preview"
             >
               {society.logoUrl ? (
                 <img src={society.logoUrl} alt="" className="organization-logo-preview__img" />
@@ -304,7 +307,6 @@ export function SettingsPage() {
               )}
             </div>
             <div className="col" style={{ gap: 6, flex: "1 1 auto", minWidth: 200 }}>
-              <strong style={{ fontSize: "var(--fs-sm)" }}>Light mode</strong>
               <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                 <input
                   ref={lightLogoInputRef}
@@ -342,124 +344,159 @@ export function SettingsPage() {
             </div>
           </div>
 
-          <div className="row" style={{ gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-            <div
-              className={`organization-logo-preview organization-logo-preview--dark${
-                !society.logoDarkUrl && society.logoUrl && society.logoInvertInDarkMode
-                  ? " organization-logo-preview--invert"
-                  : ""
-              }`}
-              aria-label="Dark mode preview"
-            >
-              {society.logoDarkUrl ? (
-                <img src={society.logoDarkUrl} alt="" className="organization-logo-preview__img" />
-              ) : society.logoUrl ? (
-                <img src={society.logoUrl} alt="" className="organization-logo-preview__img" />
-              ) : (
-                <span className="organization-logo-preview__placeholder organization-logo-preview__placeholder--dark">
-                  {(society.name ?? "S")[0].toUpperCase()}
-                </span>
-              )}
-            </div>
-            <div className="col" style={{ gap: 6, flex: "1 1 auto", minWidth: 200 }}>
-              <strong style={{ fontSize: "var(--fs-sm)" }}>Dark mode (optional)</strong>
-              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                <input
-                  ref={darkLogoInputRef}
-                  type="file"
-                  accept=".svg,.png,.jpg,.jpeg,image/svg+xml,image/png,image/jpeg"
-                  style={{ display: "none" }}
-                  onChange={onDarkLogoChosen}
-                />
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={uploadingLogo === "dark"}
-                  onClick={() => darkLogoInputRef.current?.click()}
+          <Toggle
+            checked={showDarkLogoSection}
+            onChange={setShowDarkLogoSection}
+            label="Customize logo for dark mode"
+            hint="By default, the same logo is used in both themes."
+          />
+
+          {showDarkLogoSection && (
+            <div className="col" style={{ gap: 12, paddingLeft: 4 }}>
+              <RadioGroup
+                name="dark-logo-mode"
+                value={darkLogoMode}
+                onChange={async (val) => {
+                  if (val === "invert" && society.logoDarkUrl) {
+                    const ok = await confirm({
+                      title: "Switch to inverted logo?",
+                      message: "This will remove your uploaded dark-mode logo and use an inverted version of the light logo instead.",
+                      confirmLabel: "Switch",
+                    });
+                    if (!ok) return;
+                    await clearDarkLogo({ societyId: society._id });
+                  }
+                  setDarkLogoMode(val);
+                  if (val === "invert") {
+                    void toggleLogoInvert(true);
+                  } else if (val === "upload" && society.logoInvertInDarkMode) {
+                    void toggleLogoInvert(false);
+                  }
+                }}
+                options={[
+                  { value: "invert", label: "Invert the light logo", hint: "Works best for monochrome (black-line) logos." },
+                  { value: "upload", label: "Upload a separate logo", hint: "Use a different file optimized for dark backgrounds." },
+                ]}
+              />
+
+              <div className="row" style={{ gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+                <div
+                  className={`organization-logo-preview organization-logo-preview--dark${
+                    darkLogoMode === "invert" && !society.logoDarkUrl && society.logoUrl
+                      ? " organization-logo-preview--invert"
+                      : ""
+                  }`}
+                  aria-label="Dark mode preview"
                 >
-                  {uploadingLogo === "dark"
-                    ? "Uploading…"
-                    : society.logoDarkUrl
-                      ? "Replace logo"
-                      : "Upload logo"}
-                </button>
-                {society.logoDarkUrl && (
-                  <button
-                    type="button"
-                    className="btn"
-                    disabled={uploadingLogo === "dark"}
-                    onClick={() => { void removeLogoVariant("dark"); }}
-                  >
-                    Remove
-                  </button>
+                  {darkLogoMode === "upload" && society.logoDarkUrl ? (
+                    <img src={society.logoDarkUrl} alt="" className="organization-logo-preview__img" />
+                  ) : society.logoUrl ? (
+                    <img src={society.logoUrl} alt="" className="organization-logo-preview__img" />
+                  ) : (
+                    <span className="organization-logo-preview__placeholder organization-logo-preview__placeholder--dark">
+                      {(society.name ?? "S")[0].toUpperCase()}
+                    </span>
+                  )}
+                </div>
+
+                {darkLogoMode === "upload" && (
+                  <div className="col" style={{ gap: 6, flex: "1 1 auto", minWidth: 200 }}>
+                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                      <input
+                        ref={darkLogoInputRef}
+                        type="file"
+                        accept=".svg,.png,.jpg,.jpeg,image/svg+xml,image/png,image/jpeg"
+                        style={{ display: "none" }}
+                        onChange={onDarkLogoChosen}
+                      />
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={uploadingLogo === "dark"}
+                        onClick={() => darkLogoInputRef.current?.click()}
+                      >
+                        {uploadingLogo === "dark"
+                          ? "Uploading…"
+                          : society.logoDarkUrl
+                            ? "Replace logo"
+                            : "Upload logo"}
+                      </button>
+                      {society.logoDarkUrl && (
+                        <button
+                          type="button"
+                          className="btn"
+                          disabled={uploadingLogo === "dark"}
+                          onClick={() => { void removeLogoVariant("dark"); }}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
-              <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                Used in dark mode if provided. Falls back to the light-mode logo otherwise.
-              </p>
             </div>
-          </div>
-
-          {society.logoUrl && !society.logoDarkUrl && (
-            <Toggle
-              checked={Boolean(society.logoInvertInDarkMode)}
-              onChange={(checked) => { void toggleLogoInvert(checked); }}
-              label="Invert light-mode logo for dark mode"
-              hint="Works best for monochrome (black-line) logos. Skip if your logo has color."
-            />
           )}
 
-          <div className="row" style={{ gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-            <div
-              className="organization-logo-preview organization-logo-preview--letterhead organization-logo-preview--light"
-              aria-label="Letterhead preview"
-            >
-              {society.letterheadUrl ? (
-                <img src={society.letterheadUrl} alt="" className="organization-logo-preview__img" />
-              ) : (
-                <span className="organization-logo-preview__placeholder">
-                  {(society.name ?? "S").toUpperCase()}
-                </span>
-              )}
-            </div>
-            <div className="col" style={{ gap: 6, flex: "1 1 auto", minWidth: 200 }}>
-              <strong style={{ fontSize: "var(--fs-sm)" }}>Document letterhead (optional)</strong>
-              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                <input
-                  ref={letterheadInputRef}
-                  type="file"
-                  accept=".svg,.png,.jpg,.jpeg,image/svg+xml,image/png,image/jpeg"
-                  style={{ display: "none" }}
-                  onChange={onLetterheadChosen}
-                />
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={uploadingLogo === "letterhead"}
-                  onClick={() => letterheadInputRef.current?.click()}
-                >
-                  {uploadingLogo === "letterhead"
-                    ? "Uploading…"
-                    : society.letterheadUrl
-                      ? "Replace letterhead"
-                      : "Upload letterhead"}
-                </button>
-                {society.letterheadUrl && (
+          <Toggle
+            checked={showLetterheadSection}
+            onChange={setShowLetterheadSection}
+            label="Use a custom document letterhead"
+            hint="Header image for exported minutes, meeting packs, and the public copy."
+          />
+
+          {showLetterheadSection && (
+            <div className="row" style={{ gap: 16, alignItems: "center", flexWrap: "wrap", paddingLeft: 4 }}>
+              <div
+                className="organization-logo-preview organization-logo-preview--letterhead organization-logo-preview--light"
+                aria-label="Letterhead preview"
+              >
+                {society.letterheadUrl ? (
+                  <img src={society.letterheadUrl} alt="" className="organization-logo-preview__img" />
+                ) : (
+                  <span className="organization-logo-preview__placeholder">
+                    {(society.name ?? "S").toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <div className="col" style={{ gap: 6, flex: "1 1 auto", minWidth: 200 }}>
+                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                  <input
+                    ref={letterheadInputRef}
+                    type="file"
+                    accept=".svg,.png,.jpg,.jpeg,image/svg+xml,image/png,image/jpeg"
+                    style={{ display: "none" }}
+                    onChange={onLetterheadChosen}
+                  />
                   <button
                     type="button"
                     className="btn"
                     disabled={uploadingLogo === "letterhead"}
-                    onClick={() => { void removeLogoVariant("letterhead"); }}
+                    onClick={() => letterheadInputRef.current?.click()}
                   >
-                    Remove
+                    {uploadingLogo === "letterhead"
+                      ? "Uploading…"
+                      : society.letterheadUrl
+                        ? "Replace letterhead"
+                        : "Upload letterhead"}
                   </button>
-                )}
+                  {society.letterheadUrl && (
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={uploadingLogo === "letterhead"}
+                      onClick={() => { void removeLogoVariant("letterhead"); }}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  Leave empty for unbranded exports.
+                </p>
               </div>
-              <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                Shown as the header on exported minutes, meeting packs, and the public copy. Leave empty for unbranded exports — the sidebar logo is not used here.
-              </p>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
