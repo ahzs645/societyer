@@ -1,3 +1,10 @@
+/**
+ * The jurisdiction assumed when a workspace or legacy snapshot does not specify one.
+ * Societyer began as a BC Societies Act tool, so historical/demo data defaults here.
+ * Change this in one place to move the product's default (e.g. to federal CBCA).
+ */
+export const DEFAULT_HOME_JURISDICTION_CODE = "CA-BC";
+
 export type JurisdictionWorkspaceDefaults = {
   entityType?: string;
   actFormedUnder?: string;
@@ -27,6 +34,15 @@ export type JurisdictionModuleContract = {
   filingKinds: FilingKindDefinition[];
   bylawBaselineLabel: string;
   enabledModuleHints: string[];
+  /**
+   * Whether this jurisdiction hosts obligations for entities that are extra-provincially
+   * registered here (e.g. a federal corporation registered in this province). When true,
+   * the module's compliance packs must cover BOTH the `home` and `extra_provincial`
+   * contexts — enforced by `npm run test:jurisdiction-modules`. An extra-provincial
+   * registration generally carries the same registry-maintenance obligations as a direct
+   * incorporation, so one province module is meant to serve both paths.
+   */
+  supportsExtraProvincialRegistration: boolean;
 };
 
 export type JurisdictionWorkspaceConfig = {
@@ -257,6 +273,7 @@ export const JURISDICTION_WORKSPACE_CONFIGS: JurisdictionWorkspaceConfig[] = [
       filingKinds: BC_FILING_KINDS,
       bylawBaselineLabel: "BC Model Bylaw baseline",
       enabledModuleHints: ["members", "voting", "recordsInspection", "pipaTraining"],
+      supportsExtraProvincialRegistration: true,
     },
     display: {
       entityLabel: "society",
@@ -293,6 +310,9 @@ export const JURISDICTION_WORKSPACE_CONFIGS: JurisdictionWorkspaceConfig[] = [
       filingKinds: FEDERAL_CBCA_FILING_KINDS,
       bylawBaselineLabel: "CBCA by-law and articles baseline",
       enabledModuleHints: ["filingPrefill", "secrets", "attestations"],
+      // Federal is the home jurisdiction; extra-provincial registration is hosted by the
+      // province a federal corporation registers into, not by the federal module.
+      supportsExtraProvincialRegistration: false,
     },
     display: {
       entityLabel: "corporation",
@@ -329,6 +349,10 @@ export const JURISDICTION_WORKSPACE_CONFIGS: JurisdictionWorkspaceConfig[] = [
       filingKinds: ONTARIO_OBCA_FILING_KINDS,
       bylawBaselineLabel: "OBCA by-law and articles baseline",
       enabledModuleHints: ["filingPrefill", "secrets", "attestations"],
+      // TODO(jurisdiction): Ontario can host extra-provincial registrations of federal
+      // corporations. Flip to true once an OBCA extra-provincial compliance pack exists;
+      // test:jurisdiction-modules will then require both-paths coverage.
+      supportsExtraProvincialRegistration: false,
     },
     display: {
       entityLabel: "corporation",
@@ -378,6 +402,7 @@ export function jurisdictionModuleContract(jurisdictionCode?: string | null): Ju
       filingKinds: [],
       bylawBaselineLabel: "Governing-document baseline",
       enabledModuleHints: [],
+      supportsExtraProvincialRegistration: false,
     }
   );
 }

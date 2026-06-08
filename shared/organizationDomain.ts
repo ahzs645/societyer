@@ -57,6 +57,20 @@ export function homeJurisdictionCode(organization?: LegalEntityLike | null): str
   );
 }
 
+/**
+ * Resolve a jurisdiction value (canonical code or registry alias such as
+ * "british_columbia" / "ontario" / "federal") to its canonical code. Unknown or
+ * empty values pass through unchanged so new jurisdictions work without edits here.
+ */
+export function canonicalizeJurisdictionCode(value?: string | null): string {
+  const code = cleanText(value);
+  if (!code) return UNKNOWN_JURISDICTION;
+  if (BC_JURISDICTIONS.has(code)) return "CA-BC";
+  if (FEDERAL_CBCA_JURISDICTIONS.has(code)) return "CA-FED-CBCA";
+  if (ONTARIO_OBCA_JURISDICTIONS.has(code)) return "CA-ON-OBCA";
+  return code;
+}
+
 export function organizationKind(organization?: LegalEntityLike | null): OrganizationKind {
   const entityType = organizationEntityType(organization).toLowerCase();
   const act = cleanText(organization?.actFormedUnder).toLowerCase();

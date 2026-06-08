@@ -1,4 +1,5 @@
 import Dexie, { type Table } from "dexie";
+import { DEFAULT_HOME_JURISDICTION_CODE } from "../../shared/jurisdictionWorkspace";
 
 export type LocalSeed = Record<string, any[]>;
 export type LocalArgs = Record<string, any> | undefined;
@@ -410,7 +411,7 @@ export function migrateLocalWorkspaceSnapshotTables(seed: LocalSeed): LocalSeed 
 }
 
 function migrateSocietyWorkspaceRow(row: any, now: string) {
-  const jurisdictionCode = cleanSnapshotText(row?.jurisdictionCode) || "CA-BC";
+  const jurisdictionCode = cleanSnapshotText(row?.jurisdictionCode) || DEFAULT_HOME_JURISDICTION_CODE;
   const entityType = cleanSnapshotText(row?.entityType) || "society";
   const actFormedUnder =
     cleanSnapshotText(row?.actFormedUnder) ||
@@ -435,7 +436,7 @@ function migrateHomeRegistrations(societies: any[], registrations: any[], now: s
 
   for (const society of societies) {
     if (!society?._id || hasHomeRegistration.has(society._id)) continue;
-    const jurisdictionCode = cleanSnapshotText(society.jurisdictionCode) || "CA-BC";
+    const jurisdictionCode = cleanSnapshotText(society.jurisdictionCode) || DEFAULT_HOME_JURISDICTION_CODE;
     next.push({
       _id: `local_home_registration_${society._id}`,
       _creationTime: Date.now(),

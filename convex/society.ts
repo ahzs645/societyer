@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { disabledModulesValidator } from "./lib/moduleSettings";
 import { assertAllowedOption } from "./lib/orgHubOptions";
 import { seedSociety } from "./seedRecordTableMetadata";
-import { registryOnboardingCopy } from "../shared/jurisdictionWorkspace";
+import { DEFAULT_HOME_JURISDICTION_CODE, registryOnboardingCopy } from "../shared/jurisdictionWorkspace";
 
 async function withLogoUrl(ctx, society) {
   if (!society) return society;
@@ -313,7 +313,7 @@ export const createWorkspace = mutation({
     assertAllowedOption("organizationStatuses", args.organizationStatus, "Organization status");
 
     const now = new Date().toISOString();
-    const jurisdictionCode = args.jurisdictionCode ?? "CA-BC";
+    const jurisdictionCode = args.jurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE;
     const homeJurisdictionCode = args.homeJurisdictionCode ?? jurisdictionCode;
     const anniversaryDate = blankToUndefined(args.anniversaryDate) ?? blankToUndefined(args.incorporationDate);
 
@@ -481,7 +481,7 @@ function blankToUndefined(value?: string) {
 }
 
 export function buildWorkspaceOnboardingNodes(args: any = {}) {
-  const registry = registryOnboardingCopy(args?.jurisdictionCode ?? "CA-BC");
+  const registry = registryOnboardingCopy(args?.jurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE);
   return [
     {
       key: "profile",
@@ -534,7 +534,7 @@ export function buildWorkspaceOnboardingTasks(args: any) {
     !args.incorporationDate ? "incorporation date" : null,
     !args.fiscalYearEnd ? "fiscal year end" : null,
   ].filter(Boolean);
-  const registry = registryOnboardingCopy(args?.jurisdictionCode ?? "CA-BC");
+  const registry = registryOnboardingCopy(args?.jurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE);
   return [
     {
       title: registry.taskTitle,

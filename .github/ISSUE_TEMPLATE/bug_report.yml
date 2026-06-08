@@ -1,0 +1,62 @@
+name: Bug report
+description: Something is broken or behaves incorrectly.
+title: "[bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. The more precisely you can pin down the workspace
+        (jurisdiction + entity type) and the steps, the faster this gets fixed.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+      placeholder: When I open Directors for a federal corporation, the residency metric still says "BC residents"…
+    validations:
+      required: true
+  - type: input
+    id: jurisdiction
+    attributes:
+      label: Jurisdiction / entity type
+      description: e.g. "CA-BC society", "CA-FED-CBCA corporation", "Ontario extra-provincial registration". Put "n/a" if not relevant.
+      placeholder: CA-FED-CBCA corporation
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the demo (View demo) …
+        2. Go to …
+        3. See …
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: How are you running Societyer?
+      options:
+        - Demo (in-browser, Dexie)
+        - Self-hosted Convex (Docker)
+        - Hosted Convex
+        - Desktop (Electron)
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Version / commit
+      description: Output of `git rev-parse --short HEAD`, or the release version.
+    validations:
+      required: false
+  - type: textarea
+    id: extra
+    attributes:
+      label: Logs / screenshots
+      description: Console errors, screenshots, or anything else. Redact any real corporate or personal data.
+    validations:
+      required: false

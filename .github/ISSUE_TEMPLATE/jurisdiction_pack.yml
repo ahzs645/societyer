@@ -1,0 +1,70 @@
+name: Jurisdiction / entity-type support
+description: Propose support for a new jurisdiction or entity type (province, territory, federal, society vs corporation).
+title: "[jurisdiction]: "
+labels: ["jurisdiction", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Societyer is built **federal-first**: a federal corporation is the base rule set,
+        and provinces/territories layer on top as modules. An extra-provincial
+        registration generally carries the same registry-maintenance obligations as a
+        direct provincial incorporation, so a province module is meant to serve **both**
+        paths.
+
+        See `CONTRIBUTING.md` → "Adding a jurisdiction or entity type" for the file-by-file
+        recipe. You do **not** need to be a lawyer — but every rule must cite the statute,
+        regulation, or government guidance it comes from.
+  - type: input
+    id: jurisdiction
+    attributes:
+      label: Jurisdiction
+      description: e.g. "Ontario (OBCA)", "Alberta", "Federal CBCA society", "Quebec".
+    validations:
+      required: true
+  - type: dropdown
+    id: entity-type
+    attributes:
+      label: Entity type
+      options:
+        - Corporation (business)
+        - Society / not-for-profit
+        - Cooperative
+        - Other (describe below)
+    validations:
+      required: true
+  - type: checkboxes
+    id: paths
+    attributes:
+      label: Which paths does this cover?
+      description: A complete province module covers both. It's fine to start with one and note the other as TODO.
+      options:
+        - label: Direct incorporation in this jurisdiction (home)
+        - label: Extra-provincial registration of an out-of-jurisdiction (e.g. federal) corporation
+  - type: textarea
+    id: obligations
+    attributes:
+      label: Key recurring obligations
+      description: |
+        List the main ongoing obligations with their statutory basis and timing.
+        e.g. "Annual return — OBCA s.X — within 6 months of fiscal year end".
+      placeholder: |
+        - Annual return — <Act + section> — <timing>
+        - Director minimum / residency — <Act + section> — <rule>
+        - Records to maintain — <Act + section>
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Sources
+      description: Links to the statute, regulations, registry forms, and government guidance you used. These become the pack's `sources`.
+    validations:
+      required: true
+  - type: checkboxes
+    id: offer
+    attributes:
+      label: Contribution
+      options:
+        - label: I can draft the rule-pack JSON myself (a PR with just JSON + data is very welcome).
+        - label: I can review/verify the legal references but would like help with the code wiring.

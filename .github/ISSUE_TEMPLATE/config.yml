@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/orgs/community/discussions
+    about: For general questions, design discussion, or "is this right for my jurisdiction?" — please start a discussion rather than an issue.
+  - name: Security or privacy concern
+    url: https://github.com/
+    about: Do not open a public issue for security/privacy problems. Contact the maintainers privately first.

@@ -15,7 +15,7 @@ import {
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
 import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
-import { registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
+import { DEFAULT_HOME_JURISDICTION_CODE, registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
 import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "./localDexieRowStore";
 import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
 
@@ -2185,7 +2185,7 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
     const now = new Date().toISOString();
     const societyId = staticLocalId("society", "workspace");
     const workflowId = staticLocalId("workflow", "onboarding");
-    const jurisdictionCode = args?.jurisdictionCode ?? "CA-BC";
+    const jurisdictionCode = args?.jurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE;
     const homeJurisdictionCode = args?.homeJurisdictionCode ?? jurisdictionCode;
     const anniversaryDate = args?.anniversaryDate ?? args?.incorporationDate;
     const homeRegistrationId = staticLocalId("organizationRegistration", "home");

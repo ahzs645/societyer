@@ -1,0 +1,39 @@
+name: Feature request
+description: Suggest a capability or improvement.
+title: "[feat]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: Societyer deliberately keeps a tight scope while it finds its
+        footing. Features that compound the core (compliance, registers, filings,
+        documents) land faster than net-new modules. If you want to add support for a
+        new **jurisdiction or entity type**, use the "Jurisdiction / entity-type support"
+        template instead — it's a well-trodden path.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the real situation you hit, not just the feature. Who is it for?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This builds on the existing core rather than adding a large new surface area.
+        - label: I'm willing to help implement or test this.
