@@ -28,7 +28,9 @@ const checks: Array<{ file: string; patterns: Array<string | RegExp> }> = [
     ],
   },
   {
-    file: "convex/importSessions.ts",
+    // Import-session helpers were extracted from importSessions.ts into cohesion-named
+    // modules; the canonical record-kind registry now lives in importSessionConstants.ts.
+    file: "convex/importSessionConstants.ts",
     patterns: [
       "\"organizationAddress\"",
       "\"organizationRegistration\"",
@@ -44,11 +46,23 @@ const checks: Array<{ file: string; patterns: Array<string | RegExp> }> = [
       "\"annualMaintenanceRecord\"",
       "\"jurisdictionMetadata\"",
       "\"supportLog\"",
+    ],
+  },
+  {
+    // Pre-promotion validation + option-issue helpers.
+    file: "convex/importSessionValidation.ts",
+    patterns: [
       "importPromotionIssues",
-      "patchRecordPromotionBlocked",
-      "Promotion blocked:",
       "invalidOptionIssue",
       "invalidOptionListIssues",
+    ],
+  },
+  {
+    // Apply layer: per-record-kind insert handlers and promotion-blocked patching.
+    file: "convex/importSessionMergeAndApply.ts",
+    patterns: [
+      "patchRecordPromotionBlocked",
+      "Promotion blocked:",
     ],
   },
   {

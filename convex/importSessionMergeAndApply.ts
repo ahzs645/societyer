@@ -283,12 +283,22 @@ async function ensureImportSourceDocuments(
   return ids;
 }
 
-async function insertSectionRecord(ctx: any, societyId: string, record: any, sourceDocumentIds: any[]) {
-  const payload = normalizePayload(record.recordKind, record.payload ?? {});
-  const firstSourceDocumentId = sourceDocumentIds[0];
-  const sourceNote = sourceNoteFor(record, sourceDocumentIds);
+type SectionRecordContext = {
+  ctx: any;
+  societyId: string;
+  record: any;
+  payload: any;
+  sourceDocumentIds: any[];
+  firstSourceDocumentId: any;
+  sourceNote: any;
+};
 
-  if (record.recordKind === "filing") {
+type SectionRecordHandler = (h: SectionRecordContext) => Promise<any>;
+
+// Per-record-kind insert handlers, keyed by recordKind. Each body is the verbatim
+// logic formerly inlined in insertSectionRecord's if-chain; dispatch is now a lookup.
+const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
+  filing: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("filings", {
       societyId,
       kind: cleanText(payload.kind) || "Other",
@@ -306,9 +316,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       status: cleanText(payload.status) || "NeedsReview",
       notes: cleanText(payload.notes),
     });
-  }
+  },
 
-  if (record.recordKind === "deadline") {
+  deadline: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("deadlines", {
       societyId,
       title: cleanText(payload.title) || record.title || "Imported deadline",
@@ -318,9 +328,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       done: Boolean(payload.done),
       recurrence: cleanText(payload.recurrence),
     });
-  }
+  },
 
-  if (record.recordKind === "bylawAmendment") {
+  bylawAmendment: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     const now = new Date().toISOString();
     const status = cleanText(payload.status) || "Draft";
     const title = cleanText(payload.title) || record.title || "Imported bylaw amendment";
@@ -349,9 +359,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       notes: sourceNote,
       history,
     });
-  }
+  },
 
-  if (record.recordKind === "publication") {
+  publication: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("publications", {
       societyId,
       title: cleanText(payload.title) || record.title || "Imported publication",
@@ -364,9 +374,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       reviewStatus: cleanText(payload.reviewStatus) || "InReview",
       createdAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "insurancePolicy") {
+  insurancePolicy: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     const riskFlags = unique([...(record.riskFlags ?? []), ...arrayOf(payload.riskFlags).map(String)])
       .map(cleanText)
       .filter(Boolean);
@@ -409,9 +419,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "financialStatement") {
+  financialStatement: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("financials", {
       societyId,
       fiscalYear: cleanText(payload.fiscalYear) || fiscalYearFromDate(payload.periodEnd ?? payload.sourceDate),
@@ -426,9 +436,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       remunerationDisclosures: arrayOf(payload.remunerationDisclosures),
       statementsDocId: firstSourceDocumentId,
     });
-  }
+  },
 
-  if (record.recordKind === "financialStatementImport") {
+  financialStatementImport: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     const statementId = await ctx.db.insert("financialStatementImports", {
       societyId,
       title: cleanText(payload.title) || record.title || "Imported financial statement",
@@ -459,9 +469,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       });
     }
     return statementId;
-  }
+  },
 
-  if (record.recordKind === "grant") {
+  grant: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     const sourceExternalIds = unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]);
     const riskFlags = unique([...(record.riskFlags ?? []), ...arrayOf(payload.riskFlags).map(String)])
       .map(cleanText)
@@ -491,9 +501,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: now,
       updatedAtISO: now,
     });
-  }
+  },
 
-  if (record.recordKind === "recordsLocation") {
+  recordsLocation: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("recordsLocation", {
       societyId,
       address: cleanText(payload.address) || "Needs review",
@@ -502,9 +512,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       computerProvidedForInspection: Boolean(payload.computerProvidedForInspection),
       notes: sourceNote,
     });
-  }
+  },
 
-  if (record.recordKind === "archiveAccession") {
+  archiveAccession: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("archiveAccessions", {
       societyId,
       title: cleanText(payload.title) || record.title || "Imported archive accession",
@@ -521,9 +531,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       notes: sourceNote,
       createdAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "boardRoleAssignment") {
+  boardRoleAssignment: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     const personName = cleanText(payload.personName) || cleanText(payload.name) || "Needs review";
     const personLinks = await resolvePersonLinks(ctx, societyId, personName);
     return await ctx.db.insert("boardRoleAssignments", {
@@ -545,9 +555,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       notes: sourceNote,
       createdAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "boardRoleChange") {
+  boardRoleChange: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     const personLinks = await resolvePersonLinks(ctx, societyId, payload.personName);
     const previousPersonLinks = await resolvePersonLinks(ctx, societyId, payload.previousPersonName);
     return await ctx.db.insert("boardRoleChanges", {
@@ -569,9 +579,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       notes: sourceNote,
       createdAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "signingAuthority") {
+  signingAuthority: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("signingAuthorities", {
       societyId,
       personName: cleanText(payload.personName) || cleanText(payload.name) || "Needs review",
@@ -588,9 +598,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       notes: sourceNote,
       createdAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "meetingAttendance") {
+  meetingAttendance: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     const personName = cleanText(payload.personName) || cleanText(payload.name) || "Needs review";
     const personLinks = await resolvePersonLinks(ctx, societyId, personName);
     const meetingTarget = await resolveMeetingTargetForEvidence(ctx, societyId, payload, record);
@@ -612,9 +622,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       notes: sourceNote,
       createdAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "motionEvidence") {
+  motionEvidence: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     const movedBy = cleanText(payload.movedBy) || cleanText(payload.movedByName);
     const secondedBy = cleanText(payload.secondedBy) || cleanText(payload.secondedByName);
     const movedByLinks = await resolvePersonLinks(ctx, societyId, movedBy);
@@ -644,9 +654,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       notes: sourceNote,
       createdAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "budgetSnapshot") {
+  budgetSnapshot: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     const snapshotId = await ctx.db.insert("budgetSnapshots", {
       societyId,
       title: cleanText(payload.title) || record.title || "Imported budget snapshot",
@@ -690,9 +700,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       });
     }
     return snapshotId;
-  }
+  },
 
-  if (record.recordKind === "treasurerReport") {
+  treasurerReport: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("treasurerReports", {
       societyId,
       title: cleanText(payload.title) || record.title || "Imported treasurer report",
@@ -709,9 +719,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       notes: sourceNote,
       createdAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "transactionCandidate") {
+  transactionCandidate: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     const mappingNotes = await transactionCandidateMappingNotes(ctx, societyId, payload, record);
     return await ctx.db.insert("transactionCandidates", {
       societyId,
@@ -740,9 +750,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       notes: [sourceNote, mappingNotes].filter(Boolean).join("\n"),
       createdAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "organizationAddress") {
+  organizationAddress: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("organizationAddresses", {
       societyId,
       type: cleanText(payload.type) || "other",
@@ -760,9 +770,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "organizationRegistration") {
+  organizationRegistration: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("organizationRegistrations", {
       societyId,
       jurisdiction: cleanText(payload.jurisdiction) || "Needs review",
@@ -780,9 +790,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "organizationIdentifier") {
+  organizationIdentifier: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("organizationIdentifiers", {
       societyId,
       kind: cleanText(payload.kind) || cleanText(payload.type) || "other",
@@ -797,9 +807,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "policy") {
+  policy: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("policies", {
       societyId,
       policyName: cleanText(payload.policyName) || cleanText(payload.name) || record.title || "Imported policy",
@@ -820,9 +830,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "workflowPackage") {
+  workflowPackage: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("workflowPackages", {
       societyId,
       workflowId: cleanText(payload.workflowId) as any,
@@ -843,9 +853,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "minuteBookItem") {
+  minuteBookItem: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("minuteBookItems", {
       societyId,
       title: cleanText(payload.title) || record.title || "Imported minute book record",
@@ -865,9 +875,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "roleHolder") {
+  roleHolder: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("roleHolders", {
       societyId,
       roleType: cleanText(payload.roleType) || cleanText(payload.type) || cleanText(payload.role) || "authorized_representative",
@@ -926,9 +936,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "rightsClass") {
+  rightsClass: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("rightsClasses", {
       societyId,
       className: cleanText(payload.className) || cleanText(payload.name) || cleanText(payload.rightsClassName) || "Imported rights class",
@@ -949,9 +959,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "rightsholdingTransfer") {
+  rightsholdingTransfer: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("rightsholdingTransfers", {
       societyId,
       transferType: cleanText(payload.transferType) || cleanText(payload.type) || "transfer",
@@ -977,9 +987,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "legalTemplateDataField") {
+  legalTemplateDataField: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("legalTemplateDataFields", {
       societyId,
       name: cleanText(payload.name) || cleanText(payload.fieldName) || "Imported data field",
@@ -994,9 +1004,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "legalTemplate") {
+  legalTemplate: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("legalTemplates", {
       societyId,
       templateType: cleanText(payload.templateType) || cleanText(payload.type) || "document",
@@ -1029,9 +1039,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "legalPrecedent") {
+  legalPrecedent: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("legalPrecedents", {
       societyId,
       packageName: cleanText(payload.packageName) || cleanText(payload.name) || record.title || "Imported precedent",
@@ -1058,9 +1068,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "legalPrecedentRun") {
+  legalPrecedentRun: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("legalPrecedentRuns", {
       societyId,
       name: cleanText(payload.name) || cleanText(payload.partName) || record.title || "Imported package run",
@@ -1085,9 +1095,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "generatedLegalDocument") {
+  generatedLegalDocument: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("generatedLegalDocuments", {
       societyId,
       title: cleanText(payload.title) || cleanText(payload.documentName) || record.title || "Imported generated document",
@@ -1116,9 +1126,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "legalSigner") {
+  legalSigner: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("legalSigners", {
       societyId,
       status: cleanText(payload.status) || cleanText(payload.signerStatus) || "needs_review",
@@ -1137,9 +1147,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "formationRecord") {
+  formationRecord: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("formationRecords", {
       societyId,
       status: cleanText(payload.status) || "needs_review",
@@ -1169,9 +1179,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "nameSearchItem") {
+  nameSearchItem: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("nameSearchItems", {
       societyId,
       formationRecordId: cleanText(payload.formationRecordId) as any,
@@ -1191,9 +1201,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "entityAmendment") {
+  entityAmendment: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("entityAmendments", {
       societyId,
       status: cleanText(payload.status) || "needs_review",
@@ -1210,9 +1220,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "annualMaintenanceRecord") {
+  annualMaintenanceRecord: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("annualMaintenanceRecords", {
       societyId,
       status: cleanText(payload.status) || "needs_review",
@@ -1244,9 +1254,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "jurisdictionMetadata") {
+  jurisdictionMetadata: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("jurisdictionMetadata", {
       jurisdiction: cleanText(payload.jurisdiction) || cleanText(payload.value) || "foreign",
       label: cleanText(payload.label) || cleanText(payload.jurisdiction) || "Imported jurisdiction",
@@ -1259,9 +1269,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "supportLog") {
+  supportLog: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("supportLogs", {
       societyId,
       logType: cleanText(payload.logType) || cleanText(payload.type) || "edit",
@@ -1281,9 +1291,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
       createdAtISO: cleanDateTime(payload.createdAtISO) || new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "sourceEvidence") {
+  sourceEvidence: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     const externalId = cleanText(payload.externalId) || cleanText(payload.sourceExternalIds?.[0]);
     return await ctx.db.insert("sourceEvidence", {
       societyId,
@@ -1303,9 +1313,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       notes: cleanText(payload.notes),
       createdAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "secretVaultItem") {
+  secretVaultItem: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("secretVaultItems", {
       societyId,
       name: cleanText(payload.name) || cleanText(payload.title) || record.title || "Imported secret reference",
@@ -1332,9 +1342,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
-  }
+  },
 
-  if (record.recordKind === "pipaTraining") {
+  pipaTraining: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("pipaTrainings", {
       societyId,
       participantName: cleanText(payload.participantName) || "Needs review",
@@ -1347,9 +1357,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       documentId: firstSourceDocumentId,
       notes: sourceNote,
     });
-  }
+  },
 
-  if (record.recordKind === "employee") {
+  employee: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     const name = splitName(cleanText(payload.name) || `${payload.firstName ?? ""} ${payload.lastName ?? ""}`);
     return await ctx.db.insert("employees", {
       societyId,
@@ -1367,9 +1377,9 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       eiExempt: Boolean(payload.eiExempt),
       notes: sourceNote,
     });
-  }
+  },
 
-  if (record.recordKind === "volunteer") {
+  volunteer: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     const name = splitName(cleanText(payload.name) || `${payload.firstName ?? ""} ${payload.lastName ?? ""}`);
     return await ctx.db.insert("volunteers", {
       societyId,
@@ -1390,9 +1400,19 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
       intakeSource: cleanText(payload.intakeSource) || "paperless",
       notes: sourceNote,
     });
-  }
+  },
+};
 
-  throw new Error(`Unsupported section record kind: ${record.recordKind}`);
+async function insertSectionRecord(ctx: any, societyId: string, record: any, sourceDocumentIds: any[]) {
+  const payload = normalizePayload(record.recordKind, record.payload ?? {});
+  const firstSourceDocumentId = sourceDocumentIds[0];
+  const sourceNote = sourceNoteFor(record, sourceDocumentIds);
+
+  const handler = SECTION_RECORD_HANDLERS[record.recordKind];
+  if (!handler) {
+    throw new Error(`Unsupported section record kind: ${record.recordKind}`);
+  }
+  return await handler({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote });
 }
 
 async function findExistingMeetingImport(
