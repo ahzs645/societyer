@@ -1,242 +1,22 @@
-// Import-session helpers extracted from importSessions.ts: shared constants plus
-// the pure + ctx-taking helper functions (normalization, hydration, evidence,
-// summaries, payload parsing). The Convex query/mutation registrations that use
-// them stay in importSessions.ts so all api.importSessions.* paths are unchanged.
-
-import { invalidOptionIssue, invalidOptionListIssues } from "./lib/orgHubOptions";
-import { transactionImportMappingCandidates } from "./providers/accounting";
+// Import-session hydration, summarization, titling, and document type-guards.
 
 import {
-  SESSION_TAG,
-  RECORD_TAG,
-  HISTORY_TAG,
   HISTORY_SOURCE_TAG,
+  HISTORY_TAG,
+  RECORD_TAG,
   SECTION_RECORD_KINDS,
-} from "./importSessionHelpers.part1";
+  SESSION_TAG,
+} from "./importSessionConstants";
+import {
+  cleanText,
+  unique,
+} from "./importSessionUtils";
 import {
   normalizeSourcePayload,
-} from "./importSessionHelpers.part2";
+} from "./importSessionNormalize";
 import {
   normalizeReviewStatus,
-  sourceNoteFor,
-  cleanDate,
-  cleanDateTime,
-  cleanText,
-  arrayOf,
-  compactRecord,
-  unique,
-  numberOrUndefined,
-  optionalBoolean,
-  sourceSystemFromExternalId,
-  sourceSystemLabel,
-} from "./importSessionHelpers.part4";
-
-function mergeInsurancePolicies(existing: any, incoming: any) {
-  const merged: any = { ...existing };
-  for (const [key, value] of Object.entries(incoming ?? {})) {
-    if (value == null || value === "") continue;
-    if (Array.isArray(value)) {
-      merged[key] = mergeRecordArrays(merged[key], value);
-      continue;
-    }
-    const current = merged[key];
-    if (current == null || current === "" || current === "Needs review") {
-      merged[key] = value;
-    }
-  }
-  merged.sourceExternalIds = unique([...(existing.sourceExternalIds ?? []), ...(incoming.sourceExternalIds ?? [])]);
-  merged.riskFlags = unique([...(existing.riskFlags ?? []), ...(incoming.riskFlags ?? [])]);
-  merged.notes = [existing.notes, incoming.notes].map(cleanText).filter(Boolean).filter((note, index, arr) => arr.indexOf(note) === index).join("\n") || undefined;
-  return merged;
-}
-
-function mergeRecordArrays(a: unknown, b: unknown) {
-  const rows = [...arrayOf(a), ...arrayOf(b)];
-  const seen = new Set<string>();
-  const out: any[] = [];
-  for (const row of rows) {
-    const key = JSON.stringify(row);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(row);
-  }
-  return out;
-}
-
-function normalizeCoveredParties(value: unknown) {
-  return arrayOf(value)
-    .map((party: any) => compactRecord({
-      name: cleanText(party?.name),
-      partyType: cleanText(party?.partyType),
-      coveredClass: cleanText(party?.coveredClass),
-      sourceExternalIds: unique(arrayOf(party?.sourceExternalIds)),
-      citationId: cleanText(party?.citationId),
-      notes: cleanText(party?.notes),
-    }))
-    .filter((party): party is any => Boolean(party?.name));
-}
-
-function normalizeCoverageItems(value: unknown) {
-  return arrayOf(value)
-    .map((item: any) => compactRecord({
-      label: cleanText(item?.label),
-      coverageType: cleanText(item?.coverageType),
-      coveredClass: cleanText(item?.coveredClass),
-      limitCents: numberOrUndefined(item?.limitCents),
-      deductibleCents: numberOrUndefined(item?.deductibleCents),
-      summary: cleanText(item?.summary),
-      sourceExternalIds: unique(arrayOf(item?.sourceExternalIds)),
-      citationId: cleanText(item?.citationId),
-    }))
-    .filter((item): item is any => Boolean(item?.label));
-}
-
-function normalizeCoveredLocations(value: unknown) {
-  return arrayOf(value)
-    .map((location: any) => compactRecord({
-      label: cleanText(location?.label),
-      address: cleanText(location?.address),
-      room: cleanText(location?.room),
-      coverageCents: numberOrUndefined(location?.coverageCents),
-      sourceExternalIds: unique(arrayOf(location?.sourceExternalIds)),
-      citationId: cleanText(location?.citationId),
-      notes: cleanText(location?.notes),
-    }))
-    .filter((location): location is any => Boolean(location?.label));
-}
-
-function normalizePolicyDefinitions(value: unknown) {
-  return arrayOf(value)
-    .map((definition: any) => compactRecord({
-      term: cleanText(definition?.term),
-      definition: cleanText(definition?.definition),
-      sourceExternalIds: unique(arrayOf(definition?.sourceExternalIds)),
-      citationId: cleanText(definition?.citationId),
-    }))
-    .filter((definition): definition is any => Boolean(definition?.term && definition?.definition));
-}
-
-function normalizeDeclinedCoverages(value: unknown) {
-  return arrayOf(value)
-    .map((declined: any) => compactRecord({
-      label: cleanText(declined?.label),
-      reason: cleanText(declined?.reason),
-      offeredLimitCents: numberOrUndefined(declined?.offeredLimitCents),
-      premiumCents: numberOrUndefined(declined?.premiumCents),
-      declinedAt: cleanDate(declined?.declinedAt),
-      sourceExternalIds: unique(arrayOf(declined?.sourceExternalIds)),
-      citationId: cleanText(declined?.citationId),
-      notes: cleanText(declined?.notes),
-    }))
-    .filter((declined): declined is any => Boolean(declined?.label));
-}
-
-function normalizeCertificatesOfInsurance(value: unknown) {
-  return arrayOf(value)
-    .map((certificate: any) => compactRecord({
-      holderName: cleanText(certificate?.holderName),
-      additionalInsuredLegalName: cleanText(certificate?.additionalInsuredLegalName),
-      eventName: cleanText(certificate?.eventName),
-      eventDate: cleanDate(certificate?.eventDate),
-      requiredLimitCents: numberOrUndefined(certificate?.requiredLimitCents),
-      issuedAt: cleanDate(certificate?.issuedAt),
-      expiresAt: cleanDate(certificate?.expiresAt),
-      status: cleanText(certificate?.status),
-      sourceExternalIds: unique(arrayOf(certificate?.sourceExternalIds)),
-      citationId: cleanText(certificate?.citationId),
-      notes: cleanText(certificate?.notes),
-    }))
-    .filter((certificate): certificate is any => Boolean(certificate?.holderName));
-}
-
-function normalizeInsuranceRequirements(value: unknown) {
-  return arrayOf(value)
-    .map((requirement: any) => compactRecord({
-      context: cleanText(requirement?.context),
-      requirementType: cleanText(requirement?.requirementType),
-      coverageSource: cleanText(requirement?.coverageSource),
-      cglLimitRequiredCents: numberOrUndefined(requirement?.cglLimitRequiredCents),
-      cglLimitConfirmedCents: numberOrUndefined(requirement?.cglLimitConfirmedCents),
-      additionalInsuredRequired: optionalBoolean(requirement?.additionalInsuredRequired),
-      additionalInsuredLegalName: cleanText(requirement?.additionalInsuredLegalName),
-      coiStatus: cleanText(requirement?.coiStatus),
-      coiDueDate: cleanDate(requirement?.coiDueDate),
-      tenantLegalLiabilityLimitCents: numberOrUndefined(requirement?.tenantLegalLiabilityLimitCents),
-      hostLiquorLiability: cleanText(requirement?.hostLiquorLiability),
-      indemnityRequired: optionalBoolean(requirement?.indemnityRequired),
-      waiverRequired: optionalBoolean(requirement?.waiverRequired),
-      vendorCoiRequired: optionalBoolean(requirement?.vendorCoiRequired),
-      studentEventChecklistRequired: optionalBoolean(requirement?.studentEventChecklistRequired),
-      riskTriggers: unique(arrayOf(requirement?.riskTriggers)),
-      sourceExternalIds: unique(arrayOf(requirement?.sourceExternalIds)),
-      citationId: cleanText(requirement?.citationId),
-      notes: cleanText(requirement?.notes),
-    }))
-    .filter((requirement): requirement is any => Boolean(requirement?.context));
-}
-
-function normalizeClaimsMadeTerms(value: unknown) {
-  const terms = value && typeof value === "object" ? value as any : undefined;
-  if (!terms) return undefined;
-  return compactRecord({
-    retroactiveDate: cleanDate(terms.retroactiveDate),
-    continuityDate: cleanDate(terms.continuityDate),
-    reportingDeadline: cleanDate(terms.reportingDeadline),
-    extendedReportingPeriod: cleanText(terms.extendedReportingPeriod),
-    defenseCostsInsideLimit: optionalBoolean(terms.defenseCostsInsideLimit),
-    territory: cleanText(terms.territory),
-    retentionCents: numberOrUndefined(terms.retentionCents),
-    claimsNoticeContact: cleanText(terms.claimsNoticeContact),
-    sourceExternalIds: unique(arrayOf(terms.sourceExternalIds)),
-    citationId: cleanText(terms.citationId),
-    notes: cleanText(terms.notes),
-  });
-}
-
-function normalizeClaimIncidents(value: unknown) {
-  return arrayOf(value)
-    .map((incident: any) => compactRecord({
-      incidentDate: cleanDate(incident?.incidentDate),
-      claimNoticeDate: cleanDate(incident?.claimNoticeDate),
-      status: cleanText(incident?.status),
-      privacyFlag: optionalBoolean(incident?.privacyFlag),
-      insurerNotifiedAt: cleanDateTime(incident?.insurerNotifiedAt),
-      brokerNotifiedAt: cleanDateTime(incident?.brokerNotifiedAt),
-      sourceExternalIds: unique(arrayOf(incident?.sourceExternalIds)),
-      citationId: cleanText(incident?.citationId),
-      notes: cleanText(incident?.notes),
-    }))
-    .filter((incident): incident is any => Boolean(incident?.incidentDate || incident?.claimNoticeDate || incident?.notes));
-}
-
-function normalizeAnnualReviews(value: unknown) {
-  return arrayOf(value)
-    .map((review: any) => compactRecord({
-      reviewDate: cleanDate(review?.reviewDate),
-      boardMeetingDate: cleanDate(review?.boardMeetingDate),
-      reviewer: cleanText(review?.reviewer),
-      outcome: cleanText(review?.outcome),
-      nextReviewDate: cleanDate(review?.nextReviewDate),
-      sourceExternalIds: unique(arrayOf(review?.sourceExternalIds)),
-      citationId: cleanText(review?.citationId),
-      notes: cleanText(review?.notes),
-    }))
-    .filter((review): review is any => Boolean(review?.reviewDate));
-}
-
-function normalizeComplianceChecks(value: unknown) {
-  return arrayOf(value)
-    .map((check: any) => compactRecord({
-      label: cleanText(check?.label),
-      status: cleanText(check?.status),
-      dueDate: cleanDate(check?.dueDate),
-      completedAt: cleanDate(check?.completedAt),
-      sourceExternalIds: unique(arrayOf(check?.sourceExternalIds)),
-      citationId: cleanText(check?.citationId),
-      notes: cleanText(check?.notes),
-    }))
-    .filter((check): check is any => Boolean(check?.label));
-}
+} from "./importSessionRecordKinds";
 
 function sourceExternalIdsFor(recordKind: string, payload: any) {
   if (recordKind === "source" && payload.externalId) return [payload.externalId];
@@ -330,86 +110,6 @@ function titleForHistoryItem(kind: string, payload: any) {
   if (kind === "motion") return cleanText(payload?.motionText) || cleanText(payload?.meetingTitle) || "Motion";
   if (kind === "budget") return cleanText(payload?.title) || cleanText(payload?.fiscalYear) || "Budget";
   return "History item";
-}
-
-async function insertSourceEvidenceForAppliedRecord(
-  ctx: any,
-  societyId: string,
-  record: any,
-  targetId: any,
-  sourceDocumentIds: any[],
-) {
-  const payload = record.payload ?? {};
-  const sourceExternalIds = unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]);
-  const restricted = payload.sensitivity === "restricted" || (record.riskFlags ?? []).includes("restricted");
-  const firstSourceDocumentId = sourceDocumentIds[0];
-  const externalSystem = cleanText(payload.externalSystem) || sourceSystemFromExternalId(sourceExternalIds[0]);
-  await ctx.db.insert("sourceEvidence", {
-    societyId,
-    sourceDocumentId: firstSourceDocumentId,
-    externalSystem,
-    externalId: sourceExternalIds[0],
-    sourceTitle: cleanText(payload.sourceTitle) || cleanText(payload.title) || record.title || `${sourceSystemLabel(externalSystem)} source`,
-    sourceDate: cleanDate(payload.sourceDate),
-    evidenceKind: restricted ? "restricted" : "import_support",
-    targetTable: targetTableForRecordKind(record.recordKind),
-    targetId: String(targetId),
-    sensitivity: restricted ? "restricted" : "standard",
-    accessLevel: restricted ? "restricted" : "internal",
-    summary: sourceNoteFor(record, sourceDocumentIds) || "Source evidence created from an approved import-session record.",
-    excerpt: restricted ? undefined : cleanText(payload.excerpt),
-    status: "Linked",
-    notes: "Created automatically when the approved import record was applied.",
-    createdAtISO: new Date().toISOString(),
-  });
-}
-
-function targetTableForRecordKind(kind: string) {
-  return ({
-    filing: "filings",
-    deadline: "deadlines",
-    bylawAmendment: "bylawAmendments",
-    publication: "publications",
-    insurancePolicy: "insurancePolicies",
-    financialStatement: "financials",
-    financialStatementImport: "financialStatementImports",
-    grant: "grants",
-    recordsLocation: "recordsLocation",
-    archiveAccession: "archiveAccessions",
-    boardRoleAssignment: "boardRoleAssignments",
-    boardRoleChange: "boardRoleChanges",
-    signingAuthority: "signingAuthorities",
-    meetingAttendance: "meetingAttendanceRecords",
-    motionEvidence: "motionEvidence",
-    budgetSnapshot: "budgetSnapshots",
-    treasurerReport: "treasurerReports",
-    transactionCandidate: "transactionCandidates",
-    organizationAddress: "organizationAddresses",
-    organizationRegistration: "organizationRegistrations",
-    organizationIdentifier: "organizationIdentifiers",
-    policy: "policies",
-    workflowPackage: "workflowPackages",
-    minuteBookItem: "minuteBookItems",
-    roleHolder: "roleHolders",
-    rightsClass: "rightsClasses",
-    rightsholdingTransfer: "rightsholdingTransfers",
-    legalTemplateDataField: "legalTemplateDataFields",
-    legalTemplate: "legalTemplates",
-    legalPrecedent: "legalPrecedents",
-    legalPrecedentRun: "legalPrecedentRuns",
-    generatedLegalDocument: "generatedLegalDocuments",
-    legalSigner: "legalSigners",
-    formationRecord: "formationRecords",
-    nameSearchItem: "nameSearchItems",
-    entityAmendment: "entityAmendments",
-    annualMaintenanceRecord: "annualMaintenanceRecords",
-    jurisdictionMetadata: "jurisdictionMetadata",
-    supportLog: "supportLogs",
-    secretVaultItem: "secretVaultItems",
-    pipaTraining: "pipaTrainings",
-    employee: "employees",
-    volunteer: "volunteers",
-  } as Record<string, string>)[kind] ?? kind;
 }
 
 function summarizeRecords(records: any[]) {
@@ -593,27 +293,33 @@ function isHistorySource(doc: any) {
   return Boolean(doc?.tags?.includes(HISTORY_TAG) && doc?.tags?.includes(HISTORY_SOURCE_TAG));
 }
 
+function recordSortKey(record: any) {
+  const payload = record.payload ?? {};
+  return [
+    record.status === "Pending" ? "0" : record.status === "Approved" ? "1" : "2",
+    record.recordKind,
+    payload.eventDate ?? payload.meetingDate ?? payload.startDate ?? payload.sourceDate ?? "",
+    record.title,
+  ].join("::");
+}
+
+function sourceNoteFor(record: any, sourceDocumentIds: any[]) {
+  const sourceExternalIds = unique([...(record.sourceExternalIds ?? []), ...(record.payload?.sourceExternalIds ?? [])]);
+  const parts = [
+    cleanText(record.payload?.notes),
+    sourceExternalIds.length ? `Sources: ${sourceExternalIds.join(", ")}` : undefined,
+    sourceDocumentIds.length ? `Linked source document ids: ${sourceDocumentIds.join(", ")}` : undefined,
+    cleanText(record.payload?.confidence) ? `Confidence: ${record.payload.confidence}` : undefined,
+    cleanText(record.payload?.sensitivity) ? `Sensitivity: ${record.payload.sensitivity}` : undefined,
+  ].filter(Boolean);
+  return parts.join("\n");
+}
 
 export {
-  mergeInsurancePolicies,
-  mergeRecordArrays,
-  normalizeCoveredParties,
-  normalizeCoverageItems,
-  normalizeCoveredLocations,
-  normalizePolicyDefinitions,
-  normalizeDeclinedCoverages,
-  normalizeCertificatesOfInsurance,
-  normalizeInsuranceRequirements,
-  normalizeClaimsMadeTerms,
-  normalizeClaimIncidents,
-  normalizeAnnualReviews,
-  normalizeComplianceChecks,
   sourceExternalIdsFor,
   titleForRecord,
   descriptionForRecord,
   titleForHistoryItem,
-  insertSourceEvidenceForAppliedRecord,
-  targetTableForRecordKind,
   summarizeRecords,
   summaryForSession,
   isPlainObject,
@@ -628,4 +334,6 @@ export {
   isImportSession,
   isImportRecord,
   isHistorySource,
+  recordSortKey,
+  sourceNoteFor,
 };

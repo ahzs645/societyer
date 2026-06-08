@@ -1,5 +1,4 @@
-// Private sub-components/helpers for WorkflowDetail.tsx (node panels, field/mapping editors, modals).
-
+// WorkflowDetail: PDF field-mapping types, sources, heuristics, and mapping editors.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -41,190 +40,16 @@ import {
   UserPlus,
 } from "lucide-react";
 import { formatDateTime } from "../lib/format";
-
-
 import {
   IntakeField,
-} from "./WorkflowDetail.internal.part1";
-
-function PdfPickerModal({
-  open,
-  onClose,
-  pdfs,
-  selectedId,
-  onPick,
-}: {
-  open: boolean;
-  onClose: () => void;
-  pdfs: any[];
-  selectedId?: string;
-  onPick: (id: string) => void | Promise<void>;
-}) {
-  const [search, setSearch] = useState("");
-  const [focusedId, setFocusedId] = useState<string | undefined>(selectedId);
-
-  useEffect(() => {
-    if (open) setFocusedId(selectedId);
-  }, [open, selectedId]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return pdfs;
-    return pdfs.filter((doc: any) =>
-      [doc.title, doc.fileName, doc.category]
-        .filter(Boolean)
-        .some((field) => String(field).toLowerCase().includes(q)),
-    );
-  }, [search, pdfs]);
-
-  const focused = filtered.find((d: any) => d._id === focusedId) ?? filtered[0];
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      size="xl"
-      title="Select a fillable PDF template"
-      footer={
-        <>
-          <button className="btn" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn btn--accent"
-            disabled={!focused}
-            onClick={() => focused && onPick(focused._id)}
-          >
-            Select template
-          </button>
-        </>
-      }
-    >
-      <div className="pdf-picker">
-        <aside className="pdf-picker__list">
-          <input
-            className="input"
-            placeholder="Search title, filename, category…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <div className="pdf-picker__items">
-            {filtered.length === 0 && (
-              <div className="muted" style={{ padding: 12 }}>
-                No PDFs match.
-              </div>
-            )}
-            {filtered.map((doc: any) => (
-              <button
-                key={doc._id}
-                type="button"
-                className={`pdf-picker__item${
-                  focused && focused._id === doc._id ? " is-active" : ""
-                }`}
-                onClick={() => setFocusedId(doc._id)}
-                onDoubleClick={() => onPick(doc._id)}
-              >
-                <strong>{doc.title ?? doc.fileName}</strong>
-                {doc.fileName && doc.fileName !== doc.title && (
-                  <span className="muted mono" style={{ fontSize: "var(--fs-xs)" }}>
-                    {doc.fileName}
-                  </span>
-                )}
-                {doc.category && (
-                  <span className="cell-tag" style={{ alignSelf: "flex-start" }}>
-                    {doc.category}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </aside>
-        <section className="pdf-picker__preview">
-          {focused ? (
-            <PdfPreviewPane doc={focused} />
-          ) : (
-            <div className="muted" style={{ padding: 24 }}>
-              Pick a document on the left to preview it here.
-            </div>
-          )}
-        </section>
-      </div>
-    </Modal>
-  );
-}
+} from "./WorkflowDetail.internal.intakeFields";
 
 
-function PdfPreviewPane({ doc }: { doc: any }) {
-  const latest = useQuery(api.documentVersions.latest, { documentId: doc._id });
-  const getDownloadTarget = useAction(api.documentVersions.getDownloadTarget);
-  const [url, setUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+export type MappingKind = "literal" | "dynamic" | "intake" | "person" | "personRef" | "manager" | "empty";
 
-  useEffect(() => {
-    setUrl(null);
-    setError(null);
-    if (!latest?._id) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const target = await getDownloadTarget({ versionId: latest._id });
-        if (cancelled) return;
-        if (target?.kind === "url" && target.url) {
-          setUrl(target.url);
-        } else if (target?.kind === "local-filesystem") {
-          setError("Local filesystem documents cannot be previewed in this web iframe.");
-        } else {
-          setError(target?.reason ?? "This document version does not expose a preview URL.");
-        }
-      } catch (err: any) {
-        if (!cancelled) setError(err?.message ?? "Unable to load preview.");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [latest?._id, getDownloadTarget]);
+export type PersonCategory = "members" | "directors" | "volunteers" | "employees";
 
-  return (
-    <div className="pdf-preview">
-      <div className="pdf-preview__meta">
-        <strong>{doc.title ?? doc.fileName}</strong>
-        <div className="muted mono" style={{ fontSize: "var(--fs-xs)" }}>
-          {doc.fileName ?? "—"} · {doc.category ?? "—"}
-        </div>
-      </div>
-      <div className="pdf-preview__frame">
-        {error && (
-          <div className="muted" style={{ padding: 16 }}>
-            {error}
-          </div>
-        )}
-        {!error && url && (
-          <iframe title="PDF preview" src={url} className="pdf-preview__iframe" />
-        )}
-        {!error && !url && latest?._id && (
-          <div className="muted" style={{ padding: 16 }}>
-            Loading preview…
-          </div>
-        )}
-        {!error && !latest?._id && (
-          <div className="muted" style={{ padding: 16 }}>
-            No file attached to this document yet.
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-
-type MappingKind = "literal" | "dynamic" | "intake" | "person" | "personRef" | "manager" | "empty";
-
-
-type PersonCategory = "members" | "directors" | "volunteers" | "employees";
-
-
-type FieldMapping = {
+export type FieldMapping = {
   kind: MappingKind;
   // literal/default text
   value?: string;
@@ -236,8 +61,7 @@ type FieldMapping = {
   personId?: string;
 };
 
-
-const DYNAMIC_SOURCES: Array<{ value: string; label: string }> = [
+export const DYNAMIC_SOURCES: Array<{ value: string; label: string }> = [
   { value: "today", label: "Today (YYYY-MM-DD)" },
   { value: "today:long", label: "Today (Apr 20, 2026)" },
   { value: "now", label: "Now (ISO timestamp)" },
@@ -246,8 +70,7 @@ const DYNAMIC_SOURCES: Array<{ value: string; label: string }> = [
   { value: "currentUser.email", label: "Current user email" },
 ];
 
-
-const PERSON_SOURCES: Array<{ value: string; label: string }> = [
+export const PERSON_SOURCES: Array<{ value: string; label: string }> = [
   { value: "firstName", label: "First name" },
   { value: "lastName", label: "Last name" },
   { value: "email", label: "Email" },
@@ -256,16 +79,14 @@ const PERSON_SOURCES: Array<{ value: string; label: string }> = [
   { value: "birthdate", label: "Birthdate" },
 ];
 
-
-const MANAGER_SOURCES: Array<{ value: string; label: string }> = [
+export const MANAGER_SOURCES: Array<{ value: string; label: string }> = [
   { value: "name", label: "Name" },
   { value: "email", label: "Email" },
   { value: "phone", label: "Phone" },
   { value: "department", label: "Department / Organization" },
 ];
 
-
-const PERSON_CATEGORIES: Array<{ value: PersonCategory; label: string }> = [
+export const PERSON_CATEGORIES: Array<{ value: PersonCategory; label: string }> = [
   { value: "members", label: "Members" },
   { value: "directors", label: "Directors" },
   { value: "volunteers", label: "Volunteers" },
@@ -275,7 +96,7 @@ const PERSON_CATEGORIES: Array<{ value: PersonCategory; label: string }> = [
 // Heuristic: given a raw PDF AcroForm field name, guess a sensible mapping.
 // Returns null if nothing confident — the user sees "Empty" and picks manually.
 
-function suggestMappingForField(fieldName: string, intakeFields: IntakeField[] = []): FieldMapping | null {
+export function suggestMappingForField(fieldName: string, intakeFields: IntakeField[] = []): FieldMapping | null {
   const norm = fieldName.toLowerCase().replace(/[_\-.]/g, " ").replace(/\s+/g, " ").trim();
   const contains = (needle: string) => norm.includes(needle);
   const match = (re: RegExp) => re.test(norm);
@@ -333,14 +154,12 @@ function suggestMappingForField(fieldName: string, intakeFields: IntakeField[] =
   return null;
 }
 
-
-function mappingEqualsSuggestion(a: FieldMapping | undefined, b: FieldMapping | null): boolean {
+export function mappingEqualsSuggestion(a: FieldMapping | undefined, b: FieldMapping | null): boolean {
   if (!a || !b) return false;
   return a.kind === b.kind && (a.source ?? "") === (b.source ?? "") && (a.value ?? "") === (b.value ?? "");
 }
 
-
-function summariseMappings(fields: string[], mappings: Record<string, FieldMapping>) {
+export function summariseMappings(fields: string[], mappings: Record<string, FieldMapping>) {
   const total = fields.length;
   let mapped = 0;
   const counts: Record<MappingKind, number> = {
@@ -372,8 +191,7 @@ function summariseMappings(fields: string[], mappings: Record<string, FieldMappi
   return { total, mapped, breakdown };
 }
 
-
-const KIND_LABEL: Record<MappingKind, string> = {
+export const KIND_LABEL: Record<MappingKind, string> = {
   empty: "Empty",
   literal: "Literal",
   dynamic: "Dynamic",
@@ -383,8 +201,7 @@ const KIND_LABEL: Record<MappingKind, string> = {
   manager: "Manager",
 };
 
-
-function FieldMappingWizardModal({
+export function FieldMappingWizardModal({
   open,
   onClose,
   fields,
@@ -745,8 +562,7 @@ function FieldMappingWizardModal({
   );
 }
 
-
-function PersonRefPicker({
+export function PersonRefPicker({
   category,
   personId,
   source,
@@ -880,8 +696,7 @@ function PersonRefPicker({
   );
 }
 
-
-function FieldMappingEditor({
+export function FieldMappingEditor({
   fields,
   mappings,
   onFieldsChange,
@@ -1049,27 +864,3 @@ function FieldMappingEditor({
     </div>
   );
 }
-
-
-
-export {
-  PdfPickerModal,
-  PdfPreviewPane,
-  DYNAMIC_SOURCES,
-  PERSON_SOURCES,
-  MANAGER_SOURCES,
-  PERSON_CATEGORIES,
-  suggestMappingForField,
-  mappingEqualsSuggestion,
-  summariseMappings,
-  KIND_LABEL,
-  FieldMappingWizardModal,
-  PersonRefPicker,
-  FieldMappingEditor,
-};
-
-export type {
-  MappingKind,
-  PersonCategory,
-  FieldMapping,
-};

@@ -1,5 +1,4 @@
-// Private sub-components/helpers for WorkflowDetail.tsx (node panels, field/mapping editors, modals).
-
+// WorkflowDetail: intake-field domain types and normalization/validation helpers.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -42,9 +41,7 @@ import {
 } from "lucide-react";
 import { formatDateTime } from "../lib/format";
 
-
-
-const FIELD_LABELS = [
+export const FIELD_LABELS = [
   "Legal First Name of Affiliate",
   "Legal Middle Name of Affiliate",
   "Legal Last Name of Affiliate",
@@ -64,11 +61,9 @@ const FIELD_LABELS = [
   "Check Box1",
 ];
 
+export type IntakeFieldType = "text" | "email" | "phone" | "date" | "checkbox" | "textarea" | "person";
 
-type IntakeFieldType = "text" | "email" | "phone" | "date" | "checkbox" | "textarea" | "person";
-
-
-type IntakeField = {
+export type IntakeField = {
   key: string;
   label: string;
   type: IntakeFieldType;
@@ -79,108 +74,19 @@ type IntakeField = {
   isHidden?: boolean;
 };
 
-
-type TemplateToken = {
+export type TemplateToken = {
   label: string;
   value: string;
   group: string;
 };
 
-
-const nodeTypes = {
-  societyerWorkflowNode: WorkflowNode,
-};
-
-
-function buildGraph(preview: any[]): { nodes: Node[]; edges: Edge[] } {
-  const nodes = preview.map((node, index) => ({
-    id: node.key,
-    type: "societyerWorkflowNode",
-    position: {
-      x: index % 2 === 0 ? 0 : 128,
-      y: index * 152,
-    },
-    data: node,
-  }));
-  const edges = preview.slice(0, -1).map((node, index) => ({
-    id: `${node.key}-${preview[index + 1].key}`,
-    source: node.key,
-    target: preview[index + 1].key,
-    type: "smoothstep",
-    animated: false,
-    style: { stroke: "var(--border-strong)", strokeWidth: 1.5 },
-  }));
-  return { nodes, edges };
-}
-
-
-function WorkflowNode({ data }: NodeProps) {
-  const node = data as any;
-  return (
-    <div className="workflow-node">
-      <Handle type="target" position={Position.Top} />
-      <div className="workflow-node__icon">
-        <NodeIcon type={node.type} />
-      </div>
-      <div className="workflow-node__text">
-        <div className="workflow-node__kind">{nodeTypeLabel(node.type)}</div>
-        <div className="workflow-node__label">{node.label}</div>
-      </div>
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  );
-}
-
-
-function NodeIcon({ type }: { type: string }) {
-  const props = { size: 16 };
-  switch (type) {
-    case "manual_trigger":
-      return <UserPlus {...props} />;
-    case "form":
-      return <FormInput {...props} />;
-    case "pdf_fill":
-      return <FileText {...props} />;
-    case "document_create":
-      return <Save {...props} />;
-    case "email":
-      return <Mail {...props} />;
-    case "ai_agent":
-      return <Bot {...props} />;
-    default:
-      return <ClipboardList {...props} />;
-  }
-}
-
-
-function nodeTypeLabel(type: string) {
-  switch (type) {
-    case "manual_trigger":
-      return "Trigger";
-    case "form":
-      return "Form";
-    case "pdf_fill":
-      return "PDF";
-    case "document_create":
-      return "Document";
-    case "email":
-      return "Notification";
-    case "ai_agent":
-      return "AI agent";
-    default:
-      return "Action";
-  }
-}
-
-
-function checkboxLabel(field: string) {
+export function checkboxLabel(field: string) {
   if (field === "Check Box0") return "Previous UNBC ID - yes";
   if (field === "Check Box1") return "Previous UNBC ID - no";
   return field;
 }
 
-
-function slugifyFieldKey(label: string) {
+export function slugifyFieldKey(label: string) {
   const key = label
     .trim()
     .toLowerCase()
@@ -190,8 +96,7 @@ function slugifyFieldKey(label: string) {
   return key || "field";
 }
 
-
-function inferIntakeFieldType(label: string): IntakeFieldType {
+export function inferIntakeFieldType(label: string): IntakeFieldType {
   const norm = label.toLowerCase();
   if (/check\s*box|yes\/no|true\/false/.test(norm)) return "checkbox";
   if (/e-?mail/.test(norm)) return "email";
@@ -201,8 +106,7 @@ function inferIntakeFieldType(label: string): IntakeFieldType {
   return "text";
 }
 
-
-function normalizeIntakeFields(raw: any, fallback?: any): IntakeField[] {
+export function normalizeIntakeFields(raw: any, fallback?: any): IntakeField[] {
   const source = Array.isArray(raw) && raw.length > 0
     ? raw
     : Array.isArray(fallback) && fallback.length > 0
@@ -244,8 +148,7 @@ function normalizeIntakeFields(raw: any, fallback?: any): IntakeField[] {
     .filter(Boolean) as IntakeField[];
 }
 
-
-function uniqueFieldKey(base: string, seen: Set<string>) {
+export function uniqueFieldKey(base: string, seen: Set<string>) {
   let key = base || "field";
   let suffix = 2;
   while (seen.has(key)) key = `${base}_${suffix++}`;
@@ -253,8 +156,7 @@ function uniqueFieldKey(base: string, seen: Set<string>) {
   return key;
 }
 
-
-function configuredIntakeFields(workflow: any) {
+export function configuredIntakeFields(workflow: any) {
   const intakeNode = Array.isArray(workflow?.nodePreview)
     ? workflow.nodePreview.find((node: any) => node?.type === "form")
     : null;
@@ -269,8 +171,7 @@ function configuredIntakeFields(workflow: any) {
   return normalizeIntakeFields(intakeNode?.config?.fields, fallback);
 }
 
-
-function initialIntakeValues(fields: IntakeField[], sample: Record<string, any>) {
+export function initialIntakeValues(fields: IntakeField[], sample: Record<string, any>) {
   const values: Record<string, any> = {};
   for (const field of fields) {
     const fallback = sample[field.key] ?? sample[field.label] ?? field.defaultValue;
@@ -279,26 +180,27 @@ function initialIntakeValues(fields: IntakeField[], sample: Record<string, any>)
   return values;
 }
 
+export function intakePayloadFromState(fields: IntakeField[], values: Record<string, any>) {
+  const payload: Record<string, any> = {};
+  for (const field of fields) {
+    const value = field.type === "checkbox" ? Boolean(values[field.key]) : values[field.key] ?? "";
+    payload[field.key] = value;
+    // Preserve AcroForm label lookups and older mappings that used the label as the key.
+    payload[field.label] = value;
+  }
+  return payload;
+}
 
-
-export {
-  FIELD_LABELS,
-  nodeTypes,
-  buildGraph,
-  WorkflowNode,
-  NodeIcon,
-  nodeTypeLabel,
-  checkboxLabel,
-  slugifyFieldKey,
-  inferIntakeFieldType,
-  normalizeIntakeFields,
-  uniqueFieldKey,
-  configuredIntakeFields,
-  initialIntakeValues,
-};
-
-export type {
-  IntakeFieldType,
-  IntakeField,
-  TemplateToken,
-};
+export function missingRequiredIntakeFields(fields: IntakeField[], values: Record<string, any>) {
+  return fields
+    .filter((field) => {
+      if (!field.required) return false;
+      const value = values[field.key];
+      if (field.type === "person") {
+        return !value || typeof value !== "object" || (!value.recordId && !value.name);
+      }
+      if (field.type === "checkbox") return !Boolean(value);
+      return value == null || String(value).trim() === "";
+    })
+    .map((field) => field.label);
+}

@@ -1,7 +1,9 @@
-// Import-session helpers extracted from importSessions.ts: shared constants plus
-// Re-export barrel: implementation split across .partN files.
-
-export * from "./importSessionHelpers.part1";
-export * from "./importSessionHelpers.part2";
-export * from "./importSessionHelpers.part3";
-export * from "./importSessionHelpers.part4";
+// Import-session helpers extracted from importSessions.ts.
+// Re-export barrel over cohesion-named modules; external import paths are unchanged.
+export * from "./importSessionConstants";
+export * from "./importSessionUtils";
+export * from "./importSessionNormalize";
+export * from "./importSessionMetadata";
+export * from "./importSessionValidation";
+export * from "./importSessionRecordKinds";
+export * from "./importSessionMergeAndApply";

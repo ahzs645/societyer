@@ -1,125 +1,72 @@
-// Import-session helpers extracted from importSessions.ts: shared constants plus
-// the pure + ctx-taking helper functions (normalization, hydration, evidence,
-// summaries, payload parsing). The Convex query/mutation registrations that use
-// them stay in importSessions.ts so all api.importSessions.* paths are unchanged.
+// Import-session apply layer: ctx-taking writes, meeting merge, and record insertion.
 
-import { invalidOptionIssue, invalidOptionListIssues } from "./lib/orgHubOptions";
 import { transactionImportMappingCandidates } from "./providers/accounting";
-
 import {
-  transactionCandidateMappingNotes,
-  normalizePayload,
-  normalizeSourcePayload,
-  structuredMinutesPatchFromPayload,
-  insurancePolicySeriesKey,
-  insurancePolicyTermLabel,
-} from "./importSessionHelpers.part2";
+  HISTORY_ITEM_CATEGORY,
+  HISTORY_ITEM_TAG,
+  HISTORY_SOURCE_CATEGORY,
+  HISTORY_TAG,
+  RECORD_TAG,
+  SESSION_TAG,
+} from "./importSessionConstants";
 import {
-  normalizeCoveredParties,
-  normalizeCoverageItems,
-  normalizeCoveredLocations,
-  normalizePolicyDefinitions,
-  normalizeDeclinedCoverages,
-  normalizeCertificatesOfInsurance,
-  normalizeInsuranceRequirements,
-  normalizeClaimsMadeTerms,
-  normalizeClaimIncidents,
-  normalizeAnnualReviews,
-  normalizeComplianceChecks,
-  titleForHistoryItem,
-  hydrateSession,
-  hydrateRecord,
-  hydrateHistorySource,
-  parseJson,
-  parseJsonArray,
-  isImportRecord,
-  isHistorySource,
-} from "./importSessionHelpers.part3";
-import {
-  historySourceTags,
-  confidenceFor,
-  importedLibrarySection,
-  toMeetingDateTime,
-  sourceNoteFor,
-  bylawImportHistory,
+  arrayOf,
   cleanDate,
   cleanDateTime,
-  todayDate,
-  fiscalYearFromDate,
-  splitName,
-  personKey,
-  tagValue,
   cleanText,
-  arrayOf,
-  unique,
+  fallbackSourceTitle,
+  fiscalYearFromDate,
   numberOrUndefined,
   optionalBoolean,
+  personKey,
   sourceSystemFromExternalId,
   sourceSystemLabel,
   sourceSystemTag,
-  fallbackSourceTitle,
-} from "./importSessionHelpers.part4";
-
-const SESSION_TAG = "import-session";
-const RECORD_TAG = "import-session-record";
-const SESSION_CATEGORY = "Import Session";
-const RECORD_CATEGORY = "Import Candidate";
-
-const HISTORY_TAG = "org-history";
-const HISTORY_SOURCE_TAG = "org-history-source";
-const HISTORY_ITEM_TAG = "org-history-item";
-const HISTORY_SOURCE_CATEGORY = "Org History Source";
-const HISTORY_ITEM_CATEGORY = "Org History Item";
-
-const REVIEW_STATUSES = ["Pending", "Approved", "Rejected"] as const;
-const HISTORY_KINDS = ["fact", "event", "boardTerm", "motion", "budget"] as const;
-const SECTION_RECORD_KINDS = [
-  "filing",
-  "deadline",
-  "bylawAmendment",
-  "publication",
-  "insurancePolicy",
-  "financialStatement",
-  "financialStatementImport",
-  "grant",
-  "recordsLocation",
-  "archiveAccession",
-  "boardRoleAssignment",
-  "boardRoleChange",
-  "signingAuthority",
-  "meetingAttendance",
-  "motionEvidence",
-  "budgetSnapshot",
-  "treasurerReport",
-  "transactionCandidate",
-  "organizationAddress",
-  "organizationRegistration",
-  "organizationIdentifier",
-  "policy",
-  "workflowPackage",
-  "minuteBookItem",
-  "roleHolder",
-  "rightsClass",
-  "rightsholdingTransfer",
-  "legalTemplateDataField",
-  "legalTemplate",
-  "legalPrecedent",
-  "legalPrecedentRun",
-  "generatedLegalDocument",
-  "legalSigner",
-  "formationRecord",
-  "nameSearchItem",
-  "entityAmendment",
-  "annualMaintenanceRecord",
-  "jurisdictionMetadata",
-  "supportLog",
-  "sourceEvidence",
-  "secretVaultItem",
-  "pipaTraining",
-  "employee",
-  "volunteer",
-] as const;
-
+  splitName,
+  tagValue,
+  todayDate,
+  unique,
+} from "./importSessionUtils";
+import {
+  insurancePolicySeriesKey,
+  insurancePolicyTermLabel,
+  normalizeAnnualReviews,
+  normalizeCertificatesOfInsurance,
+  normalizeClaimIncidents,
+  normalizeClaimsMadeTerms,
+  normalizeComplianceChecks,
+  normalizeCoverageItems,
+  normalizeCoveredLocations,
+  normalizeCoveredParties,
+  normalizeDeclinedCoverages,
+  normalizeInsuranceRequirements,
+  normalizePayload,
+  normalizePolicyDefinitions,
+  normalizeSourcePayload,
+  structuredMinutesPatchFromPayload,
+} from "./importSessionNormalize";
+import {
+  hydrateHistorySource,
+  hydrateRecord,
+  hydrateSession,
+  isHistorySource,
+  isImportRecord,
+  isImportSession,
+  parseJson,
+  parseJsonArray,
+  sourceNoteFor,
+  summarizeRecords,
+  titleForHistoryItem,
+} from "./importSessionMetadata";
+import {
+  bylawImportHistory,
+  confidenceFor,
+  historySourceTags,
+  importedLibrarySection,
+  sourceSystem,
+  targetTableForRecordKind,
+  toMeetingDateTime,
+} from "./importSessionRecordKinds";
 
 async function mergeExistingMeetingImport(
   ctx: any,
@@ -241,7 +188,6 @@ function appendImportNote(current: unknown, note: string) {
   if (text.includes(note)) return text;
   return `${text}\n${note}`;
 }
-
 
 async function ensureMeetingSourceDocuments(
   ctx: any,
@@ -1677,20 +1623,133 @@ async function insertHistoryItem(ctx: any, societyId: string, kind: string, payl
   });
 }
 
+async function patchRecordImportTarget(ctx: any, record: any, target: string, value: any) {
+  await ctx.db.patch(record._id, {
+    content: JSON.stringify({
+      ...record,
+      importedTargets: { ...(record.importedTargets ?? {}), [target]: value },
+      updatedAtISO: new Date().toISOString(),
+    }),
+  });
+}
+
+async function patchRecordPromotionBlocked(ctx: any, record: any, issues: string[]) {
+  const riskFlags = unique([
+    ...(record.riskFlags ?? []),
+    "validation",
+    issues.some((issue) => issue.toLowerCase().includes("duplicate")) ? "duplicate" : "",
+    issues.some((issue) => issue.toLowerCase().includes("confidence")) ? "confidence" : "",
+  ]);
+  await ctx.db.patch(record._id, {
+    content: JSON.stringify({
+      ...record,
+      status: "Pending",
+      reviewNotes: appendImportNote(
+        record.reviewNotes,
+        `Promotion blocked: ${issues.join("; ")}`,
+      ),
+      riskFlags,
+      updatedAtISO: new Date().toISOString(),
+    }),
+    tags: [SESSION_TAG, RECORD_TAG, tagValue(record.recordKind), tagValue(record.targetModule), "promotion-blocked"].filter(Boolean),
+  });
+}
+
+async function patchSessionUpdatedAt(ctx: any, sessionId: string) {
+  const doc = await ctx.db.get(sessionId);
+  if (!isImportSession(doc)) return;
+  const payload = hydrateSession(doc);
+  const records = (await recordsForSession(ctx, sessionId))
+    .filter(isImportRecord)
+    .map(hydrateRecord)
+    .filter((record) => record.sessionId === sessionId);
+  const summary = summarizeRecords(records);
+  await ctx.db.patch(sessionId, {
+    content: JSON.stringify({ ...payload, summary, updatedAtISO: new Date().toISOString() }),
+  });
+  return summary;
+}
+
+async function transactionCandidateMappingNotes(ctx: any, societyId: any, payload: any, record: any) {
+  const candidates = transactionImportMappingCandidates({
+    sourceSystem: payload?.sourceSystem ?? payload?.externalSystem ?? sourceSystemFromExternalId(record?.sourceExternalIds?.[0]),
+    accountName: cleanText(payload?.accountName),
+    accountExternalId: cleanText(payload?.accountExternalId) ?? cleanText(payload?.accountId),
+    accountCode: cleanText(payload?.accountCode),
+    category: cleanText(payload?.category),
+  });
+  if (candidates.length === 0) return undefined;
+
+  const providers = unique(candidates.map((candidate) => candidate.provider));
+  const mappings = (
+    await Promise.all(
+      providers.map((provider) =>
+        ctx.db
+          .query("accountingAccountMappings")
+          .withIndex("by_society_provider", (q: any) => q.eq("societyId", societyId).eq("provider", provider))
+          .collect(),
+      ),
+    )
+  ).flat().filter((mapping: any) => mapping.status === "active");
+
+  const matches = candidates
+    .map((candidate) => {
+      const match = mappings.find((mapping: any) => mappingMatchesCandidate(mapping, candidate));
+      if (!match) return undefined;
+      return `${candidate.externalCategory ? "category" : "account"} ${candidate.externalAccountName ?? candidate.externalCategory ?? candidate.externalAccountId ?? candidate.externalAccountCode} -> ${match.financialAccountId}`;
+    })
+    .filter(Boolean);
+  if (matches.length === 0) return undefined;
+  return `Accounting mapping suggestions: ${unique(matches).join("; ")}`;
+}
+
+function mappingMatchesCandidate(mapping: any, candidate: any) {
+  const equal = (a: unknown, b: unknown) => {
+    const left = cleanText(a)?.toLowerCase();
+    const right = cleanText(b)?.toLowerCase();
+    return Boolean(left && right && left === right);
+  };
+  return (
+    equal(mapping.externalAccountId, candidate.externalAccountId) ||
+    equal(mapping.externalAccountCode, candidate.externalAccountCode) ||
+    equal(mapping.externalAccountName, candidate.externalAccountName) ||
+    equal(mapping.externalCategory, candidate.externalCategory)
+  );
+}
+
+async function insertSourceEvidenceForAppliedRecord(
+  ctx: any,
+  societyId: string,
+  record: any,
+  targetId: any,
+  sourceDocumentIds: any[],
+) {
+  const payload = record.payload ?? {};
+  const sourceExternalIds = unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]);
+  const restricted = payload.sensitivity === "restricted" || (record.riskFlags ?? []).includes("restricted");
+  const firstSourceDocumentId = sourceDocumentIds[0];
+  const externalSystem = cleanText(payload.externalSystem) || sourceSystemFromExternalId(sourceExternalIds[0]);
+  await ctx.db.insert("sourceEvidence", {
+    societyId,
+    sourceDocumentId: firstSourceDocumentId,
+    externalSystem,
+    externalId: sourceExternalIds[0],
+    sourceTitle: cleanText(payload.sourceTitle) || cleanText(payload.title) || record.title || `${sourceSystemLabel(externalSystem)} source`,
+    sourceDate: cleanDate(payload.sourceDate),
+    evidenceKind: restricted ? "restricted" : "import_support",
+    targetTable: targetTableForRecordKind(record.recordKind),
+    targetId: String(targetId),
+    sensitivity: restricted ? "restricted" : "standard",
+    accessLevel: restricted ? "restricted" : "internal",
+    summary: sourceNoteFor(record, sourceDocumentIds) || "Source evidence created from an approved import-session record.",
+    excerpt: restricted ? undefined : cleanText(payload.excerpt),
+    status: "Linked",
+    notes: "Created automatically when the approved import record was applied.",
+    createdAtISO: new Date().toISOString(),
+  });
+}
 
 export {
-  SESSION_TAG,
-  RECORD_TAG,
-  SESSION_CATEGORY,
-  RECORD_CATEGORY,
-  HISTORY_TAG,
-  HISTORY_SOURCE_TAG,
-  HISTORY_ITEM_TAG,
-  HISTORY_SOURCE_CATEGORY,
-  HISTORY_ITEM_CATEGORY,
-  REVIEW_STATUSES,
-  HISTORY_KINDS,
-  SECTION_RECORD_KINDS,
   mergeExistingMeetingImport,
   minutesMotionFromPayload,
   shouldReplaceMeetingAgenda,
@@ -1712,4 +1771,10 @@ export {
   sourceLookupDocs,
   upsertHistorySources,
   insertHistoryItem,
+  patchRecordImportTarget,
+  patchRecordPromotionBlocked,
+  patchSessionUpdatedAt,
+  transactionCandidateMappingNotes,
+  mappingMatchesCandidate,
+  insertSourceEvidenceForAppliedRecord,
 };

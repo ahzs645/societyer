@@ -22,14 +22,14 @@ entity types (society / corporation) layered on top like class inheritance
   `organizationRegistrations` table (home / extra_provincial / branch / business_name).
 - **A3 — Legislation references in UI.** ✅ Done. Each rule carries `authority` + `sources`
   with statute citation + URL.
-- **A4 — Province module serves BOTH paths.** 🔲 Gap · M · ★★★
+- **A4 — Province module serves BOTH paths.** ✅ Done (2026-06-07) · ★★★
   Lucas's sharpest point: *extra-provincial registration needs the same things as a direct
   provincial incorporation.* Today `ca-bc-company.json` and `ca-bc-extra-provincial-company.json`
   are separate and likely duplicate obligations. Add a composition/inheritance layer so a
   province defines its obligations **once**, consumed by both "incorporate provincially" and
   "extra-provincially register a federal corp." First step: audit the two BC packs for
   duplicated `obligationKey`s.
-- **A5 — Remove BC hardcoding (the literal "make federal the base" cleanup).** 🔲 Gap · M · ★★
+- **A5 — Remove BC hardcoding (the literal "make federal the base" cleanup).** 🟡 Partial done (2026-06-07) · ★★
   `"CA-BC"` is a fallback default in `localDexieRowStore.ts`, `staticConvex.ts`,
   `convex/society.ts`. The min-3-directors / BC-residency rule is hardcoded in
   `shared/directorCompliance.ts` instead of in a rule pack — move it into the packs.
@@ -86,7 +86,7 @@ entity types (society / corporation) layered on top like class inheritance
 
 ## F. Project health & long-term survival (Lucas's parting advice)
 
-- **F1 — Contributor infrastructure.** 🔲 Gap · S · ★★★
+- **F1 — Contributor infrastructure.** ✅ Done (2026-06-07) · S · ★★★
   No `CONTRIBUTING.md`, no issue/PR templates (`.github/` only has workflows). Add them to
   make the project contributable — directly serves the "long-term survival / get maintainers"
   goal. Cheap, high leverage.

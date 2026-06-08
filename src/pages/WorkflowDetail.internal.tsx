@@ -1,6 +1,10 @@
-// Private sub-components/helpers for WorkflowDetail.tsx (node panels, field/mapping editors, modals).
-// Re-export barrel: implementation split across .partN files.
-
-export * from "./WorkflowDetail.internal.part1";
-export * from "./WorkflowDetail.internal.part2";
-export * from "./WorkflowDetail.internal.part3";
+// Private sub-components/helpers for WorkflowDetail.tsx.
+// Re-export barrel over cohesion-named modules; external import paths are unchanged.
+export * from "./WorkflowDetail.internal.nodeGraph";
+export * from "./WorkflowDetail.internal.intakeFields";
+export * from "./WorkflowDetail.internal.personPicker";
+export * from "./WorkflowDetail.internal.fieldInputs";
+export * from "./WorkflowDetail.internal.nodeSetup";
+export * from "./WorkflowDetail.internal.intakeWizard";
+export * from "./WorkflowDetail.internal.pdfFill";
+export * from "./WorkflowDetail.internal.fieldMapping";
