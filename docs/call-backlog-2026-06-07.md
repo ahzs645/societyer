@@ -38,17 +38,24 @@ entity types (society / corporation) layered on top like class inheritance
 
 ## B. Onboarding & document generation
 
-- **B1 — Post-incorporation "next steps" guided flow.** 🟡 Partial · M · ★★★
+- **B1 — Post-incorporation "next steps" guided flow.** 🟡 Data layer done (2026-06-07), UI pending · ★★★
+  Built `shared/postIncorporationSteps.ts` — the federal-first ordered ISED next-steps flow
+  (13 steps), each with timing, authority (body + CBCA citation + official URL), category,
+  cadence, linked document `packetKey`, and linked compliance `filingKind`. Gated by
+  `npm run test:post-incorporation-steps`. Remaining: a UI surface to render it + persist
+  per-step completion (reuse the workflows/tasks engine).
   The hardest thing for new incorporators ("Vault/ISED just incorporated me — now what?":
   minute book, appoint directors, issue shares, change HQ address, get HST/BN). Building
   blocks exist in `corporationDocumentPackets.ts` (organize-corporation, appoint-director,
   issue-shares, isc-register-update, extra-provincial-registration-evidence). Missing: the
   guided **sequence** that walks a new corp through them.
-- **B2 — Quick-action document issuance.** 🟡 Partial · M · ★★
+- **B2 — Quick-action document issuance.** 🟡 Partial · M · ★★ — each post-incorporation step
+  now carries a `packetKey`, so the targets for "create this document" are wired; needs a UI action.
   "Create a shareholder resolution / appointment / annual ISC declaration" as one-click
   document generation. Packet generation (`corporationPacketDocx.ts`) exists; wire up
   quick-actions + (optional) LawDepot-style templates.
-- **B3 — Annual ISC filing helper.** 🟡 Partial · S · ★★
+- **B3 — Annual ISC filing helper.** 🟡 Partial · S · ★★ — the `file-isc-information` step links
+  the `isc-register-update` packet to the recurring `FederalIscUpdate` obligation; helper UI pending.
   Federal corps file ISC (significant control, >25–30% interest) yearly. `isc-register-update`
   packet exists; add the recurring obligation + reminder + declaration doc.
 

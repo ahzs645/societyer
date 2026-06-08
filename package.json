@@ -62,6 +62,7 @@
     "test:local-snapshots": "tsx scripts/check-local-snapshot-roundtrip.ts",
     "test:organization-domain": "tsx scripts/check-organization-domain.ts",
     "test:jurisdiction-modules": "tsx scripts/check-jurisdiction-modules.ts",
+    "test:post-incorporation-steps": "tsx scripts/check-post-incorporation-steps.ts",
     "test:org-details": "tsx scripts/check-org-detail-smoke.ts",
     "test:pdf-ingestion": "tsx scripts/check-pdf-table-normalization.ts",
     "test:exports": "tsx scripts/check-export-coverage.ts",

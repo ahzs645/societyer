@@ -1,0 +1,235 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Twenty-style compact action button */
+.btn-action {
+  @include inline-flex-center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: token('r-sm');
+  font-size: token('fs-sm');
+  line-height: 1;
+  font-weight: 500;
+  color: token('text-secondary');
+  border: 1px solid token('border');
+  background: transparent;
+  white-space: nowrap;
+  transition: background 0.08s ease, color 0.08s ease;
+}
+.btn-action:hover { background: token('bg-hover'); color: token('text-primary'); }
+.btn-action svg { width: 12px; height: 12px; }
+.btn-action--icon { padding: 0; width: 24px; justify-content: center; }
+.btn-action--primary {
+  background: token('bg-base');
+  border-color: token('border-strong');
+  color: token('text-primary');
+}
+
+/* Semantic tints — used by vote/outcome actions in MotionEditor */
+.btn-action--success {
+  color: token('success');
+  border-color: color-mix(in srgb, token('success') 40%, transparent);
+}
+.btn-action--danger {
+  color: token('danger');
+  border-color: color-mix(in srgb, token('danger') 40%, transparent);
+}
+.btn-action--warn {
+  color: token('warn');
+}
+
+/* Shared pills + icon tiles */
+.pill {
+  @include inline-flex-center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: token('r-pill');
+  background: token('bg-panel');
+  border: 1px solid token('border');
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pill--sm {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 7px;
+}
+.pill--success { background: token('success-soft'); color: token('success'); border-color: token('green-6'); }
+.pill--warn { background: token('warn-soft'); color: token('warn'); border-color: token('orange-6'); }
+.pill--danger { background: token('danger-soft'); color: token('danger'); border-color: token('red-6'); }
+.pill--info { background: token('info-soft'); color: token('info'); border-color: token('blue-6'); }
+.pill--accent { background: token('accent-soft'); color: token('accent'); border-color: token('blue-6'); }
+
+/* Palette-driven tones — track Twenty's tag colours. Each uses step-3 bg +
+ * step-11 text so contrast holds across light and dark automatically. */
+.pill--blue      { background: token('blue-3');      color: token('blue-11');      border-color: token('blue-6'); }
+.pill--red       { background: token('red-3');       color: token('red-11');       border-color: token('red-6'); }
+.pill--turquoise { background: token('turquoise-3'); color: token('turquoise-11'); border-color: token('turquoise-6'); }
+.pill--gray      { background: token('gray-3');      color: token('gray-11');      border-color: token('gray-6'); }
+.pill--orange    { background: token('orange-3');    color: token('orange-11');    border-color: token('orange-6'); }
+.pill--purple    { background: token('purple-3');    color: token('purple-11');    border-color: token('purple-6'); }
+.pill--green     { background: token('green-3');     color: token('green-11');     border-color: token('green-6'); }
+.pill--pink      { background: token('pink-3');      color: token('pink-11');      border-color: token('pink-6'); }
+.pill--yellow    { background: token('yellow-3');    color: token('yellow-11');    border-color: token('yellow-6'); }
+
+.tinted-icon-tile {
+  display: inline-grid;
+  place-items: center;
+  border-radius: token('r-md');
+  border: 1px solid;
+  flex-shrink: 0;
+  /* Text fitment for initials (e.g. "AM", "PP"). Tile is small, so use a tight
+   * line-height and a size scale that keeps two chars inside the box. */
+  font-weight: token('fw-semibold');
+  line-height: 1;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  overflow: hidden;
+}
+.tinted-icon-tile svg {
+  stroke-width: 2;
+}
+.tinted-icon-tile--sm {
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+}
+.tinted-icon-tile--sm svg {
+  width: 14px;
+  height: 14px;
+}
+.tinted-icon-tile--md {
+  width: 30px;
+  height: 30px;
+  font-size: 12px;
+}
+.tinted-icon-tile--md svg {
+  width: 16px;
+  height: 16px;
+}
+.tinted-icon-tile--lg {
+  width: 36px;
+  height: 36px;
+  font-size: 14px;
+}
+.tinted-icon-tile--lg svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* View bar (above tables) — wraps on narrow widths so controls stay
+ * accessible instead of clipping at the right edge. */
+.view-bar {
+  @include flex-center;
+  flex-wrap: wrap;
+  row-gap: token('s-1');
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid token('border-color-light');
+  background: token('bg-panel');
+}
+.view-pill {
+  @include inline-flex-center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: token('fs-sm');
+  font-weight: 500;
+  color: token('text-primary');
+  background: token('bg-panel');
+  border: 1px solid token('border');
+  transition: background 0.08s ease, border-color 0.08s ease;
+}
+.view-pill:hover {
+  background: token('bg-hover');
+  border-color: token('border-strong');
+}
+.view-pill--static {
+  cursor: default;
+}
+.view-pill--static:hover {
+  background: token('bg-panel');
+  border-color: token('border');
+}
+.view-pill svg { width: 14px; height: 14px; color: token('text-secondary'); }
+.view-pill__icon {
+  margin-left: -2px;
+}
+.view-pill__count {
+  margin-left: 2px;
+}
+.view-bar__sep {
+  width: 1px;
+  height: 16px;
+  background: token('border');
+  margin: 0 4px;
+}
+.view-bar__group {
+  display: inline-flex;
+  gap: 0;
+  align-items: center;
+}
+.view-bar__btn {
+  padding: 4px 8px;
+  font-size: token('fs-sm');
+  color: token('text-secondary');
+  border-radius: token('r-sm');
+  font-weight: 500;
+  transition: background 0.08s ease, color 0.08s ease;
+}
+.view-bar__btn:hover { background: token('bg-hover'); color: token('text-primary'); }
+
+/* Filter chips row (sits below view bar) */
+.filter-chips {
+  @include flex-center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid token('border');
+  background: token('bg-base');
+  flex-wrap: wrap;
+}
+.filter-chip {
+  @include inline-flex-center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  background: token('accent-soft');
+  color: token('accent');
+  border: 1px solid transparent;
+  border-radius: token('r-sm');
+  font-size: token('fs-sm');
+  font-weight: 500;
+}
+.filter-chip__field { color: token('text-secondary'); }
+.filter-chip__op { color: token('text-tertiary'); margin: 0 2px; }
+.filter-chip__remove {
+  width: 16px;
+  height: 16px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 3px;
+  color: token('accent');
+  opacity: 0.7;
+}
+.filter-chip__remove:hover { opacity: 1; background: rgba(0,0,0,0.05); }
+
+/* Popover for filter field picker — fixed-positioned so coords match viewport rects */

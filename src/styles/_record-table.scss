@@ -1,11 +1,13 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
 // ============================================================
 // RecordTable — the Twenty-style metadata-driven table.
 // Uses design tokens from theme/tokens.css (var(--...)).
 // ============================================================
 
 .record-table-container {
-  display: flex;
-  flex-direction: column;
+  @include flex-column;
   gap: 8px;
   width: 100%;
 }
@@ -13,17 +15,15 @@
 /* ------------------------- Toolbar ------------------------- */
 
 .record-table__toolbar {
-  display: flex;
-  align-items: center;
+  @include flex-center;
   gap: 8px;
   padding: 6px 0;
-  border-bottom: 1px solid var(--border-color-light);
+  border-bottom: 1px solid token('border-color-light');
   min-width: 0;
 }
 
 .record-table__toolbar-left {
-  display: flex;
-  align-items: center;
+  @include flex-center;
   gap: 6px;
   min-width: 180px;
 }
@@ -36,8 +36,7 @@
 }
 
 .record-table__toolbar-right {
-  display: flex;
-  align-items: center;
+  @include flex-center;
   gap: 6px;
   position: relative;
   flex-wrap: wrap;
@@ -46,11 +45,10 @@
 }
 
 .record-table__title {
-  display: inline-flex;
-  align-items: center;
+  @include inline-flex-center;
   gap: 6px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: token('text-primary');
 }
 
 .record-table__view-switcher {
@@ -58,40 +56,39 @@
 }
 
 .record-table__view-switcher:first-child {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color-medium);
-  border-radius: var(--r-pill);
+  background: token('bg-secondary');
+  border: 1px solid token('border-color-medium');
+  border-radius: token('r-pill');
   padding: 3px;
 }
 
 .record-table__view-button,
 .record-table__toolbar-button {
-  display: inline-flex;
-  align-items: center;
+  @include inline-flex-center;
   gap: 6px;
   height: 24px;
   padding: 0 8px;
-  font-size: var(--fs-sm);
-  color: var(--text-primary);
+  font-size: token('fs-sm');
+  color: token('text-primary');
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--r-sm);
+  border-radius: token('r-sm');
   cursor: pointer;
   transition: background 100ms ease;
 
   &:hover {
-    background: var(--bg-transparent-light);
+    background: token('bg-transparent-light');
   }
 }
 
 .record-table__view-button {
-  border-radius: var(--r-pill);
-  font-weight: var(--fw-medium);
+  border-radius: token('r-pill');
+  font-weight: token('fw-medium');
 }
 
 .record-table__toolbar-button--active {
-  background: var(--bg-transparent-light);
-  color: var(--accent);
+  background: token('bg-transparent-light');
+  color: token('accent');
 }
 
 // "Save changes" button shown when the view has unsaved edits. Yellow
@@ -113,20 +110,19 @@
 }
 
 .record-table__search {
-  display: inline-flex;
-  align-items: center;
+  @include inline-flex-center;
   gap: 4px;
   height: 28px;
   padding: 0 10px;
-  border: 1px solid var(--border-color-medium);
-  border-radius: var(--r-pill);
-  background: var(--bg-secondary);
+  border: 1px solid token('border-color-medium');
+  border-radius: token('r-pill');
+  background: token('bg-secondary');
   min-width: 280px;
   max-width: 420px;
   flex: 1;
 
   svg {
-    color: var(--text-tertiary);
+    color: token('text-tertiary');
     flex-shrink: 0;
   }
 }
@@ -138,10 +134,10 @@
   flex: 1;
   min-width: 0;
   font-size: 12px;
-  color: var(--text-primary);
+  color: token('text-primary');
 
   &::placeholder {
-    color: var(--text-tertiary);
+    color: token('text-tertiary');
   }
 }
 
@@ -149,8 +145,8 @@
   .record-table__toolbar {
     align-items: stretch;
     flex-direction: column;
-    gap: var(--s-2);
-    padding-bottom: var(--s-3);
+    gap: token('s-2');
+    padding-bottom: token('s-3');
   }
 
   .record-table__toolbar-left,
@@ -197,14 +193,13 @@
 .record-table__search-clear {
   background: transparent;
   border: none;
-  color: var(--text-tertiary);
+  color: token('text-tertiary');
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
+  @include inline-flex-center;
   padding: 0;
 
   &:hover {
-    color: var(--text-primary);
+    color: token('text-primary');
   }
 }
 
@@ -215,11 +210,11 @@
   min-width: 180px;
   max-height: 320px;
   overflow-y: auto;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-strong);
-  z-index: var(--z-dropdown);
+  background: token('bg-panel');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  box-shadow: token('shadow-strong');
+  z-index: token('z-dropdown');
   padding: 4px;
 }
 
@@ -233,34 +228,32 @@
 }
 
 .record-table__segmented {
-  display: inline-flex;
-  align-items: center;
+  @include inline-flex-center;
   height: 26px;
   padding: 2px;
-  border: 1px solid var(--border-color-medium);
-  border-radius: var(--r-sm);
-  background: var(--bg-secondary);
+  border: 1px solid token('border-color-medium');
+  border-radius: token('r-sm');
+  background: token('bg-secondary');
 
   button {
-    display: inline-flex;
-    align-items: center;
+    @include inline-flex-center;
     justify-content: center;
     width: 24px;
     height: 20px;
     border: 0;
     border-radius: 4px;
     background: transparent;
-    color: var(--text-tertiary);
+    color: token('text-tertiary');
     cursor: pointer;
 
     &:hover {
-      color: var(--text-primary);
-      background: var(--bg-transparent-light);
+      color: token('text-primary');
+      background: token('bg-transparent-light');
     }
 
     &.is-active {
-      color: var(--accent);
-      background: var(--accent-soft);
+      color: token('accent');
+      background: token('accent-soft');
     }
   }
 }
@@ -269,7 +262,7 @@
   padding: 6px;
 
   & + & {
-    border-top: 1px solid var(--border-color-light);
+    border-top: 1px solid token('border-color-light');
   }
 }
 
@@ -278,31 +271,30 @@
   margin-bottom: 6px;
   font-size: 10px;
   font-weight: 700;
-  color: var(--text-tertiary);
+  color: token('text-tertiary');
   text-transform: uppercase;
 }
 
 .record-table__menu-radio {
-  display: flex;
-  align-items: center;
+  @include flex-center;
   gap: 8px;
   padding: 5px 4px;
   font-size: 12px;
-  color: var(--text-primary);
+  color: token('text-primary');
   cursor: pointer;
 
   input {
-    accent-color: var(--accent);
+    accent-color: token('accent');
   }
 }
 
 .record-table__menu-select {
   width: 100%;
   height: 28px;
-  border: 1px solid var(--border-color-medium);
-  border-radius: var(--r-sm);
-  background: var(--bg-panel);
-  color: var(--text-primary);
+  border: 1px solid token('border-color-medium');
+  border-radius: token('r-sm');
+  background: token('bg-panel');
+  color: token('text-primary');
   font-size: 12px;
   padding: 0 8px;
 }
@@ -310,8 +302,8 @@ select.record-table__menu-select,
 .record-table__filter-popover-row select {
   appearance: none;
   background-image:
-    linear-gradient(45deg, transparent 50%, var(--text-tertiary) 50%),
-    linear-gradient(135deg, var(--text-tertiary) 50%, transparent 50%);
+    linear-gradient(45deg, transparent 50%, token('text-tertiary') 50%),
+    linear-gradient(135deg, token('text-tertiary') 50%, transparent 50%);
   background-position:
     calc(100% - 15px) 50%,
     calc(100% - 10px) 50%;
@@ -322,8 +314,7 @@ select.record-table__menu-select,
 }
 
 .record-table__menu-item {
-  display: flex;
-  align-items: center;
+  @include flex-center;
   gap: 6px;
   width: 100%;
   padding: 6px 10px;
@@ -331,46 +322,45 @@ select.record-table__menu-select,
   border: none;
   border-radius: 4px;
   font-size: 12px;
-  color: var(--text-primary);
+  color: token('text-primary');
   cursor: pointer;
   text-align: left;
 
   &:hover {
-    background: var(--bg-hover);
+    background: token('bg-hover');
   }
 }
 
 .record-table__menu-item--active {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: token('accent-soft');
+  color: token('accent');
 }
 
 .record-table__menu-badge {
   margin-left: auto;
   padding: 1px 6px;
   font-size: 10px;
-  color: var(--text-tertiary);
-  background: var(--bg-subtle);
+  color: token('text-tertiary');
+  background: token('bg-subtle');
   border-radius: 999px;
   text-transform: uppercase;
 }
 
 .record-table__menu-checkbox {
-  display: flex;
-  align-items: center;
+  @include flex-center;
   gap: 8px;
   padding: 6px 10px;
   font-size: 12px;
-  color: var(--text-primary);
+  color: token('text-primary');
   cursor: pointer;
 
   &:hover {
-    background: var(--bg-hover);
+    background: token('bg-hover');
     border-radius: 4px;
   }
 
   input {
-    accent-color: var(--accent);
+    accent-color: token('accent');
   }
 }
 
@@ -385,13 +375,12 @@ select.record-table__menu-select,
 }
 
 .record-table__chip {
-  display: inline-flex;
-  align-items: center;
+  @include inline-flex-center;
   gap: 4px;
   padding: 3px 8px;
   font-size: 11px;
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: token('accent-soft');
+  color: token('accent');
   border-radius: 999px;
   border: 1px solid transparent;
 }
@@ -401,8 +390,7 @@ select.record-table__menu-select,
   border: none;
   color: inherit;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
+  @include inline-flex-center;
   padding: 0;
   opacity: 0.7;
 
@@ -415,12 +403,12 @@ select.record-table__menu-select,
   font-size: 11px;
   background: transparent;
   border: none;
-  color: var(--text-tertiary);
+  color: token('text-tertiary');
   cursor: pointer;
   text-decoration: underline;
 
   &:hover {
-    color: var(--text-primary);
+    color: token('text-primary');
   }
 }
 
@@ -431,11 +419,11 @@ select.record-table__menu-select,
   width: min(720px, 100%);
   margin: 0 0 4px auto;
   padding: 12px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-strong);
-  z-index: var(--z-dropdown);
+  background: token('bg-panel');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  box-shadow: token('shadow-strong');
+  z-index: token('z-dropdown');
 }
 
 .record-table__sort-popover {
@@ -444,32 +432,29 @@ select.record-table__menu-select,
   right: 0;
   width: 460px;
   padding: 12px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-strong);
-  z-index: var(--z-dropdown);
+  background: token('bg-panel');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  box-shadow: token('shadow-strong');
+  z-index: token('z-dropdown');
 }
 
 .record-table__popover-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  @include flex-between;
   gap: 8px;
   margin-bottom: 10px;
   font-size: 12px;
-  color: var(--text-primary);
+  color: token('text-primary');
 }
 
 .record-table__popover-empty {
   padding: 12px 0;
   font-size: 12px;
-  color: var(--text-tertiary);
+  color: token('text-tertiary');
 }
 
 .record-table__sort-list {
-  display: flex;
-  flex-direction: column;
+  @include flex-column;
   gap: 6px;
   margin-bottom: 10px;
 }
@@ -484,18 +469,17 @@ select.record-table__menu-select,
 .record-table__icon-btn {
   width: 26px;
   height: 26px;
-  display: inline-flex;
-  align-items: center;
+  @include inline-flex-center;
   justify-content: center;
-  color: var(--text-tertiary);
+  color: token('text-tertiary');
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--r-sm);
+  border-radius: token('r-sm');
   cursor: pointer;
 
   &:hover {
     color: var(--danger, #dc2626);
-    background: var(--bg-hover);
+    background: token('bg-hover');
   }
 }
 
@@ -509,9 +493,9 @@ select.record-table__menu-select,
     flex: 1;
     padding: 5px 8px;
     font-size: 12px;
-    background: var(--bg-subtle);
-    color: var(--text-primary);
-    border: 1px solid var(--border);
+    background: token('bg-subtle');
+    color: token('text-primary');
+    border: 1px solid token('border');
     border-radius: 5px;
   }
 
@@ -530,7 +514,7 @@ select.record-table__menu-select,
   padding: 5px 10px;
   font-size: 12px;
   font-weight: 600;
-  background: var(--accent);
+  background: token('accent');
   color: #fff;
   border: none;
   border-radius: 5px;
@@ -545,9 +529,9 @@ select.record-table__menu-select,
 .record-table__secondary-btn {
   padding: 5px 10px;
   font-size: 12px;
-  color: var(--text-primary);
+  color: token('text-primary');
   background: transparent;
-  border: 1px solid var(--border);
+  border: 1px solid token('border');
   border-radius: 5px;
   cursor: pointer;
 }
@@ -560,8 +544,7 @@ select.record-table__menu-select,
 }
 
 .record-table__board-card {
-  display: flex;
-  flex-direction: column;
+  @include flex-column;
   align-items: stretch;
   gap: 6px;
   width: 100%;
@@ -573,13 +556,13 @@ select.record-table__menu-select,
 
   strong {
     font-size: 13px;
-    color: var(--text-primary);
+    color: token('text-primary');
     overflow-wrap: anywhere;
   }
 
   span {
     font-size: 12px;
-    color: var(--text-secondary);
+    color: token('text-secondary');
   }
 }
 
@@ -592,8 +575,8 @@ select.record-table__menu-select,
 
 .record-table__virtuoso {
   height: 600px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
+  background: token('bg-panel');
+  border: 1px solid token('border');
   border-radius: 6px;
   overflow: hidden;
 }
@@ -602,9 +585,9 @@ select.record-table__menu-select,
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  background: var(--bg-panel);
+  background: token('bg-panel');
   font-size: 13px;
-  color: var(--text-primary);
+  color: token('text-primary');
 }
 
 .record-table--compact .record-table__cell,
@@ -620,14 +603,14 @@ select.record-table__menu-select,
 }
 
 .record-table__thead {
-  background: var(--bg-subtle);
+  background: token('bg-subtle');
   position: sticky;
   top: 0;
   z-index: 2;
 }
 
 .record-table__header-row {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid token('border');
 }
 
 .record-table__header-cell {
@@ -635,12 +618,12 @@ select.record-table__menu-select,
   text-align: left;
   font-weight: 600;
   font-size: 11px;
-  color: var(--text-tertiary);
+  color: token('text-tertiary');
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  border-bottom: 1px solid var(--border);
-  border-right: 1px solid var(--border);
-  background: var(--bg-subtle);
+  border-bottom: 1px solid token('border');
+  border-right: 1px solid token('border');
+  background: token('bg-subtle');
   position: relative;
   white-space: nowrap;
   user-select: none;
@@ -655,16 +638,15 @@ select.record-table__menu-select,
   font: inherit;
   color: inherit;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
+  @include inline-flex-center;
   gap: 4px;
 
   &:hover {
-    color: var(--text-primary);
+    color: token('text-primary');
   }
 
   svg {
-    color: var(--accent);
+    color: token('accent');
   }
 }
 
@@ -685,38 +667,38 @@ select.record-table__menu-select,
   background: transparent;
 
   &:hover {
-    background: var(--accent);
+    background: token('accent');
   }
 }
 
 .record-table__checkbox-cell {
   text-align: center;
   padding: 0 8px;
-  border-right: 1px solid var(--border);
+  border-right: 1px solid token('border');
   background: inherit;
 
   input {
-    accent-color: var(--accent);
+    accent-color: token('accent');
     cursor: pointer;
   }
 }
 
 .record-table__tbody {
-  background: var(--bg-panel);
+  background: token('bg-panel');
 }
 
 .record-table__row {
-  border-bottom: 1px solid var(--border-color-light);
+  border-bottom: 1px solid token('border-color-light');
 
   &:hover {
-    background: var(--bg-hover);
+    background: token('bg-hover');
   }
 }
 
 .record-table__cell {
   padding: 6px 10px;
-  border-right: 1px solid var(--border-color-light);
-  border-bottom: 1px solid var(--border-color-light);
+  border-right: 1px solid token('border-color-light');
+  border-bottom: 1px solid token('border-color-light');
   vertical-align: middle;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -726,11 +708,11 @@ select.record-table__menu-select,
 
 .record-table__cell--identifier {
   font-weight: 600;
-  color: var(--text-primary);
+  color: token('text-primary');
   cursor: pointer;
 
   &:hover {
-    color: var(--accent);
+    color: token('accent');
     text-decoration: underline;
   }
 }
@@ -740,9 +722,9 @@ select.record-table__menu-select,
 }
 
 .record-table__cell--focused {
-  outline: 2px solid var(--accent);
+  outline: 2px solid token('accent');
   outline-offset: -2px;
-  background: var(--accent-soft);
+  background: token('accent-soft');
 }
 
 .record-table__tfoot {
@@ -753,10 +735,10 @@ select.record-table__menu-select,
 
 .record-table__footer-cell {
   padding: 5px 10px;
-  border-top: 1px solid var(--border);
-  border-right: 1px solid var(--border-color-light);
-  background: var(--bg-subtle);
-  color: var(--text-tertiary);
+  border-top: 1px solid token('border');
+  border-right: 1px solid token('border-color-light');
+  background: token('bg-subtle');
+  color: token('text-tertiary');
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
@@ -765,12 +747,12 @@ select.record-table__menu-select,
 /* -------------------------- Cell sub-renderers -------------------------- */
 
 .record-cell__empty {
-  color: var(--text-tertiary);
+  color: token('text-tertiary');
   opacity: 0.6;
 }
 
 .record-cell__text {
-  color: var(--text-primary);
+  color: token('text-primary');
 }
 
 .record-cell__number,
@@ -780,7 +762,7 @@ select.record-table__menu-select,
 }
 
 .record-cell__date-time {
-  color: var(--text-tertiary);
+  color: token('text-tertiary');
   font-size: 11px;
 }
 
@@ -799,8 +781,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 // Table-cell chip — Twenty-style: 20px tall, 4px radius, 8px horiz
 // padding. No icon slot here; use `<Tag />` when you need one.
 .record-cell__chip {
-  display: inline-flex;
-  align-items: center;
+  @include inline-flex-center;
   height: 20px;
   padding: 0 8px;
   font-size: 12px;
@@ -836,8 +817,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 // outline / border) and an optional leading icon.
 
 .ui-tag {
-  display: inline-flex;
-  align-items: center;
+  @include inline-flex-center;
   gap: 4px;
   height: 20px;
   padding: 0 8px;
@@ -852,8 +832,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 .ui-tag--regular { font-weight: 400; }
 
 .ui-tag__icon {
-  display: inline-flex;
-  align-items: center;
+  @include inline-flex-center;
   flex-shrink: 0;
 }
 
@@ -885,23 +864,22 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 .ui-tag--transparent.ui-tag--outline,
 .ui-tag--transparent.ui-tag--border {
   background: transparent;
-  color: var(--text-secondary);
+  color: token('text-secondary');
 }
 
 .ui-tag--transparent.ui-tag--outline {
   border-style: dashed;
-  border-color: var(--border);
+  border-color: token('border');
 }
 
 .ui-tag--transparent.ui-tag--border {
-  border-color: var(--border);
+  border-color: token('border');
 }
 
 .record-cell__link {
-  color: var(--accent);
+  color: token('accent');
   text-decoration: none;
-  display: inline-flex;
-  align-items: center;
+  @include inline-flex-center;
   gap: 4px;
 
   &:hover {
@@ -910,8 +888,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 }
 
 .record-cell__boolean {
-  display: inline-flex;
-  align-items: center;
+  @include inline-flex-center;
   gap: 3px;
   padding: 2px 8px;
   font-size: 11px;
@@ -923,13 +900,13 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 // Green for truthy/"Yes", neutral gray for falsy/"No" (matches the
 // chip/tag palette defined above).
 .record-cell__boolean--true {
-  background: var(--green-4);
-  color: var(--green-11);
+  background: token('green-4');
+  color: token('green-11');
 }
 
 .record-cell__boolean--false {
-  background: var(--gray-3);
-  color: var(--gray-11);
+  background: token('gray-3');
+  color: token('gray-11');
 }
 
 .record-cell__rating {
@@ -938,7 +915,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 }
 
 .record-cell__rating-star {
-  color: var(--border);
+  color: token('border');
 }
 
 .record-cell__rating-star--filled {
@@ -955,13 +932,13 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   padding: 4px 6px;
   font: inherit;
   color: inherit;
-  background: var(--bg-panel);
-  border: 1px solid var(--accent);
+  background: token('bg-panel');
+  border: 1px solid token('accent');
   border-radius: 4px;
   outline: none;
 
   &:focus {
-    box-shadow: 0 0 0 2px var(--accent-soft);
+    box-shadow: 0 0 0 2px token('accent-soft');
   }
 }
 
@@ -970,22 +947,22 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 .record-table__empty {
   padding: 48px 16px;
   text-align: center;
-  color: var(--text-tertiary);
-  background: var(--bg-panel);
-  border: 1px dashed var(--border);
+  color: token('text-tertiary');
+  background: token('bg-panel');
+  border: 1px dashed token('border');
   border-radius: 8px;
 }
 
 .record-table__empty-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: token('text-primary');
   margin-bottom: 4px;
 }
 
 .record-table__empty-description {
   font-size: 12px;
-  color: var(--text-tertiary);
+  color: token('text-tertiary');
 }
 
 .record-table__empty-action {
@@ -993,8 +970,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 }
 
 .record-table__loading {
-  display: flex;
-  flex-direction: column;
+  @include flex-column;
   gap: 6px;
   padding: 8px 0;
 }
@@ -1002,7 +978,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 .record-table__loading-row {
   height: 28px;
   border-radius: 4px;
-  background: linear-gradient(90deg, var(--bg-subtle) 25%, var(--bg-hover) 50%, var(--bg-subtle) 75%);
+  background: linear-gradient(90deg, token('bg-subtle') 25%, token('bg-hover') 50%, token('bg-subtle') 75%);
   background-size: 200% 100%;
   animation: record-table-skeleton 1.4s ease-in-out infinite;
 }
@@ -1023,12 +999,11 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
-  display: inline-flex;
-  align-items: center;
+  @include inline-flex-center;
   gap: 12px;
   padding: 8px 12px;
-  background: var(--text-primary);
-  color: var(--bg-panel);
+  background: token('text-primary');
+  color: token('bg-panel');
   border-radius: 8px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
   z-index: 5;
@@ -1052,14 +1027,13 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 }
 
 .record-table__bulk-bar-button {
-  display: inline-flex;
-  align-items: center;
+  @include inline-flex-center;
   gap: 4px;
   padding: 4px 8px;
   font-size: 12px;
   font-weight: 500;
   background: transparent;
-  color: var(--bg-panel);
+  color: token('bg-panel');
   border: 1px solid transparent;
   border-radius: 5px;
   cursor: pointer;
@@ -1070,17 +1044,17 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 }
 
 .record-table__bulk-bar-button--danger {
-  color: var(--red-9);
+  color: token('red-9');
 
   &:hover {
-    background: color-mix(in oklab, var(--red-9) 18%, transparent);
+    background: color-mix(in oklab, token('red-9') 18%, transparent);
   }
 }
 
 .record-table__bulk-bar-clear {
   background: transparent;
   border: none;
-  color: var(--bg-panel);
+  color: token('bg-panel');
   opacity: 0.6;
   cursor: pointer;
   padding: 0;

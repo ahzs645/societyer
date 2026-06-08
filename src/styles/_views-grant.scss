@@ -1,0 +1,691 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+.grant-edit-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: token('s-4');
+  align-items: start;
+  min-width: 0;
+}
+
+.grant-edit-layout__main {
+  display: grid;
+  gap: token('s-4');
+  min-width: 0;
+}
+
+.grant-edit-layout__aside {
+  min-width: 0;
+}
+
+.grant-edit-layout__aside-inner {
+  position: sticky;
+  top: token('s-3');
+  display: grid;
+  gap: token('s-3');
+  max-height: calc(100vh - token('s-5'));
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.grant-edit-aside__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: token('text-tertiary');
+}
+
+.grant-edit-workbench {
+  display: grid;
+  gap: token('s-3');
+  min-width: 0;
+}
+
+.grant-edit-workbench__panel {
+  display: grid;
+  gap: token('s-3');
+  min-width: 0;
+  padding: token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  background: token('bg-panel');
+}
+
+.grant-edit-workbench__heading {
+  font-size: 13px;
+  font-weight: 650;
+  color: token('text-primary');
+}
+
+.grant-edit-workbench__badges,
+.grant-edit-workbench__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.grant-edit-workbench__links a {
+  @include inline-flex-center;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+  color: token('text-secondary');
+  font-size: 12px;
+}
+
+.grant-edit-workbench__links a:hover {
+  background: token('bg-hover');
+  color: token('text-primary');
+}
+
+.grant-edit-workbench__note {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+}
+
+.grant-edit-workbench__note span,
+.grant-edit-workbench__metrics span {
+  color: token('text-tertiary');
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.grant-edit-workbench__note strong,
+.grant-edit-workbench__item strong,
+.grant-edit-workbench__metrics strong {
+  overflow-wrap: anywhere;
+}
+
+.grant-edit-workbench__list {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.grant-edit-workbench__item {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+}
+
+.grant-edit-workbench__item p {
+  margin: 3px 0 0;
+  color: token('text-tertiary');
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.grant-edit-workbench__metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.grant-edit-workbench__metrics > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+}
+
+.grant-edit-workbench__metrics .is-danger { color: token('danger'); }
+.grant-edit-workbench__metrics .is-success { color: token('success'); }
+
+.grant-edit-workbench__facts {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: token('text-secondary');
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.source-external-ids-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.source-external-ids-field__row {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.8fr) minmax(120px, 1fr) minmax(140px, 1.2fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.source-external-ids-field__add {
+  justify-self: start;
+}
+
+.grant-edit-section {
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  background: token('bg-panel');
+  padding: token('s-4');
+  display: grid;
+  gap: token('s-3');
+  min-width: 0;
+}
+
+.grant-edit-section__head {
+  display: grid;
+  gap: 2px;
+}
+
+.grant-edit-section__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: token('text-primary');
+}
+
+.grant-edit-section__desc {
+  margin: 0;
+  font-size: 12px;
+  color: token('text-tertiary');
+}
+
+.grant-edit-section__body {
+  display: grid;
+  gap: token('s-3');
+  min-width: 0;
+}
+
+.grant-edit-grid {
+  display: grid;
+  gap: token('s-3');
+  min-width: 0;
+}
+
+.grant-edit-layout .field,
+.grant-edit-layout .input,
+.grant-edit-layout .textarea {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.grant-dossier-stack {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 16px;
+  min-width: 0;
+}
+
+.grant-dossier-stack--compact {
+  gap: 10px;
+}
+
+.grant-dossier-stack--compact section {
+  padding: 10px;
+}
+
+.grant-dossier-tabs {
+  min-width: 0;
+}
+
+.grant-dossier-tabs__nav {
+  margin-bottom: token('s-3');
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.grant-dossier-tabs__nav .tab {
+  background: transparent;
+}
+
+.grant-project-timeline {
+  display: grid;
+  gap: 0;
+}
+
+.grant-project-timeline__item {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.grant-project-timeline__rail {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.grant-project-timeline__rail::after {
+  content: "";
+  position: absolute;
+  top: 18px;
+  bottom: -12px;
+  width: 1px;
+  background: token('border');
+}
+
+.grant-project-timeline__item:last-child .grant-project-timeline__rail::after {
+  display: none;
+}
+
+.grant-project-timeline__dot {
+  position: relative;
+  z-index: 1;
+  width: 11px;
+  height: 11px;
+  margin-top: 4px;
+  border: 2px solid token('border');
+  border-radius: 999px;
+  background: token('bg-panel');
+}
+
+.grant-project-timeline__dot--success { border-color: token('success'); }
+.grant-project-timeline__dot--warn { border-color: token('warn'); }
+.grant-project-timeline__dot--danger { border-color: token('danger'); }
+.grant-project-timeline__dot--info { border-color: token('info'); }
+
+.grant-project-timeline__body {
+  min-width: 0;
+  padding-bottom: 12px;
+}
+
+.grant-project-timeline__date {
+  font-family: token('font-mono');
+  font-size: 12px;
+  color: token('text-tertiary');
+  margin-bottom: 3px;
+}
+
+.grant-project-timeline__title-row {
+  @include flex-center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.grant-requirement-card {
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  padding: 12px;
+  background: token('bg-base');
+  min-width: 0;
+}
+
+.grant-requirements-editor,
+.grant-requirement-list {
+  display: grid;
+  gap: token('s-3');
+  min-width: 0;
+}
+
+.grant-format-library {
+  display: grid;
+  gap: token('s-3');
+  min-width: 0;
+  padding: token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  background: token('bg-subtle');
+}
+
+.grant-format-library__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: token('s-3');
+  min-width: 0;
+}
+
+.grant-format-library__label {
+  color: token('text-tertiary');
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.grant-format-library__head p {
+  margin: 3px 0 0;
+  color: token('text-tertiary');
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.grant-format-library__badges,
+.grant-requirement-card__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.grant-format-library__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.grant-format-card {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+  color: token('text-primary');
+  text-align: left;
+  cursor: pointer;
+}
+
+.grant-format-card:hover,
+.grant-format-card.is-active {
+  border-color: token('accent');
+  background: token('bg-hover');
+}
+
+.grant-format-card span {
+  @include flex-center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.grant-format-card small {
+  color: token('text-tertiary');
+  font-size: 12px;
+}
+
+.grant-format-card--custom {
+  border-style: dashed;
+}
+
+.grant-requirement-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.grant-requirement-card__summary {
+  display: grid;
+  grid-template-columns: minmax(120px, 150px) minmax(180px, 1fr) minmax(110px, 150px) auto auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.grant-requirement-card__status,
+.grant-requirement-card__title,
+.grant-requirement-card__category {
+  min-width: 0;
+}
+
+.grant-requirement-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  color: token('text-tertiary');
+  font-size: 12px;
+}
+
+.grant-requirement-card__details {
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) minmax(0, 1fr);
+  gap: token('s-3');
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px dashed token('border');
+}
+
+.grant-requirement-card__details .field:last-child,
+.grant-requirement-card__links {
+  grid-column: 1 / -1;
+}
+
+.grant-requirement-evidence {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.grant-requirement-evidence__summary {
+  @include flex-between;
+  gap: 8px;
+  min-height: 34px;
+  min-width: 0;
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-subtle');
+  padding: 6px 8px;
+}
+
+.grant-requirement-evidence__summary > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grant-source-card {
+  @include flex-column;
+  min-height: 220px;
+}
+
+.grant-source-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: token('s-3');
+  padding: token('s-4') token('s-4') token('s-3');
+  border-bottom: 1px solid token('border');
+  min-width: 0;
+}
+
+.grant-source-card__main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.grant-source-card__eyebrow {
+  color: token('text-tertiary');
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.grant-source-card__title {
+  margin: 0;
+  color: token('text-primary');
+  font-size: token('fs-md');
+  font-weight: 650;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.grant-source-card__body {
+  display: grid;
+  gap: 10px;
+  padding: token('s-4');
+  min-width: 0;
+  flex: 1;
+}
+
+.grant-source-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+  color: token('text-tertiary');
+  font-size: token('fs-sm');
+  line-height: 1.4;
+}
+
+.grant-source-card__meta span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.grant-source-card__signals,
+.grant-source-tags,
+.grant-source-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.grant-source-tags {
+  row-gap: 7px;
+}
+
+.grant-source-tag {
+  max-width: 100%;
+  height: auto;
+  min-height: 22px;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.grant-source-card__footer {
+  padding: token('s-3') token('s-4');
+  border-top: 1px solid token('border');
+}
+
+.grant-source-table-source {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.grant-source-table-source strong {
+  overflow-wrap: anywhere;
+}
+
+.grant-source-table-source span {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+}
+
+.segmented-control {
+  @include inline-flex-center;
+  padding: 2px;
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-muted');
+}
+
+.segmented-control__item {
+  @include inline-flex-center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: calc(token('r-sm') - 2px);
+  background: transparent;
+  color: token('text-secondary');
+  font: inherit;
+  font-size: token('fs-sm');
+  cursor: pointer;
+  transition: background token('anim-fast') token('anim-ease'), color token('anim-fast') token('anim-ease'), border-color token('anim-fast') token('anim-ease');
+}
+
+.segmented-control__item:hover:not(.is-active) {
+  color: token('text-primary');
+  background: token('bg-hover');
+}
+
+.segmented-control__item.is-active {
+  color: token('text-primary');
+  background: token('bg-panel');
+  border-color: token('border-strong');
+  box-shadow: token('shadow-sm');
+}
+
+.grant-edit-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grant-edit-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.grant-edit-grid--4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 1180px) {
+  .grant-edit-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .grant-edit-layout__aside-inner {
+    position: static;
+    max-height: none;
+  }
+
+  .grant-edit-grid--4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .grant-dossier-tabs__nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .grant-dossier-tabs__nav .tab {
+    flex: 0 0 auto;
+  }
+
+  .grant-edit-grid--2,
+  .grant-edit-grid--3,
+  .grant-edit-grid--4,
+  .grant-requirement-card__summary,
+  .grant-requirement-card__details,
+  .source-external-ids-field__row,
+  .structured-minutes-editor__grid,
+  .pdf-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Budget line editor rows (OrganizationHistory). On phones the 4-column grid
+ * collapses to a 2-row layout: section/remove button on top, label/amount
+ * below. Keeps the trash button reachable without horizontal scroll. */
+@media (max-width: 560px) {
+  .budget-line-row {
+    grid-template-columns: minmax(0, 1fr) 34px !important;
+    grid-template-areas:
+      "section remove"
+      "label   label"
+      "amount  amount";
+  }
+  .budget-line-row > select { grid-area: section; }
+  .budget-line-row > input[placeholder="Line label"] { grid-area: label; }
+  .budget-line-row > input[placeholder="Amount"] { grid-area: amount; }
+  .budget-line-row > button { grid-area: remove; }
+}

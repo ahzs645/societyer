@@ -1,0 +1,301 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+.stat {
+  background: token('bg-panel');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  padding: token('s-3');
+  @include flex-column;
+  gap: 2px;
+  min-width: 0;
+}
+.stat__label {
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.stat__value {
+  font-size: token('fs-xl');
+  font-weight: 700;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.stat__sub {
+  font-size: token('fs-xs');
+  color: token('text-secondary');
+}
+
+/* Mobile: collapse the stat grid into a single flat panel with a 2-col grid
+ * of quieter cells. Removes per-stat borders so the four KPIs read as one
+ * unit instead of four separate cards — matches twenty's compact dashboard
+ * chrome on phones. The helper-text (.stat__sub) is hidden to save vertical
+ * space. Tap a stat to toggle the description via the `.is-expanded` class
+ * (wired up in Dashboard.tsx). */
+@media (max-width: 760px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    margin-bottom: token('s-4');
+    border: 1px solid token('border');
+    border-radius: token('r-md');
+    background: token('bg-panel');
+    overflow: hidden;
+  }
+  .stat {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: token('s-2') token('s-3');
+    /* Hairline dividers between cells — right and bottom, suppressed at the
+     * row/column edges so we get a clean grid with no doubled lines. */
+    border-right: 1px solid token('border-color-light');
+    border-bottom: 1px solid token('border-color-light');
+  }
+  .stat:nth-child(2n) { border-right: 0; }
+  .stat:nth-last-child(-n+2) { border-bottom: 0; }
+  /* Odd-count safety: if the final row has only one item, don't drop a half
+   * divider on its neighbor. */
+  .stat:last-child:nth-child(odd) { border-right: 0; }
+
+  .stat__label {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+  }
+  .stat__label svg {
+    width: 12px;
+    height: 12px;
+  }
+  .stat__value {
+    font-size: token('fs-lg');
+    line-height: 1.2;
+  }
+  /* Hide the descriptive sub-text on phones by default — the KPI number is
+   * the signal, the long explanation is noise on a 360px viewport. The stat
+   * becomes tap-to-expand to reveal the full context when the user wants it. */
+  .stat--expandable {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .stat--expandable:active {
+    background: token('bg-transparent-light');
+  }
+  .stat__sub {
+    display: none;
+  }
+  .stat.is-expanded {
+    /* Span the full width when open so the description can breathe. */
+    grid-column: 1 / -1;
+    border-right: 0;
+    background: token('bg-subtle');
+  }
+  .stat.is-expanded .stat__sub {
+    display: block;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+}
+
+/* Grid layouts */
+.two-col {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: token('s-4');
+}
+.two-col > * {
+  min-width: 0;
+}
+@media (max-width: 1100px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+/* Tighter column gap on phones so stacked cards feel continuous instead of
+ * swimming in whitespace. */
+@media (max-width: 760px) {
+  .two-col { gap: token('s-3'); }
+}
+
+/* Accounting workbench */
+.accounting-workbench {
+  --accounting-grid-min: 320px;
+}
+.accounting-action-bar {
+  @include flex-center;
+  gap: token('s-2');
+  flex-wrap: wrap;
+  margin-bottom: token('s-4');
+}
+.accounting-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: token('s-4');
+  margin-bottom: token('s-4');
+}
+.accounting-list,
+.accounting-journal-list,
+.accounting-lines {
+  @include flex-column;
+  gap: token('s-3');
+}
+.accounting-row {
+  @include flex-between;
+  gap: token('s-3');
+  min-width: 0;
+  padding: token('s-3');
+  border-top: 1px solid token('border');
+}
+.accounting-row:first-child {
+  border-top: 0;
+}
+.accounting-row__actions {
+  @include flex-center;
+  justify-content: flex-end;
+  gap: token('s-2');
+  flex-wrap: wrap;
+}
+.accounting-export-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: token('s-2');
+  padding: 0 token('s-4') token('s-3');
+}
+.accounting-note,
+.accounting-empty {
+  padding: token('s-3') token('s-4');
+}
+.accounting-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.accounting-entry {
+  border-top: 1px solid token('border');
+}
+.accounting-entry:first-child {
+  border-top: 0;
+}
+.accounting-entry > summary {
+  min-height: 44px;
+  @include flex-between;
+  gap: token('s-3');
+  padding: token('s-3') token('s-4');
+  cursor: pointer;
+}
+.accounting-entry > summary::marker {
+  color: token('text-tertiary');
+}
+.accounting-form-grid,
+.accounting-line {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: token('s-3');
+}
+.accounting-line {
+  align-items: end;
+  padding: token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+}
+@media (max-width: 900px) {
+  .accounting-grid,
+  .accounting-form-grid,
+  .accounting-line {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .accounting-action-bar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .accounting-action-bar .btn-action,
+  .accounting-export-grid .btn-action {
+    width: 100%;
+    justify-content: center;
+  }
+  .accounting-export-grid {
+    grid-template-columns: 1fr;
+    padding-inline: token('s-3');
+  }
+  .accounting-row {
+    align-items: stretch;
+    flex-direction: column;
+    padding: token('s-3');
+  }
+  .accounting-row__actions {
+    justify-content: flex-start;
+  }
+  .accounting-entry > summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+@media (max-width: 480px) {
+  .accounting-action-bar {
+    grid-template-columns: 1fr;
+  }
+  .accounting-row__actions .btn,
+  .accounting-row__actions .btn-action,
+  .accounting-line .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .accounting-table-wrap .table {
+    min-width: 640px;
+  }
+}
+
+/* ---- Wide-content page cap ---------------------------------------------
+ * Desktop optimisation for form-heavy pages (Society, Exports, etc.): cap
+ * the content width so rows and grids don't stretch across ultrawide
+ * monitors. Mirrors `.page--narrow` (which caps at 960px for record-detail
+ * reading measure) but at 1440px — wide enough for multi-column forms and
+ * dense grids without letting content bleed across the entire viewport. */
+.page--wide > * {
+  width: 100%;
+  max-width: 1440px;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+
+/* ---- Society profile page ----------------------------------------------
+ * Main/side layout: the left rail holds constitution and privacy state; the
+ * right rail holds operational cards that should scan as reference material.
+ * All helpers collapse to a single column at 1100px to match `.two-col`. */
+
+.society-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(360px, 0.95fr);
+  gap: token('s-4');
+  align-items: start;
+}
+.society-layout__main,
+.society-layout__side {
+  display: grid;
+  gap: token('s-4');
+  min-width: 0;
+}
+.society-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: token('s-3');
+  align-items: start;
+}
+.society-field-grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.society-field-grid > * {
+  min-width: 0;
+}
+.society-toggle-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-3') token('s-4');
+  align-items: center;
+}

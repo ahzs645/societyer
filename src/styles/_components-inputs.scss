@@ -1,0 +1,221 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+.confirm-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.confirm-icon svg { width: 16px; height: 16px; }
+.confirm-icon--danger { background: token('danger-soft'); color: token('danger'); }
+.confirm-icon--warn { background: token('warn-soft'); color: token('warn'); }
+
+/* `.btn--danger` and `.btn--warn` live in `_chrome.scss` next to the rest of
+ * the `.btn` family. They use `--red-9` / `--orange-9` for the saturated fill
+ * — the semantic `--danger` / `--warn` tokens map to `--red-11` / `--orange-11`
+ * in dark mode, which are *text* colors and look washed out as backgrounds. */
+
+/* ============================================================
+   Toast
+   ============================================================ */
+.toast-stack {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  @include flex-column;
+  gap: 8px;
+  z-index: token('z-toast');
+  pointer-events: none;
+  max-width: 360px;
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: token('bg-panel');
+  border: 1px solid token('border');
+  border-left: 3px solid token('border-strong');
+  border-radius: 0;
+  box-shadow: token('shadow-md');
+  animation: toastIn 0.18s ease-out;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.toast--success { border-left-color: token('success'); }
+.toast--error { border-left-color: token('danger'); }
+.toast--warn { border-left-color: token('warn'); }
+.toast--info { border-left-color: token('info'); }
+.toast__icon { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+.toast--success .toast__icon { color: token('success'); }
+.toast--error .toast__icon { color: token('danger'); }
+.toast--warn .toast__icon { color: token('warn'); }
+.toast--info .toast__icon { color: token('info'); }
+.toast__body { flex: 1; min-width: 0; }
+.toast__title { font-size: token('fs-md'); font-weight: 500; color: token('text-primary'); }
+.toast__desc { font-size: token('fs-sm'); color: token('text-secondary'); margin-top: 2px; }
+.toast__close {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 3px;
+  color: token('text-tertiary');
+  flex-shrink: 0;
+}
+.toast__close:hover { background: token('bg-hover'); color: token('text-primary'); }
+.toast__action {
+  align-self: center;
+  padding: 4px 10px;
+  margin-right: 4px;
+  border-radius: token('r-sm');
+  border: 1px solid token('border-strong');
+  background: token('bg-panel');
+  color: token('text-primary');
+  font-size: token('fs-sm');
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.08s ease;
+}
+.toast__action:hover { background: token('bg-hover'); }
+
+/* ============================================================
+   TextInput / TextArea
+   ============================================================ */
+.text-input {
+  @include inline-flex-center;
+  gap: 6px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+  color: token('text-primary');
+  font-size: token('fs-md');
+  transition: border-color 0.08s ease, box-shadow 0.08s ease;
+  position: relative;
+}
+.text-input:hover:not(.is-disabled) { border-color: token('border-strong'); }
+.text-input:focus-within {
+  outline: none;
+  border-color: token('accent');
+  box-shadow: 0 0 0 3px token('accent-soft');
+}
+.text-input.is-invalid {
+  border-color: token('danger');
+  box-shadow: 0 0 0 3px token('danger-soft');
+}
+.text-input.is-disabled {
+  background: token('bg-subtle');
+  color: token('text-secondary');
+  cursor: not-allowed;
+  border-style: dashed;
+}
+.text-input--sm { height: 24px; padding: 0 6px; font-size: token('fs-sm'); }
+.text-input input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+}
+.text-input input::placeholder { color: token('text-placeholder'); }
+.text-input__affix {
+  @include inline-flex-center;
+  color: token('text-tertiary');
+  flex-shrink: 0;
+}
+.text-input__affix svg { width: 14px; height: 14px; }
+.text-input__clear {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  color: token('text-tertiary');
+}
+.text-input__clear:hover { background: token('bg-hover'); color: token('text-primary'); }
+.text-input__error {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  font-size: token('fs-xs');
+  color: token('danger');
+}
+
+.text-area { display: block; position: relative; width: 100%; }
+.text-area textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 8px;
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+  color: token('text-primary');
+  font: inherit;
+  font-size: token('fs-md');
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color 0.08s ease, box-shadow 0.08s ease;
+}
+.text-area textarea:focus {
+  outline: none;
+  border-color: token('accent');
+  box-shadow: 0 0 0 3px token('accent-soft');
+}
+.text-area.is-invalid textarea {
+  border-color: token('danger');
+  box-shadow: 0 0 0 3px token('danger-soft');
+}
+.text-area.is-disabled textarea {
+  background: token('bg-subtle');
+  color: token('text-secondary');
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+/* ============================================================
+   Tooltip
+   ============================================================ */
+.tooltip {
+  position: fixed;
+  z-index: token('z-tooltip');
+  background: token('bg-floating');
+  color: token('text-floating');
+  border: 1px solid token('border-floating');
+  padding: 4px 8px;
+  border-radius: token('r-sm');
+  font-size: token('fs-xs');
+  line-height: 1.4;
+  max-width: 360px;
+  pointer-events: none;
+  box-shadow: token('shadow-md');
+  animation: tooltipIn 0.1s ease-out;
+}
+@keyframes tooltipIn { from { opacity: 0; } to { opacity: 1; } }
+.tooltip--top { transform: translate(-50%, -100%); }
+.tooltip--bottom { transform: translate(-50%, 0); }
+.tooltip--left { transform: translate(-100%, -50%); }
+.tooltip--right { transform: translate(0, -50%); }
+
+.legal-guide-tooltip {
+  display: grid;
+  gap: 4px;
+}
+
+.legal-guide-inline {
+  @include inline-flex-center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}

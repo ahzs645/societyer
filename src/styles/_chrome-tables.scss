@@ -1,0 +1,767 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+.accounting-table td,
+.financials-table td,
+.wave-cache-table td {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1100px) {
+  .treasurer-overview-grid,
+  .treasurer-category-grid,
+  .treasurer-register-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .treasurer-period-card {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 760px) {
+  .accounting-page,
+  .financials-page {
+    gap: token('s-3');
+  }
+  .accounting-page__actions,
+  .financials-page__actions,
+  .accounting-control-row,
+  .financials-control-row {
+    align-items: stretch;
+  }
+  .accounting-page__actions > *,
+  .financials-page__actions > *,
+  .accounting-control-row > *,
+  .financials-control-row > * {
+    min-width: 0;
+  }
+  .accounting-control-row .input,
+  .financials-control-row .input {
+    width: 100%;
+    max-width: none;
+  }
+  .accounting-table,
+  .financials-table,
+  .wave-cache-table,
+  .treasurer-claims-table,
+  .treasurer-funding-table,
+  .treasurer-source-table,
+  .treasurer-timeline-table {
+    table-layout: auto;
+    min-width: 680px;
+  }
+  .treasurer-page {
+    gap: token('s-3');
+  }
+  .treasurer-page .page__actions,
+  .treasurer-page .page-header__actions {
+    width: 100%;
+  }
+  .treasurer-period-card__body {
+    align-items: stretch;
+  }
+  .treasurer-overview-grid {
+    grid-template-columns: 1fr;
+  }
+  .treasurer-period-card {
+    grid-column: auto;
+  }
+  .treasurer-period-field {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .treasurer-period-field .input,
+  .treasurer-period-field--fy .input {
+    width: min(100%, 190px);
+    min-width: 0;
+  }
+  .treasurer-category-grid,
+  .treasurer-register-grid {
+    grid-template-columns: 1fr;
+  }
+  .treasurer-claim-stats {
+    margin-bottom: token('s-3');
+  }
+  .treasurer-budget-card .card__body,
+  .treasurer-restricted-card .card__body {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  .treasurer-restricted-card .row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .treasurer-restricted-card .row > div {
+    min-width: min(100%, 220px);
+  }
+}
+@media (max-width: 480px) {
+  .treasurer-period-card__body {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .treasurer-period-field {
+    align-items: stretch;
+    flex-direction: column;
+    gap: token('s-1');
+  }
+  .treasurer-period-field .input,
+  .treasurer-period-field--fy .input {
+    width: 100%;
+  }
+}
+
+/* ---- Settings page ----------------------------------------------------
+ * Pair compact sibling cards side-by-side on desktop (Language +
+ * Appearance, Authentication + Convex deployment) so they don't each own
+ * a full-width stripe, and lay the Modules sub-cards out in a 2-col grid
+ * instead of stacking six tall panels vertically. All collapse to a
+ * single column at 1100px to match `.two-col`. */
+
+.settings-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: token('s-4');
+  align-items: start;
+}
+.settings-pair > * { min-width: 0; }
+@media (max-width: 1100px) {
+  .settings-pair { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .settings-pair { gap: token('s-3'); }
+}
+
+.settings-modules {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: token('s-3');
+}
+.settings-modules > * { min-width: 0; }
+@media (max-width: 1100px) {
+  .settings-modules { grid-template-columns: 1fr; }
+}
+
+/* Reusable responsive grid helpers. Use on plain <div>s to avoid inline
+ * `gridTemplateColumns` strings that silently break on narrow viewports. */
+.grid-auto {
+  display: grid;
+  gap: token('s-3');
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+}
+.grid-auto--sm { grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); }
+.grid-auto--lg { grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+@media (max-width: 420px) {
+  .grid-auto,
+  .grid-auto--sm,
+  .grid-auto--lg { grid-template-columns: 1fr; }
+}
+
+/* Data table — flush with the page. Twenty's RecordTable sits directly on
+ * the canvas, separated only by the toolbar's hairline. */
+.table-wrap {
+  background: token('bg-panel');
+  border: 0;
+  border-radius: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+.card > .table {
+  width: 100%;
+  min-width: 100%;
+}
+.card__body > table {
+  max-width: 100%;
+}
+@media (max-width: 760px) {
+  .card__head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    /* Tighter chrome on phones so each card title isn't wasting a third of
+     * the viewport. Matches the compacted body padding below. */
+    padding: token('s-3');
+    gap: token('s-2');
+  }
+  .card__body {
+    padding: token('s-3');
+  }
+  .card__footer {
+    padding: token('s-2') token('s-3');
+  }
+  /* Default stat grid override is handled in the dedicated stat-grid mobile
+   * block above. We only keep the table-wrap margin adjustment here. */
+  .table-wrap {
+    margin-inline: calc(token('s-4') * -1);
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+  }
+  /* Catch-all: any bare <table> not already wrapped in .table-wrap /
+   * .table-scroll becomes horizontally scrollable on phones. Previously this
+   * only covered `.card > .table` and `.card__body > table`; tables rendered
+   * directly on the page or inside generic divs would overflow the viewport. */
+  .page table,
+  .card table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    max-width: 100%;
+  }
+  .table-toolbar__summary {
+    width: 100%;
+    margin-left: 0;
+  }
+  .table tbody td,
+  .table thead th {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+/* Table toolbar — 39px tall, matches Twenty's TopBar height spec. */
+.table-toolbar {
+  @include flex-center;
+  flex-wrap: wrap;
+  gap: token('s-2');
+  padding: 4px 8px;
+  min-height: 39px;
+  border-bottom: 1px solid token('border-color-light');
+  background: token('bg-panel');
+}
+.table-toolbar__search {
+  position: relative;
+  flex: 1;
+  min-width: min(220px, 100%);
+  max-width: 280px;
+}
+.table-toolbar__search input {
+  width: 100%;
+  height: 28px;
+  border: 1px solid token('border-color-light');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+  color: token('text-primary');
+  padding: 0 10px 0 28px;
+  font-size: token('fs-sm');
+  transition: border-color 0.08s ease, box-shadow 0.08s ease;
+}
+.table-toolbar__search input:focus {
+  outline: none;
+  border-color: token('accent');
+  box-shadow: 0 0 0 3px token('accent-soft');
+}
+.table-toolbar__search svg {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  color: token('text-tertiary');
+}
+.table-toolbar__state {
+  @include inline-flex-center;
+  gap: 6px;
+  min-height: 28px;
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+}
+.table-toolbar__summary {
+  margin-left: auto;
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+  padding-right: 4px;
+}
+
+/* Table — Twenty RecordTable spec. 32px rows, sticky header, 8px horizontal
+ * cell padding, per-cell right+bottom hairlines to produce a grid feel. */
+.table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: token('fs-sm');
+}
+.table thead th {
+  text-align: left;
+  font-weight: token('fw-medium');
+  color: token('text-tertiary');
+  font-size: token('fs-sm');
+  height: 32px;
+  padding: 0 8px;
+  background: token('bg-panel');
+  border-right: 1px solid token('border-color-light');
+  border-bottom: 1px solid token('border-color-light');
+  position: sticky;
+  top: 0;
+  z-index: token('z-base');
+  user-select: none;
+  white-space: nowrap;
+  transition: background 0.08s ease;
+}
+.table thead th:last-child {
+  border-right: none;
+}
+.table thead th.is-sortable {
+  cursor: pointer;
+}
+.table thead th.is-sortable:hover {
+  background: token('bg-secondary');
+  color: token('text-secondary');
+}
+.table tbody td {
+  padding: 0 8px;
+  border-right: 1px solid token('border-color-light');
+  border-bottom: 1px solid token('border-color-light');
+  color: token('text-primary');
+  vertical-align: middle;
+  height: 32px;
+  background: token('bg-panel');
+  transition: background 0.08s ease;
+}
+.table tbody td:last-child {
+  border-right: none;
+}
+
+/* Comfortable density — taller rows with roomier cell padding */
+.table--comfortable tbody td {
+  height: 44px;
+  padding: token('s-2') token('s-3');
+}
+.table--comfortable thead th {
+  height: 40px;
+}
+
+/* Options popover extras (density + column visibility) */
+.options-popover__segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: token('bg-muted');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  margin-bottom: token('s-1');
+}
+.options-popover__seg {
+  flex: 1;
+  height: 24px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: token('r-xs');
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  cursor: pointer;
+  transition: background token('anim-fast') token('anim-ease'), color token('anim-fast') token('anim-ease'), border-color token('anim-fast') token('anim-ease');
+}
+.options-popover__seg:hover:not(.is-active) {
+  background: token('bg-hover');
+  color: token('text-primary');
+}
+.options-popover__seg.is-active {
+  background: token('bg-panel');
+  border-color: token('border-strong');
+  color: token('text-primary');
+  box-shadow: token('shadow-sm');
+}
+.options-popover__col-row {
+  @include flex-center;
+  gap: token('s-2');
+  padding: 6px 8px;
+  border-radius: token('r-sm');
+  font-size: token('fs-md');
+  color: token('text-primary');
+  cursor: pointer;
+}
+.options-popover__col-row:hover { background: token('bg-hover'); }
+.options-popover__col-row input { accent-color: token('accent'); }
+
+/* Saved views list in options popover */
+.options-popover__views-head {
+  display: grid;
+  gap: 2px;
+  padding-bottom: 4px;
+}
+.options-popover__views-scope {
+  padding: 0 8px 4px;
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  line-height: 1.3;
+}
+.options-popover__view-row {
+  @include flex-center;
+  gap: token('s-1');
+  padding: 0 4px;
+}
+.options-popover__view-name {
+  display: grid;
+  gap: 1px;
+  flex: 1;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: token('r-sm');
+  border: 0;
+  background: transparent;
+  color: token('text-primary');
+  font-size: token('fs-md');
+  cursor: pointer;
+  transition: background token('anim-fast') token('anim-ease');
+}
+.options-popover__view-name:hover { background: token('bg-hover'); }
+.options-popover__view-name.is-active {
+  background: token('accent-soft');
+  color: token('accent');
+  font-weight: 500;
+}
+.options-popover__view-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.options-popover__view-scope {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  font-weight: 500;
+  line-height: 1.2;
+}
+.options-popover__view-name.is-active .options-popover__view-scope {
+  color: token('accent');
+}
+.options-popover__view-del {
+  @include inline-flex-center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: token('r-sm');
+  border: 0;
+  background: transparent;
+  color: token('text-tertiary');
+  opacity: 0.6;
+  cursor: pointer;
+  transition: background token('anim-fast') token('anim-ease'), opacity token('anim-fast') token('anim-ease');
+}
+.options-popover__view-del:hover {
+  opacity: 1;
+  background: token('bg-hover');
+  color: token('danger');
+}
+.options-popover__save-row {
+  display: flex;
+  gap: token('s-1');
+  align-items: center;
+  padding: 6px 4px;
+}
+.options-popover__save-input {
+  flex: 1;
+  height: 28px;
+  padding: 0 token('s-2');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+  color: token('text-primary');
+  font-size: token('fs-sm');
+  transition: border-color token('anim-fast') token('anim-ease'), box-shadow token('anim-fast') token('anim-ease');
+}
+.options-popover__save-input:focus {
+  outline: none;
+  border-color: token('accent');
+  box-shadow: 0 0 0 3px token('accent-soft');
+}
+.table__sort-button {
+  width: 100%;
+  height: 100%;
+  min-height: 32px;
+  padding: 0;
+  @include inline-flex-center;
+  gap: 4px;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.table__sort-button:focus-visible {
+  outline: 2px solid token('border-focus');
+  outline-offset: -2px;
+}
+.table__sort-indicator {
+  @include inline-flex-center;
+  margin-left: 2px;
+  color: token('text-secondary');
+  flex-shrink: 0;
+}
+.table__sort-indicator svg { width: 12px; height: 12px; }
+.table__cell-button {
+  display: inline-flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-start;
+  color: inherit;
+  text-align: left;
+}
+.table__cell-button:focus-visible {
+  outline: 2px solid token('border-focus');
+  outline-offset: 2px;
+  border-radius: token('r-sm');
+}
+
+/* Twenty-style record chip used for the first cell in record tables.
+ * Transparent background so it stays legible against both the default td
+ * (bg-panel) and the selected row (accent-quaternary). */
+.record-chip,
+.cell-chip {
+  @include inline-flex-center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px 10px 2px 2px;
+  border-radius: token('r-pill');
+  border: 1px solid transparent;
+  background: transparent;
+  color: token('text-primary');
+  font-weight: token('fw-medium');
+  transition: background 0.08s ease, border-color 0.08s ease;
+}
+.record-chip--interactive,
+.cell-chip {
+  cursor: pointer;
+}
+.record-chip--interactive:hover,
+.cell-chip:hover {
+  background: token('bg-tertiary');
+  border-color: token('border-color-medium');
+}
+.record-chip__avatar,
+.cell-chip__avatar {
+  flex-shrink: 0;
+}
+.record-chip__content {
+  @include flex-column;
+  min-width: 0;
+}
+.record-chip__label,
+.cell-chip__name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.record-chip__meta {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  min-width: 0;
+}
+/* Tag-style cells for read-only string cells (e.g. position) */
+.cell-tag {
+  @include inline-flex-center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 4px;
+  background: token('bg-subtle');
+  color: token('text-secondary');
+  border: 1px solid token('border');
+  font-size: token('fs-sm');
+}
+/* Body row hover — uses --bg-hover (one step deeper than --bg-secondary)
+ * so rows read as interactive and the action-reveal transition is obvious. */
+.table tbody tr:hover td,
+.table tbody tr:hover td[data-col-index="0"] {
+  background: token('bg-hover');
+}
+.table tbody tr[role="button"]:focus-visible {
+  outline: 2px solid token('border-focus');
+  outline-offset: -2px;
+}
+.table tbody tr[role="button"]:focus-visible td {
+  background: token('bg-hover');
+}
+/* Selected / active row — matches Twenty's accent-quaternary fill + medium
+ * border to call out the row currently being acted on. */
+.table tbody tr[data-active="true"] td,
+.table tbody tr.is-active td {
+  background: token('accent-quaternary');
+}
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+.table__cell--mono {
+  font-family: token('font-mono');
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.table__cell--muted { color: token('text-tertiary'); }
+/* Action cell: keep the <td> as a regular table-cell so it inherits row
+ * height and vertical centering. The flex layout belongs on an inner div —
+ * applying `display: flex` directly to a <td> overrides `display: table-cell`
+ * and makes the cell shrink to content, which visibly detaches the buttons
+ * from the row. */
+.table__actions,
+.table__actions-col {
+  text-align: right;
+  white-space: nowrap;
+  width: 1px; /* shrink to content — the flex-wrapper sets the real width */
+}
+
+/* Row-selection column */
+.table__select-col,
+.table__select-cell {
+  width: token('table-checkbox-column-width');
+  text-align: center;
+  padding: 0 4px;
+}
+.table__select-cell input,
+.table__select-col input {
+  cursor: pointer;
+  accent-color: token('accent');
+}
+.table tbody tr.is-selected td {
+  background: token('accent-soft');
+}
+.table tbody tr.is-selected:hover td {
+  background: token('accent-soft-strong');
+}
+
+/* Sticky bulk-action toolbar shown while rows are selected */
+.table-bulkbar {
+  position: sticky;
+  bottom: token('s-3');
+  margin: token('s-3') auto 0;
+  width: fit-content;
+  max-width: calc(100% - token('s-6'));
+  @include flex-center;
+  gap: token('s-3');
+  padding: token('s-2') token('s-3');
+  border-radius: token('r-pill');
+  background: token('bg-inverse');
+  color: token('text-inverse');
+  box-shadow: token('shadow-strong');
+  z-index: token('z-sticky');
+  animation: bulkbarIn 0.18s token('anim-ease');
+}
+@keyframes bulkbarIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.table-bulkbar__clear {
+  @include inline-flex-center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: token('r-pill');
+  background: transparent;
+  border: 0;
+  color: token('text-inverse');
+  opacity: 0.7;
+  cursor: pointer;
+  transition: background token('anim-fast') token('anim-ease'), opacity token('anim-fast') token('anim-ease');
+}
+.table-bulkbar__clear:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+.table-bulkbar__count {
+  font-size: token('fs-sm');
+  font-weight: 500;
+}
+.table-bulkbar__actions {
+  display: inline-flex;
+  gap: 4px;
+}
+.table-bulkbar__actions .btn {
+  background: token('bg-panel');
+  color: token('text-primary');
+  border-color: token('bg-panel');
+}
+.table-bulkbar__actions .btn:hover {
+  background: token('bg-hover');
+}
+.table-bulkbar__actions .btn--danger {
+  background: token('danger');
+  color: token('text-inverse');
+  border-color: token('danger');
+}
+.table__actions-inner {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: flex-end;
+  opacity: 0.34;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  transform: translateX(2px);
+}
+.table tbody tr:hover .table__actions-inner,
+.table tbody tr:focus-within .table__actions-inner,
+.table tbody tr[role="button"]:focus-visible .table__actions-inner {
+  opacity: 1;
+  transform: translateX(0);
+}
+@media (hover: none), (pointer: coarse) {
+  .table__actions-inner {
+    opacity: 1;
+    transform: none;
+  }
+}
+.table__empty {
+  text-align: center;
+  padding: 32px 24px;
+  color: token('text-secondary');
+}
+.table-pagination {
+  @include flex-center;
+  gap: token('s-2');
+  min-height: 39px;
+  padding: 4px 8px;
+  border-top: 1px solid token('border-color-light');
+  background: token('bg-panel');
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+}
+.table-pagination__range {
+  margin-right: auto;
+}
+.table-pagination__size,
+.table-pagination__controls {
+  @include inline-flex-center;
+  gap: 6px;
+}
+.table-pagination__size select {
+  height: 28px;
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+  color: token('text-primary');
+}
+.table-pagination:has(select) .btn--sm {
+  height: 28px;
+}
+.table-pagination__page {
+  min-width: 80px;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .table-toolbar {
+    align-items: stretch;
+  }
+
+  .table-toolbar__search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .table-pagination {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .table-pagination__range {
+    flex-basis: 100%;
+  }
+}
+
+/* Mobile card list — replaces the table below 760 px.
+ * Styled after twenty's mobile record rows: no inter-item dividers inside a
+ * bordered shell, generous 12×16 padding, primary text at body size, and a
+ * subtle secondary-background press state (not an accent color). */

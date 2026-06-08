@@ -1,0 +1,1103 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+.meeting-minutes-layout {
+  // Left column: stack of context cards (agenda outline, attendance, decisions,
+  // action items, signatures). Right column: the agenda record (primary
+  // workspace), ~2/3 of the screen.
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);
+  gap: token('s-4');
+  align-items: start;
+}
+.meeting-minutes-layout--transcript-focus {
+  grid-template-columns: minmax(0, 1fr);
+}
+.meeting-minutes-transcript-focus {
+  @include flex-column;
+  min-height: calc(100vh - 220px);
+  transform-origin: top left;
+  animation: meeting-minutes-transcript-focus-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.meeting-minutes-transcript-focus > .card__body {
+  flex: 1;
+  display: flex;
+}
+.meeting-minutes-transcript-focus__editor {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  resize: none;
+  font-family: token('font-mono');
+  font-size: token('fs-sm');
+  animation: meeting-minutes-transcript-focus-editor-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes meeting-minutes-transcript-focus-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+@keyframes meeting-minutes-transcript-focus-editor-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .meeting-minutes-transcript-focus,
+  .meeting-minutes-transcript-focus__editor {
+    animation: none;
+  }
+}
+.meeting-minutes-side {
+  @include flex-column;
+  gap: token('s-4');
+  min-width: 0;
+}
+.meeting-minutes-agenda-card {
+  // Was sticky when this column had only one card. Now there are several
+  // stacked cards, so let it scroll with the rest of the column.
+}
+.meeting-minutes-agenda-card .card__body {
+  display: grid;
+  gap: token('s-3');
+}
+.meeting-minutes-agenda-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 28px;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.meeting-minutes-agenda-editor {
+  display: grid;
+  gap: token('s-2');
+}
+.meeting-minutes-agenda-numbering {
+  @include inline-flex-center;
+  gap: 6px;
+}
+.meeting-minutes-agenda-editor__row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  position: relative;
+}
+.meeting-minutes-agenda-editor__row > .input {
+  min-width: 0;
+}
+.meeting-minutes-agenda-editor__row.is-locked {
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+}
+.meeting-minutes-agenda-editor__row.is-dragging {
+  opacity: 0.4;
+}
+// Drop indicator: a 2px hairline at the top of the targeted root row.
+.meeting-minutes-agenda-editor__row.is-drop-above::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -3px;
+  height: 2px;
+  background: token('accent');
+  border-radius: 1px;
+  pointer-events: none;
+}
+.meeting-minutes-agenda-editor__index {
+  @include inline-flex-center;
+  justify-content: center;
+  width: 36px;
+  height: 32px;
+  min-width: 0;
+  color: token('text-secondary');
+  font-family: token('font-mono');
+  font-size: token('fs-xs');
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  border-radius: token('r-sm');
+  transition: background 120ms ease;
+}
+.meeting-minutes-agenda-editor__index.is-drag-handle {
+  cursor: grab;
+}
+.meeting-minutes-agenda-editor__index.is-drag-handle:hover,
+.meeting-minutes-agenda-editor__index.is-drag-handle:focus-visible {
+  background: token('bg-subtle');
+}
+.meeting-minutes-agenda-editor__index.is-drag-handle:active {
+  cursor: grabbing;
+}
+.meeting-minutes-agenda-editor__row > .btn-action--icon {
+  width: 32px;
+  height: 32px;
+}
+.meeting-minutes-agenda-editor__actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.meeting-minutes-agenda-editor__actions > .btn-action--icon {
+  width: 32px;
+  height: 32px;
+}
+/* Sub-items are visually offset and outlined on the left so the parent/child
+ * relationship reads at a glance. The indent is applied via padding (not
+ * margin) so the input still spans the full available width. */
+.meeting-minutes-agenda-editor__row--child {
+  padding-left: token('s-4');
+  position: relative;
+}
+.meeting-minutes-agenda-editor__row--child::before {
+  content: "";
+  position: absolute;
+  left: token('s-2');
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 1px;
+  background: token('border');
+}
+@media (max-width: 560px) {
+  .meeting-minutes-agenda-editor__row > .btn-action--icon {
+    width: 32px;
+    height: 32px;
+  }
+  .meeting-minutes-agenda-editor__row--child {
+    padding-left: token('s-3');
+  }
+  .meeting-minutes-agenda-editor__row--child::before {
+    left: token('s-1');
+  }
+}
+.meeting-minutes-agenda-editor__confirm {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid token('warn');
+  border-radius: token('r-sm');
+  background: token('warn-soft');
+  color: token('text-primary');
+  font-size: token('fs-sm');
+}
+.meeting-minutes-agenda-editor__confirm svg {
+  color: token('warn');
+}
+.meeting-minutes-agenda-list__children {
+  list-style: none;
+  margin: 4px 0 0;
+  padding-left: token('s-4');
+  display: grid;
+  gap: 2px;
+  font-size: token('fs-sm');
+  color: token('text-secondary');
+}
+.meeting-minutes-agenda-list__child-index {
+  color: token('text-tertiary');
+  font-weight: 600;
+}
+.meeting-minutes-agenda-list li {
+  padding-right: token('s-1');
+  line-height: 1.35;
+}
+.meeting-minutes-agenda-link {
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.meeting-minutes-agenda-link:hover {
+  color: token('text-primary');
+}
+.meeting-minutes-agenda-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.meeting-minutes-main {
+  display: grid;
+  gap: token('s-4');
+  min-width: 0;
+}
+.meeting-minutes-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: token('s-3');
+  align-items: start;
+}
+.meeting-minutes-overview-grid--single {
+  grid-template-columns: 1fr;
+}
+.minutes-section--panel {
+  min-width: 0;
+  margin: 0;
+  padding: token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-subtle');
+}
+// Attendance-specific row content (rendered inside the shared .list-editor).
+.attendance-roster__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attendance-roster__status {
+  flex: 0 0 auto;
+}
+// Generic editable list shell — shared by ListEditor consumers (the meeting
+// AttendanceRoster and the Decisions LineListEditor). Owns list/row/remove/add
+// layout; consumers add their own per-row content styles.
+.list-editor {
+  @include flex-column;
+  gap: token('s-2');
+}
+.list-editor__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: token('s-2');
+}
+// Scoped with the parent class (specificity defense-in-depth) so a greedy
+// descendant `ul` rule in a host context can't indent the rows and misalign
+// them with the add footer.
+.list-editor .list-editor__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  @include flex-column;
+  gap: 6px;
+}
+.list-editor__row {
+  @include flex-center;
+  gap: token('s-2');
+}
+// Divided variant (Attendance): row separators instead of gaps.
+.list-editor--divided .list-editor__list { gap: 0; }
+.list-editor--divided .list-editor__row {
+  padding: 6px 0;
+  border-bottom: 1px solid token('border');
+
+  &:last-child { border-bottom: 0; }
+}
+// Fills the row / add footer (an input that should take the remaining width).
+.list-editor__grow { flex: 1; min-width: 0; }
+.list-editor__remove {
+  @include inline-flex-center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: token('danger');
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+
+  &:hover { background: color-mix(in srgb, token('danger') 16%, transparent); }
+  &:focus-visible {
+    outline: 2px solid token('border-focus');
+    outline-offset: 2px;
+  }
+}
+.list-editor__add {
+  @include flex-center;
+  gap: token('s-2');
+}
+.list-editor__add .name-autocomplete,
+.list-editor__add .input { flex: 1; min-width: 0; }
+.list-editor__add .btn-action { height: 32px; }
+
+// Shared name-autocomplete styles — used by AttendanceRoster, MotionEditor's
+// NameInput, and the section action item Assignee field. Custom dropdown that
+// replaces the browser-native datalist popup with themed UI.
+.name-autocomplete {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+.name-autocomplete > .input {
+  width: 100%;
+}
+.name-autocomplete__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  padding-inline-start: 0;
+  padding-inline-end: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  background: token('bg-panel');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  box-shadow: token('shadow-md');
+}
+.name-autocomplete__option {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: token('fs-md');
+  color: token('text-primary');
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+}
+.name-autocomplete__option.is-highlighted {
+  background: token('bg-hover');
+}
+.name-autocomplete__option.has-remove {
+  @include flex-center;
+  gap: 8px;
+  padding-right: 4px;
+}
+.name-autocomplete__option-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.name-autocomplete__remove {
+  flex: 0 0 auto;
+  @include inline-flex-center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: token('text-tertiary');
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 80ms ease, background 80ms ease, color 80ms ease;
+}
+.name-autocomplete__option:hover .name-autocomplete__remove,
+.name-autocomplete__option.is-highlighted .name-autocomplete__remove,
+.name-autocomplete__remove:focus-visible {
+  opacity: 1;
+}
+.name-autocomplete__remove:hover {
+  background: token('bg-hover');
+  color: token('text-primary');
+}
+.meeting-reminder-chip {
+  // Match the .badge--success / .badge--accent visual treatment: soft tinted
+  // background, bold tone-coloured text, transparent border. This resolves
+  // correctly in both light and dark themes via the *-soft and base tone
+  // tokens.
+  @include inline-flex-center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: token('fs-sm');
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: filter 0.12s ease;
+
+  &:hover { filter: brightness(1.08); }
+  &:focus-visible {
+    outline: 2px solid token('border-focus');
+    outline-offset: 2px;
+  }
+}
+.meeting-reminder-chip--decisions {
+  background: token('success-soft');
+  color: token('success');
+}
+.meeting-reminder-chip--actions {
+  background: token('accent-soft');
+  color: token('accent');
+}
+.meeting-minutes-discussion {
+  // Flat: parent card already provides bg + border + padding, so this layer
+  // just needs to constrain height and preserve newlines.
+  max-height: 260px;
+  overflow: auto;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+.meeting-minutes-narrative {
+  margin-bottom: token('s-3');
+}
+.meeting-minutes-narrative summary {
+  padding: token('s-2') 0;
+  cursor: pointer;
+  font-weight: 600;
+}
+.meeting-minutes-narrative .meeting-minutes-discussion {
+  max-height: 180px;
+  margin: 0;
+  padding-top: token('s-2');
+}
+.meeting-minutes-narrative--agenda {
+  margin: 0;
+}
+.meeting-minutes-narrative--agenda .meeting-minutes-discussion {
+  max-height: 220px;
+}
+/* Drag handle on root section rows — hidden by default, hover-revealed on
+ * the parent row so it doesn't add visual noise to the static state. */
+.meeting-minutes-section-item__grip {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  margin-right: 2px;
+  color: token('text-tertiary');
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.meeting-minutes-section-item:hover > .meeting-minutes-section-item__summary .meeting-minutes-section-item__grip,
+.meeting-minutes-section-item:focus-within > .meeting-minutes-section-item__summary .meeting-minutes-section-item__grip {
+  opacity: 1;
+}
+.meeting-minutes-section-item__grip:active {
+  cursor: grabbing;
+}
+.meeting-minutes-section-item.is-dragging {
+  opacity: 0.5;
+}
+.meeting-minutes-section-item.is-editing > .meeting-minutes-section-item__summary {
+  cursor: default;
+  list-style: none;
+}
+.meeting-minutes-section-item.is-editing > .meeting-minutes-section-item__summary::-webkit-details-marker {
+  display: none;
+}
+/* Drop indicators — a thin accent line above (or below, for the last row)
+ * the target. Drawn outside the row's box-model via offsets so it doesn't
+ * shift sibling content while dragging. */
+.meeting-minutes-section-item.is-drop-above {
+  position: relative;
+}
+.meeting-minutes-section-item.is-drop-above::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: token('accent');
+  border-radius: 1px;
+  pointer-events: none;
+}
+.meeting-minutes-section-item.is-drop-below {
+  position: relative;
+}
+.meeting-minutes-section-item.is-drop-below::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: token('accent');
+  border-radius: 1px;
+  pointer-events: none;
+}
+/* Sub-section rows in the section list — same full editor as their parent,
+ * just indented and marked with a vertical bar so the parent/child grouping
+ * reads at a glance. Additive: keeps the base border-bottom divider. */
+.meeting-minutes-section-item--child {
+  padding-left: token('s-4');
+  position: relative;
+}
+.meeting-minutes-section-item--child::before {
+  content: "";
+  position: absolute;
+  left: token('s-2');
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 1px;
+  background: token('border');
+  pointer-events: none;
+}
+.meeting-minutes-section-item--child .meeting-minutes-section-item__title-index {
+  color: token('text-tertiary');
+}
+.meeting-minutes-section-list {
+  display: grid;
+  gap: 0;
+  padding-right: token('s-1');
+}
+.meeting-minutes-section-item {
+  // Flat — sections live inside a card, so don't double the box. Use a bottom
+  // divider between sections instead of giving each its own card chrome.
+  border-bottom: 1px solid token('border');
+
+  &:last-child { border-bottom: 0; }
+}
+.meeting-minutes-section-item--preview .meeting-minutes-section-item__summary {
+  cursor: default;
+  opacity: 0.75;
+}
+.meeting-minutes-section-item--pending-remove > .meeting-minutes-section-item__summary {
+  opacity: 0.6;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.meeting-minutes-section-item__summary {
+  display: flex;
+  justify-content: space-between;
+  gap: token('s-3');
+  align-items: flex-start;
+  padding: token('s-3') 0;
+  cursor: pointer;
+  list-style: none;
+}
+.meeting-minutes-section-item__summary::-webkit-details-marker {
+  display: none;
+}
+.meeting-minutes-section-item__title {
+  display: flex;
+  gap: token('s-2');
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.meeting-minutes-section-item__expand {
+  margin-top: 0;
+  color: token('text-tertiary');
+  transition: transform 120ms ease;
+  flex: 0 0 auto;
+}
+.meeting-minutes-section-item[open] .meeting-minutes-section-item__expand {
+  transform: rotate(180deg);
+}
+/* Flex-wrap (not grid) so the title input can size to its content via
+ * field-sizing while the type/presenter fields keep their natural widths.
+ * When the title gets long, the selects wrap to the next row instead of
+ * being squeezed. */
+.meeting-minutes-section-item__title-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-2');
+  row-gap: token('s-2');
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  cursor: default;
+}
+.meeting-minutes-section-item__title-index {
+  font-weight: 700;
+  color: token('text-primary');
+  white-space: nowrap;
+}
+.meeting-minutes-section-item__title-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-2');
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+.meeting-minutes-section-item__title-type {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+/* Title input styled to match the read-only <strong> rendering — bold, no
+ * box. Hover hints editability with a dotted underline; focus solidifies it
+ * to the accent color. */
+.meeting-minutes-section-item__title-input {
+  /* `field-sizing: content` lets the input grow with its text instead of
+   * holding a fixed column width. The placeholder sets a sensible minimum so
+   * an empty input still reads as a click target. Capped to the row so a very
+   * long title forces the type/presenter fields to wrap below rather than
+   * overflowing horizontally. */
+  field-sizing: content;
+  flex: 0 1 auto;
+  min-width: 12ch;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  color: token('text-primary');
+  line-height: inherit;
+  border-bottom: 1px dashed transparent;
+  transition: border-color 120ms ease, border-bottom-style 120ms ease;
+}
+.meeting-minutes-section-item__title-input::placeholder {
+  font-weight: 500;
+  color: token('text-tertiary');
+}
+.meeting-minutes-section-item__title-input:hover {
+  border-bottom-color: token('border');
+}
+.meeting-minutes-section-item__title-input:focus,
+.meeting-minutes-section-item__title-input:focus-visible {
+  outline: none;
+  border-bottom: 1px solid token('accent');
+}
+.meeting-minutes-section-item__title-type .select-trigger {
+  height: 32px;
+}
+.meeting-minutes-section-item__title-presenter {
+  flex: 0 0 auto;
+  min-width: 180px;
+}
+.meeting-minutes-section-item__title-presenter .name-autocomplete,
+.meeting-minutes-section-item__title-presenter input {
+  width: 100%;
+  min-width: 0;
+}
+.meeting-minutes-section-item__meta {
+  display: none;
+  flex: 0 1 auto;
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  line-height: 1.35;
+  text-align: right;
+  white-space: nowrap;
+}
+.meeting-minutes-section-item:hover .meeting-minutes-section-item__meta,
+.meeting-minutes-section-item:focus-within .meeting-minutes-section-item__meta {
+  display: block;
+}
+.meeting-minutes-section-item__actions {
+  @include inline-flex-center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.meeting-minutes-section-item__body {
+  display: grid;
+  gap: token('s-3');
+  padding: 0 0 token('s-3');
+}
+.meeting-minutes-section-item p {
+  margin: 0;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.meeting-minutes-section-block {
+  display: grid;
+  gap: token('s-1');
+}
+.meeting-minutes-section-block strong {
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+  text-transform: uppercase;
+}
+// Bullet lists in the read view. Scoped to the specific content containers
+// (rendered-markdown bullets + the Decisions block) rather than every `ul`
+// under a section item, so it can't reach into editor controls like the
+// shared .list-editor.
+.meeting-minutes-section-block ul,
+.meeting-minutes-section-bullets {
+  margin: 0;
+  padding-left: 18px;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.meeting-minutes-section-bullets {
+  display: grid;
+  gap: token('s-1');
+}
+.meeting-minutes-section-actions {
+  display: grid;
+  gap: token('s-1');
+  margin: 0;
+  padding-left: 18px;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.meeting-minutes-section-motions {
+  display: grid;
+  gap: token('s-2');
+}
+.meeting-minutes-section-tasks {
+  display: grid;
+  gap: 0;
+}
+/* Flat list rows instead of card-in-card. A thin top border separates rows;
+   the first one gets no rule so it sits flush with whatever sits above. */
+.meeting-minutes-section-task {
+  display: grid;
+  gap: 6px;
+  padding: token('s-2') 0;
+  border-top: 1px solid var(--border-subtle, token('border'));
+}
+.meeting-minutes-section-task:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.meeting-minutes-section-task__head {
+  @include flex-center;
+  gap: token('s-2');
+  flex-wrap: wrap;
+}
+.meeting-minutes-section-task__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meeting-minutes-section-task__note {
+  display: grid;
+  gap: 6px;
+}
+.meeting-minutes-section-task__note-toggle {
+  cursor: pointer;
+  list-style: none;
+  font-size: token('fs-xs');
+  font-weight: 500;
+  color: token('text-tertiary');
+  @include inline-flex-center;
+  gap: 4px;
+  width: max-content;
+  user-select: none;
+}
+.meeting-minutes-section-task__note-toggle::-webkit-details-marker {
+  display: none;
+}
+.meeting-minutes-section-task__note-toggle::before {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 4px solid token('text-tertiary');
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.12s ease;
+}
+.meeting-minutes-section-task__note[open] > .meeting-minutes-section-task__note-toggle::before {
+  transform: rotate(90deg);
+}
+.meeting-minutes-section-task__note-toggle:hover {
+  color: token('text-primary');
+}
+.meeting-minutes-section-motion {
+  display: grid;
+  gap: 3px;
+  padding: token('s-2');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+  font-size: token('fs-sm');
+}
+.meeting-minutes-section-motion__meta {
+  color: token('text-tertiary');
+}
+.meeting-minutes-section-editor {
+  display: grid;
+  gap: token('s-3');
+}
+.meeting-minutes-section-editor-screen {
+  display: none;
+}
+.meeting-minutes-section-editor__top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.7fr) minmax(0, 0.9fr);
+  gap: token('s-3');
+  align-items: start;
+}
+.meeting-minutes-section-editor__top > .field {
+  min-width: 0;
+}
+.meeting-minutes-section-editor__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.82fr);
+  gap: token('s-3');
+  align-items: start;
+}
+.meeting-minutes-section-editor__tabs {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-subtle');
+  overflow-x: auto;
+}
+.meeting-minutes-section-editor-tab {
+  min-height: 30px;
+  padding: 0 token('s-3');
+  border: 0;
+  border-radius: calc(token('r-sm') - 2px);
+  background: transparent;
+  color: token('text-secondary');
+  font: inherit;
+  font-size: token('fs-sm');
+  white-space: nowrap;
+  cursor: pointer;
+}
+.meeting-minutes-section-editor-tab.is-active {
+  background: token('bg-base');
+  color: token('text-primary');
+  box-shadow: token('shadow-xs');
+}
+.meeting-minutes-section-editor__panel {
+  display: grid;
+  gap: token('s-3');
+}
+.meeting-minutes-section-editor__mobile-head {
+  display: none;
+}
+.meeting-minutes-section-editor__note-options {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: token('s-3');
+  align-items: end;
+}
+.meeting-minutes-section-editor__side-fields {
+  display: grid;
+  gap: token('s-3');
+}
+.meeting-minutes-markdown-preview {
+  min-height: 190px;
+  max-height: 300px;
+  overflow: auto;
+  padding: token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+}
+.meeting-minutes-markdown-preview__label {
+  margin-bottom: token('s-2');
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.meeting-minutes-section-markdown {
+  display: grid;
+  gap: token('s-2');
+}
+.meeting-minutes-section-markdown h4,
+.meeting-minutes-section-markdown h5,
+.meeting-minutes-markdown-preview h4,
+.meeting-minutes-markdown-preview h5 {
+  margin: 0;
+  color: token('text-primary');
+  font-size: token('fs-sm');
+}
+.meeting-minutes-section-markdown ul ul,
+.meeting-minutes-markdown-preview ul ul {
+  margin-top: token('s-1');
+}
+.meeting-minutes-motion-assignment {
+  display: grid;
+  gap: token('s-2');
+  padding: token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+}
+.meeting-minutes-motion-assignment__head {
+  @include flex-between;
+  gap: token('s-2');
+}
+.meeting-minutes-motion-assignment__list {
+  display: grid;
+  gap: token('s-2');
+}
+.meeting-minutes-motion-assignment__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  gap: token('s-2');
+  align-items: start;
+  padding: token('s-2');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-subtle');
+}
+.meeting-minutes-motion-assignment__row.is-current {
+  border-color: token('accent');
+  background: token('accent-soft');
+}
+.meeting-minutes-motion-assignment__text {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  color: token('text-primary');
+  font-size: token('fs-sm');
+}
+.meeting-minutes-motion-assignment__text span {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+}
+.meeting-minutes-motion-picklist {
+  padding: token('s-2') token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-subtle');
+}
+.meeting-minutes-motion-picklist summary {
+  cursor: pointer;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  font-weight: 700;
+}
+.meeting-minutes-motion-picklist .meeting-minutes-motion-assignment__list {
+  margin-top: token('s-2');
+}
+.meeting-minutes-action-editor {
+  display: grid;
+  gap: token('s-2');
+}
+.meeting-minutes-action-editor__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.5fr) minmax(0, 0.35fr) auto;
+  gap: token('s-2');
+  align-items: end;
+  padding: token('s-2');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+}
+.meeting-minutes-action-editor__row > .field {
+  min-width: 0;
+}
+.meeting-minutes-compact-list {
+  display: grid;
+  gap: token('s-2');
+  margin: 0;
+  padding-left: 18px;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.meeting-minutes-compact-list li {
+  padding-left: 2px;
+}
+.action-list--compact {
+  gap: token('s-2');
+}
+.action-list--compact .action-item {
+  // Flat — outer card already has bg + border + padding, so don't render each
+  // row as its own box. A subtle bottom divider keeps rows visually separated.
+  align-items: flex-start;
+  padding: token('s-2') 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid token('border');
+  border-radius: 0;
+
+  &:last-child { border-bottom: 0; }
+}
+.action-list--compact .action-item__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.action-item__context {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  line-height: 1.35;
+}
+@media (max-width: 1180px) {
+  .meeting-minutes-layout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .meeting-minutes-section-editor__grid,
+  .meeting-minutes-section-editor__note-options,
+  .meeting-minutes-action-editor__row,
+  .meeting-minutes-section-editor__top,
+  .meeting-minutes-motion-assignment__row {
+    grid-template-columns: 1fr;
+  }
+  .meeting-minutes-section-item__body > .meeting-minutes-section-editor {
+    display: none;
+  }
+  .meeting-minutes-section-editor-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: block;
+    overflow: auto;
+    background: token('bg-base');
+  }
+  .meeting-minutes-section-editor--mobile {
+    min-height: 100%;
+    align-content: start;
+    padding: max(env(safe-area-inset-top), token('s-3')) token('s-3') max(env(safe-area-inset-bottom), token('s-4'));
+  }
+  .meeting-minutes-section-editor--mobile .meeting-minutes-section-editor__mobile-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: token('s-2');
+    margin: calc(-1 * token('s-3')) calc(-1 * token('s-3')) 0;
+    padding: max(env(safe-area-inset-top), token('s-2')) token('s-3') token('s-2');
+    border-bottom: 1px solid token('border');
+    background: token('bg-base');
+  }
+  .meeting-minutes-section-editor__mobile-head h2 {
+    margin: 0;
+    font-size: token('fs-md');
+    line-height: 1.2;
+  }
+  .meeting-minutes-section-editor__mobile-head span {
+    display: block;
+    margin-top: 2px;
+    color: token('text-tertiary');
+    font-size: token('fs-xs');
+  }
+  .meeting-minutes-section-editor--mobile .meeting-minutes-section-editor__tabs {
+    position: sticky;
+    top: 52px;
+    z-index: 1;
+    width: calc(100% + (2 * token('s-3')));
+    margin-inline: calc(-1 * token('s-3'));
+    border-width: 0 0 1px;
+    border-radius: 0;
+    background: token('bg-base');
+  }
+  .meeting-minutes-section-editor--mobile .meeting-minutes-section-editor-tab {
+    flex: 0 0 auto;
+    min-height: 38px;
+  }
+  .meeting-minutes-section-editor--mobile textarea {
+    min-height: 180px;
+  }
+  .meeting-minutes-section-editor--mobile .meeting-minutes-motion-assignment,
+  .meeting-minutes-section-editor--mobile .meeting-minutes-section-task,
+  .meeting-minutes-section-editor--mobile .meeting-minutes-action-editor__row {
+    background: token('bg-subtle');
+  }
+}

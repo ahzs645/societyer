@@ -1,0 +1,129 @@
+// ============================================================
+// Sass token accessor over the runtime CSS custom properties.
+//
+// The design tokens live in ../theme/palette.css + tokens.css as CSS
+// custom properties so they can switch at runtime between the .light and
+// .dark themes (see src/lib/theme.ts). We do NOT replace them with Sass
+// variables — that would freeze the theme at compile time.
+//
+// Instead token() returns `var(--name)` and validates the name at compile
+// time, so a typo like token("text-primnary") fails the build instead of
+// silently producing a dead var(). Optional/overridable vars that are
+// always used with a fallback (e.g. --inspector-width) pass a $fallback,
+// which bypasses validation.
+//
+// Keep $known-tokens in sync with theme/*.css. Adding a token there and
+// referencing it via token() without listing it here is a build error.
+// ============================================================
+@use "sass:list";
+@use "sass:meta";
+
+$known-tokens: (
+  "gray-1" "gray-2" "gray-3" "gray-4" "gray-5" "gray-6"
+  "gray-7" "gray-8" "gray-9" "gray-10" "gray-11" "gray-12"
+  "mauve-1" "mauve-2" "mauve-3" "mauve-4" "mauve-5" "mauve-6"
+  "mauve-7" "mauve-8" "mauve-9" "mauve-10" "mauve-11" "mauve-12"
+  "slate-1" "slate-2" "slate-3" "slate-4" "slate-5" "slate-6"
+  "slate-7" "slate-8" "slate-9" "slate-10" "slate-11" "slate-12"
+  "sage-1" "sage-2" "sage-3" "sage-4" "sage-5" "sage-6"
+  "sage-7" "sage-8" "sage-9" "sage-10" "sage-11" "sage-12"
+  "olive-1" "olive-2" "olive-3" "olive-4" "olive-5" "olive-6"
+  "olive-7" "olive-8" "olive-9" "olive-10" "olive-11" "olive-12"
+  "sand-1" "sand-2" "sand-3" "sand-4" "sand-5" "sand-6"
+  "sand-7" "sand-8" "sand-9" "sand-10" "sand-11" "sand-12"
+  "tomato-1" "tomato-2" "tomato-3" "tomato-4" "tomato-5" "tomato-6"
+  "tomato-7" "tomato-8" "tomato-9" "tomato-10" "tomato-11" "tomato-12"
+  "red-1" "red-2" "red-3" "red-4" "red-5" "red-6"
+  "red-7" "red-8" "red-9" "red-10" "red-11" "red-12"
+  "ruby-1" "ruby-2" "ruby-3" "ruby-4" "ruby-5" "ruby-6"
+  "ruby-7" "ruby-8" "ruby-9" "ruby-10" "ruby-11" "ruby-12"
+  "crimson-1" "crimson-2" "crimson-3" "crimson-4" "crimson-5" "crimson-6"
+  "crimson-7" "crimson-8" "crimson-9" "crimson-10" "crimson-11" "crimson-12"
+  "pink-1" "pink-2" "pink-3" "pink-4" "pink-5" "pink-6"
+  "pink-7" "pink-8" "pink-9" "pink-10" "pink-11" "pink-12"
+  "plum-1" "plum-2" "plum-3" "plum-4" "plum-5" "plum-6"
+  "plum-7" "plum-8" "plum-9" "plum-10" "plum-11" "plum-12"
+  "purple-1" "purple-2" "purple-3" "purple-4" "purple-5" "purple-6"
+  "purple-7" "purple-8" "purple-9" "purple-10" "purple-11" "purple-12"
+  "violet-1" "violet-2" "violet-3" "violet-4" "violet-5" "violet-6"
+  "violet-7" "violet-8" "violet-9" "violet-10" "violet-11" "violet-12"
+  "iris-1" "iris-2" "iris-3" "iris-4" "iris-5" "iris-6"
+  "iris-7" "iris-8" "iris-9" "iris-10" "iris-11" "iris-12"
+  "blue-1" "blue-2" "blue-3" "blue-4" "blue-5" "blue-6"
+  "blue-7" "blue-8" "blue-9" "blue-10" "blue-11" "blue-12"
+  "indigo-1" "indigo-2" "indigo-3" "indigo-4" "indigo-5" "indigo-6"
+  "indigo-7" "indigo-8" "indigo-9" "indigo-10" "indigo-11" "indigo-12"
+  "cyan-1" "cyan-2" "cyan-3" "cyan-4" "cyan-5" "cyan-6"
+  "cyan-7" "cyan-8" "cyan-9" "cyan-10" "cyan-11" "cyan-12"
+  "sky-1" "sky-2" "sky-3" "sky-4" "sky-5" "sky-6"
+  "sky-7" "sky-8" "sky-9" "sky-10" "sky-11" "sky-12"
+  "mint-1" "mint-2" "mint-3" "mint-4" "mint-5" "mint-6"
+  "mint-7" "mint-8" "mint-9" "mint-10" "mint-11" "mint-12"
+  "green-1" "green-2" "green-3" "green-4" "green-5" "green-6"
+  "green-7" "green-8" "green-9" "green-10" "green-11" "green-12"
+  "teal-1" "teal-2" "teal-3" "teal-4" "teal-5" "teal-6"
+  "teal-7" "teal-8" "teal-9" "teal-10" "teal-11" "teal-12"
+  "turquoise-1" "turquoise-2" "turquoise-3" "turquoise-4" "turquoise-5" "turquoise-6"
+  "turquoise-7" "turquoise-8" "turquoise-9" "turquoise-10" "turquoise-11" "turquoise-12"
+  "jade-1" "jade-2" "jade-3" "jade-4" "jade-5" "jade-6"
+  "jade-7" "jade-8" "jade-9" "jade-10" "jade-11" "jade-12"
+  "grass-1" "grass-2" "grass-3" "grass-4" "grass-5" "grass-6"
+  "grass-7" "grass-8" "grass-9" "grass-10" "grass-11" "grass-12"
+  "bronze-1" "bronze-2" "bronze-3" "bronze-4" "bronze-5" "bronze-6"
+  "bronze-7" "bronze-8" "bronze-9" "bronze-10" "bronze-11" "bronze-12"
+  "gold-1" "gold-2" "gold-3" "gold-4" "gold-5" "gold-6"
+  "gold-7" "gold-8" "gold-9" "gold-10" "gold-11" "gold-12"
+  "brown-1" "brown-2" "brown-3" "brown-4" "brown-5" "brown-6"
+  "brown-7" "brown-8" "brown-9" "brown-10" "brown-11" "brown-12"
+  "amber-1" "amber-2" "amber-3" "amber-4" "amber-5" "amber-6"
+  "amber-7" "amber-8" "amber-9" "amber-10" "amber-11" "amber-12"
+  "orange-1" "orange-2" "orange-3" "orange-4" "orange-5" "orange-6"
+  "orange-7" "orange-8" "orange-9" "orange-10" "orange-11" "orange-12"
+  "yellow-1" "yellow-2" "yellow-3" "yellow-4" "yellow-5" "yellow-6"
+  "yellow-7" "yellow-8" "yellow-9" "yellow-10" "yellow-11" "yellow-12"
+  "lime-1" "lime-2" "lime-3" "lime-4" "lime-5" "lime-6"
+  "lime-7" "lime-8" "lime-9" "lime-10" "lime-11" "lime-12"
+  "gray-a-1" "gray-a-2" "gray-a-3" "gray-a-4" "gray-a-5" "gray-a-6"
+  "gray-a-7" "gray-a-8" "gray-a-9" "gray-a-10" "gray-a-11" "gray-a-12"
+  "bg-primary" "bg-secondary" "bg-tertiary" "bg-quaternary" "bg-inverted-primary" "bg-inverted-secondary"
+  "bg-danger" "bg-transparent-primary" "bg-transparent-secondary" "bg-transparent-strong" "bg-transparent-medium" "bg-transparent-light"
+  "bg-transparent-lighter" "bg-overlay-primary" "bg-overlay-secondary" "bg-overlay-tertiary" "bg-base" "bg-app"
+  "bg-panel" "bg-subtle" "bg-muted" "bg-hover" "bg-active" "bg-inverse"
+  "bg-floating" "text-floating" "border-floating" "border-color-strong" "border-color-medium" "border-color-light"
+  "border-color-inverted" "border-color-secondary-inverted" "border-color-danger" "border-color-blue" "border-color-transparent-strong" "border"
+  "border-strong" "border-focus" "font-color-primary" "font-color-secondary" "font-color-tertiary" "font-color-light"
+  "font-color-extra-light" "font-color-inverted-primary" "font-color-inverted-secondary" "font-color-danger" "font-color-success" "text-primary"
+  "text-secondary" "text-tertiary" "text-placeholder" "text-inverse" "accent-primary" "accent-tertiary"
+  "accent-quaternary" "accent-accent-4" "accent-on-accent" "accent-on-accent-inverted" "accent" "accent-hover"
+  "accent-soft" "accent-soft-strong" "accent-on" "success" "success-soft" "warn"
+  "warn-soft" "danger" "danger-soft" "info" "info-soft" "font-sans"
+  "font-mono" "font-display" "fs-xxs" "fs-xs" "fs-sm" "fs-md"
+  "fs-lg" "fs-xl" "fs-xxl" "fs-2xl" "fs-3xl" "fw-regular"
+  "fw-medium" "fw-semibold" "r-xs" "r-sm" "r-md" "r-xl"
+  "r-xxl" "r-pill" "r-rounded" "r-lg" "s-0" "s-1"
+  "s-2" "s-3" "s-4" "s-5" "s-6" "s-7"
+  "s-8" "s-9" "s-10" "s-11" "s-12" "s-13"
+  "s-14" "s-15" "s-16" "s-17" "s-18" "s-19"
+  "s-20" "s-21" "s-22" "s-23" "s-24" "s-25"
+  "s-26" "s-27" "s-28" "s-29" "s-30" "s-31"
+  "s-32" "between-siblings-gap" "shadow-light" "shadow-strong" "shadow-underline" "shadow-super-heavy"
+  "shadow-xs" "shadow-sm" "shadow-md" "shadow-lg" "sidebar-w" "sidebar-w-collapsed"
+  "topbar-h" "side-panel-w" "table-horizontal-cell-margin" "table-horizontal-cell-padding" "table-checkbox-column-width" "anim-fast"
+  "anim-normal" "anim-slow" "anim-ease" "clickable-transition" "z-base" "z-sticky"
+  "z-sidebar-peek" "z-bottom-nav" "z-sidebar-backdrop" "z-sidebar" "z-inspector" "z-drawer-backdrop"
+  "z-drawer" "z-modal-backdrop" "z-modal" "z-dropdown" "z-popover" "z-command-palette"
+  "z-toast" "z-tooltip" "bg-overlay-scrim" "bg-overlay-scrim-dense" "modal-w-sm" "modal-w-md"
+  "modal-w-lg" "modal-w-xl" "popover-w-sm" "popover-w-md" "popover-h-md" "bp-mobile-sidebar"
+  "bp-mobile" "bp-mobile-card"
+);
+
+@function token($name, $fallback: null) {
+  @if $fallback != null {
+    @return var(--#{$name}, #{$fallback});
+  }
+  @if list.index($known-tokens, $name) == null {
+    @error "Unknown design token '#{$name}'. Add it to theme/*.css and _tokens.scss $known-tokens, or pass a $fallback.";
+  }
+  @return var(--#{$name});
+}
+

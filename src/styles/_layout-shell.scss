@@ -1,0 +1,399 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+.sidebar-theme-toggle {
+  @include inline-flex-center;
+  flex: 0 0 auto;
+  padding: 2px;
+  border: 1px solid token('border-color-light');
+  border-radius: token('r-sm');
+  background: token('bg-subtle');
+}
+.sidebar-theme-toggle__btn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: calc(token('r-sm') - 2px);
+  background: transparent;
+  color: token('text-tertiary');
+  cursor: pointer;
+  transition: background token('anim-fast') token('anim-ease'), color token('anim-fast') token('anim-ease');
+}
+.sidebar-theme-toggle__btn:hover {
+  background: token('bg-transparent-light');
+  color: token('text-primary');
+}
+.sidebar-theme-toggle__btn.is-active {
+  background: token('bg-primary');
+  color: token('text-primary');
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.sidebar-theme-toggle__btn svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+}
+/* Spotlight — Twenty keeps the sidebar flat. No bordered card; just a quiet
+ * section with a toggle label and inline metadata rows. */
+.sidebar__spotlight {
+  margin: token('s-2') 0 token('s-1');
+  padding: 0 token('s-3');
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  transition: padding token('anim-fast') token('anim-ease');
+}
+.sidebar__spotlight.is-collapsed {
+  padding: 0 token('s-3');
+}
+.sidebar__spotlight-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  margin-bottom: 4px;
+  color: token('text-tertiary');
+}
+.sidebar__spotlight.is-collapsed .sidebar__spotlight-toggle {
+  margin-bottom: 0;
+}
+.sidebar__spotlight-toggle:hover {
+  color: token('text-secondary');
+}
+.sidebar__spotlight-chevron {
+  flex-shrink: 0;
+  transition: transform token('anim-fast') token('anim-ease');
+}
+.sidebar__spotlight.is-collapsed .sidebar__spotlight-chevron {
+  transform: rotate(-90deg);
+}
+.sidebar__spotlight-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: inherit;
+}
+.sidebar__spotlight-title {
+  font-size: token('fs-sm');
+  font-weight: 500;
+  color: token('text-secondary');
+  margin-bottom: token('s-2');
+  line-height: 1.3;
+}
+.sidebar__spotlight-meta {
+  @include flex-between;
+  gap: 8px;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.sidebar__spotlight-meta + .sidebar__spotlight-meta {
+  margin-top: 6px;
+}
+/* Linked variant: each row is a navigation target. Picks up sidebar-item
+ * affordances (hover background, padding) without inheriting nav-icon spacing. */
+.sidebar__spotlight-meta--link {
+  border-radius: token('r-sm');
+  cursor: pointer;
+  margin: 0 calc(-1 * token('s-2'));
+  padding: 4px token('s-2');
+  text-decoration: none;
+}
+.sidebar__spotlight-meta--link:hover {
+  background: token('bg-hover');
+  color: token('text-primary');
+}
+.sidebar__spotlight-meta--link.is-active {
+  background: token('bg-active');
+  color: token('text-primary');
+}
+.app-shell.is-collapsed .sidebar__identity,
+.app-shell.is-collapsed .sidebar__spotlight {
+  display: none;
+}
+.sidebar__icon-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: token('r-sm');
+  display: grid;
+  place-items: center;
+  color: token('text-tertiary');
+  transition: background 0.08s ease, color 0.08s ease;
+}
+.sidebar__icon-btn:hover {
+  background: token('bg-transparent-light');
+  color: token('text-primary');
+}
+.app-shell.is-collapsed .sidebar__workspace {
+  justify-content: center;
+  padding: 4px;
+}
+.app-shell.is-collapsed .sidebar__brand-actions {
+  display: none;
+}
+/* Section labels — Twenty keeps them title-case and quiet; no uppercase,
+ * no letter-spacing. Just a slightly smaller, tertiary-colored row. */
+.sidebar__section {
+  padding: token('s-3') token('s-2') token('s-1');
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+  font-weight: token('fw-medium');
+  padding-left: token('s-3');
+}
+.sidebar__section--compact {
+  @include flex-between;
+  font-size: token('fs-xs');
+  font-weight: token('fw-medium');
+  padding-top: token('s-3');
+}
+.sidebar__section-meta {
+  color: token('text-placeholder');
+  font-weight: 500;
+}
+.sidebar__group {
+  @include flex-column;
+  gap: 2px;
+}
+.sidebar__group-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  @include flex-between;
+  gap: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+.sidebar__group-toggle {
+  padding: token('s-2') token('s-3') token('s-1');
+  border-radius: token('r-sm');
+  color: token('text-tertiary');
+  transition: background 0.08s ease, color 0.08s ease;
+}
+.sidebar__group-toggle:hover {
+  background: token('bg-transparent-light');
+  color: token('text-secondary');
+}
+.sidebar__group-toggle.is-active {
+  color: token('text-secondary');
+}
+.sidebar__group-trailing {
+  @include inline-flex-center;
+  gap: 6px;
+}
+.sidebar__group-meta {
+  color: token('text-placeholder');
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.sidebar__group-chevron {
+  flex-shrink: 0;
+  transition: transform token('anim-fast') token('anim-ease');
+}
+.sidebar__group.is-open .sidebar__group-chevron {
+  transform: rotate(180deg);
+}
+.sidebar__group-items {
+  @include flex-column;
+  gap: 2px;
+}
+.sidebar__nav {
+  @include flex-column;
+  padding: token('s-1') token('s-2');
+  gap: 2px;
+}
+.sidebar__item {
+  @include flex-center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: token('r-sm');
+  color: token('text-secondary');
+  font-size: token('fs-md');
+  font-weight: 500;
+  line-height: 1;
+  transition: background 0.08s ease, color 0.08s ease;
+  border: 1px solid transparent;
+}
+/* Action buttons need a few normalizations on top of the shared item rules
+ * because <button> ships with browser defaults that <a> doesn't. */
+.sidebar__item--command {
+  width: 100%;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  /* `<div role="button" draggable>` needs explicit opt-in to be a drag source
+   * in Webkit, plus `user-select: none` so the browser doesn't intercept the
+   * mousedown as a text-selection start. Native <a> and <button> get this
+   * for free, divs don't. */
+  -webkit-user-drag: element;
+  user-select: none;
+}
+.sidebar__item--command[draggable="true"] {
+  cursor: grab;
+}
+.sidebar__item--command[draggable="true"]:active {
+  cursor: grabbing;
+}
+/* Keep the icon and label from swallowing the drag — without this they can
+ * become the drag source themselves in some browsers, and dragging an inner
+ * span doesn't bubble up to the parent's `dragstart`. */
+.sidebar__item--command > * {
+  pointer-events: none;
+}
+
+/* Favorites drag-and-drop. The dragged row dims; one row at a time gets a
+ * top hairline in the accent color showing where the dropped row will land
+ * (always above the target so the indicator never confuses two rows about
+ * the same gap). The end-of-list zone catches drops that go past the last
+ * favorite. */
+.sidebar__item.is-dragging,
+.sidebar__nav-item.is-dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+.sidebar__item.is-drop-above,
+.sidebar__nav-item.is-drop-above {
+  box-shadow: inset 0 2px 0 0 token('accent');
+}
+.sidebar__favorite-end-zone {
+  height: 8px;
+  margin-top: 2px;
+}
+.sidebar__favorite-end-zone.is-drop-above {
+  box-shadow: inset 0 2px 0 0 token('accent');
+}
+/* Hover / active use bg-transparent-light (gray-a-2, ~4% alpha black) so the
+ * tint is visible but doesn't compete with the active page content. */
+.sidebar__item:hover {
+  background: token('bg-transparent-light');
+  color: token('text-primary');
+  border-color: transparent;
+}
+.sidebar__item.is-active {
+  background: token('bg-transparent-medium');
+  color: token('text-primary');
+  border-color: transparent;
+}
+.sidebar__icon-chip {
+  flex-shrink: 0;
+}
+.sidebar__item.is-active .sidebar__icon-chip {
+  box-shadow: 0 0 0 1px token('bg-panel');
+}
+/* Icon chips — Twenty's pattern: neutral surface, family-tinted glyph.
+ * Glyph colors pull from the palette's step-11 for light and step-11 dark,
+ * so every tint tracks the Radix hierarchy automatically. */
+.icon-chip-blue,
+.icon-chip-red,
+.icon-chip-turquoise,
+.icon-chip-gray,
+.icon-chip-orange,
+.icon-chip-purple,
+.icon-chip-green,
+.icon-chip-pink,
+.icon-chip-yellow {
+  background: token('bg-muted');
+  border-color: transparent;
+}
+.icon-chip-blue      { color: token('blue-11'); }
+.icon-chip-red       { color: token('red-11'); }
+.icon-chip-turquoise { color: token('turquoise-11'); }
+.icon-chip-gray      { color: token('text-secondary'); }
+.icon-chip-orange    { color: token('orange-11'); }
+.icon-chip-purple    { color: token('purple-11'); }
+.icon-chip-green     { color: token('green-11'); }
+.icon-chip-pink      { color: token('pink-11'); }
+.icon-chip-yellow    { color: token('yellow-11'); }
+.sidebar__count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.sidebar__footer {
+  margin-top: auto;
+  border-top: 1px solid token('border');
+  padding: token('s-3') token('s-4');
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+  @include flex-center;
+  gap: token('s-2');
+}
+
+/* Topbar */
+.topbar {
+  height: token('topbar-h');
+  background: token('bg-base');
+  border-bottom: 1px solid token('border');
+  @include flex-center;
+  gap: token('s-3');
+  padding: 0 token('s-4');
+  position: sticky;
+  top: 0;
+  z-index: token('z-sticky');
+}
+.topbar__crumb {
+  color: token('text-secondary');
+  font-size: token('fs-md');
+  font-weight: 500;
+}
+.topbar__crumb-sep {
+  color: token('text-tertiary');
+}
+.topbar__spacer {
+  flex: 1;
+}
+.topbar__search {
+  position: relative;
+  width: 280px;
+}
+.topbar__search input {
+  width: 100%;
+  height: 28px;
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  padding: 0 token('s-2') 0 28px;
+  background: token('bg-subtle');
+  color: token('text-primary');
+}
+.topbar__search input::placeholder {
+  color: token('text-placeholder');
+}
+.topbar__search svg {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: token('text-tertiary');
+}
+.topbar__kbd {
+  font-family: token('font-mono');
+  font-size: 10px;
+  color: token('text-tertiary');
+  background: token('bg-muted');
+  border: 1px solid token('border');
+  padding: 2px 5px;
+  border-radius: 3px;
+  margin-left: token('s-1');
+}
+
+/* Main — Twenty uses a continuous surface; no padding around a floating card. */
+.main {
+  @include flex-column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  background: token('bg-panel');
+}

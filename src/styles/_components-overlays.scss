@@ -1,0 +1,503 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+/* ============================================================
+   Empty-state — shared placeholder for "no rows", "no notifications",
+   "no matches". Prefer this over inline padding on .muted blocks.
+   ============================================================ */
+.empty-state {
+  @include flex-column;
+  align-items: center;
+  gap: token('s-2');
+  padding: token('s-6') token('s-4');
+  font-size: token('fs-sm');
+  color: token('text-tertiary');
+  text-align: center;
+}
+.empty-state__icon {
+  @include inline-flex-center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: token('r-md');
+  background: token('bg-hover');
+  color: token('text-secondary');
+  margin-bottom: token('s-1');
+}
+.empty-state__icon svg { width: 20px; height: 20px; }
+.empty-state__title {
+  font-size: token('fs-md');
+  font-weight: 600;
+  color: token('text-primary');
+  letter-spacing: -0.005em;
+}
+.empty-state__description {
+  max-width: 42ch;
+  color: token('text-tertiary');
+}
+.empty-state__actions {
+  display: inline-flex;
+  gap: token('s-2');
+  margin-top: token('s-2');
+}
+.empty-state--sm { padding: token('s-4') token('s-3'); }
+.empty-state--lg { padding: token('s-8') token('s-4'); }
+.empty-state--start {
+  align-items: flex-start;
+  text-align: start;
+}
+.empty-state--start .empty-state__description { text-align: start; }
+
+/* ============================================================
+   Select / Dropdown trigger + floating menu
+   ============================================================ */
+.select-trigger {
+  @include inline-flex-center;
+  gap: 6px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+  color: token('text-primary');
+  font-size: token('fs-md');
+  text-align: left;
+  transition: border-color 0.08s ease, box-shadow 0.08s ease, background 0.08s ease;
+}
+.select-trigger:hover:not(:disabled) { border-color: token('border-strong'); }
+.select-trigger.is-open,
+.select-trigger:focus-visible {
+  outline: none;
+  border-color: token('accent');
+  box-shadow: 0 0 0 3px token('accent-soft');
+}
+.select-trigger:disabled {
+  background: token('bg-subtle');
+  color: token('text-secondary');
+  cursor: not-allowed;
+  border-style: dashed;
+}
+.select-trigger--sm {
+  height: 24px;
+  padding: 0 6px;
+  font-size: token('fs-sm');
+  gap: 4px;
+}
+.select-trigger__label {
+  flex: 1;
+  min-width: 0;
+  @include inline-flex-center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.select-trigger__placeholder { color: token('text-placeholder'); }
+.select-trigger__icon {
+  color: token('text-tertiary');
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.select-trigger__chev {
+  color: token('text-tertiary');
+  flex-shrink: 0;
+  transition: transform 0.12s ease;
+}
+.select-trigger.is-open .select-trigger__chev { transform: rotate(180deg); }
+
+.menu {
+  position: fixed;
+  z-index: token('z-dropdown');
+  background: token('bg-panel');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  box-shadow: token('shadow-lg');
+  padding: 4px;
+  max-height: min(70vh, 420px);
+  @include flex-column;
+  overflow: hidden auto;
+  animation: menuIn 0.08s ease-out;
+}
+@keyframes menuIn {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.menu__search {
+  @include flex-center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-bottom: 1px solid token('border');
+  margin-bottom: 4px;
+  color: token('text-tertiary');
+}
+.menu__search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: token('text-primary');
+  font-size: token('fs-md');
+  padding: 2px 0;
+}
+.menu__list {
+  overflow-y: auto;
+  flex: 1;
+}
+.menu__item {
+  @include flex-between;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: token('r-sm');
+  font-size: token('fs-md');
+  color: token('text-secondary');
+  cursor: pointer;
+  min-height: 32px;
+  user-select: none;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.menu__item-main {
+  @include inline-flex-center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.menu__item:hover:not(.is-disabled),
+.menu__item.is-active {
+  background: token('bg-hover');
+  color: token('text-primary');
+}
+.menu__item.is-disabled { opacity: 0.4; cursor: not-allowed; }
+.menu__item--clear { color: token('text-tertiary'); font-style: italic; }
+.menu__item-icon {
+  display: inline-flex;
+  color: token('text-tertiary');
+  flex-shrink: 0;
+}
+.menu__item-icon svg { width: 14px; height: 14px; }
+.menu__item-label {
+  @include inline-flex-center;
+  gap: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu__item-hint { color: token('text-tertiary'); }
+.menu__item-right {
+  @include inline-flex-center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: token('text-tertiary');
+}
+.menu__item-check { color: token('accent'); flex-shrink: 0; }
+.menu__empty {
+  padding: 10px 8px;
+  color: token('text-tertiary');
+  font-size: token('fs-sm');
+  text-align: center;
+}
+
+/* ============================================================
+   DatePicker
+   ============================================================ */
+.date-trigger-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 100%;
+}
+.date-trigger-wrap.has-clear .date-trigger {
+  padding-right: 28px;
+}
+.date-trigger .select-trigger__label { gap: 6px; }
+.date-trigger__clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  color: token('text-tertiary');
+  opacity: 0.7;
+  border: 0;
+  background: transparent;
+  transition: background 0.08s ease, opacity 0.08s ease;
+}
+.select-trigger--sm + .date-trigger__clear {
+  right: 4px;
+}
+.date-trigger__clear:hover {
+  background: token('bg-hover');
+  color: token('text-primary');
+  opacity: 1;
+}
+.date-trigger__clear:focus-visible {
+  outline: 2px solid token('border-focus');
+  outline-offset: 2px;
+}
+
+.calendar {
+  position: fixed;
+  z-index: token('z-dropdown');
+  background: token('bg-panel');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  box-shadow: token('shadow-lg');
+  padding: 10px;
+  width: 248px;
+  animation: menuIn 0.08s ease-out;
+}
+.calendar__head {
+  @include flex-between;
+  margin-bottom: 8px;
+}
+.calendar__nav {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: token('r-sm');
+  color: token('text-secondary');
+  transition: background 0.08s ease;
+}
+.calendar__nav:hover { background: token('bg-hover'); color: token('text-primary'); }
+.calendar__title {
+  @include inline-flex-center;
+  gap: 4px;
+  font-size: token('fs-md');
+  font-weight: 500;
+  color: token('text-primary');
+}
+.calendar__title-btn {
+  @include inline-flex-center;
+  gap: 2px;
+  padding: 2px 6px;
+  border-radius: token('r-sm');
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.08s ease, border-color 0.08s ease;
+}
+.calendar__title-btn:hover { background: token('bg-hover'); }
+.calendar__title-btn.is-open {
+  background: token('bg-hover');
+  border-color: token('border');
+}
+.calendar__quick {
+  display: grid;
+  gap: 2px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 4px;
+}
+.calendar__quick--months { grid-template-columns: repeat(3, 1fr); }
+.calendar__quick--years  { grid-template-columns: repeat(4, 1fr); }
+.calendar__quick-cell {
+  height: 28px;
+  border-radius: token('r-sm');
+  background: transparent;
+  border: 1px solid transparent;
+  color: token('text-primary');
+  font-size: token('fs-sm');
+  transition: background 0.08s ease, color 0.08s ease;
+}
+.calendar__quick-cell:hover { background: token('bg-hover'); }
+.calendar__quick-cell.is-current {
+  background: token('accent');
+  color: token('accent-on');
+  border-color: token('accent');
+}
+.calendar__cell.is-today.is-selected { border-color: token('accent'); }
+.calendar__cell.is-today:not(.is-selected) {
+  border-color: token('accent');
+  color: token('accent');
+  font-weight: 600;
+}
+.calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.calendar__wd {
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+  text-align: center;
+  padding: 4px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.calendar__cell {
+  height: 28px;
+  border-radius: token('r-sm');
+  font-size: token('fs-sm');
+  color: token('text-primary');
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background 0.08s ease, color 0.08s ease, border-color 0.08s ease;
+}
+.calendar__cell:hover:not(:disabled):not(.is-selected) { background: token('bg-hover'); }
+.calendar__cell.is-active:not(.is-selected) {
+  background: token('bg-hover');
+  border-color: token('border-strong');
+}
+.calendar__cell.is-out { color: token('text-tertiary'); opacity: 0.55; }
+.calendar__cell.is-today { border-color: token('border-strong'); }
+.calendar__cell.is-selected {
+  background: token('accent');
+  color: token('accent-on');
+  border-color: token('accent');
+  font-weight: 500;
+}
+.calendar__cell.is-disabled { opacity: 0.25; cursor: not-allowed; }
+.calendar__foot {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+  padding-top: 8px;
+  margin-top: 8px;
+  border-top: 1px solid token('border');
+}
+
+/* ============================================================
+   Modal + Confirm
+   ============================================================ */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: token('bg-overlay-scrim');
+  z-index: token('z-modal-backdrop');
+  animation: fadeIn 0.12s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.modal {
+  position: fixed;
+  z-index: token('z-modal');
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: calc(100% - 32px);
+  background: token('bg-panel');
+  border: 1px solid token('border');
+  border-radius: token('r-lg');
+  box-shadow: token('shadow-lg');
+  @include flex-column;
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+  animation: modalIn 0.14s ease-out;
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+.modal__head {
+  @include flex-center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid token('border');
+}
+.modal__title {
+  flex: 1;
+  margin: 0;
+  font-size: token('fs-lg');
+  font-weight: 600;
+  color: token('text-primary');
+}
+.modal__body {
+  padding: 14px;
+  overflow-y: auto;
+  color: token('text-primary');
+  font-size: token('fs-md');
+  line-height: 1.5;
+}
+.quick-action-picker__item {
+  @include flex-center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: token('r-sm');
+  border: 1px solid token('border');
+  background: token('bg-panel');
+  color: token('text-primary');
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  width: 100%;
+  transition: background 0.08s ease, border-color 0.08s ease;
+}
+.quick-action-picker__item:hover,
+.quick-action-picker__item:focus-visible {
+  background: token('bg-hover');
+  border-color: token('accent');
+  outline: none;
+}
+.quick-action-picker__item-main {
+  @include flex-column;
+  flex: 1;
+  min-width: 0;
+}
+.quick-action-picker__item-title {
+  font-weight: token('fw-medium');
+}
+.quick-action-picker__item-meta {
+  color: token('text-tertiary');
+  font-size: token('fs-sm');
+}
+.modal__foot {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 10px 14px;
+  border-top: 1px solid token('border');
+  background: token('bg-app');
+  border-bottom-left-radius: token('r-lg');
+  border-bottom-right-radius: token('r-lg');
+}
+
+@media (max-width: 560px) {
+  .modal-backdrop {
+    background: rgba(0, 0, 0, 0.28);
+  }
+
+  .modal {
+    top: auto;
+    left: max(8px, env(safe-area-inset-left));
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    width: auto;
+    max-width: none !important;
+    max-height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom)));
+    transform: none;
+    border-radius: token('r-md');
+    animation-name: modalInMobile;
+  }
+
+  @keyframes modalInMobile {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .modal__foot {
+    flex-wrap: wrap;
+    justify-content: stretch;
+    border-bottom-left-radius: token('r-md');
+    border-bottom-right-radius: token('r-md');
+  }
+
+  .modal__foot > * {
+    flex: 1 1 140px;
+  }
+}
+.confirm-body {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}

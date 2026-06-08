@@ -1,6 +1,5 @@
-// Private sub-components and helpers for GrantPanels.tsx (dossier panels, editor sections, field editors).
-
-import { useEffect, useState, type ReactNode } from "react";
+// GrantPanels: interactive grant requirements checklist editor.
+import { type ReactNode, useEffect, useState } from "react";
 import { ExternalLink, ListChecks, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge, Field, InspectorNote } from "../../../components/ui";
@@ -8,11 +7,6 @@ import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { StructuredAddressFields } from "../../../components/StructuredAddressFields";
 import { formatDate, money } from "../../../lib/format";
 import {
-  type GrantRequirement,
-  type GrantRequirementStatus,
-  type RequirementTemplateKey,
-  GRANT_REQUIREMENT_TEMPLATES,
-  REQUIREMENT_STATUSES,
   asAnswerLibrary,
   asComplianceFlags,
   asContacts,
@@ -22,301 +16,23 @@ import {
   asUseOfFunds,
   cleanStringList,
   detectRequirementTemplateKey,
+  GRANT_REQUIREMENT_TEMPLATES,
+  type GrantRequirement,
+  type GrantRequirementStatus,
   mergeTemplateRequirements,
   optionalString,
+  REQUIREMENT_STATUSES,
   requirementStatusTone,
   requirementSummary,
   requirementTemplateCoverage,
+  type RequirementTemplateKey,
 } from "../lib/grantDrafts";
 
+import {
+  cleanDocumentTitle,
+} from "./GrantPanels.internal.documentLookup";
 
-function timelineTone(status: unknown, date: string) {
-  const text = String(status ?? "").toLowerCase();
-  if (/(submitted|complete|attached|ready|saved|done)/.test(text)) return "success";
-  if (/(overdue|missing|not)/.test(text)) return "danger";
-  const dueTime = new Date(date).getTime();
-  if (Number.isFinite(dueTime) && dueTime < Date.now() && !/(conditional|expected)/.test(text)) return "danger";
-  if (/(due|requested|conditional|expected|watch)/.test(text)) return "warn";
-  return "info";
-}
-
-
-function nextStepTone(status: unknown) {
-  const text = String(status ?? "").toLowerCase();
-  if (/(done|complete|ready)/.test(text)) return "success";
-  if (/(need|missing|overdue)/.test(text)) return "danger";
-  if (/(review|upcoming|scheduled)/.test(text)) return "warn";
-  return "info";
-}
-
-
-function priorityTone(priority: unknown) {
-  const text = String(priority ?? "").toLowerCase();
-  if (text === "high") return "danger";
-  if (text === "medium") return "warn";
-  return "info";
-}
-
-
-function findKeyFactNumber(value: unknown, pattern: RegExp) {
-  for (const fact of cleanStringList(value)) {
-    const match = fact.match(pattern);
-    if (match?.[1]) return Number(match[1]);
-  }
-  return undefined;
-}
-
-
-function grantPacketKey(grant: any) {
-  const title = String(grant.title ?? "").toLowerCase();
-  if (title.includes("canada summer jobs")) return "canada summer jobs";
-  if (title.includes("bc community gaming") || title.includes("gaming grant")) return "bc gaming grant";
-  return "";
-}
-
-
-function grantRelatedDocuments(grant: any, documents: any[]) {
-  const linkedIds = new Set(
-    [
-      ...asRequirements(grant.requirements).map((requirement) => requirement.documentId),
-      ...cleanStringList(grant.sourceDocumentIds),
-    ]
-      .filter(Boolean)
-      .map(String),
-  );
-  const packetKey = grantPacketKey(grant);
-  return documents.filter((document) => {
-    if (linkedIds.has(String(document._id))) return true;
-    if (!packetKey) return false;
-    return evidenceDocumentText(document).includes(packetKey);
-  });
-}
-
-
-const EVIDENCE_GROUPS = [
-  {
-    label: "Application / confirmation",
-    patterns: [/application|confirmation|summary|online version|main application|review purposes/i],
-  },
-  {
-    label: "Bylaws and registry evidence",
-    patterns: [/bylaws|constitution|registry|society|annual report|certified/i],
-  },
-  {
-    label: "AGM / board evidence",
-    patterns: [/annual general meeting|agm|directors|office|officer|authority to act|primary officer/i],
-  },
-  {
-    label: "Financials and budgets",
-    patterns: [/budget|financial|fin312|statement|screenshot|revenue|expenses|balance|2024-2025|simplified_program_financials/i],
-  },
-  {
-    label: "Program narrative",
-    patterns: [/program information|program|narrative|job details/i],
-  },
-  {
-    label: "Government guides / conditions",
-    patterns: [/guide|conditions|cond|checklist|faq|tutorial|canada\.ca|common hosted/i],
-  },
-  {
-    label: "Follow-up documents",
-    patterns: [/follow.?up|direct deposit|email/i],
-  },
-];
-
-
-function groupEvidenceDocuments(documents: any[]) {
-  const groups = EVIDENCE_GROUPS.map((group) => ({ label: group.label, documents: [] as any[] }));
-  const other = { label: "Other packet files", documents: [] as any[] };
-
-  for (const document of documents) {
-    const text = evidenceDocumentText(document);
-    const index = EVIDENCE_GROUPS.findIndex((group) =>
-      group.patterns.some((pattern) => pattern.test(text)),
-    );
-    if (index >= 0) groups[index].documents.push(document);
-    else other.documents.push(document);
-  }
-
-  return [...groups, other];
-}
-
-
-function evidenceDocumentText(document: any) {
-  return [
-    document.title,
-    document.fileName,
-    document.category,
-    ...(Array.isArray(document.tags) ? document.tags : []),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-}
-
-
-function cleanDocumentTitle(document: any) {
-  return String(document.title ?? document.fileName ?? "Document")
-    .replace(/^Grant packet — /, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-
-function buildGrantTimeline(grant: any, reports: any[]) {
-  const grantId = String(grant.id ?? grant._id ?? "");
-  const items: { date: string; label: string; status?: string; notes?: string }[] = [];
-  const add = (date: unknown, label: string, status?: string, notes?: string) => {
-    const text = optionalString(date);
-    if (!text) return;
-    items.push({ date: text, label, status, notes });
-  };
-
-  add(grant.applicationDueDate, "Application due", "Due");
-  add(grant.submittedAtISO, "Application submitted", "Submitted", grant.confirmationCode ? `Confirmation ${grant.confirmationCode}` : undefined);
-  add(grant.decisionAtISO, "Decision expected / recorded", "Expected");
-  add(grant.startDate, "Project start", "Scheduled");
-  add(grant.endDate, "Project end", "Scheduled");
-  add(grant.nextReportDueAtISO, "Next report due", "Due");
-
-  for (const requirement of asRequirements(grant.requirements)) {
-    add(requirement.dueDate, requirement.label, requirement.status, requirement.notes);
-  }
-  for (const event of asTimelineEvents(grant.timelineEvents)) {
-    add(event.date, event.label, event.status, event.notes);
-  }
-  for (const report of reports.filter((report) => String(report.grantId) === grantId)) {
-    add(report.dueAtISO, report.title, report.status, report.notes);
-    add(report.submittedAtISO, `${report.title} submitted`, "Submitted");
-  }
-
-  const deduped = new Map<string, { date: string; label: string; status?: string; notes?: string }>();
-  for (const item of items) {
-    deduped.set(`${item.date}-${item.label}`, item);
-  }
-  return Array.from(deduped.values()).sort((a, b) => a.date.localeCompare(b.date));
-}
-
-
-const dossierSectionStyle = {
-  border: "1px solid var(--border)",
-  borderRadius: "var(--r-sm)",
-  background: "var(--bg-panel)",
-  padding: 12,
-};
-
-
-const factBoxStyle = {
-  border: "1px solid var(--border)",
-  borderRadius: "var(--r-sm)",
-  background: "var(--bg-base)",
-  padding: 10,
-  minWidth: 0,
-};
-
-
-const nextStepStyle = {
-  border: "1px solid var(--border)",
-  borderRadius: "var(--r-sm)",
-  background: "var(--bg-base)",
-  padding: 10,
-};
-
-
-const workflowActionBarStyle = {
-  display: "flex",
-  gap: 8,
-  flexWrap: "wrap" as const,
-  marginTop: 10,
-};
-
-
-const employeeLinkStyle = {
-  border: "1px solid var(--border)",
-  borderRadius: "var(--r-sm)",
-  background: "var(--bg-base)",
-  padding: 10,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 10,
-};
-
-
-const detailPanelStyle = {
-  border: "1px solid var(--border)",
-  borderRadius: "var(--r-sm)",
-  background: "var(--bg-base)",
-  padding: "8px 10px",
-};
-
-
-const detailSummaryStyle = {
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 8,
-  fontWeight: 600,
-};
-
-
-const documentListStyle = {
-  margin: "8px 0 0",
-  paddingLeft: 18,
-  display: "grid",
-  gap: 6,
-};
-
-
-const documentListItemStyle = {
-  color: "var(--text-secondary)",
-  lineHeight: 1.35,
-};
-
-
-const timelineItemStyle = {
-  display: "flex",
-  gap: 12,
-  alignItems: "flex-start",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--r-sm)",
-  background: "var(--bg-base)",
-  padding: 10,
-};
-
-
-const fundLineStyle = {
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: 12,
-};
-
-
-const flagChipStyle = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  border: "1px solid var(--border)",
-  borderRadius: "var(--r-sm)",
-  padding: "6px 8px",
-  background: "var(--bg-base)",
-};
-
-
-const contactRowStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
-  border: "1px solid var(--border)",
-  borderRadius: "var(--r-sm)",
-  background: "var(--bg-base)",
-  padding: 10,
-};
-
-
-function GrantRequirementsEditor({
+export function GrantRequirementsEditor({
   draft,
   documents,
   onChange,
@@ -549,33 +265,3 @@ function GrantRequirementsEditor({
     </div>
   );
 }
-
-
-
-export {
-  timelineTone,
-  nextStepTone,
-  priorityTone,
-  findKeyFactNumber,
-  grantPacketKey,
-  grantRelatedDocuments,
-  EVIDENCE_GROUPS,
-  groupEvidenceDocuments,
-  evidenceDocumentText,
-  cleanDocumentTitle,
-  buildGrantTimeline,
-  dossierSectionStyle,
-  factBoxStyle,
-  nextStepStyle,
-  workflowActionBarStyle,
-  employeeLinkStyle,
-  detailPanelStyle,
-  detailSummaryStyle,
-  documentListStyle,
-  documentListItemStyle,
-  timelineItemStyle,
-  fundLineStyle,
-  flagChipStyle,
-  contactRowStyle,
-  GrantRequirementsEditor,
-};

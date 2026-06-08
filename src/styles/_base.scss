@@ -1,3 +1,5 @@
+@use "tokens" as *;
+
 
 * {
   box-sizing: border-box;
@@ -8,10 +10,10 @@ body,
 #root {
   margin: 0;
   height: 100%;
-  background: var(--bg-app);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: var(--fs-md);
+  background: token('bg-app');
+  color: token('text-primary');
+  font-family: token('font-sans');
+  font-size: token('fs-md');
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -39,13 +41,13 @@ select {
 }
 
 :focus-visible {
-  outline: 2px solid var(--border-focus);
+  outline: 2px solid token('border-focus');
   outline-offset: 2px;
 }
 
 ::selection {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: token('accent-soft');
+  color: token('accent');
 }
 
 /* Scrollbar */
@@ -54,9 +56,9 @@ select {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: var(--r-sm);
-  border: 2px solid var(--bg-app);
+  background: token('border-strong');
+  border-radius: token('r-sm');
+  border: 2px solid token('bg-app');
 }
 ::-webkit-scrollbar-track {
   background: transparent;

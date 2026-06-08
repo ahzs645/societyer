@@ -1,0 +1,224 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+.privacy-layout {
+  align-items: start;
+  margin-top: token('s-4');
+}
+
+.privacy-setup-card .card__head {
+  align-items: flex-start;
+}
+
+.privacy-setup-card .card__title,
+.privacy-create-card .card__title,
+.privacy-side-col .card__title {
+  @include inline-flex-center;
+  gap: 6px;
+}
+
+.privacy-main-col {
+  gap: token('s-4');
+}
+
+.privacy-side-col {
+  gap: token('s-4');
+}
+
+.privacy-document-path {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: token('s-4');
+}
+
+.privacy-document-path__copy {
+  min-width: 0;
+  @include flex-column;
+  gap: 4px;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  line-height: 1.45;
+}
+
+.privacy-document-path__copy strong {
+  color: token('text-primary');
+}
+
+.privacy-document-path__actions {
+  @include inline-flex-center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.privacy-step-list {
+  @include flex-column;
+  gap: 0;
+}
+
+.privacy-step {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: token('s-3');
+  padding: token('s-4') 0;
+  border-bottom: 1px solid token('border');
+}
+
+.privacy-step:first-child {
+  padding-top: 0;
+}
+
+.privacy-step:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.privacy-step__icon {
+  width: 28px;
+  height: 28px;
+  border-radius: token('r-sm');
+  @include inline-flex-center;
+  justify-content: center;
+  background: token('bg-subtle');
+  color: token('text-secondary');
+}
+
+.privacy-step--success .privacy-step__icon {
+  background: token('success-soft');
+  color: token('success');
+}
+
+.privacy-step--warn .privacy-step__icon {
+  background: token('warn-soft');
+  color: token('warn');
+}
+
+.privacy-step--info .privacy-step__icon {
+  background: token('info-soft');
+  color: token('info');
+}
+
+.privacy-step__content {
+  min-width: 0;
+  @include flex-column;
+  gap: 6px;
+}
+
+.privacy-step__head {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: token('s-2');
+}
+
+.privacy-step__head strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.privacy-step__body {
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  line-height: 1.45;
+}
+
+.privacy-step__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: token('s-2');
+  flex-wrap: wrap;
+}
+
+.privacy-step__citations,
+.privacy-step__actions,
+.privacy-resource__citations {
+  @include inline-flex-center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.privacy-step__actions .btn,
+.privacy-resource > .btn {
+  white-space: nowrap;
+}
+
+.privacy-resource-list {
+  @include flex-column;
+  gap: token('s-3');
+}
+
+.privacy-note {
+  margin: 0;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  line-height: 1.45;
+}
+
+.privacy-resource {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: token('s-3');
+  align-items: flex-start;
+  padding-top: token('s-3');
+  border-top: 1px solid token('border');
+}
+
+.privacy-resource__main {
+  min-width: 0;
+  @include flex-column;
+  gap: 4px;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  line-height: 1.45;
+}
+
+.privacy-resource__main strong {
+  color: token('text-primary');
+}
+
+.privacy-resource__citations {
+  margin-top: 4px;
+}
+
+.privacy-bullet-list {
+  margin: 0;
+  padding-left: 18px;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  line-height: 1.45;
+}
+
+.privacy-bullet-list li + li {
+  margin-top: 8px;
+}
+
+.privacy-editor {
+  @include flex-column;
+  gap: token('s-4');
+}
+
+.privacy-editor__mode {
+  align-self: flex-start;
+}
+
+.privacy-editor__textarea {
+  min-height: min(58vh, 640px);
+  font-family: token('font-mono');
+  font-size: token('fs-sm');
+  line-height: 1.5;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.privacy-editor__preview {
+  min-height: min(58vh, 640px);
+  max-height: min(58vh, 640px);
+  overflow: auto;
+  padding: token('s-5');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  background: token('bg-panel');
+}

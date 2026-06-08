@@ -1,3 +1,6 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
 .asset-detail-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
@@ -22,7 +25,7 @@
 
 .record-kv dt {
   color: var(--text-muted);
-  font-size: var(--fs-xs);
+  font-size: token('fs-xs');
   margin-bottom: 2px;
 }
 
@@ -33,7 +36,7 @@
 
 .asset-label {
   align-items: center;
-  border: 1px solid var(--border);
+  border: 1px solid token('border');
   border-radius: 8px;
   display: grid;
   gap: 12px;
@@ -50,7 +53,7 @@
   align-items: center;
   aspect-ratio: 1;
   background: var(--surface-raised);
-  border: 1px solid var(--border);
+  border: 1px solid token('border');
   border-radius: 6px;
   display: flex;
   justify-content: center;
@@ -83,7 +86,7 @@
 }
 
 .asset-label__error {
-  color: var(--red-11);
+  color: token('red-11');
 }
 
 .form-grid {
@@ -99,8 +102,7 @@
 
 .asset-form__notes {
   grid-column: 1 / -1;
-  display: flex;
-  flex-direction: column;
+  @include flex-column;
   gap: 8px;
 }
 
@@ -110,7 +112,7 @@
 
 .callout {
   align-items: center;
-  border: 1px solid var(--border);
+  border: 1px solid token('border');
   border-radius: 8px;
   display: flex;
   gap: 10px;
@@ -119,8 +121,8 @@
 }
 
 .callout--info {
-  background: var(--blue-2);
-  border-color: var(--blue-6);
+  background: token('blue-2');
+  border-color: token('blue-6');
 }
 
 @media (max-width: 760px) {

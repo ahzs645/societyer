@@ -1,0 +1,624 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+.minutes-export-gaps {
+  @include flex-column;
+  gap: token('s-2');
+  padding-top: token('s-2');
+  border-top: 1px solid token('border');
+}
+.meeting-detail-page .minutes-export-gaps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.meeting-detail-page,
+.meetings-page {
+  scrollbar-width: none;
+}
+.meeting-detail-page::-webkit-scrollbar,
+.meetings-page::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+.minutes-export-gap {
+  padding: token('s-2');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-subtle');
+}
+.minutes-export-gap strong {
+  font-size: token('fs-sm');
+}
+.minutes-export-gap .muted {
+  line-height: 1.35;
+}
+.minutes-export-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: token('s-2');
+}
+.minutes-export-layout .btn-action {
+  justify-content: center;
+}
+.minutes-preview {
+  @include flex-column;
+  gap: token('s-3');
+}
+.minutes-preview__toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
+  gap: token('s-3');
+  align-items: start;
+}
+.minutes-preview__toolbar p {
+  margin: 2px 0 0;
+  font-size: token('fs-sm');
+}
+/* Empty state shown inside the standalone preview pane when there's
+ * nothing to render. The inline tab uses .minutes-preview-empty-screen
+ * (full-width replacement) instead. */
+.minutes-preview__empty {
+  @include flex-column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: token('s-2');
+  padding: token('s-6') token('s-4');
+  border: 1px dashed token('border');
+  border-radius: token('r-md');
+  color: token('text-secondary');
+  min-height: 240px;
+
+  svg { color: token('text-tertiary'); }
+  p { max-width: 52ch; margin: 0; }
+}
+.minutes-preview__page {
+  // Force light tokens inside the preview so child elements rendered from the
+  // export HTML (.motion, .meta, .muted) match the exported document and don't
+  // bleed dark-mode backgrounds / text colors when the app theme is dark.
+  --border: #d0d4dc;
+  --text-tertiary: #666;
+  --bg-subtle: #f6f8ff;
+  color-scheme: light;
+
+  width: min(680px, 100%);
+  min-height: 760px;
+  margin: 0 auto;
+  padding: 48px;
+  border: 1px solid #d0d4dc;
+  background: #fff;
+  color: #1a1a1a;
+  box-shadow: token('shadow-md');
+  font-family: Calibri, "Segoe UI", Arial, sans-serif;
+  font-size: 11pt;
+  line-height: 1.35;
+
+  .motion {
+    border-left: 3px solid #3b5bdb;
+    padding: 4px 8px;
+    background: #f6f8ff;
+    margin: 0 0 8px;
+  }
+  .motion .outcome-carried { color: #0a8f4e; font-weight: 600; }
+  .motion .outcome-defeated { color: #c9264a; font-weight: 600; }
+  .motion .outcome-tabled { color: #a86400; font-weight: 600; }
+  .meta { color: #666; font-size: 10pt; }
+  .muted { color: #888; }
+}
+.minutes-preview__page h1 {
+  margin: 0 0 8px;
+  font-size: 20pt;
+  line-height: 1.15;
+}
+.minutes-preview__page h2 {
+  margin: 20px 0 8px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid #999;
+  font-size: 14pt;
+}
+.minutes-preview__page h3 {
+  margin: 14px 0 6px;
+  font-size: 12pt;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.minutes-preview__page p {
+  margin: 0 0 8px;
+}
+.minutes-preview__page ul,
+.minutes-preview__page ol {
+  margin: 0 0 10px 24px;
+  padding: 0;
+}
+.minutes-preview__page table {
+  width: 100%;
+  margin: 8px 0 12px;
+  border-collapse: collapse;
+}
+.minutes-preview__page th,
+.minutes-preview__page td {
+  padding: 6px 8px;
+  border: 1px solid #bbb;
+  color: #1a1a1a;
+  text-align: left;
+  vertical-align: top;
+}
+.minutes-preview__page th {
+  background: #f1f1f1;
+}
+.minutes-preview__page .meta,
+.minutes-preview__page .muted {
+  color: #666;
+}
+.meeting-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: token('s-2');
+  margin-bottom: token('s-3');
+}
+.meeting-detail-location-value {
+  display: block;
+  max-width: 34ch;
+  text-align: right;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.meeting-detail-summary > div {
+  min-width: 0;
+  padding: token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-panel');
+}
+.meeting-detail-summary span {
+  display: block;
+  margin-bottom: 4px;
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.meeting-detail-summary strong {
+  display: block;
+  color: token('text-primary');
+  font-size: token('fs-lg');
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.meeting-detail-tabpanel {
+  min-width: 0;
+}
+.meeting-package-body {
+  display: grid;
+  gap: token('s-4');
+}
+.meeting-package-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+  gap: token('s-3');
+  align-items: start;
+}
+.meeting-package-stack {
+  display: grid;
+  gap: token('s-3');
+  min-width: 0;
+}
+.meeting-package-join {
+  justify-self: start;
+}
+.meeting-package-gate,
+.meeting-package-side-card,
+.meeting-package-materials {
+  padding: token('s-3');
+  border-radius: token('r-sm');
+  min-width: 0;
+}
+.meeting-package-drawers {
+  display: grid;
+  gap: token('s-2');
+  margin-top: token('s-3');
+  min-width: 0;
+}
+.meeting-package-drawer {
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+  min-width: 0;
+}
+.meeting-package-drawer__summary {
+  @include flex-between;
+  gap: token('s-2');
+  padding: token('s-2') token('s-3');
+  cursor: pointer;
+  list-style: none;
+  min-width: 0;
+}
+.meeting-package-drawer__summary > .badge {
+  max-width: 100%;
+  min-width: 0;
+}
+.meeting-package-drawer__summary::-webkit-details-marker {
+  display: none;
+}
+details.meeting-package-drawer > .meeting-package-drawer__summary::after {
+  content: "";
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid token('text-tertiary');
+  border-bottom: 1.5px solid token('text-tertiary');
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+  margin-left: auto;
+  margin-right: 4px;
+}
+details.meeting-package-drawer[open] > .meeting-package-drawer__summary::after {
+  transform: rotate(-135deg);
+  margin-top: 4px;
+}
+.meeting-package-drawer.is-empty .meeting-package-drawer__summary {
+  cursor: default;
+}
+.meeting-package-drawer__title {
+  font-weight: 600;
+  color: token('text-primary');
+  font-size: token('fs-sm');
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.meeting-package-drawer__body {
+  display: grid;
+  gap: token('s-2');
+  padding: 0 token('s-3') token('s-3');
+  min-width: 0;
+}
+.meeting-package-drawer__hint {
+  font-size: token('fs-sm');
+  padding: 0 token('s-3') token('s-3');
+}
+.meeting-package-side-card.meeting-package-drawer {
+  padding: 0;
+}
+.meeting-package-side-card.meeting-package-drawer .meeting-package-drawer__body,
+.meeting-package-side-card.meeting-package-drawer .meeting-package-drawer__hint {
+  padding-top: 0;
+}
+.meeting-package-review-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: token('s-3');
+  margin-top: token('s-3');
+}
+.meeting-package-task-list {
+  display: grid;
+  gap: token('s-2');
+}
+.meeting-package-task-row {
+  @include flex-center;
+  gap: token('s-2');
+  padding: token('s-2');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-base');
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.meeting-package-task-row__main {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.meeting-package-task-row__title {
+  font-weight: 600;
+  font-size: token('fs-sm');
+  color: token('text-primary');
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-add-task {
+  @include flex-column;
+  align-items: flex-end;
+  gap: token('s-2');
+}
+.quick-add-task__form {
+  display: grid;
+  gap: token('s-2');
+  padding: token('s-2');
+  margin-top: token('s-2');
+  border: 1px dashed token('border');
+  border-radius: token('r-sm');
+  align-self: stretch;
+}
+details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting-package-task-counts {
+  display: none;
+}
+.meeting-package-task-counts {
+  display: inline-flex;
+  min-width: 0;
+}
+.meeting-package-task-counts .badge {
+  max-width: 100%;
+}
+.meeting-package-materials {
+  border: 1px solid token('border');
+  background: token('bg-base');
+}
+.meeting-package-topic {
+  display: grid;
+  gap: token('s-2');
+  margin-top: token('s-3');
+  padding-top: token('s-3');
+  border-top: 1px solid token('border');
+}
+.meeting-package-topic__head,
+.meeting-package-material-row,
+.meeting-package-topic-pill {
+  @include flex-center;
+  gap: token('s-2');
+  min-width: 0;
+}
+.meeting-package-topic__head {
+  justify-content: space-between;
+}
+.meeting-package-material-row {
+  padding: token('s-2');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-panel');
+  flex-wrap: wrap;
+}
+.meeting-package-material-row__main {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.meeting-package-material-row__main a,
+.meeting-package-topic-pill span {
+  overflow-wrap: anywhere;
+}
+.meeting-package-material-row__main span {
+  color: token('text-tertiary');
+  font-size: token('fs-sm');
+}
+.meeting-package-empty {
+  display: flex;
+  gap: token('s-2');
+  align-items: flex-start;
+  margin-top: token('s-3');
+  padding: token('s-3');
+  border: 1px dashed token('border');
+  border-radius: token('r-sm');
+  background: token('bg-subtle');
+}
+.meeting-package-empty p {
+  margin: 3px 0 0;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.meeting-package-empty-topics {
+  margin-top: token('s-3');
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.meeting-package-empty-topics summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.meeting-package-topic-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: token('s-2');
+  margin-top: token('s-2');
+}
+.meeting-package-topic-pill {
+  justify-content: space-between;
+  padding: token('s-2');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-panel');
+}
+.meeting-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr);
+  gap: token('s-4');
+  align-items: start;
+}
+.meeting-export-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
+  gap: token('s-4');
+  align-items: start;
+}
+/* Replaces the export 2-column layout when there is nothing to render —
+ * the export controls aren't actionable with no content, so the message
+ * spans the full width instead of sharing space with a useless sidebar. */
+.minutes-preview-empty-screen {
+  @include flex-column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: token('s-2');
+  padding: token('s-6') token('s-4');
+  border: 1px dashed token('border');
+  border-radius: token('r-md');
+  color: token('text-secondary');
+  min-height: 280px;
+
+  svg { color: token('text-tertiary'); }
+  p { max-width: 52ch; margin: 0; }
+}
+// Hide the browser's native up/down spinners on VoteStepper inputs — the
+// component has its own +/- buttons, native arrows are redundant noise.
+.vote-stepper__input {
+  -moz-appearance: textfield;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+.minutes-preview--inline .minutes-preview__page {
+  width: min(760px, 100%);
+}
+.minutes-preview__viewport {
+  // Outer resizable, clipping container. react-zoom-pan-pinch handles the
+  // pan/zoom transform inside; we just provide a bounded viewport that the
+  // user can drag the bottom edge of to expand or shorten.
+  position: relative;
+  width: 100%;
+  height: 800px;
+  min-height: 240px;
+  max-height: 90vh;
+  overflow: hidden;
+  resize: vertical;
+  border: 1px solid token('border');
+  border-radius: 8px;
+  background: token('bg-app');
+}
+.minutes-preview__transform-wrapper {
+  width: 100% !important;
+  height: 100% !important;
+  cursor: grab;
+  &:active { cursor: grabbing; }
+}
+.minutes-preview__transform-content {
+  // The library wraps content in this element. We want it to lay out at the
+  // page's natural size so panning bounds work; no extra styling needed beyond
+  // the library's defaults.
+  display: flex;
+  justify-content: center;
+}
+.meeting-preview-page__header {
+  display: flex;
+  justify-content: space-between;
+  gap: token('s-4');
+  align-items: flex-start;
+  margin-bottom: token('s-4');
+  padding-bottom: token('s-3');
+  border-bottom: 1px solid token('border');
+}
+.meeting-preview-page__header h1 {
+  margin: 0;
+  font-size: token('fs-2xl');
+}
+.meeting-preview-page__header p {
+  margin: 4px 0 0;
+  color: token('text-secondary');
+}
+.meeting-preview-page__layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  gap: token('s-4');
+  align-items: start;
+}
+.meeting-preview-page__settings {
+  position: sticky;
+  top: token('s-4');
+  padding: token('s-4');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  background: token('bg-panel');
+}
+.meeting-preview-page__settings label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.minutes-preview--standalone .minutes-preview__page {
+  width: min(820px, 100%);
+}
+@media (max-width: 760px) {
+  .meeting-detail-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .meeting-detail-location-value {
+    max-width: 100%;
+  }
+  .meeting-overview-grid,
+  .meeting-minutes-layout,
+  .meeting-minutes-overview-grid,
+  .meeting-package-grid,
+  .meeting-package-review-grid,
+  .meeting-export-layout,
+  .meeting-preview-page__layout {
+    grid-template-columns: 1fr;
+  }
+  .meeting-minutes-agenda-card {
+    position: static;
+  }
+  .meeting-minutes-agenda-list,
+  .meeting-minutes-discussion,
+  .meeting-minutes-section-list {
+    max-height: none;
+  }
+  .meeting-detail-page .minutes-export-gaps {
+    grid-template-columns: 1fr;
+  }
+  .meeting-package-gate {
+    padding: token('s-2');
+  }
+  .meeting-package-drawer__summary {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: token('s-2');
+  }
+  .meeting-package-drawer__title {
+    flex: 1 1 120px;
+  }
+  .meeting-package-task-counts {
+    order: 2;
+    flex: 1 1 100%;
+  }
+  .meeting-package-task-counts .badge {
+    height: auto;
+    min-height: 20px;
+    white-space: normal;
+    line-height: 1.25;
+    padding-block: 3px;
+  }
+  details.meeting-package-drawer > .meeting-package-drawer__summary::after {
+    order: 1;
+    margin-top: 4px;
+  }
+  .meeting-preview-page__header {
+    display: grid;
+  }
+  .meeting-preview-page__settings {
+    position: static;
+  }
+  .minutes-preview__toolbar {
+    grid-template-columns: 1fr;
+  }
+  .minutes-preview__page {
+    min-height: 620px;
+    padding: 28px 20px;
+    font-size: 10.5pt;
+  }
+  .minutes-preview__page h1 {
+    font-size: 17pt;
+  }
+  .minutes-preview__page h2 {
+    font-size: 12.5pt;
+  }
+}
+.structured-minutes-editor {
+  @include flex-column;
+  gap: token('s-3');
+  padding: token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-subtle');
+}
+.structured-minutes-editor__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: token('s-3');
+}

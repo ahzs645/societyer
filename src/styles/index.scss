@@ -12,12 +12,20 @@
 // Base reset, typography, scrollbar, focus.
 @use "base";
 
-// App shell: sidebar, brand, topbar, main column, color palette.
-@use "layout";
+// App shell (split from the former monolithic _layout.scss — original order).
+@use "layout-sidebar"; // sidebar nav, brand, organization logo preview
+@use "layout-ai-drawer"; // global AI drawer: threads, messages, composer, markdown, toolcalls
+@use "layout-ai-model"; // global AI: model picker, file chips, dropzone, errors, skeletons
+@use "layout-shell"; // sidebar theme toggle, sidebar layout, topbar
+@use "layout-workbench"; // workbench, page column, inspector panel, bottom nav
 
-// Page chrome: view bar, filter chips, popovers, buttons, badges, cards,
-// stat grid, data table.
-@use "chrome";
+// Page chrome (split from the former monolithic _chrome.scss — original order).
+@use "chrome-controls"; // action buttons, pills, icon tiles, view bar, filter chips
+@use "chrome-buttons-cards"; // popovers, buttons, badges, chips, cards, settings shell
+@use "chrome-stat"; // stat grid, accounting lines
+@use "chrome-society"; // society onboarding/create, address fields, doc tables
+@use "chrome-tables"; // wave cache + data table: toolbar, options, bulkbar, pagination
+@use "chrome-misc"; // card list, page header, empty state, inspector note
 
 // Forms & misc overlays: drawer, input/select/textarea/field/lock,
 // command palette (kbar), demo banner, notifications, user picker, bot run.
@@ -25,12 +33,30 @@
 
 // View-level styling: compliance flags, meeting detail, tabs, progress,
 // kanban, priority dots, timeline, activity feed, segmented, action items.
-@use "views";
+// (split from the former monolithic _views.scss — loaded in original
+// source order so the cascade is byte-for-byte identical.)
+@use "views-compliance"; // flags, record-picker, evidence chains, transparency, onboarding, link-audit
+@use "views-privacy"; // privacy layout, steps, resources, editor
+@use "views-motions-editor"; // markdown preview, agenda/motion backlog, motion drafts, vote stepper
+@use "views-meeting-minutes"; // meeting-minutes layout, agenda, sections, action items
+@use "views-meeting-package"; // minutes export/preview, meeting detail, meeting package
+@use "views-documents"; // pdf/signature, attendance, org chart, source docs, notes/audio
+@use "views-governance"; // bylaw rules, motion library
+@use "views-widgets"; // tabs, progress, kanban, priority, timeline, activity, segmented
+@use "views-import"; // import sessions: scan, review, session rows
+@use "views-workflow"; // workflow detail/topbar/canvas/nodes/sidepanel
+@use "views-outbox-mapping"; // outbox, pdf picker, field mapping, mapping wizard, templates
+@use "views-grant"; // grant edit/dossier, requirements, formats, sources
+@use "views-insurance"; // insurance brief/insights/full layout
+@use "views-meeting-templates"; // meeting template picker/builder/library/editor
 
-// Component library: Select, DatePicker, Modal, Toast, TextInput,
-// Tooltip, Checkbox/Toggle/Radio, IconPicker, ColorPicker, DateTime,
-// Menu actions.
-@use "components";
+// Component library (split from the former monolithic _components.scss — original order).
+@use "components-overlays"; // empty state, select trigger, menu, calendar, modals, quick-action picker
+@use "components-inputs"; // confirm icon, toast, text input/area, tooltip
+@use "components-legal-citation"; // legal guide badge/track, citation badge/popover, check row
+@use "components-pickers"; // switch, icon picker, color swatch/pop, calendar, bylaw history
+@use "components-records"; // banner, shortcut help, record show/layout, import wizard, merge modal, filters
+@use "components-tables-misc"; // table scroll, calendar view, mention popover/chip, notes, activity timeline, editable cell
 
 // Marketing / landing page (/marketing). Standalone — does not use Layout.
 @use "landing";

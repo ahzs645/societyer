@@ -1,0 +1,293 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+/* Layout — flex so we can animate the sidebar width directly (more reliable than grid-template-columns) */
+.app-shell {
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  position: relative;
+  isolation: isolate;
+  background: token('bg-app');
+}
+
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: token('z-sidebar-backdrop');
+  background: token('bg-overlay-scrim');
+  border: 0;
+  padding: 0;
+}
+
+/* Floating re-open button shown only when collapsed */
+.sidebar-peek {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: token('z-sidebar-peek');
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: token('r-sm');
+  background: token('bg-base');
+  border: 1px solid token('border');
+  color: token('text-secondary');
+  box-shadow: token('shadow-sm');
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-6px);
+  transition: opacity token('anim-normal') token('anim-ease'), transform token('anim-normal') token('anim-ease');
+}
+.app-shell.is-collapsed .sidebar-peek {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+  transition-delay: 0.12s;
+}
+.app-shell.is-mobile:has(.inspector-host.is-open) .sidebar-peek {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition-delay: 0s;
+}
+.app-shell.is-mobile:has(.inspector-host.is-open) .bottom-nav {
+  opacity: 0;
+  pointer-events: none;
+}
+.sidebar-peek:hover {
+  background: token('bg-hover');
+  color: token('text-primary');
+}
+.sidebar-peek svg { width: 14px; height: 14px; }
+
+/* Sidebar — Twenty-style: inherits the app background (bg-app = gray-2) and
+ * uses a hairline right-border. No separate fill keeps the shell feeling
+ * like a single continuous surface. */
+.sidebar {
+  background: transparent;
+  border-right: 1px solid token('border-color-light');
+  @include flex-column;
+  min-height: 0;
+  flex-shrink: 0;
+  width: token('sidebar-w');
+  transition: width token('anim-normal') token('anim-ease');
+  position: relative;
+  overflow: hidden;
+  z-index: token('z-base');
+}
+.app-shell.is-collapsed .sidebar {
+  width: 0;
+  border-right-width: 0;
+}
+/* Main grows into the space the sidebar vacates */
+.main {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  z-index: token('z-base');
+}
+.sidebar__brand,
+.sidebar__footer {
+  white-space: nowrap;
+  width: token('sidebar-w');
+  flex-shrink: 0;
+}
+/* The nav is the scrolling region. It must (a) fill remaining height so the
+ * brand stays pinned at the top and (b) have a min-height of 0 so overflow-y
+ * actually scrolls inside a flex column instead of overflowing the viewport. */
+.sidebar__nav {
+  white-space: nowrap;
+  width: token('sidebar-w');
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Hairline scrollbar so it doesn't distract — uses the existing global
+   * scrollbar rules plus a narrower width just here. */
+  scrollbar-width: thin;
+}
+.sidebar__nav::-webkit-scrollbar { width: 6px; }
+.sidebar__label {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.3;
+  padding-block: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-shell.is-collapsed .sidebar {
+  width: token('sidebar-w-collapsed');
+}
+
+/* When collapsed, labels, counts, sections, brand name and footer text fade out */
+.sidebar__label,
+.sidebar__count,
+.sidebar__section,
+.sidebar__brand-name,
+.sidebar__brand-workspace,
+.sidebar__footer-text,
+.sidebar__section-meta {
+  transition: opacity token('anim-fast') token('anim-ease');
+}
+.app-shell.is-collapsed .sidebar__label,
+.app-shell.is-collapsed .sidebar__count,
+.app-shell.is-collapsed .sidebar__section,
+.app-shell.is-collapsed .sidebar__brand-name,
+.app-shell.is-collapsed .sidebar__brand-workspace,
+.app-shell.is-collapsed .sidebar__footer-text,
+.app-shell.is-collapsed .sidebar__section-meta {
+  opacity: 0;
+  pointer-events: none;
+}
+/* Fully hidden when collapsed — nothing inside needs to be repositioned */
+.app-shell.is-collapsed .sidebar {
+  transform: translateX(-8px);
+  pointer-events: none;
+}
+
+/* Collapse toggle is now inside the sidebar brand row */
+.sidebar__toggle svg { transform: rotate(0deg); transition: transform token('anim-fast') ease; }
+.app-shell.is-collapsed .sidebar__toggle svg { transform: rotate(180deg); }
+
+.sidebar__brand {
+  padding: token('s-2') token('s-2');
+  display: flex;
+  gap: token('s-1');
+  align-items: center;
+  height: token('topbar-h');
+  flex-shrink: 0;
+}
+.sidebar__workspace {
+  @include flex-center;
+  gap: token('s-2');
+  padding: token('s-1') token('s-1');
+  border-radius: token('r-sm');
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  transition: background 0.08s ease, border-color 0.08s ease;
+  border: 1px solid transparent;
+}
+.sidebar__workspace:hover {
+  background: token('bg-transparent-light');
+  border-color: token('border-color-medium');
+}
+.sidebar__brand-logo {
+  width: 20px;
+  height: 20px;
+  border-radius: token('r-sm');
+  background: token('bg-inverse');
+  color: token('text-inverse');
+  @include flex-center-center;
+  font-weight: 600;
+  font-size: 10px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.sidebar__brand-logo--image {
+  background: transparent;
+  color: inherit;
+}
+.sidebar__brand-logo-img {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+}
+.sidebar__brand-logo-img--dark {
+  display: none;
+}
+.dark .sidebar__brand-logo-img--light {
+  display: none;
+}
+.dark .sidebar__brand-logo-img--dark {
+  display: block;
+}
+.sidebar__brand-logo-img--invert {
+  filter: invert(1) hue-rotate(180deg);
+}
+.organization-logo-preview {
+  width: 80px;
+  height: 80px;
+  border-radius: token('r-md');
+  border: 1px solid token('border');
+  @include flex-center-center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.organization-logo-preview--light {
+  background: #ffffff;
+  color: #1f2937;
+}
+.organization-logo-preview--letterhead {
+  width: 240px;
+  height: 80px;
+  padding: 6px;
+}
+.organization-logo-preview--dark {
+  background: #1a1a1a;
+  color: #f5f5f5;
+}
+.organization-logo-preview--invert .organization-logo-preview__img {
+  filter: invert(1) hue-rotate(180deg);
+}
+.organization-logo-preview__img {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+}
+.organization-logo-preview__placeholder {
+  font-size: token('fs-xl');
+  font-weight: 700;
+  color: inherit;
+  opacity: 0.55;
+}
+.sidebar__brand-name {
+  font-weight: 500;
+  font-size: token('fs-sm');
+  letter-spacing: -0.1px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar__brand-workspace {
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+  @include flex-center;
+}
+.sidebar__brand-actions {
+  display: flex;
+  gap: 0;
+  flex-shrink: 0;
+}
+.sidebar__identity {
+  @include flex-center;
+  gap: 6px;
+  padding: 8px 12px;
+  flex-shrink: 0;
+  border-top: 1px solid token('border-color-light');
+}
+.sidebar__identity .user-picker {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.global-ai-shell {
+  position: fixed;
+  inset: 0;
+  z-index: token('z-modal');
+  pointer-events: none;
+}
+
+.global-ai-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgba(15, 23, 42, 0.18);
+  pointer-events: auto;
+}

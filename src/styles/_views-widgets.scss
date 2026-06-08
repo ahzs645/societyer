@@ -1,0 +1,419 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: token('s-1');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  background: token('bg-subtle');
+  margin-bottom: token('s-4');
+}
+.tab {
+  padding: 7px 12px;
+  font-size: token('fs-md');
+  font-weight: 500;
+  color: token('text-secondary');
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: token('r-sm');
+  @include inline-flex-center;
+  gap: 6px;
+  transition: color 0.08s ease, border-color 0.08s ease, background 0.08s ease;
+}
+.tab > svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+}
+.tab:hover {
+  color: token('text-primary');
+  background: token('bg-hover');
+}
+.tab.is-active {
+  color: token('text-primary');
+  border-color: token('border');
+  background: token('bg-panel');
+  box-shadow: token('shadow-xs');
+}
+.tab__count {
+  margin-left: 2px;
+}
+.tabs__trailing {
+  // Right-side slot in the tab bar — pushed to the far right with margin-left
+  // auto, sits visually separated from the tabs so reminder chips read as a
+  // distinct surface from the navigation tabs themselves.
+  margin-left: auto;
+  @include inline-flex-center;
+  gap: 6px;
+  padding-left: token('s-2');
+}
+
+@media (max-width: 760px) {
+  .meeting-detail-page .tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .meeting-detail-page .tab {
+    width: 36px;
+    min-width: 36px;
+    height: 34px;
+    justify-content: center;
+    padding: 0;
+    gap: 0;
+  }
+
+  .meeting-detail-page .tab__label,
+  .meeting-detail-page .tab__count {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+/* Progress */
+.progress {
+  height: 6px;
+  background: token('bg-subtle');
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+.progress__fill {
+  height: 100%;
+  background: token('accent');
+  border-radius: 3px;
+  transition: width token('anim-normal') token('anim-ease');
+}
+.progress--success .progress__fill { background: token('success'); }
+.progress--warn .progress__fill { background: token('warn'); }
+.progress--danger .progress__fill { background: token('danger'); }
+
+/* Kanban */
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(260px, 1fr));
+  gap: token('s-3');
+  overflow-x: auto;
+  padding-bottom: token('s-2');
+}
+.kanban__col {
+  background: token('bg-subtle');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  min-height: 180px;
+  @include flex-column;
+}
+.kanban__head {
+  padding: token('s-2') token('s-3');
+  font-size: token('fs-sm');
+  font-weight: 600;
+  color: token('text-secondary');
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  @include flex-center;
+  gap: token('s-2');
+  border-bottom: 1px solid token('border');
+}
+.kanban__body {
+  padding: token('s-2');
+  @include flex-column;
+  gap: token('s-2');
+  flex: 1;
+  min-height: 80px;
+}
+.kanban__body.is-dragging-over { background: token('accent-soft'); border-radius: token('r-sm'); }
+.kanban__card {
+  background: token('bg-panel');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  padding: 10px;
+  font-size: token('fs-md');
+  cursor: grab;
+  box-shadow: token('shadow-xs');
+  transition: box-shadow 0.1s ease, transform 0.1s ease;
+  position: relative;
+}
+.kanban__card:hover { box-shadow: token('shadow-sm'); }
+.kanban__card.is-dragging { opacity: 0.4; }
+.kanban__card.is-clickable { cursor: pointer; }
+.kanban__card.is-clickable:focus-visible {
+  outline: 2px solid token('accent');
+  outline-offset: 2px;
+}
+.kanban__card-title { font-weight: 500; margin-bottom: 4px; }
+.kanban__card-meta {
+  @include flex-center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+}
+
+/* Priority dots */
+.priority-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.priority-Urgent { background: token('danger'); }
+.priority-High { background: token('warn'); }
+.priority-Medium { background: token('accent'); }
+.priority-Low { background: token('text-tertiary'); }
+
+/* Timeline */
+.timeline-vertical {
+  position: relative;
+  padding-left: token('s-6');
+}
+.timeline-vertical::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: token('border');
+}
+.timeline-vertical__item {
+  position: relative;
+  padding: token('s-2') 0 token('s-4');
+}
+.timeline-vertical__dot {
+  position: absolute;
+  left: calc(token('s-6') * -1 + 2px);
+  top: 14px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: token('bg-panel');
+  border: 2px solid token('accent');
+}
+.timeline-vertical__item.is-past .timeline-vertical__dot { border-color: token('text-tertiary'); background: token('text-tertiary'); }
+.timeline-vertical__item.is-future .timeline-vertical__dot { background: token('bg-panel'); }
+
+/* "Now" pivot — divides past from future on the single spine. The marker is
+ * `position: sticky` so it stays pinned to the top of the viewport while the
+ * user scrolls deeper into either past or future history (Suggestion B). */
+.timeline-vertical__now {
+  position: sticky;
+  top: token('s-2');
+  z-index: 1;
+  @include flex-center;
+  gap: token('s-2');
+  padding: token('s-2') 0;
+  margin: token('s-2') 0;
+  background: token('bg-panel');
+}
+.timeline-vertical__now-dot {
+  position: absolute;
+  left: calc(token('s-6') * -1 + 2px);
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: token('accent');
+  border: 2px solid token('bg-panel');
+  box-shadow: 0 0 0 2px token('accent');
+}
+.timeline-vertical__now::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  top: 50%;
+  background: token('accent');
+  opacity: 0.35;
+}
+.timeline-vertical__now-label {
+  position: relative;
+  background: token('bg-panel');
+  padding: 2px token('s-2');
+  border-radius: token('r-pill');
+  border: 1px solid token('accent');
+  color: token('accent');
+  font-size: token('fs-xs');
+  font-weight: token('fw-semibold');
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Activity feed */
+.activity-item {
+  display: flex;
+  gap: token('s-2');
+  padding: token('s-2') 0;
+  border-bottom: 1px solid token('border');
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-item__avatar {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: token('bg-muted');
+  border: 1px solid token('border');
+  color: token('text-secondary');
+  font-size: 10px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.activity-item__text { flex: 1; font-size: token('fs-md'); }
+.activity-item__meta { color: token('text-tertiary'); font-size: token('fs-xs'); }
+
+/* Color chip */
+.color-chip {
+  width: 10px; height: 10px; border-radius: 3px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+  .timeline__item {
+    grid-template-columns: minmax(0, 1fr);
+    gap: token('s-1');
+  }
+
+  .timeline__date {
+    font-size: token('fs-xs');
+  }
+}
+
+@media (max-width: 760px) {
+  .kanban {
+    grid-template-columns: repeat(4, minmax(220px, 84vw));
+  }
+}
+
+/* Segmented control */
+.segmented {
+  display: inline-flex;
+  align-self: flex-start;
+  background: token('bg-muted');
+  border: 1px solid token('border');
+  border-radius: token('r-pill');
+  padding: 3px;
+  gap: 3px;
+}
+.segmented__btn {
+  padding: 5px 12px;
+  font-size: token('fs-sm');
+  color: token('text-secondary');
+  border: 1px solid transparent;
+  border-radius: token('r-pill');
+  font-weight: 500;
+  transition: background token('anim-fast') token('anim-ease'), color token('anim-fast') token('anim-ease'), border-color token('anim-fast') token('anim-ease');
+}
+.segmented__btn:hover:not(.is-active) {
+  background: token('bg-hover');
+  color: token('text-primary');
+}
+.segmented--compact {
+  padding: 2px;
+  gap: 2px;
+  border-radius: token('r-sm');
+}
+.segmented--compact .segmented__btn {
+  min-height: 22px;
+  padding: 2px 7px;
+  border-radius: calc(token('r-sm') - 1px);
+  font-size: token('fs-xs');
+}
+.segmented__btn.is-active {
+  background: token('bg-panel');
+  border-color: token('border-strong');
+  color: token('text-primary');
+  box-shadow: token('shadow-sm');
+}
+
+/* Outcome picker: row of independent .btn-action buttons (matches the
+   motion action strip pattern). The active outcome gets a tinted-fill
+   treatment so the selection reads at a glance, and the picker collapses
+   to icon-only via container query when it's narrower than the label row
+   would need. */
+.motion-outcome-picker {
+  container-type: inline-size;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.motion-outcome-picker .btn-action {
+  flex: 0 0 auto;
+}
+.motion-outcome-picker .btn-action.is-active {
+  background: token('bg-hover');
+  color: token('text-primary');
+}
+.motion-outcome-picker .btn-action--success.is-active {
+  background: token('success-soft');
+  color: token('success');
+  border-color: color-mix(in srgb, token('success') 60%, transparent);
+}
+.motion-outcome-picker .btn-action--danger.is-active {
+  background: token('danger-soft');
+  color: token('danger');
+  border-color: color-mix(in srgb, token('danger') 60%, transparent);
+}
+.motion-outcome-picker .btn-action--warn.is-active {
+  background: token('warn-soft');
+  color: token('warn');
+  border-color: color-mix(in srgb, token('warn') 60%, transparent);
+}
+@container (max-width: 360px) {
+  .motion-outcome-picker .btn-action__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .motion-outcome-picker .btn-action {
+    width: 24px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
+/* Stretch variant: each button takes an equal share of the row and grows
+   to fill the available width. When the row is narrow enough that the
+   widest label ("Defeated") would no longer fit on a single line, the
+   labels are visually hidden and the buttons collapse to icon-only tiles. */
+.motion-outcome-picker--stretch {
+  width: 100%;
+  flex-wrap: nowrap;
+}
+.motion-outcome-picker--stretch .btn-action {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+  /* `nowrap` keeps the label on one line; if it can't fit, the container
+     query below kicks in and removes the label entirely instead of
+     wrapping or truncating mid-word. */
+  white-space: nowrap;
+}
+@container (max-width: 380px) {
+  .motion-outcome-picker--stretch .btn-action__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .motion-outcome-picker--stretch .btn-action {
+    padding: 0 8px;
+  }
+}
+
+/* Import sessions */

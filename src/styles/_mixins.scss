@@ -1,0 +1,40 @@
+// ============================================================
+// Reusable mixins for the patterns that recur across the styles.
+//
+// Each mixin emits the exact declaration sequence it replaces, so adopting
+// it in place of the inline declarations leaves the compiled CSS unchanged
+// (verified against .css-baseline). Order matters — keep these in sync with
+// the canonical idiom they stand in for.
+// ============================================================
+
+// `display: flex; align-items: center;` — ~120 sites.
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+}
+
+// `display: inline-flex; align-items: center;` — ~120 sites.
+@mixin inline-flex-center {
+  display: inline-flex;
+  align-items: center;
+}
+
+// Row with the two ends pushed apart and vertically centred.
+@mixin flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+// Fully centred box.
+@mixin flex-center-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+// Vertical stack.
+@mixin flex-column {
+  display: flex;
+  flex-direction: column;
+}
