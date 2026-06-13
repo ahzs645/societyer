@@ -5,7 +5,7 @@ import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Field, Badge } from "../components/ui";
 import { FileCog, Copy, FileDown } from "lucide-react";
-import { exportWordDoc, escapeHtml } from "../lib/exportWord";
+import { exportWordDocx, escapeHtml } from "../lib/exportWord";
 
 const SOCIETIES_KINDS = [
   { id: "AnnualReport", label: "Annual Report ($40)" },
@@ -56,8 +56,8 @@ export function FilingPreFillPage() {
         return `<tr><th>${eh(k)}</th><td><pre style="margin:0; font-family: Consolas, monospace; font-size: 10pt;">${eh(val)}</pre></td></tr>`;
       })
       .join("");
-    exportWordDoc({
-      filename: `prefill-${kind}.doc`,
+    void exportWordDocx({
+      filename: `prefill-${kind}.docx`,
       title: `${kind} pre-fill`,
       bodyHtml: `<h1>${eh((data as any).formName ?? kind)}</h1>
         <p class="meta">Generated ${eh(new Date().toLocaleString())}</p>

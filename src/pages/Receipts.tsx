@@ -8,7 +8,7 @@ import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { Plus, Receipt, Tag, FileDown } from "lucide-react";
 import { dollarInputToCents, formatDate, money } from "../lib/format";
-import { exportWordDoc, escapeHtml } from "../lib/exportWord";
+import { exportWordDocx, escapeHtml } from "../lib/exportWord";
 import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { StructuredAddressTextFields } from "../components/StructuredAddressFields";
@@ -76,7 +76,7 @@ export function ReceiptsPage() {
       <p class="meta">Canada Revenue Agency: <a href="https://www.canada.ca/charities-giving">canada.ca/charities-giving</a></p>
       <p class="meta">Authorized signatory _______________________</p>
     `;
-    exportWordDoc({ filename: `receipt-${r.receiptNumber}.doc`, title: `Receipt ${r.receiptNumber}`, bodyHtml });
+    void exportWordDocx({ filename: `receipt-${r.receiptNumber}.docx`, title: `Receipt ${r.receiptNumber}`, bodyHtml });
   };
 
   return (

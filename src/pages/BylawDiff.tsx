@@ -21,7 +21,7 @@ import {
   MessageSquare,
   ClipboardCheck,
 } from "lucide-react";
-import { exportWordDoc, escapeHtml } from "../lib/exportWord";
+import { exportWordDocx, escapeHtml } from "../lib/exportWord";
 import { formatDateTime, relative } from "../lib/format";
 
 // ============================================================================
@@ -180,7 +180,7 @@ export function BylawDiffPage() {
         return t;
       }).join("")}</p>
     `;
-    exportWordDoc({ filename: `bylaw-redline${title ? `-${title.replace(/\W+/g, "-")}` : ""}.doc`, title: "Bylaw redline", bodyHtml });
+    void exportWordDocx({ filename: `bylaw-redline${title ? `-${title.replace(/\W+/g, "-")}` : ""}.docx`, title: "Bylaw redline", bodyHtml });
   };
 
   const status = (selected?.status ?? "Draft") as Status;

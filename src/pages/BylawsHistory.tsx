@@ -24,7 +24,7 @@ import {
   ScanText,
 } from "lucide-react";
 import { formatDateTime, formatDate, relative } from "../lib/format";
-import { exportWordDoc, escapeHtml } from "../lib/exportWord";
+import { exportWordDocx, escapeHtml } from "../lib/exportWord";
 
 // Word-level diff reused from BylawDiff (inline so we don't couple the pages)
 type Chunk = { kind: "same" | "add" | "del"; text: string };
@@ -194,8 +194,8 @@ export function BylawsHistoryPage() {
         ${filed.map((a: any) => `<li>${escapeHtml(formatDate(a.filedAtISO))} — ${escapeHtml(a.title)} (For ${a.votesFor ?? "?"} · Against ${a.votesAgainst ?? 0} · Abstain ${a.abstentions ?? 0})</li>`).join("")}
       </ol>
     `;
-    exportWordDoc({
-      filename: "bylaws-current.doc",
+    void exportWordDocx({
+      filename: "bylaws-current.docx",
       title: `${society.name} — Bylaws`,
       bodyHtml,
     });

@@ -40,7 +40,7 @@ import {
   PIPA_TEMPLATE_RESOURCES,
   RECORDS_INSPECTION_GUIDANCE,
 } from "../lib/legalCopy";
-import { exportMarkdownWordDoc, markdownToHtml } from "../lib/exportWord";
+import { exportWordDocx, markdownToHtml } from "../lib/exportWord";
 
 type StepTone = "success" | "warn" | "info" | "neutral";
 type DraftEditorKind = "policy" | "memberDataMemo";
@@ -280,10 +280,10 @@ export function PrivacyPage() {
 
   const exportDraftToWord = () => {
     if (!draftEditor) return;
-    exportMarkdownWordDoc({
-      filename: `${slugifyFileName(draftEditor.title)}.doc`,
+    void exportWordDocx({
+      filename: `${slugifyFileName(draftEditor.title)}.docx`,
       title: draftEditor.title,
-      markdown: draftEditor.content,
+      bodyHtml: markdownToHtml(draftEditor.content),
     });
     toast.success("Word document exported", "Uses the same rendered Markdown as the preview.");
   };

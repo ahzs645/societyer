@@ -18,81 +18,85 @@ const DOCUMENT_CSS = `
   .outcome-tabled { color: #a86400; font-weight: 600; }
   .meta { color: #666; font-size: 10pt; }
   .muted { color: #888; }
-  @page { margin: 0.65in; }
+  @page { size: letter; margin: 0.65in; }
+`;
+
+// Layered on top of DOCUMENT_CSS only in the print/PDF pipeline. Headings stay
+// with the content that follows; motion blocks, table rows, and list items
+// don't split across pages; long tables keep flowing but repeat their header.
+const PRINT_CSS = `
+  @media print {
+    body { margin: 0; }
+    h1, h2, h3, h4 { page-break-after: avoid; break-after: avoid; }
+    h1, h2, h3, h4, .motion, tr, li { page-break-inside: avoid; break-inside: avoid; }
+    table { page-break-inside: auto; }
+    thead { display: table-header-group; }
+    a { color: inherit; text-decoration: underline; }
+  }
 `;
 
 /**
- * Export a DOM-friendly HTML fragment as a .doc file that Word / Pages / Google Docs
- * open natively. We wrap the body in Word-compatible boilerplate and serve it as
- * `application/msword` with a `.doc` extension. No external library.
+ * Build a real .docx (Office Open XML) from an HTML body fragment and
+ * download it. Handles headings, paragraphs, lists, tables, hyperlinks, inline
+ * formatting (bold/italic/underline/strike/color/background), code/pre blocks,
+ * and embeds inline `<img>` as media parts so letterheads survive the trip
+ * into Word.
+ *
+ * Async because images are fetched (bytes + natural dimensions) before the
+ * archive is assembled. Images that fail to fetch (CORS, 404, opaque response)
+ * are silently dropped so the export still succeeds.
  */
-export function exportWordDoc({
+export async function exportWordDocx({
   filename,
-  title,
+  title: _title,
   bodyHtml,
 }: {
   filename: string;
   title: string;
   bodyHtml: string;
-}) {
-  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
-      xmlns:w="urn:schemas-microsoft-com:office:word"
-      xmlns="http://www.w3.org/TR/REC-html40">
-    <head>
-      <meta charset="utf-8" />
-      <title>${escapeHtml(title)}</title>
-      <!--[if gte mso 9]>
-      <xml>
-        <w:WordDocument>
-          <w:View>Print</w:View>
-          <w:Zoom>100</w:Zoom>
-          <w:DoNotOptimizeForBrowser/>
-        </w:WordDocument>
-      </xml>
-      <![endif]-->
-      <style>${DOCUMENT_CSS}</style>
-    </head>
-    <body>${bodyHtml}</body>
-  </html>`;
+}): Promise<void> {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(`<body>${bodyHtml}</body>`, "text/html");
 
-  const blob = new Blob(["\ufeff", html], { type: "application/msword" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename.endsWith(".doc") ? filename : `${filename}.doc`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+  const rels = createDocxRels();
+  for (const img of Array.from(doc.querySelectorAll("img"))) {
+    const src = img.getAttribute("src");
+    if (src) relForImage(rels, src);
+  }
+  for (const a of Array.from(doc.querySelectorAll("a"))) {
+    const href = a.getAttribute("href");
+    if (href && /^(https?:|mailto:)/i.test(href)) relForHyperlink(rels, href);
+  }
 
-export function exportWordDocx({
-  filename,
-  title,
-  bodyHtml,
-}: {
-  filename: string;
-  title: string;
-  bodyHtml: string;
-}) {
-  const documentXml = buildDocxDocumentXml(title, bodyHtml);
-  const zipBytes = createStoredZip({
-    "[Content_Types].xml": DOCX_CONTENT_TYPES,
+  await Promise.all(Array.from(rels.images.values()).map(fetchImageForDocx));
+  for (const [url, entry] of Array.from(rels.images.entries())) {
+    if (!entry.bytes) {
+      rels.images.delete(url);
+    } else {
+      rels.imageExtensions.add(entry.extension);
+    }
+  }
+
+  const documentXml = buildDocxDocumentXml(doc.body, rels);
+  const documentRelsXml = buildDocxDocumentRels(rels);
+  const contentTypesXml = buildDocxContentTypes(rels);
+
+  const files: Record<string, string | Uint8Array> = {
+    "[Content_Types].xml": contentTypesXml,
     "_rels/.rels": DOCX_ROOT_RELS,
     "word/document.xml": documentXml,
     "word/styles.xml": DOCX_STYLES,
-  });
+    "word/_rels/document.xml.rels": documentRelsXml,
+  };
+  for (const image of rels.images.values()) {
+    if (image.bytes) files[`word/${image.partPath}.${image.extension}`] = image.bytes;
+  }
+
+  const zipBytes = createStoredZip(files);
   const blob = new Blob([zipBytes], {
     type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename.endsWith(".docx") ? filename : `${filename}.docx`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  triggerBlobDownload(blob, ensureExtension(filename, "docx"));
 }
 
 export function downloadStoredZip({
@@ -104,64 +108,97 @@ export function downloadStoredZip({
 }) {
   const zipBytes = createStoredZip(files);
   const blob = new Blob([zipBytes], { type: "application/zip" });
+  triggerBlobDownload(blob, ensureExtension(filename, "zip"));
+}
+
+function triggerBlobDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename.endsWith(".zip") ? filename : `${filename}.zip`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function ensureExtension(filename: string, ext: string): string {
+  const stripped = filename.replace(/\.(doc|docx|pdf|html?|rtf|odt|zip)$/i, "");
+  return `${stripped}.${ext}`;
+}
+
 /**
- * Generates a PDF from the same HTML body the .doc export uses, via
- * html2pdf.js (which composes html2canvas + jsPDF under the hood).
- * Full CSS fidelity: tables, lists, bold, inline styles, embedded images,
- * page breaks. Trades selectable text for one-click download — text is
- * rasterized as part of the canvas snapshot, so the resulting PDF is not
- * text-searchable. (Use the Word export when text searchability matters.)
+ * Render the same HTML body the .docx export uses into a hidden iframe and
+ * trigger the browser's print engine. The user picks "Save as PDF" from the
+ * print dialog and gets a vector, text-searchable PDF that matches the
+ * preview pixel-for-pixel — no rasterization, no html2canvas, no extra deps.
+ *
+ * `filename` is retained in the signature for API parity with the previous
+ * html2pdf-based helper, but the browser print dialog is authoritative — it
+ * asks the user for the file name and that can't be overridden for security
+ * reasons.
+ *
+ * Returns a Promise that resolves when the print dialog closes (or after a
+ * 60-second fallback, in case `afterprint` never fires).
  */
-export async function exportPdfDownload({
-  filename,
-  title: _title,
+export function exportPdfDownload({
+  filename: _filename,
+  title,
   bodyHtml,
 }: {
   filename: string;
   title: string;
   bodyHtml: string;
-}) {
-  const html2pdf = ((await import("html2pdf.js")) as any).default;
+}): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const html = `<!doctype html><html><head><meta charset="utf-8" /><title>${escapeHtml(title)}</title><style>${DOCUMENT_CSS}${PRINT_CSS}</style></head><body>${bodyHtml}</body></html>`;
 
-  // Render off-screen so the user doesn't see a flash of the document.
-  // Letter width minus default 0.65in margins = 7.2in of content area,
-  // matching the @page margin set in DOCUMENT_CSS.
-  const wrapper = document.createElement("div");
-  wrapper.style.position = "fixed";
-  wrapper.style.left = "-10000px";
-  wrapper.style.top = "0";
-  wrapper.style.width = "7.2in";
-  wrapper.style.background = "#ffffff";
-  wrapper.innerHTML = `<style>${DOCUMENT_CSS}</style>${bodyHtml}`;
-  document.body.appendChild(wrapper);
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.style.visibility = "hidden";
+    document.body.appendChild(iframe);
 
-  try {
-    await html2pdf()
-      .set({
-        filename: filename.endsWith(".pdf") ? filename : `${filename}.pdf`,
-        margin: [0.65, 0.65, 0.65, 0.65],
-        image: { type: "jpeg", quality: 0.95 },
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
-        jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
-        pagebreak: { mode: ["css", "legacy"] },
-      })
-      .from(wrapper)
-      .save();
-  } finally {
-    wrapper.remove();
-  }
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      try {
+        iframe.contentWindow?.removeEventListener("afterprint", cleanup);
+      } catch {
+        // contentWindow can be detached at cleanup; ignore.
+      }
+      iframe.remove();
+      resolve();
+    };
+    iframe.onload = () => {
+      const cw = iframe.contentWindow;
+      if (!cw) {
+        cleanup();
+        return;
+      }
+      cw.addEventListener("afterprint", cleanup);
+      // Safari prints the parent window if the iframe isn't focused first.
+      cw.focus();
+      cw.print();
+      // Fallback in case afterprint never fires (older browsers, dialog
+      // dismissed instantly). 60s is well past any realistic Save-as-PDF flow.
+      setTimeout(cleanup, 60_000);
+    };
+    iframe.srcdoc = html;
+  });
 }
 
+/**
+ * Backwards-compatible alias for the print-iframe flow used by
+ * {@link exportPdfDownload}. Kept so older callers that just wanted "open the
+ * native print dialog" don't have to be touched.
+ */
 export function openPrintableDocument({
   title,
   bodyHtml,
@@ -169,43 +206,7 @@ export function openPrintableDocument({
   title: string;
   bodyHtml: string;
 }) {
-  const html = `<!doctype html><html><head><meta charset="utf-8" /><title>${escapeHtml(title)}</title><style>${DOCUMENT_CSS}</style></head><body>${bodyHtml}</body></html>`;
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("aria-hidden", "true");
-  iframe.style.position = "fixed";
-  iframe.style.right = "0";
-  iframe.style.bottom = "0";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  iframe.style.border = "0";
-  iframe.style.visibility = "hidden";
-  document.body.appendChild(iframe);
-  let cleaned = false;
-  const cleanup = () => {
-    if (cleaned) return;
-    cleaned = true;
-    try {
-      iframe.contentWindow?.removeEventListener("afterprint", cleanup);
-    } catch {
-      // contentWindow access may throw after detach — fine to ignore
-    }
-    iframe.remove();
-  };
-  iframe.onload = () => {
-    const cw = iframe.contentWindow;
-    if (!cw) {
-      cleanup();
-      return;
-    }
-    cw.addEventListener("afterprint", cleanup);
-    // Some browsers (Safari) print the parent if the iframe isn't focused.
-    cw.focus();
-    cw.print();
-    // Fallback cleanup in case afterprint never fires (older browsers, dialog
-    // dismissed instantly). 60s is well past any realistic Save-as-PDF flow.
-    setTimeout(cleanup, 60_000);
-  };
-  iframe.srcdoc = html;
+  void exportPdfDownload({ filename: "document.pdf", title, bodyHtml });
   return true;
 }
 
@@ -301,22 +302,6 @@ export function markdownToHtml(markdown: string | undefined | null): string {
   return html.join("\n");
 }
 
-export function exportMarkdownWordDoc({
-  filename,
-  title,
-  markdown,
-}: {
-  filename: string;
-  title: string;
-  markdown: string;
-}) {
-  exportWordDoc({
-    filename,
-    title,
-    bodyHtml: markdownToHtml(markdown),
-  });
-}
-
 function renderMarkdownInline(value: string) {
   const tokens: string[] = [];
   let html = escapeHtml(value).replace(/`([^`]+)`/g, (_match, code) => {
@@ -339,15 +324,21 @@ function renderMarkdownInline(value: string) {
   return html;
 }
 
+// OOXML namespace URIs. We declare them once on the document root and again
+// on the styles part so per-element prefixes resolve cleanly.
 const WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const WP_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
+const DRAWINGML_NS = "http://schemas.openxmlformats.org/drawingml/2006/main";
+const PIC_NS = "http://schemas.openxmlformats.org/drawingml/2006/picture";
+const HYPERLINK_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+const IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+const STYLES_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
 
-const DOCX_CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
-</Types>`;
+// English Metric Units — 914400 EMU per inch, 12700 per point. Used for image
+// sizing in the drawing XML.
+const EMU_PER_POINT = 12700;
+const MAX_INLINE_IMAGE_HEIGHT_PT = 36;
 
 const DOCX_ROOT_RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
@@ -377,16 +368,223 @@ const DOCX_STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <w:pPr><w:spacing w:before="220" w:after="80"/></w:pPr>
     <w:rPr><w:b/><w:sz w:val="24"/></w:rPr>
   </w:style>
+  <w:style w:type="character" w:styleId="Hyperlink">
+    <w:name w:val="Hyperlink"/>
+    <w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr>
+  </w:style>
 </w:styles>`;
 
-function buildDocxDocumentXml(title: string, bodyHtml: string) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(`<body>${bodyHtml}</body>`, "text/html");
-  const body = Array.from(doc.body.childNodes).map(docxBlockFromNode).join("") || docxParagraph(title);
+type DocxImage = {
+  url: string;
+  relId: string;
+  partPath: string;
+  contentType: string;
+  extension: string;
+  bytes: Uint8Array | null;
+  widthEmu: number;
+  heightEmu: number;
+};
+
+type DocxRels = {
+  hyperlinks: Map<string, string>;
+  images: Map<string, DocxImage>;
+  imageExtensions: Set<string>;
+  nextId: number;
+  nextImageNum: number;
+};
+
+function createDocxRels(): DocxRels {
+  return {
+    hyperlinks: new Map(),
+    images: new Map(),
+    imageExtensions: new Set(),
+    // rId1 is reserved for styles.xml. Everything else starts at 100 to make
+    // it obvious which IDs are user-allocated vs. reserved.
+    nextId: 100,
+    nextImageNum: 1,
+  };
+}
+
+function relForHyperlink(rels: DocxRels, url: string): string {
+  let id = rels.hyperlinks.get(url);
+  if (!id) {
+    id = `rId${rels.nextId++}`;
+    rels.hyperlinks.set(url, id);
+  }
+  return id;
+}
+
+function relForImage(rels: DocxRels, url: string): DocxImage {
+  let entry = rels.images.get(url);
+  if (!entry) {
+    const num = rels.nextImageNum++;
+    entry = {
+      url,
+      relId: `rId${rels.nextId++}`,
+      partPath: `media/image${num}`,
+      contentType: "image/png",
+      extension: "png",
+      bytes: null,
+      widthEmu: 0,
+      heightEmu: 0,
+    };
+    rels.images.set(url, entry);
+  }
+  return entry;
+}
+
+function extensionForContentType(contentType: string): string {
+  const ct = contentType.toLowerCase();
+  if (ct.includes("jpeg") || ct.includes("jpg")) return "jpeg";
+  if (ct.includes("png")) return "png";
+  if (ct.includes("gif")) return "gif";
+  if (ct.includes("bmp")) return "bmp";
+  if (ct.includes("svg")) return "svg";
+  return "png";
+}
+
+async function fetchImageForDocx(image: DocxImage): Promise<void> {
+  try {
+    let bytes: Uint8Array;
+    let contentType = "image/png";
+
+    if (image.url.startsWith("data:")) {
+      const match = image.url.match(/^data:([^,;]*)(;base64)?,(.*)$/s);
+      if (!match) return;
+      contentType = match[1] || "image/png";
+      if (match[2]) {
+        const binary = atob(match[3]);
+        bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      } else {
+        bytes = new TextEncoder().encode(decodeURIComponent(match[3]));
+      }
+    } else {
+      const res = await fetch(image.url, { credentials: "include" }).catch(() => null);
+      if (!res || !res.ok) return;
+      contentType = res.headers.get("content-type") || contentType;
+      bytes = new Uint8Array(await res.arrayBuffer());
+    }
+
+    const naturalSize = await loadImageNaturalSize(image.url).catch(() => null);
+    const ratio = naturalSize && naturalSize.height > 0 ? naturalSize.width / naturalSize.height : 1;
+    const heightEmu = MAX_INLINE_IMAGE_HEIGHT_PT * EMU_PER_POINT;
+    const widthEmu = Math.max(1, Math.round(heightEmu * ratio));
+
+    image.bytes = bytes;
+    image.contentType = contentType;
+    image.extension = extensionForContentType(contentType);
+    image.widthEmu = widthEmu;
+    image.heightEmu = heightEmu;
+  } catch {
+    // Swallow — caller checks image.bytes and drops anything that failed.
+  }
+}
+
+function loadImageNaturalSize(url: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => reject(new Error("image load failed"));
+    img.src = url;
+  });
+}
+
+function buildDocxContentTypes(rels: DocxRels): string {
+  const defaults = [
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
+    '<Default Extension="xml" ContentType="application/xml"/>',
+  ];
+  for (const ext of rels.imageExtensions) {
+    const ct =
+      ext === "jpeg" ? "image/jpeg" :
+      ext === "png" ? "image/png" :
+      ext === "gif" ? "image/gif" :
+      ext === "bmp" ? "image/bmp" :
+      ext === "svg" ? "image/svg+xml" :
+      "application/octet-stream";
+    defaults.push(`<Default Extension="${ext}" ContentType="${ct}"/>`);
+  }
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="${WORD_NS}">
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  ${defaults.join("\n  ")}
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+</Types>`;
+}
+
+function buildDocxDocumentRels(rels: DocxRels): string {
+  const items: string[] = [
+    `<Relationship Id="rId1" Type="${STYLES_REL_TYPE}" Target="styles.xml"/>`,
+  ];
+  for (const [url, id] of rels.hyperlinks.entries()) {
+    items.push(`<Relationship Id="${id}" Type="${HYPERLINK_REL_TYPE}" Target="${escapeXml(url)}" TargetMode="External"/>`);
+  }
+  for (const image of rels.images.values()) {
+    items.push(`<Relationship Id="${image.relId}" Type="${IMAGE_REL_TYPE}" Target="${image.partPath}.${image.extension}"/>`);
+  }
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  ${items.join("\n  ")}
+</Relationships>`;
+}
+
+function buildDocxDocumentXml(body: HTMLElement, rels: DocxRels): string {
+  // We do a single body walk so that a leading floating <img> (e.g. the
+  // right-aligned letterhead from renderDocumentHeader) can be deferred and
+  // re-emitted as a wp:anchor inside the *next* paragraph. That's the only way
+  // Word will wrap the title text to the left of the image — emitting the
+  // image as its own paragraph just stacks it above the title.
+  const blocks: string[] = [];
+  let pendingFloat: string | null = null;
+
+  const flushPendingAsOwnParagraph = () => {
+    if (!pendingFloat) return;
+    blocks.push(`<w:p>${pendingFloat}</w:p>`);
+    pendingFloat = null;
+  };
+
+  for (const node of Array.from(body.childNodes)) {
+    if (node instanceof HTMLElement && node.tagName.toLowerCase() === "img") {
+      const direction = getFloatDirection(node);
+      const src = node.getAttribute("src");
+      const entry = src ? rels.images.get(src) : undefined;
+      if (entry?.bytes && direction) {
+        flushPendingAsOwnParagraph();
+        pendingFloat = buildAnchorImageRun(entry, direction, imageDimensionsFor(entry, node));
+        continue;
+      }
+      const inlineBlock = docxBlockFromNode(node, rels);
+      if (inlineBlock) blocks.push(inlineBlock);
+      continue;
+    }
+
+    const block = docxBlockFromNode(node, rels);
+    if (!block) continue;
+
+    if (pendingFloat && block.startsWith("<w:p>")) {
+      // Inject the anchor run after the paragraph's <w:pPr> (if any), so the
+      // image is anchored to that paragraph and text wraps around it.
+      const headMatch = block.match(/^<w:p>(<w:pPr>[\s\S]*?<\/w:pPr>)?/);
+      if (headMatch) {
+        const prefixLen = headMatch[0].length;
+        blocks.push(block.slice(0, prefixLen) + pendingFloat + block.slice(prefixLen));
+        pendingFloat = null;
+        continue;
+      }
+    }
+
+    flushPendingAsOwnParagraph();
+    blocks.push(block);
+  }
+
+  flushPendingAsOwnParagraph();
+
+  const content = blocks.join("") || docxParagraph("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="${WORD_NS}" xmlns:r="${REL_NS}" xmlns:wp="${WP_NS}" xmlns:a="${DRAWINGML_NS}" xmlns:pic="${PIC_NS}">
   <w:body>
-    ${body}
+    ${content}
     <w:sectPr>
       <w:pgSz w:w="12240" w:h="15840"/>
       <w:pgMar w:top="936" w:right="936" w:bottom="936" w:left="936" w:header="720" w:footer="720" w:gutter="0"/>
@@ -395,62 +593,346 @@ function buildDocxDocumentXml(title: string, bodyHtml: string) {
 </w:document>`;
 }
 
-function docxBlockFromNode(node: ChildNode): string {
+function getFloatDirection(node: HTMLElement): "left" | "right" | null {
+  const styles = parseInlineStyle(node.getAttribute("style") ?? "");
+  const float = styles["float"];
+  const align = node.getAttribute("align");
+  if (float === "right" || align === "right") return "right";
+  if (float === "left" || align === "left") return "left";
+  return null;
+}
+
+function imageDimensionsFor(image: DocxImage, node: HTMLElement): { width: number; height: number } {
+  if (image.widthEmu <= 0 || image.heightEmu <= 0) {
+    return { width: image.widthEmu, height: image.heightEmu };
+  }
+  const styles = parseInlineStyle(node.getAttribute("style") ?? "");
+  const heightPt = parsePoints(styles["height"]) ?? parsePoints(styles["max-height"]);
+  if (heightPt && heightPt > 0) {
+    const heightEmu = Math.max(1, Math.round(heightPt * EMU_PER_POINT));
+    const ratio = image.widthEmu / image.heightEmu;
+    return { width: Math.max(1, Math.round(heightEmu * ratio)), height: heightEmu };
+  }
+  return { width: image.widthEmu, height: image.heightEmu };
+}
+
+function parsePoints(value: string | undefined | null): number | null {
+  if (!value) return null;
+  const match = String(value).trim().match(/^([\d.]+)(pt|in|px|pc|mm|cm)?$/i);
+  if (!match) return null;
+  const n = parseFloat(match[1]);
+  const unit = (match[2] ?? "px").toLowerCase();
+  switch (unit) {
+    case "pt": return n;
+    case "in": return n * 72;
+    case "px": return n * (72 / 96);
+    case "pc": return n * 12;
+    case "mm": return n * (72 / 25.4);
+    case "cm": return n * (72 / 2.54);
+    default: return n;
+  }
+}
+
+function buildAnchorImageRun(
+  image: DocxImage,
+  direction: "left" | "right",
+  dims: { width: number; height: number },
+): string {
+  const docPrId = String(parseInt(image.relId.replace(/[^\d]/g, ""), 10) || 1);
+  // wrapText is the side(s) of the image where surrounding text appears.
+  // For a right-anchored image, text should be on the left.
+  const wrapSide = direction === "right" ? "left" : "right";
+  return `<w:r><w:drawing>
+    <wp:anchor distT="0" distB="0" distL="114300" distR="114300" simplePos="0" relativeHeight="251660288" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">
+      <wp:simplePos x="0" y="0"/>
+      <wp:positionH relativeFrom="margin"><wp:align>${direction}</wp:align></wp:positionH>
+      <wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>
+      <wp:extent cx="${dims.width}" cy="${dims.height}"/>
+      <wp:effectExtent l="0" t="0" r="0" b="0"/>
+      <wp:wrapSquare wrapText="${wrapSide}"/>
+      <wp:docPr id="${docPrId}" name="Picture ${docPrId}"/>
+      <wp:cNvGraphicFramePr/>
+      <a:graphic>
+        <a:graphicData uri="${PIC_NS}">
+          <pic:pic>
+            <pic:nvPicPr>
+              <pic:cNvPr id="${docPrId}" name="Picture ${docPrId}"/>
+              <pic:cNvPicPr/>
+            </pic:nvPicPr>
+            <pic:blipFill>
+              <a:blip r:embed="${image.relId}"/>
+              <a:stretch><a:fillRect/></a:stretch>
+            </pic:blipFill>
+            <pic:spPr>
+              <a:xfrm><a:off x="0" y="0"/><a:ext cx="${dims.width}" cy="${dims.height}"/></a:xfrm>
+              <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+            </pic:spPr>
+          </pic:pic>
+        </a:graphicData>
+      </a:graphic>
+    </wp:anchor>
+  </w:drawing></w:r>`;
+}
+
+function docxBlockFromNode(node: ChildNode, rels: DocxRels): string {
   if (node.nodeType === Node.TEXT_NODE) {
-    return node.textContent?.trim() ? docxParagraph(node.textContent) : "";
+    const text = node.textContent ?? "";
+    return text.trim() ? docxParagraphFromRuns(docxRun(collapseWhitespace(text))) : "";
   }
   if (!(node instanceof HTMLElement)) return "";
   const tag = node.tagName.toLowerCase();
-  if (tag === "h1") return docxParagraph(node.textContent ?? "", "Title");
-  if (tag === "h2") return docxParagraph(node.textContent ?? "", "Heading1");
-  if (tag === "h3") return docxParagraph(node.textContent ?? "", "Heading2");
-  if (tag === "p" || tag === "blockquote") return docxParagraphFromRuns(docxInlineRuns(node));
-  if (tag === "ul" || tag === "ol") return docxList(node, tag === "ol");
-  if (tag === "table") return docxTable(node);
-  if (tag === "hr") return docxParagraph("");
-  return Array.from(node.childNodes).map(docxBlockFromNode).join("");
+  switch (tag) {
+    case "h1":
+      return docxParagraphFromRuns(docxInlineRuns(node, rels), "Title");
+    case "h2":
+      return docxParagraphFromRuns(docxInlineRuns(node, rels), "Heading1");
+    case "h3":
+    case "h4":
+    case "h5":
+    case "h6":
+      return docxParagraphFromRuns(docxInlineRuns(node, rels), "Heading2");
+    case "p":
+      return docxParagraphFromRuns(docxInlineRuns(node, rels));
+    case "blockquote":
+      return docxParagraphFromRuns(docxInlineRuns(node, rels), undefined, { left: 720 });
+    case "pre":
+      return docxParagraphFromRuns(
+        docxRun(node.textContent ?? "", '<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:sz w:val="18"/>'),
+        undefined,
+        { left: 200 },
+      );
+    case "ul":
+      return docxList(node, false, rels);
+    case "ol":
+      return docxList(node, true, rels);
+    case "table":
+      return docxTable(node, rels);
+    case "hr":
+      return docxParagraph("");
+    case "img":
+      return docxImageParagraph(node as HTMLImageElement, rels);
+    case "br":
+      return docxParagraph("");
+    case "div":
+    case "section":
+    case "article":
+    case "header":
+    case "footer":
+    case "main":
+    case "aside":
+      return Array.from(node.childNodes)
+        .map((child) => docxBlockFromNode(child, rels))
+        .join("");
+    default:
+      // Treat anything else as inline-only: wrap its inline runs in a paragraph
+      // so we don't drop content silently.
+      return docxParagraphFromRuns(docxInlineRuns(node, rels));
+  }
 }
 
-function docxInlineRuns(node: ChildNode, props = ""): string {
+function docxImageParagraph(img: HTMLImageElement, rels: DocxRels): string {
+  const src = img.getAttribute("src");
+  if (!src) return "";
+  const entry = rels.images.get(src);
+  if (!entry || !entry.bytes) return "";
+  return `<w:p>${buildImageRun(entry, imageDimensionsFor(entry, img))}</w:p>`;
+}
+
+function buildImageRun(image: DocxImage, dims: { width: number; height: number }): string {
+  const docPrId = String(parseInt(image.relId.replace(/[^\d]/g, ""), 10) || 1);
+  return `<w:r><w:drawing>
+    <wp:inline distT="0" distB="0" distL="0" distR="0">
+      <wp:extent cx="${dims.width}" cy="${dims.height}"/>
+      <wp:effectExtent l="0" t="0" r="0" b="0"/>
+      <wp:docPr id="${docPrId}" name="Picture ${docPrId}"/>
+      <wp:cNvGraphicFramePr/>
+      <a:graphic>
+        <a:graphicData uri="${PIC_NS}">
+          <pic:pic>
+            <pic:nvPicPr>
+              <pic:cNvPr id="${docPrId}" name="Picture ${docPrId}"/>
+              <pic:cNvPicPr/>
+            </pic:nvPicPr>
+            <pic:blipFill>
+              <a:blip r:embed="${image.relId}"/>
+              <a:stretch><a:fillRect/></a:stretch>
+            </pic:blipFill>
+            <pic:spPr>
+              <a:xfrm><a:off x="0" y="0"/><a:ext cx="${dims.width}" cy="${dims.height}"/></a:xfrm>
+              <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+            </pic:spPr>
+          </pic:pic>
+        </a:graphicData>
+      </a:graphic>
+    </wp:inline>
+  </w:drawing></w:r>`;
+}
+
+function docxInlineRuns(node: ChildNode, rels: DocxRels, props = ""): string {
   if (node.nodeType === Node.TEXT_NODE) {
-    const text = normalizeInlineText(node.textContent ?? "");
+    const text = collapseWhitespace(node.textContent ?? "");
     return text ? docxRun(text, props) : "";
   }
   if (!(node instanceof HTMLElement)) return "";
   const tag = node.tagName.toLowerCase();
+
   if (tag === "br") return "<w:r><w:br/></w:r>";
-  const nextProps = [
-    props,
-    tag === "strong" || tag === "b" ? "<w:b/>" : "",
-    tag === "em" || tag === "i" ? "<w:i/>" : "",
-  ].join("");
-  return Array.from(node.childNodes).map((child) => docxInlineRuns(child, nextProps)).join("");
+
+  if (tag === "img") {
+    const src = node.getAttribute("src");
+    const entry = src ? rels.images.get(src) : undefined;
+    return entry?.bytes ? buildImageRun(entry, imageDimensionsFor(entry, node)) : "";
+  }
+
+  if (tag === "a") {
+    const href = (node as HTMLAnchorElement).getAttribute("href") ?? "";
+    if (/^(https?:|mailto:)/i.test(href)) {
+      const relId = relForHyperlink(rels, href);
+      const linkProps = `${props}<w:rStyle w:val="Hyperlink"/>`;
+      const innerRuns = Array.from(node.childNodes)
+        .map((child) => docxInlineRuns(child, rels, linkProps))
+        .join("");
+      return `<w:hyperlink r:id="${relId}" w:history="1">${innerRuns}</w:hyperlink>`;
+    }
+  }
+
+  const nextProps = `${props}${inlineTagProps(tag)}${inlineStyleProps(node)}`;
+  return Array.from(node.childNodes)
+    .map((child) => docxInlineRuns(child, rels, nextProps))
+    .join("");
+}
+
+function inlineTagProps(tag: string): string {
+  switch (tag) {
+    case "strong":
+    case "b":
+      return "<w:b/>";
+    case "em":
+    case "i":
+      return "<w:i/>";
+    case "u":
+      return '<w:u w:val="single"/>';
+    case "s":
+    case "strike":
+    case "del":
+      return "<w:strike/>";
+    case "code":
+    case "kbd":
+    case "samp":
+    case "tt":
+      return '<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/>';
+    case "sup":
+      return '<w:vertAlign w:val="superscript"/>';
+    case "sub":
+      return '<w:vertAlign w:val="subscript"/>';
+    default:
+      return "";
+  }
+}
+
+function inlineStyleProps(node: HTMLElement): string {
+  const style = node.getAttribute("style");
+  if (!style) return "";
+  const declared = parseInlineStyle(style);
+  const out: string[] = [];
+
+  const color = declared["color"];
+  if (color) {
+    const hex = cssColorToHex(color);
+    if (hex) out.push(`<w:color w:val="${hex}"/>`);
+  }
+  const bg = declared["background-color"] ?? declared["background"];
+  if (bg) {
+    const hex = cssColorToHex(bg);
+    if (hex) out.push(`<w:shd w:val="clear" w:color="auto" w:fill="${hex}"/>`);
+  }
+  const decoration = declared["text-decoration"];
+  if (decoration) {
+    if (/line-through/i.test(decoration)) out.push("<w:strike/>");
+    if (/underline/i.test(decoration)) out.push('<w:u w:val="single"/>');
+  }
+  const fontWeight = declared["font-weight"];
+  if (fontWeight && (fontWeight === "bold" || parseInt(fontWeight, 10) >= 600)) {
+    out.push("<w:b/>");
+  }
+  if (declared["font-style"] === "italic") out.push("<w:i/>");
+  const fontFamily = declared["font-family"];
+  if (fontFamily && /(consolas|courier|monospace)/i.test(fontFamily)) {
+    out.push('<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/>');
+  }
+  return out.join("");
+}
+
+function parseInlineStyle(style: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const decl of style.split(";")) {
+    const idx = decl.indexOf(":");
+    if (idx < 0) continue;
+    const key = decl.slice(0, idx).trim().toLowerCase();
+    const value = decl.slice(idx + 1).trim();
+    if (key && value) out[key] = value;
+  }
+  return out;
+}
+
+const NAMED_COLORS: Record<string, string> = {
+  red: "FF0000",
+  green: "008000",
+  blue: "0000FF",
+  black: "000000",
+  white: "FFFFFF",
+  yellow: "FFFF00",
+  orange: "FFA500",
+  purple: "800080",
+  gray: "808080",
+  grey: "808080",
+};
+
+function cssColorToHex(value: string): string | null {
+  const trimmed = value.trim();
+  const named = NAMED_COLORS[trimmed.toLowerCase()];
+  if (named) return named;
+  const hex = trimmed.match(/^#([0-9a-f]{3,8})$/i);
+  if (hex) {
+    const v = hex[1];
+    if (v.length === 3) return Array.from(v).map((c) => `${c}${c}`).join("").toUpperCase();
+    if (v.length === 6) return v.toUpperCase();
+    if (v.length === 8) return v.slice(0, 6).toUpperCase();
+  }
+  const rgb = trimmed.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (rgb) {
+    const r = parseInt(rgb[1], 10).toString(16).padStart(2, "0");
+    const g = parseInt(rgb[2], 10).toString(16).padStart(2, "0");
+    const b = parseInt(rgb[3], 10).toString(16).padStart(2, "0");
+    return `${r}${g}${b}`.toUpperCase();
+  }
+  return null;
 }
 
 function docxParagraph(text: string | null | undefined, style?: "Title" | "Heading1" | "Heading2") {
-  return docxParagraphFromRuns(docxRun(normalizeInlineText(text ?? "")), style);
+  return docxParagraphFromRuns(docxRun(collapseWhitespace(text ?? "")), style);
 }
 
 function docxParagraphFromRuns(runs: string, style?: "Title" | "Heading1" | "Heading2", indent?: { left: number; hanging?: number }) {
   const paragraphProps = [
     style ? `<w:pStyle w:val="${style}"/>` : "",
     indent ? `<w:ind w:left="${indent.left}"${indent.hanging ? ` w:hanging="${indent.hanging}"` : ""}/>` : "",
-    "<w:spacing w:after=\"120\"/>",
+    '<w:spacing w:after="120"/>',
   ].filter(Boolean).join("");
   return `<w:p>${paragraphProps ? `<w:pPr>${paragraphProps}</w:pPr>` : ""}${runs}</w:p>`;
 }
 
-function docxList(node: HTMLElement, ordered: boolean) {
+function docxList(node: HTMLElement, ordered: boolean, rels: DocxRels) {
   return Array.from(node.children)
     .filter((child): child is HTMLElement => child instanceof HTMLElement && child.tagName.toLowerCase() === "li")
     .map((item, index) => {
       const prefix = ordered ? `${index + 1}. ` : "• ";
-      return docxParagraphFromRuns(`${docxRun(prefix)}${docxInlineRuns(item)}`, undefined, { left: 720, hanging: 360 });
+      return docxParagraphFromRuns(`${docxRun(prefix)}${docxInlineRuns(item, rels)}`, undefined, { left: 720, hanging: 360 });
     })
     .join("");
 }
 
-function docxTable(table: HTMLElement) {
+function docxTable(table: HTMLElement, rels: DocxRels) {
   const rows = Array.from(table.querySelectorAll("tr"));
   if (!rows.length) return "";
   return `<w:tbl>
@@ -465,23 +947,30 @@ function docxTable(table: HTMLElement) {
         <w:insideV w:val="single" w:sz="4" w:space="0" w:color="BBBBBB"/>
       </w:tblBorders>
     </w:tblPr>
-    ${rows.map(docxTableRow).join("")}
+    ${rows.map((row) => docxTableRow(row, rels)).join("")}
   </w:tbl>`;
 }
 
-function docxTableRow(row: HTMLTableRowElement) {
-  return `<w:tr>${Array.from(row.cells).map(docxTableCell).join("")}</w:tr>`;
+function docxTableRow(row: HTMLTableRowElement, rels: DocxRels) {
+  return `<w:tr>${Array.from(row.cells).map((cell) => docxTableCell(cell, rels)).join("")}</w:tr>`;
 }
 
-function docxTableCell(cell: HTMLTableCellElement) {
+const CELL_BLOCK_TAGS = new Set(["p", "ul", "ol", "blockquote", "table", "pre", "h1", "h2", "h3", "h4", "h5", "h6", "div"]);
+
+function docxTableCell(cell: HTMLTableCellElement, rels: DocxRels) {
   const isHeader = cell.tagName.toLowerCase() === "th";
-  const text = normalizeInlineText(cell.textContent ?? "");
+  const hasBlockChild = Array.from(cell.children).some((child) =>
+    CELL_BLOCK_TAGS.has(child.tagName.toLowerCase()),
+  );
+  const content = hasBlockChild
+    ? Array.from(cell.childNodes).map((node) => docxBlockFromNode(node, rels)).join("")
+    : docxParagraphFromRuns(docxInlineRuns(cell, rels, isHeader ? "<w:b/>" : ""));
   return `<w:tc>
     <w:tcPr>
       <w:tcW w:w="0" w:type="auto"/>
-      ${isHeader ? '<w:shd w:fill="F1F1F1"/>' : ""}
+      ${isHeader ? '<w:shd w:val="clear" w:color="auto" w:fill="F1F1F1"/>' : ""}
     </w:tcPr>
-    ${docxParagraphFromRuns(docxRun(text, isHeader ? "<w:b/>" : ""))}
+    ${content || docxParagraphFromRuns("")}
   </w:tc>`;
 }
 
@@ -489,8 +978,12 @@ function docxRun(text: string, props = "") {
   return `<w:r>${props ? `<w:rPr>${props}</w:rPr>` : ""}<w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r>`;
 }
 
-function normalizeInlineText(value: string) {
-  return value.replace(/\s+/g, " ").trim();
+// Collapse runs of whitespace (including newlines) to a single space without
+// trimming the edges. Trimming was the old behaviour and it destroyed the
+// spaces between adjacent inline runs (e.g. "<strong>X</strong> Y" turned into
+// "XY" because the leading space on the text-node child was stripped).
+function collapseWhitespace(value: string): string {
+  return value.replace(/\s+/g, " ");
 }
 
 function escapeXml(value: string) {

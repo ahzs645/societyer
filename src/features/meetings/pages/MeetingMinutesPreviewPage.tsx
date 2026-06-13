@@ -11,7 +11,7 @@ import { useSociety } from "../../../hooks/useSociety";
 import { formatDate } from "../../../lib/format";
 import {
   exportPdfDownload,
-  exportWordDoc,
+  exportWordDocx,
   renderMinutesHtml,
 } from "../../../lib/exportWord";
 import { getQuorumSnapshot, parseAgendaItems } from "../components/MeetingDetailSupport";
@@ -125,8 +125,8 @@ export function MeetingMinutesPreviewPage() {
 
   const exportPreviewToWord = () => {
     const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-    exportWordDoc({
-      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.doc`,
+    void exportWordDocx({
+      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.docx`,
       title: `${meeting.title} - Minutes`,
       bodyHtml,
     });

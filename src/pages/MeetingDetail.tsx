@@ -19,7 +19,6 @@ import {
   downloadStoredZip,
   escapeHtml,
   exportPdfDownload,
-  exportWordDoc,
   exportWordDocx,
   getMinutesStyleGaps,
   renderMinutesHtml,
@@ -572,12 +571,12 @@ export function MeetingDetailPage() {
     if (!meeting || !minutes || !society) return;
     const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
     const bodyHtml = renderExportBody();
-    exportWordDoc({
-      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.doc`,
+    void exportWordDocx({
+      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.docx`,
       title: `${meeting.title} — Minutes`,
       bodyHtml,
     });
-    toast.success("Minutes exported", "Downloaded as a styled Word-compatible document.");
+    toast.success("Minutes exported", "Downloaded as a Word (.docx) document.");
   };
 
   const exportToPdf = async () => {

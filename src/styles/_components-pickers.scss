@@ -80,47 +80,7 @@
 .radio-row__label { color: token('text-primary'); }
 .radio-row__hint { color: token('text-tertiary'); font-size: token('fs-sm'); }
 
-/* ============================================================
-   IconPicker
-   ============================================================ */
-.icon-picker {
-  position: fixed;
-  z-index: token('z-dropdown');
-  background: token('bg-panel');
-  border: 1px solid token('border');
-  border-radius: token('r-md');
-  box-shadow: token('shadow-lg');
-  padding: 6px;
-  width: 296px;
-  @include flex-column;
-  animation: menuIn 0.08s ease-out;
-}
-.icon-picker__grid {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 2px;
-  max-height: 240px;
-  overflow-y: auto;
-  padding: 4px 2px;
-}
-.icon-picker__cell {
-  aspect-ratio: 1;
-  display: grid;
-  place-items: center;
-  border-radius: token('r-sm');
-  color: token('text-secondary');
-  background: transparent;
-  transition: background 0.08s ease, color 0.08s ease;
-}
-.icon-picker__cell:hover { background: token('bg-hover'); color: token('text-primary'); }
-.icon-picker__cell.is-selected { background: token('accent'); color: token('accent-on'); }
-.icon-picker__foot {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: 6px;
-  margin-top: 4px;
-  border-top: 1px solid token('border');
-}
+
 
 /* ============================================================
    ColorPicker
