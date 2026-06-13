@@ -21,7 +21,8 @@ import {
   MessageSquare,
   ClipboardCheck,
 } from "lucide-react";
-import { exportWordDocx, escapeHtml } from "../lib/exportWord";
+import { exportWordDocx } from "../lib/docx";
+import { escapeHtml } from "../lib/html";
 import { formatDateTime, relative } from "../lib/format";
 
 // ============================================================================

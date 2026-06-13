@@ -24,7 +24,8 @@ import {
   ScanText,
 } from "lucide-react";
 import { formatDateTime, formatDate, relative } from "../lib/format";
-import { exportWordDocx, escapeHtml } from "../lib/exportWord";
+import { exportWordDocx } from "../lib/docx";
+import { escapeHtml } from "../lib/html";
 
 // Word-level diff reused from BylawDiff (inline so we don't couple the pages)
 type Chunk = { kind: "same" | "add" | "del"; text: string };

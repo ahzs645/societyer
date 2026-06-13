@@ -13,16 +13,16 @@ import { formatDate, formatDateTime } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, BookMarked, ClipboardCheck, Download, Eye, EyeOff, ExternalLink, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../components/MotionEditor";
+import { escapeHtml } from "../lib/html";
+import { exportWordDocx } from "../lib/docx";
+import { exportPdfDownload } from "../lib/pdf";
+import { downloadStoredZip } from "../lib/zip";
 import {
   MINUTES_EXPORT_STYLES,
   MinutesExportStyleId,
-  downloadStoredZip,
-  escapeHtml,
-  exportPdfDownload,
-  exportWordDocx,
   getMinutesStyleGaps,
   renderMinutesHtml,
-} from "../lib/exportWord";
+} from "../features/meetings/lib/minutesRenderer";
 import { redactText, RedactOptions } from "../lib/redactPii";
 import { getLegalGuideRules, resolveJurisdictionCode } from "../lib/jurisdictionGuideTracks";
 import {

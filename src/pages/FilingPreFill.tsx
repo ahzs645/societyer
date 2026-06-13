@@ -5,7 +5,8 @@ import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Field, Badge } from "../components/ui";
 import { FileCog, Copy, FileDown } from "lucide-react";
-import { exportWordDocx, escapeHtml } from "../lib/exportWord";
+import { exportWordDocx } from "../lib/docx";
+import { escapeHtml } from "../lib/html";
 
 const SOCIETIES_KINDS = [
   { id: "AnnualReport", label: "Annual Report ($40)" },

@@ -40,7 +40,8 @@ import {
   PIPA_TEMPLATE_RESOURCES,
   RECORDS_INSPECTION_GUIDANCE,
 } from "../lib/legalCopy";
-import { exportWordDocx, markdownToHtml } from "../lib/exportWord";
+import { exportWordDocx } from "../lib/docx";
+import { markdownToHtml } from "../lib/markdown";
 
 type StepTone = "success" | "warn" | "info" | "neutral";
 type DraftEditorKind = "policy" | "memberDataMemo";

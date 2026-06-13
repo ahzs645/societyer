@@ -1,5 +1,5 @@
 import { formatDate, formatDateTime } from "../../../lib/format";
-import { renderDocumentHeader } from "../../../lib/exportWord";
+import { renderDocumentHeader } from "./minutesRenderer";
 import {
   accessLevelLabel,
   availabilityLabel,

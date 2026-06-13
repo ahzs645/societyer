@@ -9,11 +9,9 @@ import { Select } from "../../../components/Select";
 import { SeedPrompt } from "../../../pages/_helpers";
 import { useSociety } from "../../../hooks/useSociety";
 import { formatDate } from "../../../lib/format";
-import {
-  exportPdfDownload,
-  exportWordDocx,
-  renderMinutesHtml,
-} from "../../../lib/exportWord";
+import { exportWordDocx } from "../../../lib/docx";
+import { exportPdfDownload } from "../../../lib/pdf";
+import { renderMinutesHtml } from "../lib/minutesRenderer";
 import { getQuorumSnapshot, parseAgendaItems } from "../components/MeetingDetailSupport";
 import { agendaEntriesFromRecord } from "../lib/meetingDetailHelpers";
 import { MINUTES_EXPORT_STYLES, type MinutesExportStyleId } from "../lib/minutesExportStyles";
