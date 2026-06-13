@@ -397,6 +397,26 @@ export function MeetingDetailPage() {
   const markHeld = () => updateMeeting({ id: meeting._id, patch: { status: "Held" } });
   const reopenMeeting = () => updateMeeting({ id: meeting._id, patch: { status: "Scheduled" } });
 
+  // Section indices to omit from the public copy. A depth=0 (root) section
+  // flagged publicVisible:false cascades to its trailing depth=1 children —
+  // they belong to the same agenda group, so hiding the root hides them too.
+  // A depth=1 section can be hidden on its own without affecting siblings.
+  const computeHiddenSectionIndices = (sections: any[]): Set<number> => {
+    const hidden = new Set<number>();
+    for (let i = 0; i < sections.length; i += 1) {
+      const section = sections[i];
+      if (section?.publicVisible === false) {
+        hidden.add(i);
+        if ((section?.depth ?? 0) === 0) {
+          for (let j = i + 1; j < sections.length && (sections[j]?.depth ?? 0) === 1; j += 1) {
+            hidden.add(j);
+          }
+        }
+      }
+    }
+    return hidden;
+  };
+
   const minutesRenderPayload = (redact?: (value: string) => string, publicOnly = false) => {
     if (!minutes) return null;
     const tx = (value?: string | null) => (value && redact ? redact(value) : value);
@@ -406,18 +426,15 @@ export function MeetingDetailPage() {
     // to a removed section are dropped entirely. Unassigned motions pass
     // through unchanged.
     const rawSections = (minutes.sections ?? []) as any[];
+    const hiddenIndices = publicOnly ? computeHiddenSectionIndices(rawSections) : new Set<number>();
     const sectionIndexRemap = new Map<number, number>();
-    if (publicOnly) {
-      let next = 0;
-      rawSections.forEach((section, i) => {
-        if (section.publicVisible !== false) sectionIndexRemap.set(i, next++);
-      });
-    }
-    const visibleSections = publicOnly
-      ? rawSections.filter((section) => section.publicVisible !== false)
-      : rawSections;
+    let nextSectionIndex = 0;
+    rawSections.forEach((_, i) => {
+      if (!hiddenIndices.has(i)) sectionIndexRemap.set(i, nextSectionIndex++);
+    });
+    const visibleSections = rawSections.filter((_, i) => !hiddenIndices.has(i));
     const visibleMotions = publicOnly
-      ? (minutes.motions as any[]).filter((m) => m.sectionIndex == null || sectionIndexRemap.has(m.sectionIndex))
+      ? (minutes.motions as any[]).filter((m) => m.sectionIndex == null || !hiddenIndices.has(m.sectionIndex))
       : (minutes.motions as any[]);
     return {
       heldAt: minutes.heldAt,
@@ -537,6 +554,17 @@ export function MeetingDetailPage() {
   const renderExportBody = (redact?: (value: string) => string, publicOnly = false) => {
     const payload = minutesRenderPayload(redact, publicOnly);
     if (!payload || !hasExportableContent) return "";
+    // Sections and agendaTree are seeded in lockstep (index N in sections maps
+    // to entry N in agendaTree), so we reuse the section-hide set to strip
+    // matching agenda entries. Without this filter, the "Agenda Items" header
+    // some styles render (numbered-agenda, formal-agm) still leaks hidden
+    // titles even though the section bodies and motions are gone.
+    const hiddenIndices = publicOnly && minutes
+      ? computeHiddenSectionIndices((minutes.sections ?? []) as any[])
+      : new Set<number>();
+    const visibleAgendaTree = hiddenIndices.size
+      ? agendaTree.filter((_, i) => !hiddenIndices.has(i))
+      : agendaTree;
     return renderMinutesHtml({
       society: {
         name: society.name,
@@ -551,8 +579,8 @@ export function MeetingDetailPage() {
         location: meeting.location ?? null,
         electronic: !!meeting.electronic,
         noticeSentAt: meeting.noticeSentAt ?? null,
-        agendaItems: agendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
-        agendaItemTree: agendaTree,
+        agendaItems: visibleAgendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
+        agendaItemTree: visibleAgendaTree,
       },
       minutes: payload,
       styleId: minutesExportStyle,
