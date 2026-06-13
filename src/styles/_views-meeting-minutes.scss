@@ -871,7 +871,13 @@
   display: grid;
   gap: token('s-3');
 }
-.meeting-minutes-section-editor__public-toggle {
+// Shared "Eye / EyeOff" pill toggle. Used inline in the section editor (to mark
+// a section public/private) and in the export sidebar (to flip Word/PDF
+// exports between the standard and public-copy versions). Both consumers share
+// the same is-public / is-private state classes so the icon, color, and motion
+// stay consistent.
+.meeting-minutes-section-editor__public-toggle,
+.public-copy-toggle {
   appearance: none;
   display: inline-flex;
   align-items: center;
@@ -907,7 +913,8 @@
     border-color: transparent;
   }
 }
-.meeting-minutes-section-editor__public-toggle-icon {
+.meeting-minutes-section-editor__public-toggle-icon,
+.public-copy-toggle__icon {
   position: relative;
   width: 22px;
   height: 22px;
@@ -946,7 +953,18 @@
     transform: scale(1) rotate(0deg);
   }
 }
-.meeting-minutes-section-editor__public-toggle-text {
+.public-copy-toggle.is-private {
+  .public-copy-toggle__icon > .is-on {
+    opacity: 0;
+    transform: scale(0.4) rotate(90deg);
+  }
+  .public-copy-toggle__icon > .is-off {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+.meeting-minutes-section-editor__public-toggle-text,
+.public-copy-toggle__text {
   white-space: nowrap;
 }
 .meeting-minutes-section-editor__mobile-head {

@@ -1,5 +1,4 @@
-import { FileDown, FileText, Printer } from "lucide-react";
-import { EyeOff } from "lucide-react";
+import { Eye, EyeOff, FileDown, FileText, Printer } from "lucide-react";
 import { Badge, Field } from "../../../components/ui";
 import { Checkbox } from "../../../components/Controls";
 import { LegalGuideInline, LegalGuideTrackList } from "../../../components/LegalGuide";
@@ -41,7 +40,8 @@ export function MeetingSidebarColumn({
   setIncludePlaceholdersInExport,
   exportToWord,
   exportToPdf,
-  exportPublicMinutes,
+  publicCopyMode,
+  setPublicCopyMode,
   minutesExportGaps,
   showExportGaps = false,
   exportControlsReadOnly = false,
@@ -89,7 +89,8 @@ export function MeetingSidebarColumn({
   setIncludePlaceholdersInExport: (value: boolean) => void;
   exportToWord: () => void;
   exportToPdf: () => void;
-  exportPublicMinutes: () => void;
+  publicCopyMode: boolean;
+  setPublicCopyMode: (value: boolean) => void;
   minutesExportGaps: any[];
   showExportGaps?: boolean;
   /**
@@ -204,15 +205,31 @@ export function MeetingSidebarColumn({
                         label="Include transcript"
                       />
                     </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={publicCopyMode}
+                      disabled={!minutes}
+                      className={`public-copy-toggle${publicCopyMode ? " is-private" : " is-public"}`}
+                      onClick={() => setPublicCopyMode(!publicCopyMode)}
+                      title={publicCopyMode
+                        ? "Word and PDF exports will redact PII and strip sections flagged hidden. Click to switch back to the full minutes."
+                        : "Word and PDF exports include the full minutes. Click to switch to the redacted Public copy."}
+                    >
+                      <span className="public-copy-toggle__icon" aria-hidden>
+                        <Eye size={14} className="public-copy-toggle__eye is-on" />
+                        <EyeOff size={14} className="public-copy-toggle__eye is-off" />
+                      </span>
+                      <span className="public-copy-toggle__text">
+                        {publicCopyMode ? "Exporting Public copy" : "Exporting full minutes"}
+                      </span>
+                    </button>
                     <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                       <button className="btn-action btn-action--primary" onClick={exportToWord} disabled={!minutes}>
                         <FileDown size={12} /> Export Word
                       </button>
                       <button className="btn-action" onClick={exportToPdf} disabled={!minutes}>
                         <Printer size={12} /> Export PDF
-                      </button>
-                      <button className="btn-action" onClick={exportPublicMinutes} disabled={!minutes}>
-                        <EyeOff size={12} /> Public copy
                       </button>
                     </div>
                   </>

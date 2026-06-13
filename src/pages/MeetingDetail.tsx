@@ -11,7 +11,7 @@ import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
 import { formatDate, formatDateTime } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, BookMarked, ClipboardCheck, Download, ExternalLink, EyeOff, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
+import { ArrowLeft, BookMarked, ClipboardCheck, Download, ExternalLink, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../components/MotionEditor";
 import {
   MINUTES_EXPORT_STYLES,
@@ -160,6 +160,9 @@ export function MeetingDetailPage() {
   const [includeApprovalInExport, setIncludeApprovalInExport] = useState(() => readStoredExportBool("includeApproval", true));
   const [includeSignaturesInExport, setIncludeSignaturesInExport] = useState(() => readStoredExportBool("includeSignatures", true));
   const [includePlaceholdersInExport, setIncludePlaceholdersInExport] = useState(() => readStoredExportBool("includePlaceholders", false));
+  // Always default OFF on page load: persisting would risk a user reopening the
+  // tab and silently re-exporting a redacted file thinking it's the full copy.
+  const [publicCopyMode, setPublicCopyMode] = useState(false);
   // Drive the tab from the `?tab=` URL param so deep links (e.g. the Draft
   // minutes quick-action) can land users directly on the right tab. The
   // setter writes back to the URL so the address bar reflects what's shown
@@ -595,46 +598,50 @@ export function MeetingDetailPage() {
     });
   };
 
-  const exportToWord = () => {
-    if (!meeting || !minutes || !society) return;
+  // Both export buttons funnel through this so the Public-copy toggle picks
+  // the same redact function, file slug, and dialog title regardless of
+  // format. Returns null when there's nothing to export.
+  const buildExportArgs = (extension: "docx" | "pdf") => {
+    if (!meeting || !minutes || !society) return null;
     const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-    const bodyHtml = renderExportBody();
-    void exportWordDocx({
-      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.docx`,
-      title: `${meeting.title} — Minutes`,
+    const redact = publicCopyMode ? (s: string) => redactText(s, redactOpts()) : undefined;
+    const bodyHtml = renderExportBody(redact, publicCopyMode);
+    const slug = publicCopyMode ? "public-minutes" : "minutes";
+    const titleSuffix = publicCopyMode ? "Public minutes" : "Minutes";
+    return {
+      filename: `${safe}-${slug}-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.${extension}`,
+      title: `${meeting.title} — ${titleSuffix}`,
       bodyHtml,
-    });
-    toast.success("Minutes exported", "Downloaded as a Word (.docx) document.");
+    };
+  };
+
+  const exportToWord = () => {
+    const args = buildExportArgs("docx");
+    if (!args) return;
+    void exportWordDocx(args);
+    toast.success(
+      publicCopyMode ? "Public minutes exported" : "Minutes exported",
+      publicCopyMode
+        ? "Word (.docx) with PII redacted and hidden sections stripped."
+        : "Downloaded as a Word (.docx) document.",
+    );
   };
 
   const exportToPdf = async () => {
-    if (!meeting || !minutes || !society) return;
-    const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-    await exportPdfDownload({
-      filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.pdf`,
-      title: `${meeting.title} — Minutes`,
-      bodyHtml: renderExportBody(),
-    });
-    toast.success("PDF exported", "Downloaded as a PDF file.");
+    const args = buildExportArgs("pdf");
+    if (!args) return;
+    await exportPdfDownload(args);
+    toast.success(
+      publicCopyMode ? "Public PDF exported" : "PDF exported",
+      publicCopyMode
+        ? "PDF with PII redacted and hidden sections stripped."
+        : "Downloaded as a PDF file.",
+    );
   };
 
   const openMinutesPreviewPage = () => {
     if (!meeting || !minutes) return;
     window.open(`/app/meetings/${meeting._id}/preview`, "_blank", "noopener,noreferrer");
-  };
-
-  const exportPublicMinutes = () => {
-    if (!meeting || !minutes || !society) return;
-    const pii = redactOpts();
-    const redact = (s: string) => redactText(s, pii);
-    const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-    const bodyHtml = renderExportBody(redact, true);
-    exportWordDocx({
-      filename: `${safe}-public-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.docx`,
-      title: `${meeting.title} — Public minutes`,
-      bodyHtml,
-    });
-    toast.success("Public minutes exported", "Emails, phones, addresses & names redacted.");
   };
 
   /** Names to scrub: every current member + director. Emails/phones/postal codes use the regex rules. */
@@ -1445,13 +1452,6 @@ export function MeetingDetailPage() {
                       disabled: !minutes,
                       onSelect: exportToPdf,
                     },
-                    {
-                      id: "public",
-                      label: "Export public copy",
-                      icon: <EyeOff size={12} />,
-                      disabled: !minutes,
-                      onSelect: exportPublicMinutes,
-                    },
                   ],
                 },
               ]}
@@ -1517,7 +1517,8 @@ export function MeetingDetailPage() {
               setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
               exportToWord={exportToWord}
               exportToPdf={exportToPdf}
-              exportPublicMinutes={exportPublicMinutes}
+              publicCopyMode={publicCopyMode}
+              setPublicCopyMode={setPublicCopyMode}
               minutesExportGaps={minutesExportGaps}
               quorumSnapshot={quorumSnapshot}
               quorumLegalGuides={quorumLegalGuides}
@@ -1565,7 +1566,8 @@ export function MeetingDetailPage() {
               setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
               exportToWord={exportToWord}
               exportToPdf={exportToPdf}
-              exportPublicMinutes={exportPublicMinutes}
+              publicCopyMode={publicCopyMode}
+              setPublicCopyMode={setPublicCopyMode}
               minutesExportGaps={minutesExportGaps}
               showExportGaps
               quorumSnapshot={quorumSnapshot}
@@ -1746,7 +1748,8 @@ export function MeetingDetailPage() {
                 setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
                 exportToWord={exportToWord}
                 exportToPdf={exportToPdf}
-                exportPublicMinutes={exportPublicMinutes}
+                publicCopyMode={publicCopyMode}
+              setPublicCopyMode={setPublicCopyMode}
                 minutesExportGaps={minutesExportGaps}
                 quorumSnapshot={quorumSnapshot}
                 quorumLegalGuides={quorumLegalGuides}
@@ -1810,7 +1813,8 @@ export function MeetingDetailPage() {
             setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
             exportToWord={exportToWord}
             exportToPdf={exportToPdf}
-            exportPublicMinutes={exportPublicMinutes}
+            publicCopyMode={publicCopyMode}
+            setPublicCopyMode={setPublicCopyMode}
             minutesExportGaps={minutesExportGaps}
             quorumSnapshot={quorumSnapshot}
             quorumLegalGuides={quorumLegalGuides}
