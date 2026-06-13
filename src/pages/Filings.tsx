@@ -6,6 +6,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Drawer, Field, InspectorNote } from "../components/ui";
+import { Modal } from "../components/Modal";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { useToast } from "../components/Toast";
@@ -77,9 +78,12 @@ export function FilingsPage() {
 
   const markFiledIntentHandled = useRef(false);
   useEffect(() => {
+    if (params.get("intent") !== "mark-filed") {
+      markFiledIntentHandled.current = false;
+      return;
+    }
     if (markFiledIntentHandled.current) return;
     if (!society || filings === undefined) return;
-    if (params.get("intent") !== "mark-filed") return;
     markFiledIntentHandled.current = true;
     const target = (filings ?? []).find((filing: any) => filing.status !== "Filed");
     setParams((prev) => {
@@ -316,10 +320,11 @@ export function FilingsPage() {
         filingLabel={botFor?.label ?? ""}
       />
 
-      <Drawer
+      <Modal
         open={!!completeDraft}
         onClose={() => setCompleteDraft(null)}
         title="Mark filing as filed"
+        size="md"
         footer={
           <>
             <button className="btn" onClick={() => setCompleteDraft(null)}>Cancel</button>
@@ -431,7 +436,7 @@ export function FilingsPage() {
             </Field>
           </div>
         )}
-      </Drawer>
+      </Modal>
     </div>
   );
 }
