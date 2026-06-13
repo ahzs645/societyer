@@ -625,9 +625,47 @@
   flex: 0 0 auto;
   min-width: 0;
 }
-.meeting-minutes-section-item__title-type {
+/* Two-button intent pill group that replaces the old Type dropdown. Each
+ * pill (Motion / Report) is a toggle: inactive shows a ghost outline with
+ * a "+", active shows a filled accent with an "x" to remove. Only one can
+ * be active at a time because they share the underlying section.type field. */
+.meeting-minutes-section-item__title-pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: token('s-1');
+  align-items: center;
   flex: 0 0 auto;
   min-width: 0;
+}
+.meeting-minutes-section-item__title-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: token('r-pill');
+  background: transparent;
+  border: 1px dashed token('border');
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.08s ease, border-color 0.08s ease, color 0.08s ease;
+}
+.meeting-minutes-section-item__title-pill:hover {
+  border-style: solid;
+  border-color: token('border');
+  color: token('text-primary');
+}
+.meeting-minutes-section-item__title-pill.is-active {
+  background: token('accent');
+  border-style: solid;
+  border-color: token('accent');
+  color: #fff;
+}
+.meeting-minutes-section-item__title-pill.is-active:hover {
+  filter: brightness(0.95);
 }
 /* Title input styled to match the read-only <strong> rendering — bold, no
  * box. Hover hints editability with a dotted underline; focus solidifies it
@@ -665,9 +703,6 @@
   outline: none;
   border-bottom: 1px solid token('accent');
 }
-.meeting-minutes-section-item__title-type .select-trigger {
-  height: 32px;
-}
 .meeting-minutes-section-item__title-presenter {
   flex: 0 0 auto;
   min-width: 180px;
@@ -689,6 +724,13 @@
 .meeting-minutes-section-item:hover .meeting-minutes-section-item__meta,
 .meeting-minutes-section-item:focus-within .meeting-minutes-section-item__meta {
   display: block;
+}
+/* Suppress the hover-revealed decisions/actions chip while the row is in
+ * inline edit mode — otherwise it pushes itself between the pills and the
+ * action buttons on hover, jostling the layout. The same info lives in the
+ * editor body below, so nothing is lost. */
+.meeting-minutes-section-item__summary:has(.meeting-minutes-section-item__title-edit) .meeting-minutes-section-item__meta {
+  display: none !important;
 }
 .meeting-minutes-section-item__actions {
   @include inline-flex-center;

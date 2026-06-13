@@ -49,6 +49,16 @@ const SECTION_TYPE_OPTIONS: { value: SectionTypeId; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
+/* The two section types that actually change behavior — Motion adds a
+ * motion-text editor and seeds the meeting's motion backlog; Report flags
+ * the section for the committee-report appendix. The other SECTION_TYPE_OPTIONS
+ * values (discussion/decision/other) are cosmetic labels no code reads, so
+ * the header bar surfaces only these two as toggleable intent pills. */
+const SECTION_TYPE_PILLS: { value: Extract<SectionTypeId, "motion" | "report">; label: string }[] = [
+  { value: "motion", label: "Motion" },
+  { value: "report", label: "Report" },
+];
+
 
 const AGENDA_NUMBERING_ITEMS: { id: AgendaNumberingMode; label: string }[] = [
   { id: "letters", label: "1.a" },
@@ -463,6 +473,7 @@ export {
   SECTION_TASK_STATUS_ITEMS,
   AGENDA_NUMBERING_PREF_KEY,
   SECTION_TYPE_OPTIONS,
+  SECTION_TYPE_PILLS,
   AGENDA_NUMBERING_ITEMS,
   readStoredAgendaNumberingMode,
   agendaAlphaLabel,

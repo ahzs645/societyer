@@ -11,7 +11,6 @@ import { LegalGuideInline } from "../../../components/LegalGuide";
 import { Segmented } from "../../../components/primitives";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../../../components/MotionEditor";
 import { NameAutocomplete } from "../../../components/NameAutocomplete";
-import { Select } from "../../../components/Select";
 import { DatePicker } from "../../../components/DatePicker";
 import { SignaturePanel } from "../../../components/SignaturePanel";
 import { QuickAddTaskForm } from "../../tasks/QuickAddTaskForm";
@@ -25,7 +24,7 @@ import {
 import {
   SECTION_TASK_STATUS_ITEMS,
   AGENDA_NUMBERING_PREF_KEY,
-  SECTION_TYPE_OPTIONS,
+  SECTION_TYPE_PILLS,
   AGENDA_NUMBERING_ITEMS,
   readStoredAgendaNumberingMode,
   agendaAlphaLabel,
@@ -47,7 +46,6 @@ import {
   normalize,
 } from "./MeetingMinutesColumn.internal";
 import type {
-  SectionTypeId,
   AgendaNumberingMode,
   SectionDraft,
   SectionEditorTab,
@@ -816,12 +814,23 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                       aria-label="Title"
                                     />
                                     <span className="meeting-minutes-section-item__title-meta">
-                                      <span className="meeting-minutes-section-item__title-type">
-                                        <Select
-                                          value={sectionDraft.type as SectionTypeId}
-                                          onChange={(next) => setSectionDraft({ ...sectionDraft, type: next })}
-                                          options={SECTION_TYPE_OPTIONS}
-                                        />
+                                      <span className="meeting-minutes-section-item__title-pills">
+                                        {SECTION_TYPE_PILLS.map((pill) => {
+                                          const active = sectionDraft.type === pill.value;
+                                          return (
+                                            <button
+                                              key={pill.value}
+                                              type="button"
+                                              className={`meeting-minutes-section-item__title-pill${active ? " is-active" : ""}`}
+                                              aria-pressed={active}
+                                              title={active ? `Remove ${pill.label.toLowerCase()}` : `Mark this section as a ${pill.label.toLowerCase()}`}
+                                              onClick={() => setSectionDraft({ ...sectionDraft, type: active ? "discussion" : pill.value })}
+                                            >
+                                              {active ? <X size={11} /> : <Plus size={11} />}
+                                              <span>{pill.label}</span>
+                                            </button>
+                                          );
+                                        })}
                                       </span>
                                       <span className="meeting-minutes-section-item__title-presenter">
                                         <NameAutocomplete
@@ -834,7 +843,11 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                     </span>
                                   </span>
                                 ) : (
-                                  <strong>{label} {section.title || "Untitled section"}</strong>
+                                  <>
+                                    <strong>{label} {section.title || "Untitled section"}</strong>
+                                    {section.type === "motion" && <Badge tone="accent">Motion</Badge>}
+                                    {section.type === "report" && <Badge tone="info">Report</Badge>}
+                                  </>
                                 )}
                               </span>
                               <span className="meeting-minutes-section-item__meta">

@@ -80,6 +80,8 @@ type CommandItem = {
   shortcut?: string;
   /** Registry group — drives the per-row icon tint. */
   group?: RouteGroup;
+  /** Extra search terms. Lets "logo" surface Settings, etc. */
+  keywords?: string[];
 };
 
 /**
@@ -100,6 +102,32 @@ const GROUP_TO_CATEGORY: Record<RouteGroup, CommandCategory> = {
 };
 
 /**
+ * Extra search terms keyed by route path. Lets the user reach a page by what
+ * they want to *do* there ("logo" → Settings) rather than the page name. Kept
+ * separate from `ROUTE_IDENTITY` so adding aliases doesn't churn the
+ * sidebar/header registry.
+ */
+const ROUTE_KEYWORDS: Record<string, string[]> = {
+  "/app/settings": [
+    "logo", "change logo", "organization logo", "letterhead",
+    "branding", "theme", "dark mode", "appearance", "customize",
+    "language", "locale", "translation",
+    "modules", "feature flags", "preferences",
+    "api keys", "api key",
+    "notifications retention", "ai chat", "sidebar",
+  ],
+  "/app/users": ["roles", "permissions", "invite", "access", "team"],
+  "/app/notifications": ["alerts", "inbox", "badges"],
+  "/app/integrations": ["connections", "webhooks", "third party"],
+  "/app/audit": ["log", "activity", "history"],
+  "/app/exports": ["download", "backup", "csv"],
+  "/app/society": ["organization", "org"],
+  "/app/financials": ["money", "accounting", "budget"],
+  "/app/members": ["people", "contacts", "roster"],
+  "/app/meetings": ["agm", "sgm", "board meeting", "gathering"],
+};
+
+/**
  * Nav commands are derived from the same `ROUTE_IDENTITY` registry the sidebar
  * and PageHeader use, so the icon and label here always match what the user
  * sees in the sidebar — searching the visible sidebar label always finds the
@@ -115,6 +143,7 @@ const NAV_ITEMS: CommandItem[] = Object.entries(ROUTE_IDENTITY).map(([path, iden
     to: path,
   };
   if (identity.module) item.module = identity.module;
+  if (ROUTE_KEYWORDS[path]) item.keywords = ROUTE_KEYWORDS[path];
   return item;
 });
 
@@ -149,6 +178,72 @@ function pushRecent(id: string) {
   } catch {
     /* ignore quota */
   }
+}
+
+/**
+ * Returns 1..99 when every character of `q` appears in order inside `text`
+ * (typo-tolerant subsequence match). Higher score = tighter cluster + earlier
+ * start. Returns null when the subsequence doesn't fit.
+ */
+function subsequenceScore(q: string, text: string): number | null {
+  if (q.length === 0 || q.length > text.length) return null;
+  let qi = 0;
+  let first = -1;
+  let last = -1;
+  for (let ti = 0; ti < text.length && qi < q.length; ti++) {
+    if (text[ti] === q[qi]) {
+      if (first === -1) first = ti;
+      last = ti;
+      qi++;
+    }
+  }
+  if (qi < q.length) return null;
+  const density = q.length / (last - first + 1);
+  const startPenalty = first / text.length;
+  return Math.round(density * 80 * (1 - startPenalty * 0.3)) + 1;
+}
+
+/**
+ * Score a candidate against the query. Returns null when nothing matches.
+ *
+ * Tiers (higher beats lower across the whole list, so e.g. a label-prefix
+ * always wins over a keyword-substring):
+ *   1000  exact label
+ *    800  label starts with query
+ *    600  a word in the label starts with query
+ *    400  label contains query
+ *    300  exact keyword
+ *    200  keyword starts with query
+ *    100  keyword contains query
+ *   1..99 subsequence (typo-tolerant) against label or keywords
+ */
+function scoreMatch(q: string, label: string, keywords?: string[]): number | null {
+  const l = label.toLowerCase();
+  if (l === q) return 1000;
+  if (l.startsWith(q)) return 800;
+  if (l.split(/[\s\-_/]+/).some((w) => w && w.startsWith(q))) return 600;
+  if (l.includes(q)) return 400;
+  if (keywords?.length) {
+    let best = 0;
+    for (const raw of keywords) {
+      const k = raw.toLowerCase();
+      if (k === q) { best = Math.max(best, 300); continue; }
+      if (k.startsWith(q)) { best = Math.max(best, 200); continue; }
+      if (k.includes(q)) { best = Math.max(best, 100); }
+    }
+    if (best > 0) return best;
+  }
+  const labelSub = subsequenceScore(q, l);
+  if (labelSub !== null) return labelSub;
+  if (keywords?.length) {
+    let best: number | null = null;
+    for (const raw of keywords) {
+      const s = subsequenceScore(q, raw.toLowerCase());
+      if (s !== null && (best === null || s > best)) best = s;
+    }
+    if (best !== null) return best;
+  }
+  return null;
 }
 
 const COMMAND_ICONS: Record<string, any> = {
@@ -464,9 +559,20 @@ export function CommandPalette() {
     }));
     const ql = q.trim().toLowerCase();
     const searchable = [...all, ...recordItems];
-    const matches = ql
-      ? searchable.filter((i) => i.label.toLowerCase().includes(ql))
-      : all;
+    let matches: CommandItem[];
+    if (ql) {
+      const scored: Array<{ item: CommandItem; score: number; order: number }> = [];
+      for (let i = 0; i < searchable.length; i++) {
+        const item = searchable[i];
+        const score = scoreMatch(ql, item.label, item.keywords);
+        if (score !== null) scored.push({ item, score, order: i });
+      }
+      // Sort by score desc, then by original order so ties stay stable.
+      scored.sort((a, b) => (b.score - a.score) || (a.order - b.order));
+      matches = scored.map((s) => s.item);
+    } else {
+      matches = all;
+    }
 
     // When idle (no query), promote the last-used items into a "Recent" group.
     const recentItems: CommandItem[] = [];

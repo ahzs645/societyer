@@ -735,7 +735,10 @@ export function MeetingDetailPage() {
       items: nextAgenda.map((entry) => ({
         title: entry.title,
         depth: entry.depth,
-        type: inferAgendaSectionType(entry.title),
+        // Honour the saved section type (set via the Motion/Report pills in
+        // the section header) ahead of title-based inference, otherwise the
+        // agenda re-sync silently overwrites the user's pill choice on save.
+        type: entry.source?.type || inferAgendaSectionType(entry.title),
         presenter: entry.source?.presenter || undefined,
         details: entry.source?.discussion || undefined,
       })),

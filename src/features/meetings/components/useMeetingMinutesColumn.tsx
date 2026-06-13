@@ -14,7 +14,6 @@ import { LegalGuideInline } from "../../../components/LegalGuide";
 import { Segmented } from "../../../components/primitives";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../../../components/MotionEditor";
 import { NameAutocomplete } from "../../../components/NameAutocomplete";
-import { Select } from "../../../components/Select";
 import { DatePicker } from "../../../components/DatePicker";
 import { SignaturePanel } from "../../../components/SignaturePanel";
 import { QuickAddTaskForm } from "../../tasks/QuickAddTaskForm";
@@ -28,7 +27,7 @@ import {
 import {
   SECTION_TASK_STATUS_ITEMS,
   AGENDA_NUMBERING_PREF_KEY,
-  SECTION_TYPE_OPTIONS,
+  SECTION_TYPE_PILLS,
   AGENDA_NUMBERING_ITEMS,
   readStoredAgendaNumberingMode,
   agendaAlphaLabel,
@@ -50,7 +49,6 @@ import {
   normalize,
 } from "./MeetingMinutesColumn.internal";
 import type {
-  SectionTypeId,
   AgendaNumberingMode,
   SectionDraft,
   SectionEditorTab,
@@ -1135,12 +1133,24 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                   placeholder="Section title"
                 />
               </Field>
-              <Field label="Type">
-                <Select
-                  value={sectionDraft.type as SectionTypeId}
-                  onChange={(next) => setSectionDraft({ ...sectionDraft, type: next })}
-                  options={SECTION_TYPE_OPTIONS}
-                />
+              <Field label="Kind">
+                <div className="meeting-minutes-section-item__title-pills">
+                  {SECTION_TYPE_PILLS.map((pill) => {
+                    const active = sectionDraft.type === pill.value;
+                    return (
+                      <button
+                        key={pill.value}
+                        type="button"
+                        className={`meeting-minutes-section-item__title-pill${active ? " is-active" : ""}`}
+                        aria-pressed={active}
+                        onClick={() => setSectionDraft({ ...sectionDraft, type: active ? "discussion" : pill.value })}
+                      >
+                        {active ? <X size={11} /> : <Plus size={11} />}
+                        <span>{pill.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </Field>
               <Field label="Presenter">
                 <NameAutocomplete
