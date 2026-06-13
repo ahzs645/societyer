@@ -546,6 +546,10 @@ async function syncMeetingAndMinutesFromAgenda(ctx: any, meeting: any, items: an
     else if (existing.motionTemplateId !== undefined) merged.motionTemplateId = existing.motionTemplateId;
     if (item.motionBacklogId !== undefined) merged.motionBacklogId = item.motionBacklogId;
     else if (existing.motionBacklogId !== undefined) merged.motionBacklogId = existing.motionBacklogId;
+    // Editor-managed flag, never derived from agenda metadata. Preserve it so
+    // saving a section with publicVisible:false isn't immediately reverted by
+    // the agenda re-sync that runs from saveMinuteSections.
+    if (existing.publicVisible !== undefined) merged.publicVisible = existing.publicVisible;
     return merged;
   });
   const nextTitles = new Set(items.map((item) => normalizeTitle(item.title)));
@@ -592,6 +596,7 @@ function cleanMinutesSection(section: any) {
   if (Array.isArray(section?.decisions)) clean.decisions = section.decisions.map(String);
   if (Array.isArray(section?.actionItems)) clean.actionItems = section.actionItems.map(cleanActionItem);
   if (Array.isArray(section?.linkedTaskIds)) clean.linkedTaskIds = section.linkedTaskIds;
+  if (section?.publicVisible !== undefined) clean.publicVisible = section.publicVisible;
   return clean;
 }
 
