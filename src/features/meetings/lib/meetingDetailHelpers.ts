@@ -6,6 +6,33 @@ export function slugifyFilePart(value: string) {
   return (value || "item").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "item";
 }
 
+/**
+ * A minutes record exists for every meeting (auto-created on `meetings.create`),
+ * so its mere presence doesn't mean the user has drafted anything. This returns
+ * true only when the record has user-authored content — discussion text, real
+ * decisions/action items, section content, or an approval timestamp. Used by
+ * the Draft Minutes picker (hide started drafts) and the picker's auto-draft
+ * handoff (don't clobber existing work).
+ *
+ * Top-level `motions` is intentionally not checked: meeting templates can
+ * pre-populate motions, so non-empty `motions` doesn't always mean the user
+ * has started drafting.
+ */
+export function hasStartedMinutesDraft(record: any): boolean {
+  if (!record) return false;
+  if (record.approvedAt) return true;
+  if (String(record.discussion ?? "").trim().length > 0) return true;
+  if ((record.decisions?.length ?? 0) > 0) return true;
+  if ((record.actionItems?.length ?? 0) > 0) return true;
+  for (const section of record.sections ?? []) {
+    if (String(section.discussion ?? "").trim().length > 0) return true;
+    if ((section.decisions?.length ?? 0) > 0) return true;
+    if ((section.actionItems?.length ?? 0) > 0) return true;
+    if (String(section.motionText ?? "").trim().length > 0) return true;
+  }
+  return false;
+}
+
 export function isCurrentDirector(director: any) {
   const status = String(director?.status ?? "").toLowerCase();
   if (status && !["active", "current", "verified"].includes(status)) return false;

@@ -446,10 +446,19 @@
 }
 .quick-action-picker__item-title {
   font-weight: token('fw-medium');
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  max-width: 100%;
 }
 .quick-action-picker__item-meta {
   color: token('text-tertiary');
   font-size: token('fs-sm');
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 .modal__foot {
   display: flex;

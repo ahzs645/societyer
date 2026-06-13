@@ -14,11 +14,13 @@ export function MeetingTranscriptCard({
   audioFile,
   importNote,
   hasMinutes,
+  draftingFromTranscript = false,
   setTranscriptEdit,
   setAudioFile,
   onImportVtt,
   onSaveTranscript,
   onUploadAudioAndRun,
+  onDraftFromTranscript,
 }: {
   vttInputRef: any;
   audioInputRef: any;
@@ -32,14 +34,23 @@ export function MeetingTranscriptCard({
   audioFile: File | null;
   importNote: string | null;
   hasMinutes: boolean;
+  /** True while the transcript-based draft action is running. */
+  draftingFromTranscript?: boolean;
   setTranscriptEdit: (value: string | null) => void;
   setAudioFile: (value: File | null) => void;
   onImportVtt: (file: File) => Promise<void>;
   onSaveTranscript: () => Promise<void>;
   onUploadAudioAndRun: (draftMinutes: boolean) => Promise<void> | void;
+  /** Triggers AI draft from the transcript already on file. Optional — older
+   * callers that don't pass this just won't render the button. */
+  onDraftFromTranscript?: () => Promise<void> | void;
 }) {
+  // Re-drafting is allowed even when minutes already exist; the parent
+  // callback handles the overwrite confirmation when appropriate.
+  const canDraftFromTranscript =
+    !!onDraftFromTranscript && transcriptOnFile.trim().length > 0;
   return (
-    <div className="card meeting-notes-card">
+    <div id="meeting-transcript-card" className="card meeting-notes-card">
       <div className="card__head">
         <h2 className="card__title">
           <Mic size={14} />
@@ -124,6 +135,16 @@ export function MeetingTranscriptCard({
               >
                 <Upload size={12} /> {audioFile ? "Change audio" : "Choose audio"}
               </button>
+              {canDraftFromTranscript && (
+                <button
+                  className="btn-action btn-action--primary"
+                  disabled={savingTranscript || pipelineBusy || draftingFromTranscript}
+                  onClick={() => onDraftFromTranscript?.()}
+                  title="Generate a minutes draft from the saved transcript using AI."
+                >
+                  <Sparkles size={12} /> {draftingFromTranscript ? "Drafting..." : "Draft from transcript"}
+                </button>
+              )}
             </>
           ) : (
             <>

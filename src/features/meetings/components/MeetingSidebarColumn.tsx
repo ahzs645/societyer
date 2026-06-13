@@ -17,6 +17,7 @@ import {
   sourceLabelForExternalId,
 } from "./MeetingDetailSupport";
 import { MeetingTranscriptCard } from "./MeetingTranscriptCard";
+import { hasStartedMinutesDraft } from "../lib/meetingDetailHelpers";
 
 export function MeetingSidebarColumn({
   meeting,
@@ -67,6 +68,8 @@ export function MeetingSidebarColumn({
   importTranscriptVtt,
   saveTranscriptEditText,
   uploadAudioAndRun,
+  draftFromTranscript,
+  draftingFromTranscript = false,
 }: {
   meeting: any;
   minutes: any;
@@ -122,6 +125,9 @@ export function MeetingSidebarColumn({
   importTranscriptVtt: (file: File) => Promise<void>;
   saveTranscriptEditText: () => Promise<void>;
   uploadAudioAndRun: (draftMinutes: boolean) => Promise<void> | void;
+  /** Optional — passing it enables the "Draft from transcript" button. */
+  draftFromTranscript?: () => Promise<void> | void;
+  draftingFromTranscript?: boolean;
 }) {
   const show = (panel: NonNullable<typeof visiblePanels>[number]) => visiblePanels.includes(panel);
   return (
@@ -317,12 +323,14 @@ export function MeetingSidebarColumn({
             pipelineBusy={pipelineBusy}
             audioFile={audioFile}
             importNote={importNote}
-            hasMinutes={!!minutes}
+            hasMinutes={hasStartedMinutesDraft(minutes)}
+            draftingFromTranscript={draftingFromTranscript}
             setTranscriptEdit={setTranscriptEdit}
             setAudioFile={setAudioFile}
             onImportVtt={importTranscriptVtt}
             onSaveTranscript={saveTranscriptEditText}
             onUploadAudioAndRun={uploadAudioAndRun}
+            onDraftFromTranscript={draftFromTranscript}
           />
           )}
 

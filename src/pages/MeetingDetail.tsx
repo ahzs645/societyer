@@ -37,6 +37,7 @@ import {
   attendanceRowsForDirectors,
   buildEmlMessage,
   buildMeetingOutboxEmail,
+  hasStartedMinutesDraft,
   isCurrentDirector,
   sanitizeAttachmentFileName,
   slugifyFilePart,
@@ -46,6 +47,8 @@ import { MeetingMaterialDrawer } from "../features/meetings/components/MeetingMa
 import { MeetingPackageHub } from "../features/meetings/components/MeetingPackageHub";
 import { MeetingMinutesColumn } from "../features/meetings/components/MeetingMinutesColumn";
 import { MeetingSidebarColumn } from "../features/meetings/components/MeetingSidebarColumn";
+import { MinutesDraftEmptyState } from "../features/meetings/components/MinutesDraftEmptyState";
+import { useConfirm } from "../components/Modal";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import {
@@ -135,6 +138,7 @@ export function MeetingDetailPage() {
     id ? { meetingId: id as Id<"meetings"> } : "skip",
   );
   const toast = useToast();
+  const confirm = useConfirm();
   const vttInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const motionEditorRef = useRef<MotionEditorHandle | null>(null);
@@ -186,6 +190,125 @@ export function MeetingDetailPage() {
   const [joinEdit, setJoinEdit] = useState<any | null>(null);
   const [sourceReviewNote, setSourceReviewNote] = useState("");
   const [packageReviewNote, setPackageReviewNote] = useState("");
+
+  // Generates a minutes draft. With no argument, uses the transcript on file
+  // (or the local edit buffer if the user is mid-edit). Pass `overrideText`
+  // to draft from a pasted/inline transcript without it having to be saved as
+  // a transcript record first — used by the Minutes-tab empty-state CTA.
+  // Defined above the early returns because the `?intent=draft-minutes`
+  // effect needs to call it.
+  const runGenerate = async (overrideText?: string) => {
+    if (!meeting) {
+      toast.error("Meeting not loaded yet.");
+      return;
+    }
+    const draftRaw = String(minutes?.draftTranscript ?? "");
+    const draftMeta = parseDocumentMetadata(draftRaw);
+    const draftIsImportMeta = isImportTranscriptMetadata(draftMeta);
+    const onFile = transcriptRecord?.text ?? (draftIsImportMeta ? "" : draftRaw);
+    const sourceTranscript = (overrideText ?? "").trim() || transcript.trim() || onFile.trim();
+    if (!sourceTranscript) {
+      toast.error("Add a transcript first.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await generate({ meetingId: meeting._id, transcript: sourceTranscript });
+      setTranscript("");
+      toast.success("Minutes drafted from transcript.");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Drafting minutes failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Wrapper for the Sources-tab "Draft from transcript" button — guards
+  // against silently overwriting minutes the user has already started or
+  // approved. Empty-state CTA paths skip this wrapper since the CTA only
+  // renders when minutes are still a skeleton.
+  const runGenerateWithOverwriteGuard = async () => {
+    if (hasStartedMinutesDraft(minutes)) {
+      const ok = await confirm({
+        title: "Replace existing minutes?",
+        message: minutes?.approvedAt
+          ? "These minutes have been approved. Re-drafting will overwrite the existing minutes — including the approval record."
+          : "These minutes already have content. Re-drafting will overwrite what's there with a fresh AI draft from the transcript on file.",
+        confirmLabel: "Replace minutes",
+        tone: "warn",
+      });
+      if (!ok) return;
+    }
+    await runGenerate();
+  };
+
+  // Used by the Minutes-tab empty-state CTA when a user pastes a transcript
+  // inline. Saves it as the meeting's canonical transcript first so it isn't
+  // lost on reload, then runs the AI draft against the same text.
+  const draftFromPastedTranscript = async (pastedText: string) => {
+    if (!meeting) {
+      toast.error("Meeting not loaded yet.");
+      return;
+    }
+    const trimmed = pastedText.trim();
+    if (!trimmed) {
+      toast.error("Paste a transcript first.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await saveTranscriptText({
+        societyId: meeting.societyId,
+        meetingId: meeting._id,
+        text: trimmed,
+        provider: "manual",
+      });
+      await generate({ meetingId: meeting._id, transcript: trimmed });
+      toast.success("Minutes drafted from pasted transcript.");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Drafting minutes failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Handles the `?intent=draft-minutes` handoff from the DraftMinutesPicker
+  // quick action. Always lands the user on the Minutes tab — never auto-
+  // switches to Sources — because the Minutes tab now has its own draft CTA
+  // (paste, upload, or one-click from a saved transcript). Auto-fire only
+  // when minutes are still a skeleton AND a transcript is already on file;
+  // otherwise the user makes the call from the CTA. Ref-gated so this only
+  // fires once per arrival.
+  const handledDraftIntentRef = useRef(false);
+  useEffect(() => {
+    if (handledDraftIntentRef.current) return;
+    if (searchParams.get("intent") !== "draft-minutes") return;
+    if (!meeting) return;
+    if (transcriptRecord === undefined) return;
+    if (minutes === undefined) return;
+    handledDraftIntentRef.current = true;
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("intent");
+        if (next.get("tab") !== "minutes") next.set("tab", "minutes");
+        return next;
+      },
+      { replace: true },
+    );
+    if (hasStartedMinutesDraft(minutes)) {
+      // Don't auto-clobber existing work — the user can hit the explicit
+      // re-draft button if that's what they meant.
+      toast.info("Minutes already drafted. Edit below or use the Draft button to re-run.");
+      return;
+    }
+    const onFile = (transcriptRecord?.text ?? "").trim();
+    if (onFile) {
+      void runGenerate();
+    } else {
+      toast.info("Paste a transcript or upload audio below to draft these minutes.");
+    }
+  }, [meeting?._id, minutes, transcriptRecord, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!meeting) return;
@@ -317,18 +440,6 @@ export function MeetingDetailPage() {
         committees,
       })
     : [];
-
-  const runGenerate = async () => {
-    const sourceTranscript = transcript.trim() || transcriptOnFile.trim();
-    if (!sourceTranscript) return;
-    setBusy(true);
-    try {
-      await generate({ meetingId: meeting._id, transcript: sourceTranscript });
-      setTranscript("");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const uploadAudioAndRun = async (draftMinutes: boolean) => {
     if (!audioFile) {
@@ -1599,6 +1710,18 @@ export function MeetingDetailPage() {
           </div>
         )}
 
+        {activeTab === "minutes" && !hasStartedMinutesDraft(minutes) && (
+          <MinutesDraftEmptyState
+            transcriptOnFile={transcriptOnFile}
+            audioInputRef={audioInputRef}
+            audioFile={audioFile}
+            busy={busy || pipelineBusy}
+            onDraftFromPastedText={draftFromPastedTranscript}
+            onDraftFromSavedTranscript={runGenerate}
+            onUploadAudioAndDraft={() => uploadAudioAndRun(true)}
+          />
+        )}
+
         {activeTab === "minutes" && (
           <MeetingMinutesColumn
             minutes={minutes}
@@ -1863,6 +1986,8 @@ export function MeetingDetailPage() {
             importTranscriptVtt={importTranscriptVtt}
             saveTranscriptEditText={saveTranscriptEditText}
             uploadAudioAndRun={uploadAudioAndRun}
+            draftFromTranscript={runGenerateWithOverwriteGuard}
+            draftingFromTranscript={busy}
           />
         )}
       </div>
