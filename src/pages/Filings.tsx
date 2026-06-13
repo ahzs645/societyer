@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -75,9 +75,12 @@ export function FilingsPage() {
     viewId: currentViewId,
   });
 
+  const markFiledIntentHandled = useRef(false);
   useEffect(() => {
-    if (!society || filings === undefined || completeDraft) return;
+    if (markFiledIntentHandled.current) return;
+    if (!society || filings === undefined) return;
     if (params.get("intent") !== "mark-filed") return;
+    markFiledIntentHandled.current = true;
     const target = (filings ?? []).find((filing: any) => filing.status !== "Filed");
     setParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -104,7 +107,7 @@ export function FilingsPage() {
       submissionChecklist: target.submissionChecklist ?? [],
       registryUrl: target.registryUrl ?? "",
     });
-  }, [completeDraft, filings, params, setParams, society, toast]);
+  }, [filings, params, setParams, society, toast]);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
