@@ -108,6 +108,7 @@ type SectionDraft = {
   actionItems: SectionActionDraft[];
   linkedTaskIds: string[];
   taskUpdates: Record<string, { status?: string; completionNote?: string }>;
+  publicVisible: boolean;
 };
 
 

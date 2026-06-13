@@ -398,9 +398,28 @@ export function MeetingDetailPage() {
   const markHeld = () => updateMeeting({ id: meeting._id, patch: { status: "Held" } });
   const reopenMeeting = () => updateMeeting({ id: meeting._id, patch: { status: "Scheduled" } });
 
-  const minutesRenderPayload = (redact?: (value: string) => string) => {
+  const minutesRenderPayload = (redact?: (value: string) => string, publicOnly = false) => {
     if (!minutes) return null;
     const tx = (value?: string | null) => (value && redact ? redact(value) : value);
+    // When publicOnly is set, drop sections the user has flagged as private.
+    // Motions reference their section by index, so we have to remap the
+    // surviving motions' sectionIndex to the new positions; motions assigned
+    // to a removed section are dropped entirely. Unassigned motions pass
+    // through unchanged.
+    const rawSections = (minutes.sections ?? []) as any[];
+    const sectionIndexRemap = new Map<number, number>();
+    if (publicOnly) {
+      let next = 0;
+      rawSections.forEach((section, i) => {
+        if (section.publicVisible !== false) sectionIndexRemap.set(i, next++);
+      });
+    }
+    const visibleSections = publicOnly
+      ? rawSections.filter((section) => section.publicVisible !== false)
+      : rawSections;
+    const visibleMotions = publicOnly
+      ? (minutes.motions as any[]).filter((m) => m.sectionIndex == null || sectionIndexRemap.has(m.sectionIndex))
+      : (minutes.motions as any[]);
     return {
       heldAt: minutes.heldAt,
       chairName: tx(minutes.chairName),
@@ -429,7 +448,7 @@ export function MeetingDetailPage() {
       quorumRequired: quorumSnapshot.required,
       quorumSourceLabel: quorumSnapshot.label,
       discussion: tx(minutes.discussion) ?? "",
-      sections: (minutes.sections ?? []).map((section: any) => ({
+      sections: visibleSections.map((section: any) => ({
         ...section,
         presenter: tx(section.presenter),
         discussion: tx(section.discussion),
@@ -440,11 +459,12 @@ export function MeetingDetailPage() {
           assignee: tx(item.assignee),
         })),
       })),
-      motions: (minutes.motions as any[]).map((m) => ({
+      motions: visibleMotions.map((m) => ({
         ...m,
         text: tx(m.text) ?? "",
         movedBy: tx(motionPersonDisplayName(m.movedBy, motionPeople, { memberId: m.movedByMemberId, directorId: m.movedByDirectorId })),
         secondedBy: tx(motionPersonDisplayName(m.secondedBy, motionPeople, { memberId: m.secondedByMemberId, directorId: m.secondedByDirectorId })),
+        sectionIndex: publicOnly && m.sectionIndex != null ? sectionIndexRemap.get(m.sectionIndex) : m.sectionIndex,
       })),
       decisions: redact ? minutes.decisions.map(redact) : minutes.decisions,
       actionItems: (minutes.actionItems as any[]).map((a) => ({
@@ -515,8 +535,8 @@ export function MeetingDetailPage() {
     return false;
   })();
 
-  const renderExportBody = (redact?: (value: string) => string) => {
-    const payload = minutesRenderPayload(redact);
+  const renderExportBody = (redact?: (value: string) => string, publicOnly = false) => {
+    const payload = minutesRenderPayload(redact, publicOnly);
     if (!payload || !hasExportableContent) return "";
     return renderMinutesHtml({
       society: {
@@ -581,7 +601,7 @@ export function MeetingDetailPage() {
     const pii = redactOpts();
     const redact = (s: string) => redactText(s, pii);
     const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-    const bodyHtml = renderExportBody(redact);
+    const bodyHtml = renderExportBody(redact, true);
     exportWordDocx({
       filename: `${safe}-public-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.docx`,
       title: `${meeting.title} — Public minutes`,

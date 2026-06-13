@@ -58,6 +58,7 @@ const minuteSection = v.object({
   actionItems: v.optional(v.array(actionItem)),
   linkedTaskIds: v.optional(v.array(v.id("tasks"))),
   depth: v.optional(v.union(v.literal(0), v.literal(1))),
+  publicVisible: v.optional(v.boolean()),
 });
 
 const sessionSegment = v.object({

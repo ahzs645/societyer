@@ -2184,6 +2184,9 @@ export default defineSchema({
           // 0 = root agenda item, 1 = sub-item nested under the most recent
           // preceding root. Absent on legacy data, treated as 0.
           depth: v.optional(v.union(v.literal(0), v.literal(1))),
+          // Absent or true → included in the redacted "Public copy" export.
+          // false → kept in internal minutes but stripped from the public copy.
+          publicVisible: v.optional(v.boolean()),
         }),
       ),
     ),

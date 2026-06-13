@@ -3,7 +3,7 @@
 
 import { type DragEvent as ReactDragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, FileText, GripVertical, IndentDecrease, IndentIncrease, ListChecks, Mic, MoreHorizontal, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, Eye, EyeOff, FileText, GripVertical, IndentDecrease, IndentIncrease, ListChecks, Mic, MoreHorizontal, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
 import { Badge, Field, MenuRow } from "../../../components/ui";
 import { MarkdownEditor, type MarkdownEditorHandle } from "../../../components/MarkdownEditor";
 import { LineListEditor } from "../../../components/LineListEditor";
@@ -236,6 +236,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       actionItems: [],
       linkedTaskIds: [],
       taskUpdates: {},
+      publicVisible: true,
     });
   };
 
@@ -934,6 +935,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       actionItems: normalizeActionDrafts(section.actionItems ?? []),
       linkedTaskIds: Array.isArray(section.linkedTaskIds) ? section.linkedTaskIds : [],
       taskUpdates: {},
+      publicVisible: section.publicVisible !== false,
     });
   };
 
@@ -972,6 +974,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
         }))
         .filter((item) => item.text),
       linkedTaskIds: sectionDraft.linkedTaskIds.length ? sectionDraft.linkedTaskIds : undefined,
+      publicVisible: sectionDraft.publicVisible ? undefined : false,
     };
     await saveMinuteSections(next);
     for (const [taskId, patch] of Object.entries(sectionDraft.taskUpdates)) {
@@ -1165,6 +1168,24 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
 
         {sectionEditorTab === "notes" && (
           <div className="meeting-minutes-section-editor__panel">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={sectionDraft.publicVisible}
+              className={`meeting-minutes-section-editor__public-toggle${sectionDraft.publicVisible ? " is-public" : " is-private"}`}
+              onClick={() => setSectionDraft({ ...sectionDraft, publicVisible: !sectionDraft.publicVisible })}
+              title={sectionDraft.publicVisible
+                ? "This item appears in the Public copy export. Click to hide it."
+                : "This item is hidden from the Public copy export. Click to include it."}
+            >
+              <span className="meeting-minutes-section-editor__public-toggle-icon" aria-hidden>
+                <Eye size={14} className="meeting-minutes-section-editor__public-toggle-eye is-on" />
+                <EyeOff size={14} className="meeting-minutes-section-editor__public-toggle-eye is-off" />
+              </span>
+              <span className="meeting-minutes-section-editor__public-toggle-text">
+                {sectionDraft.publicVisible ? "Visible in Public copy" : "Hidden from Public copy"}
+              </span>
+            </button>
             <Field label="Discussion notes" hint="Discussion/report points only. Use the toolbar for headings, lists, and more.">
               <MarkdownEditor
                 ref={isMobile ? undefined : sectionDiscussionRef}
