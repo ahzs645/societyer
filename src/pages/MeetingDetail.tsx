@@ -11,7 +11,7 @@ import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
 import { formatDate, formatDateTime } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, BookMarked, ClipboardCheck, Download, ExternalLink, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
+import { ArrowLeft, BookMarked, ClipboardCheck, Download, Eye, EyeOff, ExternalLink, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../components/MotionEditor";
 import {
   MINUTES_EXPORT_STYLES,
@@ -1707,7 +1707,13 @@ export function MeetingDetailPage() {
         )}
 
         {activeTab === "export" && (() => {
-          const previewHtml = renderExportBody();
+          // Mirror the toggle so the preview shows exactly what the Export
+          // Word / Export PDF buttons will produce — redacted + section-filtered
+          // when public copy mode is on, full minutes otherwise.
+          const previewHtml = renderExportBody(
+            publicCopyMode ? (s: string) => redactText(s, redactOpts()) : undefined,
+            publicCopyMode,
+          );
           // When there's nothing to render, drop the two-column layout so the
           // empty-state message takes the full width — the export sidebar's
           // controls aren't actionable until there's content anyway.
@@ -1780,9 +1786,25 @@ export function MeetingDetailPage() {
                     <strong>{selectedMinutesExportStyle.label}</strong>
                     <p className="muted">{selectedMinutesExportStyle.tone}</p>
                   </div>
-                  <button className="btn-action" onClick={openMinutesPreviewPage}>
-                    <ExternalLink size={12} /> Open separate page
-                  </button>
+                  <div className="row" style={{ gap: 6, alignItems: "center" }}>
+                    <span
+                      className={`public-copy-toggle public-copy-toggle--readonly${publicCopyMode ? " is-private" : " is-public"}`}
+                      title={publicCopyMode
+                        ? "Preview reflects the Public copy: PII redacted and hidden sections stripped."
+                        : "Preview reflects the full minutes including hidden sections."}
+                    >
+                      <span className="public-copy-toggle__icon" aria-hidden>
+                        <Eye size={14} className="public-copy-toggle__eye is-on" />
+                        <EyeOff size={14} className="public-copy-toggle__eye is-off" />
+                      </span>
+                      <span className="public-copy-toggle__text">
+                        {publicCopyMode ? "Public copy preview" : "Full minutes preview"}
+                      </span>
+                    </span>
+                    <button className="btn-action" onClick={openMinutesPreviewPage}>
+                      <ExternalLink size={12} /> Open separate page
+                    </button>
+                  </div>
                 </div>
                 <div className="minutes-preview__page" dangerouslySetInnerHTML={{ __html: previewHtml }} />
               </div>
