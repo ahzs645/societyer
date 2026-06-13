@@ -16,6 +16,7 @@
 
 .record-table__toolbar {
   @include flex-center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 6px 0;
   border-bottom: 1px solid token('border-color-light');
@@ -25,11 +26,12 @@
 .record-table__toolbar-left {
   @include flex-center;
   gap: 6px;
-  min-width: 180px;
+  min-width: 0;
+  flex-shrink: 0;
 }
 
 .record-table__toolbar-center {
-  flex: 1;
+  flex: 1 1 200px;
   display: flex;
   justify-content: center;
   min-width: 0;
@@ -117,7 +119,7 @@
   border: 1px solid token('border-color-medium');
   border-radius: token('r-pill');
   background: token('bg-secondary');
-  min-width: 280px;
+  min-width: 0;
   max-width: 420px;
   flex: 1;
 
