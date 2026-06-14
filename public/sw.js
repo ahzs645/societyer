@@ -1,4 +1,6 @@
-const CACHE_VERSION = "societyer-pwa-v1";
+// Bump this whenever the caching strategy changes so older caches (which may
+// hold stale build chunks under stable asset filenames) are purged on activate.
+const CACHE_VERSION = "societyer-pwa-v2";
 const APP_SHELL = ["/", "/index.html", "/favicon.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -41,17 +43,23 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.pathname.startsWith("/assets/") || APP_SHELL.includes(url.pathname)) {
+    // Network-first for build assets. The Pages build uses stable filenames
+    // (e.g. /assets/react-vendor.js, /assets/Documents.js), so a cache-first
+    // strategy can serve a stale chunk from a previous deploy alongside a
+    // freshly fetched lazy chunk. When the two come from different builds their
+    // minified cross-chunk imports no longer line up and the app crashes with
+    // errors like "X is not a function". Preferring the network keeps every
+    // chunk coherent for online users; the cache is only an offline fallback.
     event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) return cached;
-        return fetch(request).then((response) => {
+      fetch(request)
+        .then((response) => {
           if (response.ok) {
             const copy = response.clone();
             caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
           }
           return response;
-        });
-      }),
+        })
+        .catch(() => caches.match(request)),
     );
   }
 });

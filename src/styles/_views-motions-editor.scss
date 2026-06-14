@@ -394,8 +394,29 @@
   outline: none;
   border-bottom: 1px solid token('accent');
 }
+/* Read-only fallback heading shown when a motion has no short name: renders
+   the full wording, wraps instead of clipping (unlike the single-line input),
+   and acts as a button that opens the editor. */
+.motion__name-display {
+  field-sizing: auto;
+  cursor: pointer;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.motion__name-display:hover {
+  border-bottom-color: token('border');
+}
+.motion__name-display:focus,
+.motion__name-display:focus-visible {
+  outline: none;
+  border-bottom: 1px solid token('accent');
+}
 .motion__text { font-weight: 500; margin-bottom: 4px; }
 .motion__meta { font-size: token('fs-sm'); color: token('text-tertiary'); display: flex; gap: token('s-3'); flex-wrap: wrap; }
+// The outcome badge sits under the title by default. On phone-width cards the
+// title wraps down the left and leaves the area under the action icons empty,
+// so move the badge under the buttons there instead.
+.motion__meta--actions { display: none; }
 .motion__head {
   display: flex;
   align-items: flex-start;
@@ -434,8 +455,7 @@
     align-self: flex-end;
   }
 }
-// Container-query fallback for narrow cards (sidebar squeeze, etc.) — same
-// stacked layout, applied automatically when the .motion card itself shrinks.
+// Container-query fallback for narrow cards (sidebar squeeze, etc.).
 @container (max-width: 700px) {
   .motion-draft__grid {
     grid-template-columns: minmax(0, 1fr);
@@ -446,14 +466,6 @@
   }
   .motion-draft__actions {
     justify-content: flex-end;
-  }
-  .motion__head {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .motion__actions {
-    order: -1;
-    align-self: flex-end;
   }
 }
 // Icon-only collapse: when the motion card is narrow, drop the text label so
@@ -475,6 +487,19 @@
     gap: 0;
   }
 }
+// Phone-width cards: drop the outcome badge under the action icons (right) so
+// it fills the space left by the wrapping title, rather than sitting on its own
+// line under the title on the left. Skipped for the long-title stacked layout,
+// where the title already spans the full width.
+@container (max-width: 480px) {
+  .motion__head:not(.motion__head--stacked) .motion__meta--inline {
+    display: none;
+  }
+  .motion__head:not(.motion__head--stacked) .motion__meta--actions {
+    display: flex;
+    margin-top: 4px;
+  }
+}
 .motion-adjournment {
   display: grid;
   gap: token('s-2');
@@ -486,7 +511,18 @@
 }
 .motion-adjournment__head {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: token('s-3');
   align-items: center;
+}
+// Let the title/subtitle take the available width and drop the action button
+// to its own line on narrow cards, instead of squeezing the text into a sliver
+// that word-breaks ("Adjourn\nment").
+.motion-adjournment__head > div {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.motion-adjournment__head > button {
+  flex: 0 0 auto;
 }
