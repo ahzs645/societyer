@@ -4,6 +4,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field, Flag } from "../components/ui";
+import { DataTable } from "../components/DataTable";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Select } from "../components/Select";
 import { formatDateTime, money } from "../lib/format";
@@ -566,55 +567,49 @@ export function FinancialsPage() {
       )}
 
       {activeConnection && transactions && transactions.length > 0 && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card__head">
-            <h2 className="card__title">Recent transactions</h2>
-            <span className="card__subtitle">Latest activity from the connected source.</span>
-          </div>
-          <table className="table">
-            <thead>
-              <tr><th>Date</th><th>Description</th><th>Account</th><th>Category</th><th style={{ textAlign: "right" }}>Amount</th><th>Inventory items</th></tr>
-            </thead>
-            <tbody>
-              {transactions.map((t) => {
-                const acct = (accounts ?? []).find((a) => a._id === t.accountId);
-                const links = linksByTransactionId.get(t._id) ?? [];
-                return (
-                  <tr key={t._id}>
-                    <td className="table__cell--mono">{t.date}</td>
-                    <td>{t.description}</td>
-                    <td className="muted">{acct?.name ?? "—"}</td>
-                    <td><Badge>{t.category ?? "uncategorized"}</Badge></td>
-                    <td
-                      className="table__cell--mono"
-                      style={{ textAlign: "right", color: t.amountCents < 0 ? "var(--danger)" : "var(--success)" }}
-                    >
-                      {money(t.amountCents)}
-                    </td>
-                    <td>
-                      <div className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                        {links.map((link: any) => (
-                          <span key={link._id} className="row" style={{ gap: 4, alignItems: "center" }}>
-                            <Link to="/app/inventory">{link.inventoryItem?.name ?? link.asset?.name ?? link.receiptLineLabel ?? "Linked item"}</Link>
-                            <button
-                              className="btn btn--ghost btn--sm btn--icon"
-                              aria-label="Unlink item"
-                              onClick={async () => { await unlinkInventoryReceipt({ id: link._id }); toast.success("Item unlinked"); }}
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </span>
-                        ))}
-                        <button className="btn btn--ghost btn--sm" onClick={() => { setLinkTxn(t); setLinkItemId(""); }}>
-                          <Link2 size={12} /> Link item
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div style={{ marginBottom: 16 }}>
+          <DataTable
+            label="Recent transactions"
+            data={transactions as any[]}
+            rowKey={(t) => t._id}
+            viewsKey="financial-transactions"
+            searchPlaceholder="Search transactions, linked items…"
+            searchExtraFields={[(t) => (linksByTransactionId.get(t._id) ?? []).map((l: any) => l.inventoryItem?.name ?? l.asset?.name).join(" ")]}
+            columns={[
+              { id: "date", header: "Date", sortable: true, accessor: (t) => t.date, render: (t) => <span className="mono">{t.date}</span> },
+              { id: "description", header: "Description", sortable: true, accessor: (t) => t.description },
+              { id: "account", header: "Account", accessor: (t) => (accounts ?? []).find((a) => a._id === t.accountId)?.name ?? "", render: (t) => <span className="muted">{(accounts ?? []).find((a) => a._id === t.accountId)?.name ?? "—"}</span> },
+              { id: "category", header: "Category", accessor: (t) => t.category ?? "", render: (t) => <Badge>{t.category ?? "uncategorized"}</Badge> },
+              { id: "amount", header: "Amount", align: "right", sortable: true, accessor: (t) => t.amountCents, render: (t) => <span className="mono" style={{ color: t.amountCents < 0 ? "var(--danger)" : "var(--success)" }}>{money(t.amountCents)}</span> },
+              {
+                id: "items",
+                header: "Inventory items",
+                accessor: (t) => linksByTransactionId.get(t._id)?.length ?? 0,
+                render: (t) => {
+                  const links = linksByTransactionId.get(t._id) ?? [];
+                  return (
+                    <div className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                      {links.map((link: any) => (
+                        <span key={link._id} className="row" style={{ gap: 4, alignItems: "center" }}>
+                          <Link to="/app/inventory">{link.inventoryItem?.name ?? link.asset?.name ?? link.receiptLineLabel ?? "Linked item"}</Link>
+                          <button
+                            className="btn btn--ghost btn--sm btn--icon"
+                            aria-label="Unlink item"
+                            onClick={async () => { await unlinkInventoryReceipt({ id: link._id }); toast.success("Item unlinked"); }}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </span>
+                      ))}
+                      <button className="btn btn--ghost btn--sm" onClick={() => { setLinkTxn(t); setLinkItemId(""); }}>
+                        <Link2 size={12} /> Link item
+                      </button>
+                    </div>
+                  );
+                },
+              },
+            ]}
+          />
         </div>
       )}
 

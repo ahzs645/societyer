@@ -294,6 +294,7 @@ export const upsertItem = mutation({
     assetId: v.optional(v.id("assets")),
     imageStorageId: v.optional(v.id("_storage")),
     imageUrl: v.optional(v.string()),
+    clearImage: v.optional(v.boolean()),
     externalId: v.optional(v.string()),
     sourceSystem: v.optional(v.string()),
     rawJson: v.optional(v.string()),
@@ -301,8 +302,8 @@ export const upsertItem = mutation({
   returns: v.any(),
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
-    const { id, ...payload } = args;
-    const row = {
+    const { id, clearImage, ...payload } = args;
+    const row: any = {
       ...payload,
       currency: payload.currency ?? "CAD",
       trackSerial: payload.trackSerial ?? false,
@@ -312,6 +313,11 @@ export const upsertItem = mutation({
       sourceSystem: payload.sourceSystem ?? "manual",
       updatedAtISO: now,
     };
+    // Convex patch ignores undefined args, so clearing an image needs an explicit signal.
+    if (clearImage) {
+      row.imageStorageId = undefined;
+      row.imageUrl = undefined;
+    }
     if (id) {
       await ctx.db.patch(id, row);
       return id;

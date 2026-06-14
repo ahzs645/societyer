@@ -237,6 +237,7 @@ export function InventoryPage() {
       description: itemForm.description.trim() || undefined,
       imageStorageId: itemForm.image.imageStorageId as any,
       imageUrl: itemForm.image.imageUrl,
+      clearImage: !itemForm.image.imageStorageId && !itemForm.image.imageUrl,
       sourceSystem: "societyer_manual",
     } as any);
     toast.success(editingItemId ? "Item updated" : "Item created");

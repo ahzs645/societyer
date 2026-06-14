@@ -1,12 +1,15 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge } from "../components/ui";
+import { Select } from "../components/Select";
 import { useConfirm, usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Scale, Link2, Undo2 } from "lucide-react";
+import { Boxes, Scale, Link2, Undo2 } from "lucide-react";
 import { formatDate, money } from "../lib/format";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
@@ -36,11 +39,17 @@ export function ReconciliationPage() {
   const matchM = useMutation(api.reconciliation.match);
   const markManualM = useMutation(api.reconciliation.markManual);
   const unmatchM = useMutation(api.reconciliation.unmatch);
+  const inventoryItems = useQuery(api.inventoryHub.items, society ? { societyId: society._id } : "skip");
+  const inventoryLinks = useQuery(api.inventoryHub.receiptLinks, society ? { societyId: society._id } : "skip");
+  const linkInventoryReceipt = useMutation(api.inventoryHub.linkReceipt);
+  const unlinkInventoryReceipt = useMutation(api.inventoryHub.unlinkReceipt);
+  const actingUserId = useCurrentUserId() ?? undefined;
   const prompt = usePrompt();
   const confirm = useConfirm();
   const toast = useToast();
 
   const [selected, setSelected] = useState<string | null>(null);
+  const [linkItemId, setLinkItemId] = useState("");
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
 
@@ -75,8 +84,28 @@ export function ReconciliationPage() {
     [rows, selected],
   );
 
+  const selectedLinks = useMemo(
+    () => ((inventoryLinks ?? []) as any[]).filter((l) => selected && l.financialTransactionId === selected),
+    [inventoryLinks, selected],
+  );
+
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
+
+  const linkSelectedItem = async () => {
+    if (!selectedRow || !linkItemId) {
+      toast.error("Choose an inventory item to link.");
+      return;
+    }
+    await linkInventoryReceipt({
+      societyId: society._id,
+      inventoryItemId: linkItemId as any,
+      financialTransactionId: selectedRow.txn._id,
+      createdByUserId: actingUserId as any,
+    } as any);
+    toast.success("Inventory item linked");
+    setLinkItemId("");
+  };
 
   const autoMatchAllHighConfidence = async () => {
     const candidates = rows
@@ -280,6 +309,41 @@ export function ReconciliationPage() {
                     </button>
                   </>
                 )}
+
+                <div className="hr" />
+                <div className="col" style={{ gap: 8 }}>
+                  <div className="row" style={{ gap: 6, alignItems: "center", fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>
+                    <Boxes size={12} /> Linked inventory items
+                  </div>
+                  {selectedLinks.length === 0 && (
+                    <div className="muted">No inventory items linked to this purchase yet.</div>
+                  )}
+                  {selectedLinks.map((link: any) => (
+                    <div key={link._id} className="row" style={{ gap: 8, alignItems: "center", justifyContent: "space-between" }}>
+                      <Link to="/app/inventory">{link.inventoryItem?.name ?? link.asset?.name ?? link.receiptLineLabel ?? "Linked item"}</Link>
+                      <button
+                        className="btn-action"
+                        onClick={async () => { await unlinkInventoryReceipt({ id: link._id }); toast.info("Item unlinked"); }}
+                      >
+                        <Undo2 size={12} /> Unlink
+                      </button>
+                    </div>
+                  ))}
+                  <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <div style={{ flex: "1 1 180px", minWidth: 160 }}>
+                      <Select
+                        value={linkItemId}
+                        onChange={setLinkItemId}
+                        placeholder="Choose an item"
+                        searchable
+                        options={((inventoryItems ?? []) as any[]).map((i) => ({ value: i._id, label: i.sku ? `${i.name} (${i.sku})` : i.name }))}
+                      />
+                    </div>
+                    <button className="btn-action btn-action--primary" onClick={linkSelectedItem}>
+                      <Link2 size={12} /> Link item
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

@@ -2490,6 +2490,7 @@ const tables: Record<string, any[]> = {
       category: "Program equipment",
       serialNumber: "EP-DEMO-4421",
       supplier: "Harbour Office Supply",
+      imageUrl: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><rect width='80' height='80' rx='10' fill='%232a5d8f'/><text x='40' y='46' font-size='30' text-anchor='middle' fill='%23ffffff'>📽️</text></svg>",
       purchaseDate: "2025-09-12",
       purchaseValueCents: 92000,
       currency: "CAD",

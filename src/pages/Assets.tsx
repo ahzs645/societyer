@@ -494,6 +494,13 @@ export function AssetDetailPage() {
       <div className="asset-detail-grid">
         <section className="panel">
           <div className="panel__head"><h2>Register</h2><StatusBadge status={asset.status} /></div>
+          {asset.imageUrl && (
+            <img
+              src={asset.imageUrl}
+              alt={`Photo of ${asset.name}`}
+              style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 8, border: "1px solid var(--border, #d8dadf)", marginBottom: 12 }}
+            />
+          )}
           <dl className="record-kv">
             <div><dt>Category</dt><dd>{asset.category}</dd></div>
             <div><dt>Serial</dt><dd className="mono">{asset.serialNumber || "—"}</dd></div>
@@ -758,9 +765,14 @@ function Select({
 
 function AssetCell({ row }: { row: any }) {
   return (
-    <div>
-      <strong>{row.name}</strong>
-      <div className="muted">{[row.category, row.serialNumber].filter(Boolean).join(" · ")}</div>
+    <div className="row" style={{ gap: 10, alignItems: "center", flexWrap: "nowrap" }}>
+      {row.imageUrl && (
+        <img src={row.imageUrl} alt="" style={{ width: 32, height: 32, flex: "0 0 auto", borderRadius: 6, objectFit: "cover", border: "1px solid var(--border, #d8dadf)" }} />
+      )}
+      <div>
+        <strong>{row.name}</strong>
+        <div className="muted">{[row.category, row.serialNumber].filter(Boolean).join(" · ")}</div>
+      </div>
     </div>
   );
 }
