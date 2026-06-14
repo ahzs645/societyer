@@ -32,6 +32,9 @@ const assetPatch = v.object({
   depreciationMethod: v.optional(v.string()),
   usefulLifeMonths: v.optional(v.number()),
   bookValueCents: v.optional(v.number()),
+  imageStorageId: v.optional(v.id("_storage")),
+  imageUrl: v.optional(v.string()),
+  clearImage: v.optional(v.boolean()),
   purchaseTransactionId: v.optional(v.id("financialTransactions")),
   receiptDocumentId: v.optional(v.id("documents")),
   sourceDocumentIds: v.optional(v.array(v.id("documents"))),
@@ -181,11 +184,18 @@ async function recordConsumableStockMovement(
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
+  handler: async (ctx, { societyId }) => {
+    const rows = await ctx.db
       .query("assets")
       .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
-      .collect(),
+      .collect();
+    return Promise.all(
+      rows.map(async (row: any) => ({
+        ...row,
+        imageUrl: row.imageStorageId ? (await ctx.storage.getUrl(row.imageStorageId)) ?? row.imageUrl : row.imageUrl,
+      })),
+    );
+  },
 });
 
 export const get = query({
@@ -200,6 +210,9 @@ export const bundle = query({
   handler: async (ctx, { id }) => {
     const asset = await ctx.db.get(id);
     if (!asset) return null;
+    if (asset.imageStorageId) {
+      asset.imageUrl = (await ctx.storage.getUrl(asset.imageStorageId)) ?? asset.imageUrl;
+    }
     const [events, maintenance, receiptLinks] = await Promise.all([
       ctx.db
         .query("assetEvents")
@@ -310,6 +323,9 @@ export const create = mutation({
     depreciationMethod: v.optional(v.string()),
     usefulLifeMonths: v.optional(v.number()),
     bookValueCents: v.optional(v.number()),
+    imageStorageId: v.optional(v.id("_storage")),
+    imageUrl: v.optional(v.string()),
+    clearImage: v.optional(v.boolean()),
     purchaseTransactionId: v.optional(v.id("financialTransactions")),
     receiptDocumentId: v.optional(v.id("documents")),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
@@ -321,8 +337,9 @@ export const create = mutation({
   returns: v.any(),
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
+    const { clearImage: _clearImage, ...insertArgs } = args;
     const id = await ctx.db.insert("assets", {
-      ...args,
+      ...insertArgs,
       currency: args.currency ?? "CAD",
       sourceDocumentIds: args.sourceDocumentIds ?? [],
       disposalDocumentIds: [],
@@ -362,7 +379,14 @@ export const update = mutation({
   args: { id: v.id("assets"), patch: assetPatch },
   returns: v.any(),
   handler: async (ctx, { id, patch }) => {
-    await ctx.db.patch(id, { ...patch, updatedAtISO: new Date().toISOString() });
+    const { clearImage, ...rest } = patch as any;
+    const next: any = { ...rest, updatedAtISO: new Date().toISOString() };
+    // Convex patch ignores undefined args, so clearing an image needs an explicit signal.
+    if (clearImage) {
+      next.imageStorageId = undefined;
+      next.imageUrl = undefined;
+    }
+    await ctx.db.patch(id, next);
     return id;
   },
 });

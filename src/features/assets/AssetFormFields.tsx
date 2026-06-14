@@ -16,6 +16,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Field } from "../../components/ui";
+import { ImageUploadField, type ImageValue } from "../../components/ImageUploadField";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { Select } from "../../components/Select";
 import { DatePicker } from "../../components/DatePicker";
@@ -56,6 +57,7 @@ export type AssetFormValue = {
   depreciationMethod: string;
   usefulLifeMonths: string;
   bookValue: string;
+  image: ImageValue;
   purchaseTransactionId: string;
   receiptDocumentId: string;
   warrantyExpiresAt: string;
@@ -96,6 +98,7 @@ export function makeAssetFormDefaults(
     depreciationMethod: initial?.depreciationMethod ?? "",
     usefulLifeMonths: initial?.usefulLifeMonths ?? "",
     bookValue: initial?.bookValue ?? "",
+    image: initial?.image ?? {},
     purchaseTransactionId: initial?.purchaseTransactionId ?? "",
     receiptDocumentId: initial?.receiptDocumentId ?? "",
     warrantyExpiresAt: initial?.warrantyExpiresAt ?? "",
@@ -150,6 +153,14 @@ export function AssetFormFields({
 
   return (
     <div className="form-grid">
+      <div style={{ gridColumn: "1 / -1" }}>
+        <ImageUploadField
+          label="Photo"
+          hint="Upload a picture of the asset, or paste an image URL."
+          value={value.image}
+          onChange={(image) => onChange({ image })}
+        />
+      </div>
       <Field label="Asset tag" required>
         <input
           className="input"

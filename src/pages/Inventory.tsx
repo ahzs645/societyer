@@ -1,13 +1,16 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
-import { ArrowLeft, Boxes, ClipboardCheck, FileText, History, Plus, RefreshCw } from "lucide-react";
+import { ArrowLeft, Boxes, ClipboardCheck, FileText, History, Image as ImageIcon, Link2, MapPin, Package, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
+import { ImageUploadField, type ImageValue } from "../components/ImageUploadField";
 import { PageHeader, SeedPrompt } from "./_helpers";
 import { useToast } from "../components/Toast";
+import { money } from "../lib/format";
 
 function formatQuantity(value?: number | null, unit?: string | null) {
   if (value == null) return "-";
@@ -22,9 +25,53 @@ function movementTone(type: string) {
 }
 
 const MOVEMENT_TYPES = ["receive", "consume", "transfer", "adjustment", "count"];
+const ITEM_TYPES = ["asset", "consumable", "supply", "software", "service", "other"];
+const LOCATION_TYPES = ["facility", "room", "shelf", "bin", "custody", "in_transit", "vendor", "virtual"];
 
 function todayDate() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function dollarsToCents(value: string): number | undefined {
+  const n = Number(String(value).replace(/[^0-9.-]/g, ""));
+  if (!Number.isFinite(n) || value.trim() === "") return undefined;
+  return Math.round(n * 100);
+}
+
+function centsToDollars(value?: number | null): string {
+  if (value == null) return "";
+  return (value / 100).toFixed(2);
+}
+
+function emptyItemForm() {
+  return {
+    name: "",
+    sku: "",
+    category: "Program supplies",
+    itemType: "supply",
+    unitOfMeasure: "each",
+    reorderPoint: "",
+    defaultCost: "",
+    description: "",
+    image: {} as ImageValue,
+  };
+}
+
+function emptyLocationForm() {
+  return { name: "", locationType: "facility", address: "" };
+}
+
+function emptyLinkForm() {
+  return {
+    receiptDocumentId: "",
+    financialTransactionId: "",
+    receiptLineLabel: "",
+    quantity: "",
+    unitOfMeasure: "each",
+    unitCost: "",
+    totalCost: "",
+    notes: "",
+  };
 }
 
 function emptyMovementForm() {
@@ -43,17 +90,29 @@ function emptyMovementForm() {
 export function InventoryPage() {
   const society = useSociety();
   const toast = useToast();
+  const actingUserId = useCurrentUserId() ?? undefined;
   const items = useQuery(api.inventoryHub.items, society ? { societyId: society._id } : "skip");
   const locations = useQuery(api.inventoryHub.locations, society ? { societyId: society._id } : "skip");
   const balances = useQuery(api.inventoryHub.balances, society ? { societyId: society._id } : "skip");
   const movements = useQuery(api.inventoryHub.stockMovements, society ? { societyId: society._id, limit: 100 } : "skip");
   const counts = useQuery(api.inventoryHub.counts, society ? { societyId: society._id, status: "open" } : "skip");
   const receiptLinks = useQuery(api.inventoryHub.receiptLinks, society ? { societyId: society._id } : "skip");
+  const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
+  const transactions = useQuery(api.financialHub.transactions, society ? { societyId: society._id, limit: 200 } : "skip");
   const postMovement = useMutation(api.inventoryHub.postStockMovement);
   const backfillAssets = useMutation(api.inventoryHub.backfillAssets);
   const reconcileCount = useMutation(api.inventoryHub.postCountVarianceAdjustments);
   const importOpenBoxes = useMutation(api.inventoryHub.importOpenBoxesSnapshot);
-  const [drawer, setDrawer] = useState<"movement" | "openboxes" | null>(null);
+  const upsertItem = useMutation(api.inventoryHub.upsertItem);
+  const upsertLocation = useMutation(api.inventoryHub.upsertLocation);
+  const linkReceipt = useMutation(api.inventoryHub.linkReceipt);
+  const unlinkReceipt = useMutation(api.inventoryHub.unlinkReceipt);
+  const [drawer, setDrawer] = useState<"movement" | "openboxes" | "item" | "location" | "link" | null>(null);
+  const [itemForm, setItemForm] = useState(emptyItemForm);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [locationForm, setLocationForm] = useState(emptyLocationForm);
+  const [linkForm, setLinkForm] = useState(emptyLinkForm);
+  const [linkItem, setLinkItem] = useState<any>(null);
   const [movementForm, setMovementForm] = useState(emptyMovementForm);
   const [openBoxesJson, setOpenBoxesJson] = useState(JSON.stringify({
     products: [
@@ -79,6 +138,14 @@ export function InventoryPage() {
     }
     return map;
   }, [receiptLinks]);
+  const itemRows = (items ?? []) as any[];
+  const onHandByItemId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of (balances ?? []) as any[]) {
+      map.set(row.inventoryItemId, (map.get(row.inventoryItemId) ?? 0) + (row.quantityOnHand ?? 0));
+    }
+    return map;
+  }, [balances]);
   const balanceRows = (balances ?? []) as any[];
   const movementRows = (movements ?? []) as any[];
   const totalOnHand = balanceRows.reduce((sum, row) => sum + (row.quantityOnHand ?? 0), 0);
@@ -130,6 +197,106 @@ export function InventoryPage() {
     setDrawer(null);
   };
 
+  const openNewItem = () => {
+    setEditingItemId(null);
+    setItemForm(emptyItemForm());
+    setDrawer("item");
+  };
+
+  const openEditItem = (item: any) => {
+    setEditingItemId(item._id);
+    setItemForm({
+      name: item.name ?? "",
+      sku: item.sku ?? "",
+      category: item.category ?? "Program supplies",
+      itemType: item.itemType ?? "supply",
+      unitOfMeasure: item.unitOfMeasure ?? "each",
+      reorderPoint: item.reorderPoint != null ? String(item.reorderPoint) : "",
+      defaultCost: centsToDollars(item.defaultCostCents),
+      description: item.description ?? "",
+      image: { imageStorageId: item.imageStorageId, imageUrl: item.imageUrl },
+    });
+    setDrawer("item");
+  };
+
+  const saveItem = async () => {
+    if (!itemForm.name.trim()) {
+      toast.error("Item name is required.");
+      return;
+    }
+    await upsertItem({
+      id: editingItemId ? (editingItemId as any) : undefined,
+      societyId: society._id,
+      name: itemForm.name.trim(),
+      sku: itemForm.sku.trim() || undefined,
+      category: itemForm.category.trim() || "Uncategorized",
+      itemType: itemForm.itemType,
+      unitOfMeasure: itemForm.unitOfMeasure.trim() || "each",
+      reorderPoint: itemForm.reorderPoint.trim() ? Number(itemForm.reorderPoint) : undefined,
+      defaultCostCents: dollarsToCents(itemForm.defaultCost),
+      description: itemForm.description.trim() || undefined,
+      imageStorageId: itemForm.image.imageStorageId as any,
+      imageUrl: itemForm.image.imageUrl,
+      clearImage: !itemForm.image.imageStorageId && !itemForm.image.imageUrl,
+      sourceSystem: "societyer_manual",
+    } as any);
+    toast.success(editingItemId ? "Item updated" : "Item created");
+    setDrawer(null);
+  };
+
+  const saveLocation = async () => {
+    if (!locationForm.name.trim()) {
+      toast.error("Location name is required.");
+      return;
+    }
+    await upsertLocation({
+      societyId: society._id,
+      name: locationForm.name.trim(),
+      locationType: locationForm.locationType,
+      address: locationForm.address.trim() || undefined,
+      sourceSystem: "societyer_manual",
+    } as any);
+    toast.success("Location created");
+    setLocationForm(emptyLocationForm());
+    setDrawer(null);
+  };
+
+  const openLink = (item: any) => {
+    setLinkItem(item);
+    setLinkForm({
+      ...emptyLinkForm(),
+      receiptLineLabel: item.name ?? "",
+      unitOfMeasure: item.unitOfMeasure ?? "each",
+      unitCost: centsToDollars(item.defaultCostCents),
+    });
+    setDrawer("link");
+  };
+
+  const saveLink = async () => {
+    if (!linkItem) return;
+    if (!linkForm.receiptDocumentId && !linkForm.financialTransactionId) {
+      toast.error("Choose a purchase transaction or a receipt document to link.");
+      return;
+    }
+    await linkReceipt({
+      societyId: society._id,
+      inventoryItemId: linkItem._id,
+      assetId: linkItem.assetId,
+      receiptDocumentId: linkForm.receiptDocumentId ? (linkForm.receiptDocumentId as any) : undefined,
+      financialTransactionId: linkForm.financialTransactionId ? (linkForm.financialTransactionId as any) : undefined,
+      receiptLineLabel: linkForm.receiptLineLabel || undefined,
+      quantity: linkForm.quantity ? Number(linkForm.quantity) : undefined,
+      unitOfMeasure: linkForm.unitOfMeasure || undefined,
+      unitCostCents: dollarsToCents(linkForm.unitCost),
+      totalCostCents: dollarsToCents(linkForm.totalCost),
+      notes: linkForm.notes || undefined,
+      createdByUserId: actingUserId as any,
+    } as any);
+    toast.success("Purchase linked to item");
+    setDrawer(null);
+    setLinkItem(null);
+  };
+
   const runBackfill = async () => {
     const result = await backfillAssets({ societyId: society._id });
     toast.success(`Backfill complete: ${result.movementsCreated ?? 0} movement${result.movementsCreated === 1 ? "" : "s"} created`);
@@ -156,7 +323,9 @@ export function InventoryPage() {
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <button className="btn-action" onClick={runBackfill}><RefreshCw size={12} /> Backfill assets</button>
             <button className="btn-action" onClick={() => setDrawer("openboxes")}><Boxes size={12} /> OpenBoxes import</button>
-            <button className="btn-action btn-action--primary" onClick={() => setDrawer("movement")}><Plus size={12} /> New movement</button>
+            <button className="btn-action" onClick={() => setDrawer("location")}><MapPin size={12} /> New location</button>
+            <button className="btn-action" onClick={() => setDrawer("movement")}><Plus size={12} /> New movement</button>
+            <button className="btn-action btn-action--primary" onClick={openNewItem}><Plus size={12} /> New item</button>
             <Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link>
           </div>
         }
@@ -187,6 +356,52 @@ export function InventoryPage() {
           </button>
         </div>
       )}
+
+      <DataTable
+        label="Item catalog"
+        icon={<Package size={14} />}
+        data={itemRows}
+        rowKey={(row) => row._id}
+        loading={items === undefined}
+        viewsKey="inventory-items"
+        searchPlaceholder="Search item, SKU, category..."
+        searchExtraFields={[(row) => row.sku, (row) => row.category, (row) => row.itemType]}
+        emptyMessage="No items yet. Add an item, backfill from the asset register, or import an OpenBoxes snapshot."
+        columns={[
+          {
+            id: "item",
+            header: "Item",
+            sortable: true,
+            accessor: (row) => row.name ?? "",
+            render: (row) => (
+              <div className="row" style={{ gap: 10, alignItems: "center", flexWrap: "nowrap" }}>
+                <ItemThumb item={row} />
+                <div>
+                  <strong>{row.name}</strong>
+                  <div className="muted mono">{row.sku ?? "No SKU"}</div>
+                </div>
+              </div>
+            ),
+          },
+          { id: "category", header: "Category", sortable: true, accessor: (row) => row.category ?? "", render: (row) => <div><span>{row.category}</span><div className="muted">{row.itemType}</div></div> },
+          { id: "onHand", header: "On hand", sortable: true, align: "right", accessor: (row) => onHandByItemId.get(row._id) ?? 0, render: (row) => <span className="mono">{formatQuantity(onHandByItemId.get(row._id) ?? 0, row.unitOfMeasure)}</span> },
+          { id: "reorder", header: "Reorder", align: "right", accessor: (row) => row.reorderPoint ?? "", render: (row) => row.reorderPoint != null ? <span className="mono">{row.reorderPoint}</span> : <span className="muted">-</span> },
+          { id: "cost", header: "Unit cost", align: "right", accessor: (row) => row.defaultCostCents ?? 0, render: (row) => row.defaultCostCents != null ? <span className="mono">{money(row.defaultCostCents)}</span> : <span className="muted">-</span> },
+          {
+            id: "purchase",
+            header: "Linked purchase",
+            accessor: (row) => receiptLinksByItemId.get(row._id)?.length ?? 0,
+            render: (row) => <ReceiptEvidence links={receiptLinksByItemId.get(row._id) ?? []} />,
+          },
+        ]}
+        renderRowActions={(row) => (
+          <>
+            <button className="btn btn--ghost btn--sm" onClick={() => openLink(row)}><Link2 size={12} /> Link purchase</button>
+            <button className="btn btn--ghost btn--sm" onClick={() => openEditItem(row)}><Pencil size={12} /> Edit</button>
+            {row.assetId && <Link className="btn btn--ghost btn--sm" to={`/app/assets/${row.assetId}`}>Asset</Link>}
+          </>
+        )}
+      />
 
       <DataTable
         label="Societyer stock balances"
@@ -384,8 +599,146 @@ export function InventoryPage() {
           />
         </Field>
       </Drawer>
+
+      <Drawer
+        open={drawer === "item"}
+        onClose={() => setDrawer(null)}
+        title={editingItemId ? "Edit item" : "New item"}
+        size="wide"
+        footer={<button className="btn-action btn-action--primary" onClick={saveItem}>{editingItemId ? "Save item" : "Create item"}</button>}
+      >
+        <ImageUploadField
+          label="Item photo"
+          hint="Upload a picture of the item, or paste an image URL."
+          value={itemForm.image}
+          onChange={(image) => setItemForm({ ...itemForm, image })}
+        />
+        <div className="form-grid">
+          <Field label="Name" required>
+            <input className="input" value={itemForm.name} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} />
+          </Field>
+          <Field label="SKU">
+            <input className="input" value={itemForm.sku} onChange={(e) => setItemForm({ ...itemForm, sku: e.target.value })} />
+          </Field>
+          <Field label="Category">
+            <input className="input" value={itemForm.category} onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })} />
+          </Field>
+          <Field label="Item type">
+            <select className="input" value={itemForm.itemType} onChange={(e) => setItemForm({ ...itemForm, itemType: e.target.value })}>
+              {ITEM_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+            </select>
+          </Field>
+          <Field label="Unit of measure">
+            <input className="input" value={itemForm.unitOfMeasure} onChange={(e) => setItemForm({ ...itemForm, unitOfMeasure: e.target.value })} />
+          </Field>
+          <Field label="Reorder point">
+            <input className="input" inputMode="decimal" value={itemForm.reorderPoint} onChange={(e) => setItemForm({ ...itemForm, reorderPoint: e.target.value })} />
+          </Field>
+          <Field label="Default unit cost">
+            <input className="input" inputMode="decimal" value={itemForm.defaultCost} onChange={(e) => setItemForm({ ...itemForm, defaultCost: e.target.value })} />
+          </Field>
+          <Field label="Description">
+            <textarea className="input" value={itemForm.description} onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })} />
+          </Field>
+        </div>
+      </Drawer>
+
+      <Drawer
+        open={drawer === "location"}
+        onClose={() => setDrawer(null)}
+        title="New location"
+        footer={<button className="btn-action btn-action--primary" onClick={saveLocation}>Create location</button>}
+      >
+        <div className="form-grid">
+          <Field label="Name" required>
+            <input className="input" value={locationForm.name} onChange={(e) => setLocationForm({ ...locationForm, name: e.target.value })} />
+          </Field>
+          <Field label="Type">
+            <select className="input" value={locationForm.locationType} onChange={(e) => setLocationForm({ ...locationForm, locationType: e.target.value })}>
+              {LOCATION_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+            </select>
+          </Field>
+          <Field label="Address / notes">
+            <input className="input" value={locationForm.address} onChange={(e) => setLocationForm({ ...locationForm, address: e.target.value })} />
+          </Field>
+        </div>
+      </Drawer>
+
+      <Drawer
+        open={drawer === "link"}
+        onClose={() => setDrawer(null)}
+        title={linkItem ? `Link purchase: ${linkItem.name}` : "Link purchase"}
+        size="wide"
+        footer={<button className="btn-action btn-action--primary" onClick={saveLink}>Link purchase</button>}
+      >
+        {linkItem && (
+          <>
+            {(receiptLinksByItemId.get(linkItem._id) ?? []).length > 0 && (
+              <div className="stack stack--xs" style={{ marginBottom: 12 }}>
+                <div className="muted">Existing links</div>
+                {(receiptLinksByItemId.get(linkItem._id) ?? []).map((link: any) => (
+                  <div key={link._id} className="row" style={{ gap: 8, alignItems: "center", justifyContent: "space-between" }}>
+                    <span className="row" style={{ gap: 6 }}>
+                      <FileText size={12} />
+                      {link.receiptDocument?.title ?? link.receiptLineLabel ?? "Linked purchase"}
+                      {link.financialTransactionId && <Badge tone="info">transaction</Badge>}
+                    </span>
+                    <button className="btn btn--ghost btn--sm btn--icon" aria-label="Remove link" onClick={async () => { await unlinkReceipt({ id: link._id }); toast.success("Link removed"); }}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="form-grid">
+              <Field label="Purchase transaction" hint="Pick the financial transaction this item was bought on.">
+                <select className="input" value={linkForm.financialTransactionId} onChange={(e) => setLinkForm({ ...linkForm, financialTransactionId: e.target.value })}>
+                  <option value="">No transaction</option>
+                  {((transactions ?? []) as any[]).filter((t) => t.amountCents < 0).map((t) => (
+                    <option key={t._id} value={t._id}>{t.date} · {t.description} · {money(Math.abs(t.amountCents))}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Receipt document">
+                <select className="input" value={linkForm.receiptDocumentId} onChange={(e) => setLinkForm({ ...linkForm, receiptDocumentId: e.target.value })}>
+                  <option value="">No receipt document</option>
+                  {((documents ?? []) as any[]).filter((d) => d.category === "Receipt" || d.category === "FinancialStatement" || (d.tags ?? []).some((tag: string) => /receipt|invoice|finance/i.test(tag))).map((d) => (
+                    <option key={d._id} value={d._id}>{d.title}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Receipt line label">
+                <input className="input" value={linkForm.receiptLineLabel} onChange={(e) => setLinkForm({ ...linkForm, receiptLineLabel: e.target.value })} />
+              </Field>
+              <Field label="Quantity">
+                <input className="input" inputMode="decimal" value={linkForm.quantity} onChange={(e) => setLinkForm({ ...linkForm, quantity: e.target.value })} />
+              </Field>
+              <Field label="Unit cost">
+                <input className="input" inputMode="decimal" value={linkForm.unitCost} onChange={(e) => setLinkForm({ ...linkForm, unitCost: e.target.value })} />
+              </Field>
+              <Field label="Total cost">
+                <input className="input" inputMode="decimal" value={linkForm.totalCost} onChange={(e) => setLinkForm({ ...linkForm, totalCost: e.target.value })} />
+              </Field>
+              <Field label="Notes">
+                <textarea className="input" value={linkForm.notes} onChange={(e) => setLinkForm({ ...linkForm, notes: e.target.value })} />
+              </Field>
+            </div>
+          </>
+        )}
+      </Drawer>
     </div>
   );
+}
+
+function ItemThumb({ item }: { item: any }) {
+  if (!item.imageUrl) {
+    return (
+      <span style={{ width: 36, height: 36, flex: "0 0 auto", borderRadius: 6, background: "var(--surface-muted, #f3f4f6)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted, #8a8f98)" }}>
+        <ImageIcon size={14} />
+      </span>
+    );
+  }
+  return <img src={item.imageUrl} alt="" style={{ width: 36, height: 36, flex: "0 0 auto", borderRadius: 6, objectFit: "cover", border: "1px solid var(--border, #d8dadf)" }} />;
 }
 
 function receiptLinksForMovement(row: any, linksByItemId: Map<string, any[]>) {
