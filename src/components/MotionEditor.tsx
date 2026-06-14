@@ -646,7 +646,7 @@ function MotionRow({
               aria-label="Motion name"
             />
           )}
-          <div className="motion__meta">
+          <div className="motion__meta motion__meta--inline">
             {!expanded && <Badge tone={tone as any}>{motion.outcome}</Badge>}
           </div>
         </div>
@@ -710,6 +710,11 @@ function MotionRow({
               <Trash2 size={12} />
             </button>
           </div>
+          {!expanded && (
+            <div className="motion__meta motion__meta--actions">
+              <Badge tone={tone as any}>{motion.outcome}</Badge>
+            </div>
+          )}
         </div>
       </div>
 

@@ -413,6 +413,10 @@
 }
 .motion__text { font-weight: 500; margin-bottom: 4px; }
 .motion__meta { font-size: token('fs-sm'); color: token('text-tertiary'); display: flex; gap: token('s-3'); flex-wrap: wrap; }
+// The outcome badge sits under the title by default. On phone-width cards the
+// title wraps down the left and leaves the area under the action icons empty,
+// so move the badge under the buttons there instead.
+.motion__meta--actions { display: none; }
 .motion__head {
   display: flex;
   align-items: flex-start;
@@ -481,6 +485,19 @@
     padding: 0;
     justify-content: center;
     gap: 0;
+  }
+}
+// Phone-width cards: drop the outcome badge under the action icons (right) so
+// it fills the space left by the wrapping title, rather than sitting on its own
+// line under the title on the left. Skipped for the long-title stacked layout,
+// where the title already spans the full width.
+@container (max-width: 480px) {
+  .motion__head:not(.motion__head--stacked) .motion__meta--inline {
+    display: none;
+  }
+  .motion__head:not(.motion__head--stacked) .motion__meta--actions {
+    display: flex;
+    margin-top: 4px;
   }
 }
 .motion-adjournment {
