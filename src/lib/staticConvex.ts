@@ -1556,6 +1556,7 @@ function queryCasesInventoryHub2(name: string, args: StaticArgs, store?: StaticD
           ...row,
           receiptDocument: byId(store?.listRows("documents", args) ?? documents, row.receiptDocumentId),
           asset: byId(store?.listRows("assets", args) ?? tables.assets, row.assetId),
+          inventoryItem: byId(store?.listRows("inventoryItems", args) ?? tables.inventoryItems, row.inventoryItemId),
         }));
     }
     case "aiAgents:getChatContext": {
@@ -3206,6 +3207,106 @@ function mutCasesSubscriptions8(name: string, args: StaticArgs, store?: StaticDe
     if (movement.toLocationId) applyDelta(movement.toLocationId, quantity);
     if (!movement.fromLocationId && !movement.toLocationId) throw new Error("Stock movement needs a source or destination location.");
     return movement._id;
+  }
+  if (name === "inventoryHub:upsertItem") {
+    const now = new Date().toISOString();
+    const id = args?.id ?? `static_inventory_item_manual_${Date.now()}`;
+    const existing = store?.getRow("inventoryItems", id) ?? byId(tables.inventoryItems, id) ?? {};
+    const row = {
+      ...existing,
+      _id: id,
+      societyId: args?.societyId ?? existing.societyId ?? SOCIETY_ID,
+      connectionId: args?.connectionId ?? existing.connectionId,
+      sku: args?.sku ?? existing.sku,
+      name: args?.name ?? existing.name,
+      description: args?.description ?? existing.description,
+      category: args?.category ?? existing.category ?? "Uncategorized",
+      itemType: args?.itemType ?? existing.itemType ?? "supply",
+      unitOfMeasure: args?.unitOfMeasure ?? existing.unitOfMeasure ?? "each",
+      defaultCostCents: args?.defaultCostCents ?? existing.defaultCostCents,
+      currency: args?.currency ?? existing.currency ?? "CAD",
+      trackSerial: args?.trackSerial ?? existing.trackSerial ?? false,
+      trackLot: args?.trackLot ?? existing.trackLot ?? false,
+      trackExpiry: args?.trackExpiry ?? existing.trackExpiry ?? false,
+      reorderPoint: args?.reorderPoint ?? existing.reorderPoint,
+      status: args?.status ?? existing.status ?? "active",
+      assetId: args?.assetId ?? existing.assetId,
+      imageStorageId: args?.imageStorageId,
+      imageUrl: args?.imageUrl,
+      sourceSystem: args?.sourceSystem ?? existing.sourceSystem ?? "manual",
+      createdAtISO: existing.createdAtISO ?? now,
+      updatedAtISO: now,
+    };
+    store?.upsertRow("inventoryItems", row);
+    return id;
+  }
+  if (name === "inventoryHub:upsertLocation") {
+    const now = new Date().toISOString();
+    const id = args?.id ?? `static_inventory_location_manual_${Date.now()}`;
+    const existing = store?.getRow("inventoryLocations", id) ?? byId(tables.inventoryLocations, id) ?? {};
+    const row = {
+      ...existing,
+      _id: id,
+      societyId: args?.societyId ?? existing.societyId ?? SOCIETY_ID,
+      connectionId: args?.connectionId ?? existing.connectionId,
+      name: args?.name ?? existing.name,
+      locationType: args?.locationType ?? existing.locationType ?? "facility",
+      parentLocationId: args?.parentLocationId ?? existing.parentLocationId,
+      address: args?.address ?? existing.address,
+      active: args?.active ?? existing.active ?? true,
+      sourceSystem: args?.sourceSystem ?? existing.sourceSystem ?? "manual",
+      createdAtISO: existing.createdAtISO ?? now,
+      updatedAtISO: now,
+    };
+    store?.upsertRow("inventoryLocations", row);
+    return id;
+  }
+  if (name === "inventoryHub:linkReceipt") {
+    const now = new Date().toISOString();
+    let assetId = args?.assetId;
+    if (!assetId && args?.inventoryItemId) {
+      const item = store?.getRow("inventoryItems", args.inventoryItemId) ?? byId(tables.inventoryItems, args.inventoryItemId);
+      assetId = item?.assetId;
+    }
+    const id = args?.id ?? `static_asset_receipt_link_${Date.now()}`;
+    const existing = store?.getRow("assetReceiptLinks", id) ?? {};
+    store?.upsertRow("assetReceiptLinks", {
+      ...existing,
+      _id: id,
+      societyId: args?.societyId ?? existing.societyId ?? SOCIETY_ID,
+      assetId,
+      inventoryItemId: args?.inventoryItemId,
+      receiptDocumentId: args?.receiptDocumentId,
+      financialTransactionId: args?.financialTransactionId,
+      receiptLineLabel: args?.receiptLineLabel,
+      receiptLineIndex: args?.receiptLineIndex,
+      quantity: args?.quantity,
+      unitOfMeasure: args?.unitOfMeasure,
+      unitCostCents: args?.unitCostCents,
+      totalCostCents: args?.totalCostCents,
+      sourceText: args?.sourceText,
+      notes: args?.notes,
+      createdByUserId: args?.createdByUserId,
+      createdAtISO: existing.createdAtISO ?? now,
+      updatedAtISO: now,
+    });
+    if (assetId) {
+      const asset = store?.getRow("assets", assetId) ?? byId(tables.assets, assetId);
+      if (asset) {
+        store?.upsertRow("assets", {
+          ...asset,
+          receiptDocumentId: asset.receiptDocumentId ?? args?.receiptDocumentId,
+          purchaseTransactionId: asset.purchaseTransactionId ?? args?.financialTransactionId,
+          sourceDocumentIds: Array.from(new Set([...(asset.sourceDocumentIds ?? []), args?.receiptDocumentId].filter(Boolean))),
+          updatedAtISO: now,
+        });
+      }
+    }
+    return id;
+  }
+  if (name === "inventoryHub:unlinkReceipt") {
+    store?.removeRow("assetReceiptLinks", args?.id);
+    return { deleted: true };
   }
   if (name === "inventoryHub:backfillAssets") {
     const now = new Date().toISOString();

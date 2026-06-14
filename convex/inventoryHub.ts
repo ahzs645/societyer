@@ -144,7 +144,13 @@ export const items = query({
           .query("inventoryItems")
           .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
           .collect());
-    return rows.sort((a: any, b: any) => a.name.localeCompare(b.name));
+    const sorted = rows.sort((a: any, b: any) => a.name.localeCompare(b.name));
+    return Promise.all(
+      sorted.map(async (row: any) => ({
+        ...row,
+        imageUrl: row.imageStorageId ? (await ctx.storage.getUrl(row.imageStorageId)) ?? row.imageUrl : row.imageUrl,
+      })),
+    );
   },
 });
 
@@ -202,12 +208,14 @@ export const receiptLinks = query({
           .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
           .collect();
     const scoped = rows.filter((row: any) => row.societyId === societyId);
-    const documents = await Promise.all(scoped.map((row: any) => ctx.db.get(row.receiptDocumentId)));
-    const assets = await Promise.all(scoped.map((row: any) => ctx.db.get(row.assetId)));
+    const documents = await Promise.all(scoped.map((row: any) => (row.receiptDocumentId ? ctx.db.get(row.receiptDocumentId) : null)));
+    const assets = await Promise.all(scoped.map((row: any) => (row.assetId ? ctx.db.get(row.assetId) : null)));
+    const inventoryItems = await Promise.all(scoped.map((row: any) => (row.inventoryItemId ? ctx.db.get(row.inventoryItemId) : null)));
     return scoped.map((row: any, index: number) => ({
       ...row,
       receiptDocument: documents[index],
       asset: assets[index],
+      inventoryItem: inventoryItems[index],
     }));
   },
 });
@@ -284,6 +292,8 @@ export const upsertItem = mutation({
     reorderPoint: v.optional(v.number()),
     status: v.optional(v.string()),
     assetId: v.optional(v.id("assets")),
+    imageStorageId: v.optional(v.id("_storage")),
+    imageUrl: v.optional(v.string()),
     externalId: v.optional(v.string()),
     sourceSystem: v.optional(v.string()),
     rawJson: v.optional(v.string()),
@@ -370,6 +380,73 @@ export const upsertCandidate = mutation({
       createdAtISO: now,
       updatedAtISO: now,
     });
+  },
+});
+
+export const linkReceipt = mutation({
+  args: {
+    id: v.optional(v.id("assetReceiptLinks")),
+    societyId: v.id("societies"),
+    inventoryItemId: v.optional(v.id("inventoryItems")),
+    assetId: v.optional(v.id("assets")),
+    receiptDocumentId: v.optional(v.id("documents")),
+    financialTransactionId: v.optional(v.id("financialTransactions")),
+    receiptLineLabel: v.optional(v.string()),
+    receiptLineIndex: v.optional(v.number()),
+    quantity: v.optional(v.number()),
+    unitOfMeasure: v.optional(v.string()),
+    unitCostCents: v.optional(v.number()),
+    totalCostCents: v.optional(v.number()),
+    sourceText: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdByUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    if (!args.inventoryItemId && !args.assetId) {
+      throw new Error("Link a receipt to an inventory item or an asset.");
+    }
+    if (!args.receiptDocumentId && !args.financialTransactionId) {
+      throw new Error("Choose a receipt document or a financial transaction to link.");
+    }
+    const now = new Date().toISOString();
+    // Resolve the linked asset: explicit assetId wins, else inherit from the inventory item.
+    let assetId = args.assetId;
+    if (!assetId && args.inventoryItemId) {
+      const item = await ctx.db.get(args.inventoryItemId);
+      assetId = item?.assetId;
+    }
+    const { id, ...rest } = args;
+    const payload = { ...rest, assetId, updatedAtISO: now };
+    let linkId = id;
+    if (linkId) {
+      await ctx.db.patch(linkId, payload);
+    } else {
+      linkId = await ctx.db.insert("assetReceiptLinks", { ...payload, createdAtISO: now });
+    }
+    // Keep the asset register's purchase evidence in sync when an asset is involved.
+    if (assetId) {
+      const asset = await ctx.db.get(assetId);
+      if (asset) {
+        const patch: any = { updatedAtISO: now };
+        if (!asset.receiptDocumentId && args.receiptDocumentId) patch.receiptDocumentId = args.receiptDocumentId;
+        if (!asset.purchaseTransactionId && args.financialTransactionId) patch.purchaseTransactionId = args.financialTransactionId;
+        if (args.receiptDocumentId) {
+          patch.sourceDocumentIds = Array.from(new Set([...(asset.sourceDocumentIds ?? []), args.receiptDocumentId]));
+        }
+        await ctx.db.patch(assetId, patch);
+      }
+    }
+    return linkId;
+  },
+});
+
+export const unlinkReceipt = mutation({
+  args: { id: v.id("assetReceiptLinks") },
+  returns: v.any(),
+  handler: async (ctx, { id }) => {
+    await ctx.db.delete(id);
+    return { deleted: true };
   },
 });
 

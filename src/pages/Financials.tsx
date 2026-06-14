@@ -78,6 +78,12 @@ export function FinancialsPage() {
   const removeBudget = useMutation(api.financialHub.removeBudget);
   const upsertOperatingSubscription = useMutation(api.financialHub.upsertOperatingSubscription);
   const removeOperatingSubscription = useMutation(api.financialHub.removeOperatingSubscription);
+  const inventoryItems = useQuery(api.inventoryHub.items, society ? { societyId: society._id } : "skip");
+  const inventoryLinks = useQuery(api.inventoryHub.receiptLinks, society ? { societyId: society._id } : "skip");
+  const linkInventoryReceipt = useMutation(api.inventoryHub.linkReceipt);
+  const unlinkInventoryReceipt = useMutation(api.inventoryHub.unlinkReceipt);
+  const [linkTxn, setLinkTxn] = useState<any>(null);
+  const [linkItemId, setLinkItemId] = useState("");
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -117,6 +123,31 @@ export function FinancialsPage() {
   const activeConnection = (connections ?? []).find((c) => c.status === "connected");
   const browserBackedWaveConnection = isBrowserBackedWaveConnection(activeConnection);
   const importedBudgetReviewCount = (orgHistory?.budgets ?? []).filter((budget: any) => budget.status === "NeedsReview").length;
+  const linksByTransactionId = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const link of (inventoryLinks ?? []) as any[]) {
+      if (!link.financialTransactionId) continue;
+      const rows = map.get(link.financialTransactionId) ?? [];
+      rows.push(link);
+      map.set(link.financialTransactionId, rows);
+    }
+    return map;
+  }, [inventoryLinks]);
+  const saveInventoryLink = async () => {
+    if (!linkTxn || !linkItemId) {
+      toast.error("Choose an inventory item to link.");
+      return;
+    }
+    await linkInventoryReceipt({
+      societyId: society!._id,
+      inventoryItemId: linkItemId as any,
+      financialTransactionId: linkTxn._id,
+      createdByUserId: actingUserId as any,
+    } as any);
+    toast.success("Inventory item linked to transaction");
+    setLinkTxn(null);
+    setLinkItemId("");
+  };
   const waveLive = oauth?.live === true;
   const waveDemoAvailable = !waveLive && isDemoMode() && oauth?.demoAvailable === true;
   const canConnectWave = waveLive || waveDemoAvailable;
@@ -542,11 +573,12 @@ export function FinancialsPage() {
           </div>
           <table className="table">
             <thead>
-              <tr><th>Date</th><th>Description</th><th>Account</th><th>Category</th><th style={{ textAlign: "right" }}>Amount</th></tr>
+              <tr><th>Date</th><th>Description</th><th>Account</th><th>Category</th><th style={{ textAlign: "right" }}>Amount</th><th>Inventory items</th></tr>
             </thead>
             <tbody>
               {transactions.map((t) => {
                 const acct = (accounts ?? []).find((a) => a._id === t.accountId);
+                const links = linksByTransactionId.get(t._id) ?? [];
                 return (
                   <tr key={t._id}>
                     <td className="table__cell--mono">{t.date}</td>
@@ -558,6 +590,25 @@ export function FinancialsPage() {
                       style={{ textAlign: "right", color: t.amountCents < 0 ? "var(--danger)" : "var(--success)" }}
                     >
                       {money(t.amountCents)}
+                    </td>
+                    <td>
+                      <div className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                        {links.map((link: any) => (
+                          <span key={link._id} className="row" style={{ gap: 4, alignItems: "center" }}>
+                            <Link to="/app/inventory">{link.inventoryItem?.name ?? link.asset?.name ?? link.receiptLineLabel ?? "Linked item"}</Link>
+                            <button
+                              className="btn btn--ghost btn--sm btn--icon"
+                              aria-label="Unlink item"
+                              onClick={async () => { await unlinkInventoryReceipt({ id: link._id }); toast.success("Item unlinked"); }}
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </span>
+                        ))}
+                        <button className="btn btn--ghost btn--sm" onClick={() => { setLinkTxn(t); setLinkItemId(""); }}>
+                          <Link2 size={12} /> Link item
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -729,6 +780,33 @@ export function FinancialsPage() {
                 interval: subscriptionForm.interval,
               }))}
             </div>
+          </div>
+        )}
+      </Drawer>
+
+      <Drawer
+        open={Boolean(linkTxn)}
+        onClose={() => setLinkTxn(null)}
+        title="Link inventory item"
+        footer={<button className="btn btn--accent" onClick={saveInventoryLink}>Link item</button>}
+      >
+        {linkTxn && (
+          <div className="form-grid">
+            <Field label="Transaction">
+              <input className="input" readOnly value={`${linkTxn.date} · ${linkTxn.description} · ${money(linkTxn.amountCents)}`} />
+            </Field>
+            <Field label="Inventory item" hint="Back-link an item from inventory to this purchase.">
+              <Select
+                value={linkItemId}
+                onChange={setLinkItemId}
+                placeholder="Choose an item"
+                searchable
+                options={((inventoryItems ?? []) as any[]).map((item) => ({ value: item._id, label: item.sku ? `${item.name} (${item.sku})` : item.name }))}
+              />
+            </Field>
+            <p className="muted">
+              Need a new item first? <Link to="/app/inventory">Open inventory →</Link>
+            </p>
           </div>
         )}
       </Drawer>

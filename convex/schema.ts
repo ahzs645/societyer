@@ -3042,6 +3042,8 @@ export default defineSchema({
     depreciationMethod: v.optional(v.string()),
     usefulLifeMonths: v.optional(v.number()),
     bookValueCents: v.optional(v.number()),
+    imageStorageId: v.optional(v.id("_storage")),
+    imageUrl: v.optional(v.string()),
     purchaseTransactionId: v.optional(v.id("financialTransactions")),
     receiptDocumentId: v.optional(v.id("documents")),
     sourceDocumentIds: v.array(v.id("documents")),
@@ -3146,9 +3148,9 @@ export default defineSchema({
 
   assetReceiptLinks: defineTable({
     societyId: v.id("societies"),
-    assetId: v.id("assets"),
+    assetId: v.optional(v.id("assets")),
     inventoryItemId: v.optional(v.id("inventoryItems")),
-    receiptDocumentId: v.id("documents"),
+    receiptDocumentId: v.optional(v.id("documents")),
     financialTransactionId: v.optional(v.id("financialTransactions")),
     receiptLineLabel: v.optional(v.string()),
     receiptLineIndex: v.optional(v.number()),
@@ -3201,6 +3203,8 @@ export default defineSchema({
     reorderPoint: v.optional(v.number()),
     status: v.string(), // active | archived | needs_review
     assetId: v.optional(v.id("assets")),
+    imageStorageId: v.optional(v.id("_storage")),
+    imageUrl: v.optional(v.string()),
     externalId: v.optional(v.string()),
     sourceSystem: v.optional(v.string()),
     rawJson: v.optional(v.string()),
