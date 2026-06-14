@@ -394,6 +394,23 @@
   outline: none;
   border-bottom: 1px solid token('accent');
 }
+/* Read-only fallback heading shown when a motion has no short name: renders
+   the full wording, wraps instead of clipping (unlike the single-line input),
+   and acts as a button that opens the editor. */
+.motion__name-display {
+  field-sizing: auto;
+  cursor: pointer;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.motion__name-display:hover {
+  border-bottom-color: token('border');
+}
+.motion__name-display:focus,
+.motion__name-display:focus-visible {
+  outline: none;
+  border-bottom: 1px solid token('accent');
+}
 .motion__text { font-weight: 500; margin-bottom: 4px; }
 .motion__meta { font-size: token('fs-sm'); color: token('text-tertiary'); display: flex; gap: token('s-3'); flex-wrap: wrap; }
 .motion__head {
@@ -486,7 +503,18 @@
 }
 .motion-adjournment__head {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: token('s-3');
   align-items: center;
+}
+// Let the title/subtitle take the available width and drop the action button
+// to its own line on narrow cards, instead of squeezing the text into a sliver
+// that word-breaks ("Adjourn\nment").
+.motion-adjournment__head > div {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.motion-adjournment__head > button {
+  flex: 0 0 auto;
 }

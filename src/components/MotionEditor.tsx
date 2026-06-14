@@ -571,7 +571,14 @@ function MotionRow({
   // unbroken run of >30 non-space chars (URLs, ids, junk strings). When that's
   // the case, the action buttons stack below the title so the title gets the
   // full card width to breathe instead of wrapping inside a narrow column.
-  const titleText = motion.name ?? "";
+  // Most seeded/imported motions only carry `text` (the full wording); `name`
+  // is an optional short label added later. When there's no name, fall back to
+  // showing the wording so the headline isn't blank. Because the wording can be
+  // long, the fallback renders as a wrapping, tap-to-edit heading rather than
+  // the single-line name input (which would clip on narrow screens).
+  const hasName = !!motion.name?.trim();
+  const showTextHeadline = !expanded && !hasName && !!motion.text?.trim();
+  const titleText = hasName ? motion.name! : (motion.text ?? "");
   const isLongTitle =
     titleText.length > 80 ||
     titleText.split(/\s+/).some((word) => word.length > 30);
@@ -614,13 +621,31 @@ function MotionRow({
     >
       <div className={`motion__head${isLongTitle ? " motion__head--stacked" : ""}`}>
         <div className="motion__head-main">
-          <input
-            className="motion__name-input"
-            value={motion.name ?? ""}
-            onChange={(event) => onPatch({ name: event.target.value })}
-            placeholder="Motion name"
-            aria-label="Motion name"
-          />
+          {showTextHeadline ? (
+            <div
+              className="motion__name-input motion__name-display"
+              role="button"
+              tabIndex={0}
+              title="Edit motion"
+              onClick={() => onSetExpanded?.(true)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSetExpanded?.(true);
+                }
+              }}
+            >
+              {motion.text}
+            </div>
+          ) : (
+            <input
+              className="motion__name-input"
+              value={motion.name ?? ""}
+              onChange={(event) => onPatch({ name: event.target.value })}
+              placeholder="Motion name"
+              aria-label="Motion name"
+            />
+          )}
           <div className="motion__meta">
             {!expanded && <Badge tone={tone as any}>{motion.outcome}</Badge>}
           </div>
