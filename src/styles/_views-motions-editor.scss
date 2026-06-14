@@ -451,8 +451,7 @@
     align-self: flex-end;
   }
 }
-// Container-query fallback for narrow cards (sidebar squeeze, etc.) — same
-// stacked layout, applied automatically when the .motion card itself shrinks.
+// Container-query fallback for narrow cards (sidebar squeeze, etc.).
 @container (max-width: 700px) {
   .motion-draft__grid {
     grid-template-columns: minmax(0, 1fr);
@@ -463,14 +462,6 @@
   }
   .motion-draft__actions {
     justify-content: flex-end;
-  }
-  .motion__head {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .motion__actions {
-    order: -1;
-    align-self: flex-end;
   }
 }
 // Icon-only collapse: when the motion card is narrow, drop the text label so
