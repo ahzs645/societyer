@@ -72,83 +72,62 @@
   svg { color: token('text-tertiary'); }
   p { max-width: 52ch; margin: 0; }
 }
-.minutes-preview__page {
-  // Force light tokens inside the preview so child elements rendered from the
-  // export HTML (.motion, .meta, .muted) match the exported document and don't
-  // bleed dark-mode backgrounds / text colors when the app theme is dark.
-  --border: #d0d4dc;
-  --text-tertiary: #666;
-  --bg-subtle: #f6f8ff;
-  color-scheme: light;
-
-  width: min(680px, 100%);
-  min-height: 760px;
-  margin: 0 auto;
-  padding: 48px;
-  border: 1px solid #d0d4dc;
-  background: #fff;
-  color: #1a1a1a;
-  box-shadow: token('shadow-md');
-  font-family: Calibri, "Segoe UI", Arial, sans-serif;
-  font-size: 11pt;
-  line-height: 1.35;
-
-  .motion {
-    border-left: 3px solid #3b5bdb;
-    padding: 4px 8px;
-    background: #f6f8ff;
-    margin: 0 0 8px;
-  }
-  .motion .outcome-carried { color: #0a8f4e; font-weight: 600; }
-  .motion .outcome-defeated { color: #c9264a; font-weight: 600; }
-  .motion .outcome-tabled { color: #a86400; font-weight: 600; }
-  .meta { color: #666; font-size: 10pt; }
-  .muted { color: #888; }
-}
-.minutes-preview__page h1 {
-  margin: 0 0 8px;
-  font-size: 20pt;
-  line-height: 1.15;
-}
-.minutes-preview__page h2 {
-  margin: 20px 0 8px;
-  padding-bottom: 3px;
-  border-bottom: 1px solid #999;
-  font-size: 14pt;
-}
-.minutes-preview__page h3 {
-  margin: 14px 0 6px;
-  font-size: 12pt;
-  text-transform: none;
-  letter-spacing: 0;
-}
-.minutes-preview__page p {
-  margin: 0 0 8px;
-}
-.minutes-preview__page ul,
-.minutes-preview__page ol {
-  margin: 0 0 10px 24px;
-  padding: 0;
-}
-.minutes-preview__page table {
+// The preview renders the *actual* downloaded .docx via docx-preview (see
+// MinutesDocumentPreview). docx-preview emits its own scoped styles for the
+// page sections; these rules are just the gray "viewport" the paginated pages
+// sit in, plus a fit-to-width scale so letter pages don't overflow narrow
+// columns. Forced light so the white pages read correctly in dark mode.
+.minutes-docx-preview {
+  position: relative;
   width: 100%;
-  margin: 8px 0 12px;
-  border-collapse: collapse;
+  min-height: 320px;
+  max-height: 80vh;
+  overflow: auto;
+  padding: token('s-4');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  background: token('bg-app');
+  color-scheme: light;
 }
-.minutes-preview__page th,
-.minutes-preview__page td {
-  padding: 6px 8px;
-  border: 1px solid #bbb;
-  color: #1a1a1a;
-  text-align: left;
-  vertical-align: top;
+.minutes-docx-preview__render {
+  // Scale the whole paginated wrapper to fit the column. `zoom` (unlike
+  // transform) reflows the layout box, so the viewport's scroll height tracks
+  // the scaled content with no leftover whitespace.
+  zoom: var(--docx-scale, 1);
 }
-.minutes-preview__page th {
-  background: #f1f1f1;
+// Tame docx-preview's defaults: it ships a gray wrapper with its own padding;
+// our viewport already provides the backdrop, so flatten the wrapper and keep
+// only the per-page paper (white background + shadow) it draws on each section.
+.minutes-docx-preview .docx-wrapper {
+  background: transparent;
+  padding: 0;
+  gap: token('s-3');
 }
-.minutes-preview__page .meta,
-.minutes-preview__page .muted {
-  color: #666;
+.minutes-docx-preview .docx-wrapper > section.docx {
+  margin: 0 auto;
+  box-shadow: token('shadow-md');
+}
+.minutes-docx-preview__status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: token('s-2');
+  min-height: 240px;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  text-align: center;
+}
+.minutes-docx-preview__spinner {
+  animation: spin 0.9s linear infinite;
+}
+// When loading/erroring, the (hidden) render container shouldn't reserve space.
+.minutes-docx-preview__status + .minutes-docx-preview__render[style*="hidden"] {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 .meeting-detail-summary {
   display: grid;
@@ -462,9 +441,6 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   }
 }
 
-.minutes-preview--inline .minutes-preview__page {
-  width: min(760px, 100%);
-}
 .minutes-preview__viewport {
   // Outer resizable, clipping container. react-zoom-pan-pinch handles the
   // pan/zoom transform inside; we just provide a bounded viewport that the
@@ -531,8 +507,9 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   color: token('text-secondary');
   font-size: token('fs-sm');
 }
-.minutes-preview--standalone .minutes-preview__page {
-  width: min(820px, 100%);
+// The standalone preview page has room for a taller viewport.
+.minutes-preview--standalone .minutes-docx-preview {
+  max-height: none;
 }
 @media (max-width: 760px) {
   .meeting-detail-summary {
@@ -596,17 +573,6 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   }
   .minutes-preview__toolbar {
     grid-template-columns: 1fr;
-  }
-  .minutes-preview__page {
-    min-height: 620px;
-    padding: 28px 20px;
-    font-size: 10.5pt;
-  }
-  .minutes-preview__page h1 {
-    font-size: 17pt;
-  }
-  .minutes-preview__page h2 {
-    font-size: 12.5pt;
   }
 }
 .structured-minutes-editor {

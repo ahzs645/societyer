@@ -12,6 +12,7 @@ import { formatDate } from "../../../lib/format";
 import { exportWordDocx } from "../../../lib/docx";
 import { exportPdfDownload } from "../../../lib/pdf";
 import { renderMinutesHtml } from "../lib/minutesRenderer";
+import { MinutesDocumentPreview } from "../components/MinutesDocumentPreview";
 import { getQuorumSnapshot, parseAgendaItems } from "../components/MeetingDetailSupport";
 import { agendaEntriesFromRecord } from "../lib/meetingDetailHelpers";
 import { MINUTES_EXPORT_STYLES, type MinutesExportStyleId } from "../lib/minutesExportStyles";
@@ -181,7 +182,7 @@ export function MeetingMinutesPreviewPage() {
         </aside>
         <div className="minutes-preview minutes-preview--standalone">
           {bodyHtml ? (
-            <div className="minutes-preview__page" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+            <MinutesDocumentPreview bodyHtml={bodyHtml} />
           ) : (
             <div className="minutes-preview__empty">
               <FileText size={20} aria-hidden="true" />

@@ -101,6 +101,7 @@
     "convex": "^1.17.4",
     "date-fns": "^3.6.0",
     "dexie": "^4.4.2",
+    "docx-preview": "^0.3.7",
     "dotenv": "^17.4.2",
     "electron-updater": "^6.8.3",
     "express": "^5.2.1",
