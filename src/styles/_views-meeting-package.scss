@@ -72,83 +72,21 @@
   svg { color: token('text-tertiary'); }
   p { max-width: 52ch; margin: 0; }
 }
+// The preview is an <iframe> that renders the exact export HTML + DOCUMENT_CSS
+// (see MinutesDocumentPreview), so it literally shows the downloaded document.
+// This rule is only the "paper" frame around that iframe — all typography,
+// tables, and .motion/.meta/.muted styling live inside the iframe and stay in
+// lockstep with the PDF export. The iframe also isolates the page from the
+// app theme, so no light-token forcing is needed here anymore.
 .minutes-preview__page {
-  // Force light tokens inside the preview so child elements rendered from the
-  // export HTML (.motion, .meta, .muted) match the exported document and don't
-  // bleed dark-mode backgrounds / text colors when the app theme is dark.
-  --border: #d0d4dc;
-  --text-tertiary: #666;
-  --bg-subtle: #f6f8ff;
-  color-scheme: light;
-
+  display: block;
   width: min(680px, 100%);
   min-height: 760px;
   margin: 0 auto;
-  padding: 48px;
   border: 1px solid #d0d4dc;
   background: #fff;
-  color: #1a1a1a;
   box-shadow: token('shadow-md');
-  font-family: Calibri, "Segoe UI", Arial, sans-serif;
-  font-size: 11pt;
-  line-height: 1.35;
-
-  .motion {
-    border-left: 3px solid #3b5bdb;
-    padding: 4px 8px;
-    background: #f6f8ff;
-    margin: 0 0 8px;
-  }
-  .motion .outcome-carried { color: #0a8f4e; font-weight: 600; }
-  .motion .outcome-defeated { color: #c9264a; font-weight: 600; }
-  .motion .outcome-tabled { color: #a86400; font-weight: 600; }
-  .meta { color: #666; font-size: 10pt; }
-  .muted { color: #888; }
-}
-.minutes-preview__page h1 {
-  margin: 0 0 8px;
-  font-size: 20pt;
-  line-height: 1.15;
-}
-.minutes-preview__page h2 {
-  margin: 20px 0 8px;
-  padding-bottom: 3px;
-  border-bottom: 1px solid #999;
-  font-size: 14pt;
-}
-.minutes-preview__page h3 {
-  margin: 14px 0 6px;
-  font-size: 12pt;
-  text-transform: none;
-  letter-spacing: 0;
-}
-.minutes-preview__page p {
-  margin: 0 0 8px;
-}
-.minutes-preview__page ul,
-.minutes-preview__page ol {
-  margin: 0 0 10px 24px;
-  padding: 0;
-}
-.minutes-preview__page table {
-  width: 100%;
-  margin: 8px 0 12px;
-  border-collapse: collapse;
-}
-.minutes-preview__page th,
-.minutes-preview__page td {
-  padding: 6px 8px;
-  border: 1px solid #bbb;
-  color: #1a1a1a;
-  text-align: left;
-  vertical-align: top;
-}
-.minutes-preview__page th {
-  background: #f1f1f1;
-}
-.minutes-preview__page .meta,
-.minutes-preview__page .muted {
-  color: #666;
+  color-scheme: light;
 }
 .meeting-detail-summary {
   display: grid;
@@ -599,14 +537,6 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   }
   .minutes-preview__page {
     min-height: 620px;
-    padding: 28px 20px;
-    font-size: 10.5pt;
-  }
-  .minutes-preview__page h1 {
-    font-size: 17pt;
-  }
-  .minutes-preview__page h2 {
-    font-size: 12.5pt;
   }
 }
 .structured-minutes-editor {

@@ -48,6 +48,7 @@ import { MeetingPackageHub } from "../features/meetings/components/MeetingPackag
 import { MeetingMinutesColumn } from "../features/meetings/components/MeetingMinutesColumn";
 import { MeetingSidebarColumn } from "../features/meetings/components/MeetingSidebarColumn";
 import { MinutesDraftEmptyState } from "../features/meetings/components/MinutesDraftEmptyState";
+import { MinutesDocumentPreview } from "../features/meetings/components/MinutesDocumentPreview";
 import { useConfirm } from "../components/Modal";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -1932,7 +1933,7 @@ export function MeetingDetailPage() {
                     </button>
                   </div>
                 </div>
-                <div className="minutes-preview__page" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                <MinutesDocumentPreview bodyHtml={previewHtml} />
               </div>
             </div>
           );
