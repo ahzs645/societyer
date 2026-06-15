@@ -11,20 +11,20 @@
 import { createStoredZip, ensureExtension, triggerBlobDownload } from "./zip";
 
 /**
- * Build a real .docx (Office Open XML) from an HTML body fragment and
- * download it. Async because images are fetched (bytes + natural dimensions)
- * before the archive is assembled. Images that fail to fetch (CORS, 404,
- * opaque response) are silently dropped so the export still succeeds.
+ * Build a real .docx (Office Open XML) Blob from an HTML body fragment.
+ * Async because images are fetched (bytes + natural dimensions) before the
+ * archive is assembled. Images that fail to fetch (CORS, 404, opaque response)
+ * are silently dropped so the build still succeeds.
+ *
+ * Exposed separately from {@link exportWordDocx} so the on-screen preview can
+ * render the *exact same bytes* the user downloads (via docx-preview) instead
+ * of a separately-styled approximation.
  */
-export async function exportWordDocx({
-  filename,
-  title: _title,
+export async function buildWordDocxBlob({
   bodyHtml,
 }: {
-  filename: string;
-  title: string;
   bodyHtml: string;
-}): Promise<void> {
+}): Promise<Blob> {
   const parser = new DOMParser();
   const doc = parser.parseFromString(`<body>${bodyHtml}</body>`, "text/html");
 
@@ -63,9 +63,25 @@ export async function exportWordDocx({
   }
 
   const zipBytes = createStoredZip(files);
-  const blob = new Blob([zipBytes], {
+  return new Blob([zipBytes], {
     type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   });
+}
+
+/**
+ * Build a real .docx (Office Open XML) from an HTML body fragment and
+ * download it.
+ */
+export async function exportWordDocx({
+  filename,
+  title: _title,
+  bodyHtml,
+}: {
+  filename: string;
+  title: string;
+  bodyHtml: string;
+}): Promise<void> {
+  const blob = await buildWordDocxBlob({ bodyHtml });
   triggerBlobDownload(blob, ensureExtension(filename, "docx"));
 }
 

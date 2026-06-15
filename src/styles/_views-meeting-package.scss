@@ -72,21 +72,62 @@
   svg { color: token('text-tertiary'); }
   p { max-width: 52ch; margin: 0; }
 }
-// The preview is an <iframe> that renders the exact export HTML + DOCUMENT_CSS
-// (see MinutesDocumentPreview), so it literally shows the downloaded document.
-// This rule is only the "paper" frame around that iframe — all typography,
-// tables, and .motion/.meta/.muted styling live inside the iframe and stay in
-// lockstep with the PDF export. The iframe also isolates the page from the
-// app theme, so no light-token forcing is needed here anymore.
-.minutes-preview__page {
-  display: block;
-  width: min(680px, 100%);
-  min-height: 760px;
-  margin: 0 auto;
-  border: 1px solid #d0d4dc;
-  background: #fff;
-  box-shadow: token('shadow-md');
+// The preview renders the *actual* downloaded .docx via docx-preview (see
+// MinutesDocumentPreview). docx-preview emits its own scoped styles for the
+// page sections; these rules are just the gray "viewport" the paginated pages
+// sit in, plus a fit-to-width scale so letter pages don't overflow narrow
+// columns. Forced light so the white pages read correctly in dark mode.
+.minutes-docx-preview {
+  position: relative;
+  width: 100%;
+  min-height: 320px;
+  max-height: 80vh;
+  overflow: auto;
+  padding: token('s-4');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  background: token('bg-app');
   color-scheme: light;
+}
+.minutes-docx-preview__render {
+  // Scale the whole paginated wrapper to fit the column. `zoom` (unlike
+  // transform) reflows the layout box, so the viewport's scroll height tracks
+  // the scaled content with no leftover whitespace.
+  zoom: var(--docx-scale, 1);
+}
+// Tame docx-preview's defaults: it ships a gray wrapper with its own padding;
+// our viewport already provides the backdrop, so flatten the wrapper and keep
+// only the per-page paper (white background + shadow) it draws on each section.
+.minutes-docx-preview .docx-wrapper {
+  background: transparent;
+  padding: 0;
+  gap: token('s-3');
+}
+.minutes-docx-preview .docx-wrapper > section.docx {
+  margin: 0 auto;
+  box-shadow: token('shadow-md');
+}
+.minutes-docx-preview__status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: token('s-2');
+  min-height: 240px;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  text-align: center;
+}
+.minutes-docx-preview__spinner {
+  animation: spin 0.9s linear infinite;
+}
+// When loading/erroring, the (hidden) render container shouldn't reserve space.
+.minutes-docx-preview__status + .minutes-docx-preview__render[style*="hidden"] {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 .meeting-detail-summary {
   display: grid;
@@ -400,9 +441,6 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   }
 }
 
-.minutes-preview--inline .minutes-preview__page {
-  width: min(760px, 100%);
-}
 .minutes-preview__viewport {
   // Outer resizable, clipping container. react-zoom-pan-pinch handles the
   // pan/zoom transform inside; we just provide a bounded viewport that the
@@ -469,8 +507,9 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   color: token('text-secondary');
   font-size: token('fs-sm');
 }
-.minutes-preview--standalone .minutes-preview__page {
-  width: min(820px, 100%);
+// The standalone preview page has room for a taller viewport.
+.minutes-preview--standalone .minutes-docx-preview {
+  max-height: none;
 }
 @media (max-width: 760px) {
   .meeting-detail-summary {
@@ -534,9 +573,6 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   }
   .minutes-preview__toolbar {
     grid-template-columns: 1fr;
-  }
-  .minutes-preview__page {
-    min-height: 620px;
   }
 }
 .structured-minutes-editor {

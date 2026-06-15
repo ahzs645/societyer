@@ -1,78 +1,112 @@
 import { useEffect, useRef, useState } from "react";
-import { DOCUMENT_CSS } from "../../../lib/pdf";
+import { renderAsync } from "docx-preview";
+import { FileWarning, Loader2 } from "lucide-react";
+import { buildWordDocxBlob } from "../../../lib/docx";
 
-// Renders the exported minutes body HTML inside an isolated iframe using the
-// *same* DOCUMENT_CSS the PDF pipeline applies, so the on-screen preview
-// literally renders the document the user downloads — there is no separate,
-// hand-maintained preview stylesheet to drift out of sync with the export.
+// Renders the *actual* .docx the user downloads. We build the same OOXML bytes
+// exportWordDocx ships, then hand them to docx-preview, which lays them out as
+// paginated, Word-like pages in the DOM. So the preview is literally the file —
+// not a separately-styled HTML approximation that can drift from the export.
 //
-// The iframe also gives us full style isolation: the app's theme tokens (and
-// dark mode) can't bleed into the page, so we no longer need to force light
-// tokens or re-declare .motion/.meta/.muted colors in SCSS.
+// docx-preview can't be 100% pixel-identical to Microsoft Word (line-breaking
+// and pagination are the renderer's own approximation), but it shows real
+// letter-size pages with page breaks, which is far closer than rendering the
+// raw HTML.
 
-// Layered on top of DOCUMENT_CSS for the on-screen frame only. DOCUMENT_CSS's
-// `@page` margin governs the printed PDF; on screen we reproduce the same
-// 0.65in page margin with body padding so spacing matches what prints.
-const PREVIEW_FRAME_CSS = `
-  html, body { margin: 0; background: #fff; }
-  body { padding: 0.65in; box-sizing: border-box; }
-`;
+// Letter page width at 96dpi (8.5in). Our exporter always emits a letter
+// sectPr, so docx-preview renders pages at this width; we scale the whole
+// wrapper down to fit narrow columns rather than forcing a horizontal scroll.
+const PAGE_WIDTH_PX = 816;
 
-export function MinutesDocumentPreview({
-  bodyHtml,
-  className,
-  title = "Minutes document preview",
-}: {
-  bodyHtml: string;
-  className?: string;
-  title?: string;
-}) {
-  const frameRef = useRef<HTMLIFrameElement>(null);
-  const [height, setHeight] = useState(760);
+const RENDER_OPTIONS = {
+  className: "docx",
+  inWrapper: true,
+  breakPages: true,
+  ignoreLastRenderedPageBreak: false,
+  experimental: true,
+  useBase64URL: true,
+  renderHeaders: true,
+  renderFooters: true,
+} as const;
 
-  const srcDoc = `<!doctype html><html><head><meta charset="utf-8" /><style>${DOCUMENT_CSS}${PREVIEW_FRAME_CSS}</style></head><body>${bodyHtml}</body></html>`;
+export function MinutesDocumentPreview({ bodyHtml }: { bodyHtml: string }) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const renderRef = useRef<HTMLDivElement>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
 
+  // Render the docx whenever the content changes.
   useEffect(() => {
-    const frame = frameRef.current;
-    if (!frame) return;
-    let observer: ResizeObserver | null = null;
+    let cancelled = false;
+    const target = renderRef.current;
+    if (!target) return;
+    setStatus("loading");
+    target.innerHTML = "";
 
-    const syncHeight = () => {
-      const doc = frame.contentDocument;
-      if (!doc?.body) return;
-      const next = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
-      if (next > 0) setHeight(next);
-    };
-
-    const handleLoad = () => {
-      syncHeight();
-      // Re-measure when the content reflows (late-loading letterhead images,
-      // web fonts) so the iframe never clips or leaves a gap.
-      const doc = frame.contentDocument;
-      if (doc?.body && typeof ResizeObserver !== "undefined") {
-        observer = new ResizeObserver(syncHeight);
-        observer.observe(doc.body);
+    (async () => {
+      try {
+        const blob = await buildWordDocxBlob({ bodyHtml });
+        if (cancelled || !renderRef.current) return;
+        await renderAsync(blob, renderRef.current, undefined, RENDER_OPTIONS);
+        if (!cancelled) setStatus("ready");
+      } catch (error) {
+        console.error("Failed to render docx preview", error);
+        if (!cancelled) setStatus("error");
       }
-    };
-
-    frame.addEventListener("load", handleLoad);
-    // srcDoc is assigned before this effect runs, so the load event may have
-    // already fired; measure immediately if the document is ready.
-    if (frame.contentDocument?.readyState === "complete") handleLoad();
+    })();
 
     return () => {
-      frame.removeEventListener("load", handleLoad);
-      observer?.disconnect();
+      cancelled = true;
     };
-  }, [srcDoc]);
+  }, [bodyHtml]);
+
+  // Scale the rendered pages to fit the available column width. We measure the
+  // viewport (not the page) so the zoom recomputes as the layout/window
+  // changes, and never upscale past 1 so a wide column shows pages at natural
+  // size.
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    const render = renderRef.current;
+    if (!viewport || !render) return;
+
+    const applyScale = () => {
+      const styles = getComputedStyle(viewport);
+      const padding =
+        parseFloat(styles.paddingLeft || "0") + parseFloat(styles.paddingRight || "0");
+      // clientWidth already excludes the scrollbar; subtract padding to get the
+      // true content width the pages have to fit into.
+      const available = viewport.clientWidth - padding;
+      if (available <= 0) return;
+      const scale = Math.min(1, available / PAGE_WIDTH_PX);
+      render.style.setProperty("--docx-scale", String(scale));
+    };
+
+    applyScale();
+    const observer = new ResizeObserver(applyScale);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [status]);
 
   return (
-    <iframe
-      ref={frameRef}
-      className={className ? `minutes-preview__page ${className}` : "minutes-preview__page"}
-      title={title}
-      srcDoc={srcDoc}
-      style={{ height }}
-    />
+    <div className="minutes-docx-preview" ref={viewportRef}>
+      {status === "loading" && (
+        <div className="minutes-docx-preview__status">
+          <Loader2 size={18} className="minutes-docx-preview__spinner" aria-hidden />
+          <span>Rendering document…</span>
+        </div>
+      )}
+      {status === "error" && (
+        <div className="minutes-docx-preview__status">
+          <FileWarning size={18} aria-hidden />
+          <span>Couldn't render this document preview. The download still works.</span>
+        </div>
+      )}
+      <div
+        ref={renderRef}
+        className="minutes-docx-preview__render"
+        // Hidden until the first render resolves so users don't see a flash of
+        // unscaled, full-width pages mid-render.
+        style={{ visibility: status === "ready" ? "visible" : "hidden" }}
+      />
+    </div>
   );
 }
