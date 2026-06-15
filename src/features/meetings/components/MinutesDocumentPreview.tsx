@@ -64,9 +64,12 @@ function paginateRenderedDocx(render: HTMLElement): void {
   const contentHeight = pageHeight - padTop - padBottom;
   if (contentHeight <= 0) return;
 
-  // Detach the original page and its blocks; we rebuild the wrapper from them.
+  // Reuse the original section as the first page: pull its blocks out, then
+  // empty its article *in place*. Keeping the section attached is essential —
+  // a detached node reports offsetHeight 0, which would make every fit check
+  // pass and collapse the whole document onto one orphaned page.
   const blocks = Array.from(sourceArticle.children) as HTMLElement[];
-  source.remove();
+  sourceArticle.replaceChildren();
 
   let article: HTMLElement = sourceArticle;
   const startPage = (): void => {
