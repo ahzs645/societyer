@@ -1009,15 +1009,6 @@
 .public-copy-toggle__text {
   white-space: nowrap;
 }
-// Non-interactive variant used as a preview indicator. Same colors/icon as the
-// toggle so they read as the same control surface, but no hover affordance and
-// no pointer cursor — it's signalling state, not asking for input.
-.public-copy-toggle--readonly {
-  cursor: default;
-  &:hover {
-    border-color: token('border');
-  }
-}
 .meeting-minutes-section-editor__mobile-head {
   display: none;
 }
