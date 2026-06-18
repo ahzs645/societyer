@@ -201,6 +201,34 @@
 .meeting-signatures-card {
   margin-top: token('s-3');
 }
+.meeting-conflict-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: token('s-2');
+  padding: token('s-2') 0;
+  border-bottom: 1px solid token('border');
+}
+.meeting-conflict-row__main {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.meeting-conflict-row__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.meeting-conflict-row__actions {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.meeting-conflict-form {
+  margin-top: token('s-2');
+  padding-top: token('s-2');
+  border-top: 1px dashed token('border');
+}
 .meeting-detail-tabpanel {
   min-width: 0;
 }

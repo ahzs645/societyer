@@ -50,6 +50,7 @@ import { MeetingSidebarColumn } from "../features/meetings/components/MeetingSid
 import { MinutesDraftEmptyState } from "../features/meetings/components/MinutesDraftEmptyState";
 import { MinutesDocumentPreview } from "../features/meetings/components/MinutesDocumentPreview";
 import { SignaturePanel } from "../components/SignaturePanel";
+import { MeetingConflictsCard } from "../features/meetings/components/MeetingConflictsCard";
 import { useConfirm } from "../components/Modal";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -120,6 +121,11 @@ export function MeetingDetailPage() {
   const minutesSignatures = useQuery(
     api.signatures.listForEntity,
     minutes ? { entityType: "minutes", entityId: minutes._id as string } : "skip",
+  );
+  // Conflict-of-interest / recusal declarations for this meeting.
+  const meetingConflicts = useQuery(
+    api.conflicts.forMeeting,
+    id ? { meetingId: id as Id<"meetings"> } : "skip",
   );
   const motionPeople = personLinkCandidates(members, directors);
   const directorNames = (directors ?? []).flatMap((d: any) => [`${d.firstName} ${d.lastName}`, ...(Array.isArray(d.aliases) ? d.aliases : [])]);
@@ -772,6 +778,21 @@ export function MeetingDetailPage() {
           signedAtISO: signature.signedAtISO,
           imageDataUrl: signature.imageDataUrl,
         })),
+        conflicts: (meetingConflicts ?? []).map((conflict: any) => {
+          const director = (directors ?? []).find((d: any) => d._id === conflict.directorId);
+          const motion =
+            conflict.motionIndex == null ? undefined : (minutes?.motions ?? [])[conflict.motionIndex];
+          return {
+            directorName: director
+              ? `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim()
+              : "Director",
+            contractOrMatter: conflict.contractOrMatter,
+            natureOfInterest: conflict.natureOfInterest,
+            abstainedFromVote: conflict.abstainedFromVote,
+            leftRoom: conflict.leftRoom,
+            motionLabel: motion ? motion.name || motion.text : undefined,
+          };
+        }),
       },
     });
   };
@@ -1839,6 +1860,22 @@ export function MeetingDetailPage() {
               uploadAudioAndRun={uploadAudioAndRun}
             />
           </div>
+          {society && (
+            <div className="meeting-signatures-card">
+              <MeetingConflictsCard
+                societyId={society._id}
+                meetingId={meeting._id}
+                directors={directors ?? []}
+                motions={((minutes?.motions ?? []) as any[])
+                  .map((motion, index) => ({ motion, index }))
+                  .filter(({ motion }) => !isAdjournmentMotion(motion))
+                  .map(({ motion, index }) => ({
+                    index,
+                    label: motion.name || motion.text || `Motion ${index + 1}`,
+                  }))}
+              />
+            </div>
+          )}
           {minutes && society && (
             <div className="meeting-signatures-card">
               <SignaturePanel

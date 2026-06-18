@@ -20,6 +20,16 @@ export type MinutesSignatureLine = {
   imageDataUrl?: string;
 };
 
+/** A conflict-of-interest / recusal declaration to render into the minutes. */
+export type MinutesConflictLine = {
+  directorName: string;
+  contractOrMatter: string;
+  natureOfInterest?: string;
+  abstainedFromVote?: boolean;
+  leftRoom?: boolean;
+  motionLabel?: string;
+};
+
 export type MinutesExportOptions = {
   includeTranscript?: boolean;
   includeActionItems?: boolean;
@@ -31,6 +41,8 @@ export type MinutesExportOptions = {
   /** Captured e-signatures. When present, the signature block lists the actual
    *  signers + dates instead of blank Chair/Secretary signature lines. */
   signatures?: MinutesSignatureLine[];
+  /** Conflict-of-interest / recusal declarations recorded for the meeting. */
+  conflicts?: MinutesConflictLine[];
 };
 
 export type MinutesDataGap = {
@@ -173,6 +185,7 @@ const DEFAULT_MINUTES_EXPORT_OPTIONS: Required<MinutesExportOptions> = {
   includePlaceholders: false,
   includeGeneratedFooter: true,
   signatures: [],
+  conflicts: [],
 };
 
 /** Build the body HTML for a meeting-minutes export. */
@@ -413,6 +426,7 @@ function renderStandardMinutes({
 
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
 
+    ${renderConflictsBlock(options.conflicts)}
     ${options.includeSignatures ? renderSignatureBlock(options.signatures) : ""}
 
     ${options.includeTranscript && minutes.draftTranscript ? `
@@ -473,6 +487,7 @@ function renderFormalAgmMinutes({
     ${adjournmentMotion || adjournedAt || options.includePlaceholders ? `<p>There being no further business, ${adjournmentMotion ? `upon motion duly made and accepted, ${eh(adjournmentMotion.text)}` : `the meeting was concluded at ${eh(adjournedAt ?? placeholder("adjournment time", options))}`}</p>` : ""}
 
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
+    ${renderConflictsBlock(options.conflicts)}
     ${options.includeSignatures ? renderSignatureBlock(options.signatures, "Chair", "Secretary") : ""}
     ${options.includeTranscript && minutes.draftTranscript ? renderTranscript(minutes.draftTranscript) : ""}
     ${renderFooter(options)}
@@ -604,6 +619,7 @@ function renderNumberedAgendaMinutes({
     ${renderSampleNextMeeting(minutes, options)}
     ${renderAppendices(minutes.appendices, options)}
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
+    ${renderConflictsBlock(options.conflicts)}
     ${options.includeSignatures ? renderSignatureBlock(options.signatures) : ""}
     ${options.includeTranscript && minutes.draftTranscript ? renderTranscript(minutes.draftTranscript) : ""}
     ${renderFooter(options)}
@@ -1268,6 +1284,40 @@ function renderApprovalBlock(
     <p>${minutes.approvedAt
       ? `Approved on <strong>${escapeHtml(new Date(minutes.approvedAt).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" }))}</strong>.`
       : "<em>Pending approval at next meeting.</em>"}</p>
+  `;
+}
+
+function renderConflictsBlock(conflicts: MinutesConflictLine[] = []) {
+  if (!conflicts.length) return "";
+  const rows = conflicts
+    .map((conflict) => {
+      const measures = [
+        conflict.abstainedFromVote ? "abstained from the vote" : "",
+        conflict.leftRoom ? "left the room" : "",
+      ].filter(Boolean).join(" and ");
+      const scope = conflict.motionLabel ? ` (${escapeHtml(conflict.motionLabel)})` : "";
+      const detail = [
+        conflict.natureOfInterest ? escapeHtml(conflict.natureOfInterest) : "",
+        measures ? `The director ${measures}.` : "",
+      ].filter(Boolean).join(" ");
+      return `
+      <tr>
+        <td>${escapeHtml(conflict.directorName)}</td>
+        <td>${escapeHtml(conflict.contractOrMatter)}${scope}</td>
+        <td>${detail}</td>
+      </tr>`;
+    })
+    .join("");
+  return `
+    <h2>Conflicts of Interest &amp; Recusals</h2>
+    <table>
+      <tr>
+        <td class="meta">Director</td>
+        <td class="meta">Matter</td>
+        <td class="meta">Disclosure &amp; action taken</td>
+      </tr>
+      ${rows}
+    </table>
   `;
 }
 

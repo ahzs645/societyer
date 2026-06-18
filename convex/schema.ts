@@ -2884,10 +2884,15 @@ export default defineSchema({
     leftRoom: v.boolean(),
     resolvedAt: v.optional(v.string()),
     notes: v.optional(v.string()),
+    // Optional link to the meeting (and specific motion) the recusal applies to,
+    // so declarations can be captured per-meeting and rendered into the minutes.
+    meetingId: v.optional(v.id("meetings")),
+    motionIndex: v.optional(v.number()),
   })
     .index("by_society", ["societyId"])
     .index("by_society_resolved", ["societyId", "resolvedAt"])
-    .index("by_director", ["directorId"]),
+    .index("by_director", ["directorId"])
+    .index("by_meeting", ["meetingId"]),
 
   financials: defineTable({
     societyId: v.id("societies"),

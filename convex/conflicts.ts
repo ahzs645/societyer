@@ -11,6 +11,16 @@ export const list = query({
       .collect(),
 });
 
+export const forMeeting = query({
+  args: { meetingId: v.id("meetings") },
+  returns: v.any(),
+  handler: async (ctx, { meetingId }) =>
+    ctx.db
+      .query("conflicts")
+      .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
+      .collect(),
+});
+
 export const create = mutation({
   args: {
     societyId: v.id("societies"),
@@ -21,6 +31,8 @@ export const create = mutation({
     abstainedFromVote: v.boolean(),
     leftRoom: v.boolean(),
     notes: v.optional(v.string()),
+    meetingId: v.optional(v.id("meetings")),
+    motionIndex: v.optional(v.number()),
   },
   returns: v.any(),
   handler: async (ctx, args) => ctx.db.insert("conflicts", args),
