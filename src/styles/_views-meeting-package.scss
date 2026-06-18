@@ -229,6 +229,17 @@
   padding-top: token('s-2');
   border-top: 1px dashed token('border');
 }
+.meeting-proxy-quorum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-2') token('s-4');
+  margin-bottom: token('s-2');
+  font-size: token('fs-sm');
+}
+.meeting-proxy-quorum strong {
+  color: token('text-primary');
+}
 .meeting-detail-tabpanel {
   min-width: 0;
 }

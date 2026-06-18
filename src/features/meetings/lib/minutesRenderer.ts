@@ -30,6 +30,14 @@ export type MinutesConflictLine = {
   motionLabel?: string;
 };
 
+/** A proxy appointment to render into the minutes. */
+export type MinutesProxyLine = {
+  grantorName: string;
+  proxyHolderName: string;
+  instructions?: string;
+  revoked?: boolean;
+};
+
 export type MinutesExportOptions = {
   includeTranscript?: boolean;
   includeActionItems?: boolean;
@@ -43,6 +51,8 @@ export type MinutesExportOptions = {
   signatures?: MinutesSignatureLine[];
   /** Conflict-of-interest / recusal declarations recorded for the meeting. */
   conflicts?: MinutesConflictLine[];
+  /** Proxy appointments recorded for the meeting. */
+  proxies?: MinutesProxyLine[];
 };
 
 export type MinutesDataGap = {
@@ -186,6 +196,7 @@ const DEFAULT_MINUTES_EXPORT_OPTIONS: Required<MinutesExportOptions> = {
   includeGeneratedFooter: true,
   signatures: [],
   conflicts: [],
+  proxies: [],
 };
 
 /** Build the body HTML for a meeting-minutes export. */
@@ -426,6 +437,7 @@ function renderStandardMinutes({
 
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
 
+    ${renderProxiesBlock(options.proxies)}
     ${renderConflictsBlock(options.conflicts)}
     ${options.includeSignatures ? renderSignatureBlock(options.signatures) : ""}
 
@@ -487,6 +499,7 @@ function renderFormalAgmMinutes({
     ${adjournmentMotion || adjournedAt || options.includePlaceholders ? `<p>There being no further business, ${adjournmentMotion ? `upon motion duly made and accepted, ${eh(adjournmentMotion.text)}` : `the meeting was concluded at ${eh(adjournedAt ?? placeholder("adjournment time", options))}`}</p>` : ""}
 
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
+    ${renderProxiesBlock(options.proxies)}
     ${renderConflictsBlock(options.conflicts)}
     ${options.includeSignatures ? renderSignatureBlock(options.signatures, "Chair", "Secretary") : ""}
     ${options.includeTranscript && minutes.draftTranscript ? renderTranscript(minutes.draftTranscript) : ""}
@@ -619,6 +632,7 @@ function renderNumberedAgendaMinutes({
     ${renderSampleNextMeeting(minutes, options)}
     ${renderAppendices(minutes.appendices, options)}
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
+    ${renderProxiesBlock(options.proxies)}
     ${renderConflictsBlock(options.conflicts)}
     ${options.includeSignatures ? renderSignatureBlock(options.signatures) : ""}
     ${options.includeTranscript && minutes.draftTranscript ? renderTranscript(minutes.draftTranscript) : ""}
@@ -1284,6 +1298,32 @@ function renderApprovalBlock(
     <p>${minutes.approvedAt
       ? `Approved on <strong>${escapeHtml(new Date(minutes.approvedAt).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" }))}</strong>.`
       : "<em>Pending approval at next meeting.</em>"}</p>
+  `;
+}
+
+function renderProxiesBlock(proxies: MinutesProxyLine[] = []) {
+  const active = proxies.filter((proxy) => !proxy.revoked);
+  if (!active.length) return "";
+  const rows = active
+    .map(
+      (proxy) => `
+      <tr>
+        <td>${escapeHtml(proxy.grantorName)}</td>
+        <td>${escapeHtml(proxy.proxyHolderName)}</td>
+        <td>${escapeHtml(proxy.instructions ?? "")}</td>
+      </tr>`,
+    )
+    .join("");
+  return `
+    <h2>Proxies</h2>
+    <table>
+      <tr>
+        <td class="meta">Grantor</td>
+        <td class="meta">Proxy holder</td>
+        <td class="meta">Instructions</td>
+      </tr>
+      ${rows}
+    </table>
   `;
 }
 

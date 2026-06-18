@@ -51,6 +51,7 @@ import { MinutesDraftEmptyState } from "../features/meetings/components/MinutesD
 import { MinutesDocumentPreview } from "../features/meetings/components/MinutesDocumentPreview";
 import { SignaturePanel } from "../components/SignaturePanel";
 import { MeetingConflictsCard } from "../features/meetings/components/MeetingConflictsCard";
+import { MeetingProxiesCard } from "../features/meetings/components/MeetingProxiesCard";
 import { useConfirm } from "../components/Modal";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -125,6 +126,12 @@ export function MeetingDetailPage() {
   // Conflict-of-interest / recusal declarations for this meeting.
   const meetingConflicts = useQuery(
     api.conflicts.forMeeting,
+    id ? { meetingId: id as Id<"meetings"> } : "skip",
+  );
+  // Proxies appointed for this meeting (rendered into the export and used for
+  // proxy-inclusive quorum math).
+  const meetingProxies = useQuery(
+    api.proxies.forMeeting,
     id ? { meetingId: id as Id<"meetings"> } : "skip",
   );
   const motionPeople = personLinkCandidates(members, directors);
@@ -793,6 +800,12 @@ export function MeetingDetailPage() {
             motionLabel: motion ? motion.name || motion.text : undefined,
           };
         }),
+        proxies: (meetingProxies ?? []).map((proxy: any) => ({
+          grantorName: proxy.grantorName,
+          proxyHolderName: proxy.proxyHolderName,
+          instructions: proxy.instructions,
+          revoked: !!proxy.revokedAtISO,
+        })),
       },
     });
   };
@@ -1873,6 +1886,25 @@ export function MeetingDetailPage() {
                     index,
                     label: motion.name || motion.text || `Motion ${index + 1}`,
                   }))}
+              />
+            </div>
+          )}
+          {society && (
+            <div className="meeting-signatures-card">
+              <MeetingProxiesCard
+                societyId={society._id}
+                meetingId={meeting._id}
+                members={members ?? []}
+                presentCount={
+                  ((minutes?.detailedAttendance ?? []) as any[]).filter(
+                    (row) => row.quorumCounted !== false && row.status === "present",
+                  ).length || (minutes?.attendees?.length ?? 0)
+                }
+                quorumRequired={
+                  (quorumSnapshot as any)?.quorumRequired ??
+                  meeting.quorumRequired ??
+                  (minutes?.quorumRequired as number | undefined)
+                }
               />
             </div>
           )}
