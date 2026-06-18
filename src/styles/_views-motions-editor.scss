@@ -336,6 +336,14 @@
   font-size: token('fs-sm');
   font-weight: 600;
 }
+// Vote steppers are compact controls (two icon buttons + a 56px input, ~120px
+// total), so opt them out of the generic `.row > .field { flex: 1 1 220px }`
+// basis. That basis sizes each stepper as if it were a full text field, which
+// pushes the three-up For / Against / Abstain row past most card widths and
+// wraps "Abstain" onto its own line. Sizing to content keeps all three inline.
+.row > .field.vote-stepper {
+  flex: 0 0 auto;
+}
 .vote-stepper--compact {
   flex: 0 1 auto;
   gap: 4px;

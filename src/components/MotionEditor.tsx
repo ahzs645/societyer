@@ -449,8 +449,6 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
               />
             </Field>
 
-            <OutcomePicker stretch value={draft.outcome} onChange={(v) => setDraft({ ...draft, outcome: v })} />
-
             {agendaSections.length > 0 && (
               <Field label="Agenda item">
                 <Select
@@ -461,6 +459,8 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
                 />
               </Field>
             )}
+
+            <OutcomePicker stretch value={draft.outcome} onChange={(v) => setDraft({ ...draft, outcome: v })} />
 
             <div className="motion-draft__votes">
               <div className="motion-draft__vote-row">
@@ -748,7 +748,6 @@ function MotionRow({
               options={RESOLUTION_TYPE_OPTIONS}
             />
           </Field>
-          <OutcomePicker stretch value={motion.outcome} onChange={(v) => onPatch({ outcome: v })} />
           {agendaSections.length > 0 && (
             <Field label="Agenda item">
               <Select
@@ -758,6 +757,7 @@ function MotionRow({
               />
             </Field>
           )}
+          <OutcomePicker stretch value={motion.outcome} onChange={(v) => onPatch({ outcome: v })} />
           <div className="row" style={{ gap: 12, alignItems: "flex-end" }}>
             <VoteStepper label="For" value={motion.votesFor ?? 0} onChange={(n) => onSetVote("votesFor", n)} tone="success" />
             <VoteStepper label="Against" value={motion.votesAgainst ?? 0} onChange={(n) => onSetVote("votesAgainst", n)} tone="danger" />
