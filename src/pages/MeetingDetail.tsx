@@ -49,6 +49,7 @@ import { MeetingMinutesColumn } from "../features/meetings/components/MeetingMin
 import { MeetingSidebarColumn } from "../features/meetings/components/MeetingSidebarColumn";
 import { MinutesDraftEmptyState } from "../features/meetings/components/MinutesDraftEmptyState";
 import { MinutesDocumentPreview } from "../features/meetings/components/MinutesDocumentPreview";
+import { SignaturePanel } from "../components/SignaturePanel";
 import { useConfirm } from "../components/Modal";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -114,6 +115,12 @@ export function MeetingDetailPage() {
   // Sibling meetings power the "approved at meeting" picker — minutes are
   // typically adopted at a later meeting, so we let the user point at it.
   const allMeetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
+  // Captured e-signatures on these minutes — surfaced in the signing panel and
+  // rendered into the export's signature block.
+  const minutesSignatures = useQuery(
+    api.signatures.listForEntity,
+    minutes ? { entityType: "minutes", entityId: minutes._id as string } : "skip",
+  );
   const motionPeople = personLinkCandidates(members, directors);
   const directorNames = (directors ?? []).flatMap((d: any) => [`${d.firstName} ${d.lastName}`, ...(Array.isArray(d.aliases) ? d.aliases : [])]);
   const generate = useAction(api.minutes.generateDraft);
@@ -759,6 +766,11 @@ export function MeetingDetailPage() {
         includeApprovalBlock: includeApprovalInExport,
         includeSignatures: includeSignaturesInExport,
         includePlaceholders: includePlaceholdersInExport,
+        signatures: (minutesSignatures ?? []).map((signature: any) => ({
+          signerName: signature.signerName,
+          signerRole: signature.signerRole,
+          signedAtISO: signature.signedAtISO,
+        })),
       },
     });
   };
@@ -1826,6 +1838,17 @@ export function MeetingDetailPage() {
               uploadAudioAndRun={uploadAudioAndRun}
             />
           </div>
+          {minutes && society && (
+            <div className="meeting-signatures-card">
+              <SignaturePanel
+                societyId={society._id}
+                entityType="minutes"
+                entityId={minutes._id as string}
+                title="Minutes signatures"
+                signerScope="directors"
+              />
+            </div>
+          )}
           </>
         )}
 

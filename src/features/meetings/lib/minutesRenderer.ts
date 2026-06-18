@@ -11,6 +11,13 @@ import { MINUTES_EXPORT_STYLES, type MinutesExportStyleId } from "./minutesExpor
 export type { MinutesExportStyleId };
 export { MINUTES_EXPORT_STYLES };
 
+/** A captured e-signature to render in the signature block. */
+export type MinutesSignatureLine = {
+  signerName: string;
+  signerRole?: string;
+  signedAtISO?: string;
+};
+
 export type MinutesExportOptions = {
   includeTranscript?: boolean;
   includeActionItems?: boolean;
@@ -19,6 +26,9 @@ export type MinutesExportOptions = {
   includeSignatures?: boolean;
   includePlaceholders?: boolean;
   includeGeneratedFooter?: boolean;
+  /** Captured e-signatures. When present, the signature block lists the actual
+   *  signers + dates instead of blank Chair/Secretary signature lines. */
+  signatures?: MinutesSignatureLine[];
 };
 
 export type MinutesDataGap = {
@@ -160,6 +170,7 @@ const DEFAULT_MINUTES_EXPORT_OPTIONS: Required<MinutesExportOptions> = {
   includeSignatures: true,
   includePlaceholders: false,
   includeGeneratedFooter: true,
+  signatures: [],
 };
 
 /** Build the body HTML for a meeting-minutes export. */
@@ -400,7 +411,7 @@ function renderStandardMinutes({
 
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
 
-    ${options.includeSignatures ? renderSignatureBlock() : ""}
+    ${options.includeSignatures ? renderSignatureBlock(options.signatures) : ""}
 
     ${options.includeTranscript && minutes.draftTranscript ? `
       <h2>Transcript</h2>
@@ -460,7 +471,7 @@ function renderFormalAgmMinutes({
     ${adjournmentMotion || adjournedAt || options.includePlaceholders ? `<p>There being no further business, ${adjournmentMotion ? `upon motion duly made and accepted, ${eh(adjournmentMotion.text)}` : `the meeting was concluded at ${eh(adjournedAt ?? placeholder("adjournment time", options))}`}</p>` : ""}
 
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
-    ${options.includeSignatures ? renderSignatureBlock("Chair", "Secretary") : ""}
+    ${options.includeSignatures ? renderSignatureBlock(options.signatures, "Chair", "Secretary") : ""}
     ${options.includeTranscript && minutes.draftTranscript ? renderTranscript(minutes.draftTranscript) : ""}
     ${renderFooter(options)}
   `;
@@ -591,7 +602,7 @@ function renderNumberedAgendaMinutes({
     ${renderSampleNextMeeting(minutes, options)}
     ${renderAppendices(minutes.appendices, options)}
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
-    ${options.includeSignatures ? renderSignatureBlock() : ""}
+    ${options.includeSignatures ? renderSignatureBlock(options.signatures) : ""}
     ${options.includeTranscript && minutes.draftTranscript ? renderTranscript(minutes.draftTranscript) : ""}
     ${renderFooter(options)}
   `;
@@ -1258,7 +1269,46 @@ function renderApprovalBlock(
   `;
 }
 
-function renderSignatureBlock(leftLabel = "Chair", rightLabel = "Secretary") {
+function renderSignatureBlock(
+  signatures: MinutesSignatureLine[] = [],
+  leftLabel = "Chair",
+  rightLabel = "Secretary",
+) {
+  // When e-signatures have been captured, list the actual signers, their role,
+  // and the date signed instead of blank Chair/Secretary signature lines.
+  if (signatures.length) {
+    const rows = signatures
+      .map((signature) => {
+        const signed = signature.signedAtISO
+          ? new Date(signature.signedAtISO).toLocaleDateString("en-CA", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })
+          : "";
+        return `
+      <tr>
+        <td style="border-left: 0; border-right: 0; border-top: 0;">
+          <span style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14pt;">${escapeHtml(signature.signerName)}</span>
+        </td>
+        <td class="meta" style="border: 0; white-space: nowrap;">${escapeHtml(signature.signerRole ?? "")}</td>
+        <td class="meta" style="border: 0; white-space: nowrap;">${escapeHtml(signed)}</td>
+      </tr>`;
+      })
+      .join("");
+    return `
+    <h2>Signatures</h2>
+    <table>
+      <tr>
+        <td class="meta" style="border: 0; width: 50%;">Signature</td>
+        <td class="meta" style="border: 0;">Role</td>
+        <td class="meta" style="border: 0;">Date signed</td>
+      </tr>
+      ${rows}
+    </table>
+    <p class="meta">Electronically signed and retained with these minutes.</p>
+  `;
+  }
   return `
     <h2>Signatures</h2>
     <table>
