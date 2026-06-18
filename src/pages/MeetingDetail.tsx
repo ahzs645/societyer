@@ -1575,6 +1575,57 @@ export function MeetingDetailPage() {
     toast.success("Meeting template saved");
   };
 
+  // The sidebar column is rendered on four tabs with an identical ~40-prop set;
+  // bundle the shared props here and spread them so each call site only lists
+  // what actually differs (visible panels, read-only/gaps flags, draft action).
+  const sharedSidebarProps = {
+    meeting,
+    minutes,
+    society,
+    selectedMinutesExportStyle,
+    minutesExportStyle,
+    setMinutesExportStyle,
+    includeTranscriptInExport,
+    setIncludeTranscriptInExport,
+    includeActionItemsInExport,
+    setIncludeActionItemsInExport,
+    includeDiscussionSummaryInExport,
+    setIncludeDiscussionSummaryInExport,
+    includeApprovalInExport,
+    setIncludeApprovalInExport,
+    includeSignaturesInExport,
+    setIncludeSignaturesInExport,
+    includePlaceholdersInExport,
+    setIncludePlaceholdersInExport,
+    exportToWord,
+    exportToPdf,
+    publicCopyMode,
+    setPublicCopyMode,
+    minutesExportGaps,
+    quorumSnapshot,
+    quorumLegalGuides,
+    legalGuideDateISO,
+    linkedSourceCount,
+    sourceDocuments,
+    minutesSourceExternalIds,
+    vttInputRef,
+    audioInputRef,
+    transcriptOnFile,
+    transcriptProvider,
+    transcriptionJob,
+    transcriptStatusTone,
+    transcriptEdit,
+    savingTranscript,
+    pipelineBusy,
+    audioFile,
+    importNote,
+    setTranscriptEdit,
+    setAudioFile,
+    importTranscriptVtt,
+    saveTranscriptEditText,
+    uploadAudioAndRun,
+  };
+
   return (
     <div className="page page--wide meeting-detail-page">
       <Link to="/app/meetings" className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
@@ -1775,102 +1826,14 @@ export function MeetingDetailPage() {
           </div>
           <div className="meeting-overview-grid">
             <MeetingSidebarColumn
-              meeting={meeting}
-              minutes={minutes}
-              society={society}
+              {...sharedSidebarProps}
               visiblePanels={meeting.type === "AGM" ? ["details", "agm"] : ["details"]}
-              selectedMinutesExportStyle={selectedMinutesExportStyle}
-              minutesExportStyle={minutesExportStyle}
-              setMinutesExportStyle={setMinutesExportStyle}
-              includeTranscriptInExport={includeTranscriptInExport}
-              setIncludeTranscriptInExport={setIncludeTranscriptInExport}
-              includeActionItemsInExport={includeActionItemsInExport}
-              setIncludeActionItemsInExport={setIncludeActionItemsInExport}
-              includeDiscussionSummaryInExport={includeDiscussionSummaryInExport}
-              setIncludeDiscussionSummaryInExport={setIncludeDiscussionSummaryInExport}
-              includeApprovalInExport={includeApprovalInExport}
-              setIncludeApprovalInExport={setIncludeApprovalInExport}
-              includeSignaturesInExport={includeSignaturesInExport}
-              setIncludeSignaturesInExport={setIncludeSignaturesInExport}
-              includePlaceholdersInExport={includePlaceholdersInExport}
-              setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
-              exportToWord={exportToWord}
-              exportToPdf={exportToPdf}
-              publicCopyMode={publicCopyMode}
-              setPublicCopyMode={setPublicCopyMode}
-              minutesExportGaps={minutesExportGaps}
-              quorumSnapshot={quorumSnapshot}
-              quorumLegalGuides={quorumLegalGuides}
-              legalGuideDateISO={legalGuideDateISO}
-              linkedSourceCount={linkedSourceCount}
-              sourceDocuments={sourceDocuments}
-              minutesSourceExternalIds={minutesSourceExternalIds}
-              vttInputRef={vttInputRef}
-              audioInputRef={audioInputRef}
-              transcriptOnFile={transcriptOnFile}
-              transcriptProvider={transcriptProvider}
-              transcriptionJob={transcriptionJob}
-              transcriptStatusTone={transcriptStatusTone}
-              transcriptEdit={transcriptEdit}
-              savingTranscript={savingTranscript}
-              pipelineBusy={pipelineBusy}
-              audioFile={audioFile}
-              importNote={importNote}
-              setTranscriptEdit={setTranscriptEdit}
-              setAudioFile={setAudioFile}
-              importTranscriptVtt={importTranscriptVtt}
-              saveTranscriptEditText={saveTranscriptEditText}
-              uploadAudioAndRun={uploadAudioAndRun}
             />
             <MeetingSidebarColumn
-              meeting={meeting}
-              minutes={minutes}
-              society={society}
+              {...sharedSidebarProps}
               visiblePanels={["export"]}
               exportControlsReadOnly
-              selectedMinutesExportStyle={selectedMinutesExportStyle}
-              minutesExportStyle={minutesExportStyle}
-              setMinutesExportStyle={setMinutesExportStyle}
-              includeTranscriptInExport={includeTranscriptInExport}
-              setIncludeTranscriptInExport={setIncludeTranscriptInExport}
-              includeActionItemsInExport={includeActionItemsInExport}
-              setIncludeActionItemsInExport={setIncludeActionItemsInExport}
-              includeDiscussionSummaryInExport={includeDiscussionSummaryInExport}
-              setIncludeDiscussionSummaryInExport={setIncludeDiscussionSummaryInExport}
-              includeApprovalInExport={includeApprovalInExport}
-              setIncludeApprovalInExport={setIncludeApprovalInExport}
-              includeSignaturesInExport={includeSignaturesInExport}
-              setIncludeSignaturesInExport={setIncludeSignaturesInExport}
-              includePlaceholdersInExport={includePlaceholdersInExport}
-              setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
-              exportToWord={exportToWord}
-              exportToPdf={exportToPdf}
-              publicCopyMode={publicCopyMode}
-              setPublicCopyMode={setPublicCopyMode}
-              minutesExportGaps={minutesExportGaps}
               showExportGaps
-              quorumSnapshot={quorumSnapshot}
-              quorumLegalGuides={quorumLegalGuides}
-              legalGuideDateISO={legalGuideDateISO}
-              linkedSourceCount={linkedSourceCount}
-              sourceDocuments={sourceDocuments}
-              minutesSourceExternalIds={minutesSourceExternalIds}
-              vttInputRef={vttInputRef}
-              audioInputRef={audioInputRef}
-              transcriptOnFile={transcriptOnFile}
-              transcriptProvider={transcriptProvider}
-              transcriptionJob={transcriptionJob}
-              transcriptStatusTone={transcriptStatusTone}
-              transcriptEdit={transcriptEdit}
-              savingTranscript={savingTranscript}
-              pipelineBusy={pipelineBusy}
-              audioFile={audioFile}
-              importNote={importNote}
-              setTranscriptEdit={setTranscriptEdit}
-              setAudioFile={setAudioFile}
-              importTranscriptVtt={importTranscriptVtt}
-              saveTranscriptEditText={saveTranscriptEditText}
-              uploadAudioAndRun={uploadAudioAndRun}
             />
           </div>
           {society && (
@@ -2077,52 +2040,8 @@ export function MeetingDetailPage() {
           return (
             <div className="meeting-export-layout">
               <MeetingSidebarColumn
-                meeting={meeting}
-                minutes={minutes}
-                society={society}
+                {...sharedSidebarProps}
                 visiblePanels={["export"]}
-                selectedMinutesExportStyle={selectedMinutesExportStyle}
-                minutesExportStyle={minutesExportStyle}
-                setMinutesExportStyle={setMinutesExportStyle}
-                includeTranscriptInExport={includeTranscriptInExport}
-                setIncludeTranscriptInExport={setIncludeTranscriptInExport}
-                includeActionItemsInExport={includeActionItemsInExport}
-                setIncludeActionItemsInExport={setIncludeActionItemsInExport}
-                includeDiscussionSummaryInExport={includeDiscussionSummaryInExport}
-                setIncludeDiscussionSummaryInExport={setIncludeDiscussionSummaryInExport}
-                includeApprovalInExport={includeApprovalInExport}
-                setIncludeApprovalInExport={setIncludeApprovalInExport}
-                includeSignaturesInExport={includeSignaturesInExport}
-                setIncludeSignaturesInExport={setIncludeSignaturesInExport}
-                includePlaceholdersInExport={includePlaceholdersInExport}
-                setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
-                exportToWord={exportToWord}
-                exportToPdf={exportToPdf}
-                publicCopyMode={publicCopyMode}
-              setPublicCopyMode={setPublicCopyMode}
-                minutesExportGaps={minutesExportGaps}
-                quorumSnapshot={quorumSnapshot}
-                quorumLegalGuides={quorumLegalGuides}
-                legalGuideDateISO={legalGuideDateISO}
-                linkedSourceCount={linkedSourceCount}
-                sourceDocuments={sourceDocuments}
-                minutesSourceExternalIds={minutesSourceExternalIds}
-                vttInputRef={vttInputRef}
-                audioInputRef={audioInputRef}
-                transcriptOnFile={transcriptOnFile}
-                transcriptProvider={transcriptProvider}
-                transcriptionJob={transcriptionJob}
-                transcriptStatusTone={transcriptStatusTone}
-                transcriptEdit={transcriptEdit}
-                savingTranscript={savingTranscript}
-                pipelineBusy={pipelineBusy}
-                audioFile={audioFile}
-                importNote={importNote}
-                setTranscriptEdit={setTranscriptEdit}
-                setAudioFile={setAudioFile}
-                importTranscriptVtt={importTranscriptVtt}
-                saveTranscriptEditText={saveTranscriptEditText}
-                uploadAudioAndRun={uploadAudioAndRun}
               />
               <div className="minutes-preview minutes-preview--inline">
                 <div className="minutes-preview__toolbar">
@@ -2142,52 +2061,8 @@ export function MeetingDetailPage() {
 
         {activeTab === "sources" && (
           <MeetingSidebarColumn
-            meeting={meeting}
-            minutes={minutes}
-            society={society}
+            {...sharedSidebarProps}
             visiblePanels={["sources", "transcript"]}
-            selectedMinutesExportStyle={selectedMinutesExportStyle}
-            minutesExportStyle={minutesExportStyle}
-            setMinutesExportStyle={setMinutesExportStyle}
-            includeTranscriptInExport={includeTranscriptInExport}
-            setIncludeTranscriptInExport={setIncludeTranscriptInExport}
-            includeActionItemsInExport={includeActionItemsInExport}
-            setIncludeActionItemsInExport={setIncludeActionItemsInExport}
-            includeDiscussionSummaryInExport={includeDiscussionSummaryInExport}
-            setIncludeDiscussionSummaryInExport={setIncludeDiscussionSummaryInExport}
-            includeApprovalInExport={includeApprovalInExport}
-            setIncludeApprovalInExport={setIncludeApprovalInExport}
-            includeSignaturesInExport={includeSignaturesInExport}
-            setIncludeSignaturesInExport={setIncludeSignaturesInExport}
-            includePlaceholdersInExport={includePlaceholdersInExport}
-            setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
-            exportToWord={exportToWord}
-            exportToPdf={exportToPdf}
-            publicCopyMode={publicCopyMode}
-            setPublicCopyMode={setPublicCopyMode}
-            minutesExportGaps={minutesExportGaps}
-            quorumSnapshot={quorumSnapshot}
-            quorumLegalGuides={quorumLegalGuides}
-            legalGuideDateISO={legalGuideDateISO}
-            linkedSourceCount={linkedSourceCount}
-            sourceDocuments={sourceDocuments}
-            minutesSourceExternalIds={minutesSourceExternalIds}
-            vttInputRef={vttInputRef}
-            audioInputRef={audioInputRef}
-            transcriptOnFile={transcriptOnFile}
-            transcriptProvider={transcriptProvider}
-            transcriptionJob={transcriptionJob}
-            transcriptStatusTone={transcriptStatusTone}
-            transcriptEdit={transcriptEdit}
-            savingTranscript={savingTranscript}
-            pipelineBusy={pipelineBusy}
-            audioFile={audioFile}
-            importNote={importNote}
-            setTranscriptEdit={setTranscriptEdit}
-            setAudioFile={setAudioFile}
-            importTranscriptVtt={importTranscriptVtt}
-            saveTranscriptEditText={saveTranscriptEditText}
-            uploadAudioAndRun={uploadAudioAndRun}
             draftFromTranscript={runGenerateWithOverwriteGuard}
             draftingFromTranscript={busy}
           />
