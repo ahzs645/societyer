@@ -164,6 +164,82 @@
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
+// Governance status strip (notice sent / minutes approval) at the top of the
+// Overview tab. Two equal cards on desktop; stacks on narrow screens.
+.meeting-governance-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: token('s-2');
+  margin-bottom: token('s-3');
+}
+.meeting-governance-strip__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-2');
+  min-width: 0;
+  padding: token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-panel');
+}
+.meeting-governance-strip__label {
+  flex: 1 1 100%;
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.meeting-governance-strip__value {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.meeting-governance-strip__item > .btn-action {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+.meeting-signatures-card {
+  margin-top: token('s-3');
+}
+.meeting-conflict-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: token('s-2');
+  padding: token('s-2') 0;
+  border-bottom: 1px solid token('border');
+}
+.meeting-conflict-row__main {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.meeting-conflict-row__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.meeting-conflict-row__actions {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.meeting-conflict-form {
+  margin-top: token('s-2');
+  padding-top: token('s-2');
+  border-top: 1px dashed token('border');
+}
+.meeting-proxy-quorum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-2') token('s-4');
+  margin-bottom: token('s-2');
+  font-size: token('fs-sm');
+}
+.meeting-proxy-quorum strong {
+  color: token('text-primary');
+}
 .meeting-detail-tabpanel {
   min-width: 0;
 }
@@ -514,6 +590,9 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 @media (max-width: 760px) {
   .meeting-detail-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .meeting-governance-strip {
+    grid-template-columns: 1fr;
   }
   .meeting-detail-location-value {
     max-width: 100%;

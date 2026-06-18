@@ -1,5 +1,6 @@
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
+import { readMeetingAgendaEntries } from "./lib/agendaItems";
 
 const templateItem = v.object({
   title: v.string(),
@@ -124,7 +125,7 @@ export const createFromMeeting = mutation({
       .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
       .first();
     const motions = minutes?.motions ?? [];
-    const agenda = await getCanonicalAgendaEntries(ctx, meetingId, meeting.agendaJson);
+    const agenda = await getCanonicalAgendaEntries(ctx, meetingId);
     const items = agenda.map((entry, index) => {
       const motion = motions.find((candidate: any) => candidate.sectionIndex === index);
       return {
@@ -239,48 +240,6 @@ function cleanItems(items: any[]) {
   return cleaned;
 }
 
-function parseAgenda(raw: string | undefined) {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((entry) => {
-        if (typeof entry === "string") return { title: entry.trim(), depth: 0 as const };
-        return {
-          title: String(entry?.title ?? "").trim(),
-          depth: entry?.depth === 1 ? 1 as const : 0 as const,
-        };
-      })
-      .filter((entry) => entry.title);
-  } catch {
-    return raw
-      .split(/\r?\n/)
-      .map((title) => ({ title: title.trim(), depth: 0 as const }))
-      .filter((entry) => entry.title);
-  }
-}
-
-async function getCanonicalAgendaEntries(ctx: any, meetingId: any, fallbackAgendaJson: string | undefined) {
-  const agendas = await ctx.db
-    .query("agendas")
-    .withIndex("by_meeting", (q: any) => q.eq("meetingId", meetingId))
-    .collect();
-  agendas.sort((a: any, b: any) => a.createdAtISO.localeCompare(b.createdAtISO));
-  const agenda = agendas[0];
-  if (agenda) {
-    const items = await ctx.db
-      .query("agendaItems")
-      .withIndex("by_agenda", (q: any) => q.eq("agendaId", agenda._id))
-      .collect();
-    items.sort((a: any, b: any) => a.order - b.order);
-    const entries = items
-      .map((item: any) => ({
-        title: String(item.title ?? "").trim(),
-        depth: item.depth === 1 ? 1 as const : 0 as const,
-      }))
-      .filter((entry: any) => entry.title);
-    if (entries.length) return entries;
-  }
-  return parseAgenda(fallbackAgendaJson);
+async function getCanonicalAgendaEntries(ctx: any, meetingId: any) {
+  return await readMeetingAgendaEntries(ctx, meetingId);
 }

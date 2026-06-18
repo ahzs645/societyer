@@ -63,6 +63,8 @@ import {
   fundingSourceEvents,
   committees,
   meetings,
+  agendas,
+  agendaItems,
   minutes,
   filings,
   deadlines,
@@ -829,14 +831,15 @@ function staticMeetingPackage(args: StaticArgs) {
     .filter((material) => material.meetingId === meeting._id)
     .map((material) => ({ ...material, document: byId(documents, material.documentId) }))
     .sort((a, b) => a.order - b.order);
+  const agendaTitles = staticAgendaTitlesForMeeting(meeting._id);
   return {
     meeting,
     minutes: minutes.find((row) => row.meetingId === meeting._id) ?? null,
-    agenda: parseStaticAgenda(meeting.agendaJson),
+    agenda: agendaTitles,
     materials,
     tasks: tasks.filter((task) => task.meetingId === meeting._id),
     counts: {
-      agendaItems: parseStaticAgenda(meeting.agendaJson).length,
+      agendaItems: agendaTitles.length,
       materials: materials.length,
       requiredMaterials: materials.filter((material) => material.requiredForMeeting).length,
       openTasks: tasks.filter((task) => task.meetingId === meeting._id && task.status !== "Done").length,
@@ -881,43 +884,30 @@ function staticLibraryOverview() {
   };
 }
 
-function parseStaticAgenda(value?: string) {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed)
-      ? parsed.map((entry) => typeof entry === "string" ? entry : String(entry?.title ?? "")).filter(Boolean)
-      : [];
-  } catch {
-    return [];
-  }
+// Read the ordered agenda items for a meeting from the static agenda fixtures
+// (agendas + agendaItems). The relational store is the single source of truth.
+function staticAgendaItemsForMeeting(meetingId: string | undefined) {
+  if (!meetingId) return [] as Array<{ title: string; depth: 0 | 1; type?: string; presenter?: string; details?: string; motionText?: string }>;
+  const agenda = agendas
+    .filter((row) => row.meetingId === meetingId)
+    .sort((a, b) => String(a.createdAtISO).localeCompare(String(b.createdAtISO)))[0];
+  if (!agenda) return [];
+  return agendaItems
+    .filter((item) => item.agendaId === agenda._id)
+    .sort((a, b) => a.order - b.order)
+    .map((item) => ({
+      title: String(item.title ?? "").trim(),
+      depth: (item.depth === 1 ? 1 : 0) as 0 | 1,
+      type: (item as any).type,
+      presenter: (item as any).presenter,
+      details: (item as any).details,
+      motionText: (item as any).motionText,
+    }))
+    .filter((entry) => entry.title);
 }
 
-function parseStaticAgendaItems(value?: string) {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    if (!Array.isArray(parsed)) return [];
-    const entries: Array<{ title: string; depth: 0 | 1; type?: string; presenter?: string; details?: string; motionText?: string }> = [];
-    let hasRoot = false;
-    for (const entry of parsed) {
-      const title = typeof entry === "string" ? entry.trim() : String(entry?.title ?? "").trim();
-      if (!title) continue;
-      const depth: 0 | 1 = typeof entry === "object" && entry?.depth === 1 && hasRoot ? 1 : 0;
-      entries.push({
-        title,
-        depth,
-        type: typeof entry === "object" ? entry?.type : undefined,
-        presenter: typeof entry === "object" ? entry?.presenter : undefined,
-        details: typeof entry === "object" ? entry?.details : undefined,
-        motionText: typeof entry === "object" ? entry?.motionText : undefined,
-      });
-      if (depth === 0) hasRoot = true;
-    }
-    return entries;
-  } catch {
-    return [];
-  }
+function staticAgendaTitlesForMeeting(meetingId: string | undefined) {
+  return staticAgendaItemsForMeeting(meetingId).map((entry) => entry.title);
 }
 
 function staticAgendaItemType(title: string) {
@@ -1629,7 +1619,7 @@ function queryCasesInventoryHub2(name: string, args: StaticArgs, store?: StaticD
     case "agendas:getForMeeting": {
       const meeting = byId(meetings, args?.meetingId);
       if (!meeting) return null;
-      const items = parseStaticAgendaItems(meeting.agendaJson).map((entry, order) => ({
+      const items = staticAgendaItemsForMeeting(meeting._id).map((entry, order) => ({
         _id: `static_agenda_item_${meeting._id}_${order}`,
         societyId: meeting.societyId,
         agendaId: `static_agenda_${meeting._id}`,
@@ -5095,15 +5085,61 @@ class StaticDemoDexieStore {
 
     if (name === "agendas:syncForMeeting") {
       const items = Array.isArray(args?.items) ? args.items : [];
-      const agendaJson = JSON.stringify(items.map((item: any) => ({
-        title: String(item?.title ?? "").trim(),
-        depth: item?.depth === 1 ? 1 : 0,
-        type: item?.type,
-        presenter: item?.presenter,
-        details: item?.details,
-        motionText: item?.motionText,
-      })).filter((item: any) => item.title));
-      const updated = this.patchRow("meetings", args?.meetingId, { agendaJson });
+      const cleanedItems = items
+        .map((item: any) => ({
+          title: String(item?.title ?? "").trim(),
+          depth: (item?.depth === 1 ? 1 : 0) as 0 | 1,
+          type: item?.type,
+          presenter: item?.presenter,
+          details: item?.details,
+          motionText: item?.motionText,
+        }))
+        .filter((item: any) => item.title);
+      const meeting = byId(this.rows("meetings"), args?.meetingId);
+      const nowISO = new Date().toISOString();
+      // Write the agenda relationally (single source of truth). Reuse the
+      // existing agenda row when present; otherwise create one.
+      let agendaRow = this.rows("agendas")
+        .filter((row) => row.meetingId === args?.meetingId)
+        .sort((a, b) => String(a.createdAtISO).localeCompare(String(b.createdAtISO)))[0];
+      if (!agendaRow && meeting) {
+        agendaRow = {
+          _id: `static_agenda_${meeting._id}`,
+          societyId: meeting.societyId,
+          meetingId: meeting._id,
+          title: args?.title || `${meeting.title} agenda`,
+          status: args?.status || "Draft",
+          createdAtISO: nowISO,
+          updatedAtISO: nowISO,
+        };
+        this.upsertRow("agendas", agendaRow);
+      } else if (agendaRow) {
+        this.patchRow("agendas", agendaRow._id, {
+          title: args?.title || agendaRow.title,
+          status: args?.status || agendaRow.status || "Draft",
+          updatedAtISO: nowISO,
+        });
+      }
+      if (agendaRow) {
+        for (const existing of this.rows("agendaItems").filter((item) => item.agendaId === agendaRow._id)) {
+          this.removeRow("agendaItems", existing._id);
+        }
+        cleanedItems.forEach((item: any, order: number) => {
+          this.upsertRow("agendaItems", {
+            _id: `static_agenda_item_${agendaRow._id}_${order}`,
+            societyId: agendaRow.societyId,
+            agendaId: agendaRow._id,
+            order,
+            type: item.type || staticAgendaItemType(item.title),
+            title: item.title,
+            depth: item.depth,
+            presenter: item.presenter,
+            details: item.details,
+            motionText: item.motionText,
+            createdAtISO: nowISO,
+          });
+        });
+      }
       const minute = this.rows("minutes").find((row) => row.meetingId === args?.meetingId);
       if (minute) {
         this.patchRow("minutes", minute._id, {
@@ -5127,16 +5163,21 @@ class StaticDemoDexieStore {
             .filter((motion: any) => motion.text),
         });
       }
-      return updated ? `static_agenda_${updated._id}` : null;
+      return agendaRow?._id ?? null;
     }
 
     if (name === "agendas:startMinutesFromAgenda") {
-      const meetingId = String(args?.agendaId ?? "").replace(/^static_agenda_/, "");
+      // agendaId is a stored agenda row id; fall back to the legacy
+      // `static_agenda_<meetingId>` shape for safety.
+      const agendaRow = byId(this.rows("agendas"), args?.agendaId);
+      const meetingId = agendaRow?.meetingId ?? String(args?.agendaId ?? "").replace(/^static_agenda_/, "");
       const meeting = byId(this.rows("meetings"), meetingId);
       if (!meeting) return { minutesId: null, reused: false };
       const existing = this.rows("minutes").find((row) => row.meetingId === meetingId);
       if (existing) return { minutesId: existing._id, reused: true };
-      const items = parseStaticAgendaItems(meeting.agendaJson);
+      const items = agendaRow
+        ? this.rows("agendaItems").filter((item) => item.agendaId === agendaRow._id).sort((a, b) => a.order - b.order)
+        : [];
       const now = Date.now();
       const row = {
         _id: `static_minutes_${now}`,
@@ -5224,7 +5265,16 @@ class StaticDemoDexieStore {
     return this.rowsStore.upsertAttachment(attachment);
   }
 
+  private agendaRowForMeeting(meeting: any) {
+    const rows = this.rows("agendas")
+      .filter((row) => row.meetingId === meeting._id)
+      .sort((a, b) => String(a.createdAtISO).localeCompare(String(b.createdAtISO)));
+    return rows[0] ?? null;
+  }
+
   private agendaSummaryForMeeting(meeting: any) {
+    const existing = this.agendaRowForMeeting(meeting);
+    if (existing) return existing;
     return {
       _id: `static_agenda_${meeting._id}`,
       societyId: meeting.societyId,
@@ -5239,18 +5289,13 @@ class StaticDemoDexieStore {
   private agendaForMeeting(meetingId: string | undefined) {
     const meeting = byId(this.rows("meetings"), meetingId);
     if (!meeting) return null;
-    const items = parseStaticAgendaItems(meeting.agendaJson).map((entry, order) => ({
-      _id: `static_agenda_item_${meeting._id}_${order}`,
-      societyId: meeting.societyId,
-      agendaId: `static_agenda_${meeting._id}`,
-      order,
-      type: staticAgendaItemType(entry.title),
-      title: entry.title,
-      depth: entry.depth,
-      createdAtISO: meeting.scheduledAt,
-    }));
+    const agenda = this.agendaRowForMeeting(meeting);
+    if (!agenda) return null;
+    const items = this.rows("agendaItems")
+      .filter((item) => item.agendaId === agenda._id)
+      .sort((a, b) => a.order - b.order);
     if (items.length === 0) return null;
-    return { agenda: this.agendaSummaryForMeeting(meeting), items };
+    return { agenda, items };
   }
 
   private rows(table: string) {

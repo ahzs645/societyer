@@ -300,75 +300,6 @@ export const syncForMeeting = mutation({
   },
 });
 
-export const backfillFromMeetingAgendaJson = mutation({
-  args: {
-    societyId: v.optional(v.id("societies")),
-    dryRun: v.optional(v.boolean()),
-  },
-  returns: v.any(),
-  handler: async (ctx, args) => {
-    const meetings = args.societyId
-      ? await ctx.db
-          .query("meetings")
-          .withIndex("by_society", (q) => q.eq("societyId", args.societyId!))
-          .collect()
-      : await ctx.db.query("meetings").collect();
-    const now = new Date().toISOString();
-    let createdAgendas = 0;
-    let createdItems = 0;
-    let skippedExisting = 0;
-    let skippedEmpty = 0;
-
-    for (const meeting of meetings) {
-      const existing = await ctx.db
-        .query("agendas")
-        .withIndex("by_meeting", (q) => q.eq("meetingId", meeting._id))
-        .collect();
-      if (existing.length > 0) {
-        skippedExisting += 1;
-        continue;
-      }
-      const items = normalizeAgendaJsonItems(meeting.agendaJson);
-      if (items.length === 0) {
-        skippedEmpty += 1;
-        continue;
-      }
-      if (args.dryRun) {
-        createdAgendas += 1;
-        createdItems += items.length;
-        continue;
-      }
-      const agendaId = await ctx.db.insert("agendas", {
-        societyId: meeting.societyId,
-        meetingId: meeting._id,
-        title: `${meeting.title} agenda`,
-        status: "Draft",
-        createdAtISO: now,
-        updatedAtISO: now,
-      });
-      createdAgendas += 1;
-      for (let order = 0; order < items.length; order += 1) {
-        const item = items[order];
-        await ctx.db.insert("agendaItems", {
-          societyId: meeting.societyId,
-          agendaId,
-          order,
-          type: item.type || inferAgendaItemType(item.title),
-          title: item.title,
-          depth: item.depth,
-          details: item.details,
-          presenter: item.presenter,
-          motionText: item.motionText,
-          createdAtISO: now,
-        });
-        createdItems += 1;
-      }
-    }
-
-    return { createdAgendas, createdItems, skippedExisting, skippedEmpty, dryRun: !!args.dryRun };
-  },
-});
-
 export const startMinutesFromAgenda = mutation({
   args: { agendaId: v.id("agendas") },
   returns: v.any(),
@@ -417,7 +348,6 @@ export const startMinutesFromAgenda = mutation({
     const id = await ctx.db.insert("minutes", minutesPayload as any);
     await ctx.db.patch(meeting._id, {
       minutesId: id,
-      agendaJson: JSON.stringify(items.map((item) => ({ title: item.title, depth: item.depth === 1 ? 1 : 0 }))),
     });
     return { minutesId: id, reused: false };
   },
@@ -434,33 +364,6 @@ function inferAgendaItemType(title: string) {
   if (lower.includes("break")) return "break";
   if (lower.includes("camera") || lower.includes("closed") || lower.includes("executive")) return "executive_session";
   return "discussion";
-}
-
-function normalizeAgendaJsonItems(agendaJson?: string) {
-  if (!agendaJson) return [];
-  try {
-    const parsed = JSON.parse(agendaJson);
-    if (!Array.isArray(parsed)) return [];
-    const items: Array<{ title: string; depth: 0 | 1; type?: string; details?: string; presenter?: string; motionText?: string }> = [];
-    let hasRoot = false;
-    for (const value of parsed) {
-      const title = typeof value === "string" ? value.trim() : String(value?.title ?? "").trim();
-      if (!title) continue;
-      const depth: 0 | 1 = typeof value === "object" && value?.depth === 1 && hasRoot ? 1 : 0;
-      items.push({
-        title,
-        depth,
-        type: typeof value === "object" ? value?.type ?? value?.sectionType : undefined,
-        details: typeof value === "object" ? value?.details : undefined,
-        presenter: typeof value === "object" ? value?.presenter : undefined,
-        motionText: typeof value === "object" ? value?.motionText : undefined,
-      });
-      if (depth === 0) hasRoot = true;
-    }
-    return items;
-  } catch {
-    return [];
-  }
 }
 
 function sectionFromAgendaItem(item: any) {
@@ -498,9 +401,6 @@ function motionsFromAgendaItems(items: any[]) {
 }
 
 async function syncMeetingAndMinutesFromAgenda(ctx: any, meeting: any, items: any[], now: string) {
-  const agendaEntries = items.map((item) => ({ title: item.title, depth: item.depth === 1 ? 1 : 0 }));
-  await ctx.db.patch(meeting._id, { agendaJson: JSON.stringify(agendaEntries) });
-
   const rows = await ctx.db
     .query("minutes")
     .withIndex("by_meeting", (q: any) => q.eq("meetingId", meeting._id))

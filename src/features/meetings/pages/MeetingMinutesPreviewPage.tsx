@@ -13,7 +13,7 @@ import { exportWordDocx } from "../../../lib/docx";
 import { exportPdfDownload } from "../../../lib/pdf";
 import { renderMinutesHtml } from "../lib/minutesRenderer";
 import { MinutesDocumentPreview } from "../components/MinutesDocumentPreview";
-import { getQuorumSnapshot, parseAgendaItems } from "../components/MeetingDetailSupport";
+import { getQuorumSnapshot } from "../components/MeetingDetailSupport";
 import { agendaEntriesFromRecord } from "../lib/meetingDetailHelpers";
 import { MINUTES_EXPORT_STYLES, type MinutesExportStyleId } from "../lib/minutesExportStyles";
 import {
@@ -60,7 +60,7 @@ export function MeetingMinutesPreviewPage() {
   if (society === null) return <SeedPrompt />;
   if (!minutes) return <div className="page">No minutes recorded for this meeting.</div>;
 
-  const agendaTree = agendaEntriesFromRecord(agendaRecord) ?? parseAgendaItems(meeting.agendaJson);
+  const agendaTree = agendaEntriesFromRecord(agendaRecord) ?? [];
   const quorumSnapshot = getQuorumSnapshot(minutes, meeting);
   const selectedMinutesExportStyle =
     MINUTES_EXPORT_STYLES.find((style) => style.id === minutesExportStyle) ??

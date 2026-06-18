@@ -384,8 +384,10 @@
 
 /* Stretch variant: each button takes an equal share of the row and grows
    to fill the available width. When the row is narrow enough that the
-   widest label ("Defeated") would no longer fit on a single line, the
-   labels are visually hidden and the buttons collapse to icon-only tiles. */
+   labels would no longer fit on a single line, the labels are visually
+   hidden and the buttons collapse to icon-only tiles. The breakpoint is
+   sized for the five-outcome picker (Pending / Carried / Defeated / Tabled
+   / Deferred) so labels drop before they can clip or wrap mid-word. */
 .motion-outcome-picker--stretch {
   width: 100%;
   flex-wrap: nowrap;
@@ -399,7 +401,7 @@
      wrapping or truncating mid-word. */
   white-space: nowrap;
 }
-@container (max-width: 380px) {
+@container (max-width: 480px) {
   .motion-outcome-picker--stretch .btn-action__label {
     position: absolute;
     width: 1px;

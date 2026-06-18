@@ -1,4 +1,4 @@
-import { useParams, Link, useSearchParams } from "react-router-dom";
+import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useToast } from "../components/Toast";
@@ -9,10 +9,11 @@ import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
-import { formatDate, formatDateTime } from "../lib/format";
+import { formatDate, formatDateTime, toDateTimeLocalValue } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, BookMarked, ClipboardCheck, Download, ExternalLink, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../components/MotionEditor";
+import { isPostponedOutcome } from "../lib/motionGovernance";
 import { escapeHtml } from "../lib/html";
 import { exportWordDocx } from "../lib/docx";
 import { exportPdfDownload } from "../lib/pdf";
@@ -49,7 +50,10 @@ import { MeetingMinutesColumn } from "../features/meetings/components/MeetingMin
 import { MeetingSidebarColumn } from "../features/meetings/components/MeetingSidebarColumn";
 import { MinutesDraftEmptyState } from "../features/meetings/components/MinutesDraftEmptyState";
 import { MinutesDocumentPreview } from "../features/meetings/components/MinutesDocumentPreview";
-import { useConfirm } from "../components/Modal";
+import { SignaturePanel } from "../components/SignaturePanel";
+import { MeetingConflictsCard } from "../features/meetings/components/MeetingConflictsCard";
+import { MeetingProxiesCard } from "../features/meetings/components/MeetingProxiesCard";
+import { Modal, useConfirm } from "../components/Modal";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import {
@@ -66,7 +70,6 @@ import {
   inferredPackageReviewStatus,
   isImportTranscriptMetadata,
   namesFromDiscussion,
-  parseAgendaItems,
   parseDocumentMetadata,
   type AgendaItemEntry,
   personLinkCandidates,
@@ -111,9 +114,32 @@ export function MeetingDetailPage() {
     society ? { societyId: society._id } : "skip",
   );
   const allDocuments = useQuery(api.documents.list, society ? { societyId: society._id, actingUserId } : "skip");
+  // Sibling meetings power the "approved at meeting" picker — minutes are
+  // typically adopted at a later meeting, so we let the user point at it.
+  const allMeetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
+  // Captured e-signatures on these minutes — surfaced in the signing panel and
+  // rendered into the export's signature block.
+  const minutesSignatures = useQuery(
+    api.signatures.listForEntity,
+    minutes ? { entityType: "minutes", entityId: minutes._id as string } : "skip",
+  );
+  // Conflict-of-interest / recusal declarations for this meeting.
+  const meetingConflicts = useQuery(
+    api.conflicts.forMeeting,
+    id ? { meetingId: id as Id<"meetings"> } : "skip",
+  );
+  // Proxies appointed for this meeting (rendered into the export and used for
+  // proxy-inclusive quorum math).
+  const meetingProxies = useQuery(
+    api.proxies.forMeeting,
+    id ? { meetingId: id as Id<"meetings"> } : "skip",
+  );
   const motionPeople = personLinkCandidates(members, directors);
   const directorNames = (directors ?? []).flatMap((d: any) => [`${d.firstName} ${d.lastName}`, ...(Array.isArray(d.aliases) ? d.aliases : [])]);
   const generate = useAction(api.minutes.generateDraft);
+  const navigate = useNavigate();
+  const createMeeting = useMutation(api.meetings.create);
+  const carryForwardToMeeting = useMutation(api.motionBacklog.carryForwardToMeeting);
   const updateMeeting = useMutation(api.meetings.update);
   const markSourceReview = useMutation(api.meetings.markSourceReview);
   const setPackageReviewStatus = useMutation(api.meetings.setPackageReviewStatus);
@@ -158,6 +184,18 @@ export function MeetingDetailPage() {
   } | null>(null);
   const [savingTranscript, setSavingTranscript] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
+  // Drawer state for recording minutes approval (date + the meeting at which
+  // the minutes were adopted). null = closed.
+  const [approvalEdit, setApprovalEdit] = useState<{ approvedAt: string; approvedInMeetingId: string } | null>(null);
+  // Modal state for scheduling the next meeting from these minutes. null = closed.
+  const [nextMeetingDraft, setNextMeetingDraft] = useState<{
+    title: string;
+    type: string;
+    scheduledAt: string;
+    location: string;
+    carryForward: boolean;
+  } | null>(null);
+  const [schedulingNext, setSchedulingNext] = useState(false);
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
   const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", false));
   const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
@@ -347,7 +385,7 @@ export function MeetingDetailPage() {
   if (society === null) return <SeedPrompt />;
   if (!meeting) return <div className="page">Loading…</div>;
 
-  const agendaTree = agendaEntriesFromRecord(agendaRecord) ?? parseAgendaItems(meeting.agendaJson);
+  const agendaTree = agendaEntriesFromRecord(agendaRecord) ?? [];
   const canonicalAgendaItems = agendaItemsFromRecord(agendaRecord);
   const agenda = agendaTree.map((entry) => entry.title);
   const businessMotions = ((minutes?.motions ?? []) as Motion[]).filter((motion) => !isAdjournmentMotion(motion));
@@ -511,6 +549,115 @@ export function MeetingDetailPage() {
 
   const markHeld = () => updateMeeting({ id: meeting._id, patch: { status: "Held" } });
   const reopenMeeting = () => updateMeeting({ id: meeting._id, patch: { status: "Scheduled" } });
+
+  // Notice tracking for regular meetings (the AGM workflow has its own step).
+  // Toggling is reversible, so no confirm — clearing sets the field to
+  // undefined, which Convex removes from the record.
+  const toggleNoticeSent = async () => {
+    await updateMeeting({
+      id: meeting._id,
+      patch: { noticeSentAt: meeting.noticeSentAt ? undefined : new Date().toISOString() },
+    });
+    toast.success(
+      meeting.noticeSentAt ? "Notice cleared" : "Notice marked sent",
+      meeting.noticeSentAt
+        ? "The meeting no longer has a notice-sent date."
+        : `Recorded ${formatDate(new Date().toISOString())}.`,
+    );
+  };
+
+  // Record/clear approval of THIS meeting's minutes. Minutes are normally
+  // adopted at a later meeting, so the drawer captures both the approval date
+  // and (optionally) which meeting adopted them.
+  const startApprovalEdit = () => {
+    if (!minutes) return;
+    setApprovalEdit({
+      approvedAt: (minutes.approvedAt ?? new Date().toISOString()).slice(0, 10),
+      approvedInMeetingId: (minutes.approvedInMeetingId as string | undefined) ?? "",
+    });
+  };
+  const saveApproval = async () => {
+    if (!minutes || !approvalEdit) return;
+    await updateMinutes({
+      id: minutes._id,
+      patch: {
+        approvedAt: new Date(`${approvalEdit.approvedAt}T00:00:00`).toISOString(),
+        approvedInMeetingId: approvalEdit.approvedInMeetingId
+          ? (approvalEdit.approvedInMeetingId as Id<"meetings">)
+          : undefined,
+      },
+    });
+    setApprovalEdit(null);
+    toast.success("Minutes approval recorded", `Approved ${formatDate(approvalEdit.approvedAt)}.`);
+  };
+  const clearApproval = async () => {
+    if (!minutes) return;
+    await updateMinutes({ id: minutes._id, patch: { approvedAt: undefined, approvedInMeetingId: undefined } });
+    setApprovalEdit(null);
+    toast.success("Approval cleared", "These minutes are no longer marked approved.");
+  };
+
+  // Business motions that were Tabled/Deferred at this meeting — the unfinished
+  // business that should roll onto the next meeting's agenda. Keep each motion's
+  // real index in minutes.motions so the backlog carry-forward can reference it.
+  const carriedForwardMotions = ((minutes?.motions ?? []) as Motion[])
+    .map((motion, index) => ({ motion, index }))
+    .filter(({ motion }) => !isAdjournmentMotion(motion) && isPostponedOutcome(motion.outcome));
+
+  const startNextMeeting = () => {
+    setNextMeetingDraft({
+      title: meeting.title,
+      type: meeting.type,
+      scheduledAt: minutes?.nextMeetingAt
+        ? toDateTimeLocalValue(new Date(minutes.nextMeetingAt))
+        : toDateTimeLocalValue(new Date(Date.now() + 28 * 864e5)),
+      location: minutes?.nextMeetingLocation ?? meeting.location ?? "",
+      carryForward: carriedForwardMotions.length > 0,
+    });
+  };
+
+  const confirmNextMeeting = async () => {
+    if (!society || !nextMeetingDraft || !nextMeetingDraft.title.trim()) return;
+    setSchedulingNext(true);
+    try {
+      // Seed the next agenda with approval of these minutes. Carried-forward
+      // (Tabled/Deferred) business is added separately below as tracked backlog
+      // records linked onto the new agenda.
+      const agendaSeed: { title: string }[] = [{ title: `Approval of minutes — ${meeting.title}` }];
+      const meetingId = await createMeeting({
+        societyId: society._id,
+        type: nextMeetingDraft.type,
+        title: nextMeetingDraft.title.trim(),
+        scheduledAt: nextMeetingDraft.scheduledAt,
+        location: nextMeetingDraft.location.trim() || undefined,
+        electronic: !!meeting.electronic,
+        status: "Scheduled",
+        attendeeIds: [],
+        agendaJson: JSON.stringify(agendaSeed),
+      });
+      let carried = 0;
+      if (meetingId && nextMeetingDraft.carryForward && minutes && carriedForwardMotions.length > 0) {
+        const result = await carryForwardToMeeting({
+          meetingId,
+          sourceMinutesId: minutes._id,
+          motionIndexes: carriedForwardMotions.map((entry) => entry.index),
+        });
+        carried = (result?.created ?? 0) + (result?.reused ?? 0);
+      }
+      setNextMeetingDraft(null);
+      toast.success(
+        "Next meeting scheduled",
+        carried > 0
+          ? `Seeded minutes approval and carried ${carried} item${carried === 1 ? "" : "s"} into the agenda and backlog.`
+          : "Seeded its agenda with approval of these minutes.",
+      );
+      if (meetingId) navigate(`/app/meetings/${meetingId}`);
+    } catch (error: any) {
+      toast.error(error?.message ? String(error.message).replace(/^.*Error:\s*/, "") : "Could not schedule the next meeting.");
+    } finally {
+      setSchedulingNext(false);
+    }
+  };
 
   // Section indices to omit from the public copy. A depth=0 (root) section
   // flagged publicVisible:false cascades to its trailing depth=1 children —
@@ -706,6 +853,33 @@ export function MeetingDetailPage() {
         includeApprovalBlock: includeApprovalInExport,
         includeSignatures: includeSignaturesInExport,
         includePlaceholders: includePlaceholdersInExport,
+        signatures: (minutesSignatures ?? []).map((signature: any) => ({
+          signerName: signature.signerName,
+          signerRole: signature.signerRole,
+          signedAtISO: signature.signedAtISO,
+          imageDataUrl: signature.imageDataUrl,
+        })),
+        conflicts: (meetingConflicts ?? []).map((conflict: any) => {
+          const director = (directors ?? []).find((d: any) => d._id === conflict.directorId);
+          const motion =
+            conflict.motionIndex == null ? undefined : (minutes?.motions ?? [])[conflict.motionIndex];
+          return {
+            directorName: director
+              ? `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim()
+              : "Director",
+            contractOrMatter: conflict.contractOrMatter,
+            natureOfInterest: conflict.natureOfInterest,
+            abstainedFromVote: conflict.abstainedFromVote,
+            leftRoom: conflict.leftRoom,
+            motionLabel: motion ? motion.name || motion.text : undefined,
+          };
+        }),
+        proxies: (meetingProxies ?? []).map((proxy: any) => ({
+          grantorName: proxy.grantorName,
+          proxyHolderName: proxy.proxyHolderName,
+          instructions: proxy.instructions,
+          revoked: !!proxy.revokedAtISO,
+        })),
       },
     });
   };
@@ -823,9 +997,9 @@ export function MeetingDetailPage() {
   const saveMinuteSections = async (next: any[]) => {
     if (!minutes) return;
     await updateMinutes({ id: minutes._id, patch: { sections: next } });
-    // Keep meeting.agendaJson in sync with section titles AND depth so the
-    // sidebar agenda card and the right-side Agenda record never drift apart.
-    // Tracked alongside the source section so duplicate-titled sections each
+    // Keep the agenda record (agendas/agendaItems) in sync with section titles
+    // AND depth so the sidebar agenda card and the right-side Agenda record
+    // never drift apart. Tracked alongside the source section so duplicate-titled sections each
     // contribute their own presenter/details instead of all collapsing to the
     // first match via title-based find().
     const nextAgenda: Array<AgendaItemEntry & { source: any }> = [];
@@ -854,14 +1028,6 @@ export function MeetingDetailPage() {
         presenter: entry.source?.presenter || undefined,
         details: entry.source?.discussion || undefined,
       })),
-    });
-    await updateMeeting({
-      id: meeting._id,
-      patch: {
-        agendaJson: JSON.stringify(
-          nextAgenda.map(({ title, depth }) => ({ title, depth })),
-        ),
-      },
     });
   };
 
@@ -925,14 +1091,6 @@ export function MeetingDetailPage() {
         motionBacklogId: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionBacklogId,
         motionText: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionText,
       })),
-    });
-    await updateMeeting({
-      id: meeting._id,
-      patch: {
-        // Always send a string — `undefined` is treated as "leave field alone",
-        // which would silently undo a save that empties the agenda.
-        agendaJson: JSON.stringify(cleaned),
-      },
     });
 
     // Auto-bootstrap the minutes record on first save. This subsumes the old
@@ -1475,6 +1633,57 @@ export function MeetingDetailPage() {
     toast.success("Meeting template saved");
   };
 
+  // The sidebar column is rendered on four tabs with an identical ~40-prop set;
+  // bundle the shared props here and spread them so each call site only lists
+  // what actually differs (visible panels, read-only/gaps flags, draft action).
+  const sharedSidebarProps = {
+    meeting,
+    minutes,
+    society,
+    selectedMinutesExportStyle,
+    minutesExportStyle,
+    setMinutesExportStyle,
+    includeTranscriptInExport,
+    setIncludeTranscriptInExport,
+    includeActionItemsInExport,
+    setIncludeActionItemsInExport,
+    includeDiscussionSummaryInExport,
+    setIncludeDiscussionSummaryInExport,
+    includeApprovalInExport,
+    setIncludeApprovalInExport,
+    includeSignaturesInExport,
+    setIncludeSignaturesInExport,
+    includePlaceholdersInExport,
+    setIncludePlaceholdersInExport,
+    exportToWord,
+    exportToPdf,
+    publicCopyMode,
+    setPublicCopyMode,
+    minutesExportGaps,
+    quorumSnapshot,
+    quorumLegalGuides,
+    legalGuideDateISO,
+    linkedSourceCount,
+    sourceDocuments,
+    minutesSourceExternalIds,
+    vttInputRef,
+    audioInputRef,
+    transcriptOnFile,
+    transcriptProvider,
+    transcriptionJob,
+    transcriptStatusTone,
+    transcriptEdit,
+    savingTranscript,
+    pipelineBusy,
+    audioFile,
+    importNote,
+    setTranscriptEdit,
+    setAudioFile,
+    importTranscriptVtt,
+    saveTranscriptEditText,
+    uploadAudioAndRun,
+  };
+
   return (
     <div className="page page--wide meeting-detail-page">
       <Link to="/app/meetings" className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
@@ -1524,6 +1733,25 @@ export function MeetingDetailPage() {
                       },
                     ]
                   : []),
+                {
+                  id: "governance",
+                  label: "Governance",
+                  items: [
+                    {
+                      id: "notice-sent",
+                      label: meeting.noticeSentAt ? "Clear notice sent" : "Mark notice sent",
+                      icon: <ClipboardCheck size={12} />,
+                      onSelect: toggleNoticeSent,
+                    },
+                    {
+                      id: "record-approval",
+                      label: minutes?.approvedAt ? "Edit minutes approval" : "Record minutes approval",
+                      icon: <FileText size={12} />,
+                      disabled: !minutes,
+                      onSelect: startApprovalEdit,
+                    },
+                  ],
+                },
                 {
                   id: "package",
                   items: [
@@ -1609,106 +1837,126 @@ export function MeetingDetailPage() {
 
       <div className="meeting-detail-tabpanel">
         {activeTab === "overview" && (
+          <>
+          <div className="meeting-governance-strip">
+            <div className="meeting-governance-strip__item">
+              <div className="meeting-governance-strip__label">Notice of meeting</div>
+              <div className="meeting-governance-strip__value">
+                {meeting.noticeSentAt ? (
+                  <Badge tone="success">Sent {formatDate(meeting.noticeSentAt)}</Badge>
+                ) : (
+                  <Badge tone="warn">Not sent</Badge>
+                )}
+              </div>
+              <button className="btn-action" type="button" onClick={toggleNoticeSent}>
+                {meeting.noticeSentAt ? "Clear" : "Mark sent"}
+              </button>
+            </div>
+            <div className="meeting-governance-strip__item">
+              <div className="meeting-governance-strip__label">Minutes approval</div>
+              <div className="meeting-governance-strip__value">
+                {minutes?.approvedAt ? (
+                  <Badge tone="success">
+                    Approved {formatDate(minutes.approvedAt)}
+                    {minutes.approvedInMeetingId
+                      ? ` · ${
+                          (allMeetings ?? []).find((m: any) => m._id === minutes.approvedInMeetingId)?.title ??
+                          "linked meeting"
+                        }`
+                      : ""}
+                  </Badge>
+                ) : minutes ? (
+                  <Badge tone="warn">Not approved</Badge>
+                ) : (
+                  <span className="muted">No minutes yet</span>
+                )}
+              </div>
+              <button
+                className="btn-action"
+                type="button"
+                onClick={startApprovalEdit}
+                disabled={!minutes}
+                title={minutes ? undefined : "Start the minutes first"}
+              >
+                {minutes?.approvedAt ? "Edit" : "Record approval"}
+              </button>
+            </div>
+            <div className="meeting-governance-strip__item">
+              <div className="meeting-governance-strip__label">Next meeting</div>
+              <div className="meeting-governance-strip__value">
+                {minutes?.nextMeetingAt ? (
+                  <Badge tone="neutral">Planned {formatDate(minutes.nextMeetingAt)}</Badge>
+                ) : (
+                  <span className="muted">Not planned</span>
+                )}
+                {carriedForwardMotions.length > 0 && (
+                  <Badge tone="warn">{carriedForwardMotions.length} to carry forward</Badge>
+                )}
+              </div>
+              <button className="btn-action" type="button" onClick={startNextMeeting}>
+                Schedule
+              </button>
+            </div>
+          </div>
           <div className="meeting-overview-grid">
             <MeetingSidebarColumn
-              meeting={meeting}
-              minutes={minutes}
-              society={society}
+              {...sharedSidebarProps}
               visiblePanels={meeting.type === "AGM" ? ["details", "agm"] : ["details"]}
-              selectedMinutesExportStyle={selectedMinutesExportStyle}
-              minutesExportStyle={minutesExportStyle}
-              setMinutesExportStyle={setMinutesExportStyle}
-              includeTranscriptInExport={includeTranscriptInExport}
-              setIncludeTranscriptInExport={setIncludeTranscriptInExport}
-              includeActionItemsInExport={includeActionItemsInExport}
-              setIncludeActionItemsInExport={setIncludeActionItemsInExport}
-              includeDiscussionSummaryInExport={includeDiscussionSummaryInExport}
-              setIncludeDiscussionSummaryInExport={setIncludeDiscussionSummaryInExport}
-              includeApprovalInExport={includeApprovalInExport}
-              setIncludeApprovalInExport={setIncludeApprovalInExport}
-              includeSignaturesInExport={includeSignaturesInExport}
-              setIncludeSignaturesInExport={setIncludeSignaturesInExport}
-              includePlaceholdersInExport={includePlaceholdersInExport}
-              setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
-              exportToWord={exportToWord}
-              exportToPdf={exportToPdf}
-              publicCopyMode={publicCopyMode}
-              setPublicCopyMode={setPublicCopyMode}
-              minutesExportGaps={minutesExportGaps}
-              quorumSnapshot={quorumSnapshot}
-              quorumLegalGuides={quorumLegalGuides}
-              legalGuideDateISO={legalGuideDateISO}
-              linkedSourceCount={linkedSourceCount}
-              sourceDocuments={sourceDocuments}
-              minutesSourceExternalIds={minutesSourceExternalIds}
-              vttInputRef={vttInputRef}
-              audioInputRef={audioInputRef}
-              transcriptOnFile={transcriptOnFile}
-              transcriptProvider={transcriptProvider}
-              transcriptionJob={transcriptionJob}
-              transcriptStatusTone={transcriptStatusTone}
-              transcriptEdit={transcriptEdit}
-              savingTranscript={savingTranscript}
-              pipelineBusy={pipelineBusy}
-              audioFile={audioFile}
-              importNote={importNote}
-              setTranscriptEdit={setTranscriptEdit}
-              setAudioFile={setAudioFile}
-              importTranscriptVtt={importTranscriptVtt}
-              saveTranscriptEditText={saveTranscriptEditText}
-              uploadAudioAndRun={uploadAudioAndRun}
             />
             <MeetingSidebarColumn
-              meeting={meeting}
-              minutes={minutes}
-              society={society}
+              {...sharedSidebarProps}
               visiblePanels={["export"]}
               exportControlsReadOnly
-              selectedMinutesExportStyle={selectedMinutesExportStyle}
-              minutesExportStyle={minutesExportStyle}
-              setMinutesExportStyle={setMinutesExportStyle}
-              includeTranscriptInExport={includeTranscriptInExport}
-              setIncludeTranscriptInExport={setIncludeTranscriptInExport}
-              includeActionItemsInExport={includeActionItemsInExport}
-              setIncludeActionItemsInExport={setIncludeActionItemsInExport}
-              includeDiscussionSummaryInExport={includeDiscussionSummaryInExport}
-              setIncludeDiscussionSummaryInExport={setIncludeDiscussionSummaryInExport}
-              includeApprovalInExport={includeApprovalInExport}
-              setIncludeApprovalInExport={setIncludeApprovalInExport}
-              includeSignaturesInExport={includeSignaturesInExport}
-              setIncludeSignaturesInExport={setIncludeSignaturesInExport}
-              includePlaceholdersInExport={includePlaceholdersInExport}
-              setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
-              exportToWord={exportToWord}
-              exportToPdf={exportToPdf}
-              publicCopyMode={publicCopyMode}
-              setPublicCopyMode={setPublicCopyMode}
-              minutesExportGaps={minutesExportGaps}
               showExportGaps
-              quorumSnapshot={quorumSnapshot}
-              quorumLegalGuides={quorumLegalGuides}
-              legalGuideDateISO={legalGuideDateISO}
-              linkedSourceCount={linkedSourceCount}
-              sourceDocuments={sourceDocuments}
-              minutesSourceExternalIds={minutesSourceExternalIds}
-              vttInputRef={vttInputRef}
-              audioInputRef={audioInputRef}
-              transcriptOnFile={transcriptOnFile}
-              transcriptProvider={transcriptProvider}
-              transcriptionJob={transcriptionJob}
-              transcriptStatusTone={transcriptStatusTone}
-              transcriptEdit={transcriptEdit}
-              savingTranscript={savingTranscript}
-              pipelineBusy={pipelineBusy}
-              audioFile={audioFile}
-              importNote={importNote}
-              setTranscriptEdit={setTranscriptEdit}
-              setAudioFile={setAudioFile}
-              importTranscriptVtt={importTranscriptVtt}
-              saveTranscriptEditText={saveTranscriptEditText}
-              uploadAudioAndRun={uploadAudioAndRun}
             />
           </div>
+          {society && (
+            <div className="meeting-signatures-card">
+              <MeetingConflictsCard
+                societyId={society._id}
+                meetingId={meeting._id}
+                directors={directors ?? []}
+                motions={((minutes?.motions ?? []) as any[])
+                  .map((motion, index) => ({ motion, index }))
+                  .filter(({ motion }) => !isAdjournmentMotion(motion))
+                  .map(({ motion, index }) => ({
+                    index,
+                    label: motion.name || motion.text || `Motion ${index + 1}`,
+                  }))}
+              />
+            </div>
+          )}
+          {society && (
+            <div className="meeting-signatures-card">
+              <MeetingProxiesCard
+                societyId={society._id}
+                meetingId={meeting._id}
+                members={members ?? []}
+                presentCount={
+                  ((minutes?.detailedAttendance ?? []) as any[]).filter(
+                    (row) => row.quorumCounted !== false && row.status === "present",
+                  ).length || (minutes?.attendees?.length ?? 0)
+                }
+                quorumRequired={
+                  (quorumSnapshot as any)?.quorumRequired ??
+                  meeting.quorumRequired ??
+                  (minutes?.quorumRequired as number | undefined)
+                }
+              />
+            </div>
+          )}
+          {minutes && society && (
+            <div className="meeting-signatures-card">
+              <SignaturePanel
+                societyId={society._id}
+                entityType="minutes"
+                entityId={minutes._id as string}
+                title="Minutes signatures"
+                signerScope="directors"
+              />
+            </div>
+          )}
+          </>
         )}
 
         {activeTab === "minutes" && !hasStartedMinutesDraft(minutes) && (
@@ -1768,7 +2016,13 @@ export function MeetingDetailPage() {
                   {" / "}
                   {businessMotions.filter((motion: any) => motion.outcome === "Defeated").length} defeated
                   {" / "}
-                  {businessMotions.filter((motion: any) => motion.outcome === "Tabled").length} tabled
+                  {businessMotions.filter((motion: any) => motion.outcome === "Tabled" || motion.outcome === "Deferred").length} tabled/deferred
+                  {(() => {
+                    const pending = businessMotions.filter(
+                      (motion: any) => !motion.outcome || motion.outcome === "Pending",
+                    ).length;
+                    return pending ? ` / ${pending} pending` : "";
+                  })()}
                 </span>
               ) : null}
               <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
@@ -1860,52 +2114,8 @@ export function MeetingDetailPage() {
           return (
             <div className="meeting-export-layout">
               <MeetingSidebarColumn
-                meeting={meeting}
-                minutes={minutes}
-                society={society}
+                {...sharedSidebarProps}
                 visiblePanels={["export"]}
-                selectedMinutesExportStyle={selectedMinutesExportStyle}
-                minutesExportStyle={minutesExportStyle}
-                setMinutesExportStyle={setMinutesExportStyle}
-                includeTranscriptInExport={includeTranscriptInExport}
-                setIncludeTranscriptInExport={setIncludeTranscriptInExport}
-                includeActionItemsInExport={includeActionItemsInExport}
-                setIncludeActionItemsInExport={setIncludeActionItemsInExport}
-                includeDiscussionSummaryInExport={includeDiscussionSummaryInExport}
-                setIncludeDiscussionSummaryInExport={setIncludeDiscussionSummaryInExport}
-                includeApprovalInExport={includeApprovalInExport}
-                setIncludeApprovalInExport={setIncludeApprovalInExport}
-                includeSignaturesInExport={includeSignaturesInExport}
-                setIncludeSignaturesInExport={setIncludeSignaturesInExport}
-                includePlaceholdersInExport={includePlaceholdersInExport}
-                setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
-                exportToWord={exportToWord}
-                exportToPdf={exportToPdf}
-                publicCopyMode={publicCopyMode}
-              setPublicCopyMode={setPublicCopyMode}
-                minutesExportGaps={minutesExportGaps}
-                quorumSnapshot={quorumSnapshot}
-                quorumLegalGuides={quorumLegalGuides}
-                legalGuideDateISO={legalGuideDateISO}
-                linkedSourceCount={linkedSourceCount}
-                sourceDocuments={sourceDocuments}
-                minutesSourceExternalIds={minutesSourceExternalIds}
-                vttInputRef={vttInputRef}
-                audioInputRef={audioInputRef}
-                transcriptOnFile={transcriptOnFile}
-                transcriptProvider={transcriptProvider}
-                transcriptionJob={transcriptionJob}
-                transcriptStatusTone={transcriptStatusTone}
-                transcriptEdit={transcriptEdit}
-                savingTranscript={savingTranscript}
-                pipelineBusy={pipelineBusy}
-                audioFile={audioFile}
-                importNote={importNote}
-                setTranscriptEdit={setTranscriptEdit}
-                setAudioFile={setAudioFile}
-                importTranscriptVtt={importTranscriptVtt}
-                saveTranscriptEditText={saveTranscriptEditText}
-                uploadAudioAndRun={uploadAudioAndRun}
               />
               <div className="minutes-preview minutes-preview--inline">
                 <div className="minutes-preview__toolbar">
@@ -1925,52 +2135,8 @@ export function MeetingDetailPage() {
 
         {activeTab === "sources" && (
           <MeetingSidebarColumn
-            meeting={meeting}
-            minutes={minutes}
-            society={society}
+            {...sharedSidebarProps}
             visiblePanels={["sources", "transcript"]}
-            selectedMinutesExportStyle={selectedMinutesExportStyle}
-            minutesExportStyle={minutesExportStyle}
-            setMinutesExportStyle={setMinutesExportStyle}
-            includeTranscriptInExport={includeTranscriptInExport}
-            setIncludeTranscriptInExport={setIncludeTranscriptInExport}
-            includeActionItemsInExport={includeActionItemsInExport}
-            setIncludeActionItemsInExport={setIncludeActionItemsInExport}
-            includeDiscussionSummaryInExport={includeDiscussionSummaryInExport}
-            setIncludeDiscussionSummaryInExport={setIncludeDiscussionSummaryInExport}
-            includeApprovalInExport={includeApprovalInExport}
-            setIncludeApprovalInExport={setIncludeApprovalInExport}
-            includeSignaturesInExport={includeSignaturesInExport}
-            setIncludeSignaturesInExport={setIncludeSignaturesInExport}
-            includePlaceholdersInExport={includePlaceholdersInExport}
-            setIncludePlaceholdersInExport={setIncludePlaceholdersInExport}
-            exportToWord={exportToWord}
-            exportToPdf={exportToPdf}
-            publicCopyMode={publicCopyMode}
-            setPublicCopyMode={setPublicCopyMode}
-            minutesExportGaps={minutesExportGaps}
-            quorumSnapshot={quorumSnapshot}
-            quorumLegalGuides={quorumLegalGuides}
-            legalGuideDateISO={legalGuideDateISO}
-            linkedSourceCount={linkedSourceCount}
-            sourceDocuments={sourceDocuments}
-            minutesSourceExternalIds={minutesSourceExternalIds}
-            vttInputRef={vttInputRef}
-            audioInputRef={audioInputRef}
-            transcriptOnFile={transcriptOnFile}
-            transcriptProvider={transcriptProvider}
-            transcriptionJob={transcriptionJob}
-            transcriptStatusTone={transcriptStatusTone}
-            transcriptEdit={transcriptEdit}
-            savingTranscript={savingTranscript}
-            pipelineBusy={pipelineBusy}
-            audioFile={audioFile}
-            importNote={importNote}
-            setTranscriptEdit={setTranscriptEdit}
-            setAudioFile={setAudioFile}
-            importTranscriptVtt={importTranscriptVtt}
-            saveTranscriptEditText={saveTranscriptEditText}
-            uploadAudioAndRun={uploadAudioAndRun}
             draftFromTranscript={runGenerateWithOverwriteGuard}
             draftingFromTranscript={busy}
           />
@@ -2018,6 +2184,128 @@ export function MeetingDetailPage() {
           </div>
         )}
       </Drawer>
+
+      <Drawer
+        open={!!approvalEdit}
+        onClose={() => setApprovalEdit(null)}
+        title="Record minutes approval"
+        footer={
+          <>
+            {minutes?.approvedAt && (
+              <button className="btn btn--danger" onClick={clearApproval} style={{ marginRight: "auto" }}>
+                Clear approval
+              </button>
+            )}
+            <button className="btn" onClick={() => setApprovalEdit(null)}>Cancel</button>
+            <button className="btn btn--accent" onClick={saveApproval} disabled={!approvalEdit?.approvedAt}>
+              Save
+            </button>
+          </>
+        }
+      >
+        {approvalEdit && (
+          <div>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Minutes are usually adopted at the next meeting. Record when these minutes were
+              approved and, if you like, which meeting adopted them.
+            </p>
+            <Field label="Approved on">
+              <input
+                className="input"
+                type="date"
+                value={approvalEdit.approvedAt}
+                onChange={(event) => setApprovalEdit({ ...approvalEdit, approvedAt: event.target.value })}
+              />
+            </Field>
+            <Field label="Approved at meeting">
+              <Select
+                value={approvalEdit.approvedInMeetingId}
+                onChange={(value) => setApprovalEdit({ ...approvalEdit, approvedInMeetingId: value })}
+                options={[
+                  { value: "", label: "Not specified" },
+                  ...(allMeetings ?? [])
+                    .filter((m: any) => m._id !== meeting._id)
+                    .map((m: any) => ({
+                      value: m._id as string,
+                      label: `${m.title} · ${formatDate(m.scheduledAt)}`,
+                    })),
+                ]}
+              />
+            </Field>
+          </div>
+        )}
+      </Drawer>
+
+      <Modal
+        open={!!nextMeetingDraft}
+        onClose={() => setNextMeetingDraft(null)}
+        title="Schedule next meeting"
+        size="md"
+        footer={
+          <>
+            <button className="btn" onClick={() => setNextMeetingDraft(null)}>Cancel</button>
+            <button
+              className="btn btn--accent"
+              onClick={confirmNextMeeting}
+              disabled={schedulingNext || !nextMeetingDraft?.title.trim()}
+            >
+              Schedule meeting
+            </button>
+          </>
+        }
+      >
+        {nextMeetingDraft && (
+          <div>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Creates the next meeting and seeds its agenda with approval of these minutes
+              {carriedForwardMotions.length > 0 ? " plus any carried-forward business" : ""}.
+            </p>
+            <Field label="Meeting title">
+              <input
+                className="input"
+                value={nextMeetingDraft.title}
+                onChange={(event) => setNextMeetingDraft({ ...nextMeetingDraft, title: event.target.value })}
+              />
+            </Field>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Type">
+                <input
+                  className="input"
+                  value={nextMeetingDraft.type}
+                  onChange={(event) => setNextMeetingDraft({ ...nextMeetingDraft, type: event.target.value })}
+                />
+              </Field>
+              <Field label="Date & time">
+                <input
+                  className="input"
+                  type="datetime-local"
+                  value={nextMeetingDraft.scheduledAt}
+                  onChange={(event) => setNextMeetingDraft({ ...nextMeetingDraft, scheduledAt: event.target.value })}
+                />
+              </Field>
+            </div>
+            <Field label="Location">
+              <input
+                className="input"
+                value={nextMeetingDraft.location}
+                onChange={(event) => setNextMeetingDraft({ ...nextMeetingDraft, location: event.target.value })}
+                placeholder="Venue or join link"
+              />
+            </Field>
+            {carriedForwardMotions.length > 0 && (
+              <label className="row" style={{ gap: 6 }}>
+                <input
+                  type="checkbox"
+                  checked={nextMeetingDraft.carryForward}
+                  onChange={(event) => setNextMeetingDraft({ ...nextMeetingDraft, carryForward: event.target.checked })}
+                />
+                Carry forward {carriedForwardMotions.length} tabled/deferred motion
+                {carriedForwardMotions.length === 1 ? "" : "s"} onto the agenda &amp; motion backlog
+              </label>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

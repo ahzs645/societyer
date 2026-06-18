@@ -55,3 +55,13 @@ export function dollarInputToCents(value: string | number | undefined | null) {
 export function initials(first?: string, last?: string) {
   return `${(first || "?")[0]}${(last || "")[0] || ""}`.toUpperCase();
 }
+
+/** Format a Date as a `<input type="datetime-local">` value (local time). */
+export function toDateTimeLocalValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}

@@ -11,6 +11,33 @@ import { MINUTES_EXPORT_STYLES, type MinutesExportStyleId } from "./minutesExpor
 export type { MinutesExportStyleId };
 export { MINUTES_EXPORT_STYLES };
 
+/** A captured e-signature to render in the signature block. */
+export type MinutesSignatureLine = {
+  signerName: string;
+  signerRole?: string;
+  signedAtISO?: string;
+  /** PNG data URL for a drawn signature; rendered as an image when present. */
+  imageDataUrl?: string;
+};
+
+/** A conflict-of-interest / recusal declaration to render into the minutes. */
+export type MinutesConflictLine = {
+  directorName: string;
+  contractOrMatter: string;
+  natureOfInterest?: string;
+  abstainedFromVote?: boolean;
+  leftRoom?: boolean;
+  motionLabel?: string;
+};
+
+/** A proxy appointment to render into the minutes. */
+export type MinutesProxyLine = {
+  grantorName: string;
+  proxyHolderName: string;
+  instructions?: string;
+  revoked?: boolean;
+};
+
 export type MinutesExportOptions = {
   includeTranscript?: boolean;
   includeActionItems?: boolean;
@@ -19,6 +46,13 @@ export type MinutesExportOptions = {
   includeSignatures?: boolean;
   includePlaceholders?: boolean;
   includeGeneratedFooter?: boolean;
+  /** Captured e-signatures. When present, the signature block lists the actual
+   *  signers + dates instead of blank Chair/Secretary signature lines. */
+  signatures?: MinutesSignatureLine[];
+  /** Conflict-of-interest / recusal declarations recorded for the meeting. */
+  conflicts?: MinutesConflictLine[];
+  /** Proxy appointments recorded for the meeting. */
+  proxies?: MinutesProxyLine[];
 };
 
 export type MinutesDataGap = {
@@ -160,6 +194,9 @@ const DEFAULT_MINUTES_EXPORT_OPTIONS: Required<MinutesExportOptions> = {
   includeSignatures: true,
   includePlaceholders: false,
   includeGeneratedFooter: true,
+  signatures: [],
+  conflicts: [],
+  proxies: [],
 };
 
 /** Build the body HTML for a meeting-minutes export. */
@@ -400,7 +437,9 @@ function renderStandardMinutes({
 
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
 
-    ${options.includeSignatures ? renderSignatureBlock() : ""}
+    ${renderProxiesBlock(options.proxies)}
+    ${renderConflictsBlock(options.conflicts)}
+    ${options.includeSignatures ? renderSignatureBlock(options.signatures) : ""}
 
     ${options.includeTranscript && minutes.draftTranscript ? `
       <h2>Transcript</h2>
@@ -460,7 +499,9 @@ function renderFormalAgmMinutes({
     ${adjournmentMotion || adjournedAt || options.includePlaceholders ? `<p>There being no further business, ${adjournmentMotion ? `upon motion duly made and accepted, ${eh(adjournmentMotion.text)}` : `the meeting was concluded at ${eh(adjournedAt ?? placeholder("adjournment time", options))}`}</p>` : ""}
 
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
-    ${options.includeSignatures ? renderSignatureBlock("Chair", "Secretary") : ""}
+    ${renderProxiesBlock(options.proxies)}
+    ${renderConflictsBlock(options.conflicts)}
+    ${options.includeSignatures ? renderSignatureBlock(options.signatures, "Chair", "Secretary") : ""}
     ${options.includeTranscript && minutes.draftTranscript ? renderTranscript(minutes.draftTranscript) : ""}
     ${renderFooter(options)}
   `;
@@ -591,7 +632,9 @@ function renderNumberedAgendaMinutes({
     ${renderSampleNextMeeting(minutes, options)}
     ${renderAppendices(minutes.appendices, options)}
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
-    ${options.includeSignatures ? renderSignatureBlock() : ""}
+    ${renderProxiesBlock(options.proxies)}
+    ${renderConflictsBlock(options.conflicts)}
+    ${options.includeSignatures ? renderSignatureBlock(options.signatures) : ""}
     ${options.includeTranscript && minutes.draftTranscript ? renderTranscript(minutes.draftTranscript) : ""}
     ${renderFooter(options)}
   `;
@@ -1258,7 +1301,110 @@ function renderApprovalBlock(
   `;
 }
 
-function renderSignatureBlock(leftLabel = "Chair", rightLabel = "Secretary") {
+function renderProxiesBlock(proxies: MinutesProxyLine[] = []) {
+  const active = proxies.filter((proxy) => !proxy.revoked);
+  if (!active.length) return "";
+  const rows = active
+    .map(
+      (proxy) => `
+      <tr>
+        <td>${escapeHtml(proxy.grantorName)}</td>
+        <td>${escapeHtml(proxy.proxyHolderName)}</td>
+        <td>${escapeHtml(proxy.instructions ?? "")}</td>
+      </tr>`,
+    )
+    .join("");
+  return `
+    <h2>Proxies</h2>
+    <table>
+      <tr>
+        <td class="meta">Grantor</td>
+        <td class="meta">Proxy holder</td>
+        <td class="meta">Instructions</td>
+      </tr>
+      ${rows}
+    </table>
+  `;
+}
+
+function renderConflictsBlock(conflicts: MinutesConflictLine[] = []) {
+  if (!conflicts.length) return "";
+  const rows = conflicts
+    .map((conflict) => {
+      const measures = [
+        conflict.abstainedFromVote ? "abstained from the vote" : "",
+        conflict.leftRoom ? "left the room" : "",
+      ].filter(Boolean).join(" and ");
+      const scope = conflict.motionLabel ? ` (${escapeHtml(conflict.motionLabel)})` : "";
+      const detail = [
+        conflict.natureOfInterest ? escapeHtml(conflict.natureOfInterest) : "",
+        measures ? `The director ${measures}.` : "",
+      ].filter(Boolean).join(" ");
+      return `
+      <tr>
+        <td>${escapeHtml(conflict.directorName)}</td>
+        <td>${escapeHtml(conflict.contractOrMatter)}${scope}</td>
+        <td>${detail}</td>
+      </tr>`;
+    })
+    .join("");
+  return `
+    <h2>Conflicts of Interest &amp; Recusals</h2>
+    <table>
+      <tr>
+        <td class="meta">Director</td>
+        <td class="meta">Matter</td>
+        <td class="meta">Disclosure &amp; action taken</td>
+      </tr>
+      ${rows}
+    </table>
+  `;
+}
+
+function renderSignatureBlock(
+  signatures: MinutesSignatureLine[] = [],
+  leftLabel = "Chair",
+  rightLabel = "Secretary",
+) {
+  // When e-signatures have been captured, list the actual signers, their role,
+  // and the date signed instead of blank Chair/Secretary signature lines.
+  if (signatures.length) {
+    const rows = signatures
+      .map((signature) => {
+        const signed = signature.signedAtISO
+          ? new Date(signature.signedAtISO).toLocaleDateString("en-CA", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })
+          : "";
+        const mark = signature.imageDataUrl
+          ? `<img src="${escapeHtml(signature.imageDataUrl)}" alt="${escapeHtml(signature.signerName)} signature" style="height: 32pt; max-width: 180pt; object-fit: contain;" />`
+          : `<span style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14pt;">${escapeHtml(signature.signerName)}</span>`;
+        return `
+      <tr>
+        <td style="border-left: 0; border-right: 0; border-top: 0;">
+          ${mark}
+          <div class="meta">${escapeHtml(signature.signerName)}</div>
+        </td>
+        <td class="meta" style="border: 0; white-space: nowrap;">${escapeHtml(signature.signerRole ?? "")}</td>
+        <td class="meta" style="border: 0; white-space: nowrap;">${escapeHtml(signed)}</td>
+      </tr>`;
+      })
+      .join("");
+    return `
+    <h2>Signatures</h2>
+    <table>
+      <tr>
+        <td class="meta" style="border: 0; width: 50%;">Signature</td>
+        <td class="meta" style="border: 0;">Role</td>
+        <td class="meta" style="border: 0;">Date signed</td>
+      </tr>
+      ${rows}
+    </table>
+    <p class="meta">Electronically signed and retained with these minutes.</p>
+  `;
+  }
   return `
     <h2>Signatures</h2>
     <table>

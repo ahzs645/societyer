@@ -1332,6 +1332,7 @@ export default defineSchema({
     signerRole: v.optional(v.string()),
     method: v.string(), // typed | drawn | email_confirm
     typedName: v.optional(v.string()),
+    imageDataUrl: v.optional(v.string()), // PNG data URL for drawn signatures
     signedAtISO: v.string(),
     ipAddress: v.optional(v.string()),
     demo: v.boolean(),
@@ -2076,7 +2077,6 @@ export default defineSchema({
     quorumComputedAtISO: v.optional(v.string()),
     status: v.string(),
     attendeeIds: v.array(v.string()),
-    agendaJson: v.optional(v.string()),
     meetingTemplateId: v.optional(v.id("meetingTemplates")),
     templateSnapshotJson: v.optional(v.string()),
     minutesId: v.optional(v.id("minutes")),
@@ -2883,10 +2883,15 @@ export default defineSchema({
     leftRoom: v.boolean(),
     resolvedAt: v.optional(v.string()),
     notes: v.optional(v.string()),
+    // Optional link to the meeting (and specific motion) the recusal applies to,
+    // so declarations can be captured per-meeting and rendered into the minutes.
+    meetingId: v.optional(v.id("meetings")),
+    motionIndex: v.optional(v.number()),
   })
     .index("by_society", ["societyId"])
     .index("by_society_resolved", ["societyId", "resolvedAt"])
-    .index("by_director", ["directorId"]),
+    .index("by_director", ["directorId"])
+    .index("by_meeting", ["meetingId"]),
 
   financials: defineTable({
     societyId: v.id("societies"),
@@ -3999,7 +4004,7 @@ export default defineSchema({
     motionTemplateId: v.optional(v.id("motionTemplates")),
     motionBacklogId: v.optional(v.id("motionBacklog")),
     motionText: v.optional(v.string()),
-    outcome: v.optional(v.string()), // carried | defeated | tabled | deferred
+    outcome: v.optional(v.string()), // Pending | Carried | Defeated | Tabled | Deferred (see src/lib/motionGovernance)
     resolutionId: v.optional(v.id("writtenResolutions")),
     createdAtISO: v.string(),
   })

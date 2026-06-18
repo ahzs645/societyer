@@ -8,6 +8,7 @@ import { useMemo, useState } from "react";
 import { Pen, Trash2 } from "lucide-react";
 import { formatDateTime } from "../lib/format";
 import { NameAutocomplete } from "./NameAutocomplete";
+import { SignaturePad } from "./SignaturePad";
 
 export function SignaturePanel({
   societyId,
@@ -33,6 +34,8 @@ export function SignaturePanel({
   const user = useCurrentUser();
   const toast = useToast();
   const [typedName, setTypedName] = useState("");
+  const [signMode, setSignMode] = useState<"typed" | "drawn">("typed");
+  const [drawnDataUrl, setDrawnDataUrl] = useState<string | null>(null);
   const [localSignatures, setLocalSignatures] = useState<any[]>([]);
 
   const directorSigners = useMemo(
@@ -121,6 +124,13 @@ export function SignaturePanel({
               borderBottom: "1px solid var(--border)",
             }}
           >
+            {s.imageDataUrl ? (
+              <img
+                src={s.imageDataUrl}
+                alt={`${s.signerName} signature`}
+                style={{ height: 28, maxWidth: 120, objectFit: "contain" }}
+              />
+            ) : null}
             <strong>{s.signerName}</strong>
             {s.signerRole && <Badge>{s.signerRole}</Badge>}
             <div className="signature-list-row__spacer" style={{ flex: 1 }} />
@@ -146,6 +156,31 @@ export function SignaturePanel({
           </div>
         ))}
 
+        <div className="signature-mode-toggle" role="tablist" aria-label="Signature method">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={signMode === "typed"}
+            className={`btn btn--sm${signMode === "typed" ? " btn--accent" : " btn--ghost"}`}
+            onClick={() => setSignMode("typed")}
+          >
+            Type
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={signMode === "drawn"}
+            className={`btn btn--sm${signMode === "drawn" ? " btn--accent" : " btn--ghost"}`}
+            onClick={() => setSignMode("drawn")}
+          >
+            Draw
+          </button>
+        </div>
+        {signMode === "drawn" && (
+          <Field label="Draw signature">
+            <SignaturePad onChange={setDrawnDataUrl} ariaLabel="Draw your signature" />
+          </Field>
+        )}
         <div className="signature-form-row">
           <Field label={signerScope === "directors" ? "Director who signed" : "Person who signed"}>
             <NameAutocomplete
@@ -158,7 +193,7 @@ export function SignaturePanel({
           </Field>
           <button
             className="btn btn--accent"
-            disabled={!user || !typedName.trim() || alreadySigned}
+            disabled={!user || !typedName.trim() || alreadySigned || (signMode === "drawn" && !drawnDataUrl)}
             onClick={async () => {
               if (!user) {
                 toast.error("Pick a user in the header before signing.");
@@ -173,7 +208,12 @@ export function SignaturePanel({
                 toast.error(`${name} already signed.`);
                 return;
               }
+              if (signMode === "drawn" && !drawnDataUrl) {
+                toast.error("Draw a signature before saving.");
+                return;
+              }
               const signerRole = selectedSigner?.role ?? (signerScope === "directors" ? "Director" : undefined);
+              const imageDataUrl = signMode === "drawn" ? drawnDataUrl ?? undefined : undefined;
               const signatureId = await sign({
                 societyId,
                 entityType,
@@ -182,8 +222,9 @@ export function SignaturePanel({
                 actingUserId: user._id,
                 signerName: name,
                 signerRole,
-                method: "typed",
-                typedName: name,
+                method: signMode,
+                typedName: signMode === "typed" ? name : undefined,
+                imageDataUrl,
                 demo: true,
               });
               setLocalSignatures((current) => [
@@ -192,12 +233,14 @@ export function SignaturePanel({
                   _id: signatureId ?? `local-signature-${Date.now()}`,
                   signerName: name,
                   signerRole,
+                  imageDataUrl,
                   signedAtISO: new Date().toISOString(),
                   userId: selectedSignerUserId,
                   localOnly: !signatureId,
                 },
               ]);
               setTypedName("");
+              setDrawnDataUrl(null);
               toast.success("Signature captured");
             }}
           >

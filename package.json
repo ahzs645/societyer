@@ -68,6 +68,7 @@
     "test:exports": "tsx scripts/check-export-coverage.ts",
     "test:exports:db": "tsx scripts/validate-export-database.ts",
     "test:record-table-utils": "tsx scripts/check-record-table-utils.ts",
+    "test:meeting-governance": "tsx scripts/check-meeting-governance.ts",
     "test:ai-agent-contract": "tsx scripts/check-ai-agent-contract.ts",
     "test:csv-import-utils": "tsx scripts/check-csv-and-import-utils.ts",
     "test:integration-staging": "tsx scripts/check-integration-staging-bundles.ts",

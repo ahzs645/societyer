@@ -64,6 +64,31 @@
   margin-bottom: 0;
 }
 
+.signature-mode-toggle {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+/* Canvas signature pad — full width, responsive height set inline. */
+.signature-pad__canvas {
+  display: block;
+  width: 100%;
+  touch-action: none; /* let pointer strokes draw instead of scrolling */
+  background: token('bg-base');
+  border: 1px dashed token('border-strong');
+  border-radius: token('r-sm');
+  cursor: crosshair;
+}
+.signature-pad__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: token('fs-xs');
+}
+
 /* Form */
 .field {
   @include flex-column;

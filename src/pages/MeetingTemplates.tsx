@@ -6,8 +6,10 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { useToast } from "../components/Toast";
-import { ArrowLeft, BookOpen, ChevronDown, Copy, MinusCircle, Pencil, Plus, Save, Sparkles, Star, Trash2, X } from "lucide-react";
+import { ArrowLeft, BookOpen, CalendarPlus, ChevronDown, Copy, MinusCircle, Pencil, Plus, Save, Sparkles, Star, Trash2, X } from "lucide-react";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { Modal } from "../components/Modal";
+import { toDateTimeLocalValue } from "../lib/format";
 
 type TemplateItemDraft = {
   title: string;
@@ -196,6 +198,52 @@ export function MeetingTemplatesPage() {
   const remove = useMutation(api.meetingTemplates.remove);
   const duplicate = useMutation(api.meetingTemplates.duplicate);
   const seed = useMutation(api.meetingTemplates.seedDefaults);
+  const createMeeting = useMutation(api.meetings.create);
+
+  // Schedule-from-template modal: prefilled from the chosen template, then
+  // creates a meeting seeded with the template's agenda (meetings.create seeds
+  // agendaItems from meetingTemplateId) and opens it.
+  const [scheduleDraft, setScheduleDraft] = useState<{
+    templateId: Id<"meetingTemplates">;
+    title: string;
+    type: string;
+    scheduledAt: string;
+  } | null>(null);
+  const [scheduling, setScheduling] = useState(false);
+
+  const openSchedule = (template: any) => {
+    setScheduleDraft({
+      templateId: template._id,
+      title: template.name ?? "Meeting",
+      type: template.meetingType || "Board",
+      // Default two weeks out (typical notice window); the user can adjust.
+      scheduledAt: toDateTimeLocalValue(new Date(Date.now() + 14 * 864e5)),
+    });
+  };
+
+  const confirmSchedule = async () => {
+    if (!society || !scheduleDraft || !scheduleDraft.title.trim()) return;
+    setScheduling(true);
+    try {
+      const meetingId = await createMeeting({
+        societyId: society._id,
+        type: scheduleDraft.type,
+        title: scheduleDraft.title.trim(),
+        scheduledAt: scheduleDraft.scheduledAt,
+        electronic: false,
+        status: "Scheduled",
+        attendeeIds: [],
+        meetingTemplateId: scheduleDraft.templateId,
+      });
+      setScheduleDraft(null);
+      toast.success("Meeting scheduled", "Seeded the agenda from this template.");
+      if (meetingId) navigate(`/app/meetings/${meetingId}`);
+    } catch (error: any) {
+      toast.error(error?.message ? String(error.message).replace(/^.*Error:\s*/, "") : "Could not schedule meeting.");
+    } finally {
+      setScheduling(false);
+    }
+  };
 
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
@@ -268,6 +316,9 @@ export function MeetingTemplatesPage() {
                     </ol>
                   </div>
                   <div className="meeting-templates__template-actions">
+                    <button className="btn-action" type="button" onClick={() => openSchedule(template)} title="Schedule a meeting from this template">
+                      <CalendarPlus size={12} /> Schedule meeting
+                    </button>
                     <button className="btn-action btn-action--icon" type="button" onClick={() => navigate(`/app/meeting-templates/${template._id}`)} title="Edit template" aria-label={`Edit ${template.name}`}>
                       <Pencil size={12} />
                     </button>
@@ -294,6 +345,58 @@ export function MeetingTemplatesPage() {
           )}
         </div>
       </div>
+
+      <Modal
+        open={!!scheduleDraft}
+        onClose={() => setScheduleDraft(null)}
+        title="Schedule meeting from template"
+        size="md"
+        footer={
+          <>
+            <button className="btn" onClick={() => setScheduleDraft(null)}>Cancel</button>
+            <button
+              className="btn btn--accent"
+              onClick={confirmSchedule}
+              disabled={scheduling || !scheduleDraft?.title.trim()}
+            >
+              <CalendarPlus size={14} /> Schedule meeting
+            </button>
+          </>
+        }
+      >
+        {scheduleDraft && (
+          <div>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Creates a new meeting and seeds its agenda from this template. You can refine
+              everything on the meeting afterwards.
+            </p>
+            <Field label="Meeting title">
+              <input
+                className="input"
+                value={scheduleDraft.title}
+                onChange={(event) => setScheduleDraft({ ...scheduleDraft, title: event.target.value })}
+              />
+            </Field>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Type">
+                <input
+                  className="input"
+                  value={scheduleDraft.type}
+                  onChange={(event) => setScheduleDraft({ ...scheduleDraft, type: event.target.value })}
+                />
+              </Field>
+              <Field label="Date & time">
+                <input
+                  className="input"
+                  type="datetime-local"
+                  value={scheduleDraft.scheduledAt}
+                  onChange={(event) => setScheduleDraft({ ...scheduleDraft, scheduledAt: event.target.value })}
+                />
+              </Field>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
