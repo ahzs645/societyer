@@ -770,6 +770,7 @@ export function MeetingDetailPage() {
           signerName: signature.signerName,
           signerRole: signature.signerRole,
           signedAtISO: signature.signedAtISO,
+          imageDataUrl: signature.imageDataUrl,
         })),
       },
     });

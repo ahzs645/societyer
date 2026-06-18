@@ -16,6 +16,8 @@ export type MinutesSignatureLine = {
   signerName: string;
   signerRole?: string;
   signedAtISO?: string;
+  /** PNG data URL for a drawn signature; rendered as an image when present. */
+  imageDataUrl?: string;
 };
 
 export type MinutesExportOptions = {
@@ -1286,10 +1288,14 @@ function renderSignatureBlock(
               day: "numeric",
             })
           : "";
+        const mark = signature.imageDataUrl
+          ? `<img src="${escapeHtml(signature.imageDataUrl)}" alt="${escapeHtml(signature.signerName)} signature" style="height: 32pt; max-width: 180pt; object-fit: contain;" />`
+          : `<span style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14pt;">${escapeHtml(signature.signerName)}</span>`;
         return `
       <tr>
         <td style="border-left: 0; border-right: 0; border-top: 0;">
-          <span style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14pt;">${escapeHtml(signature.signerName)}</span>
+          ${mark}
+          <div class="meta">${escapeHtml(signature.signerName)}</div>
         </td>
         <td class="meta" style="border: 0; white-space: nowrap;">${escapeHtml(signature.signerRole ?? "")}</td>
         <td class="meta" style="border: 0; white-space: nowrap;">${escapeHtml(signed)}</td>

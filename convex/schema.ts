@@ -1332,6 +1332,7 @@ export default defineSchema({
     signerRole: v.optional(v.string()),
     method: v.string(), // typed | drawn | email_confirm
     typedName: v.optional(v.string()),
+    imageDataUrl: v.optional(v.string()), // PNG data URL for drawn signatures
     signedAtISO: v.string(),
     ipAddress: v.optional(v.string()),
     demo: v.boolean(),

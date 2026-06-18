@@ -22,6 +22,7 @@ export const sign = mutation({
     signerRole: v.optional(v.string()),
     method: v.string(),
     typedName: v.optional(v.string()),
+    imageDataUrl: v.optional(v.string()),
     demo: v.optional(v.boolean()),
     actingUserId: v.id("users"),
   },
@@ -41,6 +42,7 @@ export const sign = mutation({
       signerRole: args.signerRole,
       method: args.method,
       typedName: args.typedName,
+      imageDataUrl: args.imageDataUrl,
       signedAtISO: new Date().toISOString(),
       demo: args.demo ?? true,
     });
