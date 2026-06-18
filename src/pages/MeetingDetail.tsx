@@ -111,6 +111,9 @@ export function MeetingDetailPage() {
     society ? { societyId: society._id } : "skip",
   );
   const allDocuments = useQuery(api.documents.list, society ? { societyId: society._id, actingUserId } : "skip");
+  // Sibling meetings power the "approved at meeting" picker — minutes are
+  // typically adopted at a later meeting, so we let the user point at it.
+  const allMeetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
   const motionPeople = personLinkCandidates(members, directors);
   const directorNames = (directors ?? []).flatMap((d: any) => [`${d.firstName} ${d.lastName}`, ...(Array.isArray(d.aliases) ? d.aliases : [])]);
   const generate = useAction(api.minutes.generateDraft);
@@ -158,6 +161,9 @@ export function MeetingDetailPage() {
   } | null>(null);
   const [savingTranscript, setSavingTranscript] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
+  // Drawer state for recording minutes approval (date + the meeting at which
+  // the minutes were adopted). null = closed.
+  const [approvalEdit, setApprovalEdit] = useState<{ approvedAt: string; approvedInMeetingId: string } | null>(null);
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
   const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", false));
   const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
@@ -511,6 +517,53 @@ export function MeetingDetailPage() {
 
   const markHeld = () => updateMeeting({ id: meeting._id, patch: { status: "Held" } });
   const reopenMeeting = () => updateMeeting({ id: meeting._id, patch: { status: "Scheduled" } });
+
+  // Notice tracking for regular meetings (the AGM workflow has its own step).
+  // Toggling is reversible, so no confirm — clearing sets the field to
+  // undefined, which Convex removes from the record.
+  const toggleNoticeSent = async () => {
+    await updateMeeting({
+      id: meeting._id,
+      patch: { noticeSentAt: meeting.noticeSentAt ? undefined : new Date().toISOString() },
+    });
+    toast.success(
+      meeting.noticeSentAt ? "Notice cleared" : "Notice marked sent",
+      meeting.noticeSentAt
+        ? "The meeting no longer has a notice-sent date."
+        : `Recorded ${formatDate(new Date().toISOString())}.`,
+    );
+  };
+
+  // Record/clear approval of THIS meeting's minutes. Minutes are normally
+  // adopted at a later meeting, so the drawer captures both the approval date
+  // and (optionally) which meeting adopted them.
+  const startApprovalEdit = () => {
+    if (!minutes) return;
+    setApprovalEdit({
+      approvedAt: (minutes.approvedAt ?? new Date().toISOString()).slice(0, 10),
+      approvedInMeetingId: (minutes.approvedInMeetingId as string | undefined) ?? "",
+    });
+  };
+  const saveApproval = async () => {
+    if (!minutes || !approvalEdit) return;
+    await updateMinutes({
+      id: minutes._id,
+      patch: {
+        approvedAt: new Date(`${approvalEdit.approvedAt}T00:00:00`).toISOString(),
+        approvedInMeetingId: approvalEdit.approvedInMeetingId
+          ? (approvalEdit.approvedInMeetingId as Id<"meetings">)
+          : undefined,
+      },
+    });
+    setApprovalEdit(null);
+    toast.success("Minutes approval recorded", `Approved ${formatDate(approvalEdit.approvedAt)}.`);
+  };
+  const clearApproval = async () => {
+    if (!minutes) return;
+    await updateMinutes({ id: minutes._id, patch: { approvedAt: undefined, approvedInMeetingId: undefined } });
+    setApprovalEdit(null);
+    toast.success("Approval cleared", "These minutes are no longer marked approved.");
+  };
 
   // Section indices to omit from the public copy. A depth=0 (root) section
   // flagged publicVisible:false cascades to its trailing depth=1 children —
@@ -1525,6 +1578,25 @@ export function MeetingDetailPage() {
                     ]
                   : []),
                 {
+                  id: "governance",
+                  label: "Governance",
+                  items: [
+                    {
+                      id: "notice-sent",
+                      label: meeting.noticeSentAt ? "Clear notice sent" : "Mark notice sent",
+                      icon: <ClipboardCheck size={12} />,
+                      onSelect: toggleNoticeSent,
+                    },
+                    {
+                      id: "record-approval",
+                      label: minutes?.approvedAt ? "Edit minutes approval" : "Record minutes approval",
+                      icon: <FileText size={12} />,
+                      disabled: !minutes,
+                      onSelect: startApprovalEdit,
+                    },
+                  ],
+                },
+                {
                   id: "package",
                   items: [
                     {
@@ -1609,6 +1681,51 @@ export function MeetingDetailPage() {
 
       <div className="meeting-detail-tabpanel">
         {activeTab === "overview" && (
+          <>
+          <div className="meeting-governance-strip">
+            <div className="meeting-governance-strip__item">
+              <div className="meeting-governance-strip__label">Notice of meeting</div>
+              <div className="meeting-governance-strip__value">
+                {meeting.noticeSentAt ? (
+                  <Badge tone="success">Sent {formatDate(meeting.noticeSentAt)}</Badge>
+                ) : (
+                  <Badge tone="warn">Not sent</Badge>
+                )}
+              </div>
+              <button className="btn-action" type="button" onClick={toggleNoticeSent}>
+                {meeting.noticeSentAt ? "Clear" : "Mark sent"}
+              </button>
+            </div>
+            <div className="meeting-governance-strip__item">
+              <div className="meeting-governance-strip__label">Minutes approval</div>
+              <div className="meeting-governance-strip__value">
+                {minutes?.approvedAt ? (
+                  <Badge tone="success">
+                    Approved {formatDate(minutes.approvedAt)}
+                    {minutes.approvedInMeetingId
+                      ? ` · ${
+                          (allMeetings ?? []).find((m: any) => m._id === minutes.approvedInMeetingId)?.title ??
+                          "linked meeting"
+                        }`
+                      : ""}
+                  </Badge>
+                ) : minutes ? (
+                  <Badge tone="warn">Not approved</Badge>
+                ) : (
+                  <span className="muted">No minutes yet</span>
+                )}
+              </div>
+              <button
+                className="btn-action"
+                type="button"
+                onClick={startApprovalEdit}
+                disabled={!minutes}
+                title={minutes ? undefined : "Start the minutes first"}
+              >
+                {minutes?.approvedAt ? "Edit" : "Record approval"}
+              </button>
+            </div>
+          </div>
           <div className="meeting-overview-grid">
             <MeetingSidebarColumn
               meeting={meeting}
@@ -1709,6 +1826,7 @@ export function MeetingDetailPage() {
               uploadAudioAndRun={uploadAudioAndRun}
             />
           </div>
+          </>
         )}
 
         {activeTab === "minutes" && !hasStartedMinutesDraft(minutes) && (
@@ -2020,6 +2138,57 @@ export function MeetingDetailPage() {
             </div>
             <Field label="Instructions">
               <MarkdownEditor rows={3} value={joinEdit.remoteInstructions} onChange={(markdown) => setJoinEdit({ ...joinEdit, remoteInstructions: markdown })} />
+            </Field>
+          </div>
+        )}
+      </Drawer>
+
+      <Drawer
+        open={!!approvalEdit}
+        onClose={() => setApprovalEdit(null)}
+        title="Record minutes approval"
+        footer={
+          <>
+            {minutes?.approvedAt && (
+              <button className="btn btn--danger" onClick={clearApproval} style={{ marginRight: "auto" }}>
+                Clear approval
+              </button>
+            )}
+            <button className="btn" onClick={() => setApprovalEdit(null)}>Cancel</button>
+            <button className="btn btn--accent" onClick={saveApproval} disabled={!approvalEdit?.approvedAt}>
+              Save
+            </button>
+          </>
+        }
+      >
+        {approvalEdit && (
+          <div>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Minutes are usually adopted at the next meeting. Record when these minutes were
+              approved and, if you like, which meeting adopted them.
+            </p>
+            <Field label="Approved on">
+              <input
+                className="input"
+                type="date"
+                value={approvalEdit.approvedAt}
+                onChange={(event) => setApprovalEdit({ ...approvalEdit, approvedAt: event.target.value })}
+              />
+            </Field>
+            <Field label="Approved at meeting">
+              <Select
+                value={approvalEdit.approvedInMeetingId}
+                onChange={(value) => setApprovalEdit({ ...approvalEdit, approvedInMeetingId: value })}
+                options={[
+                  { value: "", label: "Not specified" },
+                  ...(allMeetings ?? [])
+                    .filter((m: any) => m._id !== meeting._id)
+                    .map((m: any) => ({
+                      value: m._id as string,
+                      label: `${m.title} · ${formatDate(m.scheduledAt)}`,
+                    })),
+                ]}
+              />
             </Field>
           </div>
         )}

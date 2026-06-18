@@ -164,6 +164,40 @@
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
+// Governance status strip (notice sent / minutes approval) at the top of the
+// Overview tab. Two equal cards on desktop; stacks on narrow screens.
+.meeting-governance-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: token('s-2');
+  margin-bottom: token('s-3');
+}
+.meeting-governance-strip__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-2');
+  min-width: 0;
+  padding: token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-panel');
+}
+.meeting-governance-strip__label {
+  flex: 1 1 100%;
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.meeting-governance-strip__value {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.meeting-governance-strip__item > .btn-action {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
 .meeting-detail-tabpanel {
   min-width: 0;
 }
@@ -514,6 +548,9 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 @media (max-width: 760px) {
   .meeting-detail-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .meeting-governance-strip {
+    grid-template-columns: 1fr;
   }
   .meeting-detail-location-value {
     max-width: 100%;
