@@ -1,5 +1,15 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
-import { Check, X, Plus, Trash2, MinusCircle, PlusCircle, Pencil, Clock, Unlink } from "lucide-react";
+import { Check, X, Plus, Trash2, MinusCircle, PlusCircle, Pencil, Clock, Unlink, CalendarClock } from "lucide-react";
+import {
+  MOTION_OUTCOMES,
+  isPostponedOutcome,
+  isAdjournmentMotion,
+  thresholdFor,
+  motionMeetsThreshold,
+} from "../lib/motionGovernance";
+// Re-export the pure governance helpers so existing importers can keep pulling
+// them from MotionEditor; the implementations now live in lib/motionGovernance.
+export { isAdjournmentMotion, thresholdFor, motionMeetsThreshold };
 
 function DinnerTableIcon({ size = 12 }: { size?: number }) {
   return (
@@ -64,27 +74,6 @@ const RESOLUTION_TYPE_OPTIONS: SelectOption<string>[] = [
   { value: "Procedural", label: "Procedural" },
 ];
 
-export function isAdjournmentMotion(motion: Pick<Motion, "text" | "sectionTitle" | "resolutionType">) {
-  const text = `${motion.text ?? ""} ${motion.sectionTitle ?? ""} ${motion.resolutionType ?? ""}`.toLowerCase();
-  return /\badjourn(?:ment|ed|s)?\b/.test(text);
-}
-
-/** Required threshold percentage for a resolution type per the Societies Act. */
-export function thresholdFor(kind?: string): number {
-  if (kind === "Special") return 2 / 3;
-  if (kind === "Unanimous") return 1;
-  return 0.5;
-}
-
-/** Whether a motion's vote counts meet its resolution threshold. */
-export function motionMeetsThreshold(m: Motion): boolean | null {
-  const f = m.votesFor ?? 0;
-  const a = m.votesAgainst ?? 0;
-  const cast = f + a; // abstentions don't count toward "votes cast"
-  if (cast === 0) return null;
-  return f / cast >= thresholdFor(m.resolutionType);
-}
-
 /** Director/member name autocomplete. Uses the shared NameAutocomplete so the
  * dropdown is themed instead of using the browser's native datalist. */
 function NameInput({
@@ -121,12 +110,17 @@ function OutcomePicker({
    *  icon-only when the labels can't stay on a single line. */
   stretch?: boolean;
 }) {
-  const opts: { id: Motion["outcome"]; label: string; toneClass: string; renderIcon: () => React.ReactNode }[] = [
-    { id: "Pending", label: "Pending", toneClass: "", renderIcon: () => <Clock size={12} aria-hidden="true" /> },
-    { id: "Carried", label: "Carried", toneClass: "btn-action--success", renderIcon: () => <Check size={12} aria-hidden="true" /> },
-    { id: "Defeated", label: "Defeated", toneClass: "btn-action--danger", renderIcon: () => <X size={12} aria-hidden="true" /> },
-    { id: "Tabled", label: "Tabled", toneClass: "btn-action--warn", renderIcon: () => <DinnerTableIcon size={12} /> },
-  ];
+  const outcomeIcons: Record<string, () => React.ReactNode> = {
+    Pending: () => <Clock size={12} aria-hidden="true" />,
+    Carried: () => <Check size={12} aria-hidden="true" />,
+    Defeated: () => <X size={12} aria-hidden="true" />,
+    Tabled: () => <DinnerTableIcon size={12} />,
+    Deferred: () => <CalendarClock size={12} aria-hidden="true" />,
+  };
+  const opts = MOTION_OUTCOMES.map((meta) => ({
+    ...meta,
+    renderIcon: outcomeIcons[meta.id] ?? (() => <Clock size={12} aria-hidden="true" />),
+  }));
   return (
     <div className={`motion-outcome-picker${compact ? " motion-outcome-picker--compact" : ""}${stretch ? " motion-outcome-picker--stretch" : ""}`} role="radiogroup" aria-label="Outcome">
       {opts.map(({ id, label, toneClass, renderIcon }) => {
@@ -680,7 +674,7 @@ function MotionRow({
                 </button>
               </>
             )}
-            {onAddToBacklog && /^(Tabled|Deferred)$/i.test(motion.outcome) && (
+            {onAddToBacklog && isPostponedOutcome(motion.outcome) && (
               <button className="btn-action" onClick={onAddToBacklog} title="Add to motion backlog">
                 <Plus size={12} />
                 <span className="btn-action__label">Add to backlog</span>

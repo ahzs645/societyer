@@ -1768,7 +1768,13 @@ export function MeetingDetailPage() {
                   {" / "}
                   {businessMotions.filter((motion: any) => motion.outcome === "Defeated").length} defeated
                   {" / "}
-                  {businessMotions.filter((motion: any) => motion.outcome === "Tabled").length} tabled
+                  {businessMotions.filter((motion: any) => motion.outcome === "Tabled" || motion.outcome === "Deferred").length} tabled/deferred
+                  {(() => {
+                    const pending = businessMotions.filter(
+                      (motion: any) => !motion.outcome || motion.outcome === "Pending",
+                    ).length;
+                    return pending ? ` / ${pending} pending` : "";
+                  })()}
                 </span>
               ) : null}
               <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>

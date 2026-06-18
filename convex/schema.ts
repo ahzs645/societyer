@@ -3999,7 +3999,7 @@ export default defineSchema({
     motionTemplateId: v.optional(v.id("motionTemplates")),
     motionBacklogId: v.optional(v.id("motionBacklog")),
     motionText: v.optional(v.string()),
-    outcome: v.optional(v.string()), // carried | defeated | tabled | deferred
+    outcome: v.optional(v.string()), // Pending | Carried | Defeated | Tabled | Deferred (see src/lib/motionGovernance)
     resolutionId: v.optional(v.id("writtenResolutions")),
     createdAtISO: v.string(),
   })

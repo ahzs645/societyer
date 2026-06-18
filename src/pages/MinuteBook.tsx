@@ -9,10 +9,15 @@ import { DatePicker } from "../components/DatePicker";
 import { OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { BookOpen, Plus, Trash2 } from "lucide-react";
+import { BookOpen, Download, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import {
+  downloadMinuteBookHtml,
+  downloadMinuteBookCsv,
+  type MinuteBookExportInput,
+} from "../features/meetings/lib/minuteBookExport";
 
 export function MinuteBookPage() {
   const society = useSociety();
@@ -38,15 +43,40 @@ export function MinuteBookPage() {
     };
   }, [detail]);
 
+  const exportInput = useMemo<MinuteBookExportInput>(() => ({
+    society: society ? { name: society.name, incorporationNumber: society.incorporationNumber ?? null } : undefined,
+    items: Array.isArray(detail) ? [] : detail?.items ?? [],
+    recordBundles: safeRows(detail, "recordBundles"),
+    maps,
+  }), [society, detail, maps]);
+
+  const runExport = (format: "html" | "csv") => {
+    if (!detail) {
+      toast.info("Minute book export", "Records are still loading. Try again in a moment.");
+      return;
+    }
+    if (format === "csv") {
+      downloadMinuteBookCsv(exportInput);
+    } else {
+      downloadMinuteBookHtml(exportInput);
+    }
+    toast.success(
+      "Minute book export ready",
+      format === "csv" ? "CSV index downloaded." : "Printable HTML index downloaded — open it and print to PDF.",
+    );
+  };
+
   useEffect(() => {
     if (!society || params.get("intent") !== "export") return;
+    if (!detail) return;
     setParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete("intent");
       return next;
     }, { replace: true });
-    toast.info("Minute book export", "Use Data export for now; the minute-book spine is ready for export packaging.");
-  }, [params, setParams, society, toast]);
+    runExport("html");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params, setParams, society, detail]);
 
   if (society === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
@@ -112,7 +142,11 @@ export function MinuteBookPage() {
         iconColor="purple"
         subtitle="A legal record spine tying documents, meetings, minutes, resolutions, filings, signatures, policies, and workflow packages together."
         actions={
-          <Button variant="accent" icon={<Plus size={14} />} onClick={openNew}>New record</Button>
+          <>
+            <Button variant="ghost" icon={<Download size={14} />} onClick={() => runExport("html")}>Export HTML</Button>
+            <Button variant="ghost" icon={<Download size={14} />} onClick={() => runExport("csv")}>Export CSV</Button>
+            <Button variant="accent" icon={<Plus size={14} />} onClick={openNew}>New record</Button>
+          </>
         }
       />
 
