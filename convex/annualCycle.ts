@@ -2,6 +2,7 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 import { getActiveBylawRuleSet } from "./lib/bylawRules";
+import { readMeetingAgendaItems } from "./lib/agendaItems";
 
 type ItemStatus = "complete" | "attention" | "blocked" | "upcoming";
 
@@ -18,16 +19,6 @@ type CycleItem = {
 };
 
 const DAY_MS = 86_400_000;
-
-function hasAgendaItems(agendaJson: string | undefined | null) {
-  if (typeof agendaJson !== "string" || !agendaJson.trim()) return false;
-  try {
-    const parsed = JSON.parse(agendaJson);
-    return Array.isArray(parsed) && parsed.some((item) => String(item ?? "").trim());
-  } catch {
-    return agendaJson.split(/\r?\n/).some((line) => line.trim());
-  }
-}
 
 export const summary = query({
   args: {
@@ -146,6 +137,9 @@ export const summary = query({
     const directorElection = selectedAgm
       ? elections.find((row) => String(row.meetingId) === String(selectedAgm._id)) ?? null
       : null;
+    const selectedAgmHasAgenda = selectedAgm
+      ? (await readMeetingAgendaItems(ctx, selectedAgm._id)).length > 0
+      : false;
     const meetingProxies = selectedAgm ? proxies.filter((row) => String(row.meetingId) === String(selectedAgm._id)) : [];
     const meetingProposals = selectedAgm ? memberProposals.filter((row) => String(row.meetingId) === String(selectedAgm._id)) : [];
     const officialRecordEvidenceCount = [
@@ -231,9 +225,9 @@ export const summary = query({
         phase: "before",
         title: "Finalize agenda, motions, and proposals",
         detail: selectedAgm
-          ? `${hasAgendaItems(selectedAgm.agendaJson) ? "Agenda is drafted" : "Agenda not yet recorded"}; ${meetingProposals.length} linked member proposal${meetingProposals.length === 1 ? "" : "s"}.`
+          ? `${selectedAgmHasAgenda ? "Agenda is drafted" : "Agenda not yet recorded"}; ${meetingProposals.length} linked member proposal${meetingProposals.length === 1 ? "" : "s"}.`
           : "No AGM selected for agenda planning.",
-        status: hasAgendaItems(selectedAgm?.agendaJson) ? "complete" : selectedAgm ? "attention" : "blocked",
+        status: selectedAgmHasAgenda ? "complete" : selectedAgm ? "attention" : "blocked",
         evidence: ["Agenda", "Motion text", "Member proposals", "Proxy and voting rules"],
         to: selectedAgm ? `/meetings/${selectedAgm._id}` : "/agendas",
         actionLabel: "Open agenda",

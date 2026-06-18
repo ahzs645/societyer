@@ -6,6 +6,7 @@ import {
   summarizeMeetingMaterials,
 } from "./lib/access/materialAccess";
 import { documentAccessContextForActor } from "./lib/access/documentAccess";
+import { readMeetingAgendaEntries } from "./lib/agendaItems";
 
 const accessGrantValidator = v.object({
   subjectType: v.string(),
@@ -78,7 +79,7 @@ export const packageForMeeting = query({
       }),
     );
 
-    const agenda = parseAgenda(meeting.agendaJson);
+    const agenda = (await readMeetingAgendaEntries(ctx, meetingId)).map((entry) => entry.title);
     const visibleMaterialSummary = summarizeMeetingMaterials(visibleMaterials);
     return {
       meeting,
@@ -229,12 +230,3 @@ export const remove = mutation({
   },
 });
 
-function parseAgenda(value: unknown) {
-  if (typeof value !== "string" || !value.trim()) return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
-  } catch {
-    return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  }
-}

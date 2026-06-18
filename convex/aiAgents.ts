@@ -288,14 +288,14 @@ const AGENTS: AgentDefinition[] = [
     allowedTools: ["find_meetings", "find_minutes", "find_documents", "find_members", "find_directors", "app_extract_minutes_action_items", "draft_task"],
     requiredInputHints: ["Meeting date or title", "Uploaded content, transcript, rough notes, or spoken instructions", "Agenda/minutes style", "Known chair, secretary, attendance, quorum, or approval constraints"],
     guidanceTemplate:
-      "Select agenda drafting, draft editing, or minutes generation; map supplied content into the existing meeting agendaJson and minutes fields; preserve uncertainty as review gaps.",
+      "Select agenda drafting, draft editing, or minutes generation; map supplied content into the meeting's agenda items (agendas/agendaItems) and minutes fields; preserve uncertainty as review gaps.",
     workflowModes: [
       "Agenda from upload or spoken instructions",
       "Edit existing draft minutes without changing approval status",
       "Generate structured minutes from prompt, transcript, agenda, and meeting metadata",
     ],
     outputContract: [
-      "agendaItems: ordered strings suitable for meeting.agendaJson",
+      "agendaItems: ordered strings suitable for the meeting's agenda items",
       "sections: title/type/presenter/discussion/decisions/actionItems records suitable for minutes.sections",
       "motions: text/movedBy/secondedBy/outcome/vote fields suitable for minutes.motions",
       "reviewGaps: quorum, attendance, source, approval, or ambiguous-speaker items requiring human confirmation",

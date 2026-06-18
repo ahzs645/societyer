@@ -53,7 +53,6 @@ import {
   isImportRecord,
   isImportSession,
   parseJson,
-  parseJsonArray,
   sourceNoteFor,
   summarizeRecords,
   titleForHistoryItem,
@@ -81,14 +80,17 @@ async function mergeExistingMeetingImport(
   const minutesRow = await ctx.db.get(target.minutesId);
   if (!meeting || !minutesRow) return;
 
-  const currentAgenda = parseJsonArray(meeting.agendaJson);
+  const currentAgenda = await meetingAgendaItemTitles(ctx, meeting._id);
   const nextAgenda = arrayOf(payload.agendaItems).map(String).map(cleanText).filter(Boolean);
   const meetingPatch: any = {};
   if ((!Array.isArray(meeting.attendeeIds) || meeting.attendeeIds.length === 0) && arrayOf(payload.attendees).length > 0) {
     meetingPatch.attendeeIds = arrayOf(payload.attendees).map(String).map(cleanText).filter(Boolean);
   }
+  // Agenda lives in the relational agendas/agendaItems store. Only overwrite the
+  // existing items when the current agenda is just the generic imported
+  // scaffold (so we don't clobber a reviewed agenda).
   if (nextAgenda.length > 0 && shouldReplaceMeetingAgenda(currentAgenda)) {
-    meetingPatch.agendaJson = JSON.stringify(nextAgenda);
+    await setMeetingAgendaItems(ctx, meeting, nextAgenda);
   }
   const mergedMeetingNote = appendImportNote(
     meeting.notes,
@@ -1521,6 +1523,79 @@ function normalizeLookupText(value: unknown) {
     .replace(/\s+/g, " ");
 }
 
+function inferImportedAgendaItemType(title: string) {
+  const lower = String(title ?? "").toLowerCase();
+  if (lower.includes("motion") || lower.includes("adopt") || lower.includes("approve")) return "motion";
+  if (lower.includes("report") || lower.includes("financial")) return "report";
+  if (lower.includes("break")) return "break";
+  if (lower.includes("camera") || lower.includes("closed") || lower.includes("executive")) return "executive_session";
+  return "discussion";
+}
+
+// Read the ordered agenda item titles for a meeting from the relational
+// agendas/agendaItems store (the single source of truth).
+async function meetingAgendaItemTitles(ctx: any, meetingId: any): Promise<string[]> {
+  const agendas = await ctx.db
+    .query("agendas")
+    .withIndex("by_meeting", (q: any) => q.eq("meetingId", meetingId))
+    .collect();
+  agendas.sort((a: any, b: any) => a.createdAtISO.localeCompare(b.createdAtISO));
+  const agenda = agendas[0];
+  if (!agenda) return [];
+  const items = await ctx.db
+    .query("agendaItems")
+    .withIndex("by_agenda", (q: any) => q.eq("agendaId", agenda._id))
+    .collect();
+  items.sort((a: any, b: any) => a.order - b.order);
+  return items
+    .map((item: any) => String(item.title ?? "").trim())
+    .filter(Boolean);
+}
+
+// Replace (or seed) the agenda items for a meeting from a list of ordered
+// titles. Creates the agenda row if one does not yet exist, then rewrites its
+// items so the relational store reflects the imported agenda.
+async function setMeetingAgendaItems(ctx: any, meeting: any, titles: string[]) {
+  const cleaned = (titles ?? []).map((t) => String(t ?? "").trim()).filter(Boolean);
+  if (cleaned.length === 0) return;
+  const now = new Date().toISOString();
+  const agendas = await ctx.db
+    .query("agendas")
+    .withIndex("by_meeting", (q: any) => q.eq("meetingId", meeting._id))
+    .collect();
+  agendas.sort((a: any, b: any) => a.createdAtISO.localeCompare(b.createdAtISO));
+  let agendaId = agendas[0]?._id;
+  if (!agendaId) {
+    agendaId = await ctx.db.insert("agendas", {
+      societyId: meeting.societyId,
+      meetingId: meeting._id,
+      title: `${meeting.title} agenda`,
+      status: "Draft",
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+  } else {
+    const existingItems = await ctx.db
+      .query("agendaItems")
+      .withIndex("by_agenda", (q: any) => q.eq("agendaId", agendaId))
+      .collect();
+    for (const item of existingItems) await ctx.db.delete(item._id);
+    await ctx.db.patch(agendaId, { updatedAtISO: now });
+  }
+  for (let order = 0; order < cleaned.length; order += 1) {
+    const title = cleaned[order];
+    await ctx.db.insert("agendaItems", {
+      societyId: meeting.societyId,
+      agendaId,
+      order,
+      type: inferImportedAgendaItemType(title),
+      title,
+      depth: 0,
+      createdAtISO: now,
+    });
+  }
+}
+
 function importedMeetingAgenda(title: string, motions: any[], sourceExternalIds: string[]) {
   return [
     "Call to order",
@@ -1785,6 +1860,8 @@ export {
   normalizePersonLookupName,
   normalizeLookupText,
   importedMeetingAgenda,
+  setMeetingAgendaItems,
+  meetingAgendaItemTitles,
   sessionRecords,
   recordsForSession,
   docsByCategory,

@@ -654,7 +654,6 @@ const meetings = [
     quorumSourceLabel: "Bylaw rules v1, effective 2025-06-25",
     quorumComputedAtISO: "2026-04-16T16:00:00.000Z",
     attendeeIds: ["static_director_mina", "static_director_jordan", "static_director_devon"],
-    agendaJson: JSON.stringify(["Privacy program review", "Finance committee update", "Grant reporting calendar"]),
     status: "Scheduled",
   },
   {
@@ -672,7 +671,6 @@ const meetings = [
     quorumSourceLabel: "Bylaw rules v1, effective 2025-06-25",
     quorumComputedAtISO: "2025-06-19T18:30:00.000Z",
     attendeeIds: [],
-    agendaJson: JSON.stringify(["Annual report", "Financial statements", "Director elections"]),
     status: "Held",
     sourceReviewStatus: "source_reviewed",
     sourceReviewNotes: "Demo source minutes checked against the local record.",
@@ -681,6 +679,56 @@ const meetings = [
     packageReviewStatus: "needs_review",
     packageReviewNotes: "Financial statements still need signature review before the package is ready.",
   },
+];
+
+// Agenda is stored relationally in agendas/agendaItems (the single source of
+// truth offline, mirroring the Convex backend). One agenda per demo meeting,
+// with ordered items.
+const AGENDA_BOARD_ID = "static_agenda_board_q2";
+const AGENDA_AGM_ID = "static_agenda_agm_2025";
+
+const agendas = [
+  {
+    _id: AGENDA_BOARD_ID,
+    societyId: SOCIETY_ID,
+    meetingId: MEETING_BOARD_ID,
+    title: "Q2 board meeting agenda",
+    status: "Draft",
+    createdAtISO: "2026-04-16T16:00:00.000Z",
+    updatedAtISO: "2026-04-16T16:00:00.000Z",
+  },
+  {
+    _id: AGENDA_AGM_ID,
+    societyId: SOCIETY_ID,
+    meetingId: MEETING_AGM_ID,
+    title: "2025 annual general meeting agenda",
+    status: "Final",
+    createdAtISO: "2025-06-01T16:00:00.000Z",
+    updatedAtISO: "2025-06-19T18:30:00.000Z",
+  },
+];
+
+const agendaItems = [
+  ...["Privacy program review", "Finance committee update", "Grant reporting calendar"].map((title, order) => ({
+    _id: `static_agenda_item_board_${order}`,
+    societyId: SOCIETY_ID,
+    agendaId: AGENDA_BOARD_ID,
+    order,
+    type: "discussion",
+    title,
+    depth: 0 as const,
+    createdAtISO: "2026-04-16T16:00:00.000Z",
+  })),
+  ...["Annual report", "Financial statements", "Director elections"].map((title, order) => ({
+    _id: `static_agenda_item_agm_${order}`,
+    societyId: SOCIETY_ID,
+    agendaId: AGENDA_AGM_ID,
+    order,
+    type: title.toLowerCase().includes("election") ? "motion" : title.toLowerCase().includes("financial") ? "report" : "report",
+    title,
+    depth: 0 as const,
+    createdAtISO: "2025-06-01T16:00:00.000Z",
+  })),
 ];
 
 const minutes = [
@@ -1873,7 +1921,7 @@ const aiAgentDefinitions = [
       "Generate structured minutes from prompt, transcript, agenda, and meeting metadata",
     ],
     outputContract: [
-      "agendaItems: ordered strings suitable for meeting.agendaJson",
+      "agendaItems: ordered strings suitable for the meeting's agenda items",
       "sections: title/type/presenter/discussion/decisions/actionItems records suitable for minutes.sections",
       "motions: text/movedBy/secondedBy/outcome/vote fields suitable for minutes.motions",
       "decisions and actionItems: top-level arrays for summary export",
@@ -2826,6 +2874,8 @@ const tables: Record<string, any[]> = {
     },
   ],
   meetings,
+  agendas,
+  agendaItems,
   memberProposals: [],
   memberSubscriptions,
   membershipFeePeriods,
@@ -3027,6 +3077,8 @@ export {
   fundingSourceEvents,
   committees,
   meetings,
+  agendas,
+  agendaItems,
   minutes,
   filings,
   deadlines,

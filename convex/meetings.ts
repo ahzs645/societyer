@@ -90,11 +90,6 @@ export const create = mutation({
     const templateMotions = template
       ? await buildTemplateMotions(ctx, templateItems, templateContext)
       : [];
-    const agendaJson =
-      args.agendaJson ??
-      (templateItems.length
-        ? JSON.stringify(templateItems.map(({ title, depth }) => ({ title: resolveTemplateText(title, templateContext), depth })))
-        : undefined);
     const templateSnapshotJson = template
       ? JSON.stringify({
           templateId: template._id,
@@ -106,9 +101,9 @@ export const create = mutation({
         })
       : undefined;
 
+    const { agendaJson: _agendaJsonInput, ...meetingArgs } = args;
     const meetingId = await ctx.db.insert("meetings", {
-      ...args,
-      agendaJson,
+      ...meetingArgs,
       templateSnapshotJson,
       bylawRuleSetId: args.bylawRuleSetId ?? snapshot.bylawRuleSetId,
       quorumRuleVersion: args.quorumRuleVersion ?? snapshot.quorumRuleVersion,
@@ -239,7 +234,6 @@ export const update = mutation({
       quorumComputedAtISO: v.optional(v.string()),
       status: v.optional(v.string()),
       attendeeIds: v.optional(v.array(v.string())),
-      agendaJson: v.optional(v.string()),
       meetingTemplateId: v.optional(v.id("meetingTemplates")),
       templateSnapshotJson: v.optional(v.string()),
       minutesId: v.optional(v.id("minutes")),

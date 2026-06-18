@@ -2077,7 +2077,6 @@ export default defineSchema({
     quorumComputedAtISO: v.optional(v.string()),
     status: v.string(),
     attendeeIds: v.array(v.string()),
-    agendaJson: v.optional(v.string()),
     meetingTemplateId: v.optional(v.id("meetingTemplates")),
     templateSnapshotJson: v.optional(v.string()),
     minutesId: v.optional(v.id("minutes")),

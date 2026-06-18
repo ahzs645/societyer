@@ -69,7 +69,6 @@ import {
   inferredPackageReviewStatus,
   isImportTranscriptMetadata,
   namesFromDiscussion,
-  parseAgendaItems,
   parseDocumentMetadata,
   type AgendaItemEntry,
   personLinkCandidates,
@@ -373,7 +372,7 @@ export function MeetingDetailPage() {
   if (society === null) return <SeedPrompt />;
   if (!meeting) return <div className="page">Loading…</div>;
 
-  const agendaTree = agendaEntriesFromRecord(agendaRecord) ?? parseAgendaItems(meeting.agendaJson);
+  const agendaTree = agendaEntriesFromRecord(agendaRecord) ?? [];
   const canonicalAgendaItems = agendaItemsFromRecord(agendaRecord);
   const agenda = agendaTree.map((entry) => entry.title);
   const businessMotions = ((minutes?.motions ?? []) as Motion[]).filter((motion) => !isAdjournmentMotion(motion));
@@ -923,9 +922,9 @@ export function MeetingDetailPage() {
   const saveMinuteSections = async (next: any[]) => {
     if (!minutes) return;
     await updateMinutes({ id: minutes._id, patch: { sections: next } });
-    // Keep meeting.agendaJson in sync with section titles AND depth so the
-    // sidebar agenda card and the right-side Agenda record never drift apart.
-    // Tracked alongside the source section so duplicate-titled sections each
+    // Keep the agenda record (agendas/agendaItems) in sync with section titles
+    // AND depth so the sidebar agenda card and the right-side Agenda record
+    // never drift apart. Tracked alongside the source section so duplicate-titled sections each
     // contribute their own presenter/details instead of all collapsing to the
     // first match via title-based find().
     const nextAgenda: Array<AgendaItemEntry & { source: any }> = [];
@@ -954,14 +953,6 @@ export function MeetingDetailPage() {
         presenter: entry.source?.presenter || undefined,
         details: entry.source?.discussion || undefined,
       })),
-    });
-    await updateMeeting({
-      id: meeting._id,
-      patch: {
-        agendaJson: JSON.stringify(
-          nextAgenda.map(({ title, depth }) => ({ title, depth })),
-        ),
-      },
     });
   };
 
@@ -1025,14 +1016,6 @@ export function MeetingDetailPage() {
         motionBacklogId: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionBacklogId,
         motionText: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionText,
       })),
-    });
-    await updateMeeting({
-      id: meeting._id,
-      patch: {
-        // Always send a string — `undefined` is treated as "leave field alone",
-        // which would silently undo a save that empties the agenda.
-        agendaJson: JSON.stringify(cleaned),
-      },
     });
 
     // Auto-bootstrap the minutes record on first save. This subsumes the old

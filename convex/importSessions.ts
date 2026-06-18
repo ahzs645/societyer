@@ -30,6 +30,8 @@ import {
   normalizePersonLookupName,
   normalizeLookupText,
   importedMeetingAgenda,
+  setMeetingAgendaItems,
+  meetingAgendaItemTitles,
   sessionRecords,
   recordsForSession,
   docsByCategory,
@@ -96,7 +98,6 @@ import {
   hydrateRecord,
   hydrateHistorySource,
   parseJson,
-  parseJsonArray,
   externalIdFromTags,
   sourceCatalogForRecords,
   isImportSession,
@@ -518,13 +519,17 @@ export const applyApprovedMeetings = mutation({
         electronic: false,
         status: "Held",
         attendeeIds: [],
-        agendaJson: JSON.stringify(importedMeetingAgenda(title, group.map(({ payload }) => payload), sourceExternalIds)),
         sourceReviewStatus: "imported_needs_review",
         sourceReviewNotes: "Created from approved import-session motion records. Verify against source minutes before relying on it as an official meeting record.",
         packageReviewStatus: "needs_review",
         packageReviewNotes: "Imported meeting source review must be completed before the board package is ready.",
         notes: `Imported from ${hydrateSession(session).name} (${group.length} converted motion${group.length === 1 ? "" : "s"}). Review attendance, quorum, discussion, and source minutes before treating as official minutes.`,
       });
+      await setMeetingAgendaItems(
+        ctx,
+        { _id: meetingId, societyId: session.societyId, title },
+        importedMeetingAgenda(title, group.map(({ payload }) => payload), sourceExternalIds),
+      );
       const minutesId = await ctx.db.insert("minutes", {
         societyId: session.societyId,
         meetingId,
@@ -586,17 +591,19 @@ export const applyApprovedMeetings = mutation({
         electronic: false,
         status: "Held",
         attendeeIds: payload.attendees,
-        agendaJson: JSON.stringify(
-          payload.agendaItems.length
-            ? payload.agendaItems
-            : importedMeetingAgenda(title, payload.motions, sourceExternalIds),
-        ),
         sourceReviewStatus: "imported_needs_review",
         sourceReviewNotes: "Created from approved import-session meeting minutes. Verify against source minutes before relying on it as an official meeting record.",
         packageReviewStatus: "needs_review",
         packageReviewNotes: "Imported meeting source review must be completed before the board package is ready.",
         notes: `Imported from ${hydrateSession(session).name}. Review source minutes before treating as official minutes.`,
       });
+      await setMeetingAgendaItems(
+        ctx,
+        { _id: meetingId, societyId: session.societyId, title },
+        payload.agendaItems.length
+          ? payload.agendaItems
+          : importedMeetingAgenda(title, payload.motions, sourceExternalIds),
+      );
       const minutesId = await ctx.db.insert("minutes", {
         societyId: session.societyId,
         meetingId,
@@ -690,10 +697,9 @@ export const backfillApprovedMeetingReferences = mutation({
       });
       minutes += 1;
 
-      if (!Array.isArray(parseJsonArray(meeting.agendaJson)) || parseJsonArray(meeting.agendaJson).length === 0) {
-        await ctx.db.patch(meeting._id, {
-          agendaJson: JSON.stringify(importedMeetingAgenda(meeting.title, payloads, sourceExternalIds)),
-        });
+      const existingAgendaTitles = await meetingAgendaItemTitles(ctx, meeting._id);
+      if (existingAgendaTitles.length === 0) {
+        await setMeetingAgendaItems(ctx, meeting, importedMeetingAgenda(meeting.title, payloads, sourceExternalIds));
       }
       meetings += 1;
     }

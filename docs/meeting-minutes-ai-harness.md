@@ -2,7 +2,7 @@
 
 The meeting detail page already stores meeting structure in fields that are suitable for an AI drafting workflow:
 
-- `meetings.agendaJson`: ordered agenda item strings.
+- `agendas` + `agendaItems`: the ordered agenda for a meeting (single source of truth).
 - `minutes.sections`: structured agenda sections with `title`, `type`, `presenter`, `discussion`, `decisions`, `actionItems`, and `reportSubmitted`.
 - `minutes.motions`: formal motions with mover/seconder, outcome, vote counts, and optional agenda section linkage.
 - `minutes.decisions` and `minutes.actionItems`: top-level summaries used by exports and tables.
@@ -48,7 +48,7 @@ type MeetingMinutesAgentOutput = {
 
 Implementation notes:
 
-- Agenda drafting should patch `meetings.agendaJson` only after user confirmation.
+- Agenda drafting should write the meeting's `agendaItems` (via `agendas.syncForMeeting`) only after user confirmation.
 - Draft editing should patch `minutes.sections`, `minutes.motions`, `minutes.decisions`, and `minutes.actionItems` while leaving `approvedAt` untouched.
 - Minutes generation can continue using `minutes.generateDraft` and `minutes.upsertFromDraft`; the agent harness should add clearer tool planning, source-gap reporting, and human approval checkpoints around that action.
 - Ambiguous speakers, missing quorum evidence, missing attendance, and unsupported source claims should be returned as `reviewGaps` rather than silently written into final records.

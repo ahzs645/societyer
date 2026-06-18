@@ -112,7 +112,12 @@ export const run = mutation({
       quorumRequired: 3,
       status: "Held",
       attendeeIds: Object.values(directorIds).map(String),
-      agendaJson: JSON.stringify([
+    });
+
+    // Agenda is stored relationally in agendas/agendaItems (the single source of
+    // truth). Seed an agenda + ordered items for the past AGM.
+    {
+      const agendaItemTitles = [
         "Call to order & quorum",
         "Approval of 2024 AGM minutes",
         "President's report",
@@ -122,8 +127,29 @@ export const run = mutation({
         "Special resolution: bylaw amendment (article 14)",
         "New business",
         "Adjournment",
-      ]),
-    });
+      ];
+      const nowISO = new Date().toISOString();
+      const lastAgmAgendaId = await ctx.db.insert("agendas", {
+        societyId,
+        meetingId: lastAgm,
+        title: "2025 Annual General Meeting agenda",
+        status: "Draft",
+        createdAtISO: nowISO,
+        updatedAtISO: nowISO,
+      });
+      for (let order = 0; order < agendaItemTitles.length; order += 1) {
+        const title = agendaItemTitles[order];
+        await ctx.db.insert("agendaItems", {
+          societyId,
+          agendaId: lastAgmAgendaId,
+          order,
+          type: inferSeedAgendaItemType(title),
+          title,
+          depth: 0,
+          createdAtISO: nowISO,
+        });
+      }
+    }
 
     await ctx.db.insert("minutes", {
       societyId,
@@ -1594,6 +1620,8 @@ async function wipe(ctx: any) {
     "minutes",
     "transcripts",
     "transcriptionJobs",
+    "agendaItems",
+    "agendas",
     "meetings",
     "directors",
     "members",
@@ -1638,6 +1666,15 @@ async function wipe(ctx: any) {
     const rows = await ctx.db.query(t).collect();
     for (const r of rows) await ctx.db.delete(r._id);
   }
+}
+
+function inferSeedAgendaItemType(title: string) {
+  const lower = title.toLowerCase();
+  if (lower.includes("motion") || lower.includes("adopt") || lower.includes("approve") || lower.includes("resolution") || lower.includes("election")) return "motion";
+  if (lower.includes("report") || lower.includes("financial")) return "report";
+  if (lower.includes("break")) return "break";
+  if (lower.includes("camera") || lower.includes("closed") || lower.includes("executive")) return "executive_session";
+  return "discussion";
 }
 
 function randomPastDate(yearsBack: number) {
