@@ -168,7 +168,7 @@
 // Overview tab. Two equal cards on desktop; stacks on narrow screens.
 .meeting-governance-strip {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: token('s-2');
   margin-bottom: token('s-3');
 }

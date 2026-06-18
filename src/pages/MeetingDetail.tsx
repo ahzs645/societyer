@@ -1,4 +1,4 @@
-import { useParams, Link, useSearchParams } from "react-router-dom";
+import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useToast } from "../components/Toast";
@@ -9,10 +9,11 @@ import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
-import { formatDate, formatDateTime } from "../lib/format";
+import { formatDate, formatDateTime, toDateTimeLocalValue } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, BookMarked, ClipboardCheck, Download, ExternalLink, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../components/MotionEditor";
+import { isPostponedOutcome } from "../lib/motionGovernance";
 import { escapeHtml } from "../lib/html";
 import { exportWordDocx } from "../lib/docx";
 import { exportPdfDownload } from "../lib/pdf";
@@ -52,7 +53,7 @@ import { MinutesDocumentPreview } from "../features/meetings/components/MinutesD
 import { SignaturePanel } from "../components/SignaturePanel";
 import { MeetingConflictsCard } from "../features/meetings/components/MeetingConflictsCard";
 import { MeetingProxiesCard } from "../features/meetings/components/MeetingProxiesCard";
-import { useConfirm } from "../components/Modal";
+import { Modal, useConfirm } from "../components/Modal";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import {
@@ -136,6 +137,8 @@ export function MeetingDetailPage() {
   const motionPeople = personLinkCandidates(members, directors);
   const directorNames = (directors ?? []).flatMap((d: any) => [`${d.firstName} ${d.lastName}`, ...(Array.isArray(d.aliases) ? d.aliases : [])]);
   const generate = useAction(api.minutes.generateDraft);
+  const navigate = useNavigate();
+  const createMeeting = useMutation(api.meetings.create);
   const updateMeeting = useMutation(api.meetings.update);
   const markSourceReview = useMutation(api.meetings.markSourceReview);
   const setPackageReviewStatus = useMutation(api.meetings.setPackageReviewStatus);
@@ -183,6 +186,15 @@ export function MeetingDetailPage() {
   // Drawer state for recording minutes approval (date + the meeting at which
   // the minutes were adopted). null = closed.
   const [approvalEdit, setApprovalEdit] = useState<{ approvedAt: string; approvedInMeetingId: string } | null>(null);
+  // Modal state for scheduling the next meeting from these minutes. null = closed.
+  const [nextMeetingDraft, setNextMeetingDraft] = useState<{
+    title: string;
+    type: string;
+    scheduledAt: string;
+    location: string;
+    carryForward: boolean;
+  } | null>(null);
+  const [schedulingNext, setSchedulingNext] = useState(false);
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
   const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", false));
   const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
@@ -582,6 +594,57 @@ export function MeetingDetailPage() {
     await updateMinutes({ id: minutes._id, patch: { approvedAt: undefined, approvedInMeetingId: undefined } });
     setApprovalEdit(null);
     toast.success("Approval cleared", "These minutes are no longer marked approved.");
+  };
+
+  // Business motions that were Tabled/Deferred at this meeting — the unfinished
+  // business that should roll onto the next meeting's agenda.
+  const carriedForwardMotions = businessMotions.filter((motion) => isPostponedOutcome(motion.outcome));
+
+  const startNextMeeting = () => {
+    setNextMeetingDraft({
+      title: meeting.title,
+      type: meeting.type,
+      scheduledAt: minutes?.nextMeetingAt
+        ? toDateTimeLocalValue(new Date(minutes.nextMeetingAt))
+        : toDateTimeLocalValue(new Date(Date.now() + 28 * 864e5)),
+      location: minutes?.nextMeetingLocation ?? meeting.location ?? "",
+      carryForward: carriedForwardMotions.length > 0,
+    });
+  };
+
+  const confirmNextMeeting = async () => {
+    if (!society || !nextMeetingDraft || !nextMeetingDraft.title.trim()) return;
+    setSchedulingNext(true);
+    try {
+      // Seed the next agenda: approve these minutes, then any carried-forward
+      // (Tabled/Deferred) business so unfinished business isn't lost.
+      const agendaSeed: { title: string }[] = [
+        { title: `Approval of minutes — ${meeting.title}` },
+        ...(nextMeetingDraft.carryForward
+          ? carriedForwardMotions.map((motion) => ({
+              title: `Carried forward: ${motion.name || motion.text || "motion"}`,
+            }))
+          : []),
+      ];
+      const meetingId = await createMeeting({
+        societyId: society._id,
+        type: nextMeetingDraft.type,
+        title: nextMeetingDraft.title.trim(),
+        scheduledAt: nextMeetingDraft.scheduledAt,
+        location: nextMeetingDraft.location.trim() || undefined,
+        electronic: !!meeting.electronic,
+        status: "Scheduled",
+        attendeeIds: [],
+        agendaJson: JSON.stringify(agendaSeed),
+      });
+      setNextMeetingDraft(null);
+      toast.success("Next meeting scheduled", "Seeded its agenda with minutes approval and carried-forward business.");
+      if (meetingId) navigate(`/app/meetings/${meetingId}`);
+    } catch (error: any) {
+      toast.error(error?.message ? String(error.message).replace(/^.*Error:\s*/, "") : "Could not schedule the next meeting.");
+    } finally {
+      setSchedulingNext(false);
+    }
   };
 
   // Section indices to omit from the public copy. A depth=0 (root) section
@@ -1806,6 +1869,22 @@ export function MeetingDetailPage() {
                 {minutes?.approvedAt ? "Edit" : "Record approval"}
               </button>
             </div>
+            <div className="meeting-governance-strip__item">
+              <div className="meeting-governance-strip__label">Next meeting</div>
+              <div className="meeting-governance-strip__value">
+                {minutes?.nextMeetingAt ? (
+                  <Badge tone="neutral">Planned {formatDate(minutes.nextMeetingAt)}</Badge>
+                ) : (
+                  <span className="muted">Not planned</span>
+                )}
+                {carriedForwardMotions.length > 0 && (
+                  <Badge tone="warn">{carriedForwardMotions.length} to carry forward</Badge>
+                )}
+              </div>
+              <button className="btn-action" type="button" onClick={startNextMeeting}>
+                Schedule
+              </button>
+            </div>
           </div>
           <div className="meeting-overview-grid">
             <MeetingSidebarColumn
@@ -2144,6 +2223,77 @@ export function MeetingDetailPage() {
           </div>
         )}
       </Drawer>
+
+      <Modal
+        open={!!nextMeetingDraft}
+        onClose={() => setNextMeetingDraft(null)}
+        title="Schedule next meeting"
+        size="md"
+        footer={
+          <>
+            <button className="btn" onClick={() => setNextMeetingDraft(null)}>Cancel</button>
+            <button
+              className="btn btn--accent"
+              onClick={confirmNextMeeting}
+              disabled={schedulingNext || !nextMeetingDraft?.title.trim()}
+            >
+              Schedule meeting
+            </button>
+          </>
+        }
+      >
+        {nextMeetingDraft && (
+          <div>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Creates the next meeting and seeds its agenda with approval of these minutes
+              {carriedForwardMotions.length > 0 ? " plus any carried-forward business" : ""}.
+            </p>
+            <Field label="Meeting title">
+              <input
+                className="input"
+                value={nextMeetingDraft.title}
+                onChange={(event) => setNextMeetingDraft({ ...nextMeetingDraft, title: event.target.value })}
+              />
+            </Field>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Type">
+                <input
+                  className="input"
+                  value={nextMeetingDraft.type}
+                  onChange={(event) => setNextMeetingDraft({ ...nextMeetingDraft, type: event.target.value })}
+                />
+              </Field>
+              <Field label="Date & time">
+                <input
+                  className="input"
+                  type="datetime-local"
+                  value={nextMeetingDraft.scheduledAt}
+                  onChange={(event) => setNextMeetingDraft({ ...nextMeetingDraft, scheduledAt: event.target.value })}
+                />
+              </Field>
+            </div>
+            <Field label="Location">
+              <input
+                className="input"
+                value={nextMeetingDraft.location}
+                onChange={(event) => setNextMeetingDraft({ ...nextMeetingDraft, location: event.target.value })}
+                placeholder="Venue or join link"
+              />
+            </Field>
+            {carriedForwardMotions.length > 0 && (
+              <label className="row" style={{ gap: 6 }}>
+                <input
+                  type="checkbox"
+                  checked={nextMeetingDraft.carryForward}
+                  onChange={(event) => setNextMeetingDraft({ ...nextMeetingDraft, carryForward: event.target.checked })}
+                />
+                Carry forward {carriedForwardMotions.length} tabled/deferred motion
+                {carriedForwardMotions.length === 1 ? "" : "s"} onto the agenda
+              </label>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

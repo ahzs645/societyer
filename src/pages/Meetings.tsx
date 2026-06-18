@@ -13,7 +13,7 @@ import { Toggle } from "../components/Controls";
 import { Tooltip } from "../components/Tooltip";
 import { useToast } from "../components/Toast";
 import { Plus, Calendar, Tag, AlertTriangle, BookMarked, Monitor, MoreHorizontal, Pencil, Trash2, ExternalLink } from "lucide-react";
-import { formatDateTime } from "../lib/format";
+import { formatDateTime, toDateTimeLocalValue } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { CalendarView } from "../components/CalendarView";
 import type { ToneVariant } from "../components/ui";
@@ -627,13 +627,4 @@ function templateSummary(template: any) {
   const items = Array.isArray(template.items) ? template.items : [];
   const motionCount = items.filter((item: any) => item.motionTemplateId || item.motionText).length;
   return `${items.length} agenda item${items.length === 1 ? "" : "s"}${motionCount ? `, ${motionCount} recurring motion${motionCount === 1 ? "" : "s"}` : ""}. New meetings receive a snapshot.`;
-}
-
-function toDateTimeLocalValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
