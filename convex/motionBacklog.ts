@@ -304,6 +304,131 @@ export const addToAgenda = mutation({
   },
 });
 
+// Create backlog records for a set of (deferred/tabled) motions in a source
+// meeting's minutes and link them onto a target meeting's agenda in one shot.
+// Used by "Schedule next meeting" so unfinished business becomes tracked
+// backlog records AND agenda items on the new meeting. Idempotent: deduped by
+// source minutes+motion index (backlog) and by motionBacklogId (agenda item).
+export const carryForwardToMeeting = mutation({
+  args: {
+    meetingId: v.id("meetings"),
+    sourceMinutesId: v.id("minutes"),
+    motionIndexes: v.array(v.number()),
+  },
+  returns: v.any(),
+  handler: async (ctx, { meetingId, sourceMinutesId, motionIndexes }) => {
+    const minutes = await ctx.db.get(sourceMinutesId);
+    if (!minutes) throw new Error("Source minutes not found.");
+    const meeting = await ctx.db.get(meetingId);
+    if (!meeting) throw new Error("Target meeting not found.");
+    if (meeting.societyId !== minutes.societyId) {
+      throw new Error("Meeting and minutes must belong to the same society.");
+    }
+    const sourceMeeting = await ctx.db.get(minutes.meetingId);
+    const now = new Date().toISOString();
+
+    // Resolve (or create) the target meeting's agenda.
+    const agendas = await ctx.db
+      .query("agendas")
+      .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
+      .collect();
+    agendas.sort((a, b) => String(a.createdAtISO).localeCompare(String(b.createdAtISO)));
+    let agendaId = agendas[0]?._id;
+    if (!agendaId) {
+      agendaId = await ctx.db.insert("agendas", {
+        societyId: meeting.societyId,
+        meetingId,
+        title: `${meeting.title} agenda`,
+        status: "Draft",
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    }
+
+    const existingBacklog = await ctx.db
+      .query("motionBacklog")
+      .withIndex("by_society", (q) => q.eq("societyId", minutes.societyId))
+      .collect();
+    // Track agenda items for this agenda so order/dedupe stay correct as we add.
+    const agendaItems = await ctx.db
+      .query("agendaItems")
+      .withIndex("by_agenda", (q) => q.eq("agendaId", agendaId))
+      .collect();
+    const linkedBacklogIds = new Set(
+      agendaItems.map((item) => String(item.motionBacklogId ?? "")).filter(Boolean),
+    );
+    let order = agendaItems.length;
+
+    const motions = Array.isArray(minutes.motions) ? minutes.motions : [];
+    let created = 0;
+    let reused = 0;
+    for (const motionIndex of motionIndexes) {
+      const motion = motions[motionIndex];
+      if (!motion?.text) continue;
+
+      // 1. Backlog record — dedupe by source minutes + motion index.
+      const existing = existingBacklog.find((item) =>
+        String(item.sourceMinutesId ?? "") === String(sourceMinutesId) &&
+        item.sourceMotionIndex === motionIndex
+      );
+      const title = existing?.title || summarizeMotionTitle(motion.text);
+      let backlogId = existing?._id;
+      if (!backlogId) {
+        backlogId = await ctx.db.insert("motionBacklog", {
+          societyId: minutes.societyId,
+          title,
+          motionText: motion.text,
+          category: "governance",
+          status: "Deferred",
+          priority: "normal",
+          source: "minutes-motion",
+          notes: [
+            sourceMeeting ? `Carried forward from ${sourceMeeting.title}.` : "Carried forward from meeting minutes.",
+            motion.outcome ? `Recorded outcome: ${motion.outcome}.` : "",
+          ].filter(Boolean).join(" "),
+          minutesId: sourceMinutesId,
+          sourceMinutesId,
+          sourceMotionIndex: motionIndex,
+          createdAtISO: now,
+          updatedAtISO: now,
+        });
+      }
+
+      // 2. Link it onto the target agenda — dedupe by motionBacklogId.
+      let agendaItemId: any;
+      if (linkedBacklogIds.has(String(backlogId))) {
+        const dup = agendaItems.find((item) => String(item.motionBacklogId ?? "") === String(backlogId));
+        agendaItemId = dup?._id;
+        reused += 1;
+      } else {
+        agendaItemId = await ctx.db.insert("agendaItems", {
+          societyId: meeting.societyId,
+          agendaId,
+          order,
+          type: "motion",
+          title,
+          motionBacklogId: backlogId,
+          motionText: motion.text,
+          createdAtISO: now,
+        });
+        order += 1;
+        linkedBacklogIds.add(String(backlogId));
+        created += 1;
+      }
+
+      await ctx.db.patch(backlogId, {
+        status: "Agenda",
+        targetMeetingId: meetingId,
+        agendaId,
+        agendaItemId,
+        updatedAtISO: now,
+      });
+    }
+
+    return { created, reused, agendaId };
+  },
+});
+
 export const seedToMinutes = mutation({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),

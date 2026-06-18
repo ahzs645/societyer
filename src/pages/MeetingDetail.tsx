@@ -139,6 +139,7 @@ export function MeetingDetailPage() {
   const generate = useAction(api.minutes.generateDraft);
   const navigate = useNavigate();
   const createMeeting = useMutation(api.meetings.create);
+  const carryForwardToMeeting = useMutation(api.motionBacklog.carryForwardToMeeting);
   const updateMeeting = useMutation(api.meetings.update);
   const markSourceReview = useMutation(api.meetings.markSourceReview);
   const setPackageReviewStatus = useMutation(api.meetings.setPackageReviewStatus);
@@ -597,8 +598,11 @@ export function MeetingDetailPage() {
   };
 
   // Business motions that were Tabled/Deferred at this meeting — the unfinished
-  // business that should roll onto the next meeting's agenda.
-  const carriedForwardMotions = businessMotions.filter((motion) => isPostponedOutcome(motion.outcome));
+  // business that should roll onto the next meeting's agenda. Keep each motion's
+  // real index in minutes.motions so the backlog carry-forward can reference it.
+  const carriedForwardMotions = ((minutes?.motions ?? []) as Motion[])
+    .map((motion, index) => ({ motion, index }))
+    .filter(({ motion }) => !isAdjournmentMotion(motion) && isPostponedOutcome(motion.outcome));
 
   const startNextMeeting = () => {
     setNextMeetingDraft({
@@ -616,16 +620,10 @@ export function MeetingDetailPage() {
     if (!society || !nextMeetingDraft || !nextMeetingDraft.title.trim()) return;
     setSchedulingNext(true);
     try {
-      // Seed the next agenda: approve these minutes, then any carried-forward
-      // (Tabled/Deferred) business so unfinished business isn't lost.
-      const agendaSeed: { title: string }[] = [
-        { title: `Approval of minutes — ${meeting.title}` },
-        ...(nextMeetingDraft.carryForward
-          ? carriedForwardMotions.map((motion) => ({
-              title: `Carried forward: ${motion.name || motion.text || "motion"}`,
-            }))
-          : []),
-      ];
+      // Seed the next agenda with approval of these minutes. Carried-forward
+      // (Tabled/Deferred) business is added separately below as tracked backlog
+      // records linked onto the new agenda.
+      const agendaSeed: { title: string }[] = [{ title: `Approval of minutes — ${meeting.title}` }];
       const meetingId = await createMeeting({
         societyId: society._id,
         type: nextMeetingDraft.type,
@@ -637,8 +635,22 @@ export function MeetingDetailPage() {
         attendeeIds: [],
         agendaJson: JSON.stringify(agendaSeed),
       });
+      let carried = 0;
+      if (meetingId && nextMeetingDraft.carryForward && minutes && carriedForwardMotions.length > 0) {
+        const result = await carryForwardToMeeting({
+          meetingId,
+          sourceMinutesId: minutes._id,
+          motionIndexes: carriedForwardMotions.map((entry) => entry.index),
+        });
+        carried = (result?.created ?? 0) + (result?.reused ?? 0);
+      }
       setNextMeetingDraft(null);
-      toast.success("Next meeting scheduled", "Seeded its agenda with minutes approval and carried-forward business.");
+      toast.success(
+        "Next meeting scheduled",
+        carried > 0
+          ? `Seeded minutes approval and carried ${carried} item${carried === 1 ? "" : "s"} into the agenda and backlog.`
+          : "Seeded its agenda with approval of these minutes.",
+      );
       if (meetingId) navigate(`/app/meetings/${meetingId}`);
     } catch (error: any) {
       toast.error(error?.message ? String(error.message).replace(/^.*Error:\s*/, "") : "Could not schedule the next meeting.");
@@ -2288,7 +2300,7 @@ export function MeetingDetailPage() {
                   onChange={(event) => setNextMeetingDraft({ ...nextMeetingDraft, carryForward: event.target.checked })}
                 />
                 Carry forward {carriedForwardMotions.length} tabled/deferred motion
-                {carriedForwardMotions.length === 1 ? "" : "s"} onto the agenda
+                {carriedForwardMotions.length === 1 ? "" : "s"} onto the agenda &amp; motion backlog
               </label>
             )}
           </div>
