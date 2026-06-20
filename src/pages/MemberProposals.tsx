@@ -20,7 +20,6 @@ export function MemberProposalsPage() {
   const society = useSociety();
   const { rules } = useBylawRules();
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
-  const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
   const items = useQuery(api.memberProposals.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.memberProposals.create);
   const update = useMutation(api.memberProposals.update);

@@ -1,4 +1,5 @@
 import { useMutation } from "convex/react";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/convexApi";
 import { SeedPrompt } from "./_helpers";
 import { isDemoMode, setDemoMode } from "../lib/demoMode";
@@ -754,6 +755,9 @@ export function SettingsPage() {
               Set <code className="mono">VITE_AUTH_MODE</code> and <code className="mono">AUTH_MODE</code> to <code className="mono">better-auth</code> for real login,
               or leave them as <code className="mono">none</code> to keep the local no-auth workflow.
             </div>
+            <Link to="/app/settings/api-keys" className="btn-action" style={{ alignSelf: "flex-start" }}>
+              Manage API access tokens
+            </Link>
           </div>
         </div>
 

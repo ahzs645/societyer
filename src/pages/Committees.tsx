@@ -20,7 +20,6 @@ export function CommitteesPage() {
   const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
   const allTasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
   const allGoals = useQuery(api.goals.list, society ? { societyId: society._id } : "skip");
-  const allMembers = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.committees.create);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
