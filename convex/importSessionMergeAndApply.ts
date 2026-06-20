@@ -81,7 +81,7 @@ async function mergeExistingMeetingImport(
   if (!meeting || !minutesRow) return;
 
   const currentAgenda = await meetingAgendaItemTitles(ctx, meeting._id);
-  const nextAgenda = arrayOf(payload.agendaItems).map(String).map(cleanText).filter(Boolean);
+  const nextAgenda = arrayOf(payload.agendaItems).map(String).map(cleanText).filter((s): s is string => Boolean(s));
   const meetingPatch: any = {};
   if ((!Array.isArray(meeting.attendeeIds) || meeting.attendeeIds.length === 0) && arrayOf(payload.attendees).length > 0) {
     meetingPatch.attendeeIds = arrayOf(payload.attendees).map(String).map(cleanText).filter(Boolean);

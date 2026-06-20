@@ -454,7 +454,7 @@ export function MeetingDetailPage() {
       draftTranscript: minutes?.draftTranscript ?? null,
     },
   });
-  const transcriptStatusTone =
+  const transcriptStatusTone: "success" | "danger" | "warn" =
     transcriptionJob?.status === "complete"
       ? "success"
       : transcriptionJob?.status === "failed"

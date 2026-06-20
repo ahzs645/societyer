@@ -897,7 +897,7 @@ function staticAgendaItemsForMeeting(meetingId: string | undefined) {
     .sort((a, b) => a.order - b.order)
     .map((item) => ({
       title: String(item.title ?? "").trim(),
-      depth: (item.depth === 1 ? 1 : 0) as 0 | 1,
+      depth: (Number(item.depth) === 1 ? 1 : 0) as 0 | 1,
       type: (item as any).type,
       presenter: (item as any).presenter,
       details: (item as any).details,
