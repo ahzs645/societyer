@@ -58,9 +58,18 @@ npm run test:jurisdiction-modules           # jurisdiction modules reference val
 # Compliance
 npm run test:compliance-rules               # validates rule packs + recomputes obligation fixtures
 
+# Offline/desktop parity (if you added a useMutation/useAction call)
+npm run test:static-parity                  # every frontend write is handled or classified in the static mirror
+
 # Broader smoke (if you touched UI/flows)
 npm run test:smoke                          # Playwright
 ```
+
+> **Static-mirror parity:** the offline/desktop runtime is served by the static mirror
+> (`src/lib/staticConvex.ts`). Any mutation/action the frontend calls must be handled there
+> (an explicit case or a generic CRUD verb) or classified in `src/lib/staticConvexParity.ts`
+> as an intentional offline no-op or a known-pending gap — otherwise the write silently
+> vanishes offline. `npm run test:static-parity` enforces this; pending gaps throw in dev.
 
 If you add behaviour, add or extend the matching gate — they're plain `tsx` scripts with
 `node:assert`, easy to copy.

@@ -50,6 +50,7 @@
     "setup:ote-keycard": "node scripts/setup-ote-keycard-workflow.mjs",
     "test:smoke": "npx playwright test",
     "test:api-contract": "tsx scripts/check-api-contract.ts",
+    "test:static-parity": "tsx scripts/check-static-convex-parity.ts",
     "test:accounting-core": "tsx scripts/check-accounting-core.ts",
     "test:corporation-equity": "tsx scripts/check-corporation-equity-ledger.ts && tsx scripts/check-static-corporation-people-register.ts",
     "test:corporation-packets": "tsx scripts/check-corporation-document-packets.ts",

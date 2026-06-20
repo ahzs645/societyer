@@ -17,6 +17,7 @@ import { materializeRightsHoldings, validateLedger } from "../../shared/equityLe
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { DEFAULT_HOME_JURISDICTION_CODE, registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
 import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "./localDexieRowStore";
+import { STATIC_OFFLINE_NOOP_WRITES } from "./staticConvexParity";
 import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
 
 const FUNCTION_NAME = Symbol.for("functionName");
@@ -229,6 +230,24 @@ function functionName(ref: any) {
   if (typeof ref === "string") return ref;
   const name = ref?.[FUNCTION_NAME];
   return typeof name === "string" ? name : "";
+}
+
+// A frontend write reached the static mirror with no handler and no generic-CRUD
+// match, and it is not an intentional offline no-op. Rather than silently drop
+// the write (the old behaviour, which lost ballots/signatures/etc. with no
+// signal), surface it: throw in dev so the gap is impossible to miss, warn in
+// production so a shipped demo/desktop build degrades instead of crashing. The
+// CI parity gate (scripts/check-static-convex-parity.ts) is the real backstop
+// that keeps this from ever firing in a correctly-maintained build.
+function reportStaticWriteGap(name: string): null {
+  const message =
+    `[staticConvex] No offline handler for write "${name}". ` +
+    `This action does not persist in offline/desktop mode. ` +
+    `Add a handler in staticConvex.ts (or list it in staticConvexParity.ts).`;
+  const isDev = Boolean((import.meta as any)?.env?.DEV);
+  if (isDev) throw new Error(message);
+  if (typeof console !== "undefined") console.warn(message);
+  return null;
 }
 
 function byId(rows: any[], id: string | undefined) {
@@ -4138,7 +4157,11 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     }
     return id;
   }
-  return null;
+  // Not handled explicitly and not a generic CRUD verb. Intentional offline
+  // no-ops (network/AI/email/seed) return null quietly; everything else is a
+  // real gap and must be surfaced rather than silently dropped.
+  if (STATIC_OFFLINE_NOOP_WRITES.has(name)) return null;
+  return reportStaticWriteGap(name);
 }
 
 function staticUpsertComplianceDecision(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
