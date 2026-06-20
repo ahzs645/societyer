@@ -21,6 +21,11 @@ export function SignaturePad({
   const last = useRef<{ x: number; y: number } | null>(null);
   const [empty, setEmpty] = useState(true);
 
+  // Resolve the current ink colour from the canvas's CSS `color` (set to
+  // var(--text-primary) in _forms.scss) so the stroke follows the active theme.
+  const inkColor = (canvas: HTMLCanvasElement) =>
+    getComputedStyle(canvas).color || "#111827";
+
   // Size the backing store to the element's CSS size × devicePixelRatio so the
   // stroke stays crisp on high-DPI screens. Re-runs on resize.
   useEffect(() => {
@@ -37,7 +42,7 @@ export function SignaturePad({
         ctx.lineWidth = 2;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
-        ctx.strokeStyle = "#111827";
+        ctx.strokeStyle = inkColor(canvas);
       }
     };
     resize();
@@ -54,6 +59,8 @@ export function SignaturePad({
     event.currentTarget.setPointerCapture(event.pointerId);
     drawing.current = true;
     last.current = pointFromEvent(event);
+    const ctx = event.currentTarget.getContext("2d");
+    if (ctx) ctx.strokeStyle = inkColor(event.currentTarget);
   };
 
   const move = (event: React.PointerEvent<HTMLCanvasElement>) => {

@@ -267,6 +267,17 @@ export const upsert = mutation({
     // pages that render record tables (Members, Directors, etc.) render
     // immediately instead of showing a "Metadata not seeded" empty state.
     await seedSociety(ctx, newId);
+    // Seed an Owner user so the workspace has an admin actor from the start
+    // (matches createWorkspace). Without this the Users page is stranded.
+    const ownerEmail = rest.officialEmail || `owner@${rest.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.local`;
+    await ctx.db.insert("users", {
+      societyId: newId,
+      email: ownerEmail,
+      displayName: rest.privacyOfficerName || "Owner",
+      role: "Owner",
+      status: "Active",
+      createdAtISO: new Date().toISOString(),
+    });
     return newId;
   },
 });
@@ -358,6 +369,20 @@ export const createWorkspace = mutation({
     });
     await ctx.db.patch(societyId, { primaryRegistrationId: homeRegistrationId });
     await seedSociety(ctx, societyId);
+
+    // Seed an Owner user so the new workspace has an admin actor from the
+    // start. Without this the Users page is stranded: no admin → can't create
+    // an admin. The Owner is a placeholder; the operator can rename or replace
+    // it via Users & roles.
+    const ownerEmail = blankToUndefined(args.officialEmail) ?? blankToUndefined(args.privacyOfficerEmail) ?? `owner@${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.local`;
+    await ctx.db.insert("users", {
+      societyId,
+      email: ownerEmail,
+      displayName: blankToUndefined(args.privacyOfficerName) ?? "Owner",
+      role: "Owner",
+      status: "Active",
+      createdAtISO: now,
+    });
 
     const workflowId = await ctx.db.insert("workflows", {
       societyId,

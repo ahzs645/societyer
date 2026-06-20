@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sparkles, Upload } from "lucide-react";
+import { Sparkles, Upload, ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "../../../components/ui";
 
 /**
@@ -9,8 +9,17 @@ import { Badge } from "../../../components/ui";
  * transcript card — either by pasting transcript text inline, by uploading
  * audio, or (when a transcript is already on file) by drafting directly from
  * the saved transcript.
+ *
+ * Collapsible: defaults closed when the meeting hasn't happened yet (the
+ * agenda is still being planned, so transcript/audio tooling is just noise)
+ * and open after it's been held. The user can override via the chevron and
+ * we remember the choice per meeting in localStorage.
  */
+const COLLAPSE_KEY = (meetingId: string) => `societyer.draftMinutes.collapsed.${meetingId}`;
+
 export function MinutesDraftEmptyState({
+  meetingId,
+  defaultCollapsed,
   transcriptOnFile,
   audioInputRef,
   audioFile,
@@ -19,6 +28,8 @@ export function MinutesDraftEmptyState({
   onDraftFromSavedTranscript,
   onUploadAudioAndDraft,
 }: {
+  meetingId: string;
+  defaultCollapsed: boolean;
   transcriptOnFile: string;
   audioInputRef: any;
   audioFile: File | null;
@@ -28,19 +39,38 @@ export function MinutesDraftEmptyState({
   onUploadAudioAndDraft: () => Promise<void> | void;
 }) {
   const [pasted, setPasted] = useState("");
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem(COLLAPSE_KEY(meetingId));
+      if (stored === "1") return true;
+      if (stored === "0") return false;
+    } catch {}
+    return defaultCollapsed;
+  });
+  const toggle = () => {
+    setCollapsed((current) => {
+      const next = !current;
+      try { localStorage.setItem(COLLAPSE_KEY(meetingId), next ? "1" : "0"); } catch {}
+      return next;
+    });
+  };
   const hasSavedTranscript = transcriptOnFile.trim().length > 0;
   return (
     <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card__head">
-        <h2 className="card__title">
+      <div className="card__head" style={{ cursor: "pointer" }} onClick={toggle} role="button" aria-expanded={!collapsed}>
+        <h2 className="card__title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
           <Sparkles size={14} /> Draft minutes
         </h2>
-        <span className="card__subtitle">
-          Paste a transcript, upload audio, or use the transcript already on file —
-          we'll generate a structured draft you can edit below.
-        </span>
+        {!collapsed && (
+          <span className="card__subtitle">
+            Paste a transcript, upload audio, or use the transcript already on file —
+            we'll generate a structured draft you can edit below.
+          </span>
+        )}
         {hasSavedTranscript && <Badge tone="info">Transcript on file</Badge>}
       </div>
+      {collapsed ? null : (
       <div className="card__body col" style={{ gap: 12 }}>
         {hasSavedTranscript && (
           <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -108,6 +138,7 @@ export function MinutesDraftEmptyState({
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }

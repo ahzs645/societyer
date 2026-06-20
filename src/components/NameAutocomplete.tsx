@@ -18,6 +18,7 @@ export function NameAutocomplete({
   value,
   onChange,
   options,
+  optionMeta,
   excludeOptions,
   placeholder,
   ariaLabel,
@@ -29,6 +30,9 @@ export function NameAutocomplete({
   value: string;
   onChange: (next: string) => void;
   options: string[];
+  /** Optional secondary label per option (e.g. role). Renders muted to the
+   * right of the name in the suggestion list. Keyed by the option string. */
+  optionMeta?: Record<string, string>;
   excludeOptions?: ReadonlySet<string>;
   placeholder?: string;
   ariaLabel?: string;
@@ -137,6 +141,9 @@ export function NameAutocomplete({
               onMouseEnter={() => setHighlightIndex(idx)}
             >
               <span className="name-autocomplete__option-label">{option}</span>
+              {optionMeta?.[option] && (
+                <span className="name-autocomplete__option-meta muted">{optionMeta[option]}</span>
+              )}
               {onRemoveOption && (
                 <button
                   type="button"

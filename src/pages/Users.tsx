@@ -25,6 +25,7 @@ export function UsersPage() {
   const remove = useMutation(api.users.remove);
   const actingUserId = useCurrentUserId() ?? undefined;
   const [draft, setDraft] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -78,15 +79,20 @@ export function UsersPage() {
             </tr>
           </thead>
           <tbody>
-            {(users ?? []).map((u) => (
+            {(users ?? []).map((u) => {
+              const ownerCount = (users ?? []).filter((x) => x.role === "Owner").length;
+              const isLastOwner = u.role === "Owner" && ownerCount <= 1;
+              const lastOwnerHint = "Promote another user to Owner before changing or removing this one.";
+              return (
               <tr key={u._id}>
                 <td>
                   <strong>{u.displayName}</strong>
                 </td>
                 <td className="mono">{u.email}</td>
-                <td>
+                <td title={isLastOwner ? lastOwnerHint : undefined}>
                   <Select
                     value={u.role}
+                    disabled={isLastOwner}
                     onChange={async (v) => {
                       const ok = await confirm({
                         title: "Change user role?",
@@ -122,6 +128,8 @@ export function UsersPage() {
                   <button
                     className="btn btn--ghost btn--sm btn--icon"
                     aria-label={`Remove user ${u.name ?? u.email}`}
+                    disabled={isLastOwner}
+                    title={isLastOwner ? lastOwnerHint : undefined}
                     onClick={async () => {
                       const ok = await confirm({
                         title: "Remove user access?",
@@ -138,7 +146,8 @@ export function UsersPage() {
                   </button>
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {(users ?? []).length === 0 && (
               <tr>
                 <td colSpan={6} className="muted" style={{ textAlign: "center", padding: 24 }}>
@@ -161,23 +170,33 @@ export function UsersPage() {
             <button className="btn" onClick={() => setDraft(null)}>Cancel</button>
             <button
               className="btn btn--accent"
+              disabled={saving}
               onClick={async () => {
-                await upsert({
-                  id: draft._id,
-                  societyId: society._id,
-                  email: draft.email,
-                  displayName: draft.displayName,
-                  role: draft.role,
-                  status: draft.status,
-                  memberId: draft.memberId,
-                  directorId: draft.directorId,
-                  actingUserId,
-                });
-                toast.success("Saved");
-                setDraft(null);
+                if (saving) return;
+                setSaving(true);
+                try {
+                  await upsert({
+                    id: draft._id,
+                    societyId: society._id,
+                    email: draft.email,
+                    displayName: draft.displayName,
+                    role: draft.role,
+                    status: draft.status,
+                    memberId: draft.memberId,
+                    directorId: draft.directorId,
+                    actingUserId,
+                  });
+                  toast.success("Saved");
+                  setDraft(null);
+                } catch (error) {
+                  console.error("[users.upsert]", error);
+                  toast.error("Couldn't save user", error instanceof Error ? error.message : String(error));
+                } finally {
+                  setSaving(false);
+                }
               }}
             >
-              Save
+              {saving ? "Saving…" : "Save"}
             </button>
           </>
         }

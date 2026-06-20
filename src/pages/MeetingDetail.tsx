@@ -1061,6 +1061,7 @@ export function MeetingDetailPage() {
   });
 
   const saveAgenda = async () => {
+   try {
     // Clean: drop empty titles and force any leading depth-1 entry to depth 0
     // (a child without a preceding root is impossible on save).
     const cleaned: AgendaItemEntry[] = [];
@@ -1220,6 +1221,10 @@ export function MeetingDetailPage() {
 
     setAgendaEdit(null);
     toast.success("Agenda saved");
+   } catch (error) {
+     console.error("[saveAgenda]", error);
+     toast.error("Couldn't save agenda", error instanceof Error ? error.message : String(error));
+   }
   };
 
   const startAttendanceEdit = () => {
@@ -1252,24 +1257,29 @@ export function MeetingDetailPage() {
 
   const saveAttendance = async () => {
     if (!minutes || !attendanceEdit) return;
-    const attendees = attendanceEdit.people
-      .filter((p) => p.status === "present")
-      .map((p) => p.name.trim())
-      .filter(Boolean);
-    const absent = attendanceEdit.people
-      .filter((p) => p.status === "absent")
-      .map((p) => p.name.trim())
-      .filter(Boolean);
-    await updateMinutes({
-      id: minutes._id,
-      patch: { attendees, absent, quorumMet: attendanceEdit.quorumMet },
-    });
-    await updateMeeting({
-      id: meeting._id,
-      patch: { attendeeIds: attendees },
-    });
-    setAttendanceEdit(null);
-    toast.success("Attendance saved");
+    try {
+      const attendees = attendanceEdit.people
+        .filter((p) => p.status === "present")
+        .map((p) => p.name.trim())
+        .filter(Boolean);
+      const absent = attendanceEdit.people
+        .filter((p) => p.status === "absent")
+        .map((p) => p.name.trim())
+        .filter(Boolean);
+      await updateMinutes({
+        id: minutes._id,
+        patch: { attendees, absent, quorumMet: attendanceEdit.quorumMet },
+      });
+      await updateMeeting({
+        id: meeting._id,
+        patch: { attendeeIds: attendees },
+      });
+      setAttendanceEdit(null);
+      toast.success("Attendance saved");
+    } catch (error) {
+      console.error("[saveAttendance]", error);
+      toast.error("Couldn't save attendance", error instanceof Error ? error.message : String(error));
+    }
   };
 
   const openMaterialDrawer = (agendaLabel?: string, material?: any) => {
@@ -1961,6 +1971,12 @@ export function MeetingDetailPage() {
 
         {activeTab === "minutes" && !hasStartedMinutesDraft(minutes) && (
           <MinutesDraftEmptyState
+            meetingId={meeting._id}
+            defaultCollapsed={(() => {
+              if (meeting.status === "Held") return false;
+              if (meeting.status === "Scheduled") return true;
+              return meeting.scheduledAt ? meeting.scheduledAt > new Date().toISOString() : true;
+            })()}
             transcriptOnFile={transcriptOnFile}
             audioInputRef={audioInputRef}
             audioFile={audioFile}

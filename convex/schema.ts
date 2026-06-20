@@ -2077,6 +2077,11 @@ export default defineSchema({
     quorumComputedAtISO: v.optional(v.string()),
     status: v.string(),
     attendeeIds: v.array(v.string()),
+    // Deprecated: legacy stored agenda blob removed in 9bdf80b. Kept here as an
+    // optional pass-through so pre-existing rows still validate; nothing reads
+    // or writes it now. Strip + delete this entry once the field is gone from
+    // every meeting row.
+    agendaJson: v.optional(v.string()),
     meetingTemplateId: v.optional(v.id("meetingTemplates")),
     templateSnapshotJson: v.optional(v.string()),
     minutesId: v.optional(v.id("minutes")),

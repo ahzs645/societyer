@@ -359,7 +359,9 @@
   box-shadow: token('shadow-md');
 }
 .name-autocomplete__option {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   margin: 0;
   padding: 6px 10px;
@@ -370,6 +372,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   box-sizing: border-box;
+}
+.name-autocomplete__option-meta {
+  margin-left: auto;
+  font-size: token('fs-xs');
+  flex-shrink: 0;
 }
 .name-autocomplete__option.is-highlighted {
   background: token('bg-hover');

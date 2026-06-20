@@ -72,6 +72,11 @@ export function SignaturePanel({
     return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [directorSigners, memberSigners, signerScope]);
   const nameOptions = useMemo(() => signerOptions.map((option) => option.name), [signerOptions]);
+  const nameOptionMeta = useMemo(() => {
+    const meta: Record<string, string> = {};
+    for (const option of signerOptions) meta[option.name] = option.role;
+    return meta;
+  }, [signerOptions]);
   const selectedSigner = useMemo(
     () => signerOptions.find((option) => option.name.toLowerCase() === typedName.trim().toLowerCase()),
     [signerOptions, typedName],
@@ -111,43 +116,38 @@ export function SignaturePanel({
           {title ?? "Signatures"}
         </h3>
       </div>
-      <div className="card__body">
+      <div className="card__body signature-panel__body">
         {displayedSignatures.map((s) => (
-          <div
-            className="signature-list-row"
-            key={s._id}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "6px 0",
-              borderBottom: "1px solid var(--border)",
-            }}
-          >
+          <div className="signature-list-row" key={s._id}>
             {s.imageDataUrl ? (
               <img
+                className="signature-list-row__img"
                 src={s.imageDataUrl}
                 alt={`${s.signerName} signature`}
-                style={{ height: 28, maxWidth: 120, objectFit: "contain" }}
               />
-            ) : null}
-            <strong>{s.signerName}</strong>
-            {s.signerRole && <Badge>{s.signerRole}</Badge>}
-            <div className="signature-list-row__spacer" style={{ flex: 1 }} />
-            <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
+            ) : <span className="signature-list-row__img" aria-hidden />}
+            <div className="signature-list-row__head">
+              <span className="signature-list-row__name">{s.signerName}</span>
+              {s.signerRole && <Badge>{s.signerRole}</Badge>}
+            </div>
+            <span className="signature-list-row__meta muted mono">
               {formatDateTime(s.signedAtISO)}
             </span>
             <button
-              className="btn btn--ghost btn--sm btn--icon"
+              className="signature-list-row__trash btn btn--ghost btn--sm btn--icon"
               aria-label={`Revoke signature from ${s.signerName}`}
-              disabled={!user}
-              onClick={() => {
-                if (!user) return;
+              onClick={async () => {
                 if (s.localOnly) {
                   setLocalSignatures((current) => current.filter((signature) => signature._id !== s._id));
                   return;
                 }
-                void revoke({ id: s._id, actingUserId: user._id });
+                try {
+                  await revoke({ id: s._id, actingUserId: user?._id });
+                  setLocalSignatures((current) => current.filter((signature) => signature._id !== s._id));
+                } catch (error) {
+                  console.error("[signatures.revoke]", error);
+                  toast.error("Couldn't revoke signature", error instanceof Error ? error.message : String(error));
+                }
               }}
               title="Revoke"
             >
@@ -156,6 +156,7 @@ export function SignaturePanel({
           </div>
         ))}
 
+        {displayedSignatures.length === 0 && (<>
         <div className="signature-mode-toggle" role="tablist" aria-label="Signature method">
           <button
             type="button"
@@ -181,24 +182,28 @@ export function SignaturePanel({
             <SignaturePad onChange={setDrawnDataUrl} ariaLabel="Draw your signature" />
           </Field>
         )}
+        {nameOptions.length === 0 && (
+          <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 8 }}>
+            {signerScope === "directors"
+              ? <>No directors on file — add one in <a href="/directors">Directors</a> to enable autocomplete.</>
+              : <>No members or directors on file — add one in <a href="/directors">Directors</a> or <a href="/members">Members</a> to enable autocomplete.</>}
+          </div>
+        )}
         <div className="signature-form-row">
           <Field label={signerScope === "directors" ? "Director who signed" : "Person who signed"}>
             <NameAutocomplete
               value={typedName}
               onChange={setTypedName}
               options={nameOptions}
+              optionMeta={nameOptionMeta}
               excludeOptions={signedNames}
               placeholder={signerScope === "directors" ? "Director name…" : "First Last"}
             />
           </Field>
           <button
             className="btn btn--accent"
-            disabled={!user || !typedName.trim() || alreadySigned || (signMode === "drawn" && !drawnDataUrl)}
+            disabled={!typedName.trim() || (signMode === "drawn" && !drawnDataUrl)}
             onClick={async () => {
-              if (!user) {
-                toast.error("Pick a user in the header before signing.");
-                return;
-              }
               const name = typedName.trim();
               if (!name) {
                 toast.error("Type a signer name.");
@@ -219,7 +224,7 @@ export function SignaturePanel({
                 entityType,
                 entityId,
                 userId: selectedSignerUserId,
-                actingUserId: user._id,
+                actingUserId: user?._id,
                 signerName: name,
                 signerRole,
                 method: signMode,
@@ -247,6 +252,7 @@ export function SignaturePanel({
             <Pen size={12} /> Add signature
           </button>
         </div>
+        </>)}
       </div>
     </div>
   );

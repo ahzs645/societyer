@@ -79,6 +79,72 @@
   border: 1px dashed token('border-strong');
   border-radius: token('r-sm');
   cursor: crosshair;
+  color: token('text-primary'); /* read by SignaturePad to colour ink per theme */
+}
+
+/* Signature list row — narrow-first layout. The card body is a container so
+   we can flip to side-by-side only when there's room (avoids the character-
+   stacked date column that flex+inline-styles produced in narrow asides). */
+.signature-panel__body {
+  container-type: inline-size;
+}
+.signature-list-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "head trash"
+    "meta trash"
+    "img  img";
+  align-items: center;
+  gap: 4px 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid token('border');
+}
+.signature-list-row__img {
+  grid-area: img;
+  height: 36px;
+  max-width: 100%;
+  object-fit: contain;
+  justify-self: start;
+}
+.signature-list-row__head {
+  grid-area: head;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.signature-list-row__name {
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.signature-list-row__meta {
+  grid-area: meta;
+  font-size: token('fs-xs');
+}
+.signature-list-row__trash {
+  grid-area: trash;
+  align-self: start;
+}
+@container (min-width: 360px) {
+  .signature-list-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "img head trash"
+      "img meta trash";
+  }
+  .signature-list-row__img {
+    max-width: 120px;
+    height: 32px;
+  }
+  .signature-list-row__name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    overflow-wrap: normal;
+  }
 }
 .signature-pad__footer {
   display: flex;

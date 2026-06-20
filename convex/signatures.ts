@@ -24,14 +24,19 @@ export const sign = mutation({
     typedName: v.optional(v.string()),
     imageDataUrl: v.optional(v.string()),
     demo: v.optional(v.boolean()),
-    actingUserId: v.id("users"),
+    actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    const actor = await ctx.db.get(args.actingUserId);
-    if (!actor || actor.societyId !== args.societyId) throw new Error("Signature actor is not part of this society.");
-    if (args.userId && args.userId !== args.actingUserId && !canActAs(actor.role as Role, "Admin")) {
-      throw new Error("Only an admin can sign on behalf of another user.");
+    // Signatures are kiosk-style: anyone can type/draw their own name. We only
+    // enforce the actor check when one is provided AND a userId link is being
+    // claimed — that's where the "admin can sign for another user" rule matters.
+    if (args.actingUserId) {
+      const actor = await ctx.db.get(args.actingUserId);
+      if (!actor || actor.societyId !== args.societyId) throw new Error("Signature actor is not part of this society.");
+      if (args.userId && args.userId !== args.actingUserId && !canActAs(actor.role as Role, "Admin")) {
+        throw new Error("Only an admin can sign on behalf of another user.");
+      }
     }
     const id = await ctx.db.insert("signatures", {
       societyId: args.societyId,
@@ -69,15 +74,20 @@ export const sign = mutation({
 });
 
 export const revoke = mutation({
-  args: { id: v.id("signatures"), actingUserId: v.id("users") },
+  args: { id: v.id("signatures"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const sig = await ctx.db.get(id);
     if (!sig) return;
-    const actor = await ctx.db.get(actingUserId);
-    if (!actor || actor.societyId !== sig.societyId) throw new Error("Signature actor is not part of this society.");
-    if (sig.userId && sig.userId !== actingUserId && !canActAs(actor.role as Role, "Admin")) {
-      throw new Error("Only an admin can revoke another user's signature.");
+    // Symmetric with sign(): only enforce the actor check when one is given
+    // AND the signature is linked to a specific user. Without an actor we
+    // assume kiosk-style usage where revoking is local-session housekeeping.
+    if (actingUserId) {
+      const actor = await ctx.db.get(actingUserId);
+      if (!actor || actor.societyId !== sig.societyId) throw new Error("Signature actor is not part of this society.");
+      if (sig.userId && sig.userId !== actingUserId && !canActAs(actor.role as Role, "Admin")) {
+        throw new Error("Only an admin can revoke another user's signature.");
+      }
     }
     await ctx.db.delete(id);
     await ctx.db.insert("activity", {

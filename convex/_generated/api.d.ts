@@ -75,6 +75,7 @@ import type * as legalOperations from "../legalOperations.js";
 import type * as lib_access_documentAccess from "../lib/access/documentAccess.js";
 import type * as lib_access_materialAccess from "../lib/access/materialAccess.js";
 import type * as lib_accountingCore from "../lib/accountingCore.js";
+import type * as lib_agendaItems from "../lib/agendaItems.js";
 import type * as lib_bylawRules from "../lib/bylawRules.js";
 import type * as lib_dashboardComplianceRules from "../lib/dashboardComplianceRules.js";
 import type * as lib_moduleSettings from "../lib/moduleSettings.js";
@@ -222,6 +223,7 @@ declare const fullApi: ApiFromModules<{
   "lib/access/documentAccess": typeof lib_access_documentAccess;
   "lib/access/materialAccess": typeof lib_access_materialAccess;
   "lib/accountingCore": typeof lib_accountingCore;
+  "lib/agendaItems": typeof lib_agendaItems;
   "lib/bylawRules": typeof lib_bylawRules;
   "lib/dashboardComplianceRules": typeof lib_dashboardComplianceRules;
   "lib/moduleSettings": typeof lib_moduleSettings;
