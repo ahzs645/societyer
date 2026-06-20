@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { renderAsync } from "docx-preview";
+import JSZip from "jszip";
 import { FileWarning, Loader2 } from "lucide-react";
 import { buildWordDocxBlob } from "../../../lib/docx";
 
@@ -31,7 +32,9 @@ const RENDER_OPTIONS = {
   breakPages: true,
   ignoreLastRenderedPageBreak: false,
   experimental: true,
-  useBase64URL: true,
+  // false → docx-preview uses URL.createObjectURL, which retypeImageBlobs
+  // (below) then re-binds with the correct MIME.
+  useBase64URL: false,
   renderHeaders: true,
   renderFooters: true,
 } as const;
@@ -126,6 +129,40 @@ function paginateRenderedDocx(render: HTMLElement): void {
   }
 }
 
+// JSZip hands docx-preview blobs with type:"" — the resulting blob URLs work
+// for raster images (the browser sniffs bytes) but not for SVG, because SVG can
+// contain JavaScript and browsers refuse to display it without an explicit
+// `image/svg+xml` MIME. Re-bind each rendered <img> to a blob we build
+// ourselves from the OOXML archive, with the right MIME for its extension.
+const MEDIA_MIME: Record<string, string> = {
+  png: "image/png",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  gif: "image/gif",
+  bmp: "image/bmp",
+  svg: "image/svg+xml",
+};
+
+async function retypeImageBlobs(target: HTMLElement, docxBlob: Blob): Promise<void> {
+  const imgs = Array.from(target.querySelectorAll("img")).filter((img) =>
+    img.src.startsWith("blob:"),
+  );
+  if (imgs.length === 0) return;
+  const zip = await JSZip.loadAsync(docxBlob);
+  const mediaPaths = Object.keys(zip.files)
+    .filter((n) => n.startsWith("word/media/"))
+    .sort();
+  for (let i = 0; i < imgs.length && i < mediaPaths.length; i += 1) {
+    const path = mediaPaths[i];
+    const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+    const mime = MEDIA_MIME[ext] ?? "application/octet-stream";
+    const bytes = await zip.files[path].async("uint8array");
+    const previous = imgs[i].src;
+    imgs[i].src = URL.createObjectURL(new Blob([bytes], { type: mime }));
+    URL.revokeObjectURL(previous);
+  }
+}
+
 export function MinutesDocumentPreview({ bodyHtml }: { bodyHtml: string }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const renderRef = useRef<HTMLDivElement>(null);
@@ -148,6 +185,7 @@ export function MinutesDocumentPreview({ bodyHtml }: { bodyHtml: string }) {
         if (cancelled || !renderRef.current) return;
         await renderAsync(blob, renderRef.current, undefined, RENDER_OPTIONS);
         if (cancelled || !renderRef.current) return;
+        await retypeImageBlobs(renderRef.current, blob);
         paginateRenderedDocx(renderRef.current);
         if (!cancelled) setStatus("ready");
       } catch (error) {
