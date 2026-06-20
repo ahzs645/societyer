@@ -175,6 +175,15 @@ Settings → Modules can enable or hide optional surfaces by society. Current mo
 
 ## Live integrations
 
+> **Where to set these:** every secret below is read by Convex **functions**, which see the
+> Convex *deployment's* environment — **not** the repo-root `.env.local` (that file is only read
+> by Vite and the auth/API server). Set them on the deployment, otherwise the integration stays
+> in demo mode even though the value is in `.env.local`:
+> ```bash
+> npx convex env set RESEND_API_KEY re_xxx       # hosted
+> # self-hosted: add --url <convex-url> --admin-key <key>, or use the self-hosted dashboard
+> ```
+
 - **Resend**: set `RESEND_API_KEY` plus `RESEND_FROM_EMAIL` to turn digest emails and communications into real outbound email.
 - **Twilio**: set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and either `TWILIO_FROM_NUMBER` or `TWILIO_MESSAGING_SERVICE_SID` for SMS delivery and callback tracking.
 - **Stripe**: set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` to enable real hosted checkout. Point Stripe webhooks at Convex HTTP route `/stripe/webhook`.

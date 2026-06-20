@@ -43,7 +43,9 @@ async function emitWebhookEvent(client: ConvexHttpClient, actor: Actor, type: st
 }
 
 async function connectorRunnerRequest(method: "GET" | "POST", path: string, body?: Record<string, unknown>) {
-  const baseUrl = process.env.CONNECTOR_RUNNER_BASE_URL ?? "http://127.0.0.1:8890";
+  // Treat an empty/whitespace value as unset (compose injects "" when the var
+  // is not provided) so it falls back to the default rather than fetching "".
+  const baseUrl = process.env.CONNECTOR_RUNNER_BASE_URL?.trim() || "http://127.0.0.1:8890";
   const secret = process.env.CONNECTOR_RUNNER_SECRET;
   const response = await fetch(new URL(path, baseUrl).toString(), {
     method,

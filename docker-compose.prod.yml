@@ -6,6 +6,15 @@
 # Deploy Convex functions after first boot:
 #   CONVEX_SELF_HOSTED_URL=http://127.0.0.1:3220 npx convex dev --once
 #
+# Provider secrets (RESEND_*, STRIPE_*, TWILIO_*, WAVE_*, RUSTFS_*, OPENAI_API_KEY,
+# ANTHROPIC_API_KEY, PAPERLESS_NGX_*) are read by Convex functions from the
+# deployment env, not this compose file. Set them after boot, e.g.:
+#   CONVEX_SELF_HOSTED_URL=http://127.0.0.1:3220 npx convex env set RESEND_API_KEY re_xxx
+#
+# The browser-connector stack (connector-runner + blitzbrowser) is NOT bundled
+# here. To use connectors in this stack, run them separately and point the api
+# service at the runner via CONNECTOR_RUNNER_BASE_URL (see the api service below).
+#
 services:
   convex:
     image: ghcr.io/get-convex/convex-backend:latest
@@ -50,6 +59,11 @@ services:
       - BETTER_AUTH_BASE_URL=${BETTER_AUTH_BASE_URL:-http://127.0.0.1:8080}
       - AUTH_DB_PATH=/data/auth.sqlite
       - CONNECTOR_RUNNER_SECRET=${CONNECTOR_RUNNER_SECRET:-change-me-before-using-connectors}
+      # Browser connectors are not bundled in this stack. Connector actions are
+      # unavailable unless you run a connector-runner elsewhere and point at it
+      # here (left unset, the api falls back to a localhost default that does
+      # not resolve inside this container).
+      - CONNECTOR_RUNNER_BASE_URL=${CONNECTOR_RUNNER_BASE_URL:-}
     volumes:
       - api-data:/data
     restart: unless-stopped
