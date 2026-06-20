@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Globe, Plus, Save, Trash2, Copy } from "lucide-react";
 import { useToast } from "../components/Toast";
@@ -74,7 +74,7 @@ export function TransparencyPage() {
   const publishedCount = (publications ?? []).filter((row: any) => row.status === "Published").length;
   const draftCount = (publications ?? []).filter((row: any) => row.status === "Draft").length;
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const records = (publications ?? []) as any[];

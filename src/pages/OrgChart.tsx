@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge } from "../components/ui";
 import { Briefcase, HandHeart, Network, UserCog, UsersRound, X } from "lucide-react";
 
@@ -97,7 +97,7 @@ export function OrgChartPage() {
     });
   };
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   return (

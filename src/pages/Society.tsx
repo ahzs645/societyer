@@ -6,7 +6,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { setStoredSocietyId } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Field, LockedField, Badge } from "../components/ui";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
@@ -250,7 +250,7 @@ export function SocietyPage() {
     }
   }, [detail, seededAddressSocietyId, seedStructuredAddresses, society]);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
   if (!form) return null;
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { Toggle } from "../components/Controls";
@@ -62,7 +62,7 @@ export function OrganizationDetailsPage() {
     });
   }, [autoBackfilledSocietyId, backfillRecords, detail, society]);
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
   if (!profile) return null;
 

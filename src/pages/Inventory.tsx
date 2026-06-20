@@ -8,7 +8,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { ImageUploadField, type ImageValue } from "../components/ImageUploadField";
-import { PageHeader, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { useToast } from "../components/Toast";
 import { money } from "../lib/format";
 
@@ -156,7 +156,7 @@ export function InventoryPage() {
   const openCounts = (counts ?? []) as any[];
   const varianceLines = openCounts.flatMap((count) => (count.lines ?? []).filter((line: any) => line.countedQuantity != null && (line.countedQuantity - (line.expectedQuantity ?? 0)) !== 0).map((line: any) => ({ count, line })));
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const saveMovement = async () => {

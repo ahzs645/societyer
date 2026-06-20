@@ -5,7 +5,7 @@ import { useToast } from "../components/Toast";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
@@ -381,9 +381,9 @@ export function MeetingDetailPage() {
     void backfillMinutesQuorum({ id: minutes._id }).catch(() => undefined);
   }, [backfillMinutesQuorum, minutes?._id, minutes?.quorumComputedAtISO, minutes?.quorumRequired, minutes?.quorumSourceLabel]);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  if (!meeting) return <div className="page">Loading…</div>;
+  if (!meeting) return <PageLoading />;
 
   const agendaTree = agendaEntriesFromRecord(agendaRecord) ?? [];
   const canonicalAgendaItems = agendaItemsFromRecord(agendaRecord);

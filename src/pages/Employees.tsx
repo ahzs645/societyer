@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, InspectorNote, RecordChip } from "../components/ui";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { DataTable } from "../components/DataTable";
@@ -31,7 +31,7 @@ export function EmployeesPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {

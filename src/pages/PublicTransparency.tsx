@@ -1,4 +1,5 @@
 import { Link, useParams } from "react-router-dom";
+import { PageLoading } from "./_helpers";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Badge } from "../components/ui";
@@ -10,7 +11,7 @@ export function PublicTransparencyPage() {
   const data = useQuery(api.transparency.publicCenter, { slug });
 
   if (data === undefined) {
-    return <div className="page">Loading…</div>;
+    return <PageLoading />;
   }
 
   if (!data) {

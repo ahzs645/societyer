@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Banner, Field } from "../components/ui";
 import { useToast } from "../components/Toast";
 import {
@@ -164,7 +164,7 @@ export function BylawsHistoryPage() {
   const [registryBusy, setRegistryBusy] = useState(false);
   const [lastBotSessionId, setLastBotSessionId] = useState<string | null>(null);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   // Order: Filed amendments, oldest first. Treat `filedAtISO` as the event date.

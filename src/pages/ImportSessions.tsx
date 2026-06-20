@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Segmented } from "../components/primitives";
@@ -212,7 +212,7 @@ export function ImportSessionsPage() {
     });
   }, [records, statusFilter, kindFilter, targetFilter, searchText]);
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const createFromJson = async () => {

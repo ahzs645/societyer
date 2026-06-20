@@ -1,4 +1,5 @@
 import { Link, Navigate } from "react-router-dom";
+import { PageLoading } from "./_helpers";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -33,7 +34,7 @@ export function PortalPage() {
     return <Navigate to="/app" replace />;
   }
   if (auth.isPending || society === undefined) {
-    return <div className="page">Loading…</div>;
+    return <PageLoading />;
   }
   if (!auth.isAuthenticated || !society) {
     return <Navigate to="/login" replace />;

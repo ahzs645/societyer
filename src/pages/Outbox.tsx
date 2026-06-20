@@ -5,7 +5,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -112,7 +112,7 @@ export function OutboxPage() {
     [emails],
   );
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;

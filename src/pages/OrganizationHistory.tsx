@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { Modal } from "../components/Modal";
@@ -258,9 +258,9 @@ export function OrganizationHistoryPage() {
     [boardTerms, motions],
   );
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  if (data === undefined) return <div className="page">Loading...</div>;
+  if (data === undefined) return <PageLoading />;
 
   const saveSource = async () => {
     const payload = normalizeSource(sourceForm);
@@ -1160,9 +1160,9 @@ export function OrganizationHistoryBudgetPage() {
     }
   };
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  if (data === undefined) return <div className="page">Loading...</div>;
+  if (data === undefined) return <PageLoading />;
 
   if (!budget) {
     return (

@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { PageHeader, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DataTable } from "../components/DataTable";
@@ -94,7 +94,7 @@ export function AssetsPage() {
   const rows = (assets ?? []) as any[];
   const stats = useMemo(() => summarizeAssets(rows, (maintenance ?? []) as any[], (verificationRuns ?? []) as any[]), [rows, maintenance, verificationRuns]);
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const openEdit = (row: any) => {
@@ -431,7 +431,7 @@ export function AssetDetailPage() {
     if (bundle?.asset) setLabelType(bundle.asset.preferredLabelType ?? "qr");
   }, [bundle?.asset?._id, bundle?.asset?.preferredLabelType]);
 
-  if (bundle === undefined) return <div className="page">Loading...</div>;
+  if (bundle === undefined) return <PageLoading />;
   if (!bundle) return <div className="page"><Link className="btn" to="/app/assets"><ArrowLeft size={14} /> Assets</Link><p>Asset not found.</p></div>;
   const { asset, events, maintenance } = bundle;
   const receiptDocument = (documents ?? []).find((doc: any) => doc._id === asset.receiptDocumentId);

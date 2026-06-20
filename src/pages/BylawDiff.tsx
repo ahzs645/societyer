@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Field, Badge } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { useConfirm, usePrompt, Modal } from "../components/Modal";
@@ -133,7 +133,7 @@ export function BylawDiffPage() {
     return { adds, dels };
   }, [chunks]);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const newDraft = () => {

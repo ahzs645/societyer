@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge } from "../components/ui";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
@@ -14,7 +14,7 @@ export function GovernanceRegistersPage() {
   const promoteBoardRole = useMutation(api.evidenceRegisters.promoteBoardRoleToDirector);
   const confirm = useConfirm();
   const toast = useToast();
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const roles = data?.boardRoleAssignments ?? [];
@@ -86,7 +86,7 @@ export function GovernanceRegistersPage() {
 
 export function MeetingEvidencePage() {
   const { society, data, people } = useRegisters();
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const attendance = data?.meetingAttendanceRecords ?? [];
@@ -127,7 +127,7 @@ export function MeetingEvidencePage() {
 
 export function FinanceImportsPage() {
   const { society, data } = useRegisters();
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const budgets = data?.budgetSnapshots ?? [];
@@ -192,7 +192,7 @@ export function FinanceImportsPage() {
 
 export function RecordsArchivePage() {
   const { society, data } = useRegisters();
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const accessions = data?.archiveAccessions ?? [];

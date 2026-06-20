@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, Flag, InspectorNote, RecordChip } from "../components/ui";
 import { ShieldCheck, PenLine } from "lucide-react";
 import { formatDate, initials } from "../lib/format";
@@ -105,7 +105,7 @@ export function AttestationsPage() {
     if (firstMissing?.directorId) openSign(String(firstMissing.directorId));
   }, [missing, open, params, setParams, society]);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;

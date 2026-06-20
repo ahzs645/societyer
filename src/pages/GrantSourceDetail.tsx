@@ -6,7 +6,7 @@ import { Badge } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
-import { PageHeader, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 
 export function GrantSourceDetailPage() {
   const society = useSociety();
@@ -19,7 +19,7 @@ export function GrantSourceDetailPage() {
   );
   const addGrantSourceFromLibrary = useMutation(api.grantSources.addFromLibrary);
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const source = ((sourceLibrary?.library ?? []) as any[]).find((row) => row.libraryKey === libraryKey);

@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import { BookOpen, CalendarPlus, ClipboardList, FileText, Plus, Sparkles, Trash2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { PageHeader, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { useToast } from "../components/Toast";
@@ -42,7 +42,7 @@ export function MotionBacklogPage() {
     return map;
   }, [meetings]);
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const save = async () => {

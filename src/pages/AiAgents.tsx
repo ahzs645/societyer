@@ -4,7 +4,7 @@ import { Bot, BrainCircuit, CheckCircle2, History, KeyRound, ListTree, MessageSq
 import { api } from "@/lib/convexApi";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt } from "./_helpers";
+import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field, SettingsShell } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { streamChatMessage } from "../lib/aiChatStream";
@@ -173,7 +173,7 @@ export function AiAgentsPage() {
     }));
   }, [effectiveProvider?._id, effectiveProvider?.modelId, effectiveProvider?.temperature, effectiveProvider?.maxSteps]);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const startRun = async () => {

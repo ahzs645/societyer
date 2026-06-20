@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { OptionMultiSelect, OptionSelect } from "../components/OptionSelect";
@@ -31,7 +31,7 @@ export function RoleHoldersPage() {
   const toast = useToast();
   const [draft, setDraft] = useState<any>(null);
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const corporationWorkspace = isCorporation(society);
@@ -304,7 +304,7 @@ export function RightsLedgerPage() {
   const currentHoldings = useMemo(() => deriveCurrentHoldings(data?.transfers ?? []), [data?.transfers]);
   const corporationWorkspace = society ? isCorporation(society) : false;
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const saveClass = async () => {
@@ -549,7 +549,7 @@ export function TemplateEnginePage() {
   const toast = useToast();
   const [draft, setDraft] = useState<any>(null);
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const save = async () => {
@@ -762,7 +762,7 @@ export function FormationMaintenancePage() {
     [data],
   );
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const save = async () => {

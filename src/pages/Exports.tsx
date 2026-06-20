@@ -4,7 +4,7 @@ import { CheckCircle2, Database, Download, FileJson, ShieldAlert } from "lucide-
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { Badge } from "../components/ui";
-import { PageHeader, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { escapeCsvCell } from "../lib/csv";
 
 type TableSummary = {
@@ -62,7 +62,7 @@ export function ExportsPage() {
     });
   }, [hideEmpty, searchText, tableCounts, tableSummaries]);
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const download = async (table: string) => {

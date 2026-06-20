@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt } from "./_helpers";
+import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Button, Drawer, Field, SettingsShell } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { OptionSelect } from "../components/OptionSelect";
@@ -33,7 +33,7 @@ export function WorkflowPackagesPage() {
     [workflows],
   );
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {

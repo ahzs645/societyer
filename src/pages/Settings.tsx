@@ -1,7 +1,7 @@
 import { useMutation } from "convex/react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/convexApi";
-import { SeedPrompt } from "./_helpers";
+import { PageLoading, SeedPrompt } from "./_helpers";
 import { isDemoMode, setDemoMode } from "../lib/demoMode";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useConfirm } from "../components/Modal";
@@ -107,7 +107,7 @@ export function SettingsPage() {
     [resolvedTheme, t],
   );
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const toggleModule = async (key: ModuleKey, checked: boolean) => {

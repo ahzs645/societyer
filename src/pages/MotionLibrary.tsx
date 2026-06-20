@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
-import { PageHeader, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { BookOpen, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { Field } from "../components/ui";
@@ -54,7 +54,7 @@ export function MotionLibraryPage() {
   const remove = useMutation(api.motionTemplates.remove);
   const seed = useMutation(api.motionTemplates.seedDefaults);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const save = async () => {

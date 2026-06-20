@@ -3,7 +3,7 @@ import { type ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
@@ -41,7 +41,7 @@ export function InsurancePage() {
   const rows = (items ?? []) as any[];
   const summary = useMemo(() => summarizePolicies(rows), [rows]);
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
@@ -337,7 +337,7 @@ export function InsurancePolicyDetailPage() {
   const society = useSociety();
   const items = useQuery(api.insurance.list, society ? { societyId: society._id } : "skip");
 
-  if (society === undefined || items === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined || items === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const rows = (items ?? []) as any[];

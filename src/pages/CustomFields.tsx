@@ -4,7 +4,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
-import { SeedPrompt } from "./_helpers";
+import { PageLoading, SeedPrompt } from "./_helpers";
 import { Button, Drawer, Field, SettingsShell } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { AlertTriangle, Database, Link2, Plus, Sliders, Trash2 } from "lucide-react";
@@ -67,7 +67,7 @@ export function CustomFieldsPage() {
     viewId: currentViewId,
   });
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {

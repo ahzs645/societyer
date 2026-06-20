@@ -9,6 +9,13 @@ import { getRouteIdentity, resolveRouteIdentity, type IconTone } from "../lib/ro
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { getRuntimeMode } from "../lib/runtimeMode";
 
+// The society-loading placeholder shown while `useSociety()` is undefined.
+// Extracted so the ~86 page guards share one element instead of hand-rolling
+// `<div className="page">Loading…</div>` (previously split between "…" and "...").
+export function PageLoading() {
+  return <div className="page">Loading…</div>;
+}
+
 export function SeedPrompt() {
   const toast = useToast();
   const [busy, setBusy] = useState(false);

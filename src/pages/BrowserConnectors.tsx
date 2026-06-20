@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, ClipboardPaste, ExternalLink, MonitorPlay, Play, RefreshCw, ShieldCheck, Square, Upload, XCircle } from "lucide-react";
-import { SeedPrompt } from "./_helpers";
+import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Button, Field, SettingsShell } from "../components/ui";
 import { LiveBrowserView } from "../components/LiveBrowserView";
 import { useSociety } from "../hooks/useSociety";
@@ -273,7 +273,7 @@ export function BrowserConnectorsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestedConnectorId, connectors.length]);
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {

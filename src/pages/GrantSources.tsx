@@ -5,7 +5,7 @@ import { api } from "@/lib/convexApi";
 import { GrantSourceLibrarySection } from "../features/grants/components/GrantSourceLibrary";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
-import { PageHeader, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 
 export function GrantSourcesPage() {
   const society = useSociety();
@@ -15,7 +15,7 @@ export function GrantSourcesPage() {
     society ? { societyId: society._id } : "skip",
   );
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   return (

@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Banner, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Modal, useConfirm } from "../components/Modal";
@@ -105,7 +105,7 @@ export function PrivacyPage() {
     }
   }, [privacyForm, society]);
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const privacyOpsForm = privacyForm ?? society;

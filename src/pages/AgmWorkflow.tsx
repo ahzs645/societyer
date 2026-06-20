@@ -5,7 +5,7 @@ import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import {
   ArrowLeft,
@@ -57,9 +57,9 @@ export function AgmWorkflowPage() {
     return idx < 0 ? 0 : idx;
   }, [run]);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  if (!meeting) return <div className="page">Loading…</div>;
+  if (!meeting) return <PageLoading />;
   if (meeting.type !== "AGM")
     return <div className="page">This workflow is for AGM-type meetings only.</div>;
 

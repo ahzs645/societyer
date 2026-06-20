@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
-import { PageHeader, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { ArrowLeft, BookOpen, CalendarPlus, ChevronDown, Copy, MinusCircle, Pencil, Plus, Save, Sparkles, Star, Trash2, X } from "lucide-react";
@@ -246,7 +246,7 @@ export function MeetingTemplatesPage() {
     }
   };
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   return (
@@ -444,7 +444,7 @@ export function MeetingTemplateBuilderPage() {
     });
   }, [isNew, template]);
 
-  if (society === undefined || (!isNew && templates === undefined)) return <div className="page">Loading...</div>;
+  if (society === undefined || (!isNew && templates === undefined)) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
   if (!isNew && !template) return <div className="page">Template not found.</div>;
 

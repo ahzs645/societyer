@@ -1,4 +1,5 @@
 import { FormEvent, useMemo, useState } from "react";
+import { PageLoading } from "./_helpers";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -57,7 +58,7 @@ export function VolunteerApplyPage() {
     return next;
   }, [form.email, form.firstName, form.lastName, form.roleWanted]);
 
-  if (context === undefined) return <div className="page">Loading…</div>;
+  if (context === undefined) return <PageLoading />;
   if (!context) {
     return (
       <div className="landing" style={{ minHeight: "100vh", padding: "4rem 0" }}>

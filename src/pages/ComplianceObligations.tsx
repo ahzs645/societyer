@@ -5,7 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useOrganizationWorkspace } from "../hooks/useOrganizationWorkspace";
 import { Badge } from "../components/ui";
-import { PageHeader, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { complianceFactsForOrganization, computeComplianceObligations, filterApplicableCompliancePacks } from "../lib/compliance";
 import type { ComplianceFacts, ComplianceObligationStatus } from "../lib/compliance";
 import { formatDate, relative } from "../lib/format";
@@ -44,7 +44,7 @@ export function ComplianceObligationsPage() {
   const obligations = useMemo(() => factsList.flatMap((item) => computeComplianceObligations(item)), [factsList]);
   const packs = useMemo(() => factsList.flatMap((item) => filterApplicableCompliancePacks(item)), [factsList]);
 
-  if (isLoading) return <div className="page">Loading...</div>;
+  if (isLoading) return <PageLoading />;
   if (missingWorkspace || !organization || !society) return <SeedPrompt />;
 
   const jurisdictionCode = homeJurisdictionCode(organization);

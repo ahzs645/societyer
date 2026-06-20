@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
-import { PageHeader, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { PiggyBank, TrendingUp, TrendingDown, AlertTriangle, DollarSign, PlusCircle, Trash2, Upload, Receipt } from "lucide-react";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
@@ -292,7 +292,7 @@ export function TreasurerPage() {
   const [expenseDraft, setExpenseDraft] = useState<any>(null);
   const [levyImportOpen, setLevyImportOpen] = useState(false);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   // Server now returns these as arrays of `{ category, cents }` (object keys

@@ -16,7 +16,7 @@ import {
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { Badge } from "../components/ui";
-import { PageHeader, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { formatDate, relative } from "../lib/format";
 
 type CycleItem = {
@@ -75,9 +75,9 @@ export function AnnualCyclePage() {
     return [current - 1, current, current + 1];
   }, []);
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  if (!data) return <div className="page">Loading...</div>;
+  if (!data) return <PageLoading />;
 
   const phases = data.phases ?? {};
   const fallbackItems = PHASES.flatMap((phase) => phases[phase.id] ?? []) as CycleItem[];

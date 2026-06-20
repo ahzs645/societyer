@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useState } from "react";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Flag } from "../components/ui";
 import { formatDate, formatDateTime, relative } from "../lib/format";
 import { Link, useNavigate } from "react-router-dom";
@@ -62,9 +62,9 @@ export function Dashboard() {
   const [busyRemediationAction, setBusyRemediationAction] = useState<string | null>(null);
   const [hiddenOnboardingFlowSocietyIds, setHiddenOnboardingFlowSocietyIds] = useState(readHiddenOnboardingFlowSocietyIds);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  if (!data) return <div className="page">Loading…</div>;
+  if (!data) return <PageLoading />;
 
   const { counts, upcomingMeetings, upcomingFilings, overdueFilings, goals, complianceFlags, openTasks, evidenceChains } = data;
   const onboardingSteps = getOnboardingSteps({ society, counts, upcomingMeetings, upcomingFilings, overdueFilings });

@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt } from "./_helpers";
+import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { RecordShowPage } from "../components/RecordShowPage";
 import { ActivityTimeline } from "../components/ActivityTimeline";
@@ -36,9 +36,9 @@ export function CommitteeDetailPage() {
   const [taskDrawer, setTaskDrawer] = useState(false);
   const [taskForm, setTaskForm] = useState<any>(null);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  if (!detail) return <div className="page">Loading…</div>;
+  if (!detail) return <PageLoading />;
 
   const { committee, members, meetings, tasks, goals } = detail;
   const openTasks = tasks.filter((t: any) => t.status !== "Done").length;

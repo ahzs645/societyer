@@ -2,7 +2,7 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, Flag } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -179,7 +179,7 @@ export function FinancialsPage() {
     .filter((row: any) => row.account?.isRestricted)
     .reduce((sum: number, row: any) => sum + Math.abs(row.balanceCents), 0);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const openFinancialYear = (fiscalYear: string) => {

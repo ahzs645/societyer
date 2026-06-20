@@ -5,7 +5,7 @@ import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { SignaturePanel } from "../components/SignaturePanel";
@@ -58,9 +58,9 @@ export function DocumentWorkbenchPage() {
     }).catch(() => undefined);
   }, [document?._id, markOpened, user?.displayName, userId]);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  if (!document) return <div className="page">Loading…</div>;
+  if (!document) return <PageLoading />;
 
   const openFile = async () => {
     if (latest) {

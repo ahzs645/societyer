@@ -5,7 +5,7 @@ import { api } from "@/lib/convexApi";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt } from "./_helpers";
+import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Button, Drawer, Field, SettingsShell } from "../components/ui";
 import { useToast } from "../components/Toast";
 import {
@@ -75,7 +75,7 @@ export function IntegrationMarketplacePage() {
     [meetings],
   );
 
-  if (society === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const install = async (item: CatalogItem) => {

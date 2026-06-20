@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
-import { PageHeader, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Vote, ArrowLeft, ShieldCheck, CheckCircle2, Lock } from "lucide-react";
@@ -78,7 +78,7 @@ export function ElectionDetailPage() {
     );
   }, [currentUser?.memberId, electionBundle?.eligible]);
 
-  if (electionBundle === undefined) return <div className="page">Loading…</div>;
+  if (electionBundle === undefined) return <PageLoading />;
   if (electionBundle === null || !election) return <SeedPrompt />;
 
   const canVote =

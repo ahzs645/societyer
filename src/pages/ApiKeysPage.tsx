@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
-import { SeedPrompt } from "./_helpers";
+import { PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field, Button, Banner, SettingsShell } from "../components/ui";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
@@ -90,7 +90,7 @@ export function ApiKeysPage() {
     [tokens, clientById],
   );
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const saveClient = async () => {

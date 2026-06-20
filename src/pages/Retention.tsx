@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Archive } from "lucide-react";
 import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
@@ -44,7 +44,7 @@ export function RetentionPage() {
     viewId: currentViewId,
   });
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const rows = (expired ?? []).map((r: any) => ({

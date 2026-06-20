@@ -19,7 +19,7 @@ import { useToast } from "../components/Toast";
 import { Badge, Drawer, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Modal } from "../components/Modal";
-import { SeedPrompt } from "./_helpers";
+import { PageLoading, SeedPrompt } from "./_helpers";
 import {
   ArrowLeft,
   Bot,
@@ -128,7 +128,7 @@ export function WorkflowDetailPage() {
 
   const graph = useMemo(() => buildGraph(preview), [preview]);
 
-  if (society === undefined || workflow === undefined) return <div className="page">Loading...</div>;
+  if (society === undefined || workflow === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
   if (!workflow) {
     return (

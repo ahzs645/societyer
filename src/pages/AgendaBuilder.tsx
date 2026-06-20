@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
-import { PageHeader, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { ArrowDown, ArrowUp, ClipboardList, ExternalLink, IndentDecrease, IndentIncrease, Plus, Save, Trash2 } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -84,7 +84,7 @@ export function AgendaBuilderPage() {
     })));
   }, [selected?.agenda?._id, selected?.agenda?.updatedAtISO, selected?.items?.length]);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const handleCreate = async () => {

@@ -5,7 +5,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { useBylawRules } from "../hooks/useBylawRules";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Vote, Plus, Users, CheckCircle2, Trash2 } from "lucide-react";
@@ -52,7 +52,7 @@ export function ElectionsPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<ElectionCreateForm | null>(null);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const canManage =

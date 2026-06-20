@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
-import { SeedPrompt, PageHeader } from "./_helpers";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge } from "../components/ui";
 import { Progress } from "../components/primitives";
 import { Select } from "../components/Select";
@@ -21,9 +21,9 @@ export function GoalDetailPage() {
   const toggleMilestone = useMutation(api.goals.toggleMilestone);
   const update = useMutation(api.goals.update);
 
-  if (society === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  if (!goal) return <div className="page">Loading…</div>;
+  if (!goal) return <PageLoading />;
 
   const committee = (committees ?? []).find((c: any) => c._id === goal.committeeId);
   const tasks = (allTasks ?? []).filter((t: any) => t.goalId === goal._id);
