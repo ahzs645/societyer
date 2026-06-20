@@ -190,6 +190,12 @@ Settings → Modules can enable or hide optional surfaces by society. Current mo
 
 Auth mode uses a small SQLite auth database configured by `AUTH_DB_PATH`, and maps signed-in identities into the existing Convex `users` / `members` records.
 
+> **Important — identity is client-asserted today.** The product UI talks directly to Convex,
+> Convex functions do not call `ctx.auth`, and role checks trust an `actingUserId` passed by the
+> client. `better-auth` gates the SPA login, **not** the Convex endpoint. This is intentional for
+> local-first / single-tenant use but is **not** safe for an untrusted multi-tenant deployment.
+> See [docs/security-and-auth-posture.md](/Users/ahmadjalil/github/societyer/docs/security-and-auth-posture.md) for the full model and the multi-tenant hardening checklist.
+
 ## API gateway
 
 The auth sidecar also mounts Societyer's REST API gateway:
