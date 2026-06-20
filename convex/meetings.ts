@@ -246,11 +246,17 @@ export const update = mutation({
       packageReviewedAtISO: v.optional(v.string()),
       packageReviewedByUserId: v.optional(v.id("users")),
       notes: v.optional(v.string()),
+      // Explicit clear signals — db.patch ignores undefined coming over the
+      // wire, so the client can't unset a field by sending `field: undefined`.
+      clearNoticeSent: v.optional(v.boolean()),
     }),
   },
   returns: v.any(),
   handler: async (ctx, { id, patch }) => {
-    await ctx.db.patch(id, patch);
+    const { clearNoticeSent, ...rest } = patch;
+    const next: Record<string, unknown> = { ...rest };
+    if (clearNoticeSent) next.noticeSentAt = undefined;
+    await ctx.db.patch(id, next);
   },
 });
 

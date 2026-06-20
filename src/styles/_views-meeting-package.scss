@@ -193,6 +193,10 @@
 .meeting-governance-strip__value {
   flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-2');
 }
 .meeting-governance-strip__item > .btn-action {
   flex: 0 0 auto;

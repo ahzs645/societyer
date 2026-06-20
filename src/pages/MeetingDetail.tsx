@@ -551,16 +551,19 @@ export function MeetingDetailPage() {
   const reopenMeeting = () => updateMeeting({ id: meeting._id, patch: { status: "Scheduled" } });
 
   // Notice tracking for regular meetings (the AGM workflow has its own step).
-  // Toggling is reversible, so no confirm — clearing sets the field to
-  // undefined, which Convex removes from the record.
+  // Toggling is reversible, so no confirm. Clearing uses an explicit flag
+  // because Convex drops `undefined` patch values on the wire.
   const toggleNoticeSent = async () => {
+    const wasSent = Boolean(meeting.noticeSentAt);
     await updateMeeting({
       id: meeting._id,
-      patch: { noticeSentAt: meeting.noticeSentAt ? undefined : new Date().toISOString() },
+      patch: wasSent
+        ? { clearNoticeSent: true }
+        : { noticeSentAt: new Date().toISOString() },
     });
     toast.success(
-      meeting.noticeSentAt ? "Notice cleared" : "Notice marked sent",
-      meeting.noticeSentAt
+      wasSent ? "Notice cleared" : "Notice marked sent",
+      wasSent
         ? "The meeting no longer has a notice-sent date."
         : `Recorded ${formatDate(new Date().toISOString())}.`,
     );
@@ -1909,10 +1912,58 @@ export function MeetingDetailPage() {
             </div>
           </div>
           <div className="meeting-overview-grid">
-            <MeetingSidebarColumn
-              {...sharedSidebarProps}
-              visiblePanels={meeting.type === "AGM" ? ["details", "agm"] : ["details"]}
-            />
+            <div>
+              <MeetingSidebarColumn
+                {...sharedSidebarProps}
+                visiblePanels={meeting.type === "AGM" ? ["details", "agm"] : ["details"]}
+              />
+              {society && (
+                <div className="meeting-signatures-card">
+                  <MeetingConflictsCard
+                    societyId={society._id}
+                    meetingId={meeting._id}
+                    directors={directors ?? []}
+                    motions={((minutes?.motions ?? []) as any[])
+                      .map((motion, index) => ({ motion, index }))
+                      .filter(({ motion }) => !isAdjournmentMotion(motion))
+                      .map(({ motion, index }) => ({
+                        index,
+                        label: motion.name || motion.text || `Motion ${index + 1}`,
+                      }))}
+                  />
+                </div>
+              )}
+              {society && (
+                <div className="meeting-signatures-card">
+                  <MeetingProxiesCard
+                    societyId={society._id}
+                    meetingId={meeting._id}
+                    members={members ?? []}
+                    presentCount={
+                      ((minutes?.detailedAttendance ?? []) as any[]).filter(
+                        (row) => row.quorumCounted !== false && row.status === "present",
+                      ).length || (minutes?.attendees?.length ?? 0)
+                    }
+                    quorumRequired={
+                      (quorumSnapshot as any)?.quorumRequired ??
+                      meeting.quorumRequired ??
+                      (minutes?.quorumRequired as number | undefined)
+                    }
+                  />
+                </div>
+              )}
+              {minutes && society && (
+                <div className="meeting-signatures-card">
+                  <SignaturePanel
+                    societyId={society._id}
+                    entityType="minutes"
+                    entityId={minutes._id as string}
+                    title="Minutes signatures"
+                    signerScope="directors"
+                  />
+                </div>
+              )}
+            </div>
             <MeetingSidebarColumn
               {...sharedSidebarProps}
               visiblePanels={["export"]}
@@ -1920,52 +1971,6 @@ export function MeetingDetailPage() {
               showExportGaps
             />
           </div>
-          {society && (
-            <div className="meeting-signatures-card">
-              <MeetingConflictsCard
-                societyId={society._id}
-                meetingId={meeting._id}
-                directors={directors ?? []}
-                motions={((minutes?.motions ?? []) as any[])
-                  .map((motion, index) => ({ motion, index }))
-                  .filter(({ motion }) => !isAdjournmentMotion(motion))
-                  .map(({ motion, index }) => ({
-                    index,
-                    label: motion.name || motion.text || `Motion ${index + 1}`,
-                  }))}
-              />
-            </div>
-          )}
-          {society && (
-            <div className="meeting-signatures-card">
-              <MeetingProxiesCard
-                societyId={society._id}
-                meetingId={meeting._id}
-                members={members ?? []}
-                presentCount={
-                  ((minutes?.detailedAttendance ?? []) as any[]).filter(
-                    (row) => row.quorumCounted !== false && row.status === "present",
-                  ).length || (minutes?.attendees?.length ?? 0)
-                }
-                quorumRequired={
-                  (quorumSnapshot as any)?.quorumRequired ??
-                  meeting.quorumRequired ??
-                  (minutes?.quorumRequired as number | undefined)
-                }
-              />
-            </div>
-          )}
-          {minutes && society && (
-            <div className="meeting-signatures-card">
-              <SignaturePanel
-                societyId={society._id}
-                entityType="minutes"
-                entityId={minutes._id as string}
-                title="Minutes signatures"
-                signerScope="directors"
-              />
-            </div>
-          )}
           </>
         )}
 
@@ -2201,10 +2206,11 @@ export function MeetingDetailPage() {
         )}
       </Drawer>
 
-      <Drawer
+      <Modal
         open={!!approvalEdit}
         onClose={() => setApprovalEdit(null)}
         title="Record minutes approval"
+        size="md"
         footer={
           <>
             {minutes?.approvedAt && (
@@ -2250,7 +2256,7 @@ export function MeetingDetailPage() {
             </Field>
           </div>
         )}
-      </Drawer>
+      </Modal>
 
       <Modal
         open={!!nextMeetingDraft}
@@ -2309,7 +2315,7 @@ export function MeetingDetailPage() {
               />
             </Field>
             {carriedForwardMotions.length > 0 && (
-              <label className="row" style={{ gap: 6 }}>
+              <label className="checkbox">
                 <input
                   type="checkbox"
                   checked={nextMeetingDraft.carryForward}

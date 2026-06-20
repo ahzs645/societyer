@@ -168,29 +168,44 @@ export function MinutesDocumentPreview({ bodyHtml }: { bodyHtml: string }) {
   const renderRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
 
-  // Render the docx whenever the content changes.
+  // Render the docx whenever the content changes. To avoid flicker when the
+  // user toggles options (public-copy mode, style, etc.), render into a hidden
+  // sibling buffer first and only swap the rendered pages into the visible
+  // container once everything (build → renderAsync → image retype → paginate)
+  // is ready. The buffer is absolutely positioned + visibility:hidden so the
+  // previous render stays in place during the build.
   useEffect(() => {
     let cancelled = false;
     const target = renderRef.current;
-    if (!target) return;
-    setStatus("loading");
-    target.innerHTML = "";
-    // Measure at natural size: clear any leftover fit-to-width zoom from a prior
-    // render so offsetHeight reads true layout px during pagination.
-    target.style.setProperty("--docx-scale", "1");
+    const viewport = viewportRef.current;
+    if (!target || !viewport) return;
+    if (target.childElementCount === 0) setStatus("loading");
+
+    const buffer = document.createElement("div");
+    buffer.style.cssText =
+      "position:absolute;inset:0;visibility:hidden;pointer-events:none;";
+    // Pagination reads offsetHeight, so the buffer must be at scale 1 — the
+    // visible target's --docx-scale (set by the fit-to-width effect) doesn't
+    // matter here since the swap moves children, not styles.
+    buffer.style.setProperty("--docx-scale", "1");
+    viewport.appendChild(buffer);
 
     (async () => {
       try {
         const blob = await buildWordDocxBlob({ bodyHtml });
-        if (cancelled || !renderRef.current) return;
-        await renderAsync(blob, renderRef.current, undefined, RENDER_OPTIONS);
-        if (cancelled || !renderRef.current) return;
-        await retypeImageBlobs(renderRef.current, blob);
-        paginateRenderedDocx(renderRef.current);
-        if (!cancelled) setStatus("ready");
+        if (cancelled) return;
+        await renderAsync(blob, buffer, undefined, RENDER_OPTIONS);
+        if (cancelled) return;
+        await retypeImageBlobs(buffer, blob);
+        paginateRenderedDocx(buffer);
+        if (cancelled) return;
+        target.replaceChildren(...Array.from(buffer.childNodes));
+        setStatus("ready");
       } catch (error) {
         console.error("Failed to render docx preview", error);
         if (!cancelled) setStatus("error");
+      } finally {
+        buffer.remove();
       }
     })();
 
