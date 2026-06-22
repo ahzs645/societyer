@@ -53,6 +53,7 @@ const PrivacyPage = React.lazy(() => import("./pages/Privacy").then((m) => ({ de
 const PoliciesPage = React.lazy(() => import("./pages/Policies").then((m) => ({ default: m.PoliciesPage })));
 const SettingsPage = React.lazy(() => import("./pages/Settings").then((m) => ({ default: m.SettingsPage })));
 const ApiKeysPage = React.lazy(() => import("./pages/ApiKeysPage").then((m) => ({ default: m.ApiKeysPage })));
+const WebhooksPage = React.lazy(() => import("./pages/Webhooks").then((m) => ({ default: m.WebhooksPage })));
 const CommitteesPage = React.lazy(() => import("./pages/Committees").then((m) => ({ default: m.CommitteesPage })));
 const CommitteeDetailPage = React.lazy(() => import("./pages/CommitteeDetail").then((m) => ({ default: m.CommitteeDetailPage })));
 const GoalsPage = React.lazy(() => import("./pages/Goals").then((m) => ({ default: m.GoalsPage })));
@@ -507,6 +508,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="custom-fields" element={<CustomFieldsPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="settings/api-keys" element={<ApiKeysPage />} />
+            <Route path="webhooks" element={<WebhooksPage />} />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -22,6 +22,7 @@
 // reflects. These return null (a deliberate no-op) with no error.
 export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
   "apiPlatform:revokeToken",
+  "apiPlatform:setWebhookSubscriptionStatus",
   "communications:ensureDefaultTemplates",
   "communications:sendCampaign",
   "communications:sendMeetingNotice",

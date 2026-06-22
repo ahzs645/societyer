@@ -61,6 +61,7 @@ import {
   PenLine,
   PiggyBank,
   Plug,
+  Webhook,
   Receipt,
   Scale,
   Scroll,
@@ -251,6 +252,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/imports": { icon: FileJson, group: "administration", label: "Import sessions" },
   "/app/paperless": { icon: Database, group: "administration", label: "Paperless-ngx", module: "paperless" },
   "/app/settings": { icon: Settings, group: "administration", label: "Settings" },
+  "/app/webhooks": { icon: Webhook, group: "administration", label: "Webhooks" },
   "/app/audit": { icon: ShieldCheck, group: "administration", label: "Audit log" },
   "/app/exports": { icon: Download, group: "administration", label: "Data export" },
 };
