@@ -369,6 +369,13 @@ export function AccountingWorkbenchPage() {
         })}>
           <FileSpreadsheet size={12} /> Backfill imports
         </button>
+        <Link className="btn-action" to="/app/reconciliation"><GitCompareArrows size={12} /> Bank reconciliation</Link>
+      </div>
+
+      <div className="muted" style={{ marginTop: 8, marginBottom: 8, fontSize: "var(--fs-sm)" }}>
+        Two reconciliation surfaces work together: <Link to="/app/reconciliation">Bank reconciliation</Link> matches
+        imported bank lines to records, while ledger reconciliation here checks the journal against a statement balance.
+        Use <strong>Backfill imports</strong> to post synced/manual bank transactions into the journal so both agree.
       </div>
 
       <div className="stat-grid">

@@ -182,6 +182,9 @@ export function ReconciliationPage() {
         subtitle="Match imported bank transactions to internal records (filings, donation receipts, payroll). Anything unreconciled at year-end is a red flag for the auditor."
         actions={
           <>
+            <Link className="btn-action" to="/app/financials/accounting">
+              <Scale size={12} /> Ledger reconciliation
+            </Link>
             <button className="btn-action" onClick={() => setAddOpen(true)}>
               <Plus size={12} /> Add transaction
             </button>
