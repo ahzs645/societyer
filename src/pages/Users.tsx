@@ -2,10 +2,11 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId, setStoredUserId } from "../hooks/useCurrentUser";
+import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
-import { UserCog, PlusCircle, Trash2, KeyRound } from "lucide-react";
+import { UserCog, PlusCircle, Trash2, KeyRound, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "../components/Toast";
 import { useAuth } from "../auth/AuthProvider";
@@ -24,6 +25,8 @@ export function UsersPage() {
   const setRole = useMutation(api.users.setRole);
   const remove = useMutation(api.users.remove);
   const actingUserId = useCurrentUserId() ?? undefined;
+  const { role: myRole, permissions, can } = usePermissions();
+  const canManageUsers = can("users:write");
   const [draft, setDraft] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
@@ -44,21 +47,46 @@ export function UsersPage() {
             : "Role-based access controls every write in the app. No-auth mode uses the local acting-user picker."
         }
         actions={
-          <button
-            className="btn-action btn-action--primary"
-            onClick={() =>
-              setDraft({
-                email: "",
-                displayName: "",
-                role: "Member",
-                status: "Active",
-              })
-            }
-          >
-            <PlusCircle size={12} /> Add user
-          </button>
+          canManageUsers ? (
+            <button
+              className="btn-action btn-action--primary"
+              onClick={() =>
+                setDraft({
+                  email: "",
+                  displayName: "",
+                  role: "Member",
+                  status: "Active",
+                })
+              }
+            >
+              <PlusCircle size={12} /> Add user
+            </button>
+          ) : undefined
         }
       />
+
+      {myRole && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card__head">
+            <h2 className="card__title">
+              <ShieldCheck size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+              Your access
+            </h2>
+            <Badge tone={myRole === "Owner" || myRole === "Admin" ? "success" : "info"}>{myRole}</Badge>
+          </div>
+          <div className="card__body">
+            <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 6 }}>
+              Your role grants {permissions.length} permission{permissions.length === 1 ? "" : "s"}.
+              {!canManageUsers && " You can view users but not change roles."}
+            </div>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {permissions.map((p) => (
+                <code key={p} className="chip" style={{ fontSize: 11 }}>{p}</code>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <div className="card__head">
@@ -92,7 +120,7 @@ export function UsersPage() {
                 <td title={isLastOwner ? lastOwnerHint : undefined}>
                   <Select
                     value={u.role}
-                    disabled={isLastOwner}
+                    disabled={isLastOwner || !canManageUsers}
                     onChange={async (v) => {
                       const ok = await confirm({
                         title: "Change user role?",
@@ -128,8 +156,8 @@ export function UsersPage() {
                   <button
                     className="btn btn--ghost btn--sm btn--icon"
                     aria-label={`Remove user ${u.name ?? u.email}`}
-                    disabled={isLastOwner}
-                    title={isLastOwner ? lastOwnerHint : undefined}
+                    disabled={isLastOwner || !canManageUsers}
+                    title={isLastOwner ? lastOwnerHint : !canManageUsers ? "Your role can't manage users." : undefined}
                     onClick={async () => {
                       const ok = await confirm({
                         title: "Remove user access?",

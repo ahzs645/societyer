@@ -254,6 +254,31 @@ function byId(rows: any[], id: string | undefined) {
   return rows.find((row) => row._id === id) ?? null;
 }
 
+// Mirror of convex/lib/permissions ROLE_MATRIX for the offline/demo runtime so
+// usePermissions() shows an accurate role + permission set without a backend.
+const STATIC_PERMISSIONS = [
+  "society:read", "society:write", "society:update", "members:read", "members:write",
+  "directors:read", "directors:write", "employees:read", "employees:write", "committees:read",
+  "committees:write", "meetings:read", "meetings:write", "minutes:read", "minutes:write",
+  "minutes:approve", "agendas:read", "agendas:write", "motions:read", "motions:write",
+  "proxies:read", "proxies:write", "conflicts:read", "conflicts:write", "attestations:read",
+  "attestations:write", "auditors:read", "auditors:write", "courtOrders:read", "courtOrders:write",
+  "filings:read", "filings:write", "filings:submit", "deadlines:read", "deadlines:write",
+  "commitments:read", "commitments:write", "financials:read", "financials:write", "elections:read",
+  "elections:write", "elections:tally", "grants:read", "grants:write", "documents:read",
+  "documents:write", "users:read", "users:write", "tasks:read", "tasks:write", "exports:read",
+  "exports:download", "settings:read", "settings:write", "settings:manage", "audit:read",
+  "volunteers:read", "volunteers:write", "communications:read", "communications:write",
+];
+function staticPermissionsForRole(role: string): string[] {
+  const reads = STATIC_PERMISSIONS.filter((p) => p.endsWith(":read"));
+  if (role === "Owner") return STATIC_PERMISSIONS;
+  if (role === "Admin") return STATIC_PERMISSIONS.filter((p) => p !== "settings:manage");
+  if (role === "Director") return [...reads, "meetings:write", "minutes:write", "agendas:write", "documents:write", "exports:download"];
+  if (role === "Member") return ["society:read", "members:read", "meetings:read", "minutes:read", "elections:read", "documents:read", "grants:read", "agendas:read", "motions:read", "volunteers:read", "communications:read", "tasks:read"];
+  return reads; // Viewer
+}
+
 function staticCounterpartyStats(externalId?: string) {
   if (!externalId) return {};
   const rows = financialTransactions.filter((row) => row.counterpartyExternalId === externalId);
@@ -2110,6 +2135,14 @@ function queryCasesTransparency8(name: string, args: StaticArgs, store?: StaticD
       return tables.orgChartAssignments;
     case "users:get":
       return store?.getRow("users", args?.id) ?? byId(users, args?.id) ?? users[0];
+    case "permissions:myPermissions": {
+      const permUser = store?.getRow("users", args?.userId) ?? byId(users, args?.userId) ?? users[0];
+      return { role: permUser?.role ?? "Owner", permissions: staticPermissionsForRole(permUser?.role ?? "Owner") };
+    }
+    case "permissions:check": {
+      const permUser = store?.getRow("users", args?.userId) ?? byId(users, args?.userId) ?? users[0];
+      return staticPermissionsForRole(permUser?.role ?? "Owner").includes(args?.permission);
+    }
     case "volunteers:applications":
       return tables.volunteerApplications;
     case "volunteers:screenings":
