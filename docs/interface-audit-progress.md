@@ -38,10 +38,25 @@ handled in `src/lib/staticConvex.ts` or classified in `src/lib/staticConvexParit
   `aiAgents.getAgentRunContext`, load_skills/learn_tools/execute_tool tools, persisted via
   `aiAgents._recordAgentRun`). Falls back to the deterministic `runAgent` mutation when no
   provider key is set, so demo/offline still works. UI (`AiAgents.tsx`) now calls the action.
+- [x] Reconciliation now records the real actor (was hard-coded "You") — passes `actor`
+  to `match`/`markManual`/auto-match (`Reconciliation.tsx`).
 - [ ] Wave live sync pulls invoices not bank transactions; no manual "add bank transaction"
-- [ ] Bridge the two finance reconciliation/transaction systems
-- [ ] Grants discovery → application connection (`GrantSourceDetail.tsx` "Add to pipeline")
-- [ ] Internal workflow runs are theatrical (`sleep`, `demo:true`)
+  — needs a backend adapter change + new `financialTransactions` create mutation. (Follow-up)
+- [ ] Bridge the two finance reconciliation/transaction systems — large, cross-cutting. (Follow-up)
+- [ ] Grants discovery → application connection (`GrantSourceDetail.tsx` "Add to pipeline"). (Follow-up)
+- [ ] Internal workflow runs are theatrical (`sleep`, `demo:true`). (Follow-up)
+
+## Larger follow-ups (scoped, not yet built — need their own pass)
+These are real features/risky backend changes rather than wiring, deliberately deferred:
+- Webhooks/integration admin UI over `apiPlatform.*` (14 fns).
+- Accounting counterparties / fund-restrictions / mappings / GL surfaces (~10 fns).
+- `calendarSync` connect flow (4 fns).
+- RBAC enforcement: wire `permissions.myPermissions` into nav/route guards.
+- Full export buttons (`exports.exportTable`/`exportWorkspace`) and manual evidence entry
+  (`evidenceRegisters.createManual`).
+- Remaining delete sweep: 12 `legalOperations.remove*`, `agendas.remove/removeItem`.
+- AGM steps auto-linking Elections / Written-Resolutions.
+- Wave invoice-vs-bank-transaction semantics + manual bank-transaction entry.
 
 ## Notes
 - `git` branch: `claude/quirky-noether-sf89ml`

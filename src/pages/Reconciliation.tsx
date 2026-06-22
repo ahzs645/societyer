@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { useCurrentUserId } from "../hooks/useCurrentUser";
+import { useCurrentUserId, useCurrentUser } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge } from "../components/ui";
 import { Select } from "../components/Select";
@@ -44,6 +44,7 @@ export function ReconciliationPage() {
   const linkInventoryReceipt = useMutation(api.inventoryHub.linkReceipt);
   const unlinkInventoryReceipt = useMutation(api.inventoryHub.unlinkReceipt);
   const actingUserId = useCurrentUserId() ?? undefined;
+  const actorName = useCurrentUser()?.displayName ?? undefined;
   const prompt = usePrompt();
   const confirm = useConfirm();
   const toast = useToast();
@@ -130,6 +131,7 @@ export function ReconciliationPage() {
         matchedKind: top.kind,
         matchedId: top.id,
         note: `Auto-matched · score ${top.score.toFixed(0)}`,
+        actor: actorName,
       });
       count++;
     }
@@ -282,6 +284,7 @@ export function ReconciliationPage() {
                               matchedKind: c.kind,
                               matchedId: c.id,
                               note: `Matched via UI · ${c.label}`,
+                              actor: actorName,
                             });
                             toast.success("Matched");
                           }}
@@ -301,7 +304,7 @@ export function ReconciliationPage() {
                           required: true,
                         });
                         if (!note) return;
-                        await markManualM({ txnId: selectedRow.txn._id, note });
+                        await markManualM({ txnId: selectedRow.txn._id, note, actor: actorName });
                         toast.success("Manual reconciliation recorded");
                       }}
                     >
