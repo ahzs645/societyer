@@ -145,6 +145,18 @@ export type DesktopNativeThemeState = {
   themeSource: string;
 };
 
+export type DesktopPrintToPdfInput = {
+  /** A complete, self-contained HTML document (styles inline, images as data URLs). */
+  html: string;
+  /** Suggested file name for the written PDF. */
+  fileName: string;
+};
+
+export type DesktopPrintToPdfResult = {
+  /** Absolute path of the PDF that was written. */
+  path: string;
+};
+
 export type SocietyerDesktopBridge = {
   chooseWorkspaceDirectory(): Promise<string | null>;
   getWorkspaceInfo(): Promise<DesktopWorkspaceInfo | null>;
@@ -188,6 +200,7 @@ export type SocietyerDesktopBridge = {
   getSecret(key: DesktopSecretKey): Promise<string | null>;
   setSecret(key: DesktopSecretKey, value: string): Promise<DesktopSecretStatus>;
   removeSecret(key: DesktopSecretKey): Promise<DesktopSecretStatus>;
+  printToPdf(input: DesktopPrintToPdfInput): Promise<DesktopPrintToPdfResult>;
   onNativeThemeChanged(listener: (state: DesktopNativeThemeState) => void): () => void;
   onMenuAction(listener: (action: string) => void): () => void;
 };

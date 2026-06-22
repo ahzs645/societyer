@@ -71,6 +71,13 @@ export const DesktopSchemas = {
   readDocumentVersionInput: z.object({
     key: z.string(),
   }),
+  printToPdfInput: z.object({
+    html: z.string(),
+    fileName: z.string(),
+  }),
+  printToPdfResult: z.object({
+    path: z.string(),
+  }),
   serviceConfig: z.object({
     serviceId: z.custom<DesktopServiceId>(
       (value) => typeof value === "string" && isDesktopServiceId(value),
