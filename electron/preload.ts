@@ -44,6 +44,7 @@ const bridge: SocietyerDesktopBridge = {
   openBackupFolder: (backupPath?: string) =>
     ipcRenderer.invoke(IpcChannels.OPEN_BACKUP_FOLDER_CHANNEL, backupPath),
   openLogFolder: () => ipcRenderer.invoke(IpcChannels.OPEN_LOG_FOLDER_CHANNEL),
+  printToPdf: (input) => ipcRenderer.invoke(IpcChannels.PRINT_TO_PDF_CHANNEL, input),
   getSecret: (key) => ipcRenderer.invoke(IpcChannels.GET_SECRET_CHANNEL, key),
   setSecret: (key, value) => ipcRenderer.invoke(IpcChannels.SET_SECRET_CHANNEL, { key, value }),
   removeSecret: (key) => ipcRenderer.invoke(IpcChannels.REMOVE_SECRET_CHANNEL, key),

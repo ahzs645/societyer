@@ -1,10 +1,20 @@
-// HTML → PDF via the browser's print engine. Renders the body into a hidden
-// iframe and calls window.print(); the user picks "Save as PDF" and gets a
-// vector, text-searchable PDF that pixel-matches the preview. No
-// rasterization, no html2canvas, no extra deps.
+// HTML → PDF. The PDF is produced from the *same* docx-preview rendering shown
+// in the on-screen preview and downloaded as Word — not a separate re-styling
+// of the source HTML — so all three outputs match.
+//
+// On the web (and as a fallback) we render that HTML into a hidden iframe and
+// call window.print(); the user picks "Save as PDF" and gets a vector,
+// text-searchable PDF. On the desktop build, an Electron offscreen window
+// converts the same HTML straight to a PDF file with no print dialog.
 
 import { escapeHtml } from "./html";
+import { buildWordDocxBlob } from "./docx";
+import { renderDocxToPaginatedHtml, PRINT_PAGE_CSS } from "./docxPreview";
+import { getDesktopBridge } from "./desktopBridge";
 
+// Fallback styling, used only when the docx-preview render fails. Mirrors the
+// docx export's look closely enough that a failed render still yields a usable
+// PDF rather than nothing.
 export const DOCUMENT_CSS = `
   body { font-family: Calibri, "Segoe UI", Arial, sans-serif; font-size: 11pt; color: #1a1a1a; }
   h1 { font-size: 20pt; margin: 0 0 4pt; }
@@ -28,8 +38,8 @@ export const DOCUMENT_CSS = `
   @page { size: letter; margin: 0.65in; }
 `;
 
-// Layered on top of DOCUMENT_CSS only in the print/PDF pipeline. Headings stay
-// with the content that follows; motion blocks, table rows, and list items
+// Layered on top of DOCUMENT_CSS only in the fallback print pipeline. Headings
+// stay with the content that follows; motion blocks, table rows, and list items
 // don't split across pages; long tables keep flowing but repeat their header.
 export const PRINT_CSS = `
   @media print {
@@ -42,30 +52,29 @@ export const PRINT_CSS = `
   }
 `;
 
-/**
- * Render the HTML body in a hidden iframe and trigger the browser's print
- * engine. The user picks "Save as PDF" from the print dialog and gets a vector,
- * text-searchable PDF that matches the in-app preview.
- *
- * `filename` is retained in the signature for API parity but the browser print
- * dialog is authoritative — it asks the user for the file name and that can't
- * be overridden for security reasons.
- *
- * Returns a Promise that resolves when the print dialog closes (or after a
- * 60-second fallback, in case `afterprint` never fires).
- */
-export function exportPdfDownload({
-  filename: _filename,
-  title,
-  bodyHtml,
-}: {
-  filename: string;
-  title: string;
-  bodyHtml: string;
-}): Promise<void> {
-  return new Promise<void>((resolve) => {
-    const html = `<!doctype html><html><head><meta charset="utf-8" /><title>${escapeHtml(title)}</title><style>${DOCUMENT_CSS}${PRINT_CSS}</style></head><body>${bodyHtml}</body></html>`;
+// Build the print document from the docx-preview rendering: docx-preview's own
+// styles + the paginated `.docx-wrapper`, then our print overrides (after the
+// content so they win the cascade). This is the same layout as the preview.
+async function buildDocxPrintHtml({ title, bodyHtml }: { title: string; bodyHtml: string }): Promise<string> {
+  const blob = await buildWordDocxBlob({ bodyHtml });
+  const rendered = await renderDocxToPaginatedHtml(blob);
+  return `<!doctype html><html><head><meta charset="utf-8" /><title>${escapeHtml(title)}</title></head><body>${rendered}<style>${PRINT_PAGE_CSS}</style></body></html>`;
+}
 
+function buildHtmlFallbackDocument({ title, bodyHtml }: { title: string; bodyHtml: string }): string {
+  return `<!doctype html><html><head><meta charset="utf-8" /><title>${escapeHtml(title)}</title><style>${DOCUMENT_CSS}${PRINT_CSS}</style></head><body>${bodyHtml}</body></html>`;
+}
+
+/**
+ * Render an HTML document in a hidden iframe and trigger the browser's print
+ * engine. The user picks "Save as PDF" from the print dialog and gets a vector,
+ * text-searchable PDF.
+ *
+ * Resolves when the print dialog closes (or after a 60-second fallback, in case
+ * `afterprint` never fires).
+ */
+function printHtmlDocument(html: string): Promise<void> {
+  return new Promise<void>((resolve) => {
     const iframe = document.createElement("iframe");
     iframe.setAttribute("aria-hidden", "true");
     iframe.style.position = "fixed";
@@ -105,4 +114,47 @@ export function exportPdfDownload({
     };
     iframe.srcdoc = html;
   });
+}
+
+/**
+ * Export the minutes body as a PDF that matches the on-screen preview and the
+ * Word download. Renders the actual .docx through docx-preview, then:
+ *  - on desktop, hands the HTML to Electron to write a PDF file silently;
+ *  - on the web (or if the desktop bridge/render fails), prints via the
+ *    browser's "Save as PDF" dialog.
+ *
+ * `filename` is the suggested name. On the web the browser print dialog is
+ * authoritative and the name can't be overridden for security reasons; on
+ * desktop it's used for the written file.
+ */
+export async function exportPdfDownload({
+  filename,
+  title,
+  bodyHtml,
+}: {
+  filename: string;
+  title: string;
+  bodyHtml: string;
+}): Promise<void> {
+  let html: string;
+  try {
+    html = await buildDocxPrintHtml({ title, bodyHtml });
+  } catch (error) {
+    console.error("docx-based PDF render failed; falling back to HTML print", error);
+    html = buildHtmlFallbackDocument({ title, bodyHtml });
+  }
+
+  const bridge = getDesktopBridge();
+  if (bridge?.printToPdf) {
+    try {
+      await bridge.printToPdf({ html, fileName: filename });
+      return;
+    } catch (error) {
+      // Desktop conversion failed (e.g. write error) — fall through to the
+      // browser print dialog so the user still gets their PDF.
+      console.error("Desktop printToPdf failed; falling back to browser print", error);
+    }
+  }
+
+  return printHtmlDocument(html);
 }

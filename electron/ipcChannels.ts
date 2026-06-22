@@ -21,6 +21,7 @@ export const OPEN_BACKUP_FOLDER_CHANNEL = "societyer:openBackupFolder";
 export const OPEN_LOG_FOLDER_CHANNEL = "societyer:openLogFolder";
 export const READ_MAIN_LOG_CHANNEL = "societyer:readMainLog";
 export const LOG_RENDERER_EVENT_CHANNEL = "societyer:logRendererEvent";
+export const PRINT_TO_PDF_CHANNEL = "societyer:printToPdf";
 export const GET_SECRET_CHANNEL = "societyer:getSecret";
 export const SET_SECRET_CHANNEL = "societyer:setSecret";
 export const REMOVE_SECRET_CHANNEL = "societyer:removeSecret";
