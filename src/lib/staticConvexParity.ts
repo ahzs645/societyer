@@ -107,8 +107,6 @@ export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "reconciliation:markManual",
   "reconciliation:match",
   "reconciliation:unmatch",
-  "signatures:revoke",
-  "signatures:sign",
   "society:clearDarkLogo",
   "society:clearLetterhead",
   "society:clearLogo",

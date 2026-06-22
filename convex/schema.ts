@@ -1328,17 +1328,44 @@ export default defineSchema({
     entityType: v.string(), // minutes | resolution | filing
     entityId: v.string(),
     userId: v.optional(v.id("users")),
+    directorId: v.optional(v.id("directors")),
+    memberId: v.optional(v.id("members")),
+    signatureProfileId: v.optional(v.id("signatureProfiles")),
     signerName: v.string(),
     signerRole: v.optional(v.string()),
-    method: v.string(), // typed | drawn | email_confirm
+    method: v.string(), // typed | drawn | uploaded | email_confirm
     typedName: v.optional(v.string()),
-    imageDataUrl: v.optional(v.string()), // PNG data URL for drawn signatures
+    imageDataUrl: v.optional(v.string()), // image data URL for drawn/uploaded signatures
+    imageMimeType: v.optional(v.string()),
     signedAtISO: v.string(),
     ipAddress: v.optional(v.string()),
     demo: v.boolean(),
   })
     .index("by_society", ["societyId"])
     .index("by_entity", ["entityType", "entityId"]),
+
+  signatureProfiles: defineTable({
+    societyId: v.id("societies"),
+    userId: v.optional(v.id("users")),
+    directorId: v.optional(v.id("directors")),
+    memberId: v.optional(v.id("members")),
+    signerName: v.string(),
+    normalizedSignerName: v.string(),
+    signerRole: v.optional(v.string()),
+    method: v.string(), // typed | drawn | uploaded
+    typedName: v.optional(v.string()),
+    imageDataUrl: v.optional(v.string()),
+    imageMimeType: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+    createdByUserId: v.optional(v.id("users")),
+    updatedByUserId: v.optional(v.id("users")),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_user", ["userId"])
+    .index("by_director", ["directorId"])
+    .index("by_member", ["memberId"])
+    .index("by_society_name", ["societyId", "normalizedSignerName"]),
 
   filingBotRuns: defineTable({
     societyId: v.id("societies"),

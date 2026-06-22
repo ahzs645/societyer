@@ -10,7 +10,7 @@ import { SeedPrompt } from "../../../pages/_helpers";
 import { useSociety } from "../../../hooks/useSociety";
 import { formatDate } from "../../../lib/format";
 import { exportWordDocx } from "../../../lib/docx";
-import { exportPdfDownload } from "../../../lib/pdf";
+import { exportPdfDownload, printPdfDocument } from "../../../lib/pdf";
 import { renderMinutesHtml } from "../lib/minutesRenderer";
 import { MinutesDocumentPreview } from "../components/MinutesDocumentPreview";
 import { getQuorumSnapshot } from "../components/MeetingDetailSupport";
@@ -140,6 +140,13 @@ export function MeetingMinutesPreviewPage() {
     });
   };
 
+  const printPreview = async () => {
+    await printPdfDocument({
+      title: `${meeting.title} - Minutes`,
+      bodyHtml,
+    });
+  };
+
   return (
     <div className="page page--wide meeting-preview-page">
       <div className="meeting-preview-page__header">
@@ -156,7 +163,10 @@ export function MeetingMinutesPreviewPage() {
             <FileDown size={12} /> Export Word
           </button>
           <button className="btn-action" onClick={exportPreviewToPdf}>
-            <Printer size={12} /> Export PDF
+            <FileDown size={12} /> Download PDF
+          </button>
+          <button className="btn-action" onClick={printPreview}>
+            <Printer size={12} /> Print
           </button>
         </div>
       </div>

@@ -16,7 +16,7 @@ import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion
 import { isPostponedOutcome } from "../lib/motionGovernance";
 import { escapeHtml } from "../lib/html";
 import { exportWordDocx } from "../lib/docx";
-import { exportPdfDownload } from "../lib/pdf";
+import { exportPdfDownload, printPdfDocument } from "../lib/pdf";
 import { downloadStoredZip } from "../lib/zip";
 import {
   MINUTES_EXPORT_STYLES,
@@ -928,6 +928,12 @@ export function MeetingDetailPage() {
     );
   };
 
+  const printMinutes = async () => {
+    const args = buildExportArgs("pdf");
+    if (!args) return;
+    await printPdfDocument(args);
+  };
+
   const openMinutesPreviewPage = () => {
     if (!meeting || !minutes) return;
     window.open(`/app/meetings/${meeting._id}/preview`, "_blank", "noopener,noreferrer");
@@ -1670,6 +1676,7 @@ export function MeetingDetailPage() {
     setIncludePlaceholdersInExport,
     exportToWord,
     exportToPdf,
+    printMinutes,
     publicCopyMode,
     setPublicCopyMode,
     minutesExportGaps,
@@ -1803,10 +1810,17 @@ export function MeetingDetailPage() {
                     },
                     {
                       id: "pdf",
-                      label: "Export PDF",
-                      icon: <Printer size={12} />,
+                      label: "Download PDF",
+                      icon: <FileDown size={12} />,
                       disabled: !minutes,
                       onSelect: exportToPdf,
+                    },
+                    {
+                      id: "print",
+                      label: "Print minutes",
+                      icon: <Printer size={12} />,
+                      disabled: !minutes,
+                      onSelect: printMinutes,
                     },
                   ],
                 },

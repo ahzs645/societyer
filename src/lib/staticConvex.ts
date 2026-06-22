@@ -1215,6 +1215,7 @@ const STATIC_EXPORT_TABLES = [
   "treasurerReports",
   "transactionCandidates",
   "signatures",
+  "signatureProfiles",
   "filingBotRuns",
   "legalTemplateDataFields",
   "legalTemplates",
@@ -2063,8 +2064,14 @@ function queryCasesMembers7(name: string, args: StaticArgs, store?: StaticDemoDe
     case "publicPortal:volunteerIntakeContext":
       if (args?.slug !== society.publicSlug || !society.publicTransparencyEnabled || !society.publicVolunteerIntakeEnabled) return null;
       return { society, grants: tables.grants, committees };
-    case "retention:expiredForSociety":
     case "signatures:listForEntity":
+      return (store?.listRows("signatures", {}) ?? [])
+        .filter((row: any) => row.entityType === args?.entityType && row.entityId === args?.entityId)
+        .sort((a: any, b: any) => String(a.signedAtISO ?? "").localeCompare(String(b.signedAtISO ?? "")));
+    case "signatures:listProfilesForSociety":
+      return (store?.listRows("signatureProfiles", { societyId: args?.societyId ?? SOCIETY_ID }) ?? [])
+        .sort((a: any, b: any) => String(a.signerName ?? "").localeCompare(String(b.signerName ?? "")));
+    case "retention:expiredForSociety":
       return [];
     case "subscriptions:allSubscriptions":
       return memberSubscriptions;
@@ -4113,6 +4120,12 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
   const localResult = store?.mutationResult(name, args);
   if (localResult !== undefined) return localResult;
 
+  if (name === "signatures:saveProfile") return staticUpsertSignatureProfile(store, args);
+  if (name === "signatures:sign") return staticSign(store, args);
+  if (name === "signatures:revoke") {
+    store?.removeRow("signatures", args?.id);
+    return null;
+  }
 
   for (const dispatch of MUT_DISPATCHERS) {
     const result = dispatch(name, args, store);
@@ -4162,6 +4175,88 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
   // real gap and must be surfaced rather than silently dropped.
   if (STATIC_OFFLINE_NOOP_WRITES.has(name)) return null;
   return reportStaticWriteGap(name);
+}
+
+function staticNormalizeSignerName(value: unknown) {
+  return String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function staticFindSignatureProfile(store: StaticDemoDexieStore | null | undefined, args: StaticArgs & { normalizedSignerName?: string }) {
+  const societyId = args?.societyId ?? SOCIETY_ID;
+  const normalizedSignerName = args?.normalizedSignerName ?? staticNormalizeSignerName(args?.signerName);
+  const profiles = store?.listRows("signatureProfiles", { societyId }) ?? [];
+  return (
+    profiles.find((profile: any) => args?.userId && profile.userId === args.userId) ??
+    profiles.find((profile: any) => args?.directorId && profile.directorId === args.directorId) ??
+    profiles.find((profile: any) => args?.memberId && profile.memberId === args.memberId) ??
+    profiles.find((profile: any) => profile.normalizedSignerName === normalizedSignerName) ??
+    null
+  );
+}
+
+function staticUpsertSignatureProfile(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
+  const signerName = String(args?.signerName ?? args?.typedName ?? "").trim();
+  if (!signerName) throw new Error("A signer name is required.");
+
+  const now = new Date().toISOString();
+  const normalizedSignerName = staticNormalizeSignerName(signerName);
+  const existing = staticFindSignatureProfile(store, { ...args, normalizedSignerName });
+  const id = args?.id ?? existing?._id ?? staticLocalId("signatureProfile", "profile");
+  store?.upsertRow("signatureProfiles", {
+    ...existing,
+    _id: id,
+    _creationTime: existing?._creationTime ?? Date.now(),
+    societyId: args?.societyId ?? existing?.societyId ?? SOCIETY_ID,
+    userId: args?.userId,
+    directorId: args?.directorId,
+    memberId: args?.memberId,
+    signerName,
+    normalizedSignerName,
+    signerRole: args?.signerRole,
+    method: args?.method ?? (args?.imageDataUrl ? "drawn" : "typed"),
+    typedName: args?.typedName,
+    imageDataUrl: args?.imageDataUrl,
+    imageMimeType: args?.imageMimeType,
+    createdAtISO: existing?.createdAtISO ?? now,
+    updatedAtISO: now,
+    createdByUserId: existing?.createdByUserId ?? args?.actingUserId,
+    updatedByUserId: args?.actingUserId,
+  });
+  return id;
+}
+
+function staticSign(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
+  const signerName = String(args?.signerName ?? args?.typedName ?? "").trim();
+  if (!signerName) throw new Error("A signer name is required.");
+
+  let signatureProfileId = args?.signatureProfileId;
+  if (args?.saveToProfile) {
+    signatureProfileId = staticUpsertSignatureProfile(store, args);
+  }
+
+  const profile = signatureProfileId ? store?.getRow("signatureProfiles", signatureProfileId) : null;
+  const now = new Date().toISOString();
+  const id = args?.id ?? staticLocalId("signature", "sign");
+  store?.upsertRow("signatures", {
+    _id: id,
+    _creationTime: Date.now(),
+    societyId: args?.societyId ?? profile?.societyId ?? SOCIETY_ID,
+    entityType: args?.entityType,
+    entityId: args?.entityId,
+    userId: args?.userId ?? profile?.userId,
+    directorId: args?.directorId ?? profile?.directorId,
+    memberId: args?.memberId ?? profile?.memberId,
+    signatureProfileId,
+    signerName,
+    signerRole: args?.signerRole ?? profile?.signerRole,
+    method: args?.method ?? profile?.method ?? "typed",
+    typedName: args?.typedName ?? profile?.typedName ?? signerName,
+    imageDataUrl: args?.imageDataUrl ?? profile?.imageDataUrl,
+    imageMimeType: args?.imageMimeType ?? profile?.imageMimeType,
+    signedAtISO: now,
+    demo: args?.demo ?? true,
+  });
+  return { signatureId: id, signatureProfileId };
 }
 
 function staticUpsertComplianceDecision(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {

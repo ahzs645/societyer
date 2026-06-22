@@ -41,6 +41,7 @@ export function MeetingSidebarColumn({
   setIncludePlaceholdersInExport,
   exportToWord,
   exportToPdf,
+  printMinutes,
   publicCopyMode,
   setPublicCopyMode,
   minutesExportGaps,
@@ -92,6 +93,7 @@ export function MeetingSidebarColumn({
   setIncludePlaceholdersInExport: (value: boolean) => void;
   exportToWord: () => void;
   exportToPdf: () => void;
+  printMinutes: () => void;
   publicCopyMode: boolean;
   setPublicCopyMode: (value: boolean) => void;
   minutesExportGaps: any[];
@@ -235,7 +237,10 @@ export function MeetingSidebarColumn({
                         <FileDown size={12} /> Export Word
                       </button>
                       <button className="btn-action" onClick={exportToPdf} disabled={!minutes}>
-                        <Printer size={12} /> Export PDF
+                        <FileDown size={12} /> Download PDF
+                      </button>
+                      <button className="btn-action" onClick={printMinutes} disabled={!minutes}>
+                        <Printer size={12} /> Print
                       </button>
                     </div>
                   </>
