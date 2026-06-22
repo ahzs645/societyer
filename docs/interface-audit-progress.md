@@ -12,7 +12,11 @@ handled in `src/lib/staticConvex.ts` or classified in `src/lib/staticConvexParit
 - [x] "Configure Wave" dead button → real `setupHref` link to the Wave connector; planned providers now render a non-clickable "Coming soon" label (`features/financials/components/FinancialDashboardCards.tsx`, `Financials.tsx`)
 
 ## Bucket 2 — Built but not connected
-- [ ] Delete actions sweep — wire existing `remove*` mutations into UI (members, committees, receipts, goals, filings, legal-ops, …)
+- [~] Delete actions sweep — wired `committees.remove` (CommitteeDetail), `goals.remove`
+  (GoalDetail), `filings.remove` (non-Filed rows only). Receipts (void) and attestations
+  (sign; rows are joins) intentionally keep their existing semantics. Remaining follow-up:
+  the 12 `legalOperations.remove*` and `agendas.remove/removeItem`. (All demo-safe via the
+  generic CRUD mirror — parity gate stays green.)
 - [ ] RBAC: surface `permissions.myPermissions` (at least read-side gating signal)
 - [ ] Webhooks/integration admin (apiPlatform) — surface or defer
 - [ ] Accounting counterparties / fund-restrictions / mappings / GL — surface or defer

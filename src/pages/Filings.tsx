@@ -6,11 +6,11 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field, InspectorNote } from "../components/ui";
-import { Modal } from "../components/Modal";
+import { Modal, useConfirm } from "../components/Modal";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { useToast } from "../components/Toast";
-import { Plus, Check, ClipboardList, Bot, FileDown } from "lucide-react";
+import { Plus, Check, ClipboardList, Bot, FileDown, Trash2 } from "lucide-react";
 import { centsToDollarInput, dollarInputToCents } from "../lib/format";
 import { kindLabel } from "./Dashboard";
 import { FilingBotRunner } from "../components/FilingBotRunner";
@@ -68,6 +68,8 @@ export function FilingsPage() {
   const create = useMutation(api.filings.create);
   const update = useMutation(api.filings.update);
   const markFiled = useMutation(api.filings.markFiled);
+  const removeFiling = useMutation(api.filings.remove);
+  const confirm = useConfirm();
   const toast = useToast();
 
   const tableData = useObjectRecordTableData({
@@ -247,6 +249,24 @@ export function FilingsPage() {
                     }
                   >
                     <Check size={12} /> Mark filed
+                  </button>
+                  <button
+                    className="btn btn--ghost btn--sm btn--icon"
+                    aria-label="Delete filing"
+                    title="Delete this filing"
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: "Delete filing?",
+                        message: `Permanently remove "${r.kind}: ${r.periodLabel ?? r.dueDate}". This can't be undone. Use it only for filings created in error — already-filed records can't be deleted.`,
+                        confirmLabel: "Delete",
+                        tone: "danger",
+                      });
+                      if (!ok) return;
+                      await removeFiling({ id: r._id });
+                      toast.success("Filing deleted");
+                    }}
+                  >
+                    <Trash2 size={12} />
                   </button>
                 </>
               ) : null

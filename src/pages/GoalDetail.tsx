@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
@@ -8,7 +8,9 @@ import { Badge } from "../components/ui";
 import { Progress } from "../components/primitives";
 import { Select } from "../components/Select";
 import { Checkbox } from "../components/Controls";
-import { ArrowLeft, ListTodo, Plus, Target } from "lucide-react";
+import { useConfirm } from "../components/Modal";
+import { useToast } from "../components/Toast";
+import { ArrowLeft, ListTodo, Plus, Target, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { goalTone, labelStatus } from "./Goals";
 
@@ -20,6 +22,10 @@ export function GoalDetailPage() {
   const allTasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
   const toggleMilestone = useMutation(api.goals.toggleMilestone);
   const update = useMutation(api.goals.update);
+  const removeGoal = useMutation(api.goals.remove);
+  const confirm = useConfirm();
+  const toast = useToast();
+  const navigate = useNavigate();
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -47,6 +53,23 @@ export function GoalDetailPage() {
             <Link to={`/app/tasks?goalId=${encodeURIComponent(String(goal._id))}&new=1`} className="btn-action btn-action--primary">
               <Plus size={12} /> New task
             </Link>
+            <button
+              className="btn-action"
+              onClick={async () => {
+                const ok = await confirm({
+                  title: "Delete goal?",
+                  message: `"${goal.title}" and its milestones will be permanently deleted. Linked tasks are kept but unlinked.`,
+                  confirmLabel: "Delete",
+                  tone: "danger",
+                });
+                if (!ok) return;
+                await removeGoal({ id: goal._id });
+                toast.success("Goal deleted");
+                navigate("/app/goals");
+              }}
+            >
+              <Trash2 size={12} /> Delete
+            </button>
           </>
         }
       />

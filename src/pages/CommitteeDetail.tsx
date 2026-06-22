@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
@@ -27,6 +27,8 @@ export function CommitteeDetailPage() {
   const update = useMutation(api.committees.update);
   const addMember = useMutation(api.committees.addMember);
   const removeMember = useMutation(api.committees.removeMember);
+  const removeCommittee = useMutation(api.committees.remove);
+  const navigate = useNavigate();
   const createTask = useMutation(api.tasks.create);
   const updateTask = useMutation(api.tasks.update);
   const confirm = useConfirm();
@@ -296,6 +298,25 @@ export function CommitteeDetailPage() {
           </span>
         }
         subtitle={committee.description}
+        actions={
+          <button
+            className="btn-action"
+            onClick={async () => {
+              const ok = await confirm({
+                title: "Delete committee?",
+                message: `"${committee.name}" will be permanently deleted along with its membership roster. Linked meetings, tasks, and goals are kept but unlinked.`,
+                confirmLabel: "Delete",
+                tone: "danger",
+              });
+              if (!ok) return;
+              await removeCommittee({ id: committee._id });
+              toast.success("Committee deleted");
+              navigate("/app/committees");
+            }}
+          >
+            <Trash2 size={12} /> Delete
+          </button>
+        }
         chips={
           <>
             <Badge>{committee.cadence}</Badge>
