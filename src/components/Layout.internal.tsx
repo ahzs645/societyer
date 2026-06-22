@@ -394,6 +394,7 @@ const NAV_GROUPS: NavGroup[] = [
       navItem("/app/workflow-runs"),
       navItem("/app/workflow-packages"),
       navItem("/app/template-engine"),
+      navItem("/app/calendar-sync"),
     ],
   },
   {

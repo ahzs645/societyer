@@ -54,6 +54,7 @@ const PoliciesPage = React.lazy(() => import("./pages/Policies").then((m) => ({ 
 const SettingsPage = React.lazy(() => import("./pages/Settings").then((m) => ({ default: m.SettingsPage })));
 const ApiKeysPage = React.lazy(() => import("./pages/ApiKeysPage").then((m) => ({ default: m.ApiKeysPage })));
 const WebhooksPage = React.lazy(() => import("./pages/Webhooks").then((m) => ({ default: m.WebhooksPage })));
+const CalendarSyncPage = React.lazy(() => import("./pages/CalendarSync").then((m) => ({ default: m.CalendarSyncPage })));
 const CommitteesPage = React.lazy(() => import("./pages/Committees").then((m) => ({ default: m.CommitteesPage })));
 const CommitteeDetailPage = React.lazy(() => import("./pages/CommitteeDetail").then((m) => ({ default: m.CommitteeDetailPage })));
 const GoalsPage = React.lazy(() => import("./pages/Goals").then((m) => ({ default: m.GoalsPage })));
@@ -503,6 +504,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route
               path="workflow-packages"
               element={withModule("workflows", <WorkflowPackagesPage />)}
+            />
+            <Route
+              path="calendar-sync"
+              element={withModule("workflows", <CalendarSyncPage />)}
             />
             <Route path="outbox" element={<OutboxPage />} />
             <Route path="custom-fields" element={<CustomFieldsPage />} />

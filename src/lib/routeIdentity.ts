@@ -244,6 +244,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/workflow-runs": { icon: History, group: "workflows", label: "Workflow runs", module: "workflows" },
   "/app/workflow-packages": { icon: FolderKanban, group: "workflows", label: "Workflow packages", module: "workflows" },
   "/app/template-engine": { icon: FileCog, group: "workflows", label: "Template engine" },
+  "/app/calendar-sync": { icon: CalendarClock, group: "workflows", label: "Calendar sync" },
 
   // ---- Administration ----
   "/app/notifications": { icon: Bell, group: "administration", label: "Notifications" },
