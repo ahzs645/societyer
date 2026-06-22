@@ -2574,7 +2574,7 @@ function mutCasesAiAgents3(name: string, args: StaticArgs, store?: StaticDemoDex
     if (draft) draft.status = "rejected";
     return args?.id;
   }
-  if (name === "aiAgents:runAgent") {
+  if (name === "aiAgents:runAgent" || name === "aiChatActions:runAgentLive") {
     const agent = aiAgentDefinitions.find((item) => item.key === args?.agentKey) ?? aiAgentDefinitions[0];
     const now = new Date().toISOString();
     const run = {

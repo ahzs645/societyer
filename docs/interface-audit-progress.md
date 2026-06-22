@@ -33,7 +33,11 @@ handled in `src/lib/staticConvex.ts` or classified in `src/lib/staticConvexParit
 - [ ] AGM steps → link Elections / Written-Resolutions records (deferred — needs AGM data-model change, tracked in Bucket 4)
 
 ## Bucket 4 — Needs deeper implementation
-- [ ] AI Agents runner → real LLM (`convex/aiAgents.ts` runAgent → reuse chat's streamText loop)
+- [x] AI Agents runner → real LLM. New `aiChatActions.runAgentLive` action runs the agent
+  through the same Vercel AI SDK loop chat uses (agent-scoped system prompt via new
+  `aiAgents.getAgentRunContext`, load_skills/learn_tools/execute_tool tools, persisted via
+  `aiAgents._recordAgentRun`). Falls back to the deterministic `runAgent` mutation when no
+  provider key is set, so demo/offline still works. UI (`AiAgents.tsx`) now calls the action.
 - [ ] Wave live sync pulls invoices not bank transactions; no manual "add bank transaction"
 - [ ] Bridge the two finance reconciliation/transaction systems
 - [ ] Grants discovery → application connection (`GrantSourceDetail.tsx` "Add to pipeline")

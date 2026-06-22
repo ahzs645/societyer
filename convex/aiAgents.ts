@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./lib/untypedServer";
+import { mutation, internalMutation, query } from "./lib/untypedServer";
 import { Id } from "./_generated/dataModel";
 import { hasPermission, type Permission } from "./lib/permissions";
 import { requireRole } from "./users";
@@ -808,6 +808,172 @@ export const getChatContext = query({
         tools,
         browsingContext: args.browsingContext,
       }),
+    };
+  },
+});
+
+// Agent-scoped run context for the live (LLM) runner in aiChatActions.runAgentLive.
+// Mirrors getChatContext but narrows skills/tools to the selected agent and builds
+// an agent-specific system prompt, so the model acts as that agent.
+export const getAgentRunContext = query({
+  args: {
+    societyId: v.id("societies"),
+    agentKey: v.string(),
+    actingUserId: v.optional(v.id("users")),
+    browsingContext: v.optional(v.any()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const agent = AGENTS_BY_KEY.get(args.agentKey);
+    if (!agent) throw new Error("Unknown AI agent.");
+    const { role, user } = await resolveActorRole(ctx, args.societyId, args.actingUserId);
+    const [society, allTools, skills] = await Promise.all([
+      ctx.db.get(args.societyId),
+      getAvailableTools(ctx, args.societyId, role),
+      getActiveSkills(ctx, args.societyId),
+    ]);
+    const availableTools = allTools.filter((tool: any) => agent.allowedTools.includes(tool.name));
+    const loadedSkills = skills.filter((skill: any) => agent.skillNames.includes(skill.name));
+    const unavailableTools = agent.allowedTools.filter(
+      (toolName) => !availableTools.some((tool: any) => tool.name === toolName),
+    );
+    const systemPrompt = [
+      buildSystemPrompt({
+        societyName: society?.name ?? "Societyer workspace",
+        role,
+        skills: loadedSkills,
+        tools: availableTools,
+        browsingContext: args.browsingContext,
+      }),
+      "",
+      `You are acting as the "${agent.name}" agent.`,
+      `Scope: ${agent.scope}`,
+      `Operating guidance: ${agent.guidanceTemplate}`,
+      agent.outputContract?.length ? `Structure your answer to cover: ${agent.outputContract.join("; ")}.` : "",
+      `Confirm these required inputs were provided: ${agent.requiredInputHints.join("; ")}.`,
+      unavailableTools.length
+        ? `These requested tools are not permitted for role ${role} and must not be used: ${unavailableTools.join(", ")}.`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    return {
+      role,
+      user: user ? { id: user._id, displayName: user.displayName, role: user.role } : null,
+      agentKey: agent.key,
+      agentName: agent.name,
+      systemPrompt,
+      allowedToolNames: availableTools.map((tool: any) => tool.name),
+      loadedSkills,
+      learnedTools: availableTools.map((tool: any) => ({
+        name: tool.name,
+        category: tool.category,
+        inputSchema: tool.inputSchema,
+      })),
+      plannedToolCalls: availableTools.map((tool: any) => ({
+        toolName: tool.name,
+        purpose: tool.description,
+        status: "planned",
+      })),
+      toolCatalogSnapshot: availableTools.map(toCatalogEntry),
+      unavailableTools,
+    };
+  },
+});
+
+// Records a completed agent run produced by the live LLM runner (or its fallback).
+// Parameterised on output/provider so the model's reasoning is persisted with the
+// same run + audit + activity trail that the deterministic runAgent mutation writes.
+export const _recordAgentRun = internalMutation({
+  args: {
+    societyId: v.id("societies"),
+    agentKey: v.string(),
+    input: v.string(),
+    output: v.string(),
+    provider: v.string(),
+    actingUserId: v.optional(v.id("users")),
+    actorDisplayName: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const agent = AGENTS_BY_KEY.get(args.agentKey);
+    if (!agent) throw new Error("Unknown AI agent.");
+    const { role } = await resolveActorRole(ctx, args.societyId, args.actingUserId);
+    const availableTools = (await getAvailableTools(ctx, args.societyId, role)).filter((tool: any) =>
+      agent.allowedTools.includes(tool.name),
+    );
+    const skills = await getActiveSkills(ctx, args.societyId);
+    const loadedSkills = skills.filter((skill: any) => agent.skillNames.includes(skill.name));
+    const unavailableTools = agent.allowedTools.filter(
+      (toolName) => !availableTools.some((tool: any) => tool.name === toolName),
+    );
+    const plannedToolCalls = availableTools.map((tool: any) => ({
+      toolName: tool.name,
+      purpose: tool.description,
+      status: "planned",
+    }));
+    const now = new Date().toISOString();
+    const runId = await ctx.db.insert("aiAgentRuns", {
+      societyId: args.societyId,
+      agentKey: agent.key,
+      agentName: agent.name,
+      status: "completed",
+      input: args.input.trim(),
+      inputHints: agent.requiredInputHints,
+      scope: agent.scope,
+      allowedActions: agent.allowedActions,
+      allowedTools: availableTools.map((tool: any) => tool.name),
+      plannedToolCalls,
+      output: args.output,
+      provider: args.provider,
+      createdAtISO: now,
+      completedAtISO: now,
+      triggeredByUserId: args.actingUserId,
+      loadedSkillNames: loadedSkills.map((skill: any) => skill.name),
+      toolCatalogSnapshot: availableTools.map(toCatalogEntry),
+      unavailableTools,
+    } as any);
+
+    await insertAgentAudit(ctx, {
+      societyId: args.societyId,
+      runId,
+      agentKey: agent.key,
+      eventType: "run_requested",
+      summary: `${agent.name} requested by ${args.actorDisplayName ?? "workspace user"}.`,
+      metadata: { inputLength: args.input.trim().length, role, provider: args.provider },
+      actorUserId: args.actingUserId,
+    });
+    await insertAgentAudit(ctx, {
+      societyId: args.societyId,
+      runId,
+      agentKey: agent.key,
+      eventType: "run_completed",
+      summary: `${agent.name} completed via ${args.provider}.`,
+      metadata: { provider: args.provider, unavailableTools },
+      actorUserId: args.actingUserId,
+    });
+    await ctx.db.insert("activity", {
+      societyId: args.societyId,
+      actor: args.actorDisplayName ?? "AI workspace tool",
+      entityType: "aiAgentRun",
+      entityId: String(runId),
+      action: "completed",
+      summary: `${agent.name} responded via ${args.provider}.`,
+      createdAtISO: now,
+    });
+
+    return {
+      runId,
+      output: args.output,
+      provider: args.provider,
+      plannedToolCalls,
+      loadedSkills,
+      learnedTools: availableTools.map((tool: any) => ({
+        name: tool.name,
+        category: tool.category,
+        inputSchema: tool.inputSchema,
+      })),
+      unavailableTools,
     };
   },
 });
