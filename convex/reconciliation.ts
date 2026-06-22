@@ -141,6 +141,76 @@ export const markManual = mutation({
   },
 });
 
+// Manually add a bank transaction so reconciliation is usable without a Wave/
+// browser-connector sync. Ensures a "manual" connection + bank account exist
+// (created once) so the financialTransactions row has the required references.
+export const addManualTransaction = mutation({
+  args: {
+    societyId: v.id("societies"),
+    date: v.string(),
+    description: v.string(),
+    amountCents: v.number(),
+    counterparty: v.optional(v.string()),
+    category: v.optional(v.string()),
+    accountId: v.optional(v.id("financialAccounts")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const now = new Date().toISOString();
+    const connections = await ctx.db
+      .query("financialConnections")
+      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+      .collect();
+    let connection = connections.find((c) => c.provider === "manual");
+    if (!connection) {
+      const connectionId = await ctx.db.insert("financialConnections", {
+        societyId: args.societyId,
+        provider: "manual",
+        status: "connected",
+        accountLabel: "Manual entries",
+        syncMode: "manual",
+        connectedAtISO: now,
+        demo: false,
+      });
+      connection = await ctx.db.get(connectionId);
+    }
+
+    let accountId = args.accountId;
+    if (!accountId) {
+      const accounts = await ctx.db
+        .query("financialAccounts")
+        .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+        .collect();
+      const existing = accounts.find((a) => a.connectionId === connection!._id && a.accountType === "Bank");
+      accountId = existing
+        ? existing._id
+        : await ctx.db.insert("financialAccounts", {
+            societyId: args.societyId,
+            connectionId: connection!._id,
+            externalId: "manual-bank",
+            name: "Manual bank account",
+            currency: "CAD",
+            accountType: "Bank",
+            balanceCents: 0,
+            isRestricted: false,
+            sourceSystem: "csv",
+          });
+    }
+
+    return ctx.db.insert("financialTransactions", {
+      societyId: args.societyId,
+      connectionId: connection!._id,
+      accountId,
+      externalId: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      date: args.date,
+      description: args.description,
+      amountCents: args.amountCents,
+      counterparty: args.counterparty,
+      category: args.category,
+    });
+  },
+});
+
 export const unmatch = mutation({
   args: { txnId: v.id("financialTransactions") },
   returns: v.any(),

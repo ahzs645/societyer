@@ -104,6 +104,7 @@ export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "organizationHistory:saveSource",
   "proxies:revoke",
   "receipts:voidReceipt",
+  "reconciliation:addManualTransaction",
   "reconciliation:markManual",
   "reconciliation:match",
   "reconciliation:unmatch",
