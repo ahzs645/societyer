@@ -546,11 +546,27 @@ export function TemplateEnginePage() {
   const upsertSigner = useMutation(api.legalOperations.upsertLegalSigner);
   const seedStarterTemplates = useMutation(api.legalOperations.seedStarterPolicyTemplates);
   const seedCorporationPackets = useMutation(api.legalOperations.seedCorporationDocumentPackets);
+  const removeTemplate = useMutation(api.legalOperations.removeLegalTemplate);
+  const removePrecedent = useMutation(api.legalOperations.removeLegalPrecedent);
+  const removeDocument = useMutation(api.legalOperations.removeGeneratedLegalDocument);
+  const confirm = useConfirm();
   const toast = useToast();
   const [draft, setDraft] = useState<any>(null);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
+
+  const del = async (remover: (args: { id: any }) => Promise<unknown>, id: any, label: string) => {
+    const ok = await confirm({
+      title: `Delete ${label}?`,
+      message: `This permanently removes the ${label}. This can't be undone.`,
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (!ok) return;
+    await remover({ id });
+    toast.success(`${label[0].toUpperCase()}${label.slice(1)} deleted`);
+  };
 
   const save = async () => {
     if (!draft) return;
@@ -699,13 +715,14 @@ export function TemplateEnginePage() {
 
       <Section title="Templates" count={data?.templates?.length ?? 0}>
         <SimpleTable
-          cols={["Name", "Type", "Coverage", "Signing", "Status"]}
+          cols={["Name", "Type", "Coverage", "Signing", "Status", ""]}
           rows={(data?.templates ?? []).map((row: any) => [
             <RecordTitle title={row.name} subtitle={row.owner || row.documentTag || "No owner/tag"} />,
             optionLabel("templateTypes", row.templateType),
             `${row.jurisdictions?.length || 0} jurisdictions / ${row.entityTypes?.length || 0} entity types`,
             row.signatureRequired ? `${row.requiredSigners?.length || 0} signer rules` : "No signature",
             <Badge tone={toneForStatus(row.status)}>{optionLabel("templateStatuses", row.status)}</Badge>,
+            <DeleteCell label="template" onDelete={() => del(removeTemplate, row._id, "template")} />,
           ])}
           empty="No templates yet."
         />
@@ -713,13 +730,14 @@ export function TemplateEnginePage() {
 
       <Section title="Precedents and runs" count={(data?.precedents?.length ?? 0) + (data?.runs?.length ?? 0)}>
         <SimpleTable
-          cols={["Package", "Timeline", "Deliverables", "Terms", "Status"]}
+          cols={["Package", "Timeline", "Deliverables", "Terms", "Status", ""]}
           rows={(data?.precedents ?? []).map((row: any) => [
             <RecordTitle title={row.packageName} subtitle={row.shortDescription || row.partType || "No short description"} />,
             row.timeline || "-",
             row.deliverables || "-",
             row.addOnTerms || "-",
             <Badge tone={toneForStatus(row.status)}>{optionLabel("precedentStatuses", row.status)}</Badge>,
+            <DeleteCell label="precedent" onDelete={() => del(removePrecedent, row._id, "precedent")} />,
           ])}
           empty="No precedents yet."
         />
@@ -727,13 +745,14 @@ export function TemplateEnginePage() {
 
       <Section title="Generated documents and signers" count={(data?.generatedDocuments?.length ?? 0) + (data?.signers?.length ?? 0)}>
         <SimpleTable
-          cols={["Document", "Template", "Signing package", "Signers", "Status"]}
+          cols={["Document", "Template", "Signing package", "Signers", "Status", ""]}
           rows={(data?.generatedDocuments ?? []).map((row: any) => [
             <RecordTitle title={row.title} subtitle={dateLabel(row.effectiveDate)} />,
             row.sourceTemplateName || "-",
             row.syngrafiiPackageId || row.syngrafiiDocumentId || "-",
             `${row.signerTagsSigned?.length || 0}/${row.signerTagsRequired?.length || 0}`,
             <Badge tone={toneForStatus(row.status)}>{optionLabel("generatedDocumentStatuses", row.status)}</Badge>,
+            <DeleteCell label="document" onDelete={() => del(removeDocument, row._id, "document")} />,
           ])}
           empty="No generated documents yet."
         />
@@ -755,8 +774,24 @@ export function FormationMaintenancePage() {
   const upsertAnnual = useMutation(api.legalOperations.upsertAnnualMaintenanceRecord);
   const upsertJurisdiction = useMutation(api.legalOperations.upsertJurisdictionMetadata);
   const upsertLog = useMutation(api.legalOperations.upsertSupportLog);
+  const removeFormation = useMutation(api.legalOperations.removeFormationRecord);
+  const removeAnnual = useMutation(api.legalOperations.removeAnnualMaintenanceRecord);
+  const removeJurisdiction = useMutation(api.legalOperations.removeJurisdictionMetadata);
+  const removeLog = useMutation(api.legalOperations.removeSupportLog);
+  const confirm = useConfirm();
   const toast = useToast();
   const [draft, setDraft] = useState<any>(null);
+  const del = async (remover: (args: { id: any }) => Promise<unknown>, id: any, label: string) => {
+    const ok = await confirm({
+      title: `Delete ${label}?`,
+      message: `This permanently removes the ${label}. This can't be undone.`,
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (!ok) return;
+    await remover({ id });
+    toast.success(`${label[0].toUpperCase()}${label.slice(1)} deleted`);
+  };
   const latestJurisdictionByCode = useMemo(
     () => new Map((data?.jurisdictionMetadata ?? []).map((row: any) => [row.jurisdiction, row])),
     [data],
@@ -826,13 +861,14 @@ export function FormationMaintenancePage() {
 
       <Section title="Formation records" count={data?.formations?.length ?? 0}>
         <SimpleTable
-          cols={["NUANS", "Jurisdiction", "Purpose/classes", "Staff/signing", "Status"]}
+          cols={["NUANS", "Jurisdiction", "Purpose/classes", "Staff/signing", "Status", ""]}
           rows={(data?.formations ?? []).map((row: any) => [
             <RecordTitle title={row.nuansNumber || "No NUANS"} subtitle={dateLabel(row.nuansDate)} />,
             row.jurisdiction ? optionLabel("entityJurisdictions", row.jurisdiction) : "-",
             row.purposeStatement || row.classesOfMembership || "-",
             `${row.assignedStaffIds?.length || 0} staff / ${row.signingPackageIds?.length || 0} packages`,
             <Badge tone={toneForStatus(row.status)}>{optionLabel("formationStatuses", row.status)}</Badge>,
+            <DeleteCell label="formation record" onDelete={() => del(removeFormation, row._id, "formation record")} />,
           ])}
           empty="No formation records yet."
         />
@@ -840,13 +876,14 @@ export function FormationMaintenancePage() {
 
       <Section title="Annual maintenance" count={data?.annualRecords?.length ?? 0}>
         <SimpleTable
-          cols={["Year", "AGM", "Filing", "Financial statement", "Status"]}
+          cols={["Year", "AGM", "Filing", "Financial statement", "Status", ""]}
           rows={(data?.annualRecords ?? []).map((row: any) => [
             row.yearFilingFor || "-",
             dateLabel(row.lastAgmDate),
             dateLabel(row.filingDate),
             row.annualFinancialStatementOption ? optionLabel("annualFinancialStatementOptions", row.annualFinancialStatementOption) : row.financialStatementReportType || "-",
             <Badge tone={toneForStatus(row.status)}>{optionLabel("annualMaintenanceStatuses", row.status)}</Badge>,
+            <DeleteCell label="annual maintenance record" onDelete={() => del(removeAnnual, row._id, "annual maintenance record")} />,
           ])}
           empty="No annual maintenance records yet."
         />
@@ -854,13 +891,14 @@ export function FormationMaintenancePage() {
 
       <Section title="Jurisdiction metadata" count={data?.jurisdictionMetadata?.length ?? 0}>
         <SimpleTable
-          cols={["Jurisdiction", "Act", "NUANS jurisdiction", "Reservation report", "Eligible"]}
+          cols={["Jurisdiction", "Act", "NUANS jurisdiction", "Reservation report", "Eligible", ""]}
           rows={(data?.jurisdictionMetadata ?? []).map((row: any) => [
             <RecordTitle title={row.label} subtitle={row.jurisdiction} />,
             row.actFormedUnder ? optionLabel("actsFormedUnder", row.actFormedUnder) : "-",
             row.nuansJurisdictionNumber || "-",
             row.nuansReservationReportTypeId || "-",
             row.incorporationServiceEligible ? "Yes" : "No",
+            <DeleteCell label="jurisdiction metadata" onDelete={() => del(removeJurisdiction, row._id, "jurisdiction metadata")} />,
           ])}
           empty="No jurisdiction metadata yet."
         />
@@ -868,13 +906,14 @@ export function FormationMaintenancePage() {
 
       <Section title="Operational logs" count={data?.logs?.length ?? 0}>
         <SimpleTable
-          cols={["When", "Type", "Page", "Details", "Severity"]}
+          cols={["When", "Type", "Page", "Details", "Severity", ""]}
           rows={(data?.logs ?? []).map((row: any) => [
             row.createdAtISO ? formatDate(row.createdAtISO) : "-",
             optionLabel("logTypes", row.logType),
             row.page || row.pageLocationUrl || "-",
             row.errorMessage || row.detailsHeading || "-",
             <Badge tone={row.severity === "error" || row.severity === "critical" ? "danger" : row.severity === "warning" ? "warn" : "neutral"}>{optionLabel("logSeverities", row.severity)}</Badge>,
+            <DeleteCell label="log entry" onDelete={() => del(removeLog, row._id, "log entry")} />,
           ])}
           empty="No operational logs yet."
         />
@@ -1078,6 +1117,14 @@ function RowActions({ onEdit, onDelete, label }: { onEdit: () => void; onDelete:
   return (
     <div className="row" style={{ justifyContent: "flex-end" }}>
       <button className="btn btn--ghost btn--sm" onClick={onEdit}>Edit</button>
+      <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete ${label}`} onClick={onDelete}><Trash2 size={12} /></button>
+    </div>
+  );
+}
+
+function DeleteCell({ onDelete, label }: { onDelete: () => void; label: string }) {
+  return (
+    <div className="row" style={{ justifyContent: "flex-end" }}>
       <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete ${label}`} onClick={onDelete}><Trash2 size={12} /></button>
     </div>
   );
