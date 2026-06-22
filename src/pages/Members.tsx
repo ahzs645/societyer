@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -291,6 +292,11 @@ export function MembersPage() {
         title={selected?._id ? "Edit member" : "Add member"}
         footer={
           <>
+            {selected?._id && (
+              <Link className="btn" to={`/app/members/${selected._id}`} style={{ marginRight: "auto" }}>
+                Open full profile →
+              </Link>
+            )}
             <button className="btn" onClick={() => setDrawerOpen(false)}>Cancel</button>
             <button className="btn btn--accent" onClick={save}>Save</button>
           </>

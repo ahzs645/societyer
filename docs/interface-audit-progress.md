@@ -21,12 +21,12 @@ handled in `src/lib/staticConvex.ts` or classified in `src/lib/staticConvexParit
 - [ ] Manual evidence entry (`evidenceRegisters.createManual`)
 
 ## Bucket 3 — Needs better linking
-- [ ] Members detail page + `members/:id` route + link from list
-- [ ] Grant → Committee, Grant → Sources (`Grants.tsx`)
-- [ ] Meeting → Committee (`MeetingDetail.tsx`)
-- [ ] Committee roster → Director (`CommitteeDetail.tsx`)
-- [ ] Grant detail → Committee (`GrantWorkspacePage.tsx`)
-- [ ] AGM steps → link Elections / Written-Resolutions records
+- [x] Members detail page (`src/pages/MemberDetail.tsx`) + `members/:id` route + "Open full profile" link from the register drawer (reuses mirrored `members.list`, demo-safe)
+- [x] Grant → Committee, Grant → Sources (`Grants.tsx`)
+- [x] Meeting → Committee (subtitle link in `MeetingDetail.tsx`)
+- [x] Committee roster → Director + open-tasks rows → filtered Tasks; Tasks now honors `?committeeId=` (`CommitteeDetail.tsx`, `Tasks.tsx`)
+- [x] Grant detail → Committee (`GrantPanels.internal.dossierPanels.tsx`)
+- [ ] AGM steps → link Elections / Written-Resolutions records (deferred — needs AGM data-model change, tracked in Bucket 4)
 
 ## Bucket 4 — Needs deeper implementation
 - [ ] AI Agents runner → real LLM (`convex/aiAgents.ts` runAgent → reuse chat's streamText loop)

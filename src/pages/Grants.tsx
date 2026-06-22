@@ -384,7 +384,14 @@ export function GrantsPage() {
             sortable: true,
             align: "right",
             accessor: (row) => (row.sourceExternalIds ?? []).length,
-            render: (row) => (row.sourceExternalIds?.length ? <Badge tone="info">{row.sourceExternalIds.length}</Badge> : "—"),
+            render: (row) =>
+              row.sourceExternalIds?.length ? (
+                <Link to="/app/grants/sources" onClick={(e) => e.stopPropagation()}>
+                  <Badge tone="info">{row.sourceExternalIds.length}</Badge>
+                </Link>
+              ) : (
+                "—"
+              ),
           },
           {
             id: "publicIntake",
@@ -398,7 +405,16 @@ export function GrantsPage() {
             header: "Committee",
             sortable: true,
             accessor: (row) => committeeById.get(String(row.committeeId))?.name ?? "",
-            render: (row) => <span>{committeeById.get(String(row.committeeId))?.name ?? "—"}</span>,
+            render: (row) => {
+              const committee = committeeById.get(String(row.committeeId));
+              return committee ? (
+                <Link to={`/app/committees/${row.committeeId}`} onClick={(e) => e.stopPropagation()}>
+                  {committee.name}
+                </Link>
+              ) : (
+                "—"
+              );
+            },
           },
         ]}
         renderRowActions={(row) => (

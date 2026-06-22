@@ -27,6 +27,7 @@ const FinanceImportsPage = React.lazy(() => import("./pages/EvidenceRegisters").
 const RecordsArchivePage = React.lazy(() => import("./pages/EvidenceRegisters").then((m) => ({ default: m.RecordsArchivePage })));
 const ImportSessionsPage = React.lazy(() => import("./pages/ImportSessions").then((m) => ({ default: m.ImportSessionsPage })));
 const MembersPage = React.lazy(() => import("./pages/Members").then((m) => ({ default: m.MembersPage })));
+const MemberDetailPage = React.lazy(() => import("./pages/MemberDetail").then((m) => ({ default: m.MemberDetailPage })));
 const DirectorsPage = React.lazy(() => import("./pages/Directors").then((m) => ({ default: m.DirectorsPage })));
 const OrgChartPage = React.lazy(() => import("./pages/OrgChart").then((m) => ({ default: m.OrgChartPage })));
 const MeetingsPage = React.lazy(() => import("./pages/Meetings").then((m) => ({ default: m.MeetingsPage })));
@@ -302,6 +303,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="records-archive" element={<RecordsArchivePage />} />
             <Route path="imports" element={<ImportSessionsPage />} />
             <Route path="members" element={<MembersPage />} />
+            <Route path="members/:id" element={<MemberDetailPage />} />
             <Route path="directors" element={<DirectorsPage />} />
             <Route path="org-chart" element={<OrgChartPage />} />
             <Route path="meetings" element={<MeetingsPage />} />

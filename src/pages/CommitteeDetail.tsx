@@ -129,11 +129,16 @@ export function CommitteeDetailPage() {
               <div className="card__head"><h2 className="card__title">Open tasks</h2></div>
               <div className="card__body col">
                 {tasks.filter((t: any) => t.status !== "Done").slice(0, 5).map((t: any) => (
-                  <div key={t._id} className="row" style={{ padding: 6, border: "1px solid var(--border)", borderRadius: 4 }}>
+                  <Link
+                    key={t._id}
+                    to={`/app/tasks?committeeId=${id}`}
+                    className="row"
+                    style={{ padding: 6, border: "1px solid var(--border)", borderRadius: 4 }}
+                  >
                     <span className={`priority-dot priority-${t.priority}`} />
                     <span style={{ flex: 1 }}>{t.title}</span>
                     <Badge>{t.status}</Badge>
-                  </div>
+                  </Link>
                 ))}
                 {tasks.filter((t: any) => t.status !== "Done").length === 0 && <div className="muted">Nothing open.</div>}
               </div>
@@ -162,7 +167,11 @@ export function CommitteeDetailPage() {
                   <td>
                     <div className="row">
                       <span className="avatar">{initials(m.name.split(" ")[0], m.name.split(" ")[1])}</span>
-                      <strong>{m.name}</strong>
+                      {m.directorId ? (
+                        <Link to="/app/directors"><strong>{m.name}</strong></Link>
+                      ) : (
+                        <strong>{m.name}</strong>
+                      )}
                     </div>
                   </td>
                   <td><Badge tone={m.role === "Chair" ? "accent" : "neutral"}>{m.role}</Badge></td>

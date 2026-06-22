@@ -100,7 +100,9 @@ export function GrantDossierSummary({
         <DossierFact label="Project start" value={grant.startDate ? formatDate(grant.startDate) : undefined} />
         <DossierFact label="Project end" value={grant.endDate ? formatDate(grant.endDate) : undefined} />
         <DossierFact label="Next report" value={grant.nextReportDueAtISO ? formatDate(grant.nextReportDueAtISO) : undefined} />
-        <DossierFact label="Committee" value={committee?.name} />
+        <DossierFact label="Committee">
+          {committee ? <Link to={`/app/committees/${committee._id}`}>{committee.name}</Link> : "—"}
+        </DossierFact>
         <DossierFact label="Board owner" value={owner?.displayName} />
         <DossierFact label="Public intake">
           <Badge tone={grant.allowPublicApplications ? "success" : "info"}>{grant.allowPublicApplications ? "Open" : "Internal"}</Badge>
