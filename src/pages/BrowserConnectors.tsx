@@ -1354,7 +1354,7 @@ export function BrowserConnectorsPage() {
                   {(lastRun.import?.sessionId || lastRun.workflowRunId) && (
                     <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                       {lastRun.import?.sessionId && (
-                        <Link className="btn btn--accent btn--sm" to={`/app/import-sessions?sessionId=${encodeURIComponent(lastRun.import.sessionId)}`}>
+                        <Link className="btn btn--accent btn--sm" to={`/app/imports?sessionId=${encodeURIComponent(lastRun.import.sessionId)}`}>
                           <ExternalLink size={12} /> Review import session
                         </Link>
                       )}

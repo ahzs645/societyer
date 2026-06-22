@@ -55,7 +55,7 @@ export function FilingBotRunner({
               setBusy(true);
               try {
                 await runBot({ societyId, filingId, actingUserId });
-                toast.success("Filing bot finished — see Filings for confirmation #");
+                toast.success("Filing prepared — submit it in Societies Online, then record your confirmation #");
               } catch (err: any) {
                 toast.error(err?.message ?? "Bot failed");
               } finally {
@@ -63,7 +63,7 @@ export function FilingBotRunner({
               }
             }}
           >
-            <Bot size={14} /> {busy || active ? "Bot running…" : "Run filing bot"}
+            <Bot size={14} /> {busy || active ? "Preparing…" : "Prepare filing"}
           </button>
         </>
       }
@@ -72,7 +72,8 @@ export function FilingBotRunner({
         The Societies Online portal has no public API — auto-submission isn't
         permitted. The bot gathers and validates everything, pre-fills Form 11,
         stages signatures, then deep-links you to <a href="https://www.bcregistry.ca/societies/" target="_blank" rel="noreferrer">bcregistry.ca/societies <ExternalLink size={11} /></a>{" "}
-        for final submission. Demo mode simulates submission and a confirmation number.
+        for final submission. It never files on your behalf or generates a confirmation number —
+        after you submit in Societies Online, record the real confirmation number in Filings.
       </div>
 
       {packet && (
@@ -115,15 +116,19 @@ export function FilingBotRunner({
                     ? "success"
                     : (active ?? last).status === "failed"
                     ? "danger"
+                    : (active ?? last).status === "manual_required"
+                    ? "info"
                     : "warn"
                 }
               >
-                {(active ?? last).status}
+                {(active ?? last).status === "manual_required"
+                  ? "ready to submit"
+                  : (active ?? last).status}
               </Badge>
             )}
             <div style={{ flex: 1 }} />
             <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
-              {(active ?? last).demo ? "demo" : "live"} · {formatDateTime((active ?? last).startedAtISO)}
+              {formatDateTime((active ?? last).startedAtISO)}
             </span>
           </div>
 
@@ -172,6 +177,33 @@ export function FilingBotRunner({
             })}
           </div>
 
+          {!active && last?.status === "manual_required" && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: 10,
+                background: "var(--info-soft, var(--accent-soft))",
+                borderRadius: "var(--r-sm)",
+              }}
+            >
+              <strong>Ready to submit.</strong>{" "}
+              <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                Everything is pre-filled and validated, but nothing was filed automatically.
+                Submit in Societies Online, then record your confirmation number in Filings.
+              </span>
+              <div style={{ marginTop: 8 }}>
+                <a
+                  className="btn btn--accent btn--sm"
+                  href="https://www.bcregistry.ca/societies/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open Societies Online <ExternalLink size={11} />
+                </a>
+              </div>
+            </div>
+          )}
+
           {(active ?? last).confirmationNumber && (
             <div
               style={{
@@ -199,7 +231,7 @@ export function FilingBotRunner({
 
       {!active && !last && (
         <div className="empty-state">
-          No runs yet. Click "Run filing bot" to stage this filing.
+          No runs yet. Click "Prepare filing" to gather, validate, and pre-fill this filing.
         </div>
       )}
     </Drawer>

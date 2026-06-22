@@ -27,6 +27,7 @@ const FinanceImportsPage = React.lazy(() => import("./pages/EvidenceRegisters").
 const RecordsArchivePage = React.lazy(() => import("./pages/EvidenceRegisters").then((m) => ({ default: m.RecordsArchivePage })));
 const ImportSessionsPage = React.lazy(() => import("./pages/ImportSessions").then((m) => ({ default: m.ImportSessionsPage })));
 const MembersPage = React.lazy(() => import("./pages/Members").then((m) => ({ default: m.MembersPage })));
+const MemberDetailPage = React.lazy(() => import("./pages/MemberDetail").then((m) => ({ default: m.MemberDetailPage })));
 const DirectorsPage = React.lazy(() => import("./pages/Directors").then((m) => ({ default: m.DirectorsPage })));
 const OrgChartPage = React.lazy(() => import("./pages/OrgChart").then((m) => ({ default: m.OrgChartPage })));
 const MeetingsPage = React.lazy(() => import("./pages/Meetings").then((m) => ({ default: m.MeetingsPage })));
@@ -52,6 +53,8 @@ const PrivacyPage = React.lazy(() => import("./pages/Privacy").then((m) => ({ de
 const PoliciesPage = React.lazy(() => import("./pages/Policies").then((m) => ({ default: m.PoliciesPage })));
 const SettingsPage = React.lazy(() => import("./pages/Settings").then((m) => ({ default: m.SettingsPage })));
 const ApiKeysPage = React.lazy(() => import("./pages/ApiKeysPage").then((m) => ({ default: m.ApiKeysPage })));
+const WebhooksPage = React.lazy(() => import("./pages/Webhooks").then((m) => ({ default: m.WebhooksPage })));
+const CalendarSyncPage = React.lazy(() => import("./pages/CalendarSync").then((m) => ({ default: m.CalendarSyncPage })));
 const CommitteesPage = React.lazy(() => import("./pages/Committees").then((m) => ({ default: m.CommitteesPage })));
 const CommitteeDetailPage = React.lazy(() => import("./pages/CommitteeDetail").then((m) => ({ default: m.CommitteeDetailPage })));
 const GoalsPage = React.lazy(() => import("./pages/Goals").then((m) => ({ default: m.GoalsPage })));
@@ -302,6 +305,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="records-archive" element={<RecordsArchivePage />} />
             <Route path="imports" element={<ImportSessionsPage />} />
             <Route path="members" element={<MembersPage />} />
+            <Route path="members/:id" element={<MemberDetailPage />} />
             <Route path="directors" element={<DirectorsPage />} />
             <Route path="org-chart" element={<OrgChartPage />} />
             <Route path="meetings" element={<MeetingsPage />} />
@@ -501,10 +505,15 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               path="workflow-packages"
               element={withModule("workflows", <WorkflowPackagesPage />)}
             />
+            <Route
+              path="calendar-sync"
+              element={withModule("workflows", <CalendarSyncPage />)}
+            />
             <Route path="outbox" element={<OutboxPage />} />
             <Route path="custom-fields" element={<CustomFieldsPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="settings/api-keys" element={<ApiKeysPage />} />
+            <Route path="webhooks" element={<WebhooksPage />} />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

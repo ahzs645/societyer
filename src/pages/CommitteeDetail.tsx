@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
@@ -27,6 +27,8 @@ export function CommitteeDetailPage() {
   const update = useMutation(api.committees.update);
   const addMember = useMutation(api.committees.addMember);
   const removeMember = useMutation(api.committees.removeMember);
+  const removeCommittee = useMutation(api.committees.remove);
+  const navigate = useNavigate();
   const createTask = useMutation(api.tasks.create);
   const updateTask = useMutation(api.tasks.update);
   const confirm = useConfirm();
@@ -129,11 +131,16 @@ export function CommitteeDetailPage() {
               <div className="card__head"><h2 className="card__title">Open tasks</h2></div>
               <div className="card__body col">
                 {tasks.filter((t: any) => t.status !== "Done").slice(0, 5).map((t: any) => (
-                  <div key={t._id} className="row" style={{ padding: 6, border: "1px solid var(--border)", borderRadius: 4 }}>
+                  <Link
+                    key={t._id}
+                    to={`/app/tasks?committeeId=${id}`}
+                    className="row"
+                    style={{ padding: 6, border: "1px solid var(--border)", borderRadius: 4 }}
+                  >
                     <span className={`priority-dot priority-${t.priority}`} />
                     <span style={{ flex: 1 }}>{t.title}</span>
                     <Badge>{t.status}</Badge>
-                  </div>
+                  </Link>
                 ))}
                 {tasks.filter((t: any) => t.status !== "Done").length === 0 && <div className="muted">Nothing open.</div>}
               </div>
@@ -162,7 +169,11 @@ export function CommitteeDetailPage() {
                   <td>
                     <div className="row">
                       <span className="avatar">{initials(m.name.split(" ")[0], m.name.split(" ")[1])}</span>
-                      <strong>{m.name}</strong>
+                      {m.directorId ? (
+                        <Link to="/app/directors"><strong>{m.name}</strong></Link>
+                      ) : (
+                        <strong>{m.name}</strong>
+                      )}
                     </div>
                   </td>
                   <td><Badge tone={m.role === "Chair" ? "accent" : "neutral"}>{m.role}</Badge></td>
@@ -287,6 +298,25 @@ export function CommitteeDetailPage() {
           </span>
         }
         subtitle={committee.description}
+        actions={
+          <button
+            className="btn-action"
+            onClick={async () => {
+              const ok = await confirm({
+                title: "Delete committee?",
+                message: `"${committee.name}" will be permanently deleted along with its membership roster. Linked meetings, tasks, and goals are kept but unlinked.`,
+                confirmLabel: "Delete",
+                tone: "danger",
+              });
+              if (!ok) return;
+              await removeCommittee({ id: committee._id });
+              toast.success("Committee deleted");
+              navigate("/app/committees");
+            }}
+          >
+            <Trash2 size={12} /> Delete
+          </button>
+        }
         chips={
           <>
             <Badge>{committee.cadence}</Badge>

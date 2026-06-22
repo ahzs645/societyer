@@ -50,10 +50,11 @@ export function TasksPage() {
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedGoalId = searchParams.get("goalId") ?? "";
+  const requestedCommitteeId = searchParams.get("committeeId") ?? "";
   const openNewFromUrl = searchParams.get("new") === "1";
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [q, setQ] = useState("");
-  const [filterCommittee, setFilterCommittee] = useState<string>("");
+  const [filterCommittee, setFilterCommittee] = useState<string>(requestedCommitteeId);
   const [filterGoal, setFilterGoal] = useState<string>(requestedGoalId);
   const [filterLink, setFilterLink] = useState<string>("");
   const [open, setOpen] = useState(false);
@@ -110,6 +111,10 @@ export function TasksPage() {
   useEffect(() => {
     setFilterGoal(requestedGoalId);
   }, [requestedGoalId]);
+
+  useEffect(() => {
+    if (requestedCommitteeId) setFilterCommittee(requestedCommitteeId);
+  }, [requestedCommitteeId]);
 
   useEffect(() => {
     if (!openNewFromUrl || open || society === undefined || society === null) return;

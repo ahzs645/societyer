@@ -354,6 +354,7 @@ export function FinancialsPage() {
               desc="Free bookkeeping, REST + GraphQL API."
               status={waveLive ? "live" : waveDemoAvailable ? "demo" : "setup"}
               onConnect={canConnectWave ? connect : undefined}
+              setupHref="/app/browser-connectors?connector=wave"
               busy={busy}
             />
             <ProviderCard name="QuickBooks" desc="Coming soon — OAuth flow planned." status="planned" />

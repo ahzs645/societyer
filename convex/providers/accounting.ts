@@ -353,11 +353,16 @@ export async function waveListTransactions(args?: {
       if (!node?.invoiceDate) continue;
       if (args?.sinceISO && node.invoiceDate < args.sinceISO) continue;
       const paidValue = Number(node.amountPaid?.value ?? node.total?.value ?? 0);
+      // NOTE: Wave's public GraphQL API does not expose bank/money transactions —
+      // only accounting objects like invoices. These rows are therefore
+      // invoice-derived, not bank statement lines, so they are labelled as such.
+      // True bank-line reconciliation comes from the browser connector or manual
+      // entry (reconciliation.addManualTransaction).
       rows.push({
         externalId: node.id,
         accountExternalId: node.items?.[0]?.account?.id ?? "wave-income",
         date: node.invoiceDate,
-        description: node.title || `Invoice ${node.id}`,
+        description: `Wave invoice — ${node.title || node.id}`,
         amountCents: Math.round(paidValue * 100),
         category: node.items?.[0]?.account?.name ?? "Invoice",
         counterparty: node.customer?.name,

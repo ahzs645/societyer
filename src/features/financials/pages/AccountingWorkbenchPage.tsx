@@ -11,7 +11,7 @@ import { Badge, Drawer, Field } from "../../../components/ui";
 import { PageHeader, SeedPrompt } from "../../../pages/_helpers";
 import { formatDate, money } from "../../../lib/format";
 
-type DrawerKind = "period" | "opening" | "journal" | "candidate" | "reconciliation" | null;
+type DrawerKind = "period" | "opening" | "journal" | "candidate" | "reconciliation" | "counterparty" | "fundRestriction" | null;
 
 const today = () => new Date().toISOString().slice(0, 10);
 const currentYear = () => new Date().getFullYear().toString();
@@ -155,12 +155,16 @@ export function AccountingWorkbenchPage() {
     statementDate: today(),
     statementBalance: "",
   });
+  const [counterpartyForm, setCounterpartyForm] = useState({ name: "", kind: "vendor", email: "", taxIdentifier: "" });
+  const [fundForm, setFundForm] = useState({ name: "", purpose: "", status: "active", startDate: "", endDate: "" });
 
   const accounts = useQuery(api.accounting.chartAccounts, society ? { societyId: society._id } : "skip");
   const periods = useQuery(api.accounting.fiscalPeriods, society ? { societyId: society._id } : "skip");
   const journalEntries = useQuery(api.accounting.journalEntries, society ? { societyId: society._id, limit: 25 } : "skip");
   const trialBalance = useQuery(api.accounting.trialBalance, society ? { societyId: society._id } : "skip");
   const restrictedBalances = useQuery(api.accounting.restrictedFundBalances, society ? { societyId: society._id } : "skip");
+  const counterparties = useQuery(api.accounting.counterparties, society ? { societyId: society._id } : "skip");
+  const fundRestrictions = useQuery(api.accounting.fundRestrictions, society ? { societyId: society._id } : "skip");
   const transactionCandidates = useQuery(api.evidenceRegisters.overview, society ? { societyId: society._id } : "skip");
   const seedChart = useMutation(api.accounting.seedSocietyChartOfAccounts);
   const upsertPeriod = useMutation(api.accounting.upsertFiscalPeriod);
@@ -172,6 +176,8 @@ export function AccountingWorkbenchPage() {
   const createRecon = useMutation(api.accounting.createReconciliationRun);
   const setReconStatus = useMutation(api.accounting.setReconciliationRunStatus);
   const backfillTransactions = useMutation(api.accounting.backfillFinancialTransactionsToJournal);
+  const upsertCounterparty = useMutation(api.accounting.upsertCounterparty);
+  const upsertFundRestriction = useMutation(api.accounting.upsertFundRestriction);
   const chartCsv = useQuery(api.accounting.exportCsv, society ? { societyId: society._id, kind: "chart_of_accounts" } : "skip");
   const trialCsv = useQuery(api.accounting.exportCsv, society ? { societyId: society._id, kind: "trial_balance" } : "skip");
   const journalCsv = useQuery(api.accounting.exportCsv, society ? { societyId: society._id, kind: "journal_entries" } : "skip");
@@ -279,6 +285,41 @@ export function AccountingWorkbenchPage() {
       toast.info(`Book balance ${money(result.bookBalanceCents)} · difference ${money(result.differenceCents)}`);
     }, "Reconciliation run created");
 
+  const saveCounterparty = () =>
+    run(async () => {
+      if (!counterpartyForm.name.trim()) {
+        toast.warn("Counterparty name is required");
+        return;
+      }
+      await upsertCounterparty({
+        societyId: society._id,
+        name: counterpartyForm.name.trim(),
+        kind: counterpartyForm.kind,
+        email: counterpartyForm.email.trim() || undefined,
+        taxIdentifier: counterpartyForm.taxIdentifier.trim() || undefined,
+      } as any);
+      setCounterpartyForm({ name: "", kind: "vendor", email: "", taxIdentifier: "" });
+      setDrawer(null);
+    }, "Counterparty saved");
+
+  const saveFundRestriction = () =>
+    run(async () => {
+      if (!fundForm.name.trim() || !fundForm.purpose.trim()) {
+        toast.warn("Name and purpose are required");
+        return;
+      }
+      await upsertFundRestriction({
+        societyId: society._id,
+        name: fundForm.name.trim(),
+        purpose: fundForm.purpose.trim(),
+        status: fundForm.status,
+        startDate: fundForm.startDate || undefined,
+        endDate: fundForm.endDate || undefined,
+      } as any);
+      setFundForm({ name: "", purpose: "", status: "active", startDate: "", endDate: "" });
+      setDrawer(null);
+    }, "Fund restriction saved");
+
   const exportByKind: Record<string, any> = {
     chart_of_accounts: chartCsv,
     trial_balance: trialCsv,
@@ -328,6 +369,13 @@ export function AccountingWorkbenchPage() {
         })}>
           <FileSpreadsheet size={12} /> Backfill imports
         </button>
+        <Link className="btn-action" to="/app/reconciliation"><GitCompareArrows size={12} /> Bank reconciliation</Link>
+      </div>
+
+      <div className="muted" style={{ marginTop: 8, marginBottom: 8, fontSize: "var(--fs-sm)" }}>
+        Two reconciliation surfaces work together: <Link to="/app/reconciliation">Bank reconciliation</Link> matches
+        imported bank lines to records, while ledger reconciliation here checks the journal against a statement balance.
+        Use <strong>Backfill imports</strong> to post synced/manual bank transactions into the journal so both agree.
       </div>
 
       <div className="stat-grid">
@@ -452,6 +500,57 @@ export function AccountingWorkbenchPage() {
           </div>
         </section>
       )}
+
+      <section className="card">
+        <div className="card__head">
+          <h2 className="card__title">Fund restrictions register</h2>
+          <button className="btn-action" onClick={() => setDrawer("fundRestriction")}><PlusCircle size={12} /> Add restriction</button>
+        </div>
+        <div className="accounting-list">
+          {(fundRestrictions ?? []).map((row: any) => (
+            <div className="accounting-row" key={row._id}>
+              <div><strong>{row.name}</strong><div className="muted">{row.purpose}</div></div>
+              <Badge tone={row.status === "active" ? "success" : "neutral"}>{row.status}</Badge>
+            </div>
+          ))}
+          {(fundRestrictions ?? []).length === 0 && <div className="muted accounting-empty">No restriction terms recorded. Add one to track donor/grant-restricted purposes.</div>}
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card__head">
+          <h2 className="card__title">Counterparties</h2>
+          <button className="btn-action" onClick={() => setDrawer("counterparty")}><PlusCircle size={12} /> Add counterparty</button>
+        </div>
+        <div className="accounting-list">
+          {(counterparties ?? []).map((row: any) => (
+            <div className="accounting-row" key={row._id}>
+              <div><strong>{row.name}</strong><div className="muted">{row.email ?? row.externalId ?? "—"}</div></div>
+              <Badge tone="neutral">{row.kind}</Badge>
+            </div>
+          ))}
+          {(counterparties ?? []).length === 0 && <div className="muted accounting-empty">No counterparties yet. Add vendors and customers to categorize transactions.</div>}
+        </div>
+      </section>
+
+      <Drawer open={drawer === "fundRestriction"} onClose={() => setDrawer(null)} title="Add fund restriction" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={saveFundRestriction}>Save</button></>}>
+        <div className="col">
+          <Field label="Name"><input className="input" value={fundForm.name} onChange={(e) => setFundForm({ ...fundForm, name: e.target.value })} placeholder="e.g. Capital campaign 2026" /></Field>
+          <Field label="Purpose"><input className="input" value={fundForm.purpose} onChange={(e) => setFundForm({ ...fundForm, purpose: e.target.value })} placeholder="What the funds are restricted to" /></Field>
+          <Field label="Status"><select className="input" value={fundForm.status} onChange={(e) => setFundForm({ ...fundForm, status: e.target.value })}><option value="active">Active</option><option value="released">Released</option><option value="closed">Closed</option></select></Field>
+          <Field label="Start date"><input className="input" type="date" value={fundForm.startDate} onChange={(e) => setFundForm({ ...fundForm, startDate: e.target.value })} /></Field>
+          <Field label="End date"><input className="input" type="date" value={fundForm.endDate} onChange={(e) => setFundForm({ ...fundForm, endDate: e.target.value })} /></Field>
+        </div>
+      </Drawer>
+
+      <Drawer open={drawer === "counterparty"} onClose={() => setDrawer(null)} title="Add counterparty" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={saveCounterparty}>Save</button></>}>
+        <div className="col">
+          <Field label="Name"><input className="input" value={counterpartyForm.name} onChange={(e) => setCounterpartyForm({ ...counterpartyForm, name: e.target.value })} /></Field>
+          <Field label="Kind"><select className="input" value={counterpartyForm.kind} onChange={(e) => setCounterpartyForm({ ...counterpartyForm, kind: e.target.value })}><option value="vendor">Vendor</option><option value="customer">Customer</option><option value="other">Other</option></select></Field>
+          <Field label="Email"><input className="input" value={counterpartyForm.email} onChange={(e) => setCounterpartyForm({ ...counterpartyForm, email: e.target.value })} /></Field>
+          <Field label="Tax identifier"><input className="input" value={counterpartyForm.taxIdentifier} onChange={(e) => setCounterpartyForm({ ...counterpartyForm, taxIdentifier: e.target.value })} /></Field>
+        </div>
+      </Drawer>
 
       <Drawer open={drawer === "period"} onClose={() => setDrawer(null)} title="Create fiscal period" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={savePeriod}>Create</button></>}>
         <FormGrid>

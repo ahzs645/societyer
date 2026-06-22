@@ -41,6 +41,11 @@ export function AgmWorkflowPage() {
   const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
   const run = useQuery(api.agm.runForMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
   const deliveries = useQuery(api.agm.noticeDeliveries, id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const allElections = useQuery(api.elections.list, society ? { societyId: society._id } : "skip");
+  const meetingElections = useMemo(
+    () => (allElections ?? []).filter((e: any) => String(e.meetingId) === String(id)),
+    [allElections, id],
+  );
   const init = useMutation(api.agm.init);
   const markStep = useMutation(api.agm.markStep);
   const sendMeetingNotice = useAction(api.communications.sendMeetingNotice);
@@ -212,14 +217,37 @@ export function AgmWorkflowPage() {
                       </button>
                     )}
                     {s.id === "electionsHeld" && (
-                      <button className="btn-action" onClick={() => advanceWithReview("electionsHeld", { electionsCompletedAt: new Date().toISOString() }, "Confirm election results, acclamations, vacancies, and director eligibility evidence are captured before completing this step.")}>
-                        <ClipboardCheck size={12} /> Mark elections complete
-                      </button>
+                      <div className="col" style={{ gap: 8, width: "100%" }}>
+                        {meetingElections.length > 0 && (
+                          <div className="col" style={{ gap: 4 }}>
+                            {meetingElections.map((e: any) => (
+                              <div key={e._id} className="row" style={{ gap: 8 }}>
+                                <Link to={`/app/elections/${e._id}`}>{e.title}</Link>
+                                <Badge tone={e.status === "Tallied" ? "success" : e.status === "Closed" ? "info" : "warn"}>{e.status}</Badge>
+                                {e.talliedAtISO && <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>tallied {formatDate(e.talliedAtISO)}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="row" style={{ gap: 6 }}>
+                          <Link to="/app/elections" className="btn-action">
+                            <ClipboardCheck size={12} /> {meetingElections.length ? "Manage elections" : "Set up election"}
+                          </Link>
+                          <button className="btn-action" onClick={() => advanceWithReview("electionsHeld", { electionsCompletedAt: new Date().toISOString() }, "Confirm election results, acclamations, vacancies, and director eligibility evidence are captured before completing this step.")}>
+                            <CheckCircle2 size={12} /> Mark elections complete
+                          </button>
+                        </div>
+                      </div>
                     )}
                     {s.id === "minutesApproved" && (
-                      <button className="btn-action" onClick={() => advanceWithReview("minutesApproved", { minutesApprovedAt: new Date().toISOString() }, "Confirm the approved AGM minutes are saved with approval evidence or the approving meeting reference.")}>
-                        <Flag size={12} /> Mark minutes approved
-                      </button>
+                      <>
+                        <Link to={`/app/meetings/${meeting._id}/preview`} className="btn-action">
+                          <FileText size={12} /> {minutes?.approvedAt ? "View approved minutes" : "Open minutes"}
+                        </Link>
+                        <button className="btn-action" onClick={() => advanceWithReview("minutesApproved", { minutesApprovedAt: new Date().toISOString() }, "Confirm the approved AGM minutes are saved with approval evidence or the approving meeting reference.")}>
+                          <Flag size={12} /> Mark minutes approved
+                        </button>
+                      </>
                     )}
                     {s.id === "annualReportFiled" && (
                       <>

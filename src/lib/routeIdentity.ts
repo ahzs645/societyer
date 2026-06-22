@@ -61,6 +61,7 @@ import {
   PenLine,
   PiggyBank,
   Plug,
+  Webhook,
   Receipt,
   Scale,
   Scroll,
@@ -243,6 +244,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/workflow-runs": { icon: History, group: "workflows", label: "Workflow runs", module: "workflows" },
   "/app/workflow-packages": { icon: FolderKanban, group: "workflows", label: "Workflow packages", module: "workflows" },
   "/app/template-engine": { icon: FileCog, group: "workflows", label: "Template engine" },
+  "/app/calendar-sync": { icon: CalendarClock, group: "workflows", label: "Calendar sync" },
 
   // ---- Administration ----
   "/app/notifications": { icon: Bell, group: "administration", label: "Notifications" },
@@ -251,6 +253,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/imports": { icon: FileJson, group: "administration", label: "Import sessions" },
   "/app/paperless": { icon: Database, group: "administration", label: "Paperless-ngx", module: "paperless" },
   "/app/settings": { icon: Settings, group: "administration", label: "Settings" },
+  "/app/webhooks": { icon: Webhook, group: "administration", label: "Webhooks" },
   "/app/audit": { icon: ShieldCheck, group: "administration", label: "Audit log" },
   "/app/exports": { icon: Download, group: "administration", label: "Data export" },
 };

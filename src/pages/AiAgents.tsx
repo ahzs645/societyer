@@ -84,7 +84,7 @@ export function AiAgentsPage() {
   const threads = useQuery(api.aiChat.listThreads, society ? { societyId: society._id, limit: 12 } : "skip") as any[] | undefined;
   const toolDrafts = useQuery(api.aiAgents.listToolDrafts, society ? { societyId: society._id, limit: 20 } : "skip") as any[] | undefined;
   const aiSettings = useQuery(api.aiSettings.getEffective, society ? { societyId: society._id, actingUserId } : "skip") as any | undefined;
-  const runAgent = useMutation(api.aiAgents.runAgent);
+  const runAgent = useAction(api.aiChatActions.runAgentLive);
   const sendChatMessage = useAction(api.aiChatActions.sendChatMessage);
   const validateProviderKey = useAction(api.aiSettingsActions.validateProviderKey);
   const listProviderModels = useAction(api.aiSettingsActions.listProviderModels);

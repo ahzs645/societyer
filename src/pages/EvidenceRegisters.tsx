@@ -1,21 +1,37 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge } from "../components/ui";
+import { Badge, Drawer, Field } from "../components/ui";
+import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Archive, Banknote, ClipboardCheck, FileSearch, GitBranch } from "lucide-react";
+import { Archive, Banknote, ClipboardCheck, FileSearch, GitBranch, Plus } from "lucide-react";
 import { formatDate, money } from "../lib/format";
 
 export function GovernanceRegistersPage() {
   const { society, data, people } = useRegisters();
   const promoteBoardRole = useMutation(api.evidenceRegisters.promoteBoardRoleToDirector);
+  const createManual = useMutation(api.evidenceRegisters.createManual);
   const confirm = useConfirm();
   const toast = useToast();
+  const [addForm, setAddForm] = useState<any>(null);
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
+
+  const saveManual = async () => {
+    if (!addForm || !society) return;
+    if (!String(addForm.personName ?? "").trim()) {
+      toast.warn("Person name is required");
+      return;
+    }
+    const { kind, ...payload } = addForm;
+    await createManual({ societyId: society._id, kind, payload });
+    toast.success("Record added to register");
+    setAddForm(null);
+  };
 
   const roles = data?.boardRoleAssignments ?? [];
   const changes = data?.boardRoleChanges ?? [];
@@ -44,8 +60,62 @@ export function GovernanceRegistersPage() {
         icon={<GitBranch size={16} />}
         iconColor="blue"
         subtitle="Source-backed director/officer timeline, board role changes, and signing authority records."
-        actions={<Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>}
+        actions={
+          <>
+            <button className="btn-action" onClick={() => setAddForm({ kind: "boardRoleAssignment", personName: "", roleTitle: "Director", status: "Observed", startDate: new Date().toISOString().slice(0, 10), notes: "" })}>
+              <Plus size={12} /> Add record
+            </button>
+            <Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>
+          </>
+        }
       />
+
+      <Drawer
+        open={Boolean(addForm)}
+        onClose={() => setAddForm(null)}
+        title="Add register record"
+        footer={<><button className="btn" onClick={() => setAddForm(null)}>Cancel</button><button className="btn btn--accent" onClick={saveManual}>Add record</button></>}
+      >
+        {addForm && (
+          <div>
+            <div className="muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
+              Manually record a governance fact (e.g. from minutes or a bank letter) without importing a document. It is flagged for review.
+            </div>
+            <Field label="Register">
+              <Select
+                value={addForm.kind}
+                onChange={(v) => setAddForm({ ...addForm, kind: v })}
+                options={[
+                  { value: "boardRoleAssignment", label: "Role assignment" },
+                  { value: "boardRoleChange", label: "Board role change" },
+                  { value: "signingAuthority", label: "Signing authority" },
+                ]}
+              />
+            </Field>
+            <Field label="Person name"><input className="input" value={addForm.personName ?? ""} onChange={(e) => setAddForm({ ...addForm, personName: e.target.value })} /></Field>
+            {addForm.kind === "boardRoleChange" ? (
+              <>
+                <Field label="Change type"><input className="input" value={addForm.changeType ?? ""} onChange={(e) => setAddForm({ ...addForm, changeType: e.target.value })} placeholder="appointment / removal / vacancy" /></Field>
+                <Field label="Role title"><input className="input" value={addForm.roleTitle ?? ""} onChange={(e) => setAddForm({ ...addForm, roleTitle: e.target.value })} /></Field>
+                <Field label="Effective date"><input className="input" type="date" value={addForm.effectiveDate ?? ""} onChange={(e) => setAddForm({ ...addForm, effectiveDate: e.target.value })} /></Field>
+              </>
+            ) : addForm.kind === "signingAuthority" ? (
+              <>
+                <Field label="Institution"><input className="input" value={addForm.institutionName ?? ""} onChange={(e) => setAddForm({ ...addForm, institutionName: e.target.value })} /></Field>
+                <Field label="Authority type"><input className="input" value={addForm.authorityType ?? ""} onChange={(e) => setAddForm({ ...addForm, authorityType: e.target.value })} placeholder="signing / co-signing" /></Field>
+                <Field label="Effective date"><input className="input" type="date" value={addForm.effectiveDate ?? ""} onChange={(e) => setAddForm({ ...addForm, effectiveDate: e.target.value })} /></Field>
+              </>
+            ) : (
+              <>
+                <Field label="Role title"><input className="input" value={addForm.roleTitle ?? ""} onChange={(e) => setAddForm({ ...addForm, roleTitle: e.target.value })} /></Field>
+                <Field label="Role group"><input className="input" value={addForm.roleGroup ?? ""} onChange={(e) => setAddForm({ ...addForm, roleGroup: e.target.value })} placeholder="Board / Officers / Committee" /></Field>
+                <Field label="Start date"><input className="input" type="date" value={addForm.startDate ?? ""} onChange={(e) => setAddForm({ ...addForm, startDate: e.target.value })} /></Field>
+              </>
+            )}
+            <Field label="Notes"><input className="input" value={addForm.notes ?? ""} onChange={(e) => setAddForm({ ...addForm, notes: e.target.value })} /></Field>
+          </div>
+        )}
+      </Drawer>
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         <Stat label="Role assignments" value={roles.length} />
         <Stat label="Role changes" value={changes.length} />

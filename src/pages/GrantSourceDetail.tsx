@@ -1,6 +1,6 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
-import { ArrowLeft, ExternalLink, Globe2, Plus } from "lucide-react";
+import { ArrowLeft, ExternalLink, Globe2, Plus, FilePlus2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Badge } from "../components/ui";
 import { useToast } from "../components/Toast";
@@ -18,6 +18,8 @@ export function GrantSourceDetailPage() {
     society ? { societyId: society._id } : "skip",
   );
   const addGrantSourceFromLibrary = useMutation(api.grantSources.addFromLibrary);
+  const upsertGrant = useMutation(api.grants.upsertGrant);
+  const navigate = useNavigate();
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -65,7 +67,7 @@ export function GrantSourceDetailPage() {
             </a>
             {!source.installed && (
               <button
-                className="btn-action btn-action--primary"
+                className="btn-action"
                 onClick={async () => {
                   await addGrantSourceFromLibrary({
                     societyId: society._id,
@@ -78,6 +80,27 @@ export function GrantSourceDetailPage() {
                 <Plus size={12} /> Add source
               </button>
             )}
+            <button
+              className="btn-action btn-action--primary"
+              onClick={async () => {
+                const grantId = await upsertGrant({
+                  societyId: society._id,
+                  title: `${source.name} application`,
+                  funder: source.name,
+                  status: "Prospecting",
+                  opportunityType: source.sourceType,
+                  opportunityUrl: source.url,
+                  sourceExternalIds: [`grantSource:${source.libraryKey}`],
+                  sourceNotes: source.notes || undefined,
+                  publicDescription: source.notes || undefined,
+                  actingUserId,
+                } as any);
+                toast.success("Application started", source.name);
+                navigate(`/app/grants/${grantId}/edit`);
+              }}
+            >
+              <FilePlus2 size={12} /> Add to pipeline
+            </button>
           </>
         }
       />

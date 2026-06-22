@@ -1704,6 +1704,10 @@ export function MeetingDetailPage() {
     uploadAudioAndRun,
   };
 
+  const meetingCommittee = (committees ?? []).find(
+    (c: any) => String(c._id) === String(meeting.committeeId),
+  );
+
   return (
     <div className="page page--wide meeting-detail-page">
       <Link to="/app/meetings" className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
@@ -1711,6 +1715,18 @@ export function MeetingDetailPage() {
       </Link>
       <PageHeader
         title={meeting.title}
+        subtitle={
+          <>
+            {meeting.type} · {formatDateTime(meeting.scheduledAt)}
+            {meeting.location ? ` · ${meeting.location}` : ""}
+            {meetingCommittee && (
+              <>
+                {" · "}
+                <Link to={`/app/committees/${meetingCommittee._id}`}>{meetingCommittee.name}</Link>
+              </>
+            )}
+          </>
+        }
         actions={
           <>
             <Badge tone={meeting.status === "Held" ? "success" : meeting.status === "Cancelled" ? "danger" : "warn"}>

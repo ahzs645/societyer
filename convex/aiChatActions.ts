@@ -169,6 +169,97 @@ export const sendChatMessage = action({
   },
 });
 
+// Live AI Agents runner. Replaces the deterministic-only path: when a provider key
+// is configured it runs the agent through the same Vercel AI SDK loop (skills, tool
+// learning, permissioned tool execution) that chat uses, persisting the model's real
+// output. With no key (or on error) it falls back to the deterministic runAgent
+// mutation so the feature still works offline/in demo and never hard-fails.
+export const runAgentLive = action({
+  args: {
+    societyId: v.id("societies"),
+    agentKey: v.string(),
+    input: v.string(),
+    actingUserId: v.optional(v.id("users")),
+    browsingContext: v.optional(v.any()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const runtimeConfig = await resolveAiRuntimeConfig(ctx, args.societyId, args.actingUserId);
+    if (!runtimeConfig.model) {
+      // No provider configured — deterministic skill-router run (also the demo path).
+      return ctx.runMutation((api as any).aiAgents.runAgent, args);
+    }
+
+    const context = await ctx.runQuery((api as any).aiAgents.getAgentRunContext, {
+      societyId: args.societyId,
+      agentKey: args.agentKey,
+      actingUserId: args.actingUserId,
+      browsingContext: args.browsingContext,
+    });
+
+    const tools = {
+      load_skills: tool({
+        description: "Load Societyer skill instructions by name before using domain tools.",
+        inputSchema: z.object({ skillNames: z.array(z.string()) }),
+        execute: async ({ skillNames }: { skillNames: string[] }) =>
+          ctx.runQuery((api as any).aiAgents.loadSkills, { societyId: args.societyId, skillNames }),
+      }),
+      learn_tools: tool({
+        description: "Fetch exact schemas for Societyer tools before executing them.",
+        inputSchema: z.object({ toolNames: z.array(z.string()) }),
+        execute: async ({ toolNames }: { toolNames: string[] }) =>
+          ctx.runQuery((api as any).aiAgents.learnTools, {
+            societyId: args.societyId,
+            actingUserId: args.actingUserId,
+            toolNames,
+          }),
+      }),
+      execute_tool: tool({
+        description: "Execute one permissioned Societyer tool after learning its schema.",
+        inputSchema: z.object({
+          toolName: z.string(),
+          arguments: z.record(z.string(), z.any()).optional(),
+        }),
+        execute: async ({ toolName, arguments: toolArguments }: { toolName: string; arguments?: Record<string, any> }) =>
+          ctx.runMutation((api as any).aiAgents.executeTool, {
+            societyId: args.societyId,
+            actingUserId: args.actingUserId,
+            agentKey: args.agentKey,
+            toolName,
+            arguments: toolArguments ?? {},
+          }),
+      }),
+    };
+
+    let output = "";
+    let provider = "vercel_ai_sdk";
+    try {
+      const result = await generateText({
+        model: runtimeConfig.model,
+        system: context.systemPrompt,
+        messages: [{ role: "user", content: args.input }],
+        tools,
+        stopWhen: stepCountIs(6),
+      } as any);
+      output = result.text ?? "";
+      if (!output.trim()) throw new Error("The model returned an empty response.");
+    } catch (error: any) {
+      // Fall back to the deterministic run so the feature degrades gracefully.
+      return ctx.runMutation((api as any).aiAgents.runAgent, args);
+    }
+
+    return ctx.runMutation((internal as any).aiAgents._recordAgentRun, {
+      societyId: args.societyId,
+      agentKey: args.agentKey,
+      input: args.input,
+      output,
+      provider,
+      actingUserId: args.actingUserId,
+      actorDisplayName: context?.user?.displayName,
+    });
+  },
+});
+
 async function resolveAiRuntimeConfig(ctx: any, societyId: any, actingUserId: any, requestedModelId?: string) {
   const settings = await ctx.runQuery((api as any).aiSettings.getEffective, {
     societyId,

@@ -3,13 +3,14 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { useCurrentUserId } from "../hooks/useCurrentUser";
+import { useCurrentUserId, useCurrentUser } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge } from "../components/ui";
+import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
+import { DatePicker } from "../components/DatePicker";
 import { useConfirm, usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Boxes, Scale, Link2, Undo2 } from "lucide-react";
+import { Boxes, Scale, Link2, Undo2, Plus } from "lucide-react";
 import { formatDate, money } from "../lib/format";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
@@ -39,17 +40,28 @@ export function ReconciliationPage() {
   const matchM = useMutation(api.reconciliation.match);
   const markManualM = useMutation(api.reconciliation.markManual);
   const unmatchM = useMutation(api.reconciliation.unmatch);
+  const addManualTxn = useMutation(api.reconciliation.addManualTransaction);
   const inventoryItems = useQuery(api.inventoryHub.items, society ? { societyId: society._id } : "skip");
   const inventoryLinks = useQuery(api.inventoryHub.receiptLinks, society ? { societyId: society._id } : "skip");
   const linkInventoryReceipt = useMutation(api.inventoryHub.linkReceipt);
   const unlinkInventoryReceipt = useMutation(api.inventoryHub.unlinkReceipt);
   const actingUserId = useCurrentUserId() ?? undefined;
+  const actorName = useCurrentUser()?.displayName ?? undefined;
   const prompt = usePrompt();
   const confirm = useConfirm();
   const toast = useToast();
 
   const [selected, setSelected] = useState<string | null>(null);
   const [linkItemId, setLinkItemId] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const [txnForm, setTxnForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    description: "",
+    amountDollars: "",
+    direction: "out" as "in" | "out",
+    counterparty: "",
+    category: "",
+  });
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
 
@@ -130,6 +142,7 @@ export function ReconciliationPage() {
         matchedKind: top.kind,
         matchedId: top.id,
         note: `Auto-matched · score ${top.score.toFixed(0)}`,
+        actor: actorName,
       });
       count++;
     }
@@ -139,6 +152,27 @@ export function ReconciliationPage() {
   const percent = summary.total ? Math.round((summary.reconciled / summary.total) * 100) : 0;
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
+  const saveManualTxn = async () => {
+    if (!society) return;
+    const dollars = Number(txnForm.amountDollars);
+    if (!txnForm.description.trim() || !Number.isFinite(dollars) || dollars <= 0) {
+      toast.warn("Enter a description and a positive amount");
+      return;
+    }
+    const cents = Math.round(dollars * 100) * (txnForm.direction === "out" ? -1 : 1);
+    await addManualTxn({
+      societyId: society._id,
+      date: txnForm.date,
+      description: txnForm.description.trim(),
+      amountCents: cents,
+      counterparty: txnForm.counterparty.trim() || undefined,
+      category: txnForm.category.trim() || undefined,
+    });
+    toast.success("Transaction added");
+    setAddOpen(false);
+    setTxnForm({ date: new Date().toISOString().slice(0, 10), description: "", amountDollars: "", direction: "out", counterparty: "", category: "" });
+  };
+
   return (
     <div className="page">
       <PageHeader
@@ -147,11 +181,49 @@ export function ReconciliationPage() {
         iconColor="green"
         subtitle="Match imported bank transactions to internal records (filings, donation receipts, payroll). Anything unreconciled at year-end is a red flag for the auditor."
         actions={
-          <button className="btn-action btn-action--primary" onClick={autoMatchAllHighConfidence}>
-            <Link2 size={12} /> Auto-match high confidence
-          </button>
+          <>
+            <Link className="btn-action" to="/app/financials/accounting">
+              <Scale size={12} /> Ledger reconciliation
+            </Link>
+            <button className="btn-action" onClick={() => setAddOpen(true)}>
+              <Plus size={12} /> Add transaction
+            </button>
+            <button className="btn-action btn-action--primary" onClick={autoMatchAllHighConfidence}>
+              <Link2 size={12} /> Auto-match high confidence
+            </button>
+          </>
         }
       />
+
+      <Drawer
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        title="Add bank transaction"
+        footer={
+          <>
+            <button className="btn" onClick={() => setAddOpen(false)}>Cancel</button>
+            <button className="btn btn--accent" onClick={saveManualTxn}>Add transaction</button>
+          </>
+        }
+      >
+        <div className="muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
+          Manually record a bank line so it can be reconciled when no Wave/browser-connector sync is configured.
+        </div>
+        <Field label="Date"><DatePicker value={txnForm.date} onChange={(v) => setTxnForm({ ...txnForm, date: v })} /></Field>
+        <Field label="Description"><input className="input" value={txnForm.description} onChange={(e) => setTxnForm({ ...txnForm, description: e.target.value })} /></Field>
+        <div className="row" style={{ gap: 12 }}>
+          <Field label="Direction">
+            <Select
+              value={txnForm.direction}
+              onChange={(v) => setTxnForm({ ...txnForm, direction: v as "in" | "out" })}
+              options={[{ value: "out", label: "Money out" }, { value: "in", label: "Money in" }]}
+            />
+          </Field>
+          <Field label="Amount"><input className="input" type="number" min="0" step="0.01" value={txnForm.amountDollars} onChange={(e) => setTxnForm({ ...txnForm, amountDollars: e.target.value })} /></Field>
+        </div>
+        <Field label="Counterparty"><input className="input" value={txnForm.counterparty} onChange={(e) => setTxnForm({ ...txnForm, counterparty: e.target.value })} placeholder="e.g. BC Registries, a donor, a vendor" /></Field>
+        <Field label="Category"><input className="input" value={txnForm.category} onChange={(e) => setTxnForm({ ...txnForm, category: e.target.value })} placeholder="Optional" /></Field>
+      </Drawer>
 
       <div className="stat-grid">
         <div className="stat">
@@ -282,6 +354,7 @@ export function ReconciliationPage() {
                               matchedKind: c.kind,
                               matchedId: c.id,
                               note: `Matched via UI · ${c.label}`,
+                              actor: actorName,
                             });
                             toast.success("Matched");
                           }}
@@ -301,7 +374,7 @@ export function ReconciliationPage() {
                           required: true,
                         });
                         if (!note) return;
-                        await markManualM({ txnId: selectedRow.txn._id, note });
+                        await markManualM({ txnId: selectedRow.txn._id, note, actor: actorName });
                         toast.success("Manual reconciliation recorded");
                       }}
                     >

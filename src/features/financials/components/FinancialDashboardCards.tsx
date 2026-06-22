@@ -1,4 +1,5 @@
-import { Link2, PlusCircle, Trash2 } from "lucide-react";
+import { Link2, PlusCircle, Settings, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Badge } from "../../../components/ui";
 import { formatDate, money } from "../../../lib/format";
 import {
@@ -124,12 +125,16 @@ export function ProviderCard({
   desc,
   status,
   onConnect,
+  setupHref,
   busy,
 }: {
   name: string;
   desc: string;
   status: "live" | "demo" | "setup" | "planned";
   onConnect?: () => void;
+  /** Where to send the user to finish configuring this provider when it can't be
+   * connected yet (no credentials). Renders a real link instead of a dead button. */
+  setupHref?: string;
   busy?: boolean;
 }) {
   const statusLabel = status === "setup" ? "setup required" : status;
@@ -155,13 +160,18 @@ export function ProviderCard({
         <button className="btn btn--accent btn--sm" disabled={busy} onClick={onConnect}>
           <Link2 size={12} /> Connect
         </button>
-      ) : status === "setup" ? (
-        <button className="btn btn--ghost btn--sm" disabled>
-          Configure Wave
-        </button>
+      ) : status === "setup" && setupHref ? (
+        <Link className="btn btn--ghost btn--sm" to={setupHref}>
+          <Settings size={12} /> Configure {name}
+        </Link>
+      ) : status === "planned" ? (
+        // Roadmap teaser — intentionally not a control.
+        <span className="muted" style={{ fontSize: 12, fontStyle: "italic" }}>
+          Coming soon
+        </span>
       ) : (
         <button className="btn btn--ghost btn--sm" disabled>
-          Coming soon
+          Configure {name}
         </button>
       )}
     </div>

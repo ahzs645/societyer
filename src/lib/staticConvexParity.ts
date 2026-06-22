@@ -22,6 +22,7 @@
 // reflects. These return null (a deliberate no-op) with no error.
 export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
   "apiPlatform:revokeToken",
+  "apiPlatform:setWebhookSubscriptionStatus",
   "communications:ensureDefaultTemplates",
   "communications:sendCampaign",
   "communications:sendMeetingNotice",
@@ -60,6 +61,7 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
 // become handled so this list cannot rot.
 export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "agm:init",
+  "calendarSync:stageCalendarEvents",
   "agm:markStep",
   "aiChat:archiveThread",
   "aiChat:deleteThread",
@@ -104,6 +106,7 @@ export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "organizationHistory:saveSource",
   "proxies:revoke",
   "receipts:voidReceipt",
+  "reconciliation:addManualTransaction",
   "reconciliation:markManual",
   "reconciliation:match",
   "reconciliation:unmatch",

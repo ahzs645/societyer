@@ -11,21 +11,21 @@ const STEP_DEFINITIONS: Record<string, { label: string; note?: string }[]> = {
     { label: "Validate BC-resident requirement and director consents" },
     { label: "Pre-fill BC Societies Online Form 11 (annual report)" },
     { label: "Queue signature from authorized signatory" },
-    { label: "Open Societies Online and submit Form 11" },
-    { label: "Capture confirmation number and save receipt PDF" },
+    { label: "Stage Form 11 and deep-link to Societies Online for review" },
+    { label: "Ready for you to submit — no filing was sent automatically" },
   ],
   BylawAmendment: [
     { label: "Collect bylaw text (marked-up and clean)" },
     { label: "Reference special resolution minute" },
     { label: "Pre-fill bylaw amendment filing" },
-    { label: "Submit via Societies Online" },
-    { label: "Capture confirmation number" },
+    { label: "Stage filing and deep-link to Societies Online for review" },
+    { label: "Ready for you to submit — no filing was sent automatically" },
   ],
   ChangeOfDirectors: [
     { label: "Diff director register vs last filed state" },
     { label: "Pre-fill change-of-directors form" },
-    { label: "Submit filing" },
-    { label: "Capture confirmation number" },
+    { label: "Stage filing and deep-link to Societies Online for review" },
+    { label: "Ready for you to submit — no filing was sent automatically" },
   ],
 };
 
@@ -221,9 +221,13 @@ export const buildFilingPacket = query({
   },
 });
 
-// The bot itself. In demo mode it walks the steps deterministically with
-// short sleeps so the UI animates. In live mode you'd replace each step with
-// real work — PDF generation, e-sign collection, a headless browser hop, etc.
+// The preparation assistant. BC Societies Online has no public API and does not
+// permit automated submission, so this never files on the user's behalf: it
+// gathers and validates the record, pre-fills the form, stages signatures, and
+// deep-links the operator to Societies Online for manual submission. The run
+// ends in `manual_required` — the user files in the portal, then records the
+// real confirmation number via the normal Filings "mark filed" flow. It does
+// NOT fabricate a confirmation number or mark the filing Filed.
 export const run = action({
   args: {
     societyId: v.id("societies"),
@@ -239,7 +243,7 @@ export const run = action({
       societyId,
       filingId,
       kind: filing.kind,
-      demo: true,
+      demo: false,
       actingUserId,
     });
 
@@ -247,8 +251,8 @@ export const run = action({
       societyId,
       kind: "bot",
       severity: "info",
-      title: `Filing bot started: ${filing.kind}`,
-      body: `Auto-preparing ${filing.kind} for ${filing.periodLabel ?? filing.dueDate}.`,
+      title: `Preparing filing: ${filing.kind}`,
+      body: `Gathering and pre-filling ${filing.kind} for ${filing.periodLabel ?? filing.dueDate}. You'll submit it in Societies Online.`,
       linkHref: "/filings",
     });
 
@@ -258,6 +262,7 @@ export const run = action({
     });
 
     const steps = STEP_DEFINITIONS[filing.kind] ?? [];
+    const lastIndex = steps.length - 1;
     try {
       for (let i = 0; i < steps.length; i++) {
         await ctx.runMutation(internal.filingBot._updateStep, {
@@ -265,11 +270,11 @@ export const run = action({
           stepIndex: i,
           status: "running",
         });
-        await sleep(600);
+        await sleep(400);
         const note = i === 2
           ? `Packet built: ${packet?.form ?? "n/a"}`
-          : i === 4
-          ? "Opened https://www.bcregistry.ca/societies — filled Form 11"
+          : i === lastIndex
+          ? "No submission was sent. Open Societies Online to file, then record your confirmation number in Filings."
           : undefined;
         await ctx.runMutation(internal.filingBot._updateStep, {
           id: runId,
@@ -279,27 +284,20 @@ export const run = action({
         });
       }
 
-      const confirmationNumber = `BC-${filing.kind.slice(0, 2).toUpperCase()}-${Math.floor(Math.random() * 900_000 + 100_000)}`;
+      // Honest outcome: prepared, not filed. The operator submits manually.
       await ctx.runMutation(internal.filingBot._completeRun, {
         id: runId,
-        status: "success",
-        confirmationNumber,
-      });
-      await ctx.runMutation(internal.filingBot._patchFiling, {
-        filingId,
-        filedAt: new Date().toISOString().slice(0, 10),
-        confirmationNumber,
-        status: "Filed",
+        status: "manual_required",
       });
       await ctx.runMutation(api.notifications.create, {
         societyId,
         kind: "bot",
-        severity: "success",
-        title: `Filed: ${filing.kind}`,
-        body: `Confirmation ${confirmationNumber}. Receipt saved to Filings.`,
+        severity: "info",
+        title: `Filing ready to submit: ${filing.kind}`,
+        body: `Form pre-filled and validated. Submit it in Societies Online, then record your confirmation number in Filings.`,
         linkHref: "/filings",
       });
-      return { runId, confirmationNumber };
+      return { runId, status: "manual_required" as const };
     } catch (err: any) {
       await ctx.runMutation(internal.filingBot._completeRun, {
         id: runId,

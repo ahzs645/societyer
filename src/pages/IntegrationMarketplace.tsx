@@ -388,21 +388,21 @@ function integrationLinksFor(slug: string) {
   const links: Record<string, Array<{ label: string; to: string; primary?: boolean }>> = {
     "paperless-ngx": [
       { label: "Paperless setup", to: "/app/paperless", primary: true },
-      { label: "Review imports", to: "/app/import-sessions?source=Paperless" },
+      { label: "Review imports", to: "/app/imports?source=Paperless" },
     ],
     "wave-browser": [
       { label: "Wave workspace", to: "/app/browser-connectors?connector=wave", primary: true },
-      { label: "Staged imports", to: "/app/import-sessions?source=Wave%20browser%20connector" },
+      { label: "Staged imports", to: "/app/imports?source=Wave%20browser%20connector" },
       { label: "Connector runs", to: "/app/workflow-runs?provider=browser-connector&triggeredBy=connector" },
     ],
     "bc-registry-browser": [
       { label: "BC Registry workspace", to: "/app/browser-connectors?connector=bc-registry", primary: true },
-      { label: "Registry imports", to: "/app/import-sessions?source=BC%20Registry%20browser%20connector" },
+      { label: "Registry imports", to: "/app/imports?source=BC%20Registry%20browser%20connector" },
       { label: "Connector runs", to: "/app/workflow-runs?provider=browser-connector&triggeredBy=connector" },
     ],
     "gcos-browser": [
       { label: "GCOS workspace", to: "/app/browser-connectors?connector=gcos", primary: true },
-      { label: "Grant imports", to: "/app/import-sessions?source=GCOS%20browser%20connector" },
+      { label: "Grant imports", to: "/app/imports?source=GCOS%20browser%20connector" },
       { label: "Connector runs", to: "/app/workflow-runs?provider=browser-connector&triggeredBy=connector" },
     ],
     "google-calendar": [

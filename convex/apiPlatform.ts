@@ -614,6 +614,22 @@ export const upsertWebhookSubscription = mutation({
   },
 });
 
+export const setWebhookSubscriptionStatus = mutation({
+  args: {
+    id: v.id("webhookSubscriptions"),
+    societyId: v.id("societies"),
+    status: v.string(), // active | disabled
+    actingUserId: v.optional(v.id("users")),
+    serviceToken: serviceTokenValidator,
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await assertCanManageApiPlatform(ctx, args.societyId, args.actingUserId, args.serviceToken);
+    await ctx.db.patch(args.id, { status: args.status, updatedAtISO: nowISO() });
+    return null;
+  },
+});
+
 export const createWebhookDelivery = mutation({
   args: {
     societyId: v.id("societies"),
