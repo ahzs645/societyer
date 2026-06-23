@@ -1,11 +1,15 @@
 // @ts-nocheck
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { assertNativeFileStorageEnabled } from "./providers/env";
 
 export const generateUploadUrl = mutation({
   args: {},
   returns: v.any(),
-  handler: async (ctx) => ctx.storage.generateUploadUrl(),
+  handler: async (ctx) => {
+    assertNativeFileStorageEnabled();
+    return ctx.storage.generateUploadUrl();
+  },
 });
 
 export const attachUploadedFileToDocument = mutation({
@@ -18,6 +22,7 @@ export const attachUploadedFileToDocument = mutation({
   },
   returns: v.any(),
   handler: async (ctx, { documentId, storageId, fileName, mimeType, fileSizeBytes }) => {
+    assertNativeFileStorageEnabled();
     await ctx.db.patch(documentId, { storageId, fileName, mimeType, fileSizeBytes });
   },
 });

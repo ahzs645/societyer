@@ -9,6 +9,7 @@ import { History, Upload, RotateCcw, Download } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { openDocumentDownloadTarget } from "../lib/documentStorage";
 import { uploadDocumentVersion } from "../lib/documentVersionUpload";
+import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
 
 export function DocumentVersionsDrawer({
   open,
@@ -39,6 +40,7 @@ export function DocumentVersionsDrawer({
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [changeNote, setChangeNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const nativeStorage = isNativeFileStorageEnabled();
 
   if (!documentId) return null;
 
@@ -103,39 +105,49 @@ export function DocumentVersionsDrawer({
       title={`Versions · ${title}`}
       footer={
         <>
-          <input
-            ref={fileRef}
-            type="file"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleFile(f);
-            }}
-          />
+          {nativeStorage && (
+            <input
+              ref={fileRef}
+              type="file"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFile(f);
+              }}
+            />
+          )}
           <button className="btn" onClick={onClose}>
             Close
           </button>
-          <button
-            className="btn btn--accent"
-            disabled={busy}
-            onClick={() => fileRef.current?.click()}
-          >
-            <Upload size={12} /> Upload new version
-          </button>
+          {nativeStorage && (
+            <button
+              className="btn btn--accent"
+              disabled={busy}
+              onClick={() => fileRef.current?.click()}
+            >
+              <Upload size={12} /> Upload new version
+            </button>
+          )}
         </>
       }
     >
-      <Field
-        label="Change note (optional)"
-        hint="Shown alongside this version in history — e.g. 'Board approved v4'."
-      >
-        <input
-          className="input"
-          value={changeNote}
-          onChange={(e) => setChangeNote(e.target.value)}
-          placeholder="What changed?"
-        />
-      </Field>
+      {nativeStorage ? (
+        <Field
+          label="Change note (optional)"
+          hint="Shown alongside this version in history — e.g. 'Board approved v4'."
+        >
+          <input
+            className="input"
+            value={changeNote}
+            onChange={(e) => setChangeNote(e.target.value)}
+            placeholder="What changed?"
+          />
+        </Field>
+      ) : (
+        <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+          Native file storage is disabled — new versions can't be uploaded here. Manage the file through a document connector (e.g. Paperless).
+        </div>
+      )}
 
       <div className="field__label" style={{ marginTop: 16 }}>
         <History size={14} /> History
@@ -144,7 +156,7 @@ export function DocumentVersionsDrawer({
       {versions === undefined && <div className="muted">Loading…</div>}
       {versions && versions.length === 0 && (
         <div className="empty-state empty-state--sm empty-state--start">
-          No versions yet. Upload a file to create v1.
+          {nativeStorage ? "No versions yet. Upload a file to create v1." : "No versions. File storage is disabled on this deployment."}
         </div>
       )}
 
