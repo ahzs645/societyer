@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import {
@@ -8,17 +8,11 @@ import {
   ClipboardCheck,
   ClipboardList,
   FileText,
-  History,
-  Image as ImageIcon,
   Layers,
-  Link2,
   MapPin,
   Package,
-  Pencil,
   Plus,
-  QrCode,
   RefreshCw,
-  Tag,
   Trash2,
 } from "lucide-react";
 import { api } from "@/lib/convexApi";
@@ -26,121 +20,32 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
-import { ImageUploadField, type ImageValue } from "../components/ImageUploadField";
+import { ImageUploadField } from "../components/ImageUploadField";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { money } from "../lib/format";
-
-function formatQuantity(value?: number | null, unit?: string | null) {
-  if (value == null) return "-";
-  return `${new Intl.NumberFormat("en-CA", { maximumFractionDigits: 2 }).format(value)} ${unit ?? "each"}`;
-}
-
-function movementTone(type: string) {
-  if (["receive", "return"].includes(type)) return "success";
-  if (["issue", "consume", "dispose"].includes(type)) return "warn";
-  if (["transfer", "count"].includes(type)) return "info";
-  return "neutral";
-}
-
-// "count" is intentionally excluded — counting is done through the physical-count
-// flow, which posts proper "adjustment" deltas. A manual "count" movement would
-// add its quantity on top of the existing balance (double counting).
-const MOVEMENT_TYPES = ["receive", "consume", "transfer", "adjustment"];
-const ITEM_TYPES = ["asset", "consumable", "supply", "software", "service", "other"];
-const LOCATION_TYPES = ["facility", "room", "shelf", "bin", "custody", "in_transit", "vendor", "virtual"];
-const LOT_STATUSES = ["active", "depleted", "expired", "disposed", "needs_review"];
-const EXPIRY_SOON_DAYS = 60;
-
-function todayDate() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function dollarsToCents(value: string): number | undefined {
-  const n = Number(String(value).replace(/[^0-9.-]/g, ""));
-  if (!Number.isFinite(n) || value.trim() === "") return undefined;
-  return Math.round(n * 100);
-}
-
-function centsToDollars(value?: number | null): string {
-  if (value == null) return "";
-  return (value / 100).toFixed(2);
-}
-
-function emptyItemForm() {
-  return {
-    name: "",
-    sku: "",
-    category: "Program supplies",
-    itemType: "supply",
-    unitOfMeasure: "each",
-    reorderPoint: "",
-    defaultCost: "",
-    description: "",
-    trackSerial: false,
-    trackLot: false,
-    trackExpiry: false,
-    image: {} as ImageValue,
-  };
-}
-
-function emptyLocationForm() {
-  return { name: "", code: "", locationType: "facility", parentLocationId: "", address: "", notes: "", active: true };
-}
-
-function emptyLotForm() {
-  return {
-    inventoryItemId: "",
-    lotNumber: "",
-    serialNumber: "",
-    expiresAt: "",
-    manufacturer: "",
-    manufacturedAt: "",
-    condition: "",
-    status: "active",
-  };
-}
-
-function emptyLinkForm() {
-  return {
-    receiptDocumentId: "",
-    financialTransactionId: "",
-    receiptLineLabel: "",
-    quantity: "",
-    unitOfMeasure: "each",
-    unitCost: "",
-    totalCost: "",
-    notes: "",
-  };
-}
-
-function emptyMovementForm() {
-  return {
-    movementType: "receive",
-    movementDate: todayDate(),
-    inventoryItemId: "",
-    inventoryLotId: "",
-    fromLocationId: "",
-    toLocationId: "",
-    quantity: "",
-    reason: "",
-    reference: "",
-  };
-}
-
-function emptyCountForm() {
-  return { title: "", scopeType: "all", locationId: "", itemType: "", reviewerName: "", notes: "" };
-}
-
-function daysUntil(iso?: string | null) {
-  if (!iso) return null;
-  const ms = new Date(iso).getTime() - Date.now();
-  if (!Number.isFinite(ms)) return null;
-  return Math.round(ms / (1000 * 60 * 60 * 24));
-}
-
-type TabKey = "stock" | "locations" | "lots" | "counts";
+import {
+  EXPIRY_SOON_DAYS,
+  ITEM_TYPES,
+  LOCATION_TYPES,
+  LOT_STATUSES,
+  MOVEMENT_TYPES,
+  type TabKey,
+  centsToDollars,
+  daysUntil,
+  dollarsToCents,
+  emptyCountForm,
+  emptyItemForm,
+  emptyLinkForm,
+  emptyLocationForm,
+  emptyLotForm,
+  emptyMovementForm,
+  formatQuantity,
+  todayDate,
+} from "./inventory/helpers";
+import { CountEntry, Stat, TabButton } from "./inventory/components";
+import { CountsTab, LocationsTab, LotsTab, StockTab } from "./inventory/tabs";
 
 export function InventoryPage() {
   const society = useSociety();
@@ -678,324 +583,48 @@ export function InventoryPage() {
       </div>
 
       {tab === "stock" && (
-        <>
-          <DataTable
-            label="Item catalog"
-            icon={<Package size={14} />}
-            data={itemRows}
-            rowKey={(row) => row._id}
-            loading={items === undefined}
-            viewsKey="inventory-items"
-            searchPlaceholder="Search item, SKU, category..."
-            searchExtraFields={[(row) => row.sku, (row) => row.category, (row) => row.itemType]}
-            emptyMessage="No items yet. Add an item, backfill from the asset register, or import an OpenBoxes snapshot."
-            columns={[
-              {
-                id: "item",
-                header: "Item",
-                sortable: true,
-                accessor: (row) => row.name ?? "",
-                render: (row) => (
-                  <div className="row" style={{ gap: 10, alignItems: "center", flexWrap: "nowrap" }}>
-                    <ItemThumb item={row} />
-                    <div>
-                      <strong>{row.name}</strong>{row.status === "archived" && <Badge tone="neutral">archived</Badge>}
-                      <div className="muted mono">{row.sku ?? "No SKU"}</div>
-                    </div>
-                  </div>
-                ),
-              },
-              { id: "category", header: "Category", sortable: true, accessor: (row) => row.category ?? "", render: (row) => <div><span>{row.category}</span><div className="muted">{row.itemType}{trackingLabel(row)}</div></div> },
-              { id: "onHand", header: "On hand", sortable: true, align: "right", accessor: (row) => onHandByItemId.get(row._id) ?? 0, render: (row) => <span className="mono">{formatQuantity(onHandByItemId.get(row._id) ?? 0, row.unitOfMeasure)}</span> },
-              { id: "reorder", header: "Reorder", align: "right", accessor: (row) => row.reorderPoint ?? "", render: (row) => row.reorderPoint != null ? <span className="mono">{row.reorderPoint}</span> : <span className="muted">-</span> },
-              { id: "cost", header: "Unit cost", align: "right", accessor: (row) => row.defaultCostCents ?? 0, render: (row) => row.defaultCostCents != null ? <span className="mono">{money(row.defaultCostCents)}</span> : <span className="muted">-</span> },
-              {
-                id: "purchase",
-                header: "Linked purchase",
-                accessor: (row) => receiptLinksByItemId.get(row._id)?.length ?? 0,
-                render: (row) => <ReceiptEvidence links={receiptLinksByItemId.get(row._id) ?? []} />,
-              },
-            ]}
-            renderRowActions={(row) => (
-              <>
-                <button className="btn btn--ghost btn--sm" onClick={() => openPlaceStock(row)}><MapPin size={12} /> Place / move</button>
-                <button className="btn btn--ghost btn--sm" onClick={() => openLink(row)}><Link2 size={12} /> Link purchase</button>
-                {(row.trackLot || row.trackSerial) && <button className="btn btn--ghost btn--sm" onClick={() => openNewLot(row._id)}><Layers size={12} /> Lot</button>}
-                <button className="btn btn--ghost btn--sm" onClick={() => openEditItem(row)}><Pencil size={12} /> Edit</button>
-                <button className="btn btn--ghost btn--sm" onClick={() => archiveItem(row)}>{row.status === "archived" ? "Restore" : "Archive"}</button>
-                <button className="btn btn--ghost btn--sm" onClick={() => removeItem(row)}><Trash2 size={12} /></button>
-                {row.assetId && <Link className="btn btn--ghost btn--sm" to={`/app/assets/${row.assetId}`}>Asset</Link>}
-              </>
-            )}
-          />
-
-          <DataTable
-            label="Societyer stock balances"
-            icon={<Boxes size={14} />}
-            data={balanceRows}
-            rowKey={(row) => row._id}
-            loading={balances === undefined || items === undefined || locations === undefined}
-            viewsKey="inventory-balances"
-            searchPlaceholder="Search item, SKU, location..."
-            searchExtraFields={[
-              (row) => itemById.get(row.inventoryItemId)?.name,
-              (row) => itemById.get(row.inventoryItemId)?.sku,
-              (row) => locationById.get(row.locationId)?.name,
-              (row) => locationById.get(row.locationId)?.code,
-              (row) => receiptLinksByItemId.get(row.inventoryItemId)?.map((link) => link.receiptDocument?.title).join(" "),
-            ]}
-            emptyMessage="No stock balances yet. Backfill assets or post a receive movement to create the first ledger balance."
-            columns={[
-              {
-                id: "item",
-                header: "Item",
-                sortable: true,
-                accessor: (row) => itemById.get(row.inventoryItemId)?.name ?? "",
-                render: (row) => {
-                  const item = itemById.get(row.inventoryItemId);
-                  return (
-                    <div>
-                      <strong>{item?.name ?? "Unknown item"}</strong>
-                      <div className="muted mono">{item?.sku ?? "No SKU"}</div>
-                    </div>
-                  );
-                },
-              },
-              {
-                id: "location",
-                header: "Location",
-                sortable: true,
-                accessor: (row) => locationById.get(row.locationId)?.name ?? "",
-                render: (row) => {
-                  const location = locationById.get(row.locationId);
-                  return (
-                    <div>
-                      <span>{location?.name ?? "Unknown location"}</span>
-                      <div className="muted">{location?.code ? `${location.code} · ` : ""}{location?.locationType ?? "location"}</div>
-                    </div>
-                  );
-                },
-              },
-              {
-                id: "onHand",
-                header: "On hand",
-                sortable: true,
-                align: "right",
-                accessor: (row) => row.quantityOnHand ?? 0,
-                render: (row) => <span className="mono">{formatQuantity(row.quantityOnHand, itemById.get(row.inventoryItemId)?.unitOfMeasure)}</span>,
-              },
-              {
-                id: "available",
-                header: "Available",
-                sortable: true,
-                align: "right",
-                accessor: (row) => row.quantityAvailable ?? 0,
-                render: (row) => <span className="mono">{formatQuantity(row.quantityAvailable, itemById.get(row.inventoryItemId)?.unitOfMeasure)}</span>,
-              },
-              {
-                id: "receipt",
-                header: "Receipt",
-                accessor: (row) => receiptLinksByItemId.get(row.inventoryItemId)?.map((link) => link.receiptDocument?.title).join(" ") ?? "",
-                render: (row) => <ReceiptEvidence links={receiptLinksByItemId.get(row.inventoryItemId) ?? []} />,
-              },
-              { id: "lastCounted", header: "Last counted", sortable: true, accessor: (row) => row.lastCountedAtISO ?? "", render: (row) => row.lastCountedAtISO?.slice(0, 10) ?? <span className="muted">-</span> },
-            ]}
-          />
-
-          <DataTable
-            label="Inventory movement ledger"
-            icon={<History size={14} />}
-            data={movementRows}
-            rowKey={(row) => row._id}
-            loading={movements === undefined || items === undefined || locations === undefined}
-            viewsKey="stock-movements"
-            searchPlaceholder="Search movement, item, reference, reason..."
-            searchExtraFields={[
-              (row) => itemById.get(row.inventoryItemId)?.name,
-              (row) => row.reference,
-              (row) => row.reason,
-              (row) => row.sourceSystem,
-              (row) => receiptLinksByItemId.get(row.inventoryItemId)?.map((link) => link.receiptDocument?.title).join(" "),
-            ]}
-            emptyMessage="No stock movements yet."
-            columns={[
-              { id: "date", header: "Date", sortable: true, accessor: (row) => row.movementDate, render: (row) => <span className="mono">{row.movementDate}</span> },
-              {
-                id: "type",
-                header: "Type",
-                sortable: true,
-                accessor: (row) => row.movementType,
-                render: (row) => <Badge tone={movementTone(row.movementType) as any}>{row.movementType}</Badge>,
-              },
-              { id: "item", header: "Item", sortable: true, accessor: (row) => itemById.get(row.inventoryItemId)?.name ?? "", render: (row) => itemById.get(row.inventoryItemId)?.name ?? "Unknown item" },
-              {
-                id: "path",
-                header: "From / to",
-                accessor: (row) => `${row.fromLocationId ?? ""} ${row.toLocationId ?? ""}`,
-                render: (row) => (
-                  <span>
-                    {row.fromLocationId ? locationById.get(row.fromLocationId)?.name ?? "Unknown" : "External"}
-                    {" -> "}
-                    {row.toLocationId ? locationById.get(row.toLocationId)?.name ?? "Unknown" : "External"}
-                  </span>
-                ),
-              },
-              { id: "quantity", header: "Quantity", sortable: true, align: "right", accessor: (row) => row.quantity, render: (row) => <span className="mono">{formatQuantity(row.quantity, row.unitOfMeasure)}</span> },
-              {
-                id: "reference",
-                header: "Reference / reason",
-                accessor: (row) => `${row.reference ?? ""} ${row.reason ?? ""}`,
-                render: (row) => (
-                  <div>
-                    <span>{row.reference ?? <span className="muted">No reference</span>}</span>
-                    {row.reason && <div className="muted">{row.reason}</div>}
-                  </div>
-                ),
-              },
-              {
-                id: "receipt",
-                header: "Receipt",
-                accessor: (row) => row.receiptDocumentId ?? receiptLinksByItemId.get(row.inventoryItemId)?.map((link) => link.receiptDocument?.title).join(" ") ?? "",
-                render: (row) => <ReceiptEvidence links={receiptLinksForMovement(row, receiptLinksByItemId)} receiptDocumentId={row.receiptDocumentId} />,
-              },
-              { id: "source", header: "Source", sortable: true, accessor: (row) => row.sourceSystem ?? "", render: (row) => <span className="muted">{row.sourceSystem ?? "manual"}</span> },
-            ]}
-          />
-        </>
+        <StockTab
+          itemRows={itemRows}
+          balanceRows={balanceRows}
+          movementRows={movementRows}
+          loading={{ items: items === undefined, balances: balances === undefined, locations: locations === undefined, movements: movements === undefined }}
+          maps={{ itemById, locationById, onHandByItemId, receiptLinksByItemId, balancesByLocationId }}
+          onPlace={openPlaceStock}
+          onLink={openLink}
+          onAddLot={openNewLot}
+          onEdit={openEditItem}
+          onArchive={archiveItem}
+          onDelete={removeItem}
+        />
       )}
 
       {tab === "locations" && (
-        <DataTable
-          label="Locations & bins"
-          icon={<MapPin size={14} />}
-          data={(locations ?? []) as any[]}
-          rowKey={(row) => row._id}
+        <LocationsTab
+          locations={(locations ?? []) as any[]}
           loading={locations === undefined}
-          viewsKey="inventory-locations"
-          searchPlaceholder="Search location, code, type..."
-          searchExtraFields={[(row) => row.code, (row) => row.locationType, (row) => row.address]}
-          emptyMessage="No locations yet. Add a facility, room, shelf, or bin so you can say where things live."
-          columns={[
-            {
-              id: "name",
-              header: "Location",
-              sortable: true,
-              accessor: (row) => row.name ?? "",
-              render: (row) => (
-                <div className="row" style={{ gap: 8, alignItems: "center" }}>
-                  <LocationGlyph type={row.locationType} />
-                  <div>
-                    <strong>{row.name}</strong>{!row.active && <Badge tone="neutral">inactive</Badge>}
-                    {row.parentLocationId && <div className="muted">in {locationById.get(row.parentLocationId)?.name ?? "—"}</div>}
-                  </div>
-                </div>
-              ),
-            },
-            { id: "code", header: "Bin code", sortable: true, accessor: (row) => row.code ?? "", render: (row) => row.code ? <span className="row" style={{ gap: 4 }}><QrCode size={12} /> <span className="mono">{row.code}</span></span> : <span className="muted">-</span> },
-            { id: "type", header: "Type", sortable: true, accessor: (row) => row.locationType ?? "", render: (row) => <Badge tone="info">{row.locationType}</Badge> },
-            {
-              id: "contents",
-              header: "Contents",
-              align: "right",
-              accessor: (row) => (balancesByLocationId.get(row._id) ?? []).reduce((sum, b) => sum + (b.quantityOnHand ?? 0), 0),
-              render: (row) => {
-                const rows = balancesByLocationId.get(row._id) ?? [];
-                const qty = rows.reduce((sum, b) => sum + (b.quantityOnHand ?? 0), 0);
-                return rows.length ? <span className="mono">{rows.length} item{rows.length === 1 ? "" : "s"} · {qty}</span> : <span className="muted">empty</span>;
-              },
-            },
-            { id: "address", header: "Address / notes", accessor: (row) => `${row.address ?? ""} ${row.notes ?? ""}`, render: (row) => <span className="muted">{row.address || row.notes || "-"}</span> },
-          ]}
-          renderRowActions={(row) => (
-            <>
-              <button className="btn btn--ghost btn--sm" onClick={() => { setDetailLocationId(row._id); setDrawer("location-detail"); }}><Boxes size={12} /> What's here</button>
-              <button className="btn btn--ghost btn--sm" onClick={() => openEditLocation(row)}><Pencil size={12} /> Edit</button>
-              <button className="btn btn--ghost btn--sm" onClick={() => removeLocation(row)}><Trash2 size={12} /></button>
-            </>
-          )}
+          maps={{ locationById, balancesByLocationId }}
+          onWhatsHere={(location) => { setDetailLocationId(location._id); setDrawer("location-detail"); }}
+          onEdit={openEditLocation}
+          onDelete={removeLocation}
         />
       )}
 
       {tab === "lots" && (
-        <DataTable
-          label="Lots & serials"
-          icon={<Layers size={14} />}
-          data={lotRows}
-          rowKey={(row) => row._id}
+        <LotsTab
+          lotRows={lotRows}
           loading={lots === undefined}
-          viewsKey="inventory-lots"
-          searchPlaceholder="Search lot, serial, item, manufacturer..."
-          searchExtraFields={[
-            (row) => itemById.get(row.inventoryItemId)?.name,
-            (row) => row.lotNumber,
-            (row) => row.serialNumber,
-            (row) => row.manufacturer,
-          ]}
-          emptyMessage="No lots or serials yet. Enable lot/serial tracking on an item, then add a lot."
-          columns={[
-            { id: "item", header: "Item", sortable: true, accessor: (row) => itemById.get(row.inventoryItemId)?.name ?? "", render: (row) => <div><strong>{itemById.get(row.inventoryItemId)?.name ?? "Unknown item"}</strong><div className="muted mono">{itemById.get(row.inventoryItemId)?.sku ?? ""}</div></div> },
-            { id: "lot", header: "Lot #", sortable: true, accessor: (row) => row.lotNumber ?? "", render: (row) => row.lotNumber ? <span className="mono">{row.lotNumber}</span> : <span className="muted">-</span> },
-            { id: "serial", header: "Serial #", sortable: true, accessor: (row) => row.serialNumber ?? "", render: (row) => row.serialNumber ? <span className="mono">{row.serialNumber}</span> : <span className="muted">-</span> },
-            {
-              id: "expiry",
-              header: "Expires",
-              sortable: true,
-              accessor: (row) => row.expiresAt ?? "",
-              render: (row) => {
-                if (!row.expiresAt) return <span className="muted">-</span>;
-                const d = daysUntil(row.expiresAt);
-                const tone = d != null && d < 0 ? "warn" : d != null && d <= EXPIRY_SOON_DAYS ? "warn" : "neutral";
-                return <span className="row" style={{ gap: 4 }}><span className="mono">{row.expiresAt}</span>{d != null && d <= EXPIRY_SOON_DAYS && <Badge tone={tone as any}>{d < 0 ? "expired" : `${d}d`}</Badge>}</span>;
-              },
-            },
-            { id: "manufacturer", header: "Manufacturer", accessor: (row) => row.manufacturer ?? "", render: (row) => <span className="muted">{row.manufacturer || "-"}</span> },
-            { id: "status", header: "Status", sortable: true, accessor: (row) => row.status ?? "", render: (row) => <Badge tone={row.status === "active" ? "success" : "neutral"}>{row.status}</Badge> },
-          ]}
-          renderRowActions={(row) => (
-            <>
-              <button className="btn btn--ghost btn--sm" onClick={() => openEditLot(row)}><Pencil size={12} /> Edit</button>
-              <button className="btn btn--ghost btn--sm" onClick={() => removeLot(row)}><Trash2 size={12} /></button>
-            </>
-          )}
+          maps={{ itemById }}
+          onEdit={openEditLot}
+          onDelete={removeLot}
         />
       )}
 
       {tab === "counts" && (
-        <DataTable
-          label="Physical counts"
-          icon={<ClipboardList size={14} />}
-          data={countRows}
-          rowKey={(row) => row._id}
+        <CountsTab
+          countRows={countRows}
           loading={counts === undefined}
-          viewsKey="inventory-counts"
-          searchPlaceholder="Search count title, reviewer, scope..."
-          searchExtraFields={[(row) => row.reviewerName, (row) => row.scope]}
-          emptyMessage="No physical counts yet. Start a count to verify what's actually on the shelf."
-          columns={[
-            { id: "title", header: "Count", sortable: true, accessor: (row) => row.title ?? "", render: (row) => <div><strong>{row.title}</strong><div className="muted">{row.reviewerName ?? "Unassigned"}</div></div> },
-            { id: "scope", header: "Scope", sortable: true, accessor: (row) => row.scope ?? "", render: (row) => <Badge tone="info">{row.scope ?? "all"}</Badge> },
-            { id: "status", header: "Status", sortable: true, accessor: (row) => row.status ?? "", render: (row) => <Badge tone={row.status === "open" ? "warn" : row.status === "completed" ? "success" : "neutral"}>{row.status}</Badge> },
-            { id: "lines", header: "Lines", align: "right", accessor: (row) => (row.lines ?? []).length, render: (row) => <span className="mono">{(row.lines ?? []).length}</span> },
-            {
-              id: "variance",
-              header: "Counted / variance",
-              align: "right",
-              accessor: (row) => (row.lines ?? []).filter((l: any) => l.countedQuantity != null).length,
-              render: (row) => {
-                const lines = row.lines ?? [];
-                const counted = lines.filter((l: any) => l.countedQuantity != null).length;
-                const variances = lines.filter((l: any) => l.countedQuantity != null && (l.countedQuantity - (l.expectedQuantity ?? 0)) !== 0).length;
-                return <span className="mono">{counted}/{lines.length}{variances ? ` · ${variances}Δ` : ""}</span>;
-              },
-            },
-            { id: "started", header: "Started", sortable: true, accessor: (row) => row.startedAtISO ?? "", render: (row) => <span className="mono">{row.startedAtISO?.slice(0, 10)}</span> },
-          ]}
-          renderRowActions={(row) => (
-            <>
-              {row.status === "open" && <button className="btn btn--ghost btn--sm" onClick={() => { setActiveCountId(row._id); setDrawer("count-entry"); }}><Pencil size={12} /> Enter counts</button>}
-              {row.status === "open" && <button className="btn btn--ghost btn--sm" onClick={async () => { await voidCount({ inventoryCountId: row._id }); toast.success("Count voided"); }}>Void</button>}
-            </>
-          )}
+          onEnter={(count) => { setActiveCountId(count._id); setDrawer("count-entry"); }}
+          onVoid={async (count) => { await voidCount({ inventoryCountId: count._id }); toast.success("Count voided"); }}
         />
       )}
 
@@ -1369,134 +998,6 @@ export function InventoryPage() {
           </>
         )}
       </Drawer>
-    </div>
-  );
-}
-
-function trackingLabel(item: any) {
-  const flags = [item.trackLot && "lot", item.trackSerial && "serial", item.trackExpiry && "expiry"].filter(Boolean);
-  return flags.length ? ` · ${flags.join("/")}` : "";
-}
-
-function TabButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: ReactNode; label: string }) {
-  return (
-    <button
-      className={active ? "btn btn--sm btn--accent" : "btn btn--sm btn--ghost"}
-      onClick={onClick}
-      style={{ display: "inline-flex", gap: 6, alignItems: "center" }}
-    >
-      {icon} {label}
-    </button>
-  );
-}
-
-function LocationGlyph({ type }: { type?: string }) {
-  if (type === "bin" || type === "shelf") return <Tag size={14} />;
-  if (type === "custody") return <Package size={14} />;
-  return <MapPin size={14} />;
-}
-
-function CountEntry({
-  count,
-  itemById,
-  locationById,
-  onSaveLine,
-}: {
-  count: any;
-  itemById: Map<string, any>;
-  locationById: Map<string, any>;
-  onSaveLine: (lineId: string, countedQuantity: number) => Promise<void>;
-}) {
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const lines = (count.lines ?? []) as any[];
-  if (lines.length === 0) return <div className="muted">No lines to count — this scope had no balances on hand.</div>;
-  return (
-    <table className="table">
-      <thead>
-        <tr><th>Item</th><th>Location</th><th style={{ textAlign: "right" }}>Expected</th><th style={{ textAlign: "right" }}>Counted</th><th style={{ textAlign: "right" }}>Δ</th></tr>
-      </thead>
-      <tbody>
-        {lines.map((line) => {
-          const item = itemById.get(line.inventoryItemId);
-          const location = locationById.get(line.locationId);
-          const draft = drafts[line._id] ?? (line.countedQuantity != null ? String(line.countedQuantity) : "");
-          const counted = draft.trim() === "" ? null : Number(draft);
-          const variance = counted != null ? counted - (line.expectedQuantity ?? 0) : null;
-          return (
-            <tr key={line._id}>
-              <td>{item?.name ?? "Unknown"}<div className="muted mono">{item?.sku ?? ""}</div></td>
-              <td>{location?.name ?? "—"}{location?.code ? <span className="muted"> ({location.code})</span> : null}</td>
-              <td className="mono" style={{ textAlign: "right" }}>{line.expectedQuantity ?? 0}</td>
-              <td style={{ textAlign: "right" }}>
-                <input
-                  className="input mono"
-                  style={{ width: 90, textAlign: "right" }}
-                  inputMode="decimal"
-                  value={draft}
-                  onChange={(e) => setDrafts({ ...drafts, [line._id]: e.target.value })}
-                  onBlur={async () => {
-                    if (draft.trim() === "") return;
-                    const n = Number(draft);
-                    if (Number.isFinite(n)) await onSaveLine(line._id, n);
-                  }}
-                  disabled={count.status !== "open"}
-                />
-              </td>
-              <td className="mono" style={{ textAlign: "right", color: variance ? "var(--warn, #b45309)" : undefined }}>{variance == null ? "-" : variance > 0 ? `+${variance}` : variance}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  );
-}
-
-function ItemThumb({ item }: { item: any }) {
-  if (!item.imageUrl) {
-    return (
-      <span style={{ width: 36, height: 36, flex: "0 0 auto", borderRadius: 6, background: "var(--surface-muted, #f3f4f6)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted, #8a8f98)" }}>
-        <ImageIcon size={14} />
-      </span>
-    );
-  }
-  return <img src={item.imageUrl} alt="" style={{ width: 36, height: 36, flex: "0 0 auto", borderRadius: 6, objectFit: "cover", border: "1px solid var(--border, #d8dadf)" }} />;
-}
-
-function receiptLinksForMovement(row: any, linksByItemId: Map<string, any[]>) {
-  const links = linksByItemId.get(row.inventoryItemId) ?? [];
-  if (!row.receiptDocumentId) return links;
-  const direct = links.filter((link) => link.receiptDocumentId === row.receiptDocumentId);
-  return direct.length ? direct : links;
-}
-
-function ReceiptEvidence({ links, receiptDocumentId }: { links: any[]; receiptDocumentId?: string }) {
-  if (links.length === 0) {
-    return receiptDocumentId ? <span className="mono">{receiptDocumentId}</span> : <span className="muted">-</span>;
-  }
-  return (
-    <div className="stack stack--xs">
-      {links.slice(0, 2).map((link) => (
-        <div key={link._id} className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
-          <FileText size={12} />
-          {link.receiptDocument ? (
-            <Link to={`/app/documents/${link.receiptDocument._id}`}>{link.receiptDocument.title}</Link>
-          ) : (
-            <span className="mono">{link.receiptDocumentId}</span>
-          )}
-          {link.receiptLineLabel && <span className="muted">· {link.receiptLineLabel}</span>}
-        </div>
-      ))}
-      {links.length > 2 && <div className="muted">+{links.length - 2} more</div>}
-    </div>
-  );
-}
-
-function Stat({ label, value, sub, tone }: { label: string; value: any; sub: string; tone?: "warn" | "info" }) {
-  return (
-    <div className="stat-card">
-      <div className="stat-card__label">{label}</div>
-      <div className="stat-card__value">{value}</div>
-      <div className={tone ? `stat-card__sub stat-card__sub--${tone}` : "stat-card__sub"}>{sub}</div>
     </div>
   );
 }
