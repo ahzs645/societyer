@@ -28,6 +28,7 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
   "communications:sendMeetingNotice",
   "documentVersions:beginUpload",
   "files:generateUploadUrl",
+  "files:generateLogoUploadUrl",
   "filingBot:run",
   "financialHub:disconnect",
   "financialHub:markConnectionConnected",

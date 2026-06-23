@@ -12,6 +12,17 @@ export const generateUploadUrl = mutation({
   },
 });
 
+// Branding uploads (society logo / dark logo / letterhead) are allowed even
+// when native file storage is disabled: a logo is app identity, not document
+// content, and its only sinks are the society.setLogo/setDarkLogo/setLetterhead
+// mutations — never the document store. Document/meeting/item uploads keep
+// using the gated generateUploadUrl above.
+export const generateLogoUploadUrl = mutation({
+  args: {},
+  returns: v.any(),
+  handler: async (ctx) => ctx.storage.generateUploadUrl(),
+});
+
 export const attachUploadedFileToDocument = mutation({
   args: {
     documentId: v.id("documents"),

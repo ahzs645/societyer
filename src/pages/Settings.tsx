@@ -37,7 +37,9 @@ export function SettingsPage() {
   const updateModules = useMutation(api.society.updateModules);
   const updateInventorySettings = useMutation(api.society.updateInventorySettings);
   const updateNotificationSettings = useMutation(api.society.updateNotificationSettings);
-  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  // Logos use the dedicated branding-upload path, which stays available even
+  // when native file storage is disabled (a logo isn't document content).
+  const generateUploadUrl = useMutation(api.files.generateLogoUploadUrl);
   const setLogo = useMutation(api.society.setLogo);
   const clearLogo = useMutation(api.society.clearLogo);
   const setDarkLogo = useMutation(api.society.setDarkLogo);
