@@ -181,6 +181,8 @@ export const EXPORTABLE_TABLES = [
   "inventoryCounts",
   "inventoryCountLines",
   "inventoryCandidates",
+  "rightsHoldings",
+  "signatureProfiles",
 ] as const;
 
 const EXPORTABLE_SET = new Set<string>(EXPORTABLE_TABLES);

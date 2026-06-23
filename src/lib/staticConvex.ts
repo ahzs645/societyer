@@ -1566,6 +1566,12 @@ function queryCasesActivity1(name: string, args: StaticArgs, store?: StaticDemoD
       const rows = store?.listRows("inventoryBalances", args) ?? scopedRows(tables.inventoryBalances, args);
       return args?.inventoryItemId ? rows.filter((row: any) => row.inventoryItemId === args.inventoryItemId) : rows;
     }
+    case "inventoryHub:lots": {
+      const rows = store?.listRows("inventoryLots", args) ?? scopedRows(tables.inventoryLots, args);
+      return (args?.inventoryItemId ? rows.filter((row: any) => row.inventoryItemId === args.inventoryItemId) : rows)
+        .slice()
+        .sort((a: any, b: any) => String(a.expiresAt ?? "9999").localeCompare(String(b.expiresAt ?? "9999")));
+    }
   }
   return QUERY_NOT_HANDLED;
 }
@@ -3299,9 +3305,11 @@ function mutCasesSubscriptions8(name: string, args: StaticArgs, store?: StaticDe
       societyId: args?.societyId ?? existing.societyId ?? SOCIETY_ID,
       connectionId: args?.connectionId ?? existing.connectionId,
       name: args?.name ?? existing.name,
+      code: args?.code ?? existing.code,
       locationType: args?.locationType ?? existing.locationType ?? "facility",
       parentLocationId: args?.parentLocationId ?? existing.parentLocationId,
       address: args?.address ?? existing.address,
+      notes: args?.notes ?? existing.notes,
       active: args?.active ?? existing.active ?? true,
       sourceSystem: args?.sourceSystem ?? existing.sourceSystem ?? "manual",
       createdAtISO: existing.createdAtISO ?? now,
@@ -3309,6 +3317,150 @@ function mutCasesSubscriptions8(name: string, args: StaticArgs, store?: StaticDe
     };
     store?.upsertRow("inventoryLocations", row);
     return id;
+  }
+  if (name === "inventoryHub:deleteLocation") {
+    const balances = (store?.listRows("inventoryBalances", {}) ?? tables.inventoryBalances).filter((row: any) => row.locationId === args?.id);
+    if (balances.some((row: any) => (row.quantityOnHand ?? 0) !== 0)) {
+      throw new Error("Move or zero out this location's stock before deleting it.");
+    }
+    const children = (store?.listRows("inventoryLocations", {}) ?? tables.inventoryLocations).filter((row: any) => row.parentLocationId === args?.id);
+    if (children.length > 0) {
+      throw new Error("Re-parent or delete the locations nested inside this one first.");
+    }
+    for (const row of balances) store?.removeRow("inventoryBalances", row._id);
+    store?.removeRow("inventoryLocations", args?.id);
+    return { deleted: true };
+  }
+  if (name === "inventoryHub:deleteItem") {
+    const movements = (store?.listRows("stockMovements", {}) ?? tables.stockMovements).filter((row: any) => row.inventoryItemId === args?.id);
+    if (movements.length > 0) {
+      throw new Error("This item has stock movement history. Archive it instead of deleting.");
+    }
+    for (const row of (store?.listRows("inventoryBalances", {}) ?? tables.inventoryBalances).filter((b: any) => b.inventoryItemId === args?.id)) {
+      store?.removeRow("inventoryBalances", row._id);
+    }
+    for (const row of (store?.listRows("inventoryLots", {}) ?? tables.inventoryLots).filter((l: any) => l.inventoryItemId === args?.id)) {
+      store?.removeRow("inventoryLots", row._id);
+    }
+    store?.removeRow("inventoryItems", args?.id);
+    return { deleted: true };
+  }
+  if (name === "inventoryHub:upsertLot") {
+    const now = new Date().toISOString();
+    const id = args?.id ?? `static_inventory_lot_${Date.now()}`;
+    const existing = store?.getRow("inventoryLots", id) ?? byId(tables.inventoryLots, id) ?? {};
+    store?.upsertRow("inventoryLots", {
+      ...existing,
+      _id: id,
+      societyId: args?.societyId ?? existing.societyId ?? SOCIETY_ID,
+      inventoryItemId: args?.inventoryItemId ?? existing.inventoryItemId,
+      lotNumber: args?.lotNumber ?? existing.lotNumber,
+      serialNumber: args?.serialNumber ?? existing.serialNumber,
+      expiresAt: args?.expiresAt ?? existing.expiresAt,
+      manufacturer: args?.manufacturer ?? existing.manufacturer,
+      manufacturedAt: args?.manufacturedAt ?? existing.manufacturedAt,
+      condition: args?.condition ?? existing.condition,
+      status: args?.status ?? existing.status ?? "active",
+      assetId: args?.assetId ?? existing.assetId,
+      sourceSystem: args?.sourceSystem ?? existing.sourceSystem ?? "manual",
+      createdAtISO: existing.createdAtISO ?? now,
+      updatedAtISO: now,
+    });
+    return id;
+  }
+  if (name === "inventoryHub:deleteLot") {
+    const movements = (store?.listRows("stockMovements", {}) ?? tables.stockMovements).filter((row: any) => row.inventoryLotId === args?.id);
+    if (movements.length > 0) throw new Error("This lot has stock movement history and can't be deleted.");
+    store?.removeRow("inventoryLots", args?.id);
+    return { deleted: true };
+  }
+  if (name === "inventoryHub:createCount") {
+    const now = new Date().toISOString();
+    const societyId = args?.societyId ?? SOCIETY_ID;
+    const countId = `static_inventory_count_${Date.now()}`;
+    const scope = args?.locationId ? "location" : args?.itemType ? args.itemType : "all";
+    store?.upsertRow("inventoryCounts", {
+      _id: countId,
+      societyId,
+      title: args?.title ?? "Physical count",
+      status: "open",
+      startedAtISO: now,
+      reviewerName: args?.reviewerName,
+      locationId: args?.locationId,
+      scope,
+      sourceDocumentIds: [],
+      notes: args?.notes,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    const items = store?.listRows("inventoryItems", { societyId }) ?? scopedRows(tables.inventoryItems, { societyId });
+    const itemsById = new Map(items.map((row: any) => [String(row._id), row]));
+    const balances = store?.listRows("inventoryBalances", { societyId }) ?? scopedRows(tables.inventoryBalances, { societyId });
+    let lines = 0;
+    for (const balance of balances) {
+      if (args?.locationId && String(balance.locationId) !== String(args.locationId)) continue;
+      const item: any = itemsById.get(String(balance.inventoryItemId));
+      if (!item) continue;
+      if (args?.itemType && item.itemType !== args.itemType) continue;
+      store?.upsertRow("inventoryCountLines", {
+        _id: `static_inventory_count_line_${Date.now()}_${lines}`,
+        societyId,
+        inventoryCountId: countId,
+        inventoryItemId: balance.inventoryItemId,
+        inventoryLotId: balance.inventoryLotId,
+        locationId: balance.locationId,
+        expectedQuantity: balance.quantityOnHand ?? 0,
+        status: "pending",
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      lines += 1;
+    }
+    return { countId, lines };
+  }
+  if (name === "inventoryHub:addCountLine") {
+    const now = new Date().toISOString();
+    const count = store?.getRow("inventoryCounts", args?.inventoryCountId) ?? byId(tables.inventoryCounts, args?.inventoryCountId);
+    const id = `static_inventory_count_line_${Date.now()}`;
+    store?.upsertRow("inventoryCountLines", {
+      _id: id,
+      societyId: count?.societyId ?? SOCIETY_ID,
+      inventoryCountId: args?.inventoryCountId,
+      inventoryItemId: args?.inventoryItemId,
+      inventoryLotId: args?.inventoryLotId,
+      locationId: args?.locationId,
+      expectedQuantity: 0,
+      countedQuantity: args?.countedQuantity,
+      varianceQuantity: args?.countedQuantity != null ? args.countedQuantity : undefined,
+      condition: args?.condition,
+      status: args?.countedQuantity != null ? "counted" : "pending",
+      notes: args?.notes,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    return id;
+  }
+  if (name === "inventoryHub:setCountLine") {
+    const now = new Date().toISOString();
+    const line = store?.getRow("inventoryCountLines", args?.id) ?? byId(tables.inventoryCountLines, args?.id);
+    if (!line) throw new Error("Count line not found.");
+    const countedQuantity = args?.countedQuantity ?? line.countedQuantity;
+    store?.upsertRow("inventoryCountLines", {
+      ...line,
+      countedQuantity,
+      varianceQuantity: countedQuantity != null ? countedQuantity - (line.expectedQuantity ?? 0) : line.varianceQuantity,
+      condition: args?.condition ?? line.condition,
+      status: args?.status ?? (countedQuantity != null ? "counted" : line.status),
+      notes: args?.notes ?? line.notes,
+      updatedAtISO: now,
+    });
+    return args?.id;
+  }
+  if (name === "inventoryHub:voidCount") {
+    const now = new Date().toISOString();
+    const count = store?.getRow("inventoryCounts", args?.inventoryCountId) ?? byId(tables.inventoryCounts, args?.inventoryCountId);
+    if (count) store?.upsertRow("inventoryCounts", { ...count, status: "void", completedAtISO: now, updatedAtISO: now });
+    return { voided: true };
   }
   if (name === "inventoryHub:linkReceipt") {
     const now = new Date().toISOString();
