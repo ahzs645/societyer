@@ -73,6 +73,7 @@ export function InventoryPage() {
   const deleteLot = useMutation(api.inventoryHub.deleteLot);
   const createCount = useMutation(api.inventoryHub.createCount);
   const setCountLine = useMutation(api.inventoryHub.setCountLine);
+  const addCountLine = useMutation(api.inventoryHub.addCountLine);
   const voidCount = useMutation(api.inventoryHub.voidCount);
   const linkReceipt = useMutation(api.inventoryHub.linkReceipt);
   const unlinkReceipt = useMutation(api.inventoryHub.unlinkReceipt);
@@ -927,10 +928,21 @@ export function InventoryPage() {
         {activeCount && (
           <CountEntry
             count={activeCount}
+            items={(items ?? []) as any[]}
+            locations={(locations ?? []) as any[]}
             itemById={itemById}
             locationById={locationById}
             onSaveLine={async (lineId, countedQuantity) => {
               await setCountLine({ id: lineId as any, countedQuantity });
+            }}
+            onAddLine={async ({ inventoryItemId, locationId, countedQuantity }) => {
+              await addCountLine({
+                inventoryCountId: activeCount._id,
+                inventoryItemId: inventoryItemId as any,
+                locationId: locationId as any,
+                countedQuantity,
+              });
+              toast.success("Found item added to the count");
             }}
           />
         )}

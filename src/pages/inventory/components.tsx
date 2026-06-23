@@ -1,7 +1,7 @@
 // Presentational, state-free building blocks for the Inventory module.
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { FileText, Image as ImageIcon, MapPin, Package, Tag } from "lucide-react";
+import { FileText, Image as ImageIcon, MapPin, Package, Plus, Tag } from "lucide-react";
 import { Badge } from "../../components/ui";
 import { formatQuantity } from "./helpers";
 
@@ -66,59 +66,107 @@ export function Stat({ label, value, sub, tone }: { label: string; value: any; s
   );
 }
 
-// Editable count sheet — local drafts persist a counted quantity on blur.
+// Editable count sheet — local drafts persist a counted quantity on blur, and
+// a footer row lets a counter add stock found that wasn't on the expected sheet.
 export function CountEntry({
   count,
+  items,
+  locations,
   itemById,
   locationById,
   onSaveLine,
+  onAddLine,
 }: {
   count: any;
+  items: any[];
+  locations: any[];
   itemById: Map<string, any>;
   locationById: Map<string, any>;
   onSaveLine: (lineId: string, countedQuantity: number) => Promise<void>;
+  onAddLine: (args: { inventoryItemId: string; locationId: string; countedQuantity: number }) => Promise<void>;
 }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [add, setAdd] = useState({ inventoryItemId: "", locationId: "", quantity: "" });
+  const open = count.status === "open";
   const lines = (count.lines ?? []) as any[];
-  if (lines.length === 0) return <div className="muted">No lines to count — this scope had no balances on hand.</div>;
+  const lineKeys = new Set(lines.map((l) => `${l.inventoryItemId}::${l.locationId}`));
+
+  const submitAdd = async () => {
+    const qty = Number(add.quantity);
+    if (!add.inventoryItemId || !add.locationId || !Number.isFinite(qty)) return;
+    await onAddLine({ inventoryItemId: add.inventoryItemId, locationId: add.locationId, countedQuantity: qty });
+    setAdd({ inventoryItemId: "", locationId: "", quantity: "" });
+  };
+
   return (
-    <table className="table">
-      <thead>
-        <tr><th>Item</th><th>Location</th><th style={{ textAlign: "right" }}>Expected</th><th style={{ textAlign: "right" }}>Counted</th><th style={{ textAlign: "right" }}>Δ</th></tr>
-      </thead>
-      <tbody>
-        {lines.map((line) => {
-          const item = itemById.get(line.inventoryItemId);
-          const location = locationById.get(line.locationId);
-          const draft = drafts[line._id] ?? (line.countedQuantity != null ? String(line.countedQuantity) : "");
-          const counted = draft.trim() === "" ? null : Number(draft);
-          const variance = counted != null ? counted - (line.expectedQuantity ?? 0) : null;
-          return (
-            <tr key={line._id}>
-              <td>{item?.name ?? "Unknown"}<div className="muted mono">{item?.sku ?? ""}</div></td>
-              <td>{location?.name ?? "—"}{location?.code ? <span className="muted"> ({location.code})</span> : null}</td>
-              <td className="mono" style={{ textAlign: "right" }}>{line.expectedQuantity ?? 0}</td>
-              <td style={{ textAlign: "right" }}>
-                <input
-                  className="input mono"
-                  style={{ width: 90, textAlign: "right" }}
-                  inputMode="decimal"
-                  value={draft}
-                  onChange={(e) => setDrafts({ ...drafts, [line._id]: e.target.value })}
-                  onBlur={async () => {
-                    if (draft.trim() === "") return;
-                    const n = Number(draft);
-                    if (Number.isFinite(n)) await onSaveLine(line._id, n);
-                  }}
-                  disabled={count.status !== "open"}
-                />
-              </td>
-              <td className="mono" style={{ textAlign: "right", color: variance ? "var(--warn, #b45309)" : undefined }}>{variance == null ? "-" : variance > 0 ? `+${variance}` : variance}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div className="stack">
+      {lines.length === 0 ? (
+        <div className="muted">No expected lines — this scope had no balances on hand. Add found stock below.</div>
+      ) : (
+        <table className="table">
+          <thead>
+            <tr><th>Item</th><th>Location</th><th style={{ textAlign: "right" }}>Expected</th><th style={{ textAlign: "right" }}>Counted</th><th style={{ textAlign: "right" }}>Δ</th></tr>
+          </thead>
+          <tbody>
+            {lines.map((line) => {
+              const item = itemById.get(line.inventoryItemId);
+              const location = locationById.get(line.locationId);
+              const draft = drafts[line._id] ?? (line.countedQuantity != null ? String(line.countedQuantity) : "");
+              const counted = draft.trim() === "" ? null : Number(draft);
+              const variance = counted != null ? counted - (line.expectedQuantity ?? 0) : null;
+              return (
+                <tr key={line._id}>
+                  <td>{item?.name ?? "Unknown"}<div className="muted mono">{item?.sku ?? ""}</div></td>
+                  <td>{location?.name ?? "—"}{location?.code ? <span className="muted"> ({location.code})</span> : null}</td>
+                  <td className="mono" style={{ textAlign: "right" }}>{line.expectedQuantity ?? 0}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <input
+                      className="input mono"
+                      style={{ width: 90, textAlign: "right" }}
+                      inputMode="decimal"
+                      value={draft}
+                      onChange={(e) => setDrafts({ ...drafts, [line._id]: e.target.value })}
+                      onBlur={async () => {
+                        if (draft.trim() === "") return;
+                        const n = Number(draft);
+                        if (Number.isFinite(n)) await onSaveLine(line._id, n);
+                      }}
+                      disabled={!open}
+                    />
+                  </td>
+                  <td className="mono" style={{ textAlign: "right", color: variance ? "var(--warn, #b45309)" : undefined }}>{variance == null ? "-" : variance > 0 ? `+${variance}` : variance}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+
+      {open && (
+        <div className="row" style={{ gap: 8, alignItems: "flex-end", flexWrap: "wrap", marginTop: 8 }}>
+          <div className="stack stack--xs" style={{ minWidth: 180 }}>
+            <span className="field__label">Add found item</span>
+            <select className="input" value={add.inventoryItemId} onChange={(e) => setAdd({ ...add, inventoryItemId: e.target.value })}>
+              <option value="">Select item</option>
+              {items.map((item) => <option key={item._id} value={item._id}>{item.name}{item.sku ? ` (${item.sku})` : ""}</option>)}
+            </select>
+          </div>
+          <select className="input" style={{ minWidth: 150 }} value={add.locationId} onChange={(e) => setAdd({ ...add, locationId: e.target.value })}>
+            <option value="">Location</option>
+            {locations.map((location) => <option key={location._id} value={location._id}>{location.name}{location.code ? ` (${location.code})` : ""}</option>)}
+          </select>
+          <input className="input mono" style={{ width: 90 }} inputMode="decimal" placeholder="Qty" value={add.quantity} onChange={(e) => setAdd({ ...add, quantity: e.target.value })} />
+          <button
+            className="btn btn--sm"
+            disabled={!add.inventoryItemId || !add.locationId || add.quantity.trim() === "" || lineKeys.has(`${add.inventoryItemId}::${add.locationId}`)}
+            title={lineKeys.has(`${add.inventoryItemId}::${add.locationId}`) ? "That item/location is already on the sheet" : undefined}
+            onClick={submitAdd}
+          >
+            <Plus size={12} /> Add line
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

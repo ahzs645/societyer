@@ -760,10 +760,29 @@ export const postStockMovement = mutation({
     if (!args.fromLocationId && !args.toLocationId) {
       throw new Error("Stock movement needs at least one source or destination location.");
     }
+    const status = args.status ?? "posted";
+    // Guard against driving a posted balance negative when stock leaves a
+    // location (consume / transfer-out / adjust-down). Internal flows (imports,
+    // backfill, count reconciliation) bypass this mutation, so this only applies
+    // to movements posted from the UI.
+    if (status === "posted" && args.fromLocationId) {
+      const fromDelta = args.quantity * movementSign(args.movementType, "from");
+      if (fromDelta < 0) {
+        const existing = await balanceFor(ctx, {
+          inventoryItemId: args.inventoryItemId,
+          inventoryLotId: args.inventoryLotId,
+          locationId: args.fromLocationId,
+        });
+        const onHand = existing?.quantityOnHand ?? 0;
+        if (onHand + fromDelta < 0) {
+          throw new Error(`Not enough stock at the source location: ${onHand} on hand, tried to remove ${Math.abs(fromDelta)}.`);
+        }
+      }
+    }
     const now = new Date().toISOString();
     const id = await ctx.db.insert("stockMovements", {
       ...args,
-      status: args.status ?? "posted",
+      status,
       sourceSystem: args.sourceSystem ?? "manual",
       documentIds: args.documentIds ?? [],
       createdAtISO: now,

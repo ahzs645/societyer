@@ -3222,6 +3222,20 @@ function mutCasesSubscriptions8(name: string, args: StaticArgs, store?: StaticDe
       createdAtISO: now,
       updatedAtISO: now,
     };
+    // Mirror the Convex guard: don't let a posted movement drive a source
+    // balance negative. Internal callers (backfill/count/import) pass
+    // skipStockCheck since on the Convex side they bypass this mutation.
+    if (!args?.skipStockCheck && movement.status === "posted" && movement.fromLocationId) {
+      const balances = store?.listRows("inventoryBalances", { societyId: movement.societyId }) ?? tables.inventoryBalances;
+      const balance = balances.find((row: any) =>
+        row.inventoryItemId === movement.inventoryItemId && row.locationId === movement.fromLocationId && String(row.inventoryLotId ?? "") === String(movement.inventoryLotId ?? "")
+      );
+      const onHand = balance?.quantityOnHand ?? 0;
+      const want = Number(movement.quantity ?? 0);
+      if (onHand - want < 0) {
+        throw new Error(`Not enough stock at the source location: ${onHand} on hand, tried to remove ${want}.`);
+      }
+    }
     store?.upsertRow("stockMovements", movement);
     const applyDelta = (locationId: string | undefined, delta: number) => {
       if (!locationId || delta === 0) return;
@@ -3571,6 +3585,7 @@ function mutCasesSubscriptions8(name: string, args: StaticArgs, store?: StaticDe
         reason: "Backfilled from Societyer asset register",
         reference: asset.assetTag,
         sourceSystem: "societyer_assets",
+        skipStockCheck: true,
       }, store);
       movementsCreated += 1;
       balancesCreated += 1;
@@ -3599,6 +3614,7 @@ function mutCasesSubscriptions8(name: string, args: StaticArgs, store?: StaticDe
         reason: args?.reason ?? `Physical count variance: ${count.title}`,
         reference: count.title,
         sourceSystem: "societyer_count",
+        skipStockCheck: true,
       }, store);
       store?.upsertRow("inventoryCountLines", { ...line, varianceQuantity: variance, adjustmentMovementId: movementId, status: "adjusted", updatedAtISO: now });
       adjusted += 1;
@@ -3678,6 +3694,7 @@ function mutCasesSubscriptions8(name: string, args: StaticArgs, store?: StaticDe
         sourceExternalId: movement.id,
         sourceSystem: "openboxes",
         rawJson: movement.rawJson,
+        skipStockCheck: true,
       }, store);
       movementsPosted += 1;
     }

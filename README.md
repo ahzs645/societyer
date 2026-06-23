@@ -197,6 +197,23 @@ Settings → Modules can enable or hide optional surfaces by society. Current mo
 - **Access custody vault**: set `SECRET_VAULT_ENCRYPTION_KEY` before storing client credentials in production. `/app/access-custody` encrypts stored values, keeps them hidden by default, and logs explicit reveals to the activity trail.
 - **Filing evidence**: BC still has no public Societies Online filing API. This build improves the manual path by storing submission method, confirmation number, fee paid, and linked receipt/evidence documents when a filing is marked filed.
 
+### Disable native file storage (no document management)
+
+To run a smaller instance — or to guarantee an operator that no files are ever
+stored in Convex — set `SOCIETYER_DISABLE_NATIVE_FILE_STORAGE=1` on the Convex
+*deployment* (`npx convex env set SOCIETYER_DISABLE_NATIVE_FILE_STORAGE 1`) and
+`VITE_DISABLE_NATIVE_FILE_STORAGE=1` for the client. When enabled:
+
+- Every native upload path throws server-side — document upload, document
+  versions, inventory item images, meeting audio/video, and the Paperless
+  "pull into Convex" copy — so users can't smuggle a file in even via direct
+  API calls. The client also hides the upload affordances.
+- External document **connectors stay usable as read-only sources**: Paperless
+  documents can be listed, linked, and opened *at the source*; they just aren't
+  cached into Convex. You have a document source without a native document store.
+- The only exception is the **society logo / letterhead** (branding, not
+  document content), which still uploads via a dedicated path.
+
 Auth mode uses a small SQLite auth database configured by `AUTH_DB_PATH`, and maps signed-in identities into the existing Convex `users` / `members` records.
 
 > **Important — identity is client-asserted today.** The product UI talks directly to Convex,
