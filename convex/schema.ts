@@ -3258,9 +3258,11 @@ export default defineSchema({
     societyId: v.id("societies"),
     connectionId: v.optional(v.id("inventoryConnections")),
     name: v.string(),
+    code: v.optional(v.string()), // human/scannable bin or shelf label, e.g. "BIN-A3"
     locationType: v.string(), // facility | room | shelf | bin | custody | in_transit | vendor | disposed | virtual
     parentLocationId: v.optional(v.id("inventoryLocations")),
     address: v.optional(v.string()),
+    notes: v.optional(v.string()),
     active: v.boolean(),
     externalId: v.optional(v.string()),
     sourceSystem: v.optional(v.string()),

@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { Field } from "./ui";
 import { useToast } from "./Toast";
 import { isDemoMode } from "../lib/demoMode";
+import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
 
 export type ImageValue = { imageStorageId?: string; imageUrl?: string };
 
@@ -38,6 +39,9 @@ export function ImageUploadField({
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const preview = value.imageUrl;
+  // When native file storage is disabled there is nowhere to upload bytes to,
+  // so we only offer the external image-URL path.
+  const canUpload = isNativeFileStorageEnabled();
 
   const pickFile = async (file: File | null) => {
     if (!file) return;
@@ -91,9 +95,11 @@ export function ImageUploadField({
         </div>
         <div className="stack stack--xs" style={{ flex: "1 1 200px", minWidth: 180 }}>
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <button type="button" className="btn btn--sm" disabled={busy} onClick={() => fileRef.current?.click()}>
-              {busy ? <Loader2 size={12} className="spin" /> : <ImagePlus size={12} />} {preview ? "Replace" : "Upload"}
-            </button>
+            {canUpload && (
+              <button type="button" className="btn btn--sm" disabled={busy} onClick={() => fileRef.current?.click()}>
+                {busy ? <Loader2 size={12} className="spin" /> : <ImagePlus size={12} />} {preview ? "Replace" : "Upload"}
+              </button>
+            )}
             {preview && (
               <button type="button" className="btn btn--ghost btn--sm" onClick={() => onChange({ imageStorageId: undefined, imageUrl: undefined })}>
                 <Trash2 size={12} /> Remove

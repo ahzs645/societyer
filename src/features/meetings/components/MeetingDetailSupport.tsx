@@ -9,6 +9,7 @@ import { Badge, Field } from "../../../components/ui";
 import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { Checkbox } from "../../../components/Controls";
 import { formatDate } from "../../../lib/format";
+import { isNativeFileStorageEnabled } from "../../../lib/runtimeMode";
 import { type StructuredMinutesEdit } from "../lib/structuredMinutes";
 import { materialEffectiveStatus } from "../lib/meetingMaterialAccess";
 
@@ -261,7 +262,9 @@ export function SourceDocumentRow({
   const pullSourceDocument = useAction(api.paperless.pullSourceDocument);
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const canPull = !!externalId?.match(/^paperless:\d+$/i);
+  // Pulling copies the Paperless file into Convex, which the no-native-storage
+  // mode forbids — keep "Open Paperless" but hide the pull/refresh action.
+  const canPull = !!externalId?.match(/^paperless:\d+$/i) && isNativeFileStorageEnabled();
   const hasActions = !!downloadUrl || (!!document.url && !downloadUrl) || canPull;
 
   const pull = async () => {

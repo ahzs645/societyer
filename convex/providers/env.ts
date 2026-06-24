@@ -53,3 +53,28 @@ export const providers = {
 export function isSocietyDemo(societyDemoMode: boolean | undefined): boolean {
   return societyDemoMode !== false;
 }
+
+// ---------------------------------------------------------------------------
+// Native file storage switch
+// ---------------------------------------------------------------------------
+// Some deployments must never store files in Convex's native object storage —
+// either to run a smaller instance, or because the operator does not want
+// document management at all and needs a hard guarantee that users cannot
+// smuggle a file into Convex. When SOCIETYER_DISABLE_NATIVE_FILE_STORAGE is
+// set, every native upload path throws. External document connectors (e.g.
+// Paperless) stay available as read-only sources, but nothing is copied into
+// Convex. This is the server-side enforcement layer; the client also hides the
+// upload affordances, but the throw here is what makes it un-bypassable.
+export function isNativeFileStorageDisabled(): boolean {
+  const flag = (env("SOCIETYER_DISABLE_NATIVE_FILE_STORAGE") ?? "").trim().toLowerCase();
+  return flag === "1" || flag === "true" || flag === "yes" || flag === "on";
+}
+
+export const NATIVE_FILE_STORAGE_DISABLED_MESSAGE =
+  "Native file storage is disabled on this deployment. Use a document connector (e.g. Paperless) as the source instead of uploading into Convex.";
+
+export function assertNativeFileStorageEnabled(): void {
+  if (isNativeFileStorageDisabled()) {
+    throw new Error(NATIVE_FILE_STORAGE_DISABLED_MESSAGE);
+  }
+}

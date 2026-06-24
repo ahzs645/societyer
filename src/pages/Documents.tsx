@@ -15,7 +15,7 @@ import { Plus, Trash2, Flag as FlagIcon, Upload, Download, FolderOpen, Tag, Hist
 import { formatDate, formatDateTime } from "../lib/format";
 import { DocumentVersionsDrawer } from "../components/DocumentVersions";
 import { PaperlessDocumentAction } from "../components/PaperlessDocumentAction";
-import { getDocumentStorageProvider } from "../lib/runtimeMode";
+import { getDocumentStorageProvider, isNativeFileStorageEnabled } from "../lib/runtimeMode";
 import { openDocumentDownloadTarget } from "../lib/documentStorage";
 import { uploadDocumentVersion } from "../lib/documentVersionUpload";
 
@@ -56,6 +56,7 @@ export function DocumentsPage() {
   const [versionsFor, setVersionsFor] = useState<{ id: any; title: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const nativeStorage = isNativeFileStorageEnabled();
   const visibleDocs = useMemo(() => (docs ?? []).filter((doc: any) => !isInternalDocumentRecord(doc)), [docs]);
 
   if (society === undefined) return <PageLoading />;
@@ -140,16 +141,20 @@ export function DocumentsPage() {
             <Link className="btn-action" to="/app/library">
               <BookOpen size={12} /> Library
             </Link>
-            <input ref={fileInputRef} type="file" style={{ display: "none" }}
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (file) await quickUpload(file);
-                if (fileInputRef.current) fileInputRef.current.value = "";
-              }}
-            />
-            <button className="btn-action" disabled={busy} onClick={() => fileInputRef.current?.click()}>
-              <Upload size={12} /> Upload
-            </button>
+            {nativeStorage && (
+              <>
+                <input ref={fileInputRef} type="file" style={{ display: "none" }}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) await quickUpload(file);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                />
+                <button className="btn-action" disabled={busy} onClick={() => fileInputRef.current?.click()}>
+                  <Upload size={12} /> Upload
+                </button>
+              </>
+            )}
             <button className="btn-action btn-action--primary" disabled={busy} onClick={openNew}>
               <Plus size={12} /> New document
             </button>
@@ -305,13 +310,19 @@ export function DocumentsPage() {
                 options={CATS.map((c) => ({ value: c, label: c }))}
               />
             </Field>
-            <Field label="Attach file" hint="Stored as document version history.">
-              <input type="file" onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) setForm({ ...form, _file: file, fileName: file.name });
-              }} />
-              {form.fileName && <div className="mono muted" style={{ fontSize: 11 }}>{form.fileName}</div>}
-            </Field>
+            {nativeStorage ? (
+              <Field label="Attach file" hint="Stored as document version history.">
+                <input type="file" onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) setForm({ ...form, _file: file, fileName: file.name });
+                }} />
+                {form.fileName && <div className="mono muted" style={{ fontSize: 11 }}>{form.fileName}</div>}
+              </Field>
+            ) : (
+              <Field label="Attach file" hint="Native file storage is disabled — create the record here and link it to a document connector (e.g. Paperless) as the source.">
+                <div className="muted" style={{ fontSize: 12 }}>File upload is disabled on this deployment.</div>
+              </Field>
+            )}
             <Field label="Committee (optional)">
               <Select
                 value={form.committeeId ?? ""}

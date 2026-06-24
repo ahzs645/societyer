@@ -8,6 +8,7 @@ import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { Modal } from "../components/Modal";
 import { useToast } from "../components/Toast";
+import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
 import { Tabs } from "../components/primitives";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
@@ -1852,7 +1853,9 @@ function SourceDocumentRow({ source, societyId }: { source: any; societyId: any 
   const [busy, setBusy] = useState(false);
   const label = source ? sourceLabel(source) : "Missing source";
   const url = sourceUrl(source);
-  const canPull = Boolean(source?._id && sourcePaperlessExternalId(source));
+  // Pulling copies the Paperless file into Convex, which the no-native-storage
+  // mode forbids — keep "Open Paperless" but hide the pull/refresh action.
+  const canPull = Boolean(source?._id && sourcePaperlessExternalId(source)) && isNativeFileStorageEnabled();
 
   const pull = async () => {
     const externalId = sourcePaperlessExternalId(source);

@@ -13,6 +13,7 @@ import {
   uploadDocumentToPaperless,
 } from "./providers/paperless";
 import { createDownloadUrl } from "./providers/storage";
+import { assertNativeFileStorageEnabled } from "./providers/env";
 
 import {
   latestVersion,
@@ -263,6 +264,10 @@ export const pullSourceDocument = action({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    // Pulling copies the Paperless file into Convex's native storage, which the
+    // "no native file storage" mode forbids. The connector still works as a
+    // read-only source (list/link/open at Paperless) — it just won't cache here.
+    assertNativeFileStorageEnabled();
     const { document } = await ctx.runQuery(api.paperless.sourcePullContext, {
       societyId: args.societyId,
       documentId: args.documentId,
@@ -314,6 +319,7 @@ export const recordPulledSourceDocument = mutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    assertNativeFileStorageEnabled();
     const document = await ctx.db.get(args.documentId);
     if (!document || document.societyId !== args.societyId) {
       throw new Error("Document not found.");

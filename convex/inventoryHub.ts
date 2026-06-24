@@ -183,6 +183,25 @@ export const balances = query({
   },
 });
 
+export const lots = query({
+  args: { societyId: v.id("societies"), inventoryItemId: v.optional(v.id("inventoryItems")) },
+  returns: v.any(),
+  handler: async (ctx, { societyId, inventoryItemId }) => {
+    const rows = inventoryItemId
+      ? await ctx.db
+          .query("inventoryLots")
+          .withIndex("by_item", (q: any) => q.eq("inventoryItemId", inventoryItemId))
+          .collect()
+      : await ctx.db
+          .query("inventoryLots")
+          .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+          .collect();
+    return rows
+      .filter((row: any) => row.societyId === societyId)
+      .sort((a: any, b: any) => String(a.expiresAt ?? "9999").localeCompare(String(b.expiresAt ?? "9999")));
+  },
+});
+
 export const stockMovements = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
@@ -332,9 +351,11 @@ export const upsertLocation = mutation({
     societyId: v.id("societies"),
     connectionId: v.optional(v.id("inventoryConnections")),
     name: v.string(),
+    code: v.optional(v.string()),
     locationType: v.string(),
     parentLocationId: v.optional(v.id("inventoryLocations")),
     address: v.optional(v.string()),
+    notes: v.optional(v.string()),
     active: v.optional(v.boolean()),
     externalId: v.optional(v.string()),
     sourceSystem: v.optional(v.string()),
@@ -344,6 +365,10 @@ export const upsertLocation = mutation({
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
     const { id, ...payload } = args;
+    // A location can't be its own parent.
+    if (id && payload.parentLocationId && String(payload.parentLocationId) === String(id)) {
+      throw new Error("A location cannot be its own parent.");
+    }
     const row = {
       ...payload,
       active: payload.active ?? true,
@@ -355,6 +380,252 @@ export const upsertLocation = mutation({
       return id;
     }
     return ctx.db.insert("inventoryLocations", { ...row, createdAtISO: now });
+  },
+});
+
+export const deleteLocation = mutation({
+  args: { id: v.id("inventoryLocations") },
+  returns: v.any(),
+  handler: async (ctx, { id }) => {
+    const location = await ctx.db.get(id);
+    if (!location) return { deleted: false };
+    // Refuse to delete a location that still holds stock — that would orphan
+    // the balance and break the "where is this item" answer.
+    const balances = await ctx.db
+      .query("inventoryBalances")
+      .withIndex("by_location", (q: any) => q.eq("locationId", id))
+      .collect();
+    if (balances.some((row: any) => (row.quantityOnHand ?? 0) !== 0)) {
+      throw new Error("Move or zero out this location's stock before deleting it.");
+    }
+    const children = await ctx.db
+      .query("inventoryLocations")
+      .withIndex("by_parent", (q: any) => q.eq("parentLocationId", id))
+      .collect();
+    if (children.length > 0) {
+      throw new Error("Re-parent or delete the locations nested inside this one first.");
+    }
+    // Clean up any empty balance rows left behind.
+    for (const row of balances) await ctx.db.delete(row._id);
+    await ctx.db.delete(id);
+    return { deleted: true };
+  },
+});
+
+export const deleteItem = mutation({
+  args: { id: v.id("inventoryItems") },
+  returns: v.any(),
+  handler: async (ctx, { id }) => {
+    const item = await ctx.db.get(id);
+    if (!item) return { deleted: false };
+    const movements = await ctx.db
+      .query("stockMovements")
+      .withIndex("by_item_date", (q: any) => q.eq("inventoryItemId", id))
+      .collect();
+    if (movements.length > 0) {
+      throw new Error("This item has stock movement history. Archive it instead of deleting.");
+    }
+    const balances = await ctx.db
+      .query("inventoryBalances")
+      .withIndex("by_item", (q: any) => q.eq("inventoryItemId", id))
+      .collect();
+    for (const row of balances) await ctx.db.delete(row._id);
+    const lots = await ctx.db
+      .query("inventoryLots")
+      .withIndex("by_item", (q: any) => q.eq("inventoryItemId", id))
+      .collect();
+    for (const row of lots) await ctx.db.delete(row._id);
+    await ctx.db.delete(id);
+    return { deleted: true };
+  },
+});
+
+export const upsertLot = mutation({
+  args: {
+    id: v.optional(v.id("inventoryLots")),
+    societyId: v.id("societies"),
+    inventoryItemId: v.id("inventoryItems"),
+    lotNumber: v.optional(v.string()),
+    serialNumber: v.optional(v.string()),
+    expiresAt: v.optional(v.string()),
+    manufacturer: v.optional(v.string()),
+    manufacturedAt: v.optional(v.string()),
+    condition: v.optional(v.string()),
+    status: v.optional(v.string()),
+    assetId: v.optional(v.id("assets")),
+    externalId: v.optional(v.string()),
+    sourceSystem: v.optional(v.string()),
+    rawJson: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const now = new Date().toISOString();
+    const { id, ...payload } = args;
+    const row = {
+      ...payload,
+      status: payload.status ?? "active",
+      sourceSystem: payload.sourceSystem ?? "manual",
+      updatedAtISO: now,
+    };
+    if (id) {
+      await ctx.db.patch(id, row);
+      return id;
+    }
+    return ctx.db.insert("inventoryLots", { ...row, createdAtISO: now });
+  },
+});
+
+export const deleteLot = mutation({
+  args: { id: v.id("inventoryLots") },
+  returns: v.any(),
+  handler: async (ctx, { id }) => {
+    const movements = await ctx.db
+      .query("stockMovements")
+      .withIndex("by_lot", (q: any) => q.eq("inventoryLotId", id))
+      .collect();
+    if (movements.length > 0) {
+      throw new Error("This lot has stock movement history and can't be deleted.");
+    }
+    await ctx.db.delete(id);
+    return { deleted: true };
+  },
+});
+
+// Start an in-app physical count. Seeds count lines from the current posted
+// balances for the chosen scope so a counter can walk a location (or the whole
+// catalog) and record what they actually find.
+export const createCount = mutation({
+  args: {
+    societyId: v.id("societies"),
+    title: v.string(),
+    locationId: v.optional(v.id("inventoryLocations")),
+    itemType: v.optional(v.string()),
+    reviewerName: v.optional(v.string()),
+    notes: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const now = new Date().toISOString();
+    const scope = args.locationId
+      ? "location"
+      : args.itemType
+        ? args.itemType
+        : "all";
+    const countId = await ctx.db.insert("inventoryCounts", {
+      societyId: args.societyId,
+      title: args.title,
+      status: "open",
+      startedAtISO: now,
+      reviewerName: args.reviewerName,
+      locationId: args.locationId,
+      scope,
+      sourceDocumentIds: [],
+      notes: args.notes,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+
+    const itemsById = new Map<string, any>();
+    for (const item of await ctx.db
+      .query("inventoryItems")
+      .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))
+      .collect()) {
+      itemsById.set(String(item._id), item);
+    }
+    const balances = await ctx.db
+      .query("inventoryBalances")
+      .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))
+      .collect();
+    let lines = 0;
+    for (const balance of balances) {
+      if (args.locationId && String(balance.locationId) !== String(args.locationId)) continue;
+      const item = itemsById.get(String(balance.inventoryItemId));
+      if (!item) continue;
+      if (args.itemType && item.itemType !== args.itemType) continue;
+      await ctx.db.insert("inventoryCountLines", {
+        societyId: args.societyId,
+        inventoryCountId: countId,
+        inventoryItemId: balance.inventoryItemId,
+        inventoryLotId: balance.inventoryLotId,
+        locationId: balance.locationId,
+        expectedQuantity: balance.quantityOnHand ?? 0,
+        status: "pending",
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      lines += 1;
+    }
+    return { countId, lines };
+  },
+});
+
+// Add an item/location pair that wasn't expected (found stock not on the sheet).
+export const addCountLine = mutation({
+  args: {
+    inventoryCountId: v.id("inventoryCounts"),
+    inventoryItemId: v.id("inventoryItems"),
+    locationId: v.id("inventoryLocations"),
+    inventoryLotId: v.optional(v.id("inventoryLots")),
+    countedQuantity: v.optional(v.number()),
+    condition: v.optional(v.string()),
+    notes: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const count = await ctx.db.get(args.inventoryCountId);
+    if (!count) throw new Error("Count not found.");
+    const now = new Date().toISOString();
+    return ctx.db.insert("inventoryCountLines", {
+      societyId: count.societyId,
+      inventoryCountId: args.inventoryCountId,
+      inventoryItemId: args.inventoryItemId,
+      inventoryLotId: args.inventoryLotId,
+      locationId: args.locationId,
+      expectedQuantity: 0,
+      countedQuantity: args.countedQuantity,
+      varianceQuantity: args.countedQuantity != null ? args.countedQuantity : undefined,
+      condition: args.condition,
+      status: args.countedQuantity != null ? "counted" : "pending",
+      notes: args.notes,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+  },
+});
+
+export const setCountLine = mutation({
+  args: {
+    id: v.id("inventoryCountLines"),
+    countedQuantity: v.optional(v.number()),
+    condition: v.optional(v.string()),
+    status: v.optional(v.string()),
+    notes: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const line = await ctx.db.get(args.id);
+    if (!line) throw new Error("Count line not found.");
+    const now = new Date().toISOString();
+    const countedQuantity = args.countedQuantity ?? line.countedQuantity;
+    await ctx.db.patch(args.id, {
+      countedQuantity,
+      varianceQuantity: countedQuantity != null ? countedQuantity - (line.expectedQuantity ?? 0) : line.varianceQuantity,
+      condition: args.condition ?? line.condition,
+      status: args.status ?? (countedQuantity != null ? "counted" : line.status),
+      notes: args.notes ?? line.notes,
+      updatedAtISO: now,
+    });
+    return args.id;
+  },
+});
+
+export const voidCount = mutation({
+  args: { inventoryCountId: v.id("inventoryCounts") },
+  returns: v.any(),
+  handler: async (ctx, { inventoryCountId }) => {
+    const now = new Date().toISOString();
+    await ctx.db.patch(inventoryCountId, { status: "void", completedAtISO: now, updatedAtISO: now });
+    return { voided: true };
   },
 });
 
@@ -489,10 +760,29 @@ export const postStockMovement = mutation({
     if (!args.fromLocationId && !args.toLocationId) {
       throw new Error("Stock movement needs at least one source or destination location.");
     }
+    const status = args.status ?? "posted";
+    // Guard against driving a posted balance negative when stock leaves a
+    // location (consume / transfer-out / adjust-down). Internal flows (imports,
+    // backfill, count reconciliation) bypass this mutation, so this only applies
+    // to movements posted from the UI.
+    if (status === "posted" && args.fromLocationId) {
+      const fromDelta = args.quantity * movementSign(args.movementType, "from");
+      if (fromDelta < 0) {
+        const existing = await balanceFor(ctx, {
+          inventoryItemId: args.inventoryItemId,
+          inventoryLotId: args.inventoryLotId,
+          locationId: args.fromLocationId,
+        });
+        const onHand = existing?.quantityOnHand ?? 0;
+        if (onHand + fromDelta < 0) {
+          throw new Error(`Not enough stock at the source location: ${onHand} on hand, tried to remove ${Math.abs(fromDelta)}.`);
+        }
+      }
+    }
     const now = new Date().toISOString();
     const id = await ctx.db.insert("stockMovements", {
       ...args,
-      status: args.status ?? "posted",
+      status,
       sourceSystem: args.sourceSystem ?? "manual",
       documentIds: args.documentIds ?? [],
       createdAtISO: now,

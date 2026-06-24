@@ -1,6 +1,9 @@
 import { isDemoMode } from "./demoMode";
 import { writeLocalDocumentVersion } from "./documentStorage";
-import { getDocumentStorageProvider } from "./runtimeMode";
+import { getDocumentStorageProvider, isNativeFileStorageEnabled } from "./runtimeMode";
+
+export const NATIVE_FILE_STORAGE_DISABLED_MESSAGE =
+  "Native file storage is disabled on this deployment. Use a document connector (e.g. Paperless) as the source instead of uploading.";
 
 export async function uploadDocumentVersion({
   societyId,
@@ -23,6 +26,9 @@ export async function uploadDocumentVersion({
   beginUpload: (args: any) => Promise<any>;
   recordUploadedVersion: (args: any) => Promise<any>;
 }) {
+  if (!isNativeFileStorageEnabled()) {
+    throw new Error(NATIVE_FILE_STORAGE_DISABLED_MESSAGE);
+  }
   const storageProvider = getDocumentStorageProvider();
   if (storageProvider === "local-filesystem") {
     const ref = await writeLocalDocumentVersion({

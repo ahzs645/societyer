@@ -10,6 +10,7 @@ import { Badge, Drawer, Field } from "../components/ui";
 import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
 import { formatDate, formatDateTime, toDateTimeLocalValue } from "../lib/format";
+import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, BookMarked, ClipboardCheck, Download, ExternalLink, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../components/MotionEditor";
@@ -483,6 +484,10 @@ export function MeetingDetailPage() {
   const uploadAudioAndRun = async (draftMinutes: boolean) => {
     if (!audioFile) {
       toast.error("Choose an audio or video file first.");
+      return;
+    }
+    if (!isNativeFileStorageEnabled()) {
+      toast.error("File uploads are disabled on this deployment.", "Audio/video can't be stored in Convex here.");
       return;
     }
     setPipelineBusy(true);

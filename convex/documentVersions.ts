@@ -8,6 +8,7 @@ import {
   createUploadUrl,
   createDownloadUrl,
 } from "./providers/storage";
+import { assertNativeFileStorageEnabled } from "./providers/env";
 
 export const listForDocument = query({
   args: { documentId: v.id("documents") },
@@ -46,6 +47,7 @@ export const beginUpload = action({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    assertNativeFileStorageEnabled();
     if (!args.actingUserId) {
       throw new Error("Role Director required — no authenticated actor.");
     }
@@ -91,6 +93,7 @@ export const recordUploadedVersion = mutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    assertNativeFileStorageEnabled();
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
       societyId: args.societyId,
@@ -238,6 +241,7 @@ export const createDemoVersion = mutation({
   },
   returns: v.any(),
   handler: async (ctx, args): Promise<Id<"documentVersions">> => {
+    assertNativeFileStorageEnabled();
     const existing = await ctx.db
       .query("documentVersions")
       .withIndex("by_document", (q) => q.eq("documentId", args.documentId))

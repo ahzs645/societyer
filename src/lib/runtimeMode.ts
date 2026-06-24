@@ -8,7 +8,8 @@ export type DocumentStorageProvider =
   | "convex"
   | "rustfs"
   | "local-filesystem"
-  | "demo";
+  | "demo"
+  | "none";
 
 export type RuntimeCapabilities = {
   localData: boolean;
@@ -34,6 +35,11 @@ export function getRuntimeMode(): RuntimeMode {
 }
 
 export function getDocumentStorageProvider(): DocumentStorageProvider {
+  // A deployment can hard-disable all native file storage. When it does, no
+  // provider is "native": uploads are blocked and only external document
+  // connectors (e.g. Paperless) remain as read-only sources.
+  if (isNativeFileStorageDisabledByFlag()) return "none";
+
   const configured = import.meta.env.VITE_DOCUMENT_STORAGE_PROVIDER as DocumentStorageProvider | undefined;
   if (configured && isDocumentStorageProvider(configured)) return configured;
 
@@ -41,6 +47,21 @@ export function getDocumentStorageProvider(): DocumentStorageProvider {
   if (runtimeMode === "electron-local") return "local-filesystem";
   if (runtimeMode === "local-indexeddb") return "demo";
   return "rustfs";
+}
+
+function isNativeFileStorageDisabledByFlag(): boolean {
+  const flag = String(import.meta.env.VITE_DISABLE_NATIVE_FILE_STORAGE ?? "").trim().toLowerCase();
+  return flag === "1" || flag === "true" || flag === "yes" || flag === "on";
+}
+
+/**
+ * Whether this deployment stores files in its own (native) document storage.
+ * When false, the UI must hide every upload affordance and rely on external
+ * document connectors. The server enforces the same rule independently, so a
+ * stale client cannot smuggle a file in even if this returns the wrong value.
+ */
+export function isNativeFileStorageEnabled(): boolean {
+  return getDocumentStorageProvider() !== "none";
 }
 
 export function getRuntimeDescriptor(): RuntimeDescriptor {
@@ -103,7 +124,8 @@ function isDocumentStorageProvider(value: string): value is DocumentStorageProvi
     value === "convex" ||
     value === "rustfs" ||
     value === "local-filesystem" ||
-    value === "demo"
+    value === "demo" ||
+    value === "none"
   );
 }
 
