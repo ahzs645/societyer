@@ -425,7 +425,9 @@
   }
 
   .page__subtitle {
-    font-size: token('fs-xs');
+    /* Phones hide the descriptive blurb under the title to reclaim vertical
+     * space — the title + icon are enough context on a small screen. */
+    display: none;
   }
 
   .page__actions {

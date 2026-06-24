@@ -164,6 +164,10 @@
 
   .record-table__toolbar-center {
     justify-content: stretch;
+    /* The base `flex: 1 1 200px` sets a 200px basis for horizontal layout; in
+     * the stacked column layout that basis becomes a 200px *height*, leaving a
+     * big empty gap above the table. Reset to content height. */
+    flex: 0 0 auto;
   }
 
   .record-table__toolbar-right {
@@ -1091,5 +1095,65 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 
   .record-table__row:hover & {
     opacity: 1;
+  }
+}
+
+/* -------- Phone: keep the table, freeze the first column ------------------
+ * On narrow screens the record table stays a real table (not cards). The
+ * selection column is dropped in the component, so the leftmost column is the
+ * record name — we freeze it and let every other column scroll sideways, the
+ * way Twenty handles a wide table on a small viewport. */
+@media (max-width: 760px) {
+  /* The generic `.page table { display:block; overflow-x:auto }` phone rule
+   * (in _chrome-tables) would make the table its own scroll box and break the
+   * frozen column — keep real table layout and let `.record-table__scroll` /
+   * the virtuoso scroller be the horizontal scroller instead. */
+  .record-table__scroll > .record-table,
+  .record-table__virtuoso .record-table {
+    display: table;
+    overflow: visible;
+    max-width: none;
+    width: max-content;
+    min-width: 100%;
+  }
+  .record-table {
+    font-size: 12px;
+  }
+  .record-table__scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  .record-table__virtuoso {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .record-table__scroll .record-table > thead > tr > th:first-child,
+  .record-table__virtuoso .record-table > thead > tr > th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 4;
+    background: token('bg-subtle');
+  }
+  .record-table__scroll .record-table > tbody > tr > td:first-child,
+  .record-table__virtuoso .record-table > tbody > tr > td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: token('bg-panel');
+    max-width: 48vw;
+  }
+  /* Hairline divider so the frozen column reads as pinned while scrolling. */
+  .record-table__scroll .record-table > thead > tr > th:first-child::after,
+  .record-table__scroll .record-table > tbody > tr > td:first-child::after,
+  .record-table__virtuoso .record-table > thead > tr > th:first-child::after,
+  .record-table__virtuoso .record-table > tbody > tr > td:first-child::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 1px;
+    background: token('border');
   }
 }

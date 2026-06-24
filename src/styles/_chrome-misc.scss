@@ -1,53 +1,38 @@
 @use "tokens" as *;
 @use "mixins" as *;
 
-// Stacked card list — the mobile presentation of every data table
-// (DataTable + RecordTable). One card per record: a bold title row with an
-// optional chevron/actions, then clean label / value detail rows below.
 .card-list {
   @include flex-column;
-  gap: token('s-2');
-  background: transparent;
-}
-.card-list__item {
-  padding: token('s-3') token('s-4');
   border: 1px solid token('border-color-light');
   border-radius: token('r-md');
   background: token('bg-panel');
-  box-shadow: token('shadow-xs');
+  overflow: hidden;
+}
+.card-list__item {
+  padding: token('s-3') token('s-4');
+  border-bottom: 1px solid token('border-color-light');
+  background: token('bg-panel');
+}
+.card-list__item:last-child {
+  border-bottom: 0;
 }
 .card-list__item--interactive {
   cursor: pointer;
-  transition: border-color token('anim-fast') token('anim-ease'),
-    box-shadow token('anim-fast') token('anim-ease'),
-    background token('anim-fast') token('anim-ease');
-}
-.card-list__item--interactive:hover {
-  border-color: token('border-color-medium');
+  transition: background token('anim-fast') token('anim-ease');
 }
 .card-list__item--interactive:active {
   background: token('bg-transparent-light');
 }
-.card-list__item--selected {
-  border-color: token('accent');
-  box-shadow: 0 0 0 1px token('accent');
-}
 .card-list__primary {
-  display: flex;
-  align-items: center;
+  @include flex-center;
   gap: token('s-2');
   min-width: 0;
-}
-.card-list__checkbox {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
 }
 .card-list__primary-cell {
   flex: 1;
   min-width: 0;
   font-size: token('fs-md');
-  font-weight: token('fw-semibold');
+  font-weight: token('fw-medium');
   color: token('text-primary');
   overflow-wrap: break-word;
   word-break: normal;
@@ -55,10 +40,6 @@
 .card-list__primary-cell .mono {
   white-space: normal;
   overflow-wrap: anywhere;
-}
-.card-list__chevron {
-  flex-shrink: 0;
-  color: token('text-tertiary');
 }
 .card-list__actions {
   flex-shrink: 0;
@@ -71,41 +52,52 @@
 }
 .card-list__details {
   display: flex;
-  flex-direction: column;
-  gap: token('s-1');
-  margin-top: token('s-3');
-  padding-top: token('s-3');
-  border-top: 1px solid token('border-color-light');
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 6px;
+  padding-left: 2px;
 }
 .card-list__detail {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: token('s-3');
-  font-size: token('fs-sm');
+  @include flex-center;
+  gap: 4px;
+  font-size: token('fs-xs');
   min-width: 0;
 }
 .card-list__detail-label {
-  flex-shrink: 0;
   color: token('text-tertiary');
   white-space: nowrap;
 }
+.card-list__detail-label::after {
+  content: ":";
+}
 .card-list__detail-value {
-  min-width: 0;
-  flex: 1;
   color: token('text-secondary');
-  text-align: right;
-  overflow-wrap: break-word;
-  word-break: normal;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 520px) {
+  .card-list__primary {
+    align-items: stretch;
+    flex-direction: column;
+    gap: token('s-2');
+  }
+
   .card-list__actions {
-    justify-content: flex-end;
+    justify-content: flex-start;
+    width: 100%;
   }
 
   .card-list__actions .btn:not(.btn--icon) {
+    flex: 1 1 calc(50% - 4px);
+    justify-content: center;
     min-width: 0;
+  }
+
+  .card-list__actions .btn--icon {
+    flex: 0 0 30px;
   }
 }
 

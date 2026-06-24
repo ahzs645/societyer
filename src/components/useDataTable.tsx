@@ -18,7 +18,7 @@ import {
 } from "./FilterBar";
 import { AdvancedFilterModal } from "./AdvancedFilter";
 import { MenuRow, MenuSectionLabel, Pill, Skeleton } from "./ui";
-import { useIsMobileCards } from "../lib/useIsMobileCards";
+import { useIsMobile } from "../lib/useIsMobile";
 import {
   makeViewId,
   readSavedViews,
@@ -124,7 +124,7 @@ export function useDataTable<T extends { _id?: string } & Record<string, any>>(p
   const [sort, setSort] = useState<SortState>(defaultSort ?? null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(initialPageSize);
-  const isMobileCards = useIsMobileCards();
+  const isMobile = useIsMobile();
   const selectionScope = viewsKey ?? `table:${label}`;
   const selectionList = useUIStore((s) => s.selection[selectionScope] ?? EMPTY_ARR);
   const selected = useMemo(() => new Set(selectionList), [selectionList]);
@@ -578,7 +578,7 @@ export function useDataTable<T extends { _id?: string } & Record<string, any>>(p
     setPage,
     pageSize,
     setPageSize,
-    isMobileCards,
+    isMobile,
     selected,
     hiddenColumns,
     setHiddenColumns,

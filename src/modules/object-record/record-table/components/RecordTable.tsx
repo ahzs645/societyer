@@ -10,11 +10,10 @@ import { useFilteredRecords } from "../hooks/useFilteredRecords";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { RecordTableHeader } from "./RecordTableHeader";
 import { RecordTableRow } from "./RecordTableRow";
-import { RecordTableCardList } from "./RecordTableCardList";
 import { RecordTableEmpty } from "./RecordTableEmpty";
 import { RecordTableAggregateFooter } from "./RecordTableAggregateFooter";
 import { useRecordTableKeyboardNavigation } from "../hooks/useRecordTableKeyboardNavigation";
-import { useIsMobileCards } from "../../../../lib/useIsMobileCards";
+import { useIsMobile } from "../../../../lib/useIsMobile";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
 import { CalendarView } from "../../../../components/CalendarView";
 import { RecordBoard, type RecordBoardColumn } from "../../../../components/RecordBoard";
@@ -113,7 +112,11 @@ export function RecordTable({
 
   const visibleColumns = useMemo(() => columns.filter((c) => c.isVisible), [columns]);
   const hasRowActions = !!renderRowActions;
-  const isMobileCards = useIsMobileCards();
+  // On phones we drop the selection column so the first data column (the
+  // record name) sits flush left and can be frozen while the rest of the
+  // table scrolls horizontally — the Twenty-style narrow-screen table.
+  const isMobile = useIsMobile();
+  const effectiveSelectable = selectable && !isMobile;
   useRecordTableKeyboardNavigation({ enabled: keyboardNavigation });
 
   useEffect(() => {
@@ -274,21 +277,6 @@ export function RecordTable({
     );
   }
 
-  // On phones the wide table is unusable (horizontal scroll, tiny cells), so
-  // we render a metadata-driven stacked card list instead — same visible
-  // columns, same FieldDisplay, just laid out vertically. Applies to the
-  // standard table view only; kanban/calendar handle small screens above.
-  if (isMobileCards) {
-    return (
-      <RecordTableCardList
-        records={filtered}
-        selectable={selectable}
-        renderRowActions={renderRowActions}
-        renderCell={renderCell}
-      />
-    );
-  }
-
   // Small result sets render without virtuoso — simpler, faster for
   // common <100-row tables. Once we cross the threshold we switch on
   // react-virtuoso.
@@ -297,7 +285,7 @@ export function RecordTable({
       <div ref={tableRootRef} className={`record-table__scroll ${densityClass}`}>
         <table className="record-table">
           <thead className="record-table__thead">
-            <RecordTableHeader selectable={selectable} hasRowActions={hasRowActions} />
+            <RecordTableHeader selectable={effectiveSelectable} hasRowActions={hasRowActions} />
           </thead>
           <tbody className="record-table__tbody">
             {filtered.map((record: any, i: number) => (
@@ -309,7 +297,7 @@ export function RecordTable({
                 <RecordTableRow
                   record={record}
                   rowIndex={i}
-                  selectable={selectable}
+                  selectable={effectiveSelectable}
                   renderRowActions={renderRowActions}
                   renderCell={renderCell}
                 />
@@ -317,7 +305,7 @@ export function RecordTable({
             ))}
           </tbody>
           {showAggregateFooter && (
-            <RecordTableAggregateFooter selectable={selectable} hasRowActions={hasRowActions} />
+            <RecordTableAggregateFooter selectable={effectiveSelectable} hasRowActions={hasRowActions} />
           )}
         </table>
       </div>
@@ -342,13 +330,13 @@ export function RecordTable({
           TableRow: VirtuosoTableRow,
         }}
         fixedHeaderContent={() => (
-          <RecordTableHeader selectable={selectable} hasRowActions={hasRowActions} />
+          <RecordTableHeader selectable={effectiveSelectable} hasRowActions={hasRowActions} />
         )}
         itemContent={(index, record) => (
           <RecordTableRow
             record={record}
             rowIndex={index}
-            selectable={selectable}
+            selectable={effectiveSelectable}
             renderRowActions={renderRowActions}
             renderCell={renderCell}
           />

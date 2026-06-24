@@ -413,3 +413,35 @@ select.editable-cell__input {
   font-size: token('fs-xs');
   line-height: 1;
 }
+
+/* -------- Phone: DataTable stays a real table with a frozen first column ---
+ * The generic `.page table { display:block }` mobile rule (in _chrome-tables)
+ * would turn the table into its own scroll box and break the sticky first
+ * column, so inside `.table-scroll` we keep real table layout, size the table
+ * to its content (so it scrolls horizontally), and pin the first column. The
+ * selection column is dropped in the component on phones, so the first column
+ * is the primary/name cell. */
+@media (max-width: 760px) {
+  .table-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  .table-scroll > .table {
+    display: table;
+    overflow: visible;
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
+    font-size: 12px;
+  }
+  .table-scroll > .table th,
+  .table-scroll > .table td {
+    white-space: nowrap;
+  }
+  .table-scroll--sticky .table--sticky-first td:first-child,
+  .table-scroll--sticky .table--sticky-first th:first-child {
+    max-width: 52vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
