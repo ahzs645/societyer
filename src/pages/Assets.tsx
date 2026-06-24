@@ -10,6 +10,7 @@ import {
   Download,
   FileSpreadsheet,
   Link2,
+  MoreHorizontal,
   Package,
   PackageCheck,
   Pencil,
@@ -26,6 +27,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DataTable } from "../components/DataTable";
+import { Menu } from "../components/Menu";
 import { FilterField } from "../components/FilterBar";
 import { formatDate } from "../lib/format";
 import { useToast } from "../components/Toast";
@@ -212,15 +214,24 @@ export function AssetsPage() {
         subtitle="Asset register, QR labels, custody, grant restrictions, maintenance, insurance, finance, verification, and disposal evidence."
         actions={
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <button className="btn-action" onClick={() => downloadText(`societyer-assets-${todayDate()}.csv`, assetsToCsv(rows))}>
-              <Download size={12} /> Export CSV
-            </button>
-            <button className="btn-action" onClick={() => setDrawer("import")}>
-              <Upload size={12} /> Import CSV
-            </button>
-            <button className="btn-action" onClick={() => setDrawer("verify")}>
-              <ClipboardCheck size={12} /> Start verification
-            </button>
+            <Menu
+              align="right"
+              trigger={
+                <button className="btn-action" aria-label="More asset actions">
+                  <MoreHorizontal size={14} /> More
+                </button>
+              }
+              sections={[
+                {
+                  id: "asset-actions",
+                  items: [
+                    { id: "export", label: "Export CSV", icon: <Download size={14} />, onSelect: () => downloadText(`societyer-assets-${todayDate()}.csv`, assetsToCsv(rows)) },
+                    { id: "import", label: "Import CSV", icon: <Upload size={14} />, onSelect: () => setDrawer("import") },
+                    { id: "verify", label: "Start verification", icon: <ClipboardCheck size={14} />, onSelect: () => setDrawer("verify") },
+                  ],
+                },
+              ]}
+            />
             <button className="btn-action btn-action--primary" onClick={openGlobalAssetCreate}>
               <Plus size={12} /> New asset
             </button>

@@ -209,9 +209,15 @@
     overscroll-behavior-x: contain;
     max-width: 100%;
   }
+  /* Keep the count inline (right-aligned) next to the "Sorted by" pill so the
+   * toolbar is one compact row instead of stacking search / sort / count into
+   * three separate rows above the table. */
   .table-toolbar__summary {
-    width: 100%;
-    margin-left: 0;
+    width: auto;
+    margin-left: auto;
+  }
+  .table-toolbar__search {
+    max-width: none;
   }
   .table tbody td,
   .table thead th {

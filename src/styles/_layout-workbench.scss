@@ -408,13 +408,13 @@
  * cards, generous spacing, hairline separators). */
 @media (max-width: 760px) {
   .page {
-    padding: token('s-5') token('s-5') calc(token('s-6') + env(safe-area-inset-bottom, 0));
+    padding: token('s-4') token('s-4') calc(token('s-6') + env(safe-area-inset-bottom, 0));
   }
 
   .page__header {
     gap: token('s-2');
-    margin-bottom: token('s-4');
-    padding: 0 0 token('s-3');
+    margin-bottom: token('s-3');
+    padding: 0 0 token('s-2');
     min-height: 0;
   }
 
