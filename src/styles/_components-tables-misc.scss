@@ -451,4 +451,41 @@ select.editable-cell__input {
   .table .record-chip__avatar {
     display: none;
   }
+
+  /* Custom page tables wrapped in `.table-wrap` (Policies, MinuteBook, etc.)
+   * keep real table layout and scroll horizontally, instead of being squeezed
+   * by the generic `.page table { display:block }` rule — which collapsed the
+   * first column and wrapped the name one word per line. */
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  .table-wrap > .table {
+    display: table;
+    overflow: visible;
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
+    font-size: 12px;
+  }
+  .table-wrap > .table th,
+  .table-wrap > .table td {
+    white-space: nowrap;
+  }
+  /* Freeze the first column (the record name) while the rest scroll. */
+  .table-wrap > .table > thead > tr > th:first-child,
+  .table-wrap > .table > tbody > tr > td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: token('bg-panel');
+    max-width: 50vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .table-wrap > .table > thead > tr > th:first-child {
+    z-index: 3;
+    background: token('bg-subtle');
+  }
 }

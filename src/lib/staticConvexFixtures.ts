@@ -1432,6 +1432,42 @@ const policies = [
   },
 ];
 
+const attestations = [
+  {
+    _id: "static_attestation_mina_2026",
+    societyId: SOCIETY_ID,
+    directorId: "static_director_mina",
+    year: 2026,
+    signedAtISO: "2026-04-18T17:00:00.000Z",
+    isAtLeast18: true,
+    notBankrupt: true,
+    notDisqualified: true,
+    stillResidentOrEligible: true,
+  },
+  {
+    _id: "static_attestation_jordan_2026",
+    societyId: SOCIETY_ID,
+    directorId: "static_director_jordan",
+    year: 2026,
+    signedAtISO: "2026-04-19T15:30:00.000Z",
+    isAtLeast18: true,
+    notBankrupt: true,
+    notDisqualified: true,
+    stillResidentOrEligible: true,
+  },
+  {
+    _id: "static_attestation_devon_2026",
+    societyId: SOCIETY_ID,
+    directorId: "static_director_devon",
+    year: 2026,
+    signedAtISO: "2026-04-20T19:00:00.000Z",
+    isAtLeast18: true,
+    notBankrupt: true,
+    notDisqualified: true,
+    stillResidentOrEligible: true,
+  },
+];
+
 const courtOrders = [
   {
     _id: "static_court_order_records",
@@ -2268,7 +2304,7 @@ const tables: Record<string, any[]> = {
       notes: "Queued by workflow UNBC Affiliate ID Request · node notify",
     },
   ],
-  attestations: [],
+  attestations,
   auditors: [
     {
       _id: "static_auditor",
