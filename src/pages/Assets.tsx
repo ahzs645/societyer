@@ -778,7 +778,7 @@ function AssetCell({ row }: { row: any }) {
   return (
     <div className="row" style={{ gap: 10, alignItems: "center", flexWrap: "nowrap" }}>
       {row.imageUrl && (
-        <img src={row.imageUrl} alt="" style={{ width: 32, height: 32, flex: "0 0 auto", borderRadius: 6, objectFit: "cover", border: "1px solid var(--border, #d8dadf)" }} />
+        <img className="asset-cell__thumb" src={row.imageUrl} alt="" style={{ width: 32, height: 32, flex: "0 0 auto", borderRadius: 6, objectFit: "cover", border: "1px solid var(--border, #d8dadf)" }} />
       )}
       <div>
         <strong>{row.name}</strong>
