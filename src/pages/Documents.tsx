@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -18,6 +18,7 @@ import { PaperlessDocumentAction } from "../components/PaperlessDocumentAction";
 import { getDocumentStorageProvider, isNativeFileStorageEnabled } from "../lib/runtimeMode";
 import { openDocumentDownloadTarget } from "../lib/documentStorage";
 import { uploadDocumentVersion } from "../lib/documentVersionUpload";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 
 const CATS = ["Constitution", "Bylaws", "Minutes", "FinancialStatement", "Policy", "Filing", "Agreement", "Library", "WorkflowGenerated", "Other"] as const;
 
@@ -51,6 +52,7 @@ export function DocumentsPage() {
   const paperlessConnection = useQuery(api.paperless.listConnection, society ? { societyId: society._id } : "skip");
   const confirm = useConfirm();
   const toast = useToast();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [versionsFor, setVersionsFor] = useState<{ id: any; title: string } | null>(null);
@@ -138,23 +140,36 @@ export function DocumentsPage() {
         subtitle="Constitution, bylaws, minutes, financial statements, policies. Records ≥ 10 years (CRA: 7 years financial)."
         actions={
           <>
-            <Link className="btn-action" to="/app/library">
-              <BookOpen size={12} /> Library
-            </Link>
             {nativeStorage && (
-              <>
-                <input ref={fileInputRef} type="file" style={{ display: "none" }}
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (file) await quickUpload(file);
-                    if (fileInputRef.current) fileInputRef.current.value = "";
-                  }}
-                />
-                <button className="btn-action" disabled={busy} onClick={() => fileInputRef.current?.click()}>
-                  <Upload size={12} /> Upload
-                </button>
-              </>
+              <input ref={fileInputRef} type="file" style={{ display: "none" }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (file) await quickUpload(file);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+              />
             )}
+            <MoreActionsMenu
+              items={[
+                {
+                  id: "library",
+                  label: "Library",
+                  icon: <BookOpen size={14} />,
+                  onSelect: () => navigate("/app/library"),
+                },
+                ...(nativeStorage
+                  ? [
+                      {
+                        id: "upload",
+                        label: "Upload",
+                        icon: <Upload size={14} />,
+                        disabled: busy,
+                        onSelect: () => fileInputRef.current?.click(),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
             <button className="btn-action btn-action--primary" disabled={busy} onClick={openNew}>
               <Plus size={12} /> New document
             </button>

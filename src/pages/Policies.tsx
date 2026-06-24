@@ -4,12 +4,13 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
+import { Menu } from "../components/Menu";
 import { DatePicker } from "../components/DatePicker";
 import { Toggle } from "../components/Controls";
 import { OptionMultiSelect, OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { FileText, Plus, Trash2 } from "lucide-react";
+import { FileText, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -173,23 +174,28 @@ export function PoliciesPage() {
                   <td><Badge tone={toneForStatus(row.status)}>{row.status}</Badge></td>
                   <td>
                     <div className="row" style={{ justifyContent: "flex-end" }}>
-                      <button className="btn btn--ghost btn--sm" onClick={() => createLifecycleTask(row, "review")}>Review task</button>
-                      {row.signatureRequired && <button className="btn btn--ghost btn--sm" onClick={() => createLifecycleTask(row, "signers")}>Signer task</button>}
-                      <button className="btn btn--ghost btn--sm" onClick={() => createPublication(row)}>Publish draft</button>
-                      <button
-                        className="btn btn--ghost btn--sm"
-                        onClick={() => {
-                          setDraft({
-                            ...row,
-                          });
-                          setOpen(true);
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button className="btn btn--ghost btn--sm btn--icon" aria-label="Delete policy" onClick={() => confirmDelete(row)}>
-                        <Trash2 size={12} />
-                      </button>
+                      <Menu
+                        align="right"
+                        trigger={
+                          <button className="btn btn--ghost btn--sm btn--icon" aria-label="Policy actions">
+                            <MoreHorizontal size={14} />
+                          </button>
+                        }
+                        sections={[
+                          {
+                            id: "policy-actions",
+                            items: [
+                              { id: "review", label: "Review task", onSelect: () => createLifecycleTask(row, "review") },
+                              ...(row.signatureRequired
+                                ? [{ id: "signers", label: "Signer task", onSelect: () => createLifecycleTask(row, "signers") }]
+                                : []),
+                              { id: "publish", label: "Publish draft", onSelect: () => createPublication(row) },
+                              { id: "edit", label: "Edit", onSelect: () => { setDraft({ ...row }); setOpen(true); } },
+                              { id: "delete", label: "Delete", icon: <Trash2 size={14} />, destructive: true, onSelect: () => confirmDelete(row) },
+                            ],
+                          },
+                        ]}
+                      />
                     </div>
                   </td>
                 </tr>

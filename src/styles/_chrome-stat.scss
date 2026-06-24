@@ -42,7 +42,7 @@
   .stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0;
-    margin-bottom: token('s-4');
+    margin-bottom: token('s-3');
     border: 1px solid token('border');
     border-radius: token('r-md');
     background: token('bg-panel');
@@ -52,7 +52,7 @@
     border: 0;
     border-radius: 0;
     background: transparent;
-    padding: token('s-2') token('s-3');
+    padding: 6px token('s-3');
     /* Hairline dividers between cells — right and bottom, suppressed at the
      * row/column edges so we get a clean grid with no doubled lines. */
     border-right: 1px solid token('border-color-light');
@@ -73,8 +73,8 @@
     height: 12px;
   }
   .stat__value {
-    font-size: token('fs-lg');
-    line-height: 1.2;
+    font-size: token('fs-md');
+    line-height: 1.15;
   }
   /* Hide the descriptive sub-text on phones by default — the KPI number is
    * the signal, the long explanation is noise on a 360px viewport. The stat

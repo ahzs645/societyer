@@ -8,6 +8,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { PiggyBank, TrendingUp, TrendingDown, AlertTriangle, DollarSign, PlusCircle, Trash2, Upload, Receipt } from "lucide-react";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { useToast } from "../components/Toast";
 import { centsToDollarInput, dollarInputToCents, formatDate } from "../lib/format";
 import { StudentLevyIntakeDrawer } from "../components/StudentLevyIntakeDrawer";
@@ -334,12 +335,12 @@ export function TreasurerPage() {
         subtitle="P&L summary, funding sources, budget variance, and restricted-fund balances."
         actions={
           <>
-            <button className="btn-action" onClick={() => setLevyImportOpen(true)}>
-              <Upload size={12} /> Import levy
-            </button>
-            <button className="btn-action" onClick={() => setExpenseDraft(newExpenseDraft())}>
-              <Receipt size={12} /> New expense claim
-            </button>
+            <MoreActionsMenu
+              items={[
+                { id: "import-levy", label: "Import levy", icon: <Upload size={14} />, onSelect: () => setLevyImportOpen(true) },
+                { id: "new-expense-claim", label: "New expense claim", icon: <Receipt size={14} />, onSelect: () => setExpenseDraft(newExpenseDraft()) },
+              ]}
+            />
             <button className="btn-action btn-action--primary" onClick={() => setSourceDraft(newSourceDraft())}>
               <PlusCircle size={12} /> New funding source
             </button>

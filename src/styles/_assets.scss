@@ -140,3 +140,12 @@
     grid-template-columns: 96px minmax(0, 1fr);
   }
 }
+
+/* The inline asset photo is decorative — the cell already shows the name and
+ * category · serial. Hide it on phones so every row's name lines up and the
+ * thumbnail doesn't eat width in the horizontally-scrolling Asset column. */
+@media (max-width: 760px) {
+  .asset-cell__thumb {
+    display: none;
+  }
+}

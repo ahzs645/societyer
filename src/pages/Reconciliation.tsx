@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -10,6 +10,7 @@ import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { useConfirm, usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { Boxes, Scale, Link2, Undo2, Plus } from "lucide-react";
 import { formatDate, money } from "../lib/format";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -50,6 +51,7 @@ export function ReconciliationPage() {
   const prompt = usePrompt();
   const confirm = useConfirm();
   const toast = useToast();
+  const navigate = useNavigate();
 
   const [selected, setSelected] = useState<string | null>(null);
   const [linkItemId, setLinkItemId] = useState("");
@@ -182,12 +184,12 @@ export function ReconciliationPage() {
         subtitle="Match imported bank transactions to internal records (filings, donation receipts, payroll). Anything unreconciled at year-end is a red flag for the auditor."
         actions={
           <>
-            <Link className="btn-action" to="/app/financials/accounting">
-              <Scale size={12} /> Ledger reconciliation
-            </Link>
-            <button className="btn-action" onClick={() => setAddOpen(true)}>
-              <Plus size={12} /> Add transaction
-            </button>
+            <MoreActionsMenu
+              items={[
+                { id: "ledger-reconciliation", label: "Ledger reconciliation", icon: <Scale size={14} />, onSelect: () => navigate("/app/financials/accounting") },
+                { id: "add-transaction", label: "Add transaction", icon: <Plus size={14} />, onSelect: () => setAddOpen(true) },
+              ]}
+            />
             <button className="btn-action btn-action--primary" onClick={autoMatchAllHighConfidence}>
               <Link2 size={12} /> Auto-match high confidence
             </button>

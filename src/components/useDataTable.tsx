@@ -18,7 +18,7 @@ import {
 } from "./FilterBar";
 import { AdvancedFilterModal } from "./AdvancedFilter";
 import { MenuRow, MenuSectionLabel, Pill, Skeleton } from "./ui";
-import { mobileCardMediaQuery } from "../lib/breakpoints";
+import { useIsMobile } from "../lib/useIsMobile";
 import {
   makeViewId,
   readSavedViews,
@@ -124,9 +124,7 @@ export function useDataTable<T extends { _id?: string } & Record<string, any>>(p
   const [sort, setSort] = useState<SortState>(defaultSort ?? null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(initialPageSize);
-  const [isMobileCards, setIsMobileCards] = useState(
-    () => window.matchMedia(mobileCardMediaQuery).matches,
-  );
+  const isMobile = useIsMobile();
   const selectionScope = viewsKey ?? `table:${label}`;
   const selectionList = useUIStore((s) => s.selection[selectionScope] ?? EMPTY_ARR);
   const selected = useMemo(() => new Set(selectionList), [selectionList]);
@@ -214,12 +212,6 @@ export function useDataTable<T extends { _id?: string } & Record<string, any>>(p
     [columns, hiddenColumns],
   );
 
-  useEffect(() => {
-    const mq = window.matchMedia(mobileCardMediaQuery);
-    const onChange = (e: MediaQueryListEvent) => setIsMobileCards(e.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
   const sortColumn = sort ? columns.find((column) => column.id === sort.columnId) : null;
   const sortableColumns = useMemo(() => columns.filter((c) => c.sortable), [columns]);
   const effectivePageSizeOptions = useMemo(
@@ -586,7 +578,7 @@ export function useDataTable<T extends { _id?: string } & Record<string, any>>(p
     setPage,
     pageSize,
     setPageSize,
-    isMobileCards,
+    isMobile,
     selected,
     hiddenColumns,
     setHiddenColumns,

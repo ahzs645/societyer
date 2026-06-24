@@ -199,6 +199,18 @@
 }
 .view-bar__btn:hover { background: token('bg-hover'); color: token('text-primary'); }
 
+/* Phones: tighten the view bar so the view pill + filter/sort buttons don't
+ * eat two tall rows above the table. */
+@media (max-width: 760px) {
+  .view-bar {
+    padding: 5px 8px;
+    row-gap: 4px;
+  }
+  .view-pill {
+    height: 28px;
+  }
+}
+
 /* Filter chips row (sits below view bar) */
 .filter-chips {
   @include flex-center;

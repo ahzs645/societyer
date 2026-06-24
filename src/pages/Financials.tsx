@@ -5,6 +5,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, Flag } from "../components/ui";
 import { DataTable } from "../components/DataTable";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Select } from "../components/Select";
 import { formatDateTime, money } from "../lib/format";
@@ -261,58 +262,51 @@ export function FinancialsPage() {
         actions={
           activeConnection ? (
             <>
-              <Link className="btn-action" to="/app/financials/accounting">
-                <PiggyBank size={12} /> Accounting
-              </Link>
               <Badge tone="success">Connected · {activeConnection.provider}</Badge>
-              <button
-                className="btn-action"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    const result = await sync({ connectionId: activeConnection._id });
-                    toast.success(
-                      `Synced ${result.accounts} accounts, ${result.transactions} transactions.`,
-                    );
-                  } catch (err: any) {
-                    toast.error(err?.message ?? "Sync failed");
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                <RefreshCw size={12} /> Sync
-              </button>
-              <button
-                className="btn-action"
-                disabled={busy}
-                onClick={refreshWaveCache}
-              >
-                <Database size={12} /> Cache
-              </button>
-              <button
-                className="btn-action"
-                disabled={busy || waveHealthBusy}
-                onClick={runWaveHealthCheck}
-              >
-                <ShieldCheck size={12} /> Check
-              </button>
-              <button
-                className="btn-action"
-                onClick={async () => {
-                  await disconnect({ connectionId: activeConnection._id, actingUserId });
-                  toast.info("Disconnected Wave");
-                }}
-              >
-                Disconnect
-              </button>
+              <MoreActionsMenu
+                items={[
+                  { id: "accounting", label: "Accounting", icon: <PiggyBank size={14} />, onSelect: () => navigate("/app/financials/accounting") },
+                  {
+                    id: "sync",
+                    label: "Sync",
+                    icon: <RefreshCw size={14} />,
+                    disabled: busy,
+                    onSelect: async () => {
+                      setBusy(true);
+                      try {
+                        const result = await sync({ connectionId: activeConnection._id });
+                        toast.success(
+                          `Synced ${result.accounts} accounts, ${result.transactions} transactions.`,
+                        );
+                      } catch (err: any) {
+                        toast.error(err?.message ?? "Sync failed");
+                      } finally {
+                        setBusy(false);
+                      }
+                    },
+                  },
+                  { id: "cache", label: "Cache", icon: <Database size={14} />, disabled: busy, onSelect: refreshWaveCache },
+                  { id: "check", label: "Check", icon: <ShieldCheck size={14} />, disabled: busy || waveHealthBusy, onSelect: runWaveHealthCheck },
+                  {
+                    id: "disconnect",
+                    label: "Disconnect",
+                    destructive: true,
+                    onSelect: async () => {
+                      await disconnect({ connectionId: activeConnection._id, actingUserId });
+                      toast.info("Disconnected Wave");
+                    },
+                  },
+                ]}
+              />
             </>
           ) : (
             <>
-              <Link className="btn-action" to="/app/financials/accounting">
-                <PiggyBank size={12} /> Accounting
-              </Link>
+              <MoreActionsMenu
+                items={[
+                  { id: "accounting", label: "Accounting", icon: <PiggyBank size={14} />, onSelect: () => navigate("/app/financials/accounting") },
+                  { id: "check", label: "Check", icon: <ShieldCheck size={14} />, disabled: busy || waveHealthBusy, onSelect: runWaveHealthCheck },
+                ]}
+              />
               <button
                 className="btn-action btn-action--primary"
                 disabled={busy || !canConnectWave}
@@ -320,13 +314,6 @@ export function FinancialsPage() {
                 title={!canConnectWave ? "Configure Wave credentials before connecting this workspace." : undefined}
               >
                 <Link2 size={12} /> Connect Wave
-              </button>
-              <button
-                className="btn-action"
-                disabled={busy || waveHealthBusy}
-                onClick={runWaveHealthCheck}
-              >
-                <ShieldCheck size={12} /> Check
               </button>
             </>
           )

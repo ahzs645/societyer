@@ -8,6 +8,7 @@ import { useToast } from "../components/Toast";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import {
   ExternalLink,
   Plus,
@@ -153,50 +154,79 @@ export function WorkflowsPage() {
         subtitle="Native workflow control with Societyer context and n8n execution for external automations."
         actions={
           <>
-            <Link className="btn-action" to="/app/workflow-packages">
-              <WorkflowIcon size={12} /> Legal packages
-            </Link>
-            <button className="btn-action" onClick={() => openNew("unbc_affiliate_id_request")}>
-              <WorkflowIcon size={12} /> UNBC example
-            </button>
-            <button className="btn-action" onClick={() => openNew("unbc_key_access_request")}>
-              <WorkflowIcon size={12} /> Key request
-            </button>
-            <button className="btn-action" onClick={() => openNew("ote_keycard_access_request")}>
-              <WorkflowIcon size={12} /> OTE access
-            </button>
-            <button className="btn-action" onClick={() => openNew("csj_remote_worker_orientation")}>
-              <WorkflowIcon size={12} /> CSJ orientation
-            </button>
-            <button className="btn-action" onClick={() => openNew("agm_date_deadlines")}>
-              <WorkflowIcon size={12} /> AGM deadlines
-            </button>
-            <button className="btn-action" onClick={() => openNew("filing_due_notify_officer")}>
-              <WorkflowIcon size={12} /> Filing notice
-            </button>
-            <button className="btn-action" onClick={() => openNew("conflict_disclosed_agenda_item")}>
-              <WorkflowIcon size={12} /> Conflict agenda
-            </button>
-            <button
-              className="btn-action"
-              disabled={setupBusy}
-              onClick={async () => {
-                setSetupBusy(true);
-                try {
-                  const result = await setupGovernanceN8nRecipes({
-                    societyId: society._id,
-                    actingUserId,
-                  });
-                  toast.success("n8n governance recipes linked", `${result.created.length} created, ${result.updated.length} updated`);
-                } catch (error: any) {
-                  toast.error("Could not link n8n recipes", error?.message);
-                } finally {
-                  setSetupBusy(false);
-                }
-              }}
-            >
-              <WorkflowIcon size={12} /> {setupBusy ? "Linking..." : "Link n8n recipes"}
-            </button>
+            <MoreActionsMenu
+              label="Templates"
+              items={[
+                {
+                  id: "legal-packages",
+                  label: "Legal packages",
+                  icon: <WorkflowIcon size={14} />,
+                  onSelect: () => navigate("/app/workflow-packages"),
+                },
+                {
+                  id: "unbc-example",
+                  label: "UNBC example",
+                  icon: <WorkflowIcon size={14} />,
+                  onSelect: () => openNew("unbc_affiliate_id_request"),
+                },
+                {
+                  id: "key-request",
+                  label: "Key request",
+                  icon: <WorkflowIcon size={14} />,
+                  onSelect: () => openNew("unbc_key_access_request"),
+                },
+                {
+                  id: "ote-access",
+                  label: "OTE access",
+                  icon: <WorkflowIcon size={14} />,
+                  onSelect: () => openNew("ote_keycard_access_request"),
+                },
+                {
+                  id: "csj-orientation",
+                  label: "CSJ orientation",
+                  icon: <WorkflowIcon size={14} />,
+                  onSelect: () => openNew("csj_remote_worker_orientation"),
+                },
+                {
+                  id: "agm-deadlines",
+                  label: "AGM deadlines",
+                  icon: <WorkflowIcon size={14} />,
+                  onSelect: () => openNew("agm_date_deadlines"),
+                },
+                {
+                  id: "filing-notice",
+                  label: "Filing notice",
+                  icon: <WorkflowIcon size={14} />,
+                  onSelect: () => openNew("filing_due_notify_officer"),
+                },
+                {
+                  id: "conflict-agenda",
+                  label: "Conflict agenda",
+                  icon: <WorkflowIcon size={14} />,
+                  onSelect: () => openNew("conflict_disclosed_agenda_item"),
+                },
+                {
+                  id: "link-n8n-recipes",
+                  label: setupBusy ? "Linking..." : "Link n8n recipes",
+                  icon: <WorkflowIcon size={14} />,
+                  disabled: setupBusy,
+                  onSelect: async () => {
+                    setSetupBusy(true);
+                    try {
+                      const result = await setupGovernanceN8nRecipes({
+                        societyId: society._id,
+                        actingUserId,
+                      });
+                      toast.success("n8n governance recipes linked", `${result.created.length} created, ${result.updated.length} updated`);
+                    } catch (error: any) {
+                      toast.error("Could not link n8n recipes", error?.message);
+                    } finally {
+                      setSetupBusy(false);
+                    }
+                  },
+                },
+              ]}
+            />
             <button className="btn-action btn-action--primary" onClick={() => openNew()}>
               <Plus size={12} /> New workflow
             </button>

@@ -13,6 +13,7 @@ import { RecordTableRow } from "./RecordTableRow";
 import { RecordTableEmpty } from "./RecordTableEmpty";
 import { RecordTableAggregateFooter } from "./RecordTableAggregateFooter";
 import { useRecordTableKeyboardNavigation } from "../hooks/useRecordTableKeyboardNavigation";
+import { useIsMobile } from "../../../../lib/useIsMobile";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
 import { CalendarView } from "../../../../components/CalendarView";
 import { RecordBoard, type RecordBoardColumn } from "../../../../components/RecordBoard";
@@ -111,6 +112,11 @@ export function RecordTable({
 
   const visibleColumns = useMemo(() => columns.filter((c) => c.isVisible), [columns]);
   const hasRowActions = !!renderRowActions;
+  // On phones we drop the selection column so the first data column (the
+  // record name) sits flush left and can be frozen while the rest of the
+  // table scrolls horizontally — the Twenty-style narrow-screen table.
+  const isMobile = useIsMobile();
+  const effectiveSelectable = selectable && !isMobile;
   useRecordTableKeyboardNavigation({ enabled: keyboardNavigation });
 
   useEffect(() => {
@@ -279,7 +285,7 @@ export function RecordTable({
       <div ref={tableRootRef} className={`record-table__scroll ${densityClass}`}>
         <table className="record-table">
           <thead className="record-table__thead">
-            <RecordTableHeader selectable={selectable} hasRowActions={hasRowActions} />
+            <RecordTableHeader selectable={effectiveSelectable} hasRowActions={hasRowActions} />
           </thead>
           <tbody className="record-table__tbody">
             {filtered.map((record: any, i: number) => (
@@ -291,7 +297,7 @@ export function RecordTable({
                 <RecordTableRow
                   record={record}
                   rowIndex={i}
-                  selectable={selectable}
+                  selectable={effectiveSelectable}
                   renderRowActions={renderRowActions}
                   renderCell={renderCell}
                 />
@@ -299,7 +305,7 @@ export function RecordTable({
             ))}
           </tbody>
           {showAggregateFooter && (
-            <RecordTableAggregateFooter selectable={selectable} hasRowActions={hasRowActions} />
+            <RecordTableAggregateFooter selectable={effectiveSelectable} hasRowActions={hasRowActions} />
           )}
         </table>
       </div>
@@ -324,13 +330,13 @@ export function RecordTable({
           TableRow: VirtuosoTableRow,
         }}
         fixedHeaderContent={() => (
-          <RecordTableHeader selectable={selectable} hasRowActions={hasRowActions} />
+          <RecordTableHeader selectable={effectiveSelectable} hasRowActions={hasRowActions} />
         )}
         itemContent={(index, record) => (
           <RecordTableRow
             record={record}
             rowIndex={index}
-            selectable={selectable}
+            selectable={effectiveSelectable}
             renderRowActions={renderRowActions}
             renderCell={renderCell}
           />

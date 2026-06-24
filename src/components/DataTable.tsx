@@ -126,7 +126,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>(prop
     setPage,
     pageSize,
     setPageSize,
-    isMobileCards,
+    isMobile,
     selected,
     hiddenColumns,
     setHiddenColumns,
@@ -168,6 +168,10 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>(prop
     deleteView,
     toggleSort,
   } = useDataTable(props);
+  // On phones: drop the selection column (so the first data column is flush
+  // left) and always freeze that first column while the rest scroll sideways.
+  const showSelectCol = selectable && !isMobile;
+  const stickyFirst = isMobile || visibleColumns.length >= 6;
   return (
     <div className="table-wrap" style={{ position: "relative" }}>
       <ViewBar
@@ -295,86 +299,12 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>(prop
         </div>
       </div>
 
-      {isMobileCards ? (
-        <div className="card-list" role="list" aria-label={label}>
-          {loading ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <div key={`sk-${i}`} className="card-list__item" role="listitem" aria-busy="true">
-                <div className="card-list__primary">
-                  <div className="card-list__primary-cell">
-                    <Skeleton variant="line" width="60%" height={12} />
-                  </div>
-                </div>
-                <div className="card-list__details">
-                  <Skeleton variant="line" width="40%" height={10} />
-                  <Skeleton variant="line" width="30%" height={10} />
-                </div>
-              </div>
-            ))
-          ) : (
-          <>
-          {visibleRows.map((row) => {
-            const primaryCol = visibleColumns[0] ?? columns[0];
-            const secondaryCols = visibleColumns.slice(1);
-            const primaryCell = primaryCol.render
-              ? primaryCol.render(row)
-              : String(primaryCol.accessor?.(row) ?? "");
-            const cardClick = onPrimaryCellClick ?? onRowClick;
-            return (
-              <div
-                key={rowKey(row)}
-                className={`card-list__item${cardClick ? " card-list__item--interactive" : ""}`}
-                role="listitem"
-                onClick={cardClick ? () => cardClick(row) : undefined}
-              >
-                <div className="card-list__primary">
-                  <div className="card-list__primary-cell">{primaryCell}</div>
-                  {renderRowActions && (
-                    <div
-                      className="card-list__actions"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {renderRowActions(row)}
-                    </div>
-                  )}
-                </div>
-                {secondaryCols.length > 0 && (
-                  <div className="card-list__details">
-                    {secondaryCols.map((col) => {
-                      const cell = col.render
-                        ? col.render(row)
-                        : String(col.accessor?.(row) ?? "");
-                      return (
-                        <div key={col.id} className="card-list__detail">
-                          <span className="card-list__detail-label">
-                            {col.header}
-                          </span>
-                          <span className="card-list__detail-value">{cell}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {filtered.length === 0 && (
-            <div className="table__empty">
-              {data.length === 0
-                ? emptyMessage
-                : "No rows match the current filters."}
-            </div>
-          )}
-          </>
-          )}
-        </div>
-      ) : (
-      <TableScrollWrap stickyFirst={visibleColumns.length >= 6}>
-      <table className={`table${density === "comfortable" ? " table--comfortable" : ""}${visibleColumns.length >= 6 ? " table--sticky-first" : ""}`}>
+      <TableScrollWrap stickyFirst={stickyFirst}>
+      <table className={`table${density === "comfortable" ? " table--comfortable" : ""}${stickyFirst ? " table--sticky-first" : ""}`}>
         <caption className="sr-only">{label}</caption>
         <thead>
           <tr>
-            {selectable && (
+            {showSelectCol && (
               <th className="table__select-col">
                 <input
                   type="checkbox"
@@ -439,7 +369,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>(prop
           {loading
             ? Array.from({ length: 6 }).map((_, i) => (
                 <tr key={`sk-${i}`} aria-busy="true">
-                  {selectable && (
+                  {showSelectCol && (
                     <td className="table__select-cell">
                       <Skeleton variant="block" width={14} height={14} radius={3} />
                     </td>
@@ -470,7 +400,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>(prop
               style={{ cursor: onRowClick && rowClickScope === "row" ? "pointer" : undefined }}
               aria-selected={selectable ? isSelected : undefined}
             >
-              {selectable && (
+              {showSelectCol && (
                 <td className="table__select-cell" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
@@ -563,7 +493,6 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>(prop
         </tbody>
       </table>
       </TableScrollWrap>
-      )}
       {selectable && selectedRows.length > 0 && (
         <div className="table-bulkbar" role="region" aria-label="Bulk actions">
           <button
