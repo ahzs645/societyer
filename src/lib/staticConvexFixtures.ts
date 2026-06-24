@@ -1432,6 +1432,112 @@ const policies = [
   },
 ];
 
+const courtOrders = [
+  {
+    _id: "static_court_order_records",
+    societyId: SOCIETY_ID,
+    title: "Member records production order",
+    orderDate: "2025-11-12",
+    court: "BC Supreme Court (Vancouver Registry)",
+    fileNumber: "S-2025-14872",
+    description: "Order to produce the member register and board minutes for the 2024–2025 fiscal year.",
+    status: "Satisfied",
+    notes: "Certified copies delivered to counsel on 2025-11-26.",
+  },
+  {
+    _id: "static_court_order_injunction",
+    societyId: SOCIETY_ID,
+    title: "Interim preservation order",
+    orderDate: "2026-02-03",
+    court: "BC Provincial Court",
+    fileNumber: "P-2026-00421",
+    description: "Preserve all financial records relating to the disputed grant disbursement pending review.",
+    status: "Active",
+    notes: "Review with counsel before the April board meeting.",
+  },
+];
+
+const inspections = [
+  {
+    _id: "static_inspection_member_register",
+    societyId: SOCIETY_ID,
+    inspectorName: "Devon Clarke",
+    isMember: true,
+    recordsRequested: "Member register and director register",
+    inspectedAtISO: "2026-03-09T18:00:00.000Z",
+    feeCents: 0,
+    deliveryMethod: "in-person",
+    notes: "Member inspection of registers; no copies requested.",
+  },
+  {
+    _id: "static_inspection_minutes_copies",
+    societyId: SOCIETY_ID,
+    inspectorName: "Sam Nguyen",
+    isMember: true,
+    recordsRequested: "AGM minutes (2024, 2025)",
+    inspectedAtISO: "2026-04-02T17:30:00.000Z",
+    feeCents: 0,
+    copyPages: 12,
+    copyFeeCents: 600,
+    deliveryMethod: "electronic",
+    notes: "Electronic copies emailed; copy fee invoiced at $0.50/page.",
+  },
+];
+
+const proxies = [
+  {
+    _id: "static_proxy_patel_lee",
+    societyId: SOCIETY_ID,
+    meetingId: MEETING_AGM_ID,
+    grantorName: "Mina Patel",
+    proxyHolderName: "Jordan Lee",
+    instructions: "Vote in favour of the proposed bylaw amendments.",
+    signedAtISO: "2025-06-12T00:00:00.000Z",
+  },
+  {
+    _id: "static_proxy_santos_clarke",
+    societyId: SOCIETY_ID,
+    meetingId: MEETING_AGM_ID,
+    grantorName: "Avery Santos",
+    proxyHolderName: "Devon Clarke",
+    signedAtISO: "2025-06-14T00:00:00.000Z",
+  },
+];
+
+const writtenResolutions = [
+  {
+    _id: "static_written_resolution_banking",
+    societyId: SOCIETY_ID,
+    title: "Update banking signatories",
+    text: "RESOLVED that the treasurer and board chair be authorized as signing officers on all society accounts effective immediately.",
+    kind: "Ordinary",
+    circulatedAtISO: "2026-01-15T00:00:00.000Z",
+    completedAtISO: "2026-01-22T00:00:00.000Z",
+    signatures: [
+      { signerName: "Mina Patel", signedAtISO: "2026-01-16T00:00:00.000Z" },
+      { signerName: "Jordan Lee", signedAtISO: "2026-01-18T00:00:00.000Z" },
+      { signerName: "Devon Clarke", signedAtISO: "2026-01-20T00:00:00.000Z" },
+      { signerName: "Sam Nguyen", signedAtISO: "2026-01-22T00:00:00.000Z" },
+    ],
+    requiredCount: 4,
+    status: "Carried",
+  },
+  {
+    _id: "static_written_resolution_policy",
+    societyId: SOCIETY_ID,
+    title: "Adopt revised privacy policy",
+    text: "RESOLVED that the revised Privacy & PIPA Compliance Policy be adopted as the society's current privacy policy.",
+    kind: "Special",
+    circulatedAtISO: "2026-04-05T00:00:00.000Z",
+    signatures: [
+      { signerName: "Mina Patel", signedAtISO: "2026-04-06T00:00:00.000Z" },
+      { signerName: "Avery Santos", signedAtISO: "2026-04-07T00:00:00.000Z" },
+    ],
+    requiredCount: 4,
+    status: "Circulating",
+  },
+];
+
 const financials = [
   {
     _id: "static_financials_2025",
@@ -2224,7 +2330,7 @@ const tables: Record<string, any[]> = {
   commitmentEvents,
   policies,
   complianceRemediations: [],
-  courtOrders: [],
+  courtOrders,
   deadlines,
   directors,
   documents,
@@ -2434,7 +2540,7 @@ const tables: Record<string, any[]> = {
     },
   ],
   grantOpportunityCandidates: [],
-  inspections: [],
+  inspections,
   meetingMaterials,
   secrets: [
     {
@@ -2950,7 +3056,7 @@ const tables: Record<string, any[]> = {
       expiresAt: "2027-02-12",
     },
   ],
-  proxies: [],
+  proxies,
   receipts: [
     {
       _id: "static_receipt",
@@ -3016,7 +3122,7 @@ const tables: Record<string, any[]> = {
     },
   ],
   volunteerScreenings: [],
-  writtenResolutions: [],
+  writtenResolutions,
 };
 
 function director(id: string, firstName: string, lastName: string, position: string, isBCResident: boolean, consentOnFile: boolean, termStart: string) {
