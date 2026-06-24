@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -26,9 +26,12 @@ import { GrantSummaryStats } from "../features/grants/components/GrantSummarySta
 import { buildCsjOrientationEmailBody } from "../features/grants/lib/csjOrientationEmail";
 import { enrichGcosNormalizedGrant, readGcosExportFile } from "../lib/gcosExportImport";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 
 export function GrantsPage() {
   const society = useSociety();
+  const navigate = useNavigate();
+  const gcosInputRef = useRef<HTMLInputElement>(null);
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const [selectedGrant, setSelectedGrant] = useState<any | null>(null);
@@ -167,53 +170,65 @@ export function GrantsPage() {
         subtitle="Grant pipeline, public intake, reporting deadlines, and restricted-fund ledger tracking."
         actions={
           <>
-            <Link className="btn-action" to="/app/imports">
-              <FileText size={12} /> Review imports
-            </Link>
-            <Link className="btn-action" to="/app/grants/sources">
-              <FileText size={12} /> Source library
-            </Link>
-            <label className="btn-action" style={{ cursor: "pointer" }}>
-              <Upload size={12} /> Import GCOS
-              <input
-                type="file"
-                accept="application/json,application/zip,.json,.zip"
-                onChange={(event) => {
-                  void importGcosGrantFile(event.target.files?.[0]);
-                  event.currentTarget.value = "";
-                }}
-                style={{ display: "none" }}
-              />
-            </label>
-            <button
-              className="btn-action"
-              onClick={() =>
-                setTxnDraft({
-                  societyId: society._id,
-                  grantId: grants?.[0]?._id ?? "",
-                  date: new Date().toISOString().slice(0, 10),
-                  direction: "outflow",
-                  amountDollars: "",
-                  description: "",
-                })
-              }
-            >
-              <FileText size={12} /> Ledger entry
-            </button>
-            <button
-              className="btn-action"
-              onClick={() =>
-                setReportDraft({
-                  societyId: society._id,
-                  grantId: grants?.[0]?._id ?? "",
-                  title: "",
-                  dueAtISO: new Date().toISOString().slice(0, 10),
-                  status: "Upcoming",
-                })
-              }
-            >
-              <FileText size={12} /> New report
-            </button>
+            <input
+              ref={gcosInputRef}
+              type="file"
+              accept="application/json,application/zip,.json,.zip"
+              onChange={(event) => {
+                void importGcosGrantFile(event.target.files?.[0]);
+                event.currentTarget.value = "";
+              }}
+              style={{ display: "none" }}
+            />
+            <MoreActionsMenu
+              items={[
+                {
+                  id: "review-imports",
+                  label: "Review imports",
+                  icon: <FileText size={14} />,
+                  onSelect: () => navigate("/app/imports"),
+                },
+                {
+                  id: "source-library",
+                  label: "Source library",
+                  icon: <FileText size={14} />,
+                  onSelect: () => navigate("/app/grants/sources"),
+                },
+                {
+                  id: "import-gcos",
+                  label: "Import GCOS",
+                  icon: <Upload size={14} />,
+                  onSelect: () => gcosInputRef.current?.click(),
+                },
+                {
+                  id: "ledger-entry",
+                  label: "Ledger entry",
+                  icon: <FileText size={14} />,
+                  onSelect: () =>
+                    setTxnDraft({
+                      societyId: society._id,
+                      grantId: grants?.[0]?._id ?? "",
+                      date: new Date().toISOString().slice(0, 10),
+                      direction: "outflow",
+                      amountDollars: "",
+                      description: "",
+                    }),
+                },
+                {
+                  id: "new-report",
+                  label: "New report",
+                  icon: <FileText size={14} />,
+                  onSelect: () =>
+                    setReportDraft({
+                      societyId: society._id,
+                      grantId: grants?.[0]?._id ?? "",
+                      title: "",
+                      dueAtISO: new Date().toISOString().slice(0, 10),
+                      status: "Upcoming",
+                    }),
+                },
+              ]}
+            />
             <button
               className="btn-action btn-action--primary"
               onClick={() => setGrantDraft(newGrantDraft(society._id))}

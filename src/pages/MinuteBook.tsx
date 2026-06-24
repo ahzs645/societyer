@@ -9,6 +9,7 @@ import { DatePicker } from "../components/DatePicker";
 import { OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { BookOpen, Download, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
@@ -143,8 +144,12 @@ export function MinuteBookPage() {
         subtitle="A legal record spine tying documents, meetings, minutes, resolutions, filings, signatures, policies, and workflow packages together."
         actions={
           <>
-            <Button variant="ghost" icon={<Download size={14} />} onClick={() => runExport("html")}>Export HTML</Button>
-            <Button variant="ghost" icon={<Download size={14} />} onClick={() => runExport("csv")}>Export CSV</Button>
+            <MoreActionsMenu
+              items={[
+                { id: "export-html", label: "Export HTML", icon: <Download size={14} />, onSelect: () => runExport("html") },
+                { id: "export-csv", label: "Export CSV", icon: <Download size={14} />, onSelect: () => runExport("csv") },
+              ]}
+            />
             <Button variant="accent" icon={<Plus size={14} />} onClick={openNew}>New record</Button>
           </>
         }

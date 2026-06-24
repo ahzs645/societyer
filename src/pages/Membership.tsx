@@ -6,6 +6,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Select } from "../components/Select";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { useToast } from "../components/Toast";
 import { centsToDollarInput, dollarInputToCents, money, formatDate } from "../lib/format";
 import {
@@ -124,12 +125,12 @@ export function MembershipPage() {
         subtitle="Fee tiers, dated member-fee history, self-serve signup and renewal. Stripe Checkout in live mode; demo mode simulates the full lifecycle."
         actions={
           <>
-            <button className="btn-action" onClick={() => setLevyImportOpen(true)}>
-              <Upload size={12} /> Import levy
-            </button>
-            <button className="btn-action" onClick={() => setFeeDraft(newFeeDraft())}>
-              <CalendarClock size={12} /> Add fee period
-            </button>
+            <MoreActionsMenu
+              items={[
+                { id: "import-levy", label: "Import levy", icon: <Upload size={14} />, onSelect: () => setLevyImportOpen(true) },
+                { id: "add-fee-period", label: "Add fee period", icon: <CalendarClock size={14} />, onSelect: () => setFeeDraft(newFeeDraft()) },
+              ]}
+            />
             <button
               className="btn-action btn-action--primary"
               onClick={() =>

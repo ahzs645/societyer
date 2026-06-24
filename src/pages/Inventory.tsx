@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import {
   AlertTriangle,
@@ -46,9 +46,11 @@ import {
 } from "./inventory/helpers";
 import { CountEntry, Stat, TabButton } from "./inventory/components";
 import { CountsTab, LocationsTab, LotsTab, StockTab } from "./inventory/tabs";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 
 export function InventoryPage() {
   const society = useSociety();
+  const navigate = useNavigate();
   const toast = useToast();
   const confirm = useConfirm();
   const actingUserId = useCurrentUserId() ?? undefined;
@@ -513,11 +515,15 @@ export function InventoryPage() {
         routeKey="/app/inventory"
         actions={
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <button className="btn-action" onClick={runBackfill}><RefreshCw size={12} /> Backfill assets</button>
-            <button className="btn-action" onClick={() => setDrawer("openboxes")}><Boxes size={12} /> OpenBoxes import</button>
-            <button className="btn-action" onClick={() => { setMovementForm(emptyMovementForm()); setDrawer("movement"); }}><Plus size={12} /> New movement</button>
+            <MoreActionsMenu
+              items={[
+                { id: "backfill-assets", label: "Backfill assets", icon: <RefreshCw size={14} />, onSelect: runBackfill },
+                { id: "openboxes-import", label: "OpenBoxes import", icon: <Boxes size={14} />, onSelect: () => setDrawer("openboxes") },
+                { id: "new-movement", label: "New movement", icon: <Plus size={14} />, onSelect: () => { setMovementForm(emptyMovementForm()); setDrawer("movement"); } },
+                { id: "assets", label: "Assets", icon: <ArrowLeft size={14} />, onSelect: () => navigate("/app/assets") },
+              ]}
+            />
             <button className="btn-action btn-action--primary" onClick={openNewItem}><Plus size={12} /> New item</button>
-            <Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link>
           </div>
         }
       />

@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -11,6 +10,7 @@ import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import {
   RecordTable,
   RecordTableScope,
@@ -97,63 +97,66 @@ export function TransparencyPage() {
         subtitle="Publish board info, bylaws, annual reports, AGM materials, and contact details without exposing the private workspace."
         actions={
           <>
-            {publicPageLive ? (
-              <>
-                <Link className="btn-action" to={publicHref} target="_blank" rel="noreferrer">
-                  <Globe size={12} /> View public page
-                </Link>
-                <button
-                  className="btn-action"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(absolutePublicHref);
-                      toast.success("Public link copied");
-                    } catch {
-                      toast.error("Could not copy the link in this browser");
-                    }
-                  }}
-                >
-                  <Copy size={12} /> Copy link
-                </button>
-              </>
-            ) : (
-              <button className="btn-action" type="button" disabled title="Enable the public page before sharing this link.">
-                <Globe size={12} /> Public page disabled
-              </button>
-            )}
-            <button
-              className="btn-action"
-              onClick={() => setSettingsDraft({
-                id: society._id,
-                name: society.name,
-                incorporationNumber: society.incorporationNumber,
-                incorporationDate: society.incorporationDate,
-                fiscalYearEnd: society.fiscalYearEnd,
-                isCharity: society.isCharity,
-                isMemberFunded: society.isMemberFunded,
-                registeredOfficeAddress: society.registeredOfficeAddress,
-                mailingAddress: society.mailingAddress,
-                purposes: society.purposes,
-                privacyOfficerName: society.privacyOfficerName,
-                privacyOfficerEmail: society.privacyOfficerEmail,
-                boardCadence: society.boardCadence,
-                boardCadenceDayOfWeek: society.boardCadenceDayOfWeek,
-                boardCadenceTime: society.boardCadenceTime,
-                boardCadenceNotes: society.boardCadenceNotes,
-                publicSlug: society.publicSlug ?? society.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-                publicSummary: society.publicSummary ?? society.purposes ?? "",
-                publicContactEmail: society.publicContactEmail ?? society.privacyOfficerEmail ?? "",
-                publicTransparencyEnabled: society.publicTransparencyEnabled ?? true,
-                publicShowBoard: society.publicShowBoard ?? true,
-                publicShowBylaws: society.publicShowBylaws ?? true,
-                publicShowFinancials: society.publicShowFinancials ?? true,
-                publicVolunteerIntakeEnabled: society.publicVolunteerIntakeEnabled ?? false,
-                publicGrantIntakeEnabled: society.publicGrantIntakeEnabled ?? false,
-                demoMode: society.demoMode,
-              })}
-            >
-              <Save size={12} /> Edit settings
-            </button>
+            <MoreActionsMenu
+              items={[
+                ...(publicPageLive
+                  ? [
+                      {
+                        id: "view-public",
+                        label: "View public page",
+                        icon: <Globe size={14} />,
+                        onSelect: () => window.open(publicHref, "_blank", "noreferrer"),
+                      },
+                      {
+                        id: "copy-link",
+                        label: "Copy link",
+                        icon: <Copy size={14} />,
+                        onSelect: async () => {
+                          try {
+                            await navigator.clipboard.writeText(absolutePublicHref);
+                            toast.success("Public link copied");
+                          } catch {
+                            toast.error("Could not copy the link in this browser");
+                          }
+                        },
+                      },
+                    ]
+                  : []),
+                {
+                  id: "edit-settings",
+                  label: "Edit settings",
+                  icon: <Save size={14} />,
+                  onSelect: () => setSettingsDraft({
+                    id: society._id,
+                    name: society.name,
+                    incorporationNumber: society.incorporationNumber,
+                    incorporationDate: society.incorporationDate,
+                    fiscalYearEnd: society.fiscalYearEnd,
+                    isCharity: society.isCharity,
+                    isMemberFunded: society.isMemberFunded,
+                    registeredOfficeAddress: society.registeredOfficeAddress,
+                    mailingAddress: society.mailingAddress,
+                    purposes: society.purposes,
+                    privacyOfficerName: society.privacyOfficerName,
+                    privacyOfficerEmail: society.privacyOfficerEmail,
+                    boardCadence: society.boardCadence,
+                    boardCadenceDayOfWeek: society.boardCadenceDayOfWeek,
+                    boardCadenceTime: society.boardCadenceTime,
+                    boardCadenceNotes: society.boardCadenceNotes,
+                    publicSlug: society.publicSlug ?? society.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+                    publicSummary: society.publicSummary ?? society.purposes ?? "",
+                    publicContactEmail: society.publicContactEmail ?? society.privacyOfficerEmail ?? "",
+                    publicTransparencyEnabled: society.publicTransparencyEnabled ?? true,
+                    publicShowBoard: society.publicShowBoard ?? true,
+                    publicShowBylaws: society.publicShowBylaws ?? true,
+                    publicShowFinancials: society.publicShowFinancials ?? true,
+                    publicVolunteerIntakeEnabled: society.publicVolunteerIntakeEnabled ?? false,
+                    publicGrantIntakeEnabled: society.publicGrantIntakeEnabled ?? false,
+                    demoMode: society.demoMode,
+                  }),
+                },
+              ]}
+            />
             <button
               className="btn-action btn-action--primary"
               onClick={() =>

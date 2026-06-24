@@ -6,6 +6,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { Mail, Plus, Send, Settings2 } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
@@ -308,53 +309,55 @@ export function CommunicationsPage() {
         subtitle="Templated notices, campaign history, member contact preferences, and proof-of-notice delivery logs."
         actions={
           <>
-            <button
-              className="btn-action"
-              onClick={async () => {
-                const result = await ensureDefaults({ societyId: society._id });
-                toast.success(
-                  result.created === 0
-                    ? "Default templates already installed"
-                    : `Installed ${result.created} default template${result.created === 1 ? "" : "s"}`,
-                );
-              }}
-            >
-              <Settings2 size={12} /> Install defaults
-            </button>
-            <button
-              className="btn-action"
-              onClick={() =>
-                setSegmentDraft({
-                  societyId: society._id,
-                  name: "",
-                  description: "",
-                  includeAudience: "all_members",
-                  votingRightsOnly: false,
-                  hasEmail: false,
-                  hasPhone: false,
-                })
-              }
-            >
-              <Plus size={12} /> New segment
-            </button>
-            <button
-              className="btn-action"
-              onClick={() =>
-                setTemplateDraft({
-                  societyId: society._id,
-                  name: "",
-                  slug: "",
-                  kind: "notice",
-                  channel: "email",
-                  audience: "all_members",
-                  subject: "",
-                  bodyText: "",
-                  system: false,
-                })
-              }
-            >
-              <Plus size={12} /> New template
-            </button>
+            <MoreActionsMenu
+              items={[
+                {
+                  id: "install-defaults",
+                  label: "Install defaults",
+                  icon: <Settings2 size={14} />,
+                  onSelect: async () => {
+                    const result = await ensureDefaults({ societyId: society._id });
+                    toast.success(
+                      result.created === 0
+                        ? "Default templates already installed"
+                        : `Installed ${result.created} default template${result.created === 1 ? "" : "s"}`,
+                    );
+                  },
+                },
+                {
+                  id: "new-segment",
+                  label: "New segment",
+                  icon: <Plus size={14} />,
+                  onSelect: () =>
+                    setSegmentDraft({
+                      societyId: society._id,
+                      name: "",
+                      description: "",
+                      includeAudience: "all_members",
+                      votingRightsOnly: false,
+                      hasEmail: false,
+                      hasPhone: false,
+                    }),
+                },
+                {
+                  id: "new-template",
+                  label: "New template",
+                  icon: <Plus size={14} />,
+                  onSelect: () =>
+                    setTemplateDraft({
+                      societyId: society._id,
+                      name: "",
+                      slug: "",
+                      kind: "notice",
+                      channel: "email",
+                      audience: "all_members",
+                      subject: "",
+                      bodyText: "",
+                      system: false,
+                    }),
+                },
+              ]}
+            />
             <button
               className="btn-action btn-action--primary"
               onClick={() =>

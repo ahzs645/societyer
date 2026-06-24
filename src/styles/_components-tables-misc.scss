@@ -444,4 +444,11 @@ select.editable-cell__input {
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* Decorative avatar tiles inside table cells (RecordChip initials) are noise
+   * on a phone — the label text carries the meaning. Hide them so the first
+   * column is tighter and rows line up. */
+  .record-table .record-chip__avatar,
+  .table .record-chip__avatar {
+    display: none;
+  }
 }
