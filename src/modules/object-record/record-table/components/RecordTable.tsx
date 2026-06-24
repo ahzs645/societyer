@@ -111,12 +111,14 @@ export function RecordTable({
   const virtuosoRef = useRef<TableVirtuosoHandle>(null);
 
   const visibleColumns = useMemo(() => columns.filter((c) => c.isVisible), [columns]);
-  const hasRowActions = !!renderRowActions;
+  const hasOpenRecordAction = !!onRecordClick;
+  const hasRowActions = !!renderRowActions || hasOpenRecordAction;
   // On phones we drop the selection column so the first data column (the
   // record name) sits flush left and can be frozen while the rest of the
   // table scrolls horizontally — the Twenty-style narrow-screen table.
   const isMobile = useIsMobile();
   const effectiveSelectable = selectable && !isMobile;
+  const showDragHandle = !isMobile;
   useRecordTableKeyboardNavigation({ enabled: keyboardNavigation });
 
   useEffect(() => {
@@ -138,8 +140,11 @@ export function RecordTable({
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
       const root = tableRootRef.current;
+      const target = event.target as HTMLElement | null;
       if (!root || root.contains(event.target as Node)) return;
+      if (target?.closest(".record-table__cell-editor-popover")) return;
       handle.get().setFocusedCell(null);
+      handle.get().setEditingInitialValue(undefined);
       handle.get().setEditingCell(null);
     };
     window.addEventListener("pointerdown", onPointerDown);
@@ -285,7 +290,7 @@ export function RecordTable({
       <div ref={tableRootRef} className={`record-table__scroll ${densityClass}`}>
         <table className="record-table">
           <thead className="record-table__thead">
-            <RecordTableHeader selectable={effectiveSelectable} hasRowActions={hasRowActions} />
+            <RecordTableHeader selectable={effectiveSelectable} hasRowActions={hasRowActions} showDragHandle={showDragHandle} />
           </thead>
           <tbody className="record-table__tbody">
             {filtered.map((record: any, i: number) => (
@@ -298,14 +303,16 @@ export function RecordTable({
                   record={record}
                   rowIndex={i}
                   selectable={effectiveSelectable}
+                  showDragHandle={showDragHandle}
                   renderRowActions={renderRowActions}
+                  showOpenRecordAction={hasOpenRecordAction}
                   renderCell={renderCell}
                 />
               </tr>
             ))}
           </tbody>
           {showAggregateFooter && (
-            <RecordTableAggregateFooter selectable={effectiveSelectable} hasRowActions={hasRowActions} />
+            <RecordTableAggregateFooter selectable={effectiveSelectable} hasRowActions={hasRowActions} showDragHandle={showDragHandle} />
           )}
         </table>
       </div>
@@ -330,14 +337,16 @@ export function RecordTable({
           TableRow: VirtuosoTableRow,
         }}
         fixedHeaderContent={() => (
-          <RecordTableHeader selectable={effectiveSelectable} hasRowActions={hasRowActions} />
+          <RecordTableHeader selectable={effectiveSelectable} hasRowActions={hasRowActions} showDragHandle={showDragHandle} />
         )}
         itemContent={(index, record) => (
           <RecordTableRow
             record={record}
             rowIndex={index}
             selectable={effectiveSelectable}
+            showDragHandle={showDragHandle}
             renderRowActions={renderRowActions}
+            showOpenRecordAction={hasOpenRecordAction}
             renderCell={renderCell}
           />
         )}

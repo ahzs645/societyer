@@ -108,6 +108,8 @@ export type RecordTableState = {
   setFocusedCell: (pos: CellPosition | null) => void;
   editingCell: CellPosition | null;
   setEditingCell: (pos: CellPosition | null) => void;
+  editingInitialValue?: string;
+  setEditingInitialValue: (value?: string) => void;
 
   /* loaded records */
   records: any[];
@@ -151,6 +153,7 @@ export function createRecordTableStore(opts: {
     hoverPosition: null,
     focusedCell: null,
     editingCell: null,
+    editingInitialValue: undefined,
     records: [],
     savedView: null,
 
@@ -208,7 +211,8 @@ export function createRecordTableStore(opts: {
 
     setHoverPosition: (pos) => set({ hoverPosition: pos }),
     setFocusedCell: (pos) => set({ focusedCell: pos }),
-    setEditingCell: (pos) => set({ editingCell: pos }),
+    setEditingCell: (pos) => set({ editingCell: pos, editingInitialValue: pos ? get().editingInitialValue : undefined }),
+    setEditingInitialValue: (value) => set({ editingInitialValue: value }),
 
     setRecords: (records) => set({ records }),
 

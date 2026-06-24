@@ -6,9 +6,11 @@ import { aggregateRecordValues } from "../utils/aggregateOperations";
 export function RecordTableAggregateFooter({
   selectable,
   hasRowActions,
+  showDragHandle = false,
 }: {
   selectable: boolean;
   hasRowActions: boolean;
+  showDragHandle?: boolean;
 }) {
   const columns = useRecordTableState((state) => state.columns);
   const visibleColumns = useMemo(() => columns.filter((column) => column.isVisible), [columns]);
@@ -19,6 +21,7 @@ export function RecordTableAggregateFooter({
   return (
     <tfoot className="record-table__tfoot">
       <tr className="record-table__footer-row">
+        {showDragHandle && <td className="record-table__footer-cell record-table__drag-cell" />}
         {selectable && <td className="record-table__footer-cell record-table__checkbox-cell" />}
         {visibleColumns.map((column, index) => (
           <td

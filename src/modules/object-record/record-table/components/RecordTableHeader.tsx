@@ -10,9 +10,11 @@ import { useFilteredRecords } from "../hooks/useFilteredRecords";
 export function RecordTableHeader({
   selectable,
   hasRowActions = false,
+  showDragHandle = false,
 }: {
   selectable: boolean;
   hasRowActions?: boolean;
+  showDragHandle?: boolean;
 }) {
   const columns = useRecordTableState((s) => s.columns);
   const selected = useRecordTableState((s) => s.selectedRecordIds);
@@ -42,6 +44,7 @@ export function RecordTableHeader({
 
   return (
     <tr className="record-table__header-row">
+      {showDragHandle && <th className="record-table__drag-head" aria-hidden="true" />}
       {selectable && (
         <th className="record-table__checkbox-cell" style={{ width: 36 }}>
           <input

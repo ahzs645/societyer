@@ -40,9 +40,17 @@ export class RecordTablePage {
     );
     await cell.click();
     await this.page.keyboard.press("Enter");
-    const input = this.page.locator(".record-table__cell input, .record-table__cell textarea").first();
+    const input = this.page.locator(".record-table__cell-editor-popover input, .record-table__cell-editor-popover textarea").first();
     await input.fill(value);
     await this.page.keyboard.press("Enter");
+  }
+
+  async focusCell(rowIndex: number, columnIndex: number) {
+    const cell = this.page.locator(
+      `.record-table__row[data-row-index="${rowIndex}"] .record-table__cell[data-column-index="${columnIndex}"]`,
+    );
+    await cell.click();
+    await expect(cell).toHaveClass(/record-table__cell--focused/);
   }
 
   async focusFirstCell() {
@@ -65,6 +73,6 @@ export class RecordTablePage {
 
   async enterEditMode() {
     await this.page.keyboard.press("Enter");
-    await expect(this.page.locator(".record-table__cell input, .record-table__cell textarea, .record-table__cell select").first()).toBeVisible();
+    await expect(this.page.locator(".record-table__cell-editor-popover input, .record-table__cell-editor-popover textarea, .record-table__cell-editor-popover select").first()).toBeVisible();
   }
 }

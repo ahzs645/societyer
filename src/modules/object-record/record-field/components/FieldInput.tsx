@@ -15,12 +15,13 @@ export type FieldInputProps = {
   field: FieldMetadata;
   onCommit: (value: unknown) => void;
   onCancel: () => void;
+  initialValue?: string;
 };
 
 type InputComponent = ComponentType<FieldInputProps>;
 
-function TextInput({ value, onCommit, onCancel, field }: FieldInputProps) {
-  const [draft, setDraft] = useState<string>(value == null ? "" : String(value));
+function TextInput({ value, onCommit, onCancel, field, initialValue }: FieldInputProps) {
+  const [draft, setDraft] = useState<string>(initialValue ?? (value == null ? "" : String(value)));
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => {
     ref.current?.focus();
@@ -46,8 +47,8 @@ function TextInput({ value, onCommit, onCancel, field }: FieldInputProps) {
   );
 }
 
-function NumberInput({ value, onCommit, onCancel, field }: FieldInputProps) {
-  const [draft, setDraft] = useState<string>(value == null ? "" : String(value));
+function NumberInput({ value, onCommit, onCancel, field, initialValue }: FieldInputProps) {
+  const [draft, setDraft] = useState<string>(initialValue ?? (value == null ? "" : String(value)));
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => {
     ref.current?.focus();
@@ -113,7 +114,7 @@ function SelectInput({ value, onCommit, onCancel, field }: FieldInputProps) {
   // Anchor to the parent cell so the dropdown aligns to the column,
   // not just the little placeholder span we render inline.
   useLayoutEffect(() => {
-    const cell = anchorRef.current?.closest("td");
+    const cell = anchorRef.current?.closest("[data-record-cell-editor-anchor], td");
     if (!cell) return;
     const r = cell.getBoundingClientRect();
     setAnchorRect({ top: r.top, bottom: r.bottom, left: r.left, width: r.width });
