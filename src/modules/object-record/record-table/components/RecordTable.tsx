@@ -10,9 +10,11 @@ import { useFilteredRecords } from "../hooks/useFilteredRecords";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { RecordTableHeader } from "./RecordTableHeader";
 import { RecordTableRow } from "./RecordTableRow";
+import { RecordTableCardList } from "./RecordTableCardList";
 import { RecordTableEmpty } from "./RecordTableEmpty";
 import { RecordTableAggregateFooter } from "./RecordTableAggregateFooter";
 import { useRecordTableKeyboardNavigation } from "../hooks/useRecordTableKeyboardNavigation";
+import { useIsMobileCards } from "../../../../lib/useIsMobileCards";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
 import { CalendarView } from "../../../../components/CalendarView";
 import { RecordBoard, type RecordBoardColumn } from "../../../../components/RecordBoard";
@@ -111,6 +113,7 @@ export function RecordTable({
 
   const visibleColumns = useMemo(() => columns.filter((c) => c.isVisible), [columns]);
   const hasRowActions = !!renderRowActions;
+  const isMobileCards = useIsMobileCards();
   useRecordTableKeyboardNavigation({ enabled: keyboardNavigation });
 
   useEffect(() => {
@@ -268,6 +271,21 @@ export function RecordTable({
           onSelect={(record) => onRecordClick?.(String(record._id), record)}
         />
       </div>
+    );
+  }
+
+  // On phones the wide table is unusable (horizontal scroll, tiny cells), so
+  // we render a metadata-driven stacked card list instead — same visible
+  // columns, same FieldDisplay, just laid out vertically. Applies to the
+  // standard table view only; kanban/calendar handle small screens above.
+  if (isMobileCards) {
+    return (
+      <RecordTableCardList
+        records={filtered}
+        selectable={selectable}
+        renderRowActions={renderRowActions}
+        renderCell={renderCell}
+      />
     );
   }
 
