@@ -134,16 +134,45 @@ export function ycnMutationResult(
     const { _id: _sid2, _creationTime: _sct, ...fields } = source as Record<string, unknown>;
     void _sid2; void _sct;
     store?.upsertRow("societies", { ...fields, _id: newId, name: args?.newName, incorporationNumber: undefined, updatedAtISO: new Date().toISOString() });
-    let copied = 0;
-    for (const table of ["roleHolders", "organizationAddresses", "organizationRegistrations", "rightsClasses", "serviceProviders", "societyNameHistory", "constatingEvents", "shareCertificates", "annualFilingLedger", "entitySigners"]) {
+    // Pass 1: copy every child register, recording old→new Id (mirrors
+    // convex/society.ts CLONE_CHILD_TABLES + two-pass remap).
+    const idMap = new Map<string, string>();
+    const inserted: Array<{ table: string; newRowId: string }> = [];
+    for (const table of [
+      "roleHolders", "organizationAddresses", "organizationRegistrations",
+      "rightsClasses", "rightsHoldings", "rightsholdingTransfers", "dividends",
+      "assets", "assetEvents", "significantIndividualSteps", "serviceProviders",
+      "societyNameHistory", "constatingEvents", "shareCertificates",
+      "annualFilingLedger", "entitySigners",
+    ]) {
       for (const row of store?.listRows(table, { societyId: args?.sourceSocietyId }) ?? []) {
         const { _id: rid, _creationTime: rct, ...rest } = row as Record<string, unknown>;
-        void rid; void rct;
-        store?.upsertRow(table, { ...rest, _id: staticLocalId(table, "create"), societyId: newId });
-        copied += 1;
+        void rct;
+        const newRowId = staticLocalId(table, "create");
+        store?.upsertRow(table, { ...rest, _id: newRowId, societyId: newId });
+        idMap.set(String(rid), newRowId);
+        inserted.push({ table, newRowId });
       }
     }
-    return { societyId: newId, copiedRows: copied };
+    // Pass 2: rewrite intra-clone Id references to the cloned rows.
+    const remap = (value: unknown): unknown => {
+      if (typeof value === "string") return idMap.get(value) ?? value;
+      if (Array.isArray(value)) return value.map((i) => (typeof i === "string" ? idMap.get(i) ?? i : i));
+      return value;
+    };
+    for (const { table, newRowId } of inserted) {
+      const row = store?.getRow(table, newRowId) as Record<string, unknown> | undefined;
+      if (!row) continue;
+      let changed = false;
+      const next: Record<string, unknown> = { ...row };
+      for (const [key, value] of Object.entries(row)) {
+        if (key === "_id" || key === "_creationTime" || key === "societyId") continue;
+        const remapped = remap(value);
+        if (remapped !== value) { next[key] = remapped; changed = true; }
+      }
+      if (changed) store?.upsertRow(table, next);
+    }
+    return { societyId: newId, copiedRows: inserted.length };
   }
   return YCN_NOT_HANDLED;
 }

@@ -478,13 +478,21 @@ export const updateModules = mutation({
 });
 
 // Deep-clone a society's records into a new society (YCN Copy_Entity_*): copies
-// the society row + a curated set of child registers under a fresh societyId.
-// Useful for onboarding a similar entity or spinning up from a template.
+// the society row + every child register that carries entity-scoped history
+// under a fresh societyId. Includes the equity ledger (holdings + transfers),
+// dividends, assets (+ events), and the transparency diligence steps — without
+// these a clone silently loses the share/dividend/asset/SI history.
 const CLONE_CHILD_TABLES = [
   "roleHolders",
   "organizationAddresses",
   "organizationRegistrations",
   "rightsClasses",
+  "rightsHoldings",
+  "rightsholdingTransfers",
+  "dividends",
+  "assets",
+  "assetEvents",
+  "significantIndividualSteps",
   "serviceProviders",
   "societyNameHistory",
   "constatingEvents",
@@ -492,6 +500,24 @@ const CLONE_CHILD_TABLES = [
   "annualFilingLedger",
   "entitySigners",
 ] as const;
+
+/**
+ * Remap a single field value through the old→new Id map. Cloned rows reference
+ * each other by Convex Id (e.g. rightsHoldings.rightsClassId → rightsClasses);
+ * a flat copy would leave those references pointing at the SOURCE society. We
+ * remap any value (scalar or array element) that is an Id of a row we cloned;
+ * cross-tenant Ids we did NOT clone (e.g. directoryPersonId → peopleDirectory,
+ * sourceDocumentIds → documents) are absent from the map and pass through.
+ */
+function remapValue(value: unknown, idMap: Map<string, string>): unknown {
+  if (typeof value === "string") {
+    return idMap.get(value) ?? value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => (typeof item === "string" ? idMap.get(item) ?? item : item));
+  }
+  return value;
+}
 
 export const cloneSociety = mutation({
   args: { sourceSocietyId: v.id("societies"), newName: v.string(), nowISO: v.string() },
@@ -512,7 +538,10 @@ export const cloneSociety = mutation({
       updatedAt: Date.now(),
     });
 
-    let copied = 0;
+    // Pass 1: insert every child row under the new society, recording the
+    // old→new Id mapping. Cross-references are not yet rewritten.
+    const idMap = new Map<string, string>();
+    const inserted: Array<{ table: (typeof CLONE_CHILD_TABLES)[number]; newId: string }> = [];
     for (const table of CLONE_CHILD_TABLES) {
       const rows = await ctx.db
         .query(table)
@@ -520,13 +549,29 @@ export const cloneSociety = mutation({
         .collect();
       for (const row of rows) {
         const { _id: rid, _creationTime: rct, ...fields } = row as Record<string, unknown>;
-        void rid;
         void rct;
-        await ctx.db.insert(table, { ...(fields as any), societyId: newSocietyId });
-        copied += 1;
+        const newId = await ctx.db.insert(table, { ...(fields as any), societyId: newSocietyId });
+        idMap.set(String(rid), newId as unknown as string);
+        inserted.push({ table, newId: newId as unknown as string });
       }
     }
-    return { societyId: newSocietyId, copiedRows: copied };
+
+    // Pass 2: rewrite intra-clone Id references now that the full map exists, so
+    // cloned holdings/transfers/asset-events point at the cloned rows, not the
+    // source society's. Only patch rows that actually carry a remapped value.
+    for (const { newId } of inserted) {
+      const row = (await ctx.db.get(newId as any)) as Record<string, unknown> | null;
+      if (!row) continue;
+      const patch: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(row)) {
+        if (key === "_id" || key === "_creationTime" || key === "societyId") continue;
+        const remapped = remapValue(value, idMap);
+        if (remapped !== value) patch[key] = remapped;
+      }
+      if (Object.keys(patch).length > 0) await ctx.db.patch(newId as any, patch);
+    }
+
+    return { societyId: newSocietyId, copiedRows: inserted.length };
   },
 });
 

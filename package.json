@@ -96,6 +96,7 @@
     "test:society-packets": "tsx scripts/check-society-packets.ts",
     "test:society-packet-seeding": "tsx scripts/check-society-packet-seeding.ts",
     "test:entity-packet-autoseed": "tsx scripts/check-entity-packet-autoseed.ts",
+    "test:clone-society": "tsx scripts/check-clone-society.ts",
     "test:generate-from-catalog": "tsx scripts/check-generate-from-catalog.ts",
     "test:dividends": "tsx scripts/check-dividends.ts",
     "test:service-providers": "tsx scripts/check-service-providers.ts",
