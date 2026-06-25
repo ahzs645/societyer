@@ -546,14 +546,21 @@ export function Layout() {
   const pinnedNav = useMemo(() => getPinnedNav(pinnedRoutes), [pinnedRoutes]);
   const groupedNav = useMemo(() => getGroupedNav(pinnedRouteSet), [pinnedRouteSet]);
   const entityKind = useMemo(() => (society ? organizationKind(society as any) : null), [society]);
+  // The firm-wide Portfolio rolls up multiple entities; with a single entity it
+  // has nothing to aggregate, so hide its sidebar nav item (the switcher's
+  // "All entities" row is gated the same way).
+  const isMultiEntity = (societies?.length ?? 0) > 1;
+  const navAllowedForEntityCount = (item: NavItem) =>
+    item.to !== "/app/portfolio" || isMultiEntity;
   const visiblePinnedNav = useMemo(
     () =>
       pinnedNav.filter(
         (item) =>
           (!item.module || isModuleEnabled(society, item.module)) &&
-          routeAllowedForEntityKind(item, entityKind),
+          routeAllowedForEntityKind(item, entityKind) &&
+          navAllowedForEntityCount(item),
       ),
-    [pinnedNav, society, entityKind],
+    [pinnedNav, society, entityKind, isMultiEntity],
   );
 
   // Resolve pinned command IDs into runnable commands. Commands whose ID isn't
@@ -574,10 +581,11 @@ export function Layout() {
         items: group.items.filter(
         (item) =>
           (!item.module || isModuleEnabled(society, item.module)) &&
-          routeAllowedForEntityKind(item, entityKind),
+          routeAllowedForEntityKind(item, entityKind) &&
+          navAllowedForEntityCount(item),
       ),
       })).filter((group) => group.items.length > 0),
-    [groupedNav, society, entityKind],
+    [groupedNav, society, entityKind, isMultiEntity],
   );
   const getNavItemLabel = (item: NavItem) => t(NAV_ITEM_LABEL_KEYS[item.label] ?? item.label, item.label);
   const isSidebarCollapsed = isMobileNav ? !mobileSidebarOpen : collapsed;
@@ -1175,35 +1183,37 @@ export function Layout() {
             <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
               <strong style={{ fontSize: "var(--fs-md)" }}>{t("sidebar.workspaces")}</strong>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setWorkspaceOpen(false);
-                navigate("/app/portfolio");
-              }}
-              style={{
-                width: "100%",
-                textAlign: "left",
-                padding: "10px 12px",
-                border: "none",
-                borderBottom: "1px solid var(--border)",
-                background: "var(--bg-panel)",
-                color: "inherit",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                flexShrink: 0,
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-panel)"; }}
-            >
-              <Layers size={15} />
-              <span style={{ flex: 1 }}>
-                <strong style={{ fontSize: "var(--fs-md)" }}>{t("sidebar.viewAllEntities")}</strong>
-                <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{t("sidebar.viewAllEntitiesHint")}</div>
-              </span>
-            </button>
+            {societies.length > 1 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setWorkspaceOpen(false);
+                  navigate("/app/portfolio");
+                }}
+                style={{
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "10px 12px",
+                  border: "none",
+                  borderBottom: "1px solid var(--border)",
+                  background: "var(--bg-panel)",
+                  color: "inherit",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexShrink: 0,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-panel)"; }}
+              >
+                <Layers size={15} />
+                <span style={{ flex: 1 }}>
+                  <strong style={{ fontSize: "var(--fs-md)" }}>{t("sidebar.viewAllEntities")}</strong>
+                  <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{t("sidebar.viewAllEntitiesHint")}</div>
+                </span>
+              </button>
+            )}
             <div style={{ overflowY: "auto", minHeight: 0 }}>
               {societies.map((s: any) => {
                 const active = s._id === society?._id;
