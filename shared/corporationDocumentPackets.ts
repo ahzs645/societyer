@@ -82,7 +82,7 @@ export const CORPORATION_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
         heading: "Director Appointment",
         body: [
           "The corporation records the appointment or election of the director and confirms the effective date.",
-          "The entering director consents to act and provides required service and residential address information.",
+          "{#if appointment.hasDirectors}The directors of record are:{#each appointment.directors} {.name}{#if .term} ({.term}){/if};{/each}{#else}The entering director consents to act and provides required service and residential address information.{/if}",
         ],
       },
     ],
@@ -107,7 +107,7 @@ export const CORPORATION_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
       {
         heading: "Officer Appointment",
         body: [
-          "The board appoints the officer to the stated title and confirms any authority attached to that office.",
+          "{#if appointment.hasOfficers}The board confirms the following officers:{#each appointment.officers} {.name} as {.title};{/each}{#else}The board appoints the officer to the stated title and confirms any authority attached to that office.{/if}",
           "The officer register and signing authority schedule are updated with the effective date.",
         ],
       },
@@ -275,7 +275,8 @@ export const CORPORATION_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
       {
         heading: "Share Transfer",
         body: [
-          "Being {#if dir.isSole}the sole director{/if}{#if dir.isMultiple}all the directors{/if} of {org.shortName}, the director{dir.plural} approve{dir.verbS} the transfer of the stated number of {ShareClass} shares from the transferor to the transferee.",
+          "Being {#if dir.isSole}the sole director{/if}{#if dir.isMultiple}all the directors{/if} of {org.shortName}, the director{dir.plural} approve{dir.verbS} the following share transfer{#if transfer.hasTransfers}s{/if}.",
+          "{#if transfer.hasTransfers}{#each transfer.transfers}{.quantity} {.className} share(s) from {.from} to {.to}{#if .date} on {.date}{/if}. {/each}{#else}The stated number of shares are transferred from the transferor to the transferee.{/if}",
           "The certificate previously issued to the transferor is cancelled and a new certificate is issued to the transferee for the transferred shares.",
           "The securities register and transfer register of {org.shortName} are updated to record the transfer effective {date.long}.",
         ],
@@ -302,7 +303,8 @@ export const CORPORATION_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
       {
         heading: "Certificate Issuance",
         body: [
-          "Being {#if dir.isSole}the sole director{/if}{#if dir.isMultiple}all the directors{/if} of {org.shortName}, the director{dir.plural} authorize{dir.verbS} the issuance of a share certificate evidencing the previously issued {ShareClass} shares held by the shareholder.",
+          "Being {#if dir.isSole}the sole director{/if}{#if dir.isMultiple}all the directors{/if} of {org.shortName}, the director{dir.plural} authorize{dir.verbS} the issuance of share certificate(s) evidencing the issued shares held by the shareholder(s).",
+          "{#if certificate.hasCertificates}Certificates of record:{#each certificate.certificates} No. {.number} — {.shares} {.className} share(s) to {.holder}{#if .issuedOn} issued {.issuedOn}{/if};{/each}{/if}",
           "The certificate is issued under the stated certificate number and recorded against the securities register of {org.shortName} effective {date.long}.",
         ],
       },
@@ -358,7 +360,8 @@ export const CORPORATION_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
       {
         heading: "Change of Office",
         body: [
-          "Being {#if dir.isSole}the sole director{/if}{#if dir.isMultiple}all the directors{/if} of {org.shortName}, the director{dir.plural} resolve{dir.verbS} to change the registered office and records office of {org.shortName} to the stated addresses.",
+          "Being {#if dir.isSole}the sole director{/if}{#if dir.isMultiple}all the directors{/if} of {org.shortName}, the director{dir.plural} resolve{dir.verbS} to record the registered and records offices of {org.shortName}.",
+          "{#if offices.hasRegistered}The registered office is{#if offices.hasPriorRegistered} changed from {offices.priorRegistered} to{/if} {offices.registered}. {/if}{#if offices.hasRecords}The records office is{#if offices.hasPriorRecords} changed from {offices.priorRecords} to{/if} {offices.records}.{/if}{#if offices.hasRegistered}{#else}{#if offices.hasRecords}{#else}The registered office and records office are changed to the stated addresses.{/if}{/if}",
           "The change is effective {date.long} and the secretary is authorized to file any notice of change required under the {org.legislation}.",
         ],
       },
@@ -387,6 +390,7 @@ export const CORPORATION_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
         heading: "Director Departure",
         body: [
           "{org.shortName} records the removal or resignation of the named director effective {date.long}.",
+          "{#if removal.hasRemovals}Departed directors:{#each removal.removals} {.name}{#if .endDate} (effective {.endDate}){/if};{/each}{/if}",
           "Being {#if dir.isSole}the sole director{/if}{#if dir.isMultiple}all the directors{/if} of {org.shortName}, the remaining director{dir.plural} confirm{dir.verbS} the departure and direct{dir.verbS} that the directors register be updated, subject to the {org.legislation}.",
         ],
       },
@@ -412,7 +416,8 @@ export const CORPORATION_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
       {
         heading: "Asset Authorization",
         body: [
-          "Being {#if dir.isSole}the sole director{/if}{#if dir.isMultiple}all the directors{/if} of {org.shortName}, the director{dir.plural} authorize{dir.verbS} {org.shortName} to acquire or dispose of the described asset on the stated terms.",
+          "Being {#if dir.isSole}the sole director{/if}{#if dir.isMultiple}all the directors{/if} of {org.shortName}, the director{dir.plural} authorize{dir.verbS} {org.shortName} to acquire or dispose of the assets described below on the stated terms.",
+          "{#if assetTransfer.hasAcquisitions}Acquisitions:{#each assetTransfer.acquisitions} {.name} ({.category}){#if .value} for {.value}{/if}{#if .from} from {.from}{/if};{/each} {/if}{#if assetTransfer.hasDispositions}Dispositions:{#each assetTransfer.dispositions} {.name} ({.category}){#if .notes} — {.notes}{/if};{/each}{/if}{#if assetTransfer.hasAcquisitions}{#else}{#if assetTransfer.hasDispositions}{#else}The described asset is acquired or disposed of on the stated terms.{/if}{/if}",
           "The named officers are authorized to execute and deliver the agreements and documents required to complete the transaction, subject to the {org.legislation}, effective {date.long}.",
         ],
       },

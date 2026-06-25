@@ -30,6 +30,15 @@ import { buildSocietyRenderContext } from "../shared/societyRenderContext";
 import { normalizeGender } from "../shared/nlg";
 import { enforcePersonReference } from "./lib/personReference";
 import { planRoleHolderRevision } from "../shared/roleHolderHistory";
+import {
+  assetTransferView,
+  directorAppointmentView,
+  directorRemovalView,
+  officeChangeView,
+  officerAppointmentView,
+  shareCertificateView,
+  shareTransferView,
+} from "../shared/packetOperativeData";
 import { buildExecutionBlock, resolvingBodyFor, type SignerLine } from "../shared/executionBlock";
 import { activeAsOf, type IntervalRow } from "../shared/registerHistory";
 import { buildAnnualResolutionContext } from "../shared/annualResolution";
@@ -2263,6 +2272,45 @@ async function buildPacketDataContext(
         })),
       },
     };
+  }
+  if (packet.key === "appoint-officer" || packet.key === "appoint-director" || packet.key === "director-removal") {
+    const roleHolders = await ctx.db
+      .query("roleHolders")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .collect();
+    if (packet.key === "appoint-officer") return officerAppointmentView(roleHolders);
+    if (packet.key === "appoint-director") return directorAppointmentView(roleHolders);
+    return directorRemovalView(roleHolders);
+  }
+  if (packet.key === "share-transfer") {
+    const [transfers, classes] = await Promise.all([
+      ctx.db.query("rightsholdingTransfers").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("rightsClasses").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
+    ]);
+    const classNameById: Record<string, string> = {};
+    for (const c of classes) classNameById[String(c._id)] = String(c.className ?? "");
+    return shareTransferView(transfers, classNameById);
+  }
+  if (packet.key === "share-certificate") {
+    const certs = await ctx.db
+      .query("shareCertificates")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .collect();
+    return shareCertificateView(certs);
+  }
+  if (packet.key === "change-of-offices") {
+    const addresses = await ctx.db
+      .query("organizationAddresses")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .collect();
+    return officeChangeView(addresses);
+  }
+  if (packet.key === "asset-transfer") {
+    const assets = await ctx.db
+      .query("assets")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .collect();
+    return assetTransferView(assets);
   }
   if (packet.key === "annual-resolutions") {
     return {
