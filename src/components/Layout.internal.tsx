@@ -316,6 +316,7 @@ const NAV_GROUPS: NavGroup[] = [
       navItem("/app/deadlines"),
       navItem("/app/commitments"),
       navItem("/app/documents"),
+      navItem("/app/document-catalog"),
       navItem("/app/library"),
       navItem("/app/communications"),
       navItem("/app/outbox"),

@@ -207,6 +207,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/deadlines": { icon: CalendarClock, group: "work", label: "Deadlines" },
   "/app/commitments": { icon: ClipboardList, group: "work", label: "Commitments" },
   "/app/documents": { icon: FolderOpen, group: "work", label: "Documents" },
+  "/app/document-catalog": { icon: FileText, group: "work", label: "Document catalog" },
   "/app/library": { icon: BookOpen, group: "work", label: "Library" },
   "/app/communications": { icon: Mail, group: "work", label: "Communications", module: "communications" },
   "/app/outbox": { icon: Inbox, group: "work", label: "Outbox" },
