@@ -30,6 +30,7 @@ export const sharedRegisterTables = {
     isServiceProvider: v.optional(v.boolean()),
     atAgeOfMajority: v.optional(v.boolean()),
     gender: v.optional(v.string()), // M | F | X
+    pronouns: v.optional(v.string()), // stated pronouns; override gender for NLG
     corpSign: v.optional(v.string()), // signature-block "By:" prefix for orgs
     createdAtISO: v.string(),
     updatedAtISO: v.string(),

@@ -13,6 +13,68 @@ export interface Actor {
   name: string;
   gender?: "M" | "F" | "X";
   isOrganization?: boolean;
+  /**
+   * Stated pronouns that override the gender-derived default for a single
+   * natural-person actor (e.g. they/them, xe/xir). Ignored for organizations
+   * and for multi-actor groups (which always read "they/their").
+   */
+  customPronouns?: CustomPronouns;
+}
+
+/** A subjective pronoun + its possessive determiner, e.g. {he, his}. */
+export interface CustomPronouns {
+  subject: string;
+  possessive: string;
+}
+
+/**
+ * Canonicalise a free-form gender value to the engine's M | F | X domain, or
+ * undefined when unknown. Accepts single letters and common words.
+ */
+export function normalizeGender(raw: string | null | undefined): "M" | "F" | "X" | undefined {
+  const text = (raw ?? "").trim().toUpperCase();
+  if (text === "M" || text.startsWith("MALE")) return "M";
+  if (text === "F" || text.startsWith("FEMALE")) return "F";
+  if (text === "X" || text === "O" || text.startsWith("NON")) return "X";
+  return undefined;
+}
+
+const KNOWN_PRONOUNS: Record<string, CustomPronouns> = {
+  "he/him": { subject: "he", possessive: "his" },
+  "she/her": { subject: "she", possessive: "her" },
+  "they/them": { subject: "they", possessive: "their" },
+};
+
+/**
+ * Parse a stated-pronoun string into a {subject, possessive} pair.
+ *   "she/her"      -> { she, her }
+ *   "they/them"    -> { they, their }   (canonical possessive determiner)
+ *   "xe/xir"       -> { xe, xir }
+ *   "xe/xem/xyr"   -> { xe, xyr }       (3-part: subject / object / possessive)
+ * Returns undefined for empty input.
+ */
+export function parsePronouns(raw?: string | null): CustomPronouns | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const key = raw.trim().toLowerCase();
+  if (key === "") {
+    return undefined;
+  }
+  if (KNOWN_PRONOUNS[key]) {
+    return KNOWN_PRONOUNS[key];
+  }
+  const parts = key.split("/").map((p) => p.trim()).filter(Boolean);
+  if (parts.length >= 3) {
+    return { subject: parts[0], possessive: parts[2] };
+  }
+  if (parts.length === 2) {
+    return { subject: parts[0], possessive: parts[1] };
+  }
+  if (parts.length === 1) {
+    return { subject: parts[0], possessive: parts[0] };
+  }
+  return undefined;
 }
 
 export interface ActorGrammar {
@@ -140,7 +202,13 @@ export function actorGrammar(actors: Actor[]): ActorGrammar {
   } else {
     // Single actor.
     const actor = actors[0];
-    if (isNonGendered(actor) || (actor.gender !== "M" && actor.gender !== "F")) {
+    const isOrg = actor.isOrganization ?? looksLikeOrganization(actor.name);
+    const custom = actor.customPronouns;
+    if (custom && custom.subject && custom.possessive && !isOrg) {
+      // Stated pronouns win over the gender-derived default for a real person.
+      pronoun = custom.subject;
+      pronPoss = custom.possessive;
+    } else if (isNonGendered(actor) || (actor.gender !== "M" && actor.gender !== "F")) {
       pronoun = "they";
       pronPoss = "their";
     } else if (actor.gender === "M") {

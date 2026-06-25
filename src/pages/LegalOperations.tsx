@@ -82,6 +82,8 @@ export function RoleHoldersPage() {
       nonNaturalPersonType: empty(draft.nonNaturalPersonType),
       nonNaturalJurisdiction: empty(draft.nonNaturalJurisdiction),
       natureOfControl: empty(draft.natureOfControl),
+      gender: empty(draft.gender),
+      pronouns: empty(draft.pronouns),
       authorizedRepresentative: draft.authorizedRepresentative,
       relatedShareholderIds: csv(draft.relatedShareholderIdsText ?? draft.relatedShareholderIds),
       controllingIndividualIds: csv(draft.controllingIndividualIdsText ?? draft.controllingIndividualIds),
@@ -253,6 +255,17 @@ export function RoleHoldersPage() {
             <div className="grid two">
               <OptionSelect label="Officer title" setName="officerTitles" value={draft.officerTitle ?? ""} emptyLabel="No title" onChange={(value) => setDraft({ ...draft, officerTitle: value })} />
               <OptionSelect label="Director term" setName="directorTerms" value={draft.directorTerm ?? ""} emptyLabel="No term" onChange={(value) => setDraft({ ...draft, directorTerm: value })} />
+            </div>
+            <div className="grid two">
+              <Field label="Gender (for document grammar)">
+                <select className="input" value={draft.gender ?? ""} onChange={(e) => setDraft({ ...draft, gender: e.target.value })}>
+                  <option value="">—</option>
+                  <option value="M">Male (he/his)</option>
+                  <option value="F">Female (she/her)</option>
+                  <option value="X">Neutral (they/their)</option>
+                </select>
+              </Field>
+              <Field label="Stated pronouns (override gender)"><input className="input" placeholder="e.g. they/them, xe/xir" value={draft.pronouns ?? ""} onChange={(e) => setDraft({ ...draft, pronouns: e.target.value })} /></Field>
             </div>
             <div className="grid two">
               <Field label="Start date"><DatePicker value={draft.startDate ?? ""} onChange={(value) => setDraft({ ...draft, startDate: value })} /></Field>

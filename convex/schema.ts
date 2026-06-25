@@ -252,6 +252,11 @@ export default defineSchema({
     // concurrent extra officer titles (YCN OFFICER PRES/SECR/OTHER).
     directoryPersonId: v.optional(v.id("peopleDirectory")),
     additionalOfficerTitles: v.optional(v.array(v.string())),
+    // YCN ENT_PEOPLE.GENDER (M | F | X). Read by the NLG grammar engine
+    // (shared/societyRenderContext.ts toActor) to pick pronouns in generated
+    // documents; pronouns, when stated, override the gender-derived default.
+    gender: v.optional(v.string()),
+    pronouns: v.optional(v.string()), // e.g. "he/him", "she/her", "they/them", "xe/xir"
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })

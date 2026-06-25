@@ -5,7 +5,7 @@
  */
 
 import { buildRenderContext, type RenderContext, type RenderContextOrg } from "./renderContext";
-import type { Actor } from "./nlg";
+import { normalizeGender, parsePronouns, type Actor } from "./nlg";
 
 /** Minimal society shape this needs (a Convex societies row satisfies it). */
 export interface SocietyLike {
@@ -23,13 +23,18 @@ export interface RoleHolderLike {
   roleType?: string;
   fullName?: string;
   gender?: string;
+  /** Stated pronouns (e.g. "they/them", "xe/xir") — override gender for NLG. */
+  pronouns?: string | null;
   startDate?: string | null;
   endDate?: string | null;
 }
 
 function toActor(row: RoleHolderLike): Actor {
-  const gender = row.gender === "M" || row.gender === "F" || row.gender === "X" ? row.gender : undefined;
-  return { name: String(row.fullName ?? ""), gender };
+  return {
+    name: String(row.fullName ?? ""),
+    gender: normalizeGender(row.gender),
+    customPronouns: parsePronouns(row.pronouns),
+  };
 }
 
 /** Role holders of a type that are current (no endDate) — order preserved. */

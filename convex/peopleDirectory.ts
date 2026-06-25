@@ -48,6 +48,7 @@ export const upsert = mutation({
     isIndividual: v.optional(v.boolean()),
     defaultAddress: v.optional(v.string()),
     gender: v.optional(v.string()),
+    pronouns: v.optional(v.string()),
     isServiceProvider: v.optional(v.boolean()),
     atAgeOfMajority: v.optional(v.boolean()),
     corpSign: v.optional(v.string()),
@@ -64,6 +65,7 @@ export const upsert = mutation({
       isIndividual: args.isIndividual,
       defaultAddress: args.defaultAddress,
       gender: args.gender,
+      pronouns: args.pronouns,
       isServiceProvider: args.isServiceProvider,
       atAgeOfMajority: args.atAgeOfMajority,
       corpSign: args.corpSign,
@@ -104,6 +106,11 @@ export const addToSociety = mutation({
       firstName: person.firstName,
       lastName: person.lastName,
       dateOfBirth: person.dob,
+      // Carry the directory's gender/pronouns onto the role holder so the NLG
+      // engine renders correct pronouns in generated documents (YCN
+      // ENT_PEOPLE.GENDER copy-on-add).
+      gender: person.gender,
+      pronouns: person.pronouns,
       directoryPersonId: args.directoryPersonId,
       startDate: args.startDate,
       createdAtISO: args.nowISO,

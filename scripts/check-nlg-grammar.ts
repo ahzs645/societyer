@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 
-import { actorGrammar, looksLikeOrganization, type Actor } from "../shared/nlg";
+import {
+  actorGrammar,
+  looksLikeOrganization,
+  normalizeGender,
+  parsePronouns,
+  type Actor,
+} from "../shared/nlg";
 
 // --- 1 male director (single male actor) ---
 {
@@ -142,5 +148,51 @@ for (const positive of [
 for (const negative of ["Smithson", "Incognito", "Jane Doe", "Cohen", "Trustin", "Foundationer", "Companyman"]) {
   assert.equal(looksLikeOrganization(negative), false, `expected NOT org: ${negative}`);
 }
+
+// --- stated pronouns override the gender-derived default (single actor) ---
+{
+  const they = actorGrammar([{ name: "Robin", gender: "X", customPronouns: { subject: "they", possessive: "their" } }]);
+  assert.equal(they.pronoun, "they");
+  assert.equal(they.pronPoss, "their");
+
+  const xe = actorGrammar([{ name: "Sam", customPronouns: { subject: "xe", possessive: "xir" } }]);
+  assert.equal(xe.pronoun, "xe");
+  assert.equal(xe.pronPoss, "xir");
+
+  // Stated she/her overrides even an (incorrect) male gender code.
+  const she = actorGrammar([{ name: "Alex", gender: "M", customPronouns: { subject: "she", possessive: "her" } }]);
+  assert.equal(she.pronoun, "she");
+  assert.equal(she.pronPoss, "her");
+}
+
+// --- custom pronouns are ignored for organizations and for multi-actor groups ---
+{
+  const org = actorGrammar([{ name: "Acme Ltd.", isOrganization: true, customPronouns: { subject: "he", possessive: "his" } }]);
+  assert.equal(org.pronoun, "they", "org keeps neutral pronoun");
+  assert.equal(org.pronPoss, "their");
+
+  const group = actorGrammar([
+    { name: "Robin", customPronouns: { subject: "xe", possessive: "xir" } },
+    { name: "Sam", gender: "F" },
+  ]);
+  assert.equal(group.pronoun, "they", "group keeps neutral pronoun");
+}
+
+// --- parsePronouns ---
+assert.deepEqual(parsePronouns("he/him"), { subject: "he", possessive: "his" });
+assert.deepEqual(parsePronouns("she/her"), { subject: "she", possessive: "her" });
+assert.deepEqual(parsePronouns("they/them"), { subject: "they", possessive: "their" });
+assert.deepEqual(parsePronouns("xe/xir"), { subject: "xe", possessive: "xir" });
+assert.deepEqual(parsePronouns("ze/zem/zir"), { subject: "ze", possessive: "zir" });
+assert.equal(parsePronouns(""), undefined);
+assert.equal(parsePronouns(null), undefined);
+
+// --- normalizeGender ---
+assert.equal(normalizeGender("M"), "M");
+assert.equal(normalizeGender("female"), "F");
+assert.equal(normalizeGender("X"), "X");
+assert.equal(normalizeGender("nonbinary"), "X");
+assert.equal(normalizeGender("unknown"), undefined);
+assert.equal(normalizeGender(""), undefined);
 
 console.log("OK nlg-grammar");

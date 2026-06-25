@@ -26,6 +26,7 @@ import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../shared/so
 import { isCorporation } from "../shared/organizationDomain";
 import { materializeRightsHoldings, validateLedger } from "../shared/equityLedger";
 import { buildSocietyRenderContext } from "../shared/societyRenderContext";
+import { normalizeGender } from "../shared/nlg";
 import { buildExecutionBlock, resolvingBodyFor, type SignerLine } from "../shared/executionBlock";
 import { activeAsOf, type IntervalRow } from "../shared/registerHistory";
 import { buildAnnualResolutionContext } from "../shared/annualResolution";
@@ -95,6 +96,8 @@ export const upsertRoleHolder = mutation({
     relatedShareholderIds: v.optional(v.array(v.string())),
     controllingIndividualIds: v.optional(v.array(v.string())),
     extraProvincialRegistrationId: v.optional(v.id("organizationRegistrations")),
+    gender: v.optional(v.string()),
+    pronouns: v.optional(v.string()),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     sourceExternalIds: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
@@ -159,6 +162,8 @@ export const upsertRoleHolder = mutation({
       relatedShareholderIds: cleanList(args.relatedShareholderIds),
       controllingIndividualIds: cleanList(args.controllingIndividualIds),
       extraProvincialRegistrationId: args.extraProvincialRegistrationId,
+      gender: normalizeGender(args.gender),
+      pronouns: cleanText(args.pronouns),
       sourceDocumentIds: args.sourceDocumentIds ?? [],
       sourceExternalIds: cleanList(args.sourceExternalIds),
       notes: cleanText(args.notes),

@@ -18,6 +18,7 @@
  */
 
 import { decodeYcnDate, isYcnNullDate } from "./ycnDate";
+import { normalizeGender } from "./nlg";
 
 /** A raw row as produced by `mdb-export` — column name → cell text. */
 export type YcnRow = Record<string, string | number | null | undefined>;
@@ -190,14 +191,9 @@ function entPersonPayload(row: YcnRow): BundlePayload {
   };
 }
 
-/** Map YCN single-letter gender to the NLG engine's M/F/X domain. */
-export function normalizeGender(raw: string | undefined): "M" | "F" | "X" | undefined {
-  const text = (raw ?? "").trim().toUpperCase();
-  if (text === "M" || text.startsWith("MALE")) return "M";
-  if (text === "F" || text.startsWith("FEMALE")) return "F";
-  if (text === "X" || text === "O" || text.startsWith("NON")) return "X";
-  return undefined;
-}
+// Gender canonicalisation lives in shared/nlg.ts (the M/F/X domain owner) and is
+// re-exported here for the import test's convenience.
+export { normalizeGender };
 
 function shareClassPayload(row: YcnRow): BundlePayload {
   return {

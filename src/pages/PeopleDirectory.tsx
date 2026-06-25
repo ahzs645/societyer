@@ -66,6 +66,7 @@ export function PeopleDirectoryPage() {
       isIndividual: true,
       defaultAddress: "",
       gender: "",
+      pronouns: "",
     });
     setOpen(true);
   };
@@ -79,6 +80,7 @@ export function PeopleDirectoryPage() {
       isIndividual: form.isIndividual,
       defaultAddress: form.defaultAddress || undefined,
       gender: form.gender || undefined,
+      pronouns: form.pronouns || undefined,
       nowISO: new Date().toISOString(),
     });
     setOpen(false);
@@ -270,6 +272,14 @@ export function PeopleDirectoryPage() {
                   <option value="F">Female (she/her)</option>
                   <option value="X">Neutral (they/their)</option>
                 </select>
+              </Field>
+              <Field label="Stated pronouns (override gender)">
+                <input
+                  className="input"
+                  placeholder="e.g. they/them, xe/xir"
+                  value={form.pronouns ?? ""}
+                  onChange={(e) => setForm({ ...form, pronouns: e.target.value })}
+                />
               </Field>
             </div>
             <label className="checkbox">
