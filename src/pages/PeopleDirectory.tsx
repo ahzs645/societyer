@@ -40,9 +40,22 @@ export function PeopleDirectoryPage() {
     | undefined;
 
   const upsert = useMutation(api.peopleDirectory.upsert);
+  const addToSociety = useMutation(api.peopleDirectory.addToSociety);
+  const [addedId, setAddedId] = useState<string | null>(null);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
+
+  const addPersonToSociety = async (personId: string, roleType: string) => {
+    await addToSociety({
+      directoryPersonId: personId,
+      societyId: society._id,
+      roleType,
+      nowISO: new Date().toISOString(),
+    });
+    setAddedId(personId);
+    setTimeout(() => setAddedId(null), 2000);
+  };
 
   const openNew = () => {
     setForm({
@@ -153,12 +166,34 @@ export function PeopleDirectoryPage() {
               <div
                 key={p._id}
                 className="row"
-                style={{ gap: 8, justifyContent: "space-between" }}
+                style={{ gap: 8, justifyContent: "space-between", alignItems: "center" }}
               >
                 <span>{p.fullName}</span>
-                <span style={{ display: "flex", gap: 8, opacity: 0.6 }}>
-                  {p.dob && <span>{p.dob}</span>}
-                  {p.isIndividual === false && <span>Organization</span>}
+                <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  {p.dob && <span style={{ opacity: 0.6 }}>{p.dob}</span>}
+                  {p.isIndividual === false && <span style={{ opacity: 0.6 }}>Organization</span>}
+                  {addedId === p._id ? (
+                    <span style={{ color: "var(--accent, green)" }}>Added ✓</span>
+                  ) : (
+                    <select
+                      className="input"
+                      defaultValue=""
+                      title="Add to current society as…"
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          addPersonToSociety(p._id, e.target.value);
+                          e.target.value = "";
+                        }
+                      }}
+                      style={{ width: 150 }}
+                    >
+                      <option value="">Add to society…</option>
+                      <option value="director">as Director</option>
+                      <option value="officer">as Officer</option>
+                      <option value="member">as Member</option>
+                      <option value="controller">as Significant individual</option>
+                    </select>
+                  )}
                 </span>
               </div>
             ))}

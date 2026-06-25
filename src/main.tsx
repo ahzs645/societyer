@@ -125,6 +125,9 @@ const PeopleDirectoryPage = React.lazy(() => import("./pages/PeopleDirectory").t
 const DividendsPage = React.lazy(() => import("./pages/Dividends").then((m) => ({ default: m.DividendsPage })));
 const ServiceProvidersPage = React.lazy(() => import("./pages/ServiceProviders").then((m) => ({ default: m.ServiceProvidersPage })));
 const ComplianceSettingsPage = React.lazy(() => import("./pages/ComplianceSettings").then((m) => ({ default: m.ComplianceSettingsPage })));
+const CorporateHistoryPage = React.lazy(() => import("./pages/CorporateHistory").then((m) => ({ default: m.CorporateHistoryPage })));
+const AnnualFilingsPage = React.lazy(() => import("./pages/AnnualFilings").then((m) => ({ default: m.AnnualFilingsPage })));
+const CertificateRegisterPage = React.lazy(() => import("./pages/CertificateRegister").then((m) => ({ default: m.CertificateRegisterPage })));
 const RightsLedgerPage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.RightsLedgerPage })));
 const TemplateEnginePage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.TemplateEnginePage })));
 const FormationMaintenancePage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.FormationMaintenancePage })));
@@ -306,6 +309,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="dividends" element={<DividendsPage />} />
             <Route path="service-providers" element={<ServiceProvidersPage />} />
             <Route path="compliance-settings" element={<ComplianceSettingsPage />} />
+            <Route path="corporate-history" element={<CorporateHistoryPage />} />
+            <Route path="annual-filings" element={<AnnualFilingsPage />} />
+            <Route path="certificate-register" element={<CertificateRegisterPage />} />
             <Route path="rights-ledger" element={<RightsLedgerPage />} />
             <Route path="template-engine" element={<TemplateEnginePage />} />
             <Route path="formation-maintenance" element={<FormationMaintenancePage />} />

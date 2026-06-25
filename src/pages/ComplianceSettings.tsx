@@ -24,6 +24,9 @@ export function ComplianceSettingsPage() {
   const society = useSociety();
   const save = useMutation(api.society.updateComplianceSettings);
   const createDeadline = useMutation(api.deadlines.create);
+  const cloneSociety = useMutation(api.society.cloneSociety);
+  const [cloneName, setCloneName] = useState("");
+  const [cloneResult, setCloneResult] = useState<string | null>(null);
   const existing = useQuery(
     api.deadlines.list,
     society ? { societyId: society._id } : "skip",
@@ -32,7 +35,16 @@ export function ComplianceSettingsPage() {
   const [agmMonth, setAgmMonth] = useState<number | "">(society?.agmMonth ?? "");
   const [agmDay, setAgmDay] = useState<number | "">(society?.agmDay ?? "");
   const [waive, setWaive] = useState<boolean>(Boolean(society?.waivePrepFinancials));
+  const [contacts, setContacts] = useState({
+    shortName: society?.shortName ?? "",
+    primaryContactName: society?.primaryContactName ?? "",
+    primaryContactEmail: society?.primaryContactEmail ?? "",
+    minuteBookLocation: society?.minuteBookLocation ?? "",
+    sealLocation: society?.sealLocation ?? "",
+    responsibleLawyer: society?.responsibleLawyer ?? "",
+  });
   const [saved, setSaved] = useState(false);
+  const setC = (k: string, v: string) => setContacts((c) => ({ ...c, [k]: v }));
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -54,6 +66,12 @@ export function ComplianceSettingsPage() {
       agmMonth: settings.agmMonth,
       agmDay: settings.agmDay,
       waivePrepFinancials: waive,
+      shortName: contacts.shortName || undefined,
+      primaryContactName: contacts.primaryContactName || undefined,
+      primaryContactEmail: contacts.primaryContactEmail || undefined,
+      minuteBookLocation: contacts.minuteBookLocation || undefined,
+      sealLocation: contacts.sealLocation || undefined,
+      responsibleLawyer: contacts.responsibleLawyer || undefined,
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -106,6 +124,62 @@ export function ComplianceSettingsPage() {
           <input type="checkbox" checked={waive} onChange={(e) => setWaive(e.target.checked)} />
           {" "}Waive preparation of financial statements (skips the annual-report deadline)
         </label>
+      </div>
+
+      <div className="card" style={{ maxWidth: 520, marginBottom: 16 }}>
+        <h3 style={{ margin: "0 0 8px" }}>Clone this entity</h3>
+        <p style={{ color: "var(--text-tertiary)", marginTop: 0 }}>
+          Deep-copy this entity's registers (role holders, addresses, share classes,
+          name/constating history, filings, signers) into a new entity.
+        </p>
+        <div className="row" style={{ gap: 8, alignItems: "flex-end" }}>
+          <Field label="New entity name">
+            <input className="input" value={cloneName} onChange={(e) => setCloneName(e.target.value)} />
+          </Field>
+          <button
+            className="btn btn--accent"
+            disabled={!cloneName.trim()}
+            onClick={async () => {
+              const r = (await cloneSociety({
+                sourceSocietyId: society._id,
+                newName: cloneName.trim(),
+                nowISO: new Date().toISOString(),
+              })) as { copiedRows?: number } | undefined;
+              setCloneResult(`Cloned (${r?.copiedRows ?? 0} records copied).`);
+              setCloneName("");
+              setTimeout(() => setCloneResult(null), 4000);
+            }}
+          >
+            Clone
+          </button>
+        </div>
+        {cloneResult && <p style={{ color: "var(--accent, green)" }}>{cloneResult}</p>}
+      </div>
+
+      <div className="card" style={{ maxWidth: 520, marginBottom: 16 }}>
+        <h3 style={{ margin: "0 0 8px" }}>Contacts &amp; records</h3>
+        <Field label="Short name / defined term (e.g. &quot;the Company&quot;)">
+          <input className="input" value={contacts.shortName} onChange={(e) => setC("shortName", e.target.value)} />
+        </Field>
+        <div className="row" style={{ gap: 12 }}>
+          <Field label="Primary contact name">
+            <input className="input" value={contacts.primaryContactName} onChange={(e) => setC("primaryContactName", e.target.value)} />
+          </Field>
+          <Field label="Primary contact email">
+            <input className="input" value={contacts.primaryContactEmail} onChange={(e) => setC("primaryContactEmail", e.target.value)} />
+          </Field>
+        </div>
+        <div className="row" style={{ gap: 12 }}>
+          <Field label="Minute book location">
+            <input className="input" value={contacts.minuteBookLocation} onChange={(e) => setC("minuteBookLocation", e.target.value)} />
+          </Field>
+          <Field label="Seal / records location">
+            <input className="input" value={contacts.sealLocation} onChange={(e) => setC("sealLocation", e.target.value)} />
+          </Field>
+        </div>
+        <Field label="Responsible lawyer / file owner">
+          <input className="input" value={contacts.responsibleLawyer} onChange={(e) => setC("responsibleLawyer", e.target.value)} />
+        </Field>
       </div>
 
       <div className="card" style={{ maxWidth: 520 }}>
