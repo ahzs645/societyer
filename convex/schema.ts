@@ -70,6 +70,22 @@ export default defineSchema({
     agmMonth: v.optional(v.number()),
     agmDay: v.optional(v.number()),
     waivePrepFinancials: v.optional(v.boolean()),
+    // Current short/defined-term name ("the Company"). Effective-dated history
+    // lives in societyNameHistory; this is the current convenience value.
+    shortName: v.optional(v.string()),
+    // YCN Corporation_Settings — records-manager contacts + physical record
+    // locations + document-prep preferences.
+    primaryContactName: v.optional(v.string()),
+    primaryContactPhone: v.optional(v.string()),
+    primaryContactEmail: v.optional(v.string()),
+    altContactName: v.optional(v.string()),
+    altContactPhone: v.optional(v.string()),
+    altContactEmail: v.optional(v.string()),
+    minuteBookLocation: v.optional(v.string()),
+    sealLocation: v.optional(v.string()),
+    docPrepLanguage: v.optional(v.string()),
+    responsibleLawyer: v.optional(v.string()),
+    restrictPeoplePicker: v.optional(v.boolean()),
     updatedAt: v.number(),
   }).index("by_public_slug", ["publicSlug"]),
 
@@ -85,6 +101,10 @@ export default defineSchema({
     provinceState: v.optional(v.string()),
     postalCode: v.optional(v.string()),
     country: v.string(),
+    // YCN BUS_ADDRESS: a business/operating address (type "business_address")
+    // may carry named contacts (name + role) and free-form address lines.
+    contacts: v.optional(v.array(v.object({ name: v.string(), role: v.optional(v.string()) }))),
+    freeformLines: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     createdAtISO: v.string(),
@@ -201,6 +221,10 @@ export default defineSchema({
     // individuals), read by convex/registerHistory.ts significantIndividualsAsOf.
     significanceReason: v.optional(v.string()),
     taxResidentHomeJurisdiction: v.optional(v.string()), // yes | no | unknown
+    // Link to the cross-tenant people directory (YCN ENT_PEOPLE.GLOB_ID) and
+    // concurrent extra officer titles (YCN OFFICER PRES/SECR/OTHER).
+    directoryPersonId: v.optional(v.id("peopleDirectory")),
+    additionalOfficerTitles: v.optional(v.array(v.string())),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })
@@ -213,6 +237,8 @@ export default defineSchema({
     className: v.string(),
     classType: v.string(), // membership | voting | non_voting | unit | share | other
     status: v.string(), // active | proposed | inactive | needs_review
+    // YCN SHR_SINGLE: hand-authored singular display form ("Common Share") for NLG.
+    singularForm: v.optional(v.string()),
     idPrefix: v.optional(v.string()),
     highestAssignedNumber: v.optional(v.number()),
     votingRights: v.optional(v.string()),
@@ -3102,6 +3128,15 @@ export default defineSchema({
     disposalValueCents: v.optional(v.number()),
     disposalApprovedMeetingId: v.optional(v.id("meetings")),
     disposalDocumentIds: v.array(v.id("documents")),
+    // YCN CORP_ASSETS: named counterparties each side, asset legal situs, and
+    // independent acquire vs dispose currency + free-text comments.
+    acquiredFrom: v.optional(v.string()),
+    disposedTo: v.optional(v.string()),
+    assetJurisdiction: v.optional(v.string()),
+    acquisitionCurrency: v.optional(v.string()),
+    dispositionCurrency: v.optional(v.string()),
+    acquisitionComments: v.optional(v.string()),
+    dispositionComments: v.optional(v.string()),
     notes: v.optional(v.string()),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
@@ -4385,6 +4420,11 @@ export default defineSchema({
     dob: v.optional(v.string()),
     isIndividual: v.optional(v.boolean()),
     defaultAddress: v.optional(v.string()),
+    // YCN PEOPLE_DIRECTORY grammar/signature drivers.
+    isServiceProvider: v.optional(v.boolean()),
+    atAgeOfMajority: v.optional(v.boolean()),
+    gender: v.optional(v.string()), // M | F | X
+    corpSign: v.optional(v.string()), // signature-block "By:" prefix for orgs
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })
@@ -4434,5 +4474,72 @@ export default defineSchema({
   })
     .index("by_society", ["societyId"])
     .index("by_society_review", ["societyId", "nextReviewDate"]),
+
+  // Effective-dated corporate name history (YCN CORP_NAME). Logic: shared/nameHistory.ts.
+  societyNameHistory: defineTable({
+    societyId: v.id("societies"),
+    name: v.string(),
+    shortName: v.optional(v.string()),
+    startISO: v.string(),
+    regPosn: v.optional(v.number()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"]),
+
+  // Constating-document timeline (YCN CONSTATING). Logic: shared/constating.ts.
+  constatingEvents: defineTable({
+    societyId: v.id("societies"),
+    action: v.string(), // incorporated | transitioned | continued | amalgamated | restated | other
+    jurisdiction: v.string(),
+    legislation: v.string(),
+    regNumber: v.optional(v.string()),
+    startISO: v.string(),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"]),
+
+  // Per-year / per-jurisdiction annual-filing ledger (YCN REG_FILING).
+  // Logic: shared/annualFilings.ts.
+  annualFilingLedger: defineTable({
+    societyId: v.id("societies"),
+    jurisdiction: v.string(),
+    year: v.string(),
+    filed: v.boolean(),
+    filedOn: v.optional(v.string()),
+    regnNature: v.optional(v.string()),
+    regnLegislation: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_jurisdiction", ["societyId", "jurisdiction"]),
+
+  // Per-entity signer roster (YCN ENT_PEOPLE: GLOB_ID link, SIGN_ORDER, validity, CORP_SIGN).
+  entitySigners: defineTable({
+    societyId: v.id("societies"),
+    directoryPersonId: v.optional(v.id("peopleDirectory")),
+    name: v.string(),
+    signOrder: v.optional(v.number()),
+    validFromISO: v.optional(v.string()),
+    validToISO: v.optional(v.string()),
+    corpSign: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"]),
+
+  // Physical share-certificate register (YCN SHARE_TRANS SHR_CERT/SHR_CERT_REPL).
+  // Logic: shared/shareCertificates.ts.
+  shareCertificates: defineTable({
+    societyId: v.id("societies"),
+    certificateNumber: v.string(),
+    holderName: v.string(),
+    shareClass: v.string(),
+    shares: v.number(),
+    issuedOn: v.string(),
+    replacesCertificateNumber: v.optional(v.string()),
+    cancelledOn: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_class", ["societyId", "shareClass"]),
 
 });
