@@ -93,7 +93,8 @@ import { UserPicker } from "./UserPicker";
 import { InspectorHost, InspectorProvider } from "./InspectorPanel";
 import { MenuRow, MenuSectionLabel, Pill, TintedIconTile } from "./ui";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
-import { getRouteIdentity, type IconTone, type LucideIcon } from "../lib/routeIdentity";
+import { getRouteIdentity, routeAllowedForEntityKind, type IconTone, type LucideIcon } from "../lib/routeIdentity";
+import { organizationKind } from "../../shared/organizationDomain";
 import { useStaticCommands } from "../lib/useStaticCommands";
 import { useTranslation } from "react-i18next";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
@@ -543,9 +544,15 @@ export function Layout() {
   const pinnedRouteSet = useMemo(() => new Set(pinnedRoutes), [pinnedRoutes]);
   const pinnedNav = useMemo(() => getPinnedNav(pinnedRoutes), [pinnedRoutes]);
   const groupedNav = useMemo(() => getGroupedNav(pinnedRouteSet), [pinnedRouteSet]);
+  const entityKind = useMemo(() => (society ? organizationKind(society as any) : null), [society]);
   const visiblePinnedNav = useMemo(
-    () => pinnedNav.filter((item) => !item.module || isModuleEnabled(society, item.module)),
-    [pinnedNav, society],
+    () =>
+      pinnedNav.filter(
+        (item) =>
+          (!item.module || isModuleEnabled(society, item.module)) &&
+          routeAllowedForEntityKind(item, entityKind),
+      ),
+    [pinnedNav, society, entityKind],
   );
 
   // Resolve pinned command IDs into runnable commands. Commands whose ID isn't
@@ -563,9 +570,13 @@ export function Layout() {
     () =>
       groupedNav.map((group) => ({
         ...group,
-        items: group.items.filter((item) => !item.module || isModuleEnabled(society, item.module)),
+        items: group.items.filter(
+        (item) =>
+          (!item.module || isModuleEnabled(society, item.module)) &&
+          routeAllowedForEntityKind(item, entityKind),
+      ),
       })).filter((group) => group.items.length > 0),
-    [groupedNav, society],
+    [groupedNav, society, entityKind],
   );
   const getNavItemLabel = (item: NavItem) => t(NAV_ITEM_LABEL_KEYS[item.label] ?? item.label, item.label);
   const isSidebarCollapsed = isMobileNav ? !mobileSidebarOpen : collapsed;

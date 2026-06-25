@@ -150,6 +150,9 @@ export function groupToneCssVar(group: RouteGroup): string {
 
 export type LucideIcon = ComponentType<{ size?: number | string }>;
 
+/** Which entity kinds a route applies to. Omit = applies to all kinds. */
+export type RouteEntityKind = "society" | "corporation";
+
 export type RouteIdentity = {
   icon: LucideIcon;
   group: RouteGroup;
@@ -157,7 +160,25 @@ export type RouteIdentity = {
   label: string;
   /** Optional module gate; page is hidden when the module is disabled. */
   module?: ModuleKey;
+  /**
+   * Optional entity-kind gate. When set, the route is only shown for entities of
+   * these kinds (e.g. ["corporation"] for share certificates / dividends, which
+   * have no society analog). Omit for routes that apply to every entity.
+   */
+  entityKinds?: RouteEntityKind[];
 };
+
+/** True when a route should be visible for an entity of the given kind. */
+export function routeAllowedForEntityKind(
+  identity: Pick<RouteIdentity, "entityKinds">,
+  kind: RouteEntityKind | "organization" | null | undefined,
+): boolean {
+  if (!identity.entityKinds || identity.entityKinds.length === 0) return true;
+  if (kind === "society" || kind === "corporation") return identity.entityKinds.includes(kind);
+  // Unknown/generic kind ("organization", or no society loaded): show everything
+  // so nothing is hidden before the entity type is known.
+  return true;
+}
 
 /** Path → identity. Add new pages here. Keys are exact router paths. */
 export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
@@ -209,13 +230,13 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/court-orders": { icon: Gavel, group: "records", label: "Court orders", module: "courtOrders" },
   "/app/governance-registers": { icon: Scale, group: "records", label: "Governance registers" },
   "/app/rights-ledger": { icon: BookKey, group: "records", label: "Rights ledger" },
-  "/app/dividends": { icon: Coins, group: "records", label: "Dividends" },
-  "/app/significant-individuals": { icon: ShieldCheck, group: "records", label: "Significant individuals" },
+  "/app/dividends": { icon: Coins, group: "records", label: "Dividends", entityKinds: ["corporation"] },
+  "/app/significant-individuals": { icon: ShieldCheck, group: "records", label: "Significant individuals", entityKinds: ["corporation"] },
   "/app/service-providers": { icon: Briefcase, group: "records", label: "Service providers" },
   "/app/compliance-settings": { icon: CalendarClock, group: "records", label: "Compliance settings" },
   "/app/corporate-history": { icon: History, group: "records", label: "Corporate history" },
   "/app/annual-filings": { icon: CalendarCheck, group: "records", label: "Annual filings" },
-  "/app/certificate-register": { icon: ScrollText, group: "records", label: "Certificate register" },
+  "/app/certificate-register": { icon: ScrollText, group: "records", label: "Certificate register", entityKinds: ["corporation"] },
   "/app/minute-book": { icon: BookOpen, group: "records", label: "Minute book" },
   "/app/bylaw-rules": { icon: BookMarked, group: "records", label: "Bylaw rules" },
   "/app/bylaw-diff": { icon: GitCompare, group: "records", label: "Bylaw redline" },

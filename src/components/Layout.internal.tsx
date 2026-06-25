@@ -241,6 +241,7 @@ type NavItem = {
   color: IconTone;
   end?: boolean;
   module?: ModuleKey;
+  entityKinds?: ("society" | "corporation")[];
 };
 
 
@@ -269,6 +270,7 @@ function navItem(to: string, end?: boolean): NavItem {
     color: id.color,
     ...(end ? { end } : {}),
     ...(id.module ? { module: id.module } : {}),
+    ...(id.entityKinds ? { entityKinds: id.entityKinds } : {}),
   };
 }
 
