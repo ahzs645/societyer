@@ -120,6 +120,10 @@ const WorkflowRunsPage = React.lazy(() => import("./pages/WorkflowRuns").then((m
 const WorkflowPackagesPage = React.lazy(() => import("./pages/WorkflowPackages").then((m) => ({ default: m.WorkflowPackagesPage })));
 const RoleHoldersPage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.RoleHoldersPage })));
 const PointInTimeRegisterPage = React.lazy(() => import("./pages/PointInTimeRegister").then((m) => ({ default: m.PointInTimeRegisterPage })));
+const SignificantIndividualsPage = React.lazy(() => import("./pages/SignificantIndividuals").then((m) => ({ default: m.SignificantIndividualsPage })));
+const PeopleDirectoryPage = React.lazy(() => import("./pages/PeopleDirectory").then((m) => ({ default: m.PeopleDirectoryPage })));
+const DividendsPage = React.lazy(() => import("./pages/Dividends").then((m) => ({ default: m.DividendsPage })));
+const ServiceProvidersPage = React.lazy(() => import("./pages/ServiceProviders").then((m) => ({ default: m.ServiceProvidersPage })));
 const RightsLedgerPage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.RightsLedgerPage })));
 const TemplateEnginePage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.TemplateEnginePage })));
 const FormationMaintenancePage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.FormationMaintenancePage })));
@@ -296,6 +300,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="organization-details" element={<OrganizationDetailsPage />} />
             <Route path="role-holders" element={<RoleHoldersPage />} />
             <Route path="point-in-time-register" element={<PointInTimeRegisterPage />} />
+            <Route path="significant-individuals" element={<SignificantIndividualsPage />} />
+            <Route path="people-directory" element={<PeopleDirectoryPage />} />
+            <Route path="dividends" element={<DividendsPage />} />
+            <Route path="service-providers" element={<ServiceProvidersPage />} />
             <Route path="rights-ledger" element={<RightsLedgerPage />} />
             <Route path="template-engine" element={<TemplateEnginePage />} />
             <Route path="formation-maintenance" element={<FormationMaintenancePage />} />

@@ -15,6 +15,10 @@ import {
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
 import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
 import { roleHoldersAsOf } from "../../shared/registerHistory";
+import { computeDividend, totalDeclaredByClass, totalDeclaredByCurrency } from "../../shared/dividends";
+import { activeProvidersAsOf, SERVICE_PROVIDER_FUNCTIONS } from "../../shared/serviceProviders";
+import { normalizeSearchName, matchByPrefix, findDuplicates } from "../../shared/peopleDirectory";
+import { reviewsDue as computeReviewsDue } from "../../shared/significantIndividuals";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { DEFAULT_HOME_JURISDICTION_CODE, registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
 import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "./localDexieRowStore";
@@ -2222,6 +2226,39 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
       return roleHolderRows.filter((row) => row.roleType === "controller");
     }
   }
+  if (moduleName === "dividends") {
+    const rows = (store?.listRows("dividends", args) ?? []) as any[];
+    if (exportName === "list") {
+      return [...rows].sort((a, b) => String(a.declaredOn ?? "").localeCompare(String(b.declaredOn ?? "")));
+    }
+    if (exportName === "summary") {
+      return { byClass: totalDeclaredByClass(rows), byCurrency: totalDeclaredByCurrency(rows) };
+    }
+  }
+  if (moduleName === "serviceProviders") {
+    if (exportName === "functionsCatalog") return SERVICE_PROVIDER_FUNCTIONS;
+    const rows = (store?.listRows("serviceProviders", args) ?? []) as any[];
+    if (exportName === "list") return rows;
+    if (exportName === "activeAsOf") return activeProvidersAsOf(rows, String(args?.asOf ?? ""));
+  }
+  if (moduleName === "peopleDirectory") {
+    const rows = (store?.listRows("peopleDirectory", {}) ?? []) as any[];
+    const people = rows.map((r) => ({
+      id: String(r._id), fullName: r.fullName, firstName: r.firstName, lastName: r.lastName, dob: r.dob, isIndividual: r.isIndividual,
+    }));
+    if (exportName === "list") return [...rows].sort((a, b) => String(a.searchName ?? "").localeCompare(String(b.searchName ?? "")));
+    if (exportName === "searchByPrefix") return matchByPrefix(people, String(args?.prefix ?? ""), args?.limit ?? 10);
+    if (exportName === "duplicates") return findDuplicates(people);
+  }
+  if (moduleName === "significantIndividualSteps") {
+    const rows = (store?.listRows("significantIndividualSteps", args) ?? []) as any[];
+    if (exportName === "list") {
+      return [...rows].sort((a, b) => String(b.stepDate ?? "").localeCompare(String(a.stepDate ?? "")));
+    }
+    if (exportName === "reviewsDue") {
+      return computeReviewsDue(rows as any[], String(args?.asOf ?? ""));
+    }
+  }
   if (moduleName === "legalOperations" && exportName === "rightsLedger") {
     const classes = (store?.listRows("rightsClasses", args) ?? [])
       .sort((a, b) => String(a.className ?? "").localeCompare(String(b.className ?? "")));
@@ -4348,6 +4385,20 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
   }
 
     const [moduleName, exportName] = name.split(":");
+  // Derived fields that the real Convex handlers compute — inject so the generic
+  // CRUD persist below stores them offline too (searchName, totalCents).
+  if (name === "peopleDirectory:upsert" && args) {
+    (args as any).searchName = normalizeSearchName(String((args as any).fullName ?? ""));
+  }
+  if (name === "dividends:create" && args && (args as any).totalCents == null) {
+    (args as any).totalCents = computeDividend({
+      declaredOn: String((args as any).declaredOn ?? ""),
+      shareClass: String((args as any).shareClass ?? ""),
+      perShareCents: Number((args as any).perShareCents ?? 0),
+      sharesOutstanding: Number((args as any).sharesOutstanding ?? 0),
+      currency: String((args as any).currency ?? ""),
+    }).totalCents;
+  }
   if (exportName && /^(create|update|upsert|issue|setStatus|remove)/.test(exportName)) {
     const tableName = staticMutationTableName(moduleName, exportName);
     if (exportName.startsWith("remove")) {
