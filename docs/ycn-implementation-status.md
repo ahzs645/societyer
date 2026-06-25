@@ -95,3 +95,46 @@ The A/B/C scope is complete. Sensible next steps if desired:
   logic is runtime-tested in the pure `shared/` layer.
 - The offline `StaticConvexClient` is a hand-written mirror; new frontend writes must
   be added there (and to the parity ledger) — accounted for above.
+
+---
+
+# Society / Corporation / Multi-entity architecture + modularization
+
+## Three views
+- **Society view** — BC Societies Act entity. Sees universal registers + the new
+  society document packet catalog (`shared/societyDocumentPackets.ts`: AGM,
+  directors' resolution, special resolution of the members, director appointment,
+  registered-office change), which render society prose ("members", "Societies
+  Act") through the same grammar engine.
+- **Corporation view** — BC Business Corporations Act entity. Additionally sees
+  the share-capital features (Certificate Register, Dividends) and the BC
+  transparency register (Significant Individuals), plus the corporation packets.
+- **Multi-entity (portfolio) view** — `src/pages/Portfolio.tsx` lists every
+  society AND corporation grouped by kind with one-click switching (the YCN
+  entity-index premise). The people directory is already cross-entity.
+
+## Entity-kind gating
+`RouteIdentity.entityKinds` + `routeAllowedForEntityKind`, propagated through
+`NavItem` and applied in the sidebar/command filters via `organizationKind(society)`.
+Corporation-only routes (Dividends, Certificate Register, Significant Individuals)
+are gated to `["corporation"]`; universal registers show for both; unknown kind
+shows everything. (Fix: all the new register pages were also added to the
+hand-listed `NAV_GROUPS` so they actually appear in the sidebar.)
+
+## Schema modularization (in progress)
+`convex/schema.ts` (186 tables / 4,545 lines) is being split into domain modules
+that spread back into `defineSchema({...})` — generated types/runtime are
+byte-identical (verified by `convex:typecheck`). First module:
+`convex/tables/ycnRegisters.ts` (`sharedRegisterTables` + `corporationRegisterTables`,
+grouped by entity applicability). schema.ts is now 4,416 lines; remaining domains
+follow the same pattern.
+
+## Static-mirror modularization
+`src/lib/staticConvex.ts` (5,800 lines) split: all YCN-register handlers moved to
+`src/lib/staticConvexYcn.ts` (`ycnQueryResult` / `ycnMutationResult` /
+`applyYcnDerivedFields`); staticConvex delegates and falls through on
+`YCN_NOT_HANDLED`. The parity-gate scanner now reads the sibling module too.
+
+## Verification
+26 YCN test suites green; `convex:typecheck` + app `tsc` + `static-parity`
+(427 frontend writes) clean.
