@@ -8,6 +8,7 @@ import {
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
 import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
 import { planShareSplit, validateRatio, type HoldingPosition, type SplitRatio } from "../../shared/shareSplit";
+import { postIncorporationStepsForOrganization } from "../../shared/postIncorporationSteps";
 import {
   buildTimeline,
   changesBetween as changesBetweenPure,
@@ -2226,6 +2227,19 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
   if (moduleName === "legalOperations" && exportName === "listRoleHolders") {
     return (store?.listRows("roleHolders", args) ?? [])
       .sort((a, b) => String(a.fullName ?? "").localeCompare(String(b.fullName ?? "")));
+  }
+  if (moduleName === "postIncorporation" && exportName === "checklist") {
+    const society = store?.getRow("societies", args?.societyId);
+    if (!society) return { steps: [], generatedPacketKeys: [] };
+    const steps = postIncorporationStepsForOrganization(society as any);
+    const generated = new Set<string>();
+    for (const run of store?.listRows("legalPrecedentRuns", { societyId: args?.societyId }) ?? []) {
+      for (const id of run.sourceExternalIds ?? []) {
+        const match = /^societyer:corporation-packet-run:(.+)$/.exec(String(id));
+        if (match) generated.add(match[1]);
+      }
+    }
+    return { steps, generatedPacketKeys: Array.from(generated) };
   }
   if (moduleName === "roleHolderHistory" && exportName === "revisionHistory") {
     const revisions = staticStoredRoleHolderRevisions(store, { roleHolderId: args?.roleHolderId });
