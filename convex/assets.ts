@@ -47,6 +47,14 @@ const assetPatch = v.object({
   disposalValueCents: v.optional(v.number()),
   disposalApprovedMeetingId: v.optional(v.id("meetings")),
   disposalDocumentIds: v.optional(v.array(v.id("documents"))),
+  // YCN CORP_ASSETS acquire/dispose detail.
+  acquiredFrom: v.optional(v.string()),
+  disposedTo: v.optional(v.string()),
+  assetJurisdiction: v.optional(v.string()),
+  acquisitionCurrency: v.optional(v.string()),
+  dispositionCurrency: v.optional(v.string()),
+  acquisitionComments: v.optional(v.string()),
+  dispositionComments: v.optional(v.string()),
   notes: v.optional(v.string()),
 });
 

@@ -19,6 +19,10 @@ import { computeDividend, totalDeclaredByClass, totalDeclaredByCurrency } from "
 import { activeProvidersAsOf, SERVICE_PROVIDER_FUNCTIONS } from "../../shared/serviceProviders";
 import { normalizeSearchName, matchByPrefix, findDuplicates } from "../../shared/peopleDirectory";
 import { reviewsDue as computeReviewsDue } from "../../shared/significantIndividuals";
+import { nameTimeline, nameAsOf as computeNameAsOf, nameChangeNarrative } from "../../shared/nameHistory";
+import { constatingTimeline, currentRegime as computeCurrentRegime, regimeNarrative } from "../../shared/constating";
+import { jurisdictionsTracked, filingHistory, outstandingYears } from "../../shared/annualFilings";
+import { activeCertificates, certificateChain, sharesOutstandingByClass } from "../../shared/shareCertificates";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { DEFAULT_HOME_JURISDICTION_CODE, registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
 import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "./localDexieRowStore";
@@ -2259,6 +2263,39 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
       return computeReviewsDue(rows as any[], String(args?.asOf ?? ""));
     }
   }
+  if (moduleName === "nameHistory") {
+    const recs = (store?.listRows("societyNameHistory", args) ?? []) as any[];
+    if (exportName === "list") return nameTimeline(recs);
+    if (exportName === "asOf") return computeNameAsOf(recs, String(args?.asOf ?? ""));
+    if (exportName === "narrative") return nameChangeNarrative(recs);
+  }
+  if (moduleName === "constating") {
+    const events = (store?.listRows("constatingEvents", args) ?? []) as any[];
+    if (exportName === "list") return constatingTimeline(events);
+    if (exportName === "currentRegime") return computeCurrentRegime(events, String(args?.asOf ?? ""));
+    if (exportName === "narrative") return regimeNarrative(events);
+  }
+  if (moduleName === "annualFilings") {
+    const recs = (store?.listRows("annualFilingLedger", args) ?? []) as any[];
+    if (exportName === "list") return recs;
+    if (exportName === "jurisdictions") return jurisdictionsTracked(recs);
+    if (exportName === "history") return filingHistory(recs, String(args?.jurisdiction ?? ""));
+    if (exportName === "outstanding") return outstandingYears(recs, String(args?.jurisdiction ?? ""), String(args?.fromYear ?? ""), String(args?.toYear ?? ""));
+  }
+  if (moduleName === "shareCertificates") {
+    const rows = (store?.listRows("shareCertificates", args) ?? []) as any[];
+    if (exportName === "list") return rows;
+    if (exportName === "register") {
+      return { active: activeCertificates(rows, String(args?.asOf ?? "")), outstandingByClass: sharesOutstandingByClass(rows, String(args?.asOf ?? "")) };
+    }
+    if (exportName === "chain") return certificateChain(rows, String(args?.certificateNumber ?? ""));
+  }
+  if (moduleName === "entitySigners") {
+    const rows = (store?.listRows("entitySigners", args) ?? []) as any[];
+    if (exportName === "list" || exportName === "activeAsOfQuery") {
+      return [...rows].sort((a, b) => (a.signOrder ?? Infinity) - (b.signOrder ?? Infinity));
+    }
+  }
   if (moduleName === "legalOperations" && exportName === "rightsLedger") {
     const classes = (store?.listRows("rightsClasses", args) ?? [])
       .sort((a, b) => String(a.className ?? "").localeCompare(String(b.className ?? "")));
@@ -2394,15 +2431,53 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
 
   if (name === "society:updateComplianceSettings") {
     const existing = store?.getRow("societies", args?.societyId) ?? society;
+    const { societyId: _sid, ...settings } = args ?? {};
+    void _sid;
     store?.upsertRow("societies", {
       ...existing,
+      ...settings,
       _id: args?.societyId ?? existing._id,
-      agmMonth: args?.agmMonth,
-      agmDay: args?.agmDay,
-      waivePrepFinancials: args?.waivePrepFinancials,
       updatedAtISO: new Date().toISOString(),
     });
     return args?.societyId ?? existing._id;
+  }
+
+  if (name === "peopleDirectory:addToSociety") {
+    const person = store?.getRow("peopleDirectory", args?.directoryPersonId) ?? {};
+    const id = staticLocalId("roleHolders", "create");
+    store?.upsertRow("roleHolders", {
+      _id: id,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      roleType: args?.roleType,
+      status: "current",
+      fullName: person.fullName,
+      firstName: person.firstName,
+      lastName: person.lastName,
+      dateOfBirth: person.dob,
+      directoryPersonId: args?.directoryPersonId,
+      startDate: args?.startDate,
+      createdAtISO: args?.nowISO ?? new Date().toISOString(),
+      updatedAtISO: args?.nowISO ?? new Date().toISOString(),
+    });
+    return id;
+  }
+
+  if (name === "society:cloneSociety") {
+    const source = store?.getRow("societies", args?.sourceSocietyId) ?? {};
+    const newId = staticLocalId("societies", "create");
+    const { _id: _sid2, _creationTime: _sct, ...fields } = source as Record<string, unknown>;
+    void _sid2; void _sct;
+    store?.upsertRow("societies", { ...fields, _id: newId, name: args?.newName, incorporationNumber: undefined, updatedAtISO: new Date().toISOString() });
+    let copied = 0;
+    for (const table of ["roleHolders", "organizationAddresses", "organizationRegistrations", "rightsClasses", "serviceProviders", "societyNameHistory", "constatingEvents", "shareCertificates", "annualFilingLedger", "entitySigners"]) {
+      for (const row of store?.listRows(table, { societyId: args?.sourceSocietyId }) ?? []) {
+        const { _id: rid, _creationTime: rct, ...rest } = row as Record<string, unknown>;
+        void rid; void rct;
+        store?.upsertRow(table, { ...rest, _id: staticLocalId(table, "create"), societyId: newId });
+        copied += 1;
+      }
+    }
+    return { societyId: newId, copiedRows: copied };
   }
 
   if (name === "complianceObligations:markReviewed") {

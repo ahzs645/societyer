@@ -469,6 +469,59 @@ export const updateModules = mutation({
   },
 });
 
+// Deep-clone a society's records into a new society (YCN Copy_Entity_*): copies
+// the society row + a curated set of child registers under a fresh societyId.
+// Useful for onboarding a similar entity or spinning up from a template.
+const CLONE_CHILD_TABLES = [
+  "roleHolders",
+  "organizationAddresses",
+  "organizationRegistrations",
+  "rightsClasses",
+  "serviceProviders",
+  "societyNameHistory",
+  "constatingEvents",
+  "shareCertificates",
+  "annualFilingLedger",
+  "entitySigners",
+] as const;
+
+export const cloneSociety = mutation({
+  args: { sourceSocietyId: v.id("societies"), newName: v.string(), nowISO: v.string() },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const name = args.newName.trim();
+    if (!name) throw new Error("New society name is required.");
+    const source = await ctx.db.get(args.sourceSocietyId);
+    if (!source) throw new Error("Source society not found.");
+
+    const { _id, _creationTime, ...sourceFields } = source as Record<string, unknown>;
+    void _id;
+    void _creationTime;
+    const newSocietyId = await ctx.db.insert("societies", {
+      ...(sourceFields as any),
+      name,
+      incorporationNumber: undefined, // a clone is a distinct legal entity
+      updatedAt: Date.now(),
+    });
+
+    let copied = 0;
+    for (const table of CLONE_CHILD_TABLES) {
+      const rows = await ctx.db
+        .query(table)
+        .withIndex("by_society", (q: any) => q.eq("societyId", args.sourceSocietyId))
+        .collect();
+      for (const row of rows) {
+        const { _id: rid, _creationTime: rct, ...fields } = row as Record<string, unknown>;
+        void rid;
+        void rct;
+        await ctx.db.insert(table, { ...(fields as any), societyId: newSocietyId });
+        copied += 1;
+      }
+    }
+    return { societyId: newSocietyId, copiedRows: copied };
+  },
+});
+
 // YCN-style compliance settings (AGM date + financials-prep waiver). Consumed by
 // shared/corporationSettings.ts to derive AGM / annual-report deadlines.
 export const updateComplianceSettings = mutation({
@@ -477,15 +530,22 @@ export const updateComplianceSettings = mutation({
     agmMonth: v.optional(v.number()),
     agmDay: v.optional(v.number()),
     waivePrepFinancials: v.optional(v.boolean()),
+    shortName: v.optional(v.string()),
+    primaryContactName: v.optional(v.string()),
+    primaryContactPhone: v.optional(v.string()),
+    primaryContactEmail: v.optional(v.string()),
+    altContactName: v.optional(v.string()),
+    altContactPhone: v.optional(v.string()),
+    altContactEmail: v.optional(v.string()),
+    minuteBookLocation: v.optional(v.string()),
+    sealLocation: v.optional(v.string()),
+    docPrepLanguage: v.optional(v.string()),
+    responsibleLawyer: v.optional(v.string()),
+    restrictPeoplePicker: v.optional(v.boolean()),
   },
   returns: v.id("societies"),
-  handler: async (ctx, { societyId, agmMonth, agmDay, waivePrepFinancials }) => {
-    await ctx.db.patch(societyId, {
-      agmMonth,
-      agmDay,
-      waivePrepFinancials,
-      updatedAt: Date.now(),
-    });
+  handler: async (ctx, { societyId, ...settings }) => {
+    await ctx.db.patch(societyId, { ...settings, updatedAt: Date.now() });
     return societyId;
   },
 });

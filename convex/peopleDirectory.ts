@@ -79,6 +79,37 @@ export const upsert = mutation({
   },
 });
 
+// Materialize a directory person onto a society as a role holder (YCN
+// Name_Add_From_GLOB_PEOPLE_DIRECTORY): copies identity fields and links back to
+// the directory record via roleHolders.directoryPersonId.
+export const addToSociety = mutation({
+  args: {
+    directoryPersonId: v.id("peopleDirectory"),
+    societyId: v.id("societies"),
+    roleType: v.string(),
+    startDate: v.optional(v.string()),
+    nowISO: v.string(),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const person = await ctx.db.get(args.directoryPersonId);
+    if (!person) throw new Error("Directory person not found");
+    return await ctx.db.insert("roleHolders", {
+      societyId: args.societyId,
+      roleType: args.roleType,
+      status: "current",
+      fullName: person.fullName,
+      firstName: person.firstName,
+      lastName: person.lastName,
+      dateOfBirth: person.dob,
+      directoryPersonId: args.directoryPersonId,
+      startDate: args.startDate,
+      createdAtISO: args.nowISO,
+      updatedAtISO: args.nowISO,
+    });
+  },
+});
+
 export const duplicates = query({
   args: {},
   returns: v.any(),
