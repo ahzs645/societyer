@@ -77,6 +77,9 @@
     "test:ycn-date-codec": "tsx scripts/check-ycn-date-codec.ts",
     "test:versioned-register": "tsx scripts/check-versioned-register.ts",
     "test:reference-field": "tsx scripts/check-reference-field-constraint.ts",
+    "test:template-assembly": "tsx scripts/check-template-assembly.ts",
+    "test:render-context": "tsx scripts/check-render-context.ts",
+    "test:document-binding": "tsx scripts/check-document-binding.ts",
     "export:workspace:files": "tsx scripts/export-workspace-with-files.ts",
     "backup:runtime": "./scripts/backup-runtime-data.sh"
   },
