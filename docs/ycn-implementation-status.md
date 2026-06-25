@@ -46,11 +46,26 @@ Every gate stays green between commits: `npm run convex:typecheck`,
   `convex/significantIndividualSteps.ts`. Logic delegated to the tested shared libs.
 - Tests: `test:register-history-connection`, `test:persistence-wrappers`.
 
-## (B) UI ✅ (first surface; pattern established)
+## (B) UI ✅ (6 surfaces — full set)
 
-- `src/pages/PointInTimeRegister.tsx` — "who held each role on date X?" (read-only;
-  Directors/Officers/Members as of a chosen date). Route `/app/point-in-time-register`,
-  nav entry in the People group, static-mirror handler for offline/demo mode.
+All routed, nav-registered, and static-mirror-backed (offline-capable):
+
+- `src/pages/PointInTimeRegister.tsx` — "who held each role on date X?" (read-only).
+- `src/pages/SignificantIndividuals.tsx` — BC transparency register (as-of) +
+  diligence-steps sub-register with a reviews-due banner.
+- `src/pages/PeopleDirectory.tsx` — global directory: prefix typeahead, dedup
+  groups, upsert.
+- `src/pages/Dividends.tsx` — declarations register (list / summary / create / remove).
+- `src/pages/ServiceProviders.tsx` — provider register with function catalog +
+  active-today filter.
+- `src/pages/ComplianceSettings.tsx` — AGM date + fiscal year-end → derives and
+  inserts AGM/fiscal/annual-report deadlines via the existing `deadlines.create`.
+
+Write parity: all mutations either use generic-CRUD verbs (`create/upsert/remove`)
+or have an explicit mirror handler (`society:updateComplianceSettings`), so the
+parity gate stays green (416 frontend writes accounted for). Derived fields
+(`searchName`, `totalCents`) are injected in the mirror so offline persists
+correctly.
 
 ## (C) Live document generator ✅
 
@@ -61,18 +76,17 @@ Every gate stays green between commits: `npm run convex:typecheck`,
   token-free packets are byte-identical (`test:packet-grammar`, plus existing
   `corporation-packets`/`corporation-mvp` stay green).
 
-## Remaining (same proven patterns, not yet built)
+## Remaining (optional follow-ups)
 
-These each follow the established shared→convex→page recipe. Write-backed pages
-additionally need a static-mirror **write** handler + a `staticConvexParity.ts`
-ledger entry (the parity gate enforces this):
+The A/B/C scope is complete. Sensible next steps if desired:
 
-- UI: Significant-Individuals register + diligence-steps editor (writes).
-- UI: People-directory typeahead / dedup panel (writes).
-- UI: Dividends register & service-providers register (writes).
-- Settings: surface `agmMonth`/`agmDay`/`waivePrepFinancials` on Organization
-  Details, then auto-generate `deadlines` rows via `deriveComplianceDeadlines`.
-- `versionedRegister` adoption for true edit-history on a register (larger change).
+- `versionedRegister` adoption for true supersede-based edit-history on a live
+  register (e.g. directors) — a larger migration than the interval model used so far.
+- Wire `significanceReason` / `taxResidentHomeJurisdiction` editing into the
+  Significant-Individuals page (fields exist on `roleHolders`; currently read-only).
+- Playwright smoke coverage for the new pages (needs a running app + backend).
+- Promote grammar tokens into the seeded packet bodies so generated documents use
+  the NLG layer by default (capability is wired; default content is still static).
 
 ## Environment caveats (honest verification scope)
 
