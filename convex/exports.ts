@@ -183,6 +183,16 @@ export const EXPORTABLE_TABLES = [
   "inventoryCandidates",
   "rightsHoldings",
   "signatureProfiles",
+  // YCN-derived registers (shared + corporation).
+  "peopleDirectory",
+  "serviceProviders",
+  "societyNameHistory",
+  "constatingEvents",
+  "annualFilingLedger",
+  "entitySigners",
+  "dividends",
+  "significantIndividualSteps",
+  "shareCertificates",
 ] as const;
 
 const EXPORTABLE_SET = new Set<string>(EXPORTABLE_TABLES);

@@ -1,15 +1,23 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
 const schemaPath = path.join(root, "convex/schema.ts");
+const tablesDir = path.join(root, "convex/tables");
 const exportsPath = path.join(root, "convex/exports.ts");
 
-const schema = readFileSync(schemaPath, "utf8");
+// The schema is modularized: schema.ts spreads table groups from convex/tables/*.ts.
+// Scan all of them so table coverage reflects the full data model.
+const schemaSources = [readFileSync(schemaPath, "utf8")];
+if (existsSync(tablesDir)) {
+  for (const file of readdirSync(tablesDir)) {
+    if (file.endsWith(".ts")) schemaSources.push(readFileSync(path.join(tablesDir, file), "utf8"));
+  }
+}
 const exportsSource = readFileSync(exportsPath, "utf8");
 
-const schemaTables = Array.from(schema.matchAll(/^  ([A-Za-z0-9]+): defineTable/gm)).map(
-  (match) => match[1],
+const schemaTables = schemaSources.flatMap((src) =>
+  Array.from(src.matchAll(/^  ([A-Za-z0-9]+): defineTable/gm)).map((match) => match[1]),
 );
 const exportList = exportsSource.match(/export const EXPORTABLE_TABLES = \[([\s\S]*?)\] as const;/);
 if (!exportList) {
