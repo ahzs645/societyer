@@ -86,6 +86,7 @@
     "test:corporation-settings": "tsx scripts/check-corporation-settings.ts",
     "test:register-history-connection": "tsx scripts/check-register-history-connection.ts",
     "test:persistence-wrappers": "tsx scripts/check-persistence-wrappers.ts",
+    "test:packet-grammar": "tsx scripts/check-packet-grammar.ts",
     "test:dividends": "tsx scripts/check-dividends.ts",
     "test:service-providers": "tsx scripts/check-service-providers.ts",
     "test:register-diff": "tsx scripts/check-register-diff.ts",

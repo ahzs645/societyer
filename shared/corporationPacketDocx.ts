@@ -1,16 +1,21 @@
 import type { CORPORATION_DOCUMENT_PACKETS } from "./corporationDocumentPackets";
+import { renderText, renderSections } from "./packetRendering";
+import type { TemplateValues } from "./templateAssembly";
 
 const WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 type CorporationDocumentPacket = (typeof CORPORATION_DOCUMENT_PACKETS)[number];
 
-export function corporationPacketDocxBytes(packet: CorporationDocumentPacket) {
-  return buildDocxPackage(packet.packageName, corporationPacketDocxBlocks(packet));
+// Optional grammar/data context: when provided, packet prose renders through the
+// template engine (shared/packetRendering.ts) so {token}/{#if}/{#each} markup
+// binds. Omitted → token-free packets render byte-identically to before.
+export function corporationPacketDocxBytes(packet: CorporationDocumentPacket, context?: TemplateValues) {
+  return buildDocxPackage(packet.packageName, corporationPacketDocxBlocks(packet, context));
 }
 
-export function corporationPacketDocxDataUrl(packet: CorporationDocumentPacket) {
-  const bytes = corporationPacketDocxBytes(packet);
+export function corporationPacketDocxDataUrl(packet: CorporationDocumentPacket, context?: TemplateValues) {
+  const bytes = corporationPacketDocxBytes(packet, context);
   return `data:${DOCX_MIME_TYPE};base64,${base64FromBytes(bytes)}`;
 }
 
@@ -22,20 +27,21 @@ export function corporationPacketDocxMimeType() {
   return DOCX_MIME_TYPE;
 }
 
-function corporationPacketDocxBlocks(packet: CorporationDocumentPacket) {
+function corporationPacketDocxBlocks(packet: CorporationDocumentPacket, context?: TemplateValues) {
+  const sections = renderSections(packet.sections, context);
   return [
     { kind: "title", text: packet.packageName },
-    { kind: "paragraph", text: packet.summary },
+    { kind: "paragraph", text: renderText(packet.summary, context) },
     { kind: "heading", text: "Deliverable" },
-    { kind: "paragraph", text: packet.deliverable },
+    { kind: "paragraph", text: renderText(packet.deliverable, context) },
     { kind: "heading", text: "Review terms" },
-    { kind: "paragraph", text: packet.terms },
+    { kind: "paragraph", text: renderText(packet.terms, context) },
     { kind: "heading", text: "Required data" },
     ...packet.requiredDataFields.map((text) => ({ kind: "listItem", text })),
     { kind: "heading", text: "Review data" },
     ...packet.reviewDataFields.map((text) => ({ kind: "listItem", text })),
     { kind: "heading", text: "Packet sections" },
-    ...packet.sections.flatMap((section) => [
+    ...sections.flatMap((section) => [
       { kind: "heading", text: section.heading },
       ...section.body.map((text) => ({ kind: "paragraph", text })),
     ]),

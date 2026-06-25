@@ -21,6 +21,7 @@ import {
   corporationPacketDocxMimeType,
 } from "../shared/corporationPacketDocx";
 import { materializeRightsHoldings, validateLedger } from "../shared/equityLedger";
+import { buildSocietyRenderContext } from "../shared/societyRenderContext";
 
 export const listRoleHolders = query({
   args: { societyId: v.id("societies") },
@@ -1569,7 +1570,21 @@ async function createPacketRunArtifacts(ctx: any, args: {
     `societyer:corporation-packet-run:${args.packet.key}`,
     `societyer:legal-precedent-run:${args.runId}`,
   ];
-  const docxDataUrl = corporationPacketDocxDataUrl(args.packet);
+  // Build a grammar/data context so generated packet prose binds {token}/{#if}/
+  // {#each} markup (token-free packets are unaffected). Logic in the tested
+  // shared/societyRenderContext.ts.
+  const society = await ctx.db.get(args.societyId);
+  const roleHolders = await ctx.db
+    .query("roleHolders")
+    .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))
+    .collect();
+  const renderCtx = society
+    ? buildSocietyRenderContext(society, roleHolders, args.effectiveDate ?? now)
+    : undefined;
+  const docxDataUrl = corporationPacketDocxDataUrl(
+    args.packet,
+    renderCtx as unknown as Record<string, unknown> | undefined,
+  );
   const docxFileName = corporationPacketDocxFileName(args.packet);
   const docxMimeType = corporationPacketDocxMimeType();
   const draftDocumentId = await ctx.db.insert("documents", {
