@@ -84,6 +84,7 @@
     "test:significant-individuals": "tsx scripts/check-significant-individuals.ts",
     "test:people-directory": "tsx scripts/check-people-directory.ts",
     "test:corporation-settings": "tsx scripts/check-corporation-settings.ts",
+    "test:register-history-connection": "tsx scripts/check-register-history-connection.ts",
     "export:workspace:files": "tsx scripts/export-workspace-with-files.ts",
     "backup:runtime": "./scripts/backup-runtime-data.sh"
   },
