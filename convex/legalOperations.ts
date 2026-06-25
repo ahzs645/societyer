@@ -26,6 +26,8 @@ import { materializeRightsHoldings, validateLedger } from "../shared/equityLedge
 import { buildSocietyRenderContext } from "../shared/societyRenderContext";
 import { buildExecutionBlock, resolvingBodyFor, type SignerLine } from "../shared/executionBlock";
 import { activeAsOf, type IntervalRow } from "../shared/registerHistory";
+import { buildAnnualResolutionContext } from "../shared/annualResolution";
+import { buildDividendResolutionContext } from "../shared/dividendResolution";
 
 export const listRoleHolders = query({
   args: { societyId: v.id("societies") },
@@ -1749,7 +1751,10 @@ async function createPacketRunArtifacts(ctx: any, args: {
       signers,
       dateLong: renderCtx.date.long,
     });
-    context = { ...renderCtx, execution };
+    // Packet-specific operative data so the resolution body renders real clauses
+    // (YCN Doc - Annual / Doc - Dividends), not a generic blurb.
+    const dataContext = await buildPacketDataContext(ctx, args.packet, args.societyId, society, renderCtx);
+    context = { ...renderCtx, execution, ...dataContext };
   }
   const docxDataUrl = corporationPacketDocxDataUrl(args.packet, context);
   const docxFileName = corporationPacketDocxFileName(args.packet);
@@ -1872,6 +1877,54 @@ async function createPacketRunArtifacts(ctx: any, args: {
     });
   }
   return { draftDocumentId, draftDocumentVersionId, generatedDocumentId, signerIds, minuteBookItemId, sourceEvidenceId };
+}
+
+/**
+ * Build the packet-specific operative data context that the resolution body
+ * binds (YCN Doc - Annual / Doc - Dividends). Keyed off packet.key so generic
+ * packets are unaffected. Logic lives in the tested shared/* helpers.
+ */
+async function buildPacketDataContext(
+  ctx: any,
+  packet: (typeof CORPORATION_DOCUMENT_PACKETS)[number],
+  societyId: any,
+  society: any,
+  renderCtx: { dir: { list: Array<{ name: string }> } },
+): Promise<Record<string, unknown>> {
+  if (packet.key === "annual-resolutions") {
+    return {
+      annual: buildAnnualResolutionContext({
+        waivePrepFinancials: society?.waivePrepFinancials,
+        fiscalYearEnd: society?.fiscalYearEnd,
+        directors: renderCtx.dir.list,
+      }),
+    };
+  }
+  if (packet.key === "dividend-declaration") {
+    const rows = await ctx.db
+      .query("dividends")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .collect();
+    // The latest declaration date's rows make up one multi-class declaration.
+    let latest = "";
+    for (const row of rows) {
+      const declaredOn = String(row.declaredOn ?? "");
+      if (declaredOn > latest) latest = declaredOn;
+    }
+    const declarationRows = rows
+      .filter((row: any) => String(row.declaredOn ?? "") === latest)
+      .map((row: any) => ({
+        shareClass: String(row.shareClass ?? ""),
+        perShareCents: Number(row.perShareCents ?? 0),
+        sharesOutstanding: Number(row.sharesOutstanding ?? 0),
+        totalCents: Number(row.totalCents ?? 0),
+        currency: String(row.currency ?? ""),
+      }));
+    return {
+      dividend: buildDividendResolutionContext(declarationRows, { declaredDate: latest || undefined }),
+    };
+  }
+  return {};
 }
 
 async function defaultPacketSignerRoleHolderIds(ctx: any, societyId: any) {

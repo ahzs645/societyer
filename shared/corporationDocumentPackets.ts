@@ -148,7 +148,7 @@ export const CORPORATION_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
     partType: "filing",
     filingType: "annual_return",
     signatureRequired: true,
-    requiredSigners: ["all_directors"],
+    requiredSigners: ["all_shareholders"],
     requiredDataFields: ["CorporationName", "FiscalYearEndDate", "AnnualMeetingDate", "DirectorSlate", "FinancialStatements"],
     optionalDataFields: ["AuditorStatus", "ShareholderResolutionDate", "AnnualReturnConfirmation"],
     reviewDataFields: ["FinancialStatements", "AnnualReturn", "DirectorsRegister", "OfficersRegister", "ShareholdersRegister"],
@@ -160,10 +160,15 @@ export const CORPORATION_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
     templateFilingNames: ["Annual return", "Annual resolutions"],
     sections: [
       {
-        heading: "Annual Approvals",
+        heading: "Annual Consent Resolutions",
         body: [
-          "The corporation records annual approvals, confirms directors and officers, and retains financial statement approval evidence.",
-          "The annual return filing evidence is linked once submitted.",
+          "BE IT RESOLVED THAT:",
+          "1. {#if annual.waivePrepFinancials}The requirement to produce and publish financial statements of {org.shortName} for the most recently completed financial year is waived by the shareholders.{#else}The financial statements of {org.shortName} for the most recently completed financial year, as approved by the directors, are approved.{/if}",
+          "2. {#if annual.hasFiscalYearEnd}The next financial year end of {org.shortName} is fixed at {annual.fiscalYearEnd}.{#else}The next financial year end of {org.shortName} is confirmed.{/if}",
+          "3. {#if annual.waivePrepFinancials}The appointment of an auditor of {org.shortName} for the current financial year is waived.{#else}The directors are authorized to appoint an auditor of {org.shortName} for the current financial year and to fix the auditor's remuneration.{/if}",
+          "4. All lawful contracts, acts, proceedings, appointments and payments made by the directors of {org.shortName} in the preceding 12 months, and previously disclosed to the shareholders, are approved, ratified and confirmed.",
+          "5. {#if annual.hasDirectors}The following person{dir.plural} {dir.isAre} appointed as director{dir.plural} of {org.shortName} until their successors are elected or appointed: {annual.directorSlate}.{#else}The directors of {org.shortName} are confirmed.{/if}",
+          "6. The annual general meeting of {org.shortName} for the year is deemed to have been held on {date.long}.",
         ],
       },
     ],
@@ -243,9 +248,9 @@ export const CORPORATION_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
       {
         heading: "Dividend Declaration",
         body: [
-          "Being {#if dir.isSole}the sole director{/if}{#if dir.isMultiple}all the directors{/if} of {org.shortName}, the director{dir.plural} declare{dir.verbS} a dividend on the {ShareClass} shares of {org.shortName}.",
-          "The dividend is payable at the stated rate per share to the shareholders of record as at the record date, subject to the solvency test under the {org.legislation}.",
-          "This resolution is effective on {date.long}.",
+          "BE IT RESOLVED THAT {org.shortName} pay dividends on the issued and outstanding shares of the classes set out below{#if dividend.hasDeclaredDate}, as declared on {dividend.declaredDate}{/if}, subject to the solvency test under the {org.legislation}:",
+          "{#if dividend.hasDeclarations}{#each dividend.declarations}Class {.className}: {.perShare} per share — total {.total}. {/each}{#else}Complete the dividend schedule (class, amount per share, and total) before this resolution is signed.{/if}",
+          "This resolution is adopted by {#if dir.isSole}the sole director{/if}{#if dir.isMultiple}all the directors{/if} of {org.shortName} effective on {date.long}.",
         ],
       },
     ],
