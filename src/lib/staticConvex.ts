@@ -2229,6 +2229,14 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     if (exportName === "significantIndividualsAsOf") {
       return roleHolderRows.filter((row) => row.roleType === "controller");
     }
+    if (exportName === "addressesAsOf") {
+      const addrs = (store?.listRows("organizationAddresses", args) ?? []) as any[];
+      const filtered = args?.type ? addrs.filter((r) => r.type === args.type) : addrs;
+      const asOf = String(args?.asOf ?? "");
+      return filtered.filter(
+        (r) => (!r.effectiveFrom || r.effectiveFrom <= asOf) && (!r.effectiveTo || r.effectiveTo > asOf),
+      );
+    }
   }
   if (moduleName === "dividends") {
     const rows = (store?.listRows("dividends", args) ?? []) as any[];

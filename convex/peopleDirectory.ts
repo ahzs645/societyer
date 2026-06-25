@@ -47,32 +47,34 @@ export const upsert = mutation({
     dob: v.optional(v.string()),
     isIndividual: v.optional(v.boolean()),
     defaultAddress: v.optional(v.string()),
+    gender: v.optional(v.string()),
+    isServiceProvider: v.optional(v.boolean()),
+    atAgeOfMajority: v.optional(v.boolean()),
+    corpSign: v.optional(v.string()),
     nowISO: v.string(),
   },
   returns: v.any(),
   handler: async (ctx, args) => {
     const searchName = normalizeSearchName(args.fullName);
-    if (args.id) {
-      await ctx.db.patch(args.id, {
-        fullName: args.fullName,
-        firstName: args.firstName,
-        lastName: args.lastName,
-        dob: args.dob,
-        isIndividual: args.isIndividual,
-        defaultAddress: args.defaultAddress,
-        searchName,
-        updatedAtISO: args.nowISO,
-      });
-      return args.id;
-    }
-    return await ctx.db.insert("peopleDirectory", {
+    const fields = {
       fullName: args.fullName,
-      searchName,
       firstName: args.firstName,
       lastName: args.lastName,
       dob: args.dob,
       isIndividual: args.isIndividual,
       defaultAddress: args.defaultAddress,
+      gender: args.gender,
+      isServiceProvider: args.isServiceProvider,
+      atAgeOfMajority: args.atAgeOfMajority,
+      corpSign: args.corpSign,
+      searchName,
+    };
+    if (args.id) {
+      await ctx.db.patch(args.id, { ...fields, updatedAtISO: args.nowISO });
+      return args.id;
+    }
+    return await ctx.db.insert("peopleDirectory", {
+      ...fields,
       createdAtISO: args.nowISO,
       updatedAtISO: args.nowISO,
     });

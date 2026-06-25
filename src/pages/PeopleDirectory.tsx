@@ -65,6 +65,7 @@ export function PeopleDirectoryPage() {
       dob: "",
       isIndividual: true,
       defaultAddress: "",
+      gender: "",
     });
     setOpen(true);
   };
@@ -77,6 +78,7 @@ export function PeopleDirectoryPage() {
       dob: form.dob || undefined,
       isIndividual: form.isIndividual,
       defaultAddress: form.defaultAddress || undefined,
+      gender: form.gender || undefined,
       nowISO: new Date().toISOString(),
     });
     setOpen(false);
@@ -249,13 +251,27 @@ export function PeopleDirectoryPage() {
                 onChange={(e) => setForm({ ...form, dob: e.target.value })}
               />
             </Field>
-            <Field label="Default address">
-              <input
-                className="input"
-                value={form.defaultAddress}
-                onChange={(e) => setForm({ ...form, defaultAddress: e.target.value })}
-              />
-            </Field>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Default address">
+                <input
+                  className="input"
+                  value={form.defaultAddress}
+                  onChange={(e) => setForm({ ...form, defaultAddress: e.target.value })}
+                />
+              </Field>
+              <Field label="Gender (for document grammar)">
+                <select
+                  className="input"
+                  value={form.gender}
+                  onChange={(e) => setForm({ ...form, gender: e.target.value })}
+                >
+                  <option value="">—</option>
+                  <option value="M">Male (he/his)</option>
+                  <option value="F">Female (she/her)</option>
+                  <option value="X">Neutral (they/their)</option>
+                </select>
+              </Field>
+            </div>
             <label className="checkbox">
               <input
                 type="checkbox"

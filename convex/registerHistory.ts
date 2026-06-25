@@ -1,6 +1,6 @@
 import { query } from "./lib/untypedServer";
 import { v } from "convex/values";
-import { roleHoldersAsOf, type IntervalRow } from "../shared/registerHistory";
+import { roleHoldersAsOf, activeAsOf, type IntervalRow } from "../shared/registerHistory";
 import {
   deriveSignificanceStatus,
   type SignificantIndividual,
@@ -29,6 +29,27 @@ export const roleHoldersAsOfDate = query({
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
       .collect();
     return roleHoldersAsOf(rows as IntervalRow[], asOf, roleType);
+  },
+});
+
+/**
+ * Office/business addresses in effect on a specific ISO date, using the existing
+ * organizationAddresses effectiveFrom/effectiveTo intervals (YCN REG_OFFICE /
+ * REC_OFFICE / BUS_ADDRESS START_DT_TM point-in-time resolution).
+ */
+export const addressesAsOf = query({
+  args: { societyId: v.id("societies"), asOf: v.string(), type: v.optional(v.string()) },
+  returns: v.any(),
+  handler: async (ctx, { societyId, asOf, type }) => {
+    const rows = await ctx.db
+      .query("organizationAddresses")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+    const filtered = type ? rows.filter((r) => r.type === type) : rows;
+    return activeAsOf(filtered as IntervalRow[], asOf, {
+      start: "effectiveFrom",
+      end: "effectiveTo",
+    });
   },
 });
 
