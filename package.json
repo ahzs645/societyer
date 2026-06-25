@@ -73,6 +73,10 @@
     "test:ai-agent-contract": "tsx scripts/check-ai-agent-contract.ts",
     "test:csv-import-utils": "tsx scripts/check-csv-and-import-utils.ts",
     "test:integration-staging": "tsx scripts/check-integration-staging-bundles.ts",
+    "test:nlg-grammar": "tsx scripts/check-nlg-grammar.ts",
+    "test:ycn-date-codec": "tsx scripts/check-ycn-date-codec.ts",
+    "test:versioned-register": "tsx scripts/check-versioned-register.ts",
+    "test:reference-field": "tsx scripts/check-reference-field-constraint.ts",
     "export:workspace:files": "tsx scripts/export-workspace-with-files.ts",
     "backup:runtime": "./scripts/backup-runtime-data.sh"
   },
