@@ -184,6 +184,7 @@ export function routeAllowedForEntityKind(
 export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   // ---- Workspace ----
   "/app": { icon: LayoutDashboard, group: "workspace", label: "Dashboard" },
+  "/app/portfolio": { icon: Layers, group: "workspace", label: "Portfolio" },
   "/app/society": { icon: Building2, group: "workspace", label: "Society" },
   "/app/organization-details": { icon: Info, group: "workspace", label: "Org details" },
   "/app/org-history": { icon: Newspaper, group: "workspace", label: "Org history" },

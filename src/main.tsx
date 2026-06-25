@@ -128,6 +128,7 @@ const ComplianceSettingsPage = React.lazy(() => import("./pages/ComplianceSettin
 const CorporateHistoryPage = React.lazy(() => import("./pages/CorporateHistory").then((m) => ({ default: m.CorporateHistoryPage })));
 const AnnualFilingsPage = React.lazy(() => import("./pages/AnnualFilings").then((m) => ({ default: m.AnnualFilingsPage })));
 const CertificateRegisterPage = React.lazy(() => import("./pages/CertificateRegister").then((m) => ({ default: m.CertificateRegisterPage })));
+const PortfolioPage = React.lazy(() => import("./pages/Portfolio").then((m) => ({ default: m.PortfolioPage })));
 const RightsLedgerPage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.RightsLedgerPage })));
 const TemplateEnginePage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.TemplateEnginePage })));
 const FormationMaintenancePage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.FormationMaintenancePage })));
@@ -312,6 +313,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="corporate-history" element={<CorporateHistoryPage />} />
             <Route path="annual-filings" element={<AnnualFilingsPage />} />
             <Route path="certificate-register" element={<CertificateRegisterPage />} />
+            <Route path="portfolio" element={<PortfolioPage />} />
             <Route path="rights-ledger" element={<RightsLedgerPage />} />
             <Route path="template-engine" element={<TemplateEnginePage />} />
             <Route path="formation-maintenance" element={<FormationMaintenancePage />} />
