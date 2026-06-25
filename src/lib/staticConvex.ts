@@ -7,6 +7,7 @@ import {
 } from "../../shared/corporationDocumentPackets";
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
 import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
+import { computeVotingPower } from "../../shared/votingPower";
 import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../../shared/societyDocumentPackets";
 import {
   ycnQueryResult,
@@ -2230,6 +2231,37 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     const roleHolders = (store?.listRows("roleHolders", args) ?? [])
       .sort((a, b) => String(a.fullName ?? "").localeCompare(String(b.fullName ?? "")));
     return { classes, holdings, transfers, roleHolders };
+  }
+  if (moduleName === "legalOperations" && exportName === "votingPower") {
+    const classes = store?.listRows("rightsClasses", args) ?? [];
+    const holdings = store?.listRows("rightsHoldings", args) ?? [];
+    const roleHolders = store?.listRows("roleHolders", args) ?? [];
+    const directory = store?.listRows("peopleDirectory", {}) ?? [];
+    const roleById = new Map(roleHolders.map((r: any) => [String(r._id), r]));
+    const dirById = new Map(directory.map((d: any) => [String(d._id), d]));
+    const meta: Record<string, { isIndividual?: boolean; atAgeOfMajority?: boolean }> = {};
+    const holdingInputs = holdings
+      .filter((h: any) => String(h.status) === "current" && Number(h.quantity) > 0)
+      .map((h: any) => {
+        const role = h.holderRoleHolderId ? roleById.get(String(h.holderRoleHolderId)) : undefined;
+        const dir = role?.directoryPersonId ? dirById.get(String(role.directoryPersonId)) : undefined;
+        if (dir && (dir.isIndividual !== undefined || dir.atAgeOfMajority !== undefined)) {
+          meta[String(h.holderKey)] = { isIndividual: dir.isIndividual, atAgeOfMajority: dir.atAgeOfMajority };
+        }
+        return {
+          holderKey: String(h.holderKey),
+          holderName: String(role?.fullName ?? h.holderKey),
+          rightsClassId: String(h.rightsClassId),
+          quantity: Number(h.quantity) || 0,
+        };
+      });
+    const classInputs = classes.map((c: any) => ({
+      rightsClassId: String(c._id),
+      votesPerShare: c.votesPerShare,
+      votingRights: c.votingRights,
+      classType: c.classType,
+    }));
+    return computeVotingPower(holdingInputs, classInputs, meta);
   }
   if (moduleName === "legalOperations" && exportName === "templateEngine") {
     return staticTemplateEngine(store, args);

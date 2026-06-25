@@ -269,6 +269,10 @@ export default defineSchema({
     idPrefix: v.optional(v.string()),
     highestAssignedNumber: v.optional(v.number()),
     votingRights: v.optional(v.string()),
+    // YCN "Register - Shares" VOTING multiplier: numeric votes per share (e.g. 10
+    // or 1). Drives the voting-power roll-up; falls back to inference from the
+    // votingRights free text when unset.
+    votesPerShare: v.optional(v.number()),
     startDate: v.optional(v.string()),
     endDate: v.optional(v.string()),
     conditionsToHold: v.optional(v.string()),

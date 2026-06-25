@@ -90,6 +90,7 @@
     "test:execution-block": "tsx scripts/check-execution-block.ts",
     "test:annual-resolution": "tsx scripts/check-annual-resolution.ts",
     "test:dividend-resolution": "tsx scripts/check-dividend-resolution.ts",
+    "test:voting-power": "tsx scripts/check-voting-power.ts",
     "test:share-certificates": "tsx scripts/check-share-certificates.ts",
     "test:share-split": "tsx scripts/check-share-split.ts",
     "test:name-history": "tsx scripts/check-name-history.ts",

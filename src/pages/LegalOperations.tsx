@@ -292,6 +292,9 @@ export function RoleHoldersPage() {
 export function RightsLedgerPage() {
   const society = useSociety();
   const data = useQuery(api.legalOperations.rightsLedger, society ? { societyId: society._id } : "skip");
+  const voting = useQuery(api.legalOperations.votingPower, society ? { societyId: society._id } : "skip") as
+    | { voting: any[]; nonVoting: any[]; eligibleSigners: any[]; totalVotes: number }
+    | undefined;
   const upsertClass = useMutation(api.legalOperations.upsertRightsClass);
   const upsertTransfer = useMutation(api.legalOperations.upsertRightsholdingTransfer);
   const stageShareIssuancePacket = useMutation(api.legalOperations.stageShareIssuancePacket);
@@ -318,6 +321,7 @@ export function RightsLedgerPage() {
       idPrefix: empty(classDraft.idPrefix),
       highestAssignedNumber: numberOrUndefined(classDraft.highestAssignedNumber),
       votingRights: empty(classDraft.votingRights),
+      votesPerShare: numberOrUndefined(classDraft.votesPerShare),
       startDate: empty(classDraft.startDate),
       endDate: empty(classDraft.endDate),
       conditionsToHold: empty(classDraft.conditionsToHold),
@@ -446,6 +450,43 @@ export function RightsLedgerPage() {
         </div>
       </Section>
 
+      {corporationWorkspace && (
+        <Section
+          title="Voting power"
+          count={voting?.voting?.length ?? 0}
+        >
+          <div className="table-wrap">
+            <table className="table">
+              <thead><tr><th>Shareholder</th><th>Shares</th><th>Votes</th><th>Eligible to sign</th></tr></thead>
+              <tbody>
+                {(voting?.voting ?? []).map((h: any) => (
+                  <tr key={h.holderKey}>
+                    <td><strong>{h.holderName}</strong></td>
+                    <td>{h.totalShares}</td>
+                    <td>{h.totalVotes}</td>
+                    <td>{h.isEligibleSignatory ? <Badge tone="success">Eligible</Badge> : <Badge tone="warn">Not eligible</Badge>}</td>
+                  </tr>
+                ))}
+                {(voting?.voting ?? []).length === 0 && <EmptyRow cols={4} label="No voting shareholders yet." />}
+                {(voting?.nonVoting ?? []).map((h: any) => (
+                  <tr key={h.holderKey} className="muted">
+                    <td>{h.holderName}</td>
+                    <td>{h.totalShares}</td>
+                    <td>0 (non-voting)</td>
+                    <td>—</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="muted" style={{ marginTop: 8 }}>
+            Total votes: {voting?.totalVotes ?? 0} · Eligible voting signatories:{" "}
+            {voting?.eligibleSigners?.length ?? 0} (natural persons at the age of majority). Set a class's
+            votes per share to weight the roll-up; otherwise it is inferred from the voting text.
+          </div>
+        </Section>
+      )}
+
       <Section title="Holding and transfer events" count={data?.transfers?.length ?? 0}>
         <div className="table-wrap">
           <table className="table">
@@ -496,6 +537,7 @@ export function RightsLedgerPage() {
             <div className="grid two">
               <Field label="ID prefix"><input className="input" value={classDraft.idPrefix ?? ""} onChange={(e) => setClassDraft({ ...classDraft, idPrefix: e.target.value })} /></Field>
               <Field label="Highest assigned number"><input className="input" value={classDraft.highestAssignedNumber ?? ""} onChange={(e) => setClassDraft({ ...classDraft, highestAssignedNumber: e.target.value })} /></Field>
+              <Field label="Votes per share"><input className="input" type="number" min="0" value={classDraft.votesPerShare ?? ""} onChange={(e) => setClassDraft({ ...classDraft, votesPerShare: e.target.value })} placeholder="e.g. 1" /></Field>
             </div>
             <Field label="Voting rights"><MarkdownEditor rows={4} value={classDraft.votingRights ?? ""} onChange={(markdown) => setClassDraft({ ...classDraft, votingRights: markdown })} /></Field>
             <Field label="Holding conditions"><MarkdownEditor rows={4} value={classDraft.conditionsToHold ?? ""} onChange={(markdown) => setClassDraft({ ...classDraft, conditionsToHold: markdown })} /></Field>

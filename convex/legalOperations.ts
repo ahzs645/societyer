@@ -28,6 +28,7 @@ import { buildExecutionBlock, resolvingBodyFor, type SignerLine } from "../share
 import { activeAsOf, type IntervalRow } from "../shared/registerHistory";
 import { buildAnnualResolutionContext } from "../shared/annualResolution";
 import { buildDividendResolutionContext } from "../shared/dividendResolution";
+import { computeVotingPower } from "../shared/votingPower";
 
 export const listRoleHolders = query({
   args: { societyId: v.id("societies") },
@@ -195,6 +196,50 @@ export const rightsLedger = query({
   },
 });
 
+/**
+ * Voting-power roll-up: each shareholder's total votes (shares × the class's
+ * votes-per-share), partitioned into voting / non-voting, plus the eligible
+ * voting-signatory set (natural persons at the age of majority). Logic in the
+ * tested shared/votingPower.ts.
+ */
+export const votingPower = query({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, { societyId }) => {
+    const [classes, holdings, roleHolders, directory] = await Promise.all([
+      ctx.db.query("rightsClasses").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("rightsHoldings").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("peopleDirectory").collect(),
+    ]);
+    const roleById = new Map<string, any>(roleHolders.map((r: any) => [String(r._id), r]));
+    const dirById = new Map<string, any>(directory.map((d: any) => [String(d._id), d]));
+    const meta: Record<string, { isIndividual?: boolean; atAgeOfMajority?: boolean }> = {};
+    const holdingInputs = holdings
+      .filter((h: any) => String(h.status) === "current" && Number(h.quantity) > 0)
+      .map((h: any) => {
+        const role = h.holderRoleHolderId ? roleById.get(String(h.holderRoleHolderId)) : undefined;
+        const dir = role?.directoryPersonId ? dirById.get(String(role.directoryPersonId)) : undefined;
+        if (dir && (dir.isIndividual !== undefined || dir.atAgeOfMajority !== undefined)) {
+          meta[String(h.holderKey)] = { isIndividual: dir.isIndividual, atAgeOfMajority: dir.atAgeOfMajority };
+        }
+        return {
+          holderKey: String(h.holderKey),
+          holderName: String(role?.fullName ?? h.holderKey),
+          rightsClassId: String(h.rightsClassId),
+          quantity: Number(h.quantity) || 0,
+        };
+      });
+    const classInputs = classes.map((c: any) => ({
+      rightsClassId: String(c._id),
+      votesPerShare: c.votesPerShare,
+      votingRights: c.votingRights,
+      classType: c.classType,
+    }));
+    return computeVotingPower(holdingInputs, classInputs, meta);
+  },
+});
+
 export const upsertRightsClass = mutation({
   args: {
     id: v.optional(v.id("rightsClasses")),
@@ -205,6 +250,7 @@ export const upsertRightsClass = mutation({
     idPrefix: v.optional(v.string()),
     highestAssignedNumber: v.optional(v.number()),
     votingRights: v.optional(v.string()),
+    votesPerShare: v.optional(v.number()),
     startDate: v.optional(v.string()),
     endDate: v.optional(v.string()),
     conditionsToHold: v.optional(v.string()),
@@ -228,6 +274,7 @@ export const upsertRightsClass = mutation({
       idPrefix: cleanText(args.idPrefix),
       highestAssignedNumber: args.highestAssignedNumber,
       votingRights: cleanText(args.votingRights),
+      votesPerShare: args.votesPerShare,
       startDate: cleanText(args.startDate),
       endDate: cleanText(args.endDate),
       conditionsToHold: cleanText(args.conditionsToHold),
