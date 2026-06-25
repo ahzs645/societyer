@@ -1,6 +1,7 @@
 import type { CORPORATION_DOCUMENT_PACKETS } from "./corporationDocumentPackets";
 import { renderText, renderSections } from "./packetRendering";
 import type { TemplateValues } from "./templateAssembly";
+import type { ExecutionBlockResult } from "./executionBlock";
 
 const WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -29,6 +30,10 @@ export function corporationPacketDocxMimeType() {
 
 function corporationPacketDocxBlocks(packet: CorporationDocumentPacket, context?: TemplateValues) {
   const sections = renderSections(packet.sections, context);
+  // Opt-in execution/signature page: rendered only when the caller precomputes
+  // and attaches an `execution` block to the context (shared/executionBlock.ts).
+  // Token-free / execution-free contexts stay byte-identical to before.
+  const execution = (context as { execution?: ExecutionBlockResult } | undefined)?.execution;
   return [
     { kind: "title", text: packet.packageName },
     { kind: "paragraph", text: renderText(packet.summary, context) },
@@ -48,6 +53,13 @@ function corporationPacketDocxBlocks(packet: CorporationDocumentPacket, context?
     { kind: "heading", text: "Required signers" },
     ...(packet.requiredSigners?.length ? packet.requiredSigners : ["Review signing requirements before use."])
       .map((text) => ({ kind: "listItem", text })),
+    ...(execution
+      ? [
+          { kind: "heading", text: "Execution" },
+          { kind: "paragraph", text: execution.adoptionClause },
+          ...execution.lines.map((text) => ({ kind: "paragraph", text })),
+        ]
+      : []),
   ];
 }
 

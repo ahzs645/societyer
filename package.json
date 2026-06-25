@@ -87,6 +87,7 @@
     "test:register-history-connection": "tsx scripts/check-register-history-connection.ts",
     "test:persistence-wrappers": "tsx scripts/check-persistence-wrappers.ts",
     "test:packet-grammar": "tsx scripts/check-packet-grammar.ts",
+    "test:execution-block": "tsx scripts/check-execution-block.ts",
     "test:share-certificates": "tsx scripts/check-share-certificates.ts",
     "test:share-split": "tsx scripts/check-share-split.ts",
     "test:name-history": "tsx scripts/check-name-history.ts",

@@ -24,6 +24,8 @@ import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../shared/so
 import { isCorporation } from "../shared/organizationDomain";
 import { materializeRightsHoldings, validateLedger } from "../shared/equityLedger";
 import { buildSocietyRenderContext } from "../shared/societyRenderContext";
+import { buildExecutionBlock, resolvingBodyFor, type SignerLine } from "../shared/executionBlock";
+import { activeAsOf, type IntervalRow } from "../shared/registerHistory";
 
 export const listRoleHolders = query({
   args: { societyId: v.id("societies") },
@@ -1709,10 +1711,47 @@ async function createPacketRunArtifacts(ctx: any, args: {
   const renderCtx = society
     ? buildSocietyRenderContext(society, roleHolders, args.effectiveDate ?? now)
     : undefined;
-  const docxDataUrl = corporationPacketDocxDataUrl(
-    args.packet,
-    renderCtx as unknown as Record<string, unknown> | undefined,
-  );
+  // Compute the execution/signature block (adoption clause + signature page) so
+  // the generated DOCX is a signable instrument, not a checklist. Signatories
+  // come from the per-entity signer roster (entitySigners) when one exists,
+  // otherwise from the resolving body's current role holders.
+  let context: Record<string, unknown> | undefined = renderCtx as unknown as
+    | Record<string, unknown>
+    | undefined;
+  if (renderCtx) {
+    const asOf = args.effectiveDate ?? now;
+    const body = resolvingBodyFor(args.packet.requiredSigners ?? []);
+    const signerRoster = await ctx.db
+      .query("entitySigners")
+      .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))
+      .collect();
+    const activeRoster = activeAsOf(signerRoster as unknown as IntervalRow[], asOf, {
+      start: "validFromISO",
+      end: "validToISO",
+    }) as Array<{ name?: string; corpSign?: string | null; signOrder?: number }>;
+    let signers: SignerLine[];
+    if (activeRoster.length) {
+      signers = [...activeRoster]
+        .sort((a, b) => (a.signOrder ?? Infinity) - (b.signOrder ?? Infinity))
+        .map((s) => ({ name: String(s.name ?? ""), corpSign: s.corpSign ?? null }));
+    } else {
+      signers = roleHolders
+        .filter((r: any) => body.roleTypes.includes(r.roleType) && !r.endDate)
+        .map((r: any) => ({ name: String(r.fullName ?? ""), capacity: body.capacity }));
+    }
+    const resolutionsPlural =
+      args.packet.sections.reduce((sum, section) => sum + section.body.length, 0) > 1;
+    const execution = buildExecutionBlock({
+      shortName: renderCtx.org.shortName,
+      legislation: renderCtx.org.legislation,
+      noun: body.noun,
+      resolutionsPlural,
+      signers,
+      dateLong: renderCtx.date.long,
+    });
+    context = { ...renderCtx, execution };
+  }
+  const docxDataUrl = corporationPacketDocxDataUrl(args.packet, context);
   const docxFileName = corporationPacketDocxFileName(args.packet);
   const docxMimeType = corporationPacketDocxMimeType();
   const draftDocumentId = await ctx.db.insert("documents", {
