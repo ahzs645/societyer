@@ -65,6 +65,11 @@ export default defineSchema({
     // Undefined = use the default (30). 0 = keep forever (never auto-delete).
     notificationRetentionDays: v.optional(v.number()),
     demoMode: v.optional(v.boolean()),
+    // YCN-style compliance settings consumed by shared/corporationSettings.ts to
+    // derive AGM / annual-report deadlines. Optional and additive.
+    agmMonth: v.optional(v.number()),
+    agmDay: v.optional(v.number()),
+    waivePrepFinancials: v.optional(v.boolean()),
     updatedAt: v.number(),
   }).index("by_public_slug", ["publicSlug"]),
 
@@ -192,6 +197,10 @@ export default defineSchema({
     sourceDocumentIds: v.array(v.id("documents")),
     sourceExternalIds: v.array(v.string()),
     notes: v.optional(v.string()),
+    // Transparency-register fields for roleType 'controller' (significant
+    // individuals), read by convex/registerHistory.ts significantIndividualsAsOf.
+    significanceReason: v.optional(v.string()),
+    taxResidentHomeJurisdiction: v.optional(v.string()), // yes | no | unknown
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })
@@ -4363,5 +4372,67 @@ export default defineSchema({
     .index("by_society", ["societyId"])
     .index("by_society_scope", ["societyId", "scopeType"])
     .index("by_object", ["objectMetadataId"]),
+
+  // --- YCN-derived registers (logic in shared/*.ts; these tables persist it) ---
+
+  // Cross-tenant people directory: store a person once, reuse across societies.
+  // Logic: shared/peopleDirectory.ts.
+  peopleDirectory: defineTable({
+    fullName: v.string(),
+    searchName: v.string(), // normalizeSearchName(fullName)
+    firstName: v.optional(v.string()),
+    lastName: v.optional(v.string()),
+    dob: v.optional(v.string()),
+    isIndividual: v.optional(v.boolean()),
+    defaultAddress: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_search_name", ["searchName"]),
+
+  // Dividend declarations (corporations track). Logic: shared/dividends.ts.
+  dividends: defineTable({
+    societyId: v.id("societies"),
+    declaredOn: v.string(),
+    shareClass: v.string(),
+    perShareCents: v.number(),
+    sharesOutstanding: v.number(),
+    currency: v.string(),
+    totalCents: v.number(),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_class", ["societyId", "shareClass"]),
+
+  // External service-provider register. Logic: shared/serviceProviders.ts.
+  serviceProviders: defineTable({
+    societyId: v.id("societies"),
+    function: v.string(), // lawyer | accountant | banker | transfer_agent | auditor | registered_agent | other
+    firmName: v.string(),
+    contactName: v.optional(v.string()),
+    firmLocation: v.optional(v.string()),
+    appointedOn: v.optional(v.string()),
+    removedOn: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_function", ["societyId", "function"]),
+
+  // Diligence sub-register: steps taken to confirm a significant individual.
+  // Logic: shared/significantIndividuals.ts (reviewsDue).
+  significantIndividualSteps: defineTable({
+    societyId: v.id("societies"),
+    individualName: v.string(),
+    roleHolderId: v.optional(v.id("roleHolders")),
+    stepsNarrative: v.string(),
+    stepDate: v.string(),
+    nextReviewDate: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_review", ["societyId", "nextReviewDate"]),
 
 });
