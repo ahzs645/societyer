@@ -78,6 +78,7 @@
     "test:ycn-access-import": "tsx scripts/check-ycn-access-import.ts",
     "test:versioned-register": "tsx scripts/check-versioned-register.ts",
     "test:reference-field": "tsx scripts/check-reference-field-constraint.ts",
+    "test:person-reference": "tsx scripts/check-person-reference.ts",
     "test:template-assembly": "tsx scripts/check-template-assembly.ts",
     "test:render-context": "tsx scripts/check-render-context.ts",
     "test:document-binding": "tsx scripts/check-document-binding.ts",

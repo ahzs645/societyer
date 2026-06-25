@@ -27,6 +27,7 @@ import { isCorporation } from "../shared/organizationDomain";
 import { materializeRightsHoldings, validateLedger } from "../shared/equityLedger";
 import { buildSocietyRenderContext } from "../shared/societyRenderContext";
 import { normalizeGender } from "../shared/nlg";
+import { enforcePersonReference } from "./lib/personReference";
 import { buildExecutionBlock, resolvingBodyFor, type SignerLine } from "../shared/executionBlock";
 import { activeAsOf, type IntervalRow } from "../shared/registerHistory";
 import { buildAnnualResolutionContext } from "../shared/annualResolution";
@@ -96,6 +97,7 @@ export const upsertRoleHolder = mutation({
     relatedShareholderIds: v.optional(v.array(v.string())),
     controllingIndividualIds: v.optional(v.array(v.string())),
     extraProvincialRegistrationId: v.optional(v.id("organizationRegistrations")),
+    directoryPersonId: v.optional(v.id("peopleDirectory")),
     gender: v.optional(v.string()),
     pronouns: v.optional(v.string()),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
@@ -109,6 +111,13 @@ export const upsertRoleHolder = mutation({
     assertAllowedOption("officerTitles", args.officerTitle, "Officer title");
     assertAllowedOption("directorTerms", args.directorTerm, "Director term");
     assertAllowedOption("citizenshipResidencies", args.citizenshipResidency, "Citizenship/residency");
+    // Enforce the society's People Directory constraint (free unless restricted).
+    const directoryPersonId = await enforcePersonReference(
+      ctx,
+      args.societyId,
+      args.fullName,
+      args.directoryPersonId,
+    );
     const now = new Date().toISOString();
     const payload = {
       societyId: args.societyId,
@@ -162,6 +171,7 @@ export const upsertRoleHolder = mutation({
       relatedShareholderIds: cleanList(args.relatedShareholderIds),
       controllingIndividualIds: cleanList(args.controllingIndividualIds),
       extraProvincialRegistrationId: args.extraProvincialRegistrationId,
+      directoryPersonId,
       gender: normalizeGender(args.gender),
       pronouns: cleanText(args.pronouns),
       sourceDocumentIds: args.sourceDocumentIds ?? [],
