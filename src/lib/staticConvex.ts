@@ -2,18 +2,26 @@ import { RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinition
 import {
   CORPORATION_DOCUMENT_PACKETS,
   corporationPacketEntityTypes,
-  corporationPacketForComplianceObligation,
   corporationPacketPrecedentMarker,
-  corporationPacketTemplateHtml,
   corporationPacketTemplateMarker,
 } from "../../shared/corporationDocumentPackets";
-import {
-  corporationPacketDocxDataUrl,
-  corporationPacketDocxFileName,
-  corporationPacketDocxMimeType,
-} from "../../shared/corporationPacketDocx";
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
 import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
+import { computeVotingPower } from "../../shared/votingPower";
+import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../../shared/societyDocumentPackets";
+import {
+  ycnQueryResult,
+  ycnMutationResult,
+  applyYcnDerivedFields,
+  YCN_NOT_HANDLED,
+} from "./staticConvexYcn";
+import {
+  staticSeedCorporationDocumentPackets,
+  staticSeedSocietyDocumentPackets,
+  staticCreatePacketRunArtifacts,
+  staticStageCorporationDocumentPacket,
+  staticGenerateDocumentFromCatalog,
+} from "./staticConvexDocuments";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { DEFAULT_HOME_JURISDICTION_CODE, registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
 import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "./localDexieRowStore";
@@ -2209,6 +2217,10 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     return (store?.listRows("roleHolders", args) ?? [])
       .sort((a, b) => String(a.fullName ?? "").localeCompare(String(b.fullName ?? "")));
   }
+  {
+    const ycn = ycnQueryResult(moduleName, exportName, args, store as any);
+    if (ycn !== YCN_NOT_HANDLED) return ycn;
+  }
   if (moduleName === "legalOperations" && exportName === "rightsLedger") {
     const classes = (store?.listRows("rightsClasses", args) ?? [])
       .sort((a, b) => String(a.className ?? "").localeCompare(String(b.className ?? "")));
@@ -2219,6 +2231,37 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     const roleHolders = (store?.listRows("roleHolders", args) ?? [])
       .sort((a, b) => String(a.fullName ?? "").localeCompare(String(b.fullName ?? "")));
     return { classes, holdings, transfers, roleHolders };
+  }
+  if (moduleName === "legalOperations" && exportName === "votingPower") {
+    const classes = store?.listRows("rightsClasses", args) ?? [];
+    const holdings = store?.listRows("rightsHoldings", args) ?? [];
+    const roleHolders = store?.listRows("roleHolders", args) ?? [];
+    const directory = store?.listRows("peopleDirectory", {}) ?? [];
+    const roleById = new Map(roleHolders.map((r: any) => [String(r._id), r]));
+    const dirById = new Map(directory.map((d: any) => [String(d._id), d]));
+    const meta: Record<string, { isIndividual?: boolean; atAgeOfMajority?: boolean }> = {};
+    const holdingInputs = holdings
+      .filter((h: any) => String(h.status) === "current" && Number(h.quantity) > 0)
+      .map((h: any) => {
+        const role = h.holderRoleHolderId ? roleById.get(String(h.holderRoleHolderId)) : undefined;
+        const dir = role?.directoryPersonId ? dirById.get(String(role.directoryPersonId)) : undefined;
+        if (dir && (dir.isIndividual !== undefined || dir.atAgeOfMajority !== undefined)) {
+          meta[String(h.holderKey)] = { isIndividual: dir.isIndividual, atAgeOfMajority: dir.atAgeOfMajority };
+        }
+        return {
+          holderKey: String(h.holderKey),
+          holderName: String(role?.fullName ?? h.holderKey),
+          rightsClassId: String(h.rightsClassId),
+          quantity: Number(h.quantity) || 0,
+        };
+      });
+    const classInputs = classes.map((c: any) => ({
+      rightsClassId: String(c._id),
+      votesPerShare: c.votesPerShare,
+      votingRights: c.votingRights,
+      classType: c.classType,
+    }));
+    return computeVotingPower(holdingInputs, classInputs, meta);
   }
   if (moduleName === "legalOperations" && exportName === "templateEngine") {
     return staticTemplateEngine(store, args);
@@ -2275,6 +2318,13 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
       createdAtISO: now,
       updatedAtISO: now,
     });
+    // Auto-seed the entity's document packet catalog by kind (mirrors
+    // convex/society.createWorkspace), unless the caller opts out.
+    if (args?.seedDocumentPackets !== false) {
+      const isCorp = String(args?.entityType ?? "").includes("corporation") || String(args?.actFormedUnder ?? "").includes("corporations_act");
+      if (isCorp) staticSeedCorporationDocumentPackets(store, { societyId });
+      else staticSeedSocietyDocumentPackets(store, { societyId });
+    }
     store?.upsertRow("organizationRegistrations", {
       _id: homeRegistrationId,
       _creationTime: Date.now(),
@@ -2342,6 +2392,11 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
     return args?.societyId ?? existing._id;
   }
 
+  {
+    const ycn = ycnMutationResult(name, args, store as any, staticLocalId, society);
+    if (ycn !== YCN_NOT_HANDLED) return ycn;
+  }
+
   if (name === "complianceObligations:markReviewed") {
     return staticUpsertComplianceDecision(store, {
       ...args,
@@ -2372,8 +2427,24 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
     return staticSeedCorporationDocumentPackets(store, args);
   }
 
+  if (name === "legalOperations:seedSocietyDocumentPackets") {
+    return staticSeedSocietyDocumentPackets(store, args);
+  }
+
+  if (name === "legalOperations:seedDocumentPacketsForEntity") {
+    const soc = store?.getRow("societies", args?.societyId) ?? society;
+    const kind = String(soc?.entityType ?? "").includes("corporation") || String(soc?.actFormedUnder ?? "").includes("corporations_act") ? "corporation" : "society";
+    return kind === "corporation"
+      ? { kind, ...staticSeedCorporationDocumentPackets(store, args) }
+      : { kind, ...staticSeedSocietyDocumentPackets(store, args) };
+  }
+
+  if (name === "legalOperations:generateDocumentFromCatalog") {
+    return staticGenerateDocumentFromCatalog(store, args, staticLocalId, staticUniqueStrings);
+  }
+
   if (name === "legalOperations:stageCorporationDocumentPacket") {
-    return staticStageCorporationDocumentPacket(store, args);
+    return staticStageCorporationDocumentPacket(store, args, staticLocalId, staticUniqueStrings);
   }
 
   if (name === "legalOperations:stageShareIssuancePacket") {
@@ -4335,6 +4406,9 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
   }
 
     const [moduleName, exportName] = name.split(":");
+  // Derived fields that the real Convex handlers compute — inject so the generic
+  // CRUD persist below stores them offline too (searchName, totalCents).
+  applyYcnDerivedFields(name, args);
   if (exportName && /^(create|update|upsert|issue|setStatus|remove)/.test(exportName)) {
     const tableName = staticMutationTableName(moduleName, exportName);
     if (exportName.startsWith("remove")) {
@@ -4542,400 +4616,6 @@ function staticSyncRightsHoldings(store: StaticDemoDexieStore | null | undefined
   });
 }
 
-function staticCreatePacketRunArtifacts(store: StaticDemoDexieStore | null | undefined, args: {
-  societyId: string;
-  packet: (typeof CORPORATION_DOCUMENT_PACKETS)[number];
-  runId: string;
-  eventId?: string;
-  effectiveDate?: string;
-  filingId?: string;
-  signerRoleHolderIds?: string[];
-  dataJson?: string;
-  notes?: string;
-}) {
-  const now = new Date().toISOString();
-  const run = store?.getRow("legalPrecedentRuns", args.runId);
-  const signerRoleHolderIds = args.signerRoleHolderIds?.length
-    ? args.signerRoleHolderIds
-    : (store?.listRows("roleHolders", { societyId: args.societyId }) ?? [])
-      .filter((row: any) => row.status === "current" && ["director", "officer", "authorized_representative"].includes(row.roleType))
-      .map((row: any) => row._id);
-  const sourceExternalIds = staticUniqueStrings([
-    ...(run?.sourceExternalIds ?? []),
-    `societyer:corporation-packet-run:${args.packet.key}`,
-    `societyer:legal-precedent-run:${args.runId}`,
-  ]);
-  const docxDataUrl = corporationPacketDocxDataUrl(args.packet);
-  const docxFileName = corporationPacketDocxFileName(args.packet);
-  const docxMimeType = corporationPacketDocxMimeType();
-  const draftDocumentId = staticLocalId("document", `${args.packet.key}_editable_docx`);
-  const draftDocumentVersionId = staticLocalId("documentVersion", `${args.packet.key}_editable_docx`);
-  const generatedDocumentId = staticLocalId("generatedLegalDocument", args.packet.key);
-  const sourceEvidenceId = staticLocalId("sourceEvidence", args.packet.key);
-  const minuteBookItemId = staticLocalId("minuteBookItem", args.packet.key);
-  const signerIds: string[] = [];
-
-  store?.transaction(() => {
-    store.upsertRow("documents", {
-      _id: draftDocumentId,
-      _creationTime: Date.now(),
-      societyId: args.societyId,
-      title: `${args.packet.packageName} - editable draft`,
-      category: "governance",
-      fileName: docxFileName,
-      mimeType: docxMimeType,
-      content: corporationPacketTemplateHtml(args.packet),
-      url: docxDataUrl,
-      fileSizeBytes: docxDataUrl.length,
-      retentionYears: 7,
-      createdAtISO: now,
-      reviewStatus: "needs_signature",
-      librarySection: "governance",
-      flaggedForDeletion: false,
-      sourceExternalIds,
-      sourcePayloadJson: args.dataJson,
-      tags: ["corporation-packet", args.packet.key, "editable-docx"],
-    });
-    store.upsertRow("documentVersions", {
-      _id: draftDocumentVersionId,
-      _creationTime: Date.now(),
-      societyId: args.societyId,
-      documentId: draftDocumentId,
-      version: 1,
-      storageProvider: "generated-inline",
-      storageKey: docxDataUrl,
-      fileName: docxFileName,
-      mimeType: docxMimeType,
-      fileSizeBytes: docxDataUrl.length,
-      uploadedByName: "Societyer packet generator",
-      uploadedAtISO: now,
-      changeNote: `Generated editable DOCX for ${args.packet.packageName}.`,
-      isCurrent: true,
-    });
-    store.upsertRow("generatedLegalDocuments", {
-      _id: generatedDocumentId,
-      _creationTime: Date.now(),
-      societyId: args.societyId,
-      title: args.packet.packageName,
-      status: "draft",
-      draftDocumentId,
-      sourceTemplateName: args.packet.templateName,
-      precedentRunId: args.runId,
-      eventId: args.eventId,
-      effectiveDate: args.effectiveDate,
-      documentTag: args.packet.documentTag,
-      dataJson: args.dataJson,
-      subloopJsonList: [],
-      signersRequiredRoleHolderIds: signerRoleHolderIds,
-      signersWhoSignedIds: [],
-      signerTagsRequired: args.packet.requiredSigners ?? [],
-      signerTagsSigned: [],
-      sourceDocumentIds: [draftDocumentId],
-      sourceExternalIds: staticUniqueStrings([
-        ...sourceExternalIds,
-        `societyer:editable-document:${draftDocumentId}`,
-        `societyer:document-version:${draftDocumentVersionId}`,
-      ]),
-      notes: args.notes,
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
-    for (const roleHolderId of signerRoleHolderIds) {
-      const roleHolder = store.getRow("roleHolders", roleHolderId);
-      if (!roleHolder) continue;
-      const signerId = staticLocalId("legalSigner", roleHolderId);
-      signerIds.push(signerId);
-      store.upsertRow("legalSigners", {
-        _id: signerId,
-        _creationTime: Date.now(),
-        societyId: args.societyId,
-        status: "unsigned",
-        fullName: roleHolder.fullName ?? "Unnamed signer",
-        firstName: roleHolder.firstName,
-        lastName: roleHolder.lastName,
-        email: roleHolder.email,
-        phone: roleHolder.phone,
-        signerTag: roleHolder.signerTag ?? roleHolder.roleType,
-        eventId: args.eventId,
-        generatedDocumentId,
-        roleHolderId,
-        sourceExternalIds: staticUniqueStrings([...sourceExternalIds, `societyer:generated-legal-document:${generatedDocumentId}`]),
-        notes: "Signer placeholder staged from corporation document packet.",
-        createdAtISO: now,
-        updatedAtISO: now,
-      });
-    }
-    store.upsertRow("sourceEvidence", {
-      _id: sourceEvidenceId,
-      _creationTime: Date.now(),
-      societyId: args.societyId,
-      sourceDocumentId: draftDocumentId,
-      externalSystem: "societyer",
-      externalId: `corporation-packet:${args.packet.key}:${args.runId}`,
-      sourceTitle: `${args.packet.packageName} editable packet`,
-      sourceDate: args.effectiveDate,
-      evidenceKind: "provenance",
-      targetTable: "generatedLegalDocuments",
-      targetId: generatedDocumentId,
-      sensitivity: "standard",
-      accessLevel: "internal",
-      summary: `Editable document, generated-document row, signer placeholders, and minute-book record staged for ${args.packet.packageName}.`,
-      status: "Linked",
-      notes: args.notes,
-      createdAtISO: now,
-    });
-    store.upsertRow("minuteBookItems", {
-      _id: minuteBookItemId,
-      _creationTime: Date.now(),
-      societyId: args.societyId,
-      title: args.packet.packageName,
-      recordType: args.packet.requiresAnnualMaintenanceRecord ? "filing" : "package",
-      effectiveDate: args.effectiveDate,
-      status: "Draft",
-      documentIds: [draftDocumentId],
-      filingId: args.filingId,
-      signatureIds: [],
-      sourceEvidenceIds: [sourceEvidenceId],
-      notes: args.notes ?? `Minute-book item staged from corporation packet ${args.packet.key}.`,
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
-    store.upsertRow("legalPrecedentRuns", {
-      ...run,
-      _id: args.runId,
-      generatedDocumentIds: [generatedDocumentId],
-      signerRoleHolderIds,
-      sourceExternalIds: staticUniqueStrings([
-        ...sourceExternalIds,
-        `societyer:editable-document:${draftDocumentId}`,
-        `societyer:document-version:${draftDocumentVersionId}`,
-        `societyer:generated-legal-document:${generatedDocumentId}`,
-        `societyer:minute-book-item:${minuteBookItemId}`,
-        `societyer:source-evidence:${sourceEvidenceId}`,
-        ...signerIds.map((signerId) => `societyer:legal-signer:${signerId}`),
-      ]),
-      updatedAtISO: now,
-    });
-    if (args.filingId) {
-      const filing = store.getRow("filings", args.filingId);
-      if (filing) {
-        store.upsertRow("filings", {
-          ...filing,
-          stagedPacketDocumentId: draftDocumentId,
-          relatedPrecedentRunId: args.runId,
-          updatedAtISO: now,
-        });
-      }
-    }
-  });
-
-  return { draftDocumentId, draftDocumentVersionId, generatedDocumentId, signerIds, minuteBookItemId, sourceEvidenceId };
-}
-
-function staticSeedCorporationDocumentPackets(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
-  const now = new Date().toISOString();
-  const societyId = args?.societyId ?? SOCIETY_ID;
-  const existingTemplates = store?.listRows("legalTemplates", { societyId }) ?? [];
-  const existingPrecedents = store?.listRows("legalPrecedents", { societyId }) ?? [];
-  let insertedTemplates = 0;
-  let updatedTemplates = 0;
-  let skippedTemplates = 0;
-  let insertedPrecedents = 0;
-  let updatedPrecedents = 0;
-  let skippedPrecedents = 0;
-  const templateIdByPacketKey = new Map<string, string>();
-
-  store?.transaction(() => {
-    for (const packet of CORPORATION_DOCUMENT_PACKETS) {
-      const marker = corporationPacketTemplateMarker(packet);
-      const existingByMarker = existingTemplates.find((row: any) => (row.sourceExternalIds ?? []).includes(marker));
-      const existingByName = existingTemplates.find((row: any) => String(row.name ?? "").toLowerCase() === packet.templateName.toLowerCase());
-      const id = existingByMarker?._id ?? `static_legal_template_${packet.key}`;
-      const payload = {
-        _id: id,
-        _creationTime: existingByMarker?._creationTime ?? Date.now(),
-        societyId,
-        templateType: "document",
-        name: packet.templateName,
-        status: "active",
-        html: corporationPacketTemplateHtml(packet),
-        notes: [
-          packet.summary,
-          "Catalog packet for corporation minute book, registers, filings, and compliance evidence.",
-          `Packet key: ${packet.key}`,
-        ].join("\n"),
-        owner: "Societyer corporation packet catalog",
-        ownerIsTobuso: false,
-        signatureRequired: packet.signatureRequired,
-        documentTag: packet.documentTag,
-        entityTypes: corporationPacketEntityTypes(),
-        jurisdictions: packet.jurisdictions,
-        requiredSigners: packet.requiredSigners,
-        requiredDataFieldIds: [],
-        optionalDataFieldIds: [],
-        reviewDataFieldIds: [],
-        requiredDataFields: packet.requiredDataFields,
-        optionalDataFields: packet.optionalDataFields,
-        reviewDataFields: packet.reviewDataFields,
-        timeline: packet.timeline,
-        deliverable: packet.deliverable,
-        terms: packet.terms,
-        filingType: packet.filingType,
-        priceItems: [],
-        sourceExternalIds: [marker],
-        createdAtISO: existingByMarker?.createdAtISO ?? now,
-        updatedAtISO: now,
-      };
-      if (existingByMarker) {
-        store.upsertRow("legalTemplates", payload);
-        updatedTemplates += 1;
-        templateIdByPacketKey.set(packet.key, id);
-      } else if (existingByName) {
-        skippedTemplates += 1;
-        templateIdByPacketKey.set(packet.key, existingByName._id);
-      } else {
-        store.upsertRow("legalTemplates", payload);
-        insertedTemplates += 1;
-        templateIdByPacketKey.set(packet.key, id);
-      }
-    }
-
-    const latestTemplates = store?.listRows("legalTemplates", { societyId }) ?? [];
-    for (const packet of CORPORATION_DOCUMENT_PACKETS) {
-      const marker = corporationPacketPrecedentMarker(packet);
-      const existingByMarker = existingPrecedents.find((row: any) => (row.sourceExternalIds ?? []).includes(marker));
-      const existingByName = existingPrecedents.find((row: any) => String(row.packageName ?? "").toLowerCase() === packet.packageName.toLowerCase());
-      const id = existingByMarker?._id ?? `static_legal_precedent_${packet.key}`;
-      const templateId = templateIdByPacketKey.get(packet.key) ??
-        latestTemplates.find((row: any) => String(row.name ?? "").toLowerCase() === packet.templateName.toLowerCase())?._id;
-      const payload = {
-        _id: id,
-        _creationTime: existingByMarker?._creationTime ?? Date.now(),
-        societyId,
-        packageName: packet.packageName,
-        partType: packet.partType,
-        status: "active",
-        description: packet.terms,
-        shortDescription: packet.summary,
-        timeline: packet.timeline,
-        deliverables: packet.deliverable,
-        internalNotes: `Catalog packet key: ${packet.key}`,
-        addOnTerms: packet.terms,
-        templateIds: templateId ? [templateId] : [],
-        templateNames: [packet.templateName],
-        templateFilingNames: packet.templateFilingNames ?? [],
-        templateSearchNames: [],
-        templateRegistrationNames: packet.templateRegistrationNames ?? [],
-        requiresAmendmentRecord: packet.requiresAmendmentRecord,
-        requiresAnnualMaintenanceRecord: packet.requiresAnnualMaintenanceRecord,
-        priceItems: [],
-        entityTypes: corporationPacketEntityTypes(),
-        jurisdictions: packet.jurisdictions,
-        subloopPairs: [],
-        sourceExternalIds: [marker],
-        createdAtISO: existingByMarker?.createdAtISO ?? now,
-        updatedAtISO: now,
-      };
-      if (existingByMarker) {
-        store.upsertRow("legalPrecedents", payload);
-        updatedPrecedents += 1;
-      } else if (existingByName) {
-        skippedPrecedents += 1;
-      } else {
-        store.upsertRow("legalPrecedents", payload);
-        insertedPrecedents += 1;
-      }
-    }
-  });
-
-  return {
-    insertedTemplates,
-    updatedTemplates,
-    skippedTemplates,
-    insertedPrecedents,
-    updatedPrecedents,
-    skippedPrecedents,
-    total: CORPORATION_DOCUMENT_PACKETS.length,
-  };
-}
-
-function staticStageCorporationDocumentPacket(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
-  const societyId = args?.societyId ?? SOCIETY_ID;
-  staticSeedCorporationDocumentPackets(store, { societyId });
-  const packet = args?.packetKey
-    ? CORPORATION_DOCUMENT_PACKETS.find((candidate) => candidate.key === args.packetKey)
-    : corporationPacketForComplianceObligation({
-        filingKind: args?.filingKind,
-        obligationKey: args?.obligationKey,
-        ruleId: args?.obligationRuleId,
-      });
-  if (!packet) throw new Error("No corporation document packet matches this obligation.");
-
-  const marker = corporationPacketPrecedentMarker(packet);
-  const precedent = (store?.listRows("legalPrecedents", { societyId }) ?? [])
-    .find((row: any) => (row.sourceExternalIds ?? []).includes(marker));
-  if (!precedent) throw new Error(`Corporation document packet precedent was not seeded: ${packet.key}`);
-
-  const now = new Date().toISOString();
-  const runId = staticLocalId("legalPrecedentRuns", packet.key);
-  store?.upsertRow("legalPrecedentRuns", {
-    _id: runId,
-    _creationTime: Date.now(),
-    societyId,
-    name: `${packet.packageName}${args?.dueDate ? ` - ${args.dueDate}` : ""}`,
-    status: "draft",
-    precedentId: precedent._id,
-    eventId: args?.obligationRuleId,
-    dateTime: args?.dueDate,
-    dataJson: JSON.stringify({
-      packetKey: packet.key,
-      obligationKey: args?.obligationKey,
-      obligationRuleId: args?.obligationRuleId,
-      obligationTitle: args?.obligationTitle,
-      filingKind: args?.filingKind,
-      dueDate: args?.dueDate,
-      sourceRegistrationId: args?.sourceRegistrationId,
-    }),
-    dataJsonList: [],
-    dataReviewed: false,
-    externalNotes: args?.obligationTitle,
-    searchIds: [],
-    registrationIds: args?.sourceRegistrationId ? [args.sourceRegistrationId] : [],
-    filingIds: args?.filingId ? [args.filingId] : [],
-    generatedDocumentIds: [],
-    signerRoleHolderIds: [],
-    priceItems: [],
-    abstainingDirectorIds: [],
-    abstainingRightsholderIds: [],
-    sourceExternalIds: [
-      `societyer:compliance-obligation:${args?.obligationRuleId ?? args?.obligationKey ?? packet.key}`,
-      `societyer:corporation-packet-run:${packet.key}`,
-    ],
-    notes: args?.notes ?? `Staged from compliance obligation ${args?.obligationKey ?? args?.obligationRuleId ?? packet.key}.`,
-    createdAtISO: now,
-    updatedAtISO: now,
-  });
-  const artifacts = staticCreatePacketRunArtifacts(store, {
-    societyId,
-    packet,
-    runId,
-    eventId: args?.obligationRuleId ?? args?.obligationKey,
-    effectiveDate: args?.dueDate,
-    filingId: args?.filingId,
-    dataJson: JSON.stringify({
-      packetKey: packet.key,
-      obligationKey: args?.obligationKey,
-      obligationRuleId: args?.obligationRuleId,
-      obligationTitle: args?.obligationTitle,
-      filingKind: args?.filingKind,
-      dueDate: args?.dueDate,
-      sourceRegistrationId: args?.sourceRegistrationId,
-    }),
-    notes: args?.notes ?? `Editable packet output staged from compliance obligation ${args?.obligationKey ?? args?.obligationRuleId ?? packet.key}.`,
-  });
-  return { runId, packetKey: packet.key, precedentId: precedent._id, ...artifacts };
-}
-
 function staticStageShareIssuancePacket(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
   const societyId = args?.societyId ?? SOCIETY_ID;
   const transfer = store?.getRow("rightsholdingTransfers", args?.transferId);
@@ -5017,7 +4697,7 @@ function staticStageShareIssuancePacket(store: StaticDemoDexieStore | null | und
         considerationDescription: transfer.considerationDescription,
       }),
       notes: args?.notes ?? `Editable share issuance packet output staged for ledger transfer ${args?.transferId}.`,
-    });
+    }, staticLocalId, staticUniqueStrings);
     store.upsertRow("rightsholdingTransfers", {
       ...transfer,
       precedentRunId: runId,

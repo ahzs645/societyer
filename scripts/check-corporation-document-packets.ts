@@ -15,6 +15,7 @@ const created = await client.mutation("society:createWorkspace", {
   fiscalYearEnd: "12-31",
   jurisdictionCode: "CA-FED-CBCA",
   entityType: "corporation__business_",
+  seedDocumentPackets: false,
   actFormedUnder: "canada_business_corporations_act",
 });
 

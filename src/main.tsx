@@ -40,6 +40,7 @@ const DeadlinesPage = React.lazy(() => import("./pages/Deadlines").then((m) => (
 const AnnualCyclePage = React.lazy(() => import("./pages/AnnualCycle").then((m) => ({ default: m.AnnualCyclePage })));
 const DocumentsPage = React.lazy(() => import("./pages/Documents").then((m) => ({ default: m.DocumentsPage })));
 const DocumentWorkbenchPage = React.lazy(() => import("./pages/DocumentWorkbench").then((m) => ({ default: m.DocumentWorkbenchPage })));
+const DocumentCatalogPage = React.lazy(() => import("./pages/DocumentCatalog").then((m) => ({ default: m.DocumentCatalogPage })));
 const LibraryPage = React.lazy(() => import("./pages/Library").then((m) => ({ default: m.LibraryPage })));
 const MinuteBookPage = React.lazy(() => import("./pages/MinuteBook").then((m) => ({ default: m.MinuteBookPage })));
 const ConflictsPage = React.lazy(() => import("./pages/Conflicts").then((m) => ({ default: m.ConflictsPage })));
@@ -119,6 +120,16 @@ const WorkflowDetailPage = React.lazy(() => import("./pages/WorkflowDetail").the
 const WorkflowRunsPage = React.lazy(() => import("./pages/WorkflowRuns").then((m) => ({ default: m.WorkflowRunsPage })));
 const WorkflowPackagesPage = React.lazy(() => import("./pages/WorkflowPackages").then((m) => ({ default: m.WorkflowPackagesPage })));
 const RoleHoldersPage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.RoleHoldersPage })));
+const PointInTimeRegisterPage = React.lazy(() => import("./pages/PointInTimeRegister").then((m) => ({ default: m.PointInTimeRegisterPage })));
+const SignificantIndividualsPage = React.lazy(() => import("./pages/SignificantIndividuals").then((m) => ({ default: m.SignificantIndividualsPage })));
+const PeopleDirectoryPage = React.lazy(() => import("./pages/PeopleDirectory").then((m) => ({ default: m.PeopleDirectoryPage })));
+const DividendsPage = React.lazy(() => import("./pages/Dividends").then((m) => ({ default: m.DividendsPage })));
+const ServiceProvidersPage = React.lazy(() => import("./pages/ServiceProviders").then((m) => ({ default: m.ServiceProvidersPage })));
+const ComplianceSettingsPage = React.lazy(() => import("./pages/ComplianceSettings").then((m) => ({ default: m.ComplianceSettingsPage })));
+const CorporateHistoryPage = React.lazy(() => import("./pages/CorporateHistory").then((m) => ({ default: m.CorporateHistoryPage })));
+const AnnualFilingsPage = React.lazy(() => import("./pages/AnnualFilings").then((m) => ({ default: m.AnnualFilingsPage })));
+const CertificateRegisterPage = React.lazy(() => import("./pages/CertificateRegister").then((m) => ({ default: m.CertificateRegisterPage })));
+const PortfolioPage = React.lazy(() => import("./pages/Portfolio").then((m) => ({ default: m.PortfolioPage })));
 const RightsLedgerPage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.RightsLedgerPage })));
 const TemplateEnginePage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.TemplateEnginePage })));
 const FormationMaintenancePage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.FormationMaintenancePage })));
@@ -294,6 +305,16 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="society" element={<SocietyPage />} />
             <Route path="organization-details" element={<OrganizationDetailsPage />} />
             <Route path="role-holders" element={<RoleHoldersPage />} />
+            <Route path="point-in-time-register" element={<PointInTimeRegisterPage />} />
+            <Route path="significant-individuals" element={<SignificantIndividualsPage />} />
+            <Route path="people-directory" element={<PeopleDirectoryPage />} />
+            <Route path="dividends" element={<DividendsPage />} />
+            <Route path="service-providers" element={<ServiceProvidersPage />} />
+            <Route path="compliance-settings" element={<ComplianceSettingsPage />} />
+            <Route path="corporate-history" element={<CorporateHistoryPage />} />
+            <Route path="annual-filings" element={<AnnualFilingsPage />} />
+            <Route path="certificate-register" element={<CertificateRegisterPage />} />
+            <Route path="portfolio" element={<PortfolioPage />} />
             <Route path="rights-ledger" element={<RightsLedgerPage />} />
             <Route path="template-engine" element={<TemplateEnginePage />} />
             <Route path="formation-maintenance" element={<FormationMaintenancePage />} />
@@ -321,6 +342,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="annual-cycle" element={<AnnualCyclePage />} />
             <Route path="documents" element={<DocumentsPage />} />
             <Route path="documents/:id" element={<DocumentWorkbenchPage />} />
+            <Route path="document-catalog" element={<DocumentCatalogPage />} />
             <Route path="library" element={<LibraryPage />} />
             <Route path="minute-book" element={<MinuteBookPage />} />
             <Route path="conflicts" element={<ConflictsPage />} />

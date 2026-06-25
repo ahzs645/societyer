@@ -19,8 +19,18 @@ import {
   corporationPacketDocxDataUrl,
   corporationPacketDocxFileName,
   corporationPacketDocxMimeType,
+  documentDocxDataUrl,
 } from "../shared/corporationPacketDocx";
+import { buildSubscriptionAgreementBlocks } from "../shared/subscriptionAgreement";
+import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../shared/societyDocumentPackets";
+import { isCorporation } from "../shared/organizationDomain";
 import { materializeRightsHoldings, validateLedger } from "../shared/equityLedger";
+import { buildSocietyRenderContext } from "../shared/societyRenderContext";
+import { buildExecutionBlock, resolvingBodyFor, type SignerLine } from "../shared/executionBlock";
+import { activeAsOf, type IntervalRow } from "../shared/registerHistory";
+import { buildAnnualResolutionContext } from "../shared/annualResolution";
+import { buildDividendResolutionContext } from "../shared/dividendResolution";
+import { computeVotingPower } from "../shared/votingPower";
 
 export const listRoleHolders = query({
   args: { societyId: v.id("societies") },
@@ -188,6 +198,50 @@ export const rightsLedger = query({
   },
 });
 
+/**
+ * Voting-power roll-up: each shareholder's total votes (shares × the class's
+ * votes-per-share), partitioned into voting / non-voting, plus the eligible
+ * voting-signatory set (natural persons at the age of majority). Logic in the
+ * tested shared/votingPower.ts.
+ */
+export const votingPower = query({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, { societyId }) => {
+    const [classes, holdings, roleHolders, directory] = await Promise.all([
+      ctx.db.query("rightsClasses").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("rightsHoldings").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("peopleDirectory").collect(),
+    ]);
+    const roleById = new Map<string, any>(roleHolders.map((r: any) => [String(r._id), r]));
+    const dirById = new Map<string, any>(directory.map((d: any) => [String(d._id), d]));
+    const meta: Record<string, { isIndividual?: boolean; atAgeOfMajority?: boolean }> = {};
+    const holdingInputs = holdings
+      .filter((h: any) => String(h.status) === "current" && Number(h.quantity) > 0)
+      .map((h: any) => {
+        const role = h.holderRoleHolderId ? roleById.get(String(h.holderRoleHolderId)) : undefined;
+        const dir = role?.directoryPersonId ? dirById.get(String(role.directoryPersonId)) : undefined;
+        if (dir && (dir.isIndividual !== undefined || dir.atAgeOfMajority !== undefined)) {
+          meta[String(h.holderKey)] = { isIndividual: dir.isIndividual, atAgeOfMajority: dir.atAgeOfMajority };
+        }
+        return {
+          holderKey: String(h.holderKey),
+          holderName: String(role?.fullName ?? h.holderKey),
+          rightsClassId: String(h.rightsClassId),
+          quantity: Number(h.quantity) || 0,
+        };
+      });
+    const classInputs = classes.map((c: any) => ({
+      rightsClassId: String(c._id),
+      votesPerShare: c.votesPerShare,
+      votingRights: c.votingRights,
+      classType: c.classType,
+    }));
+    return computeVotingPower(holdingInputs, classInputs, meta);
+  },
+});
+
 export const upsertRightsClass = mutation({
   args: {
     id: v.optional(v.id("rightsClasses")),
@@ -198,6 +252,7 @@ export const upsertRightsClass = mutation({
     idPrefix: v.optional(v.string()),
     highestAssignedNumber: v.optional(v.number()),
     votingRights: v.optional(v.string()),
+    votesPerShare: v.optional(v.number()),
     startDate: v.optional(v.string()),
     endDate: v.optional(v.string()),
     conditionsToHold: v.optional(v.string()),
@@ -221,6 +276,7 @@ export const upsertRightsClass = mutation({
       idPrefix: cleanText(args.idPrefix),
       highestAssignedNumber: args.highestAssignedNumber,
       votingRights: cleanText(args.votingRights),
+      votesPerShare: args.votesPerShare,
       startDate: cleanText(args.startDate),
       endDate: cleanText(args.endDate),
       conditionsToHold: cleanText(args.conditionsToHold),
@@ -431,6 +487,101 @@ export const seedCorporationDocumentPackets = mutation({
   returns: v.any(),
   handler: async (ctx, { societyId }) => seedCorporationDocumentPacketsForSociety(ctx, societyId),
 });
+
+export const seedSocietyDocumentPackets = mutation({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, { societyId }) => seedSocietyDocumentPacketsForSociety(ctx, societyId),
+});
+
+/**
+ * Generate a draft document from the catalog for ANY entity kind: resolves the
+ * packet from the corporation OR society catalog by key, ensures it's seeded,
+ * then produces the draft document + version + artifacts via the same
+ * createPacketRunArtifacts path (which binds the grammar-aware render context).
+ */
+export const generateDocumentFromCatalog = mutation({
+  args: {
+    societyId: v.id("societies"),
+    packetKey: v.string(),
+    effectiveDate: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const corpPacket = CORPORATION_DOCUMENT_PACKETS.find((p) => p.key === args.packetKey);
+    const socPacket = SOCIETY_DOCUMENT_PACKETS.find((p) => p.key === args.packetKey);
+    const packet = corpPacket ?? socPacket;
+    if (!packet) throw new Error(`No document packet matches key: ${args.packetKey}`);
+    const markerKind = corpPacket ? "corporation" : "society";
+    if (markerKind === "corporation") await seedCorporationDocumentPacketsForSociety(ctx, args.societyId);
+    else await seedSocietyDocumentPacketsForSociety(ctx, args.societyId);
+
+    const precMarker = `societyer:${markerKind}-packet-precedent:${packet.key}`;
+    const precedent = await ctx.db
+      .query("legalPrecedents")
+      .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))
+      .collect()
+      .then((rows: any[]) => rows.find((r: any) => (r.sourceExternalIds ?? []).includes(precMarker)));
+    if (!precedent) throw new Error(`Packet precedent was not seeded: ${packet.key}`);
+
+    const now = new Date().toISOString();
+    const runId = await ctx.db.insert("legalPrecedentRuns", {
+      societyId: args.societyId,
+      name: `${packet.packageName}${args.effectiveDate ? ` - ${args.effectiveDate}` : ""}`,
+      status: "draft",
+      precedentId: precedent._id,
+      dateTime: args.effectiveDate,
+      dataJson: JSON.stringify({ packetKey: packet.key }),
+      dataJsonList: [],
+      dataReviewed: false,
+      searchIds: [],
+      registrationIds: [],
+      filingIds: [],
+      generatedDocumentIds: [],
+      signerRoleHolderIds: [],
+      priceItems: [],
+      abstainingDirectorIds: [],
+      abstainingRightsholderIds: [],
+      sourceExternalIds: [`societyer:${markerKind}-packet-run:${packet.key}`],
+      notes: "Generated from the document catalog.",
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    const artifacts = await createPacketRunArtifacts(ctx, {
+      societyId: args.societyId,
+      packet,
+      runId,
+      effectiveDate: args.effectiveDate,
+      dataJson: JSON.stringify({ packetKey: packet.key }),
+      notes: "Generated from the document catalog.",
+    });
+    return { runId, packetKey: packet.key, precedentId: precedent._id, ...artifacts };
+  },
+});
+
+/**
+ * Seed the right packet catalog for an entity by its kind: corporations get the
+ * corporation packets, everything else (societies) gets the society packets.
+ * Idempotent — safe to call on entity creation or on demand.
+ */
+export const seedDocumentPacketsForEntity = mutation({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, { societyId }) => seedDocumentPacketsForEntityHelper(ctx, societyId),
+});
+
+/**
+ * Seed the correct packet catalog for an entity by kind. Plain helper so other
+ * mutations (e.g. society.createWorkspace) can auto-seed on entity creation
+ * without going through the mutation boundary.
+ */
+export async function seedDocumentPacketsForEntityHelper(ctx: any, societyId: any) {
+  const society = await ctx.db.get(societyId);
+  if (society && isCorporation(society as any)) {
+    return { kind: "corporation", ...(await seedCorporationDocumentPacketsForSociety(ctx, societyId)) };
+  }
+  return { kind: "society", ...(await seedSocietyDocumentPacketsForSociety(ctx, societyId)) };
+}
 
 export const stageCorporationDocumentPacket = mutation({
   args: {
@@ -1417,7 +1568,38 @@ export const removeSupportLog = mutation({
 });
 
 async function seedCorporationDocumentPacketsForSociety(ctx: any, societyId: any) {
+  return seedDocumentPacketCatalog(ctx, societyId, CORPORATION_DOCUMENT_PACKETS, {
+    entityTypes: corporationPacketEntityTypes(),
+    markerKind: "corporation",
+    catalogNote: "Catalog packet for corporation minute book, registers, filings, and compliance evidence.",
+    owner: "Societyer corporation packet catalog",
+  });
+}
+
+async function seedSocietyDocumentPacketsForSociety(ctx: any, societyId: any) {
+  return seedDocumentPacketCatalog(ctx, societyId, SOCIETY_DOCUMENT_PACKETS, {
+    entityTypes: societyPacketEntityTypes(),
+    markerKind: "society",
+    catalogNote: "Catalog packet for society minute book, registers, AGM, and Societies Act resolutions.",
+    owner: "Societyer society packet catalog",
+  });
+}
+
+/**
+ * Generic packet-catalog seeder: idempotently upserts legalTemplates +
+ * legalPrecedents for any packet set (corporation or society), keyed by a
+ * per-kind marker so the two catalogs coexist. The corporation marker format is
+ * preserved exactly (markerKind "corporation" → societyer:corporation-packet-*).
+ */
+async function seedDocumentPacketCatalog(
+  ctx: any,
+  societyId: any,
+  packets: typeof CORPORATION_DOCUMENT_PACKETS,
+  opts: { entityTypes: string[]; markerKind: string; catalogNote: string; owner: string },
+) {
   const now = new Date().toISOString();
+  const templateMarker = (packet: (typeof packets)[number]) => `societyer:${opts.markerKind}-packet-template:${packet.key}`;
+  const precedentMarker = (packet: (typeof packets)[number]) => `societyer:${opts.markerKind}-packet-precedent:${packet.key}`;
   const [existingTemplates, existingPrecedents] = await Promise.all([
     ctx.db.query("legalTemplates").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("legalPrecedents").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
@@ -1430,8 +1612,8 @@ async function seedCorporationDocumentPacketsForSociety(ctx: any, societyId: any
   let skippedPrecedents = 0;
   const templateIdByPacketKey = new Map<string, any>();
 
-  for (const packet of CORPORATION_DOCUMENT_PACKETS) {
-    const marker = corporationPacketTemplateMarker(packet);
+  for (const packet of packets) {
+    const marker = templateMarker(packet);
     const existingByMarker = existingTemplates.find((row: any) => (row.sourceExternalIds ?? []).includes(marker));
     const existingByName = existingTemplates.find((row: any) => String(row.name ?? "").toLowerCase() === packet.templateName.toLowerCase());
     const payload = {
@@ -1445,14 +1627,14 @@ async function seedCorporationDocumentPacketsForSociety(ctx: any, societyId: any
       html: corporationPacketTemplateHtml(packet),
       notes: [
         packet.summary,
-        "Catalog packet for corporation minute book, registers, filings, and compliance evidence.",
+        opts.catalogNote,
         `Packet key: ${packet.key}`,
       ].join("\n"),
-      owner: "Societyer corporation packet catalog",
+      owner: opts.owner,
       ownerIsTobuso: false,
       signatureRequired: packet.signatureRequired,
       documentTag: packet.documentTag,
-      entityTypes: corporationPacketEntityTypes(),
+      entityTypes: opts.entityTypes,
       jurisdictions: packet.jurisdictions,
       requiredSigners: packet.requiredSigners,
       requiredDataFieldIds: [],
@@ -1484,8 +1666,8 @@ async function seedCorporationDocumentPacketsForSociety(ctx: any, societyId: any
     }
   }
 
-  for (const packet of CORPORATION_DOCUMENT_PACKETS) {
-    const marker = corporationPacketPrecedentMarker(packet);
+  for (const packet of packets) {
+    const marker = precedentMarker(packet);
     const existingByMarker = existingPrecedents.find((row: any) => (row.sourceExternalIds ?? []).includes(marker));
     const existingByName = existingPrecedents.find((row: any) => String(row.packageName ?? "").toLowerCase() === packet.packageName.toLowerCase());
     const templateId = templateIdByPacketKey.get(packet.key);
@@ -1508,7 +1690,7 @@ async function seedCorporationDocumentPacketsForSociety(ctx: any, societyId: any
       requiresAmendmentRecord: packet.requiresAmendmentRecord,
       requiresAnnualMaintenanceRecord: packet.requiresAnnualMaintenanceRecord,
       priceItems: [],
-      entityTypes: corporationPacketEntityTypes(),
+      entityTypes: opts.entityTypes,
       jurisdictions: packet.jurisdictions,
       subloopPairs: [],
       sourceExternalIds: [marker],
@@ -1533,7 +1715,7 @@ async function seedCorporationDocumentPacketsForSociety(ctx: any, societyId: any
     insertedPrecedents,
     updatedPrecedents,
     skippedPrecedents,
-    total: CORPORATION_DOCUMENT_PACKETS.length,
+    total: packets.length,
   };
 }
 
@@ -1569,7 +1751,61 @@ async function createPacketRunArtifacts(ctx: any, args: {
     `societyer:corporation-packet-run:${args.packet.key}`,
     `societyer:legal-precedent-run:${args.runId}`,
   ];
-  const docxDataUrl = corporationPacketDocxDataUrl(args.packet);
+  // Build a grammar/data context so generated packet prose binds {token}/{#if}/
+  // {#each} markup (token-free packets are unaffected). Logic in the tested
+  // shared/societyRenderContext.ts.
+  const society = await ctx.db.get(args.societyId);
+  const roleHolders = await ctx.db
+    .query("roleHolders")
+    .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))
+    .collect();
+  const renderCtx = society
+    ? buildSocietyRenderContext(society, roleHolders, args.effectiveDate ?? now)
+    : undefined;
+  // Compute the execution/signature block (adoption clause + signature page) so
+  // the generated DOCX is a signable instrument, not a checklist. Signatories
+  // come from the per-entity signer roster (entitySigners) when one exists,
+  // otherwise from the resolving body's current role holders.
+  let context: Record<string, unknown> | undefined = renderCtx as unknown as
+    | Record<string, unknown>
+    | undefined;
+  if (renderCtx) {
+    const asOf = args.effectiveDate ?? now;
+    const body = resolvingBodyFor(args.packet.requiredSigners ?? []);
+    const signerRoster = await ctx.db
+      .query("entitySigners")
+      .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))
+      .collect();
+    const activeRoster = activeAsOf(signerRoster as unknown as IntervalRow[], asOf, {
+      start: "validFromISO",
+      end: "validToISO",
+    }) as Array<{ name?: string; corpSign?: string | null; signOrder?: number }>;
+    let signers: SignerLine[];
+    if (activeRoster.length) {
+      signers = [...activeRoster]
+        .sort((a, b) => (a.signOrder ?? Infinity) - (b.signOrder ?? Infinity))
+        .map((s) => ({ name: String(s.name ?? ""), corpSign: s.corpSign ?? null }));
+    } else {
+      signers = roleHolders
+        .filter((r: any) => body.roleTypes.includes(r.roleType) && !r.endDate)
+        .map((r: any) => ({ name: String(r.fullName ?? ""), capacity: body.capacity }));
+    }
+    const resolutionsPlural =
+      args.packet.sections.reduce((sum, section) => sum + section.body.length, 0) > 1;
+    const execution = buildExecutionBlock({
+      shortName: renderCtx.org.shortName,
+      legislation: renderCtx.org.legislation,
+      noun: body.noun,
+      resolutionsPlural,
+      signers,
+      dateLong: renderCtx.date.long,
+    });
+    // Packet-specific operative data so the resolution body renders real clauses
+    // (YCN Doc - Annual / Doc - Dividends), not a generic blurb.
+    const dataContext = await buildPacketDataContext(ctx, args.packet, args.societyId, society, renderCtx);
+    context = { ...renderCtx, execution, ...dataContext };
+  }
+  const docxDataUrl = corporationPacketDocxDataUrl(args.packet, context);
   const docxFileName = corporationPacketDocxFileName(args.packet);
   const docxMimeType = corporationPacketDocxMimeType();
   const draftDocumentId = await ctx.db.insert("documents", {
@@ -1654,13 +1890,27 @@ async function createPacketRunArtifacts(ctx: any, args: {
     notes: args.notes,
     createdAtISO: now,
   });
+  // Per-subscriber "Subscription for Shares" annexes for the allotment packet
+  // (YCN Doc - Share Allotment): one companion document per subscriber of the
+  // latest issuance. Logic in the tested shared/subscriptionAgreement.ts.
+  const companionDocumentIds =
+    args.packet.key === "issue-shares"
+      ? await createSubscriptionAnnexes(ctx, {
+          societyId: args.societyId,
+          society,
+          renderCtx,
+          effectiveDate: args.effectiveDate ?? now,
+          now,
+          sourceExternalIds,
+        })
+      : [];
   const minuteBookItemId = await ctx.db.insert("minuteBookItems", {
     societyId: args.societyId,
     title: args.packet.packageName,
     recordType: args.packet.requiresAnnualMaintenanceRecord ? "filing" : "package",
     effectiveDate: args.effectiveDate,
     status: "Draft",
-    documentIds: [draftDocumentId],
+    documentIds: [draftDocumentId, ...companionDocumentIds],
     filingId: args.filingId,
     signatureIds: [],
     sourceEvidenceIds: [sourceEvidenceId],
@@ -1678,6 +1928,7 @@ async function createPacketRunArtifacts(ctx: any, args: {
       `societyer:generated-legal-document:${generatedDocumentId}`,
       `societyer:minute-book-item:${minuteBookItemId}`,
       `societyer:source-evidence:${sourceEvidenceId}`,
+      ...companionDocumentIds.map((id: string) => `societyer:subscription-annex:${id}`),
       ...signerIds.map((signerId: string) => `societyer:legal-signer:${signerId}`),
     ]),
     updatedAtISO: now,
@@ -1689,7 +1940,145 @@ async function createPacketRunArtifacts(ctx: any, args: {
       updatedAtISO: now,
     });
   }
-  return { draftDocumentId, draftDocumentVersionId, generatedDocumentId, signerIds, minuteBookItemId, sourceEvidenceId };
+  return { draftDocumentId, draftDocumentVersionId, generatedDocumentId, signerIds, minuteBookItemId, sourceEvidenceId, companionDocumentIds };
+}
+
+/**
+ * Create one "Subscription for Shares" document per subscriber of the latest
+ * posted issuance, returning the created document ids. Each is a standalone DOCX
+ * (shared/subscriptionAgreement.ts) stored as a documents row + version.
+ */
+async function createSubscriptionAnnexes(
+  ctx: any,
+  args: {
+    societyId: any;
+    society: any;
+    renderCtx: { org: { name: string; shortName: string; legislation: string }; date: { long: string } } | undefined;
+    effectiveDate: string;
+    now: string;
+    sourceExternalIds: string[];
+  },
+): Promise<string[]> {
+  if (!args.renderCtx) return [];
+  const [transfers, classes, roleHolders] = await Promise.all([
+    ctx.db.query("rightsholdingTransfers").withIndex("by_society", (q: any) => q.eq("societyId", args.societyId)).collect(),
+    ctx.db.query("rightsClasses").withIndex("by_society", (q: any) => q.eq("societyId", args.societyId)).collect(),
+    ctx.db.query("roleHolders").withIndex("by_society", (q: any) => q.eq("societyId", args.societyId)).collect(),
+  ]);
+  const issuances = transfers.filter(
+    (t: any) => String(t.transferType) === "issuance" && String(t.status) === "posted",
+  );
+  if (issuances.length === 0) return [];
+  // Use the latest issuance date's subscribers (one declaration of allotment).
+  let latest = "";
+  for (const t of issuances) {
+    const date = String(t.transferDate ?? t.createdAtISO ?? "");
+    if (date > latest) latest = date;
+  }
+  const subscribers = issuances.filter((t: any) => String(t.transferDate ?? t.createdAtISO ?? "") === latest);
+  const classById = new Map<string, any>(classes.map((c: any) => [String(c._id), c]));
+  const roleById = new Map<string, any>(roleHolders.map((r: any) => [String(r._id), r]));
+  const created: string[] = [];
+  for (const t of subscribers) {
+    const cls = t.rightsClassId ? classById.get(String(t.rightsClassId)) : undefined;
+    const role = t.destinationRoleHolderId ? roleById.get(String(t.destinationRoleHolderId)) : undefined;
+    const subscriberName = String(role?.fullName ?? t.destinationHolderName ?? "Subscriber");
+    const consideration =
+      cleanText(t.considerationDescription) ?? cleanText(t.considerationType) ?? undefined;
+    const blocks = buildSubscriptionAgreementBlocks({
+      corporationName: args.renderCtx.org.name,
+      shortName: args.renderCtx.org.shortName,
+      legislation: args.renderCtx.org.legislation,
+      subscriberName,
+      shareClass: String(cls?.className ?? ""),
+      quantity: Number(t.quantity ?? 0),
+      consideration,
+      dateLong: args.renderCtx.date.long,
+    });
+    const dataUrl = documentDocxDataUrl("Subscription for Shares", blocks);
+    const fileName = `subscription-for-shares-${created.length + 1}.docx`;
+    const docId = await ctx.db.insert("documents", {
+      societyId: args.societyId,
+      title: `Subscription for Shares — ${subscriberName}`,
+      category: "governance",
+      fileName,
+      mimeType: corporationPacketDocxMimeType(),
+      content: `Subscription for Shares for ${subscriberName}.`,
+      url: dataUrl,
+      fileSizeBytes: dataUrl.length,
+      retentionYears: 7,
+      createdAtISO: args.now,
+      reviewStatus: "needs_signature",
+      librarySection: "governance",
+      flaggedForDeletion: false,
+      sourceExternalIds: [...args.sourceExternalIds, "societyer:subscription-annex"],
+      tags: ["corporation-packet", "subscription-agreement", "editable-docx"],
+    });
+    await ctx.db.insert("documentVersions", {
+      societyId: args.societyId,
+      documentId: docId,
+      version: 1,
+      storageProvider: "generated-inline",
+      storageKey: dataUrl,
+      fileName,
+      mimeType: corporationPacketDocxMimeType(),
+      fileSizeBytes: dataUrl.length,
+      uploadedByName: "Societyer packet generator",
+      uploadedAtISO: args.now,
+      changeNote: `Generated Subscription for Shares for ${subscriberName}.`,
+      isCurrent: true,
+    });
+    created.push(docId as unknown as string);
+  }
+  return created;
+}
+
+/**
+ * Build the packet-specific operative data context that the resolution body
+ * binds (YCN Doc - Annual / Doc - Dividends). Keyed off packet.key so generic
+ * packets are unaffected. Logic lives in the tested shared/* helpers.
+ */
+async function buildPacketDataContext(
+  ctx: any,
+  packet: (typeof CORPORATION_DOCUMENT_PACKETS)[number],
+  societyId: any,
+  society: any,
+  renderCtx: { dir: { list: Array<{ name: string }> } },
+): Promise<Record<string, unknown>> {
+  if (packet.key === "annual-resolutions") {
+    return {
+      annual: buildAnnualResolutionContext({
+        waivePrepFinancials: society?.waivePrepFinancials,
+        fiscalYearEnd: society?.fiscalYearEnd,
+        directors: renderCtx.dir.list,
+      }),
+    };
+  }
+  if (packet.key === "dividend-declaration") {
+    const rows = await ctx.db
+      .query("dividends")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .collect();
+    // The latest declaration date's rows make up one multi-class declaration.
+    let latest = "";
+    for (const row of rows) {
+      const declaredOn = String(row.declaredOn ?? "");
+      if (declaredOn > latest) latest = declaredOn;
+    }
+    const declarationRows = rows
+      .filter((row: any) => String(row.declaredOn ?? "") === latest)
+      .map((row: any) => ({
+        shareClass: String(row.shareClass ?? ""),
+        perShareCents: Number(row.perShareCents ?? 0),
+        sharesOutstanding: Number(row.sharesOutstanding ?? 0),
+        totalCents: Number(row.totalCents ?? 0),
+        currency: String(row.currency ?? ""),
+      }));
+    return {
+      dividend: buildDividendResolutionContext(declarationRows, { declaredDate: latest || undefined }),
+    };
+  }
+  return {};
 }
 
 async function defaultPacketSignerRoleHolderIds(ctx: any, societyId: any) {

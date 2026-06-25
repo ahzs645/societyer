@@ -241,6 +241,7 @@ type NavItem = {
   color: IconTone;
   end?: boolean;
   module?: ModuleKey;
+  entityKinds?: ("society" | "corporation")[];
 };
 
 
@@ -269,6 +270,7 @@ function navItem(to: string, end?: boolean): NavItem {
     color: id.color,
     ...(end ? { end } : {}),
     ...(id.module ? { module: id.module } : {}),
+    ...(id.entityKinds ? { entityKinds: id.entityKinds } : {}),
   };
 }
 
@@ -280,8 +282,10 @@ const NAV_GROUPS: NavGroup[] = [
     defaultOpen: true,
     items: [
       navItem("/app", true),
+      navItem("/app/portfolio"),
       navItem("/app/society"),
       navItem("/app/organization-details"),
+      navItem("/app/corporate-history"),
       navItem("/app/org-history"),
       navItem("/app/timeline"),
     ],
@@ -295,6 +299,8 @@ const NAV_GROUPS: NavGroup[] = [
       navItem("/app/directors"),
       navItem("/app/org-chart"),
       navItem("/app/role-holders"),
+      navItem("/app/point-in-time-register"),
+      navItem("/app/people-directory"),
       navItem("/app/committees"),
       navItem("/app/volunteers"),
       navItem("/app/employees"),
@@ -310,6 +316,7 @@ const NAV_GROUPS: NavGroup[] = [
       navItem("/app/deadlines"),
       navItem("/app/commitments"),
       navItem("/app/documents"),
+      navItem("/app/document-catalog"),
       navItem("/app/library"),
       navItem("/app/communications"),
       navItem("/app/outbox"),
@@ -342,6 +349,12 @@ const NAV_GROUPS: NavGroup[] = [
       navItem("/app/court-orders"),
       navItem("/app/governance-registers"),
       navItem("/app/rights-ledger"),
+      navItem("/app/certificate-register"),
+      navItem("/app/dividends"),
+      navItem("/app/significant-individuals"),
+      navItem("/app/service-providers"),
+      navItem("/app/annual-filings"),
+      navItem("/app/compliance-settings"),
       navItem("/app/minute-book"),
       navItem("/app/bylaw-rules"),
       navItem("/app/bylaw-diff"),

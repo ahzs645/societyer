@@ -1,16 +1,22 @@
 import type { CORPORATION_DOCUMENT_PACKETS } from "./corporationDocumentPackets";
+import { renderText, renderSections } from "./packetRendering";
+import type { TemplateValues } from "./templateAssembly";
+import type { ExecutionBlockResult } from "./executionBlock";
 
 const WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 type CorporationDocumentPacket = (typeof CORPORATION_DOCUMENT_PACKETS)[number];
 
-export function corporationPacketDocxBytes(packet: CorporationDocumentPacket) {
-  return buildDocxPackage(packet.packageName, corporationPacketDocxBlocks(packet));
+// Optional grammar/data context: when provided, packet prose renders through the
+// template engine (shared/packetRendering.ts) so {token}/{#if}/{#each} markup
+// binds. Omitted → token-free packets render byte-identically to before.
+export function corporationPacketDocxBytes(packet: CorporationDocumentPacket, context?: TemplateValues) {
+  return buildDocxPackage(packet.packageName, corporationPacketDocxBlocks(packet, context));
 }
 
-export function corporationPacketDocxDataUrl(packet: CorporationDocumentPacket) {
-  const bytes = corporationPacketDocxBytes(packet);
+export function corporationPacketDocxDataUrl(packet: CorporationDocumentPacket, context?: TemplateValues) {
+  const bytes = corporationPacketDocxBytes(packet, context);
   return `data:${DOCX_MIME_TYPE};base64,${base64FromBytes(bytes)}`;
 }
 
@@ -22,26 +28,51 @@ export function corporationPacketDocxMimeType() {
   return DOCX_MIME_TYPE;
 }
 
-function corporationPacketDocxBlocks(packet: CorporationDocumentPacket) {
+/**
+ * Generic single-document DOCX from a block list (title/heading/paragraph/
+ * listItem) — used for companion documents like the per-subscriber Subscription
+ * for Shares annex, which are not packet-shaped.
+ */
+export function documentDocxBytes(title: string, blocks: Array<{ kind: string; text: string }>) {
+  return buildDocxPackage(title, blocks);
+}
+
+export function documentDocxDataUrl(title: string, blocks: Array<{ kind: string; text: string }>) {
+  return `data:${DOCX_MIME_TYPE};base64,${base64FromBytes(documentDocxBytes(title, blocks))}`;
+}
+
+function corporationPacketDocxBlocks(packet: CorporationDocumentPacket, context?: TemplateValues) {
+  const sections = renderSections(packet.sections, context);
+  // Opt-in execution/signature page: rendered only when the caller precomputes
+  // and attaches an `execution` block to the context (shared/executionBlock.ts).
+  // Token-free / execution-free contexts stay byte-identical to before.
+  const execution = (context as { execution?: ExecutionBlockResult } | undefined)?.execution;
   return [
     { kind: "title", text: packet.packageName },
-    { kind: "paragraph", text: packet.summary },
+    { kind: "paragraph", text: renderText(packet.summary, context) },
     { kind: "heading", text: "Deliverable" },
-    { kind: "paragraph", text: packet.deliverable },
+    { kind: "paragraph", text: renderText(packet.deliverable, context) },
     { kind: "heading", text: "Review terms" },
-    { kind: "paragraph", text: packet.terms },
+    { kind: "paragraph", text: renderText(packet.terms, context) },
     { kind: "heading", text: "Required data" },
     ...packet.requiredDataFields.map((text) => ({ kind: "listItem", text })),
     { kind: "heading", text: "Review data" },
     ...packet.reviewDataFields.map((text) => ({ kind: "listItem", text })),
     { kind: "heading", text: "Packet sections" },
-    ...packet.sections.flatMap((section) => [
+    ...sections.flatMap((section) => [
       { kind: "heading", text: section.heading },
       ...section.body.map((text) => ({ kind: "paragraph", text })),
     ]),
     { kind: "heading", text: "Required signers" },
     ...(packet.requiredSigners?.length ? packet.requiredSigners : ["Review signing requirements before use."])
       .map((text) => ({ kind: "listItem", text })),
+    ...(execution
+      ? [
+          { kind: "heading", text: "Execution" },
+          { kind: "paragraph", text: execution.adoptionClause },
+          ...execution.lines.map((text) => ({ kind: "paragraph", text })),
+        ]
+      : []),
   ];
 }
 
