@@ -1,10 +1,23 @@
 # YCN Wiring Plan — turning dormant ports into live features
 
-> Status: in progress. Branch: `claude/epic-turing-t0l6eq`.
+> Status: ✅ all five workstreams shipped on `claude/epic-turing-t0l6eq`.
 >
-> The through-line: every module below is already built and tested — it just has no
-> consumer. Each workstream gives a dead module a real caller and ships a
+> The through-line: every module below was already built and tested — it just had no
+> consumer. Each workstream gave a dead module a real caller and shipped a
 > user-visible feature. Ordered low → high risk.
+
+## Shipped
+
+| WS | Module(s) made live | Feature | Test(s) |
+|---|---|---|---|
+| WS4 | ycnDate | `.accdb` → import bundle adapter + YCN-aware cleanDate | check-ycn-access-import |
+| WS2a | referenceField | restrictPeoplePicker directory enforcement | check-person-reference |
+| WS2b | nlg (gender path) | gender + stated pronouns in generated documents | check-nlg-grammar |
+| WS1 | shareSplit | subdivision/consolidation flow + before/after resolution | check-share-split, check-corporation-equity-ledger |
+| WS3 | versionedRegister + registerDiff | role-holder edit-history + audit trail | check-role-holder-history, check-role-holder-revision-flow |
+
+Plus: the YCN import apply path now persists `gender`/`pronouns` (WS4 → WS2b), so
+imported directors render with correct pronouns.
 
 ## Dormant modules (tested, zero production consumers)
 

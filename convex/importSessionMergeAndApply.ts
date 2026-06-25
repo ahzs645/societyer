@@ -927,6 +927,9 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       nonNaturalPersonType: cleanText(payload.nonNaturalPersonType),
       nonNaturalJurisdiction: cleanText(payload.nonNaturalJurisdiction),
       natureOfControl: cleanText(payload.natureOfControl),
+      // YCN ENT_PEOPLE.GENDER → NLG pronoun engine (WS2b). Imported via ycnAccessImport.
+      gender: cleanText(payload.gender),
+      pronouns: cleanText(payload.pronouns),
       authorizedRepresentative: optionalBoolean(payload.authorizedRepresentative),
       relatedRoleHolderId: cleanText(payload.relatedRoleHolderId) as any,
       relatedShareholderIds: arrayOf(payload.relatedShareholderIds).map(String).map(cleanText).filter(Boolean),
