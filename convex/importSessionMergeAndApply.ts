@@ -1,6 +1,7 @@
 // Import-session apply layer: ctx-taking writes, meeting merge, and record insertion.
 
 import { transactionImportMappingCandidates } from "./providers/accounting";
+import { reconcileDividend } from "../shared/dividends";
 import {
   HISTORY_ITEM_CATEGORY,
   HISTORY_ITEM_TAG,
@@ -1016,15 +1017,27 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
   dividend: async ({ ctx, societyId, payload }: SectionRecordContext) => {
     const perShareCents = numberOrUndefined(payload.perShareCents) ?? 0;
     const sharesOutstanding = numberOrUndefined(payload.sharesOutstanding) ?? 0;
+    const enteredTotal = numberOrUndefined(payload.totalCents);
+    const currency = cleanText(payload.currency) || "CAD";
+    // Cross-check the imported total against per-share × shares (YCN reconciliation).
+    let notes = cleanText(payload.notes);
+    if (typeof enteredTotal === "number") {
+      const recon = reconcileDividend({
+        declaredOn: "", shareClass: "", currency, perShareCents, sharesOutstanding, totalCents: enteredTotal,
+      });
+      if (!recon.reconciled) {
+        notes = [`⚠ Imported dividend total (${recon.enteredCents}) ≠ per-share × shares (${recon.expectedCents}). Verify before relying on it.`, notes].filter(Boolean).join("\n\n");
+      }
+    }
     return await ctx.db.insert("dividends", {
       societyId,
       declaredOn: cleanDate(payload.declaredOn) || cleanDate(payload.date) || "",
       shareClass: cleanText(payload.shareClass) || cleanText(payload.class) || "Imported class",
       perShareCents,
       sharesOutstanding,
-      currency: cleanText(payload.currency) || "CAD",
-      totalCents: numberOrUndefined(payload.totalCents) ?? perShareCents * sharesOutstanding,
-      notes: cleanText(payload.notes),
+      currency,
+      totalCents: enteredTotal ?? perShareCents * sharesOutstanding,
+      notes,
       createdAtISO: new Date().toISOString(),
     });
   },

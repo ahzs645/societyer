@@ -30,6 +30,39 @@ export function computeDividend(d: DividendDeclaration): DividendComputation {
   };
 }
 
+export interface DividendReconciliation {
+  /** Recomputed total (perShareCents * sharesOutstanding). */
+  expectedCents: number;
+  /** The total the caller entered/imported. */
+  enteredCents: number;
+  /** enteredCents - expectedCents (signed). */
+  deltaCents: number;
+  /** true when the entered total matches the computed total within tolerance. */
+  reconciled: boolean;
+}
+
+/**
+ * Reconcile an entered/imported dividend total against perShareCents *
+ * sharesOutstanding (YCN "Record - Dividends" cross-check). Tolerance is a
+ * fraction of the expected total (default 1%, matching YCN), with a 1-cent floor
+ * so exact small declarations still reconcile.
+ */
+export function reconcileDividend(
+  d: DividendDeclaration & { totalCents?: number },
+  tolerance = 0.01,
+): DividendReconciliation {
+  const expectedCents = d.perShareCents * d.sharesOutstanding;
+  const enteredCents = typeof d.totalCents === "number" ? d.totalCents : expectedCents;
+  const deltaCents = enteredCents - expectedCents;
+  const allowed = Math.max(1, Math.round(Math.abs(expectedCents) * tolerance));
+  return {
+    expectedCents,
+    enteredCents,
+    deltaCents,
+    reconciled: Math.abs(deltaCents) <= allowed,
+  };
+}
+
 /**
  * Validate a declaration. Requires declaredOn (ISO date string), shareClass,
  * currency, perShareCents >= 0, sharesOutstanding >= 0, and integer

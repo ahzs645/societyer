@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   computeDividend,
+  reconcileDividend,
   validateDividend,
   totalDeclaredByClass,
   totalDeclaredByCurrency,
@@ -161,6 +162,43 @@ import {
     inPeriod.map((d) => d.declaredOn),
     ["2026-01-01", "2026-06-15", "2026-12-31"],
   );
+}
+
+// reconcileDividend: exact match reconciles.
+{
+  const recon = reconcileDividend({
+    declaredOn: "2026-01-01", shareClass: "COMMON", currency: "CAD",
+    perShareCents: 5000, sharesOutstanding: 200, totalCents: 1000000,
+  });
+  assert.equal(recon.expectedCents, 1000000);
+  assert.equal(recon.deltaCents, 0);
+  assert.equal(recon.reconciled, true);
+}
+
+// reconcileDividend: a 10% gap fails reconciliation.
+{
+  const recon = reconcileDividend({
+    declaredOn: "2026-01-01", shareClass: "COMMON", currency: "CAD",
+    perShareCents: 5000, sharesOutstanding: 200, totalCents: 900000,
+  });
+  assert.equal(recon.deltaCents, -100000);
+  assert.equal(recon.reconciled, false);
+}
+
+// reconcileDividend: within 1% tolerance reconciles; missing total defaults to expected.
+{
+  const within = reconcileDividend({
+    declaredOn: "2026-01-01", shareClass: "COMMON", currency: "CAD",
+    perShareCents: 5000, sharesOutstanding: 200, totalCents: 1005000, // +0.5%
+  });
+  assert.equal(within.reconciled, true);
+
+  const noTotal = reconcileDividend({
+    declaredOn: "2026-01-01", shareClass: "COMMON", currency: "CAD",
+    perShareCents: 5000, sharesOutstanding: 200,
+  });
+  assert.equal(noTotal.enteredCents, 1000000);
+  assert.equal(noTotal.reconciled, true);
 }
 
 console.log("OK dividends");

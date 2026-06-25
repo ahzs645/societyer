@@ -7,7 +7,7 @@
  * caller can fall through to the rest of the mirror.
  */
 import { SOCIETY_ID } from "./staticConvexFixtures";
-import { computeDividend, totalDeclaredByClass, totalDeclaredByCurrency } from "../../shared/dividends";
+import { computeDividend, reconcileDividend, totalDeclaredByClass, totalDeclaredByCurrency } from "../../shared/dividends";
 import { activeProvidersAsOf, SERVICE_PROVIDER_FUNCTIONS } from "../../shared/serviceProviders";
 import { normalizeSearchName, matchByPrefix, findDuplicates } from "../../shared/peopleDirectory";
 import { reviewsDue as computeReviewsDue } from "../../shared/significantIndividuals";
@@ -185,13 +185,25 @@ export function applyYcnDerivedFields(name: string, args: any): void {
   if (name === "peopleDirectory:upsert" && args) {
     (args as any).searchName = normalizeSearchName(String((args as any).fullName ?? ""));
   }
-  if (name === "dividends:create" && args && (args as any).totalCents == null) {
-    (args as any).totalCents = computeDividend({
-      declaredOn: String((args as any).declaredOn ?? ""),
-      shareClass: String((args as any).shareClass ?? ""),
-      perShareCents: Number((args as any).perShareCents ?? 0),
-      sharesOutstanding: Number((args as any).sharesOutstanding ?? 0),
-      currency: String((args as any).currency ?? ""),
-    }).totalCents;
+  if (name === "dividends:create" && args) {
+    const a = args as any;
+    const declaration = {
+      declaredOn: String(a.declaredOn ?? ""),
+      shareClass: String(a.shareClass ?? ""),
+      perShareCents: Number(a.perShareCents ?? 0),
+      sharesOutstanding: Number(a.sharesOutstanding ?? 0),
+      currency: String(a.currency ?? ""),
+    };
+    if (a.totalCents == null) {
+      a.totalCents = computeDividend(declaration).totalCents;
+    }
+    // Mirror the backend reconciliation warning, then drop the arg (not a column).
+    if (typeof a.expectedTotalCents === "number") {
+      const recon = reconcileDividend({ ...declaration, totalCents: a.expectedTotalCents });
+      if (!recon.reconciled) {
+        a.notes = [`⚠ Dividend total mismatch: entered ${recon.enteredCents} vs computed ${recon.expectedCents} cents.`, a.notes].filter(Boolean).join("\n\n");
+      }
+      delete a.expectedTotalCents;
+    }
   }
 }
