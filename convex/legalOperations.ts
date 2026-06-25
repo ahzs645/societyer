@@ -20,6 +20,8 @@ import {
   corporationPacketDocxFileName,
   corporationPacketDocxMimeType,
 } from "../shared/corporationPacketDocx";
+import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../shared/societyDocumentPackets";
+import { isCorporation } from "../shared/organizationDomain";
 import { materializeRightsHoldings, validateLedger } from "../shared/equityLedger";
 import { buildSocietyRenderContext } from "../shared/societyRenderContext";
 
@@ -431,6 +433,29 @@ export const seedCorporationDocumentPackets = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, { societyId }) => seedCorporationDocumentPacketsForSociety(ctx, societyId),
+});
+
+export const seedSocietyDocumentPackets = mutation({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, { societyId }) => seedSocietyDocumentPacketsForSociety(ctx, societyId),
+});
+
+/**
+ * Seed the right packet catalog for an entity by its kind: corporations get the
+ * corporation packets, everything else (societies) gets the society packets.
+ * Idempotent — safe to call on entity creation or on demand.
+ */
+export const seedDocumentPacketsForEntity = mutation({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, { societyId }) => {
+    const society = await ctx.db.get(societyId);
+    if (society && isCorporation(society as any)) {
+      return { kind: "corporation", ...(await seedCorporationDocumentPacketsForSociety(ctx, societyId)) };
+    }
+    return { kind: "society", ...(await seedSocietyDocumentPacketsForSociety(ctx, societyId)) };
+  },
 });
 
 export const stageCorporationDocumentPacket = mutation({
@@ -1418,7 +1443,38 @@ export const removeSupportLog = mutation({
 });
 
 async function seedCorporationDocumentPacketsForSociety(ctx: any, societyId: any) {
+  return seedDocumentPacketCatalog(ctx, societyId, CORPORATION_DOCUMENT_PACKETS, {
+    entityTypes: corporationPacketEntityTypes(),
+    markerKind: "corporation",
+    catalogNote: "Catalog packet for corporation minute book, registers, filings, and compliance evidence.",
+    owner: "Societyer corporation packet catalog",
+  });
+}
+
+async function seedSocietyDocumentPacketsForSociety(ctx: any, societyId: any) {
+  return seedDocumentPacketCatalog(ctx, societyId, SOCIETY_DOCUMENT_PACKETS, {
+    entityTypes: societyPacketEntityTypes(),
+    markerKind: "society",
+    catalogNote: "Catalog packet for society minute book, registers, AGM, and Societies Act resolutions.",
+    owner: "Societyer society packet catalog",
+  });
+}
+
+/**
+ * Generic packet-catalog seeder: idempotently upserts legalTemplates +
+ * legalPrecedents for any packet set (corporation or society), keyed by a
+ * per-kind marker so the two catalogs coexist. The corporation marker format is
+ * preserved exactly (markerKind "corporation" → societyer:corporation-packet-*).
+ */
+async function seedDocumentPacketCatalog(
+  ctx: any,
+  societyId: any,
+  packets: typeof CORPORATION_DOCUMENT_PACKETS,
+  opts: { entityTypes: string[]; markerKind: string; catalogNote: string; owner: string },
+) {
   const now = new Date().toISOString();
+  const templateMarker = (packet: (typeof packets)[number]) => `societyer:${opts.markerKind}-packet-template:${packet.key}`;
+  const precedentMarker = (packet: (typeof packets)[number]) => `societyer:${opts.markerKind}-packet-precedent:${packet.key}`;
   const [existingTemplates, existingPrecedents] = await Promise.all([
     ctx.db.query("legalTemplates").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("legalPrecedents").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
@@ -1431,8 +1487,8 @@ async function seedCorporationDocumentPacketsForSociety(ctx: any, societyId: any
   let skippedPrecedents = 0;
   const templateIdByPacketKey = new Map<string, any>();
 
-  for (const packet of CORPORATION_DOCUMENT_PACKETS) {
-    const marker = corporationPacketTemplateMarker(packet);
+  for (const packet of packets) {
+    const marker = templateMarker(packet);
     const existingByMarker = existingTemplates.find((row: any) => (row.sourceExternalIds ?? []).includes(marker));
     const existingByName = existingTemplates.find((row: any) => String(row.name ?? "").toLowerCase() === packet.templateName.toLowerCase());
     const payload = {
@@ -1446,14 +1502,14 @@ async function seedCorporationDocumentPacketsForSociety(ctx: any, societyId: any
       html: corporationPacketTemplateHtml(packet),
       notes: [
         packet.summary,
-        "Catalog packet for corporation minute book, registers, filings, and compliance evidence.",
+        opts.catalogNote,
         `Packet key: ${packet.key}`,
       ].join("\n"),
-      owner: "Societyer corporation packet catalog",
+      owner: opts.owner,
       ownerIsTobuso: false,
       signatureRequired: packet.signatureRequired,
       documentTag: packet.documentTag,
-      entityTypes: corporationPacketEntityTypes(),
+      entityTypes: opts.entityTypes,
       jurisdictions: packet.jurisdictions,
       requiredSigners: packet.requiredSigners,
       requiredDataFieldIds: [],
@@ -1485,8 +1541,8 @@ async function seedCorporationDocumentPacketsForSociety(ctx: any, societyId: any
     }
   }
 
-  for (const packet of CORPORATION_DOCUMENT_PACKETS) {
-    const marker = corporationPacketPrecedentMarker(packet);
+  for (const packet of packets) {
+    const marker = precedentMarker(packet);
     const existingByMarker = existingPrecedents.find((row: any) => (row.sourceExternalIds ?? []).includes(marker));
     const existingByName = existingPrecedents.find((row: any) => String(row.packageName ?? "").toLowerCase() === packet.packageName.toLowerCase());
     const templateId = templateIdByPacketKey.get(packet.key);
@@ -1509,7 +1565,7 @@ async function seedCorporationDocumentPacketsForSociety(ctx: any, societyId: any
       requiresAmendmentRecord: packet.requiresAmendmentRecord,
       requiresAnnualMaintenanceRecord: packet.requiresAnnualMaintenanceRecord,
       priceItems: [],
-      entityTypes: corporationPacketEntityTypes(),
+      entityTypes: opts.entityTypes,
       jurisdictions: packet.jurisdictions,
       subloopPairs: [],
       sourceExternalIds: [marker],
@@ -1534,7 +1590,7 @@ async function seedCorporationDocumentPacketsForSociety(ctx: any, societyId: any
     insertedPrecedents,
     updatedPrecedents,
     skippedPrecedents,
-    total: CORPORATION_DOCUMENT_PACKETS.length,
+    total: packets.length,
   };
 }
 

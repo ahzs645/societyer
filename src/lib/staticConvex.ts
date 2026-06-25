@@ -14,6 +14,7 @@ import {
 } from "../../shared/corporationPacketDocx";
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
 import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
+import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../../shared/societyDocumentPackets";
 import {
   ycnQueryResult,
   ycnMutationResult,
@@ -2387,6 +2388,18 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
     return staticSeedCorporationDocumentPackets(store, args);
   }
 
+  if (name === "legalOperations:seedSocietyDocumentPackets") {
+    return staticSeedSocietyDocumentPackets(store, args);
+  }
+
+  if (name === "legalOperations:seedDocumentPacketsForEntity") {
+    const soc = store?.getRow("societies", args?.societyId) ?? society;
+    const kind = String(soc?.entityType ?? "").includes("corporation") || String(soc?.actFormedUnder ?? "").includes("corporations_act") ? "corporation" : "society";
+    return kind === "corporation"
+      ? { kind, ...staticSeedCorporationDocumentPackets(store, args) }
+      : { kind, ...staticSeedSocietyDocumentPackets(store, args) };
+  }
+
   if (name === "legalOperations:stageCorporationDocumentPacket") {
     return staticStageCorporationDocumentPacket(store, args);
   }
@@ -4751,8 +4764,34 @@ function staticCreatePacketRunArtifacts(store: StaticDemoDexieStore | null | und
 }
 
 function staticSeedCorporationDocumentPackets(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
+  return staticSeedDocumentPackets(store, args, CORPORATION_DOCUMENT_PACKETS, {
+    markerKind: "corporation",
+    entityTypes: corporationPacketEntityTypes(),
+    catalogNote: "Catalog packet for corporation minute book, registers, filings, and compliance evidence.",
+    owner: "Societyer corporation packet catalog",
+  });
+}
+
+function staticSeedSocietyDocumentPackets(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
+  return staticSeedDocumentPackets(store, args, SOCIETY_DOCUMENT_PACKETS, {
+    markerKind: "society",
+    entityTypes: societyPacketEntityTypes(),
+    catalogNote: "Catalog packet for society minute book, registers, AGM, and Societies Act resolutions.",
+    owner: "Societyer society packet catalog",
+  });
+}
+
+/** Generic offline seeder mirroring convex/legalOperations seedDocumentPacketCatalog. */
+function staticSeedDocumentPackets(
+  store: StaticDemoDexieStore | null | undefined,
+  args: StaticArgs,
+  packets: typeof CORPORATION_DOCUMENT_PACKETS,
+  opts: { markerKind: string; entityTypes: string[]; catalogNote: string; owner: string },
+) {
   const now = new Date().toISOString();
   const societyId = args?.societyId ?? SOCIETY_ID;
+  const templateMarker = (packet: (typeof packets)[number]) => `societyer:${opts.markerKind}-packet-template:${packet.key}`;
+  const precedentMarker = (packet: (typeof packets)[number]) => `societyer:${opts.markerKind}-packet-precedent:${packet.key}`;
   const existingTemplates = store?.listRows("legalTemplates", { societyId }) ?? [];
   const existingPrecedents = store?.listRows("legalPrecedents", { societyId }) ?? [];
   let insertedTemplates = 0;
@@ -4764,8 +4803,8 @@ function staticSeedCorporationDocumentPackets(store: StaticDemoDexieStore | null
   const templateIdByPacketKey = new Map<string, string>();
 
   store?.transaction(() => {
-    for (const packet of CORPORATION_DOCUMENT_PACKETS) {
-      const marker = corporationPacketTemplateMarker(packet);
+    for (const packet of packets) {
+      const marker = templateMarker(packet);
       const existingByMarker = existingTemplates.find((row: any) => (row.sourceExternalIds ?? []).includes(marker));
       const existingByName = existingTemplates.find((row: any) => String(row.name ?? "").toLowerCase() === packet.templateName.toLowerCase());
       const id = existingByMarker?._id ?? `static_legal_template_${packet.key}`;
@@ -4777,16 +4816,12 @@ function staticSeedCorporationDocumentPackets(store: StaticDemoDexieStore | null
         name: packet.templateName,
         status: "active",
         html: corporationPacketTemplateHtml(packet),
-        notes: [
-          packet.summary,
-          "Catalog packet for corporation minute book, registers, filings, and compliance evidence.",
-          `Packet key: ${packet.key}`,
-        ].join("\n"),
-        owner: "Societyer corporation packet catalog",
+        notes: [packet.summary, opts.catalogNote, `Packet key: ${packet.key}`].join("\n"),
+        owner: opts.owner,
         ownerIsTobuso: false,
         signatureRequired: packet.signatureRequired,
         documentTag: packet.documentTag,
-        entityTypes: corporationPacketEntityTypes(),
+        entityTypes: opts.entityTypes,
         jurisdictions: packet.jurisdictions,
         requiredSigners: packet.requiredSigners,
         requiredDataFieldIds: [],
@@ -4819,8 +4854,8 @@ function staticSeedCorporationDocumentPackets(store: StaticDemoDexieStore | null
     }
 
     const latestTemplates = store?.listRows("legalTemplates", { societyId }) ?? [];
-    for (const packet of CORPORATION_DOCUMENT_PACKETS) {
-      const marker = corporationPacketPrecedentMarker(packet);
+    for (const packet of packets) {
+      const marker = precedentMarker(packet);
       const existingByMarker = existingPrecedents.find((row: any) => (row.sourceExternalIds ?? []).includes(marker));
       const existingByName = existingPrecedents.find((row: any) => String(row.packageName ?? "").toLowerCase() === packet.packageName.toLowerCase());
       const id = existingByMarker?._id ?? `static_legal_precedent_${packet.key}`;
@@ -4847,7 +4882,7 @@ function staticSeedCorporationDocumentPackets(store: StaticDemoDexieStore | null
         requiresAmendmentRecord: packet.requiresAmendmentRecord,
         requiresAnnualMaintenanceRecord: packet.requiresAnnualMaintenanceRecord,
         priceItems: [],
-        entityTypes: corporationPacketEntityTypes(),
+        entityTypes: opts.entityTypes,
         jurisdictions: packet.jurisdictions,
         subloopPairs: [],
         sourceExternalIds: [marker],
@@ -4873,7 +4908,7 @@ function staticSeedCorporationDocumentPackets(store: StaticDemoDexieStore | null
     insertedPrecedents,
     updatedPrecedents,
     skippedPrecedents,
-    total: CORPORATION_DOCUMENT_PACKETS.length,
+    total: packets.length,
   };
 }
 

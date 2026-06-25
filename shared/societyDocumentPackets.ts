@@ -15,6 +15,11 @@ const SOCIETY_ENTITY_TYPES = ["society", "society__bc_"];
 const SOCIETY_JURISDICTIONS = ["CA-BC", "british_columbia"];
 const COMMON_REVIEW_FIELDS = ["SocietyName", "Bylaws", "Constitution", "Directors", "Members", "RegisteredOffice"];
 
+/** Entity types a society document packet applies to (for the legal catalog). */
+export function societyPacketEntityTypes() {
+  return SOCIETY_ENTITY_TYPES;
+}
+
 export const SOCIETY_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
   {
     key: "society-annual-general-meeting",
