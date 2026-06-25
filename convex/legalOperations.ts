@@ -29,6 +29,7 @@ import { planShareSplit, validateRatio, type HoldingPosition, type SplitRatio } 
 import { buildSocietyRenderContext } from "../shared/societyRenderContext";
 import { normalizeGender } from "../shared/nlg";
 import { enforcePersonReference } from "./lib/personReference";
+import { planRoleHolderRevision } from "../shared/roleHolderHistory";
 import { buildExecutionBlock, resolvingBodyFor, type SignerLine } from "../shared/executionBlock";
 import { activeAsOf, type IntervalRow } from "../shared/registerHistory";
 import { buildAnnualResolutionContext } from "../shared/annualResolution";
@@ -101,6 +102,7 @@ export const upsertRoleHolder = mutation({
     directoryPersonId: v.optional(v.id("peopleDirectory")),
     gender: v.optional(v.string()),
     pronouns: v.optional(v.string()),
+    actorUserId: v.optional(v.string()),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     sourceExternalIds: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
@@ -181,17 +183,38 @@ export const upsertRoleHolder = mutation({
       updatedAtISO: now,
     };
     if (id) {
+      const existing = await ctx.db.get(id);
+      if (existing) {
+        // Append the prior version to the edit history, then patch the live row.
+        const { revision, liveStamps } = planRoleHolderRevision(existing, now, args.actorUserId);
+        await ctx.db.insert("roleHolderRevisions", { societyId: args.societyId, ...revision, createdAtISO: now });
+        await ctx.db.patch(id, { ...payload, ...liveStamps });
+        return id;
+      }
       await ctx.db.patch(id, payload);
       return id;
     }
-    return await ctx.db.insert("roleHolders", { ...payload, createdAtISO: now });
+    return await ctx.db.insert("roleHolders", {
+      ...payload,
+      enteredAtISO: now,
+      enteredByUserId: args.actorUserId,
+      createdAtISO: now,
+    });
   },
 });
 
 export const removeRoleHolder = mutation({
-  args: { id: v.id("roleHolders") },
+  args: { id: v.id("roleHolders"), actorUserId: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
+  handler: async (ctx, { id, actorUserId }) => {
+    // Capture a final closed revision before deleting, so the audit trail records
+    // the removal (and the last known values).
+    const existing = await ctx.db.get(id);
+    if (existing) {
+      const now = new Date().toISOString();
+      const { revision } = planRoleHolderRevision(existing, now, actorUserId);
+      await ctx.db.insert("roleHolderRevisions", { societyId: existing.societyId, ...revision, createdAtISO: now });
+    }
     await ctx.db.delete(id);
   },
 });

@@ -257,12 +257,33 @@ export default defineSchema({
     // documents; pronouns, when stated, override the gender-derived default.
     gender: v.optional(v.string()),
     pronouns: v.optional(v.string()), // e.g. "he/him", "she/her", "they/them", "xe/xir"
+    // Bitemporal "current version began" stamps (shared/roleHolderHistory.ts).
+    // The live row is always the open version; prior versions live in
+    // roleHolderRevisions. enteredByUserId is client-asserted (no backend auth).
+    enteredAtISO: v.optional(v.string()),
+    enteredByUserId: v.optional(v.string()),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })
     .index("by_society", ["societyId"])
     .index("by_society_role", ["societyId", "roleType"])
     .index("by_society_status", ["societyId", "status"]),
+
+  // Append-only edit history for roleHolders: each row is a closed (superseded)
+  // prior version. The live roleHolders row stays the current version, so reads
+  // of the register are unchanged. Logic: shared/roleHolderHistory.ts.
+  roleHolderRevisions: defineTable({
+    societyId: v.id("societies"),
+    roleHolderId: v.id("roleHolders"),
+    dataJson: v.string(), // snapshot of the tracked fields at this version
+    enteredAtISO: v.string(),
+    enteredByUserId: v.optional(v.string()),
+    supersededAtISO: v.string(),
+    supersededByUserId: v.optional(v.string()),
+    createdAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_role_holder", ["roleHolderId"]),
 
   rightsClasses: defineTable({
     societyId: v.id("societies"),

@@ -30,6 +30,19 @@ export function RoleHoldersPage() {
   const confirm = useConfirm();
   const toast = useToast();
   const [draft, setDraft] = useState<any>(null);
+  const [historyId, setHistoryId] = useState<string | null>(null);
+  const [auditFrom, setAuditFrom] = useState("");
+  const [auditTo, setAuditTo] = useState("");
+  const history = useQuery(
+    api.roleHolderHistory.revisionHistory,
+    historyId ? { roleHolderId: historyId as any } : "skip",
+  ) as any[] | undefined;
+  const auditDiff = useQuery(
+    api.roleHolderHistory.changesBetween,
+    society && auditFrom && auditTo
+      ? { societyId: society._id, fromISO: `${auditFrom}T00:00:00`, toISO: `${auditTo}T23:59:59` }
+      : "skip",
+  ) as Array<{ op: string; key: string; name: string }> | undefined;
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -219,6 +232,7 @@ export function RoleHoldersPage() {
                   <td><Badge tone={toneForStatus(row.status)}>{optionLabel("roleHolderStatuses", row.status)}</Badge></td>
                   <td>
                     <div className="row" style={{ justifyContent: "flex-end" }}>
+                      <button className="btn btn--ghost btn--sm" onClick={() => setHistoryId(row._id)}>History</button>
                       <button className="btn btn--ghost btn--sm" onClick={() => setDraft(editRoleHolder(row))}>Edit</button>
                       <button className="btn btn--ghost btn--sm btn--icon" aria-label="Delete role holder" onClick={() => confirmDelete(row)}><Trash2 size={12} /></button>
                     </div>
@@ -230,6 +244,61 @@ export function RoleHoldersPage() {
           </table>
         </div>
       </Section>
+
+      <Section title="Audit trail — changes between two dates" count={(auditDiff ?? []).filter((d) => d.op !== "unchanged").length}>
+        <div className="card__body">
+          <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <Field label="From"><input className="input" type="date" value={auditFrom} onChange={(e) => setAuditFrom(e.target.value)} /></Field>
+            <Field label="To"><input className="input" type="date" value={auditTo} onChange={(e) => setAuditTo(e.target.value)} /></Field>
+          </div>
+          {auditFrom && auditTo && (
+            <ul style={{ marginTop: 12 }}>
+              {(auditDiff ?? []).filter((d) => d.op !== "unchanged").map((d) => (
+                <li key={d.key}>
+                  <Badge tone={d.op === "new" ? "success" : d.op === "delete" ? "danger" : "warn"}>{d.op}</Badge>{" "}
+                  {d.name || d.key}
+                </li>
+              ))}
+              {(auditDiff ?? []).filter((d) => d.op !== "unchanged").length === 0 && (
+                <li className="muted">No changes to the register in this window.</li>
+              )}
+            </ul>
+          )}
+        </div>
+      </Section>
+
+      <Drawer
+        open={Boolean(historyId)}
+        onClose={() => setHistoryId(null)}
+        title="Edit history"
+      >
+        {historyId && (
+          <div>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Every edit appends a version. "Who" is client-asserted (this backend has no
+              auth yet), so treat the actor as advisory until auth is added.
+            </p>
+            {(history ?? []).slice().reverse().map((version, idx) => (
+              <div key={idx} className="card" style={{ marginBottom: 10, padding: 12 }}>
+                <div className="row" style={{ justifyContent: "space-between" }}>
+                  <strong>{formatDate(version.enteredAtISO)}</strong>
+                  {version.isCurrent ? <Badge tone="success">current</Badge> : <Badge tone="neutral">superseded</Badge>}
+                </div>
+                <div className="muted">by {version.enteredByUserId || "unknown"}</div>
+                <ul style={{ marginTop: 8, marginBottom: 0 }}>
+                  {(version.changes ?? []).map((c: any) => (
+                    <li key={c.field}>
+                      <code>{c.field}</code>: {formatChangeValue(c.from)} → {formatChangeValue(c.to)}
+                    </li>
+                  ))}
+                  {(version.changes ?? []).length === 0 && <li className="muted">No tracked field changes.</li>}
+                </ul>
+              </div>
+            ))}
+            {history && history.length === 0 && <p className="muted">No history recorded yet.</p>}
+          </div>
+        )}
+      </Drawer>
 
       <Drawer
         open={Boolean(draft)}
@@ -1289,6 +1358,11 @@ function countCurrentRoles(rows: any[], roleTypes: string[]) {
     row.status !== "former" &&
     row.status !== "inactive",
   ).length;
+}
+
+function formatChangeValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return "—";
+  return String(value);
 }
 
 function editRoleHolder(row: any) {

@@ -8,6 +8,15 @@ import {
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
 import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
 import { planShareSplit, validateRatio, type HoldingPosition, type SplitRatio } from "../../shared/shareSplit";
+import {
+  buildTimeline,
+  changesBetween as changesBetweenPure,
+  fieldChanges,
+  planRoleHolderRevision,
+  registerAsOf as registerAsOfPure,
+  type LiveRoleHolder,
+  type StoredRevision,
+} from "../../shared/roleHolderHistory";
 import { computeVotingPower } from "../../shared/votingPower";
 import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../../shared/societyDocumentPackets";
 import {
@@ -2218,6 +2227,33 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     return (store?.listRows("roleHolders", args) ?? [])
       .sort((a, b) => String(a.fullName ?? "").localeCompare(String(b.fullName ?? "")));
   }
+  if (moduleName === "roleHolderHistory" && exportName === "revisionHistory") {
+    const revisions = staticStoredRoleHolderRevisions(store, { roleHolderId: args?.roleHolderId });
+    const liveRow = store?.getRow("roleHolders", args?.roleHolderId);
+    const timeline = buildTimeline(revisions, liveRow ? ({ ...liveRow, _id: String(liveRow._id) } as LiveRoleHolder) : undefined);
+    return timeline.map((version, index) => ({
+      enteredAtISO: version.enteredAtISO,
+      enteredByUserId: version.enteredByUserId ?? null,
+      supersededAtISO: version.supersededAtISO ?? null,
+      supersededByUserId: version.supersededByUserId ?? null,
+      isCurrent: version.supersededAtISO == null,
+      fullName: version.fullName ?? null,
+      changes: fieldChanges(index === 0 ? undefined : timeline[index - 1], version),
+    }));
+  }
+  if (moduleName === "roleHolderHistory" && exportName === "registerAsOf") {
+    const revisions = staticStoredRoleHolderRevisions(store, { societyId: args?.societyId });
+    const liveRows = (store?.listRows("roleHolders", { societyId: args?.societyId }) ?? [])
+      .map((row: any) => ({ ...row, _id: String(row._id) })) as LiveRoleHolder[];
+    return registerAsOfPure(revisions, liveRows, String(args?.asOfISO ?? ""));
+  }
+  if (moduleName === "roleHolderHistory" && exportName === "changesBetween") {
+    const revisions = staticStoredRoleHolderRevisions(store, { societyId: args?.societyId });
+    const liveRows = (store?.listRows("roleHolders", { societyId: args?.societyId }) ?? [])
+      .map((row: any) => ({ ...row, _id: String(row._id) })) as LiveRoleHolder[];
+    return changesBetweenPure(revisions, liveRows, String(args?.fromISO ?? ""), String(args?.toISO ?? ""))
+      .map((row) => ({ op: row.op, key: row.key, name: String((row.desired ?? row.current)?.fullName ?? "") }));
+  }
   {
     const ycn = ycnQueryResult(moduleName, exportName, args, store as any);
     if (ycn !== YCN_NOT_HANDLED) return ycn;
@@ -4418,6 +4454,9 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     const tableName = staticMutationTableName(moduleName, exportName);
     if (exportName.startsWith("remove")) {
       const existing = store?.getRow(tableName, args?.id);
+      if (tableName === "roleHolders" && existing) {
+        staticSnapshotRoleHolderRevision(store, existing, args?.actorUserId);
+      }
       store?.removeRow(tableName, args?.id);
       if (tableName === "rightsholdingTransfers" && existing?.societyId) {
         staticSyncRightsHoldings(store, existing.societyId);
@@ -4438,6 +4477,19 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     };
     delete row.id;
     delete row.patch;
+    if (tableName === "roleHolders") {
+      const now = new Date().toISOString();
+      if (existing && existing._id) {
+        // Edit: append the prior version to the history before patching.
+        staticSnapshotRoleHolderRevision(store, existing, args?.actorUserId, now);
+        row.enteredAtISO = now;
+        row.enteredByUserId = args?.actorUserId;
+      } else {
+        row.enteredAtISO = row.enteredAtISO ?? now;
+        row.enteredByUserId = args?.actorUserId ?? row.enteredByUserId;
+      }
+      delete row.actorUserId;
+    }
     if (tableName === "rightsholdingTransfers") {
       const proposedTransfers = (store?.listRows("rightsholdingTransfers", { societyId: row.societyId }) ?? [])
         .filter((transfer) => String(transfer._id) !== String(id))
@@ -4746,6 +4798,34 @@ function staticStageShareIssuancePacket(store: StaticDemoDexieStore | null | und
     minuteBookItemId: minuteBookItem?._id,
     sourceEvidenceId: sourceEvidence?._id,
   };
+}
+
+function staticSnapshotRoleHolderRevision(
+  store: StaticDemoDexieStore | null | undefined,
+  existing: any,
+  actorUserId?: string,
+  nowISO: string = new Date().toISOString(),
+) {
+  if (!store || !existing?._id) return;
+  const { revision } = planRoleHolderRevision(existing, nowISO, actorUserId);
+  store.upsertRow("roleHolderRevisions", {
+    _id: staticLocalId("roleHolderRevisions", String(existing._id)),
+    _creationTime: Date.now(),
+    societyId: existing.societyId,
+    ...revision,
+    createdAtISO: nowISO,
+  });
+}
+
+function staticStoredRoleHolderRevisions(store: StaticDemoDexieStore | null | undefined, where: Record<string, unknown>): StoredRevision[] {
+  return (store?.listRows("roleHolderRevisions", where) ?? []).map((row: any) => ({
+    roleHolderId: String(row.roleHolderId),
+    dataJson: String(row.dataJson ?? "{}"),
+    enteredAtISO: String(row.enteredAtISO ?? row.createdAtISO ?? ""),
+    enteredByUserId: row.enteredByUserId,
+    supersededAtISO: String(row.supersededAtISO ?? ""),
+    supersededByUserId: row.supersededByUserId,
+  }));
 }
 
 function staticStageShareSplitPacket(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
