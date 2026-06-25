@@ -55,10 +55,15 @@ function collectFrontendWrites(): Map<string, string[]> {
 // (2) Names the mirror handles explicitly, i.e. any "module:fn" string literal
 // in staticConvex.ts (handlers are `name === "module:fn"` / switch(name) cases).
 function collectExplicitlyHandled(): Set<string> {
-  const text = readFileSync(staticConvexPath, "utf8");
+  // The mirror is split across staticConvex.ts and its domain sibling modules
+  // (e.g. staticConvexYcn.ts) that staticConvex.ts delegates to. Scan all of them.
+  const mirrorFiles = [staticConvexPath, path.join(srcDir, "lib", "staticConvexYcn.ts")];
   const handled = new Set<string>();
-  for (const match of text.matchAll(/["']([a-zA-Z][a-zA-Z0-9]*:[a-zA-Z][a-zA-Z0-9]*)["']/g)) {
-    handled.add(match[1]);
+  for (const file of mirrorFiles) {
+    const text = readFileSync(file, "utf8");
+    for (const match of text.matchAll(/["']([a-zA-Z][a-zA-Z0-9]*:[a-zA-Z][a-zA-Z0-9]*)["']/g)) {
+      handled.add(match[1]);
+    }
   }
   return handled;
 }
