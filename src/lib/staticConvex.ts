@@ -14,6 +14,7 @@ import {
 } from "../../shared/corporationPacketDocx";
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
 import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
+import { roleHoldersAsOf } from "../../shared/registerHistory";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { DEFAULT_HOME_JURISDICTION_CODE, registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
 import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "./localDexieRowStore";
@@ -2208,6 +2209,18 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
   if (moduleName === "legalOperations" && exportName === "listRoleHolders") {
     return (store?.listRows("roleHolders", args) ?? [])
       .sort((a, b) => String(a.fullName ?? "").localeCompare(String(b.fullName ?? "")));
+  }
+  if (moduleName === "registerHistory") {
+    const roleHolderRows = (store?.listRows("roleHolders", args) ?? []) as any[];
+    if (exportName === "directorsAsOf") {
+      return roleHoldersAsOf(roleHolderRows, String(args?.asOf ?? ""), "director");
+    }
+    if (exportName === "roleHoldersAsOfDate") {
+      return roleHoldersAsOf(roleHolderRows, String(args?.asOf ?? ""), String(args?.roleType ?? ""));
+    }
+    if (exportName === "significantIndividualsAsOf") {
+      return roleHolderRows.filter((row) => row.roleType === "controller");
+    }
   }
   if (moduleName === "legalOperations" && exportName === "rightsLedger") {
     const classes = (store?.listRows("rightsClasses", args) ?? [])

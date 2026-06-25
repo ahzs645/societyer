@@ -119,6 +119,7 @@ const WorkflowDetailPage = React.lazy(() => import("./pages/WorkflowDetail").the
 const WorkflowRunsPage = React.lazy(() => import("./pages/WorkflowRuns").then((m) => ({ default: m.WorkflowRunsPage })));
 const WorkflowPackagesPage = React.lazy(() => import("./pages/WorkflowPackages").then((m) => ({ default: m.WorkflowPackagesPage })));
 const RoleHoldersPage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.RoleHoldersPage })));
+const PointInTimeRegisterPage = React.lazy(() => import("./pages/PointInTimeRegister").then((m) => ({ default: m.PointInTimeRegisterPage })));
 const RightsLedgerPage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.RightsLedgerPage })));
 const TemplateEnginePage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.TemplateEnginePage })));
 const FormationMaintenancePage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.FormationMaintenancePage })));
@@ -294,6 +295,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="society" element={<SocietyPage />} />
             <Route path="organization-details" element={<OrganizationDetailsPage />} />
             <Route path="role-holders" element={<RoleHoldersPage />} />
+            <Route path="point-in-time-register" element={<PointInTimeRegisterPage />} />
             <Route path="rights-ledger" element={<RightsLedgerPage />} />
             <Route path="template-engine" element={<TemplateEnginePage />} />
             <Route path="formation-maintenance" element={<FormationMaintenancePage />} />

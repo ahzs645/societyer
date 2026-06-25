@@ -170,6 +170,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/directors": { icon: UserCog, group: "people", label: "Directors" },
   "/app/org-chart": { icon: Network, group: "people", label: "Org chart" },
   "/app/role-holders": { icon: UsersRound, group: "people", label: "Role holders" },
+  "/app/point-in-time-register": { icon: History, group: "people", label: "Point-in-time register" },
   "/app/committees": { icon: Network, group: "people", label: "Committees" },
   "/app/volunteers": { icon: HandHeart, group: "people", label: "Volunteers", module: "volunteers" },
   "/app/employees": { icon: Briefcase, group: "people", label: "Employees", module: "employees" },
