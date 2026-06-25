@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { disabledModulesValidator } from "./lib/moduleSettings";
 import { assertAllowedOption } from "./lib/orgHubOptions";
 import { seedSociety } from "./seedRecordTableMetadata";
+import { seedDocumentPacketsForEntityHelper } from "./legalOperations";
 import { DEFAULT_HOME_JURISDICTION_CODE, registryOnboardingCopy } from "../shared/jurisdictionWorkspace";
 
 async function withLogoUrl(ctx, society) {
@@ -307,6 +308,8 @@ export const createWorkspace = mutation({
     isCharity: v.optional(v.boolean()),
     isMemberFunded: v.optional(v.boolean()),
     actingUserId: v.optional(v.id("users")),
+    // Auto-seed the entity's document packet catalog on creation (default true).
+    seedDocumentPackets: v.optional(v.boolean()),
   },
   returns: v.object({
     societyId: v.id("societies"),
@@ -369,6 +372,11 @@ export const createWorkspace = mutation({
     });
     await ctx.db.patch(societyId, { primaryRegistrationId: homeRegistrationId });
     await seedSociety(ctx, societyId);
+    // Seed the entity's document packet catalog (corporation vs society by kind)
+    // unless the caller opts out (isolation tests that assert seed counts).
+    if (args.seedDocumentPackets !== false) {
+      await seedDocumentPacketsForEntityHelper(ctx, societyId);
+    }
 
     // Seed an Owner user so the new workspace has an admin actor from the
     // start. Without this the Users page is stranded: no admin → can't create

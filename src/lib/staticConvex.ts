@@ -2286,6 +2286,13 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
       createdAtISO: now,
       updatedAtISO: now,
     });
+    // Auto-seed the entity's document packet catalog by kind (mirrors
+    // convex/society.createWorkspace), unless the caller opts out.
+    if (args?.seedDocumentPackets !== false) {
+      const isCorp = String(args?.entityType ?? "").includes("corporation") || String(args?.actFormedUnder ?? "").includes("corporations_act");
+      if (isCorp) staticSeedCorporationDocumentPackets(store, { societyId });
+      else staticSeedSocietyDocumentPackets(store, { societyId });
+    }
     store?.upsertRow("organizationRegistrations", {
       _id: homeRegistrationId,
       _creationTime: Date.now(),

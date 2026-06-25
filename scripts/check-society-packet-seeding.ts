@@ -21,6 +21,7 @@ const created = await client.mutation("society:createWorkspace", {
   jurisdictionCode: "CA-BC",
   entityType: "society",
   actFormedUnder: "societies_act",
+  seedDocumentPackets: false,
 });
 const societyId = created.societyId;
 

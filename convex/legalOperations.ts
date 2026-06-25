@@ -449,14 +449,21 @@ export const seedSocietyDocumentPackets = mutation({
 export const seedDocumentPacketsForEntity = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const society = await ctx.db.get(societyId);
-    if (society && isCorporation(society as any)) {
-      return { kind: "corporation", ...(await seedCorporationDocumentPacketsForSociety(ctx, societyId)) };
-    }
-    return { kind: "society", ...(await seedSocietyDocumentPacketsForSociety(ctx, societyId)) };
-  },
+  handler: async (ctx, { societyId }) => seedDocumentPacketsForEntityHelper(ctx, societyId),
 });
+
+/**
+ * Seed the correct packet catalog for an entity by kind. Plain helper so other
+ * mutations (e.g. society.createWorkspace) can auto-seed on entity creation
+ * without going through the mutation boundary.
+ */
+export async function seedDocumentPacketsForEntityHelper(ctx: any, societyId: any) {
+  const society = await ctx.db.get(societyId);
+  if (society && isCorporation(society as any)) {
+    return { kind: "corporation", ...(await seedCorporationDocumentPacketsForSociety(ctx, societyId)) };
+  }
+  return { kind: "society", ...(await seedSocietyDocumentPacketsForSociety(ctx, societyId)) };
+}
 
 export const stageCorporationDocumentPacket = mutation({
   args: {

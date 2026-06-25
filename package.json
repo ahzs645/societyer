@@ -94,6 +94,7 @@
     "test:annual-filings": "tsx scripts/check-annual-filings.ts",
     "test:society-packets": "tsx scripts/check-society-packets.ts",
     "test:society-packet-seeding": "tsx scripts/check-society-packet-seeding.ts",
+    "test:entity-packet-autoseed": "tsx scripts/check-entity-packet-autoseed.ts",
     "test:dividends": "tsx scripts/check-dividends.ts",
     "test:service-providers": "tsx scripts/check-service-providers.ts",
     "test:register-diff": "tsx scripts/check-register-diff.ts",
