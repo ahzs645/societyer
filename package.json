@@ -92,6 +92,7 @@
     "test:name-history": "tsx scripts/check-name-history.ts",
     "test:constating": "tsx scripts/check-constating.ts",
     "test:annual-filings": "tsx scripts/check-annual-filings.ts",
+    "test:society-packets": "tsx scripts/check-society-packets.ts",
     "test:dividends": "tsx scripts/check-dividends.ts",
     "test:service-providers": "tsx scripts/check-service-providers.ts",
     "test:register-diff": "tsx scripts/check-register-diff.ts",
