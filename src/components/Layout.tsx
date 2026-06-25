@@ -64,6 +64,7 @@ import {
   Bot,
   Plug,
   Plus,
+  Layers,
 } from "lucide-react";
 import {
   ComponentType,
@@ -1174,6 +1175,35 @@ export function Layout() {
             <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
               <strong style={{ fontSize: "var(--fs-md)" }}>{t("sidebar.workspaces")}</strong>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                setWorkspaceOpen(false);
+                navigate("/app/portfolio");
+              }}
+              style={{
+                width: "100%",
+                textAlign: "left",
+                padding: "10px 12px",
+                border: "none",
+                borderBottom: "1px solid var(--border)",
+                background: "var(--bg-panel)",
+                color: "inherit",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-panel)"; }}
+            >
+              <Layers size={15} />
+              <span style={{ flex: 1 }}>
+                <strong style={{ fontSize: "var(--fs-md)" }}>{t("sidebar.viewAllEntities")}</strong>
+                <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{t("sidebar.viewAllEntitiesHint")}</div>
+              </span>
+            </button>
             <div style={{ overflowY: "auto", minHeight: 0 }}>
               {societies.map((s: any) => {
                 const active = s._id === society?._id;

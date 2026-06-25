@@ -113,6 +113,8 @@
     "openInNewTab": "Open in new tab",
     "activeWorkspace": "Active",
     "addWorkspace": "Add workspace",
+    "viewAllEntities": "All entities",
+    "viewAllEntitiesHint": "Firm-wide portfolio across every entity",
     "noSocieties": "No societies available yet."
   },
   "settings": {
