@@ -58,6 +58,13 @@ function recordsFromBundle(bundle: any) {
   for (const holder of arrayOf(bundle?.roleHolders ?? bundle?.representatives)) records.push(makeRecord("roleHolder", "roleHolders", holder));
   for (const rightsClass of arrayOf(bundle?.rightsClasses ?? bundle?.shareClasses)) records.push(makeRecord("rightsClass", "rightsClasses", rightsClass));
   for (const transfer of arrayOf(bundle?.rightsholdingTransfers ?? bundle?.shareTransfers)) records.push(makeRecord("rightsholdingTransfer", "rightsholdingTransfers", transfer));
+  for (const provider of arrayOf(bundle?.serviceProviders)) records.push(makeRecord("serviceProvider", "serviceProviders", provider));
+  for (const dividend of arrayOf(bundle?.dividends)) records.push(makeRecord("dividend", "dividends", dividend));
+  for (const name of arrayOf(bundle?.nameHistory)) records.push(makeRecord("nameHistory", "societyNameHistory", name));
+  for (const event of arrayOf(bundle?.constatingEvents)) records.push(makeRecord("constatingEvent", "constatingEvents", event));
+  for (const step of arrayOf(bundle?.significantIndividualSteps)) records.push(makeRecord("significantIndividualStep", "significantIndividualSteps", step));
+  for (const asset of arrayOf(bundle?.assets)) records.push(makeRecord("asset", "assets", asset));
+  for (const cert of arrayOf(bundle?.shareCertificates)) records.push(makeRecord("shareCertificate", "shareCertificates", cert));
   for (const field of arrayOf(bundle?.legalTemplateDataFields ?? bundle?.dataFields)) records.push(makeRecord("legalTemplateDataField", "legalTemplateDataFields", field));
   for (const template of arrayOf(bundle?.legalTemplates ?? bundle?.templates)) records.push(makeRecord("legalTemplate", "legalTemplates", template));
   for (const precedent of arrayOf(bundle?.legalPrecedents ?? bundle?.parts ?? bundle?.partPrecedents)) records.push(makeRecord("legalPrecedent", "legalPrecedents", precedent));
@@ -124,6 +131,13 @@ function targetTableForRecordKind(kind: string) {
     roleHolder: "roleHolders",
     rightsClass: "rightsClasses",
     rightsholdingTransfer: "rightsholdingTransfers",
+    serviceProvider: "serviceProviders",
+    dividend: "dividends",
+    nameHistory: "societyNameHistory",
+    constatingEvent: "constatingEvents",
+    significantIndividualStep: "significantIndividualSteps",
+    asset: "assets",
+    shareCertificate: "shareCertificates",
     legalTemplateDataField: "legalTemplateDataFields",
     legalTemplate: "legalTemplates",
     legalPrecedent: "legalPrecedents",

@@ -930,6 +930,9 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       // YCN ENT_PEOPLE.GENDER → NLG pronoun engine (WS2b). Imported via ycnAccessImport.
       gender: cleanText(payload.gender),
       pronouns: cleanText(payload.pronouns),
+      // YCN TRANSPARENCY_REG significant-individual fields (roleType "controller").
+      significanceReason: cleanText(payload.significanceReason),
+      taxResidentHomeJurisdiction: cleanText(payload.taxResidentHomeJurisdiction),
       authorizedRepresentative: optionalBoolean(payload.authorizedRepresentative),
       relatedRoleHolderId: cleanText(payload.relatedRoleHolderId) as any,
       relatedShareholderIds: arrayOf(payload.relatedShareholderIds).map(String).map(cleanText).filter(Boolean),
@@ -991,6 +994,109 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       notes: sourceNote,
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
+    });
+  },
+
+  serviceProvider: async ({ ctx, societyId, payload }: SectionRecordContext) => {
+    const now = new Date().toISOString();
+    return await ctx.db.insert("serviceProviders", {
+      societyId,
+      function: cleanText(payload.function) || cleanText(payload.role) || "other",
+      firmName: cleanText(payload.firmName) || cleanText(payload.name) || "Imported service provider",
+      contactName: cleanText(payload.contactName),
+      firmLocation: cleanText(payload.firmLocation) || cleanText(payload.location),
+      appointedOn: cleanDate(payload.appointedOn),
+      removedOn: cleanDate(payload.removedOn),
+      notes: cleanText(payload.notes),
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+  },
+
+  dividend: async ({ ctx, societyId, payload }: SectionRecordContext) => {
+    const perShareCents = numberOrUndefined(payload.perShareCents) ?? 0;
+    const sharesOutstanding = numberOrUndefined(payload.sharesOutstanding) ?? 0;
+    return await ctx.db.insert("dividends", {
+      societyId,
+      declaredOn: cleanDate(payload.declaredOn) || cleanDate(payload.date) || "",
+      shareClass: cleanText(payload.shareClass) || cleanText(payload.class) || "Imported class",
+      perShareCents,
+      sharesOutstanding,
+      currency: cleanText(payload.currency) || "CAD",
+      totalCents: numberOrUndefined(payload.totalCents) ?? perShareCents * sharesOutstanding,
+      notes: cleanText(payload.notes),
+      createdAtISO: new Date().toISOString(),
+    });
+  },
+
+  nameHistory: async ({ ctx, societyId, payload }: SectionRecordContext) => {
+    return await ctx.db.insert("societyNameHistory", {
+      societyId,
+      name: cleanText(payload.name) || cleanText(payload.corpName) || "Imported name",
+      shortName: cleanText(payload.shortName),
+      startISO: cleanDate(payload.startISO) || cleanDate(payload.startDate) || "",
+      regPosn: numberOrUndefined(payload.regPosn),
+      createdAtISO: new Date().toISOString(),
+    });
+  },
+
+  constatingEvent: async ({ ctx, societyId, payload }: SectionRecordContext) => {
+    return await ctx.db.insert("constatingEvents", {
+      societyId,
+      action: cleanText(payload.action) || "other",
+      jurisdiction: cleanText(payload.jurisdiction) || "Imported",
+      legislation: cleanText(payload.legislation) || "",
+      regNumber: cleanText(payload.regNumber),
+      startISO: cleanDate(payload.startISO) || cleanDate(payload.startDate) || "",
+      createdAtISO: new Date().toISOString(),
+    });
+  },
+
+  significantIndividualStep: async ({ ctx, societyId, payload }: SectionRecordContext) => {
+    return await ctx.db.insert("significantIndividualSteps", {
+      societyId,
+      individualName: cleanText(payload.individualName) || cleanText(payload.name) || "Imported individual",
+      stepsNarrative: cleanText(payload.stepsNarrative) || cleanText(payload.steps) || "",
+      stepDate: cleanDate(payload.stepDate) || "",
+      nextReviewDate: cleanDate(payload.nextReviewDate),
+      createdAtISO: new Date().toISOString(),
+    });
+  },
+
+  asset: async ({ ctx, societyId, payload }: SectionRecordContext) => {
+    const now = new Date().toISOString();
+    return await ctx.db.insert("assets", {
+      societyId,
+      assetTag: cleanText(payload.assetTag) || cleanText(payload.assetId) || `imported-${now}`,
+      name: cleanText(payload.name) || cleanText(payload.description) || "Imported asset",
+      category: cleanText(payload.category) || cleanText(payload.assetType) || "Other",
+      serialNumber: cleanText(payload.serialNumber),
+      supplier: cleanText(payload.supplier),
+      purchaseDate: cleanDate(payload.purchaseDate),
+      purchaseValueCents: numberOrUndefined(payload.purchaseValueCents),
+      quantityOnHand: numberOrUndefined(payload.quantityOnHand),
+      currency: cleanText(payload.currency),
+      location: cleanText(payload.location),
+      condition: cleanText(payload.condition) || "unknown",
+      status: cleanText(payload.status) || "needs_review",
+      capitalized: optionalBoolean(payload.capitalized) ?? false,
+      notes: cleanText(payload.notes),
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+  },
+
+  shareCertificate: async ({ ctx, societyId, payload }: SectionRecordContext) => {
+    return await ctx.db.insert("shareCertificates", {
+      societyId,
+      certificateNumber: cleanText(payload.certificateNumber) || "Imported certificate",
+      holderName: cleanText(payload.holderName) || "Imported holder",
+      shareClass: cleanText(payload.shareClass) || "Imported class",
+      shares: numberOrUndefined(payload.shares) ?? 0,
+      issuedOn: cleanDate(payload.issuedOn) || "",
+      replacesCertificateNumber: cleanText(payload.replacesCertificateNumber),
+      cancelledOn: cleanDate(payload.cancelledOn),
+      createdAtISO: new Date().toISOString(),
     });
   },
 

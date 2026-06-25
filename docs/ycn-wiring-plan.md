@@ -19,6 +19,29 @@
 Plus: the YCN import apply path now persists `gender`/`pronouns` (WS4 → WS2b), so
 imported directors render with correct pronouns.
 
+## WS4+ · full Access-DB coverage (follow-on)
+
+The first WS4 cut imported 5 register collections; a second pass brought in the
+remaining `DB_GLOB_*` tables so the whole sample `.accdb` migrates (154 → 270 sample
+records). New mappings in `shared/ycnAccessImport.ts`, new promotable section-record
+kinds + apply handlers in the import pipeline (no static-mirror work — the static
+bundle parser has a generic fallback and the apply step is a deferred no-op):
+
+| Access table | → kind → table |
+|---|---|
+| TRANSPARENCY_REG | roleHolder (controller) → roleHolders (significance reason + tax-residency) |
+| TRANSPARENCY_DUE | significantIndividualStep → significantIndividualSteps |
+| SERVICE_PROVIDERS | serviceProvider → serviceProviders |
+| DIVIDEND | dividend → dividends |
+| CORP_NAME | nameHistory → societyNameHistory |
+| CONSTATING | constatingEvent → constatingEvents |
+| CORP_ASSETS | asset → assets |
+| SHARE_TRANS (SHR_CERT) | shareCertificate → shareCertificates |
+
+Still deferred (documented, not data records): `CORP_SETTINGS` (settings, applied via
+society:updateComplianceSettings, not the staged pipeline), the global
+`PEOPLE_DIRECTORY` (cross-tenant), and `Retain_List` (a UI picklist).
+
 ## Dormant modules (tested, zero production consumers)
 
 | Module | Test | Wired by |

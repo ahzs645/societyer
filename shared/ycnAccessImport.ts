@@ -47,6 +47,13 @@ export interface YcnImportBundle {
   rightsholdingTransfers: BundlePayload[];
   organizationRegistrations: BundlePayload[];
   organizationAddresses: BundlePayload[];
+  serviceProviders: BundlePayload[];
+  dividends: BundlePayload[];
+  nameHistory: BundlePayload[];
+  constatingEvents: BundlePayload[];
+  significantIndividualSteps: BundlePayload[];
+  assets: BundlePayload[];
+  shareCertificates: BundlePayload[];
 }
 
 // ---------------------------------------------------------------------------
@@ -103,6 +110,26 @@ function toNumber(value: unknown): number | undefined {
   }
   const n = Number(String(value).replace(/[,$]/g, "").trim());
   return Number.isFinite(n) ? n : undefined;
+}
+
+/** Parse a YCN money string ("$52,500", "10", "C$ 1,000") into integer cents. */
+export function parseMoneyCents(value: unknown): number | undefined {
+  const n = toNumber(value);
+  return n === undefined ? undefined : Math.round(n * 100);
+}
+
+/** Strip a YCN leading register index ("2. Avery Ward" -> "Avery Ward"). */
+export function stripLeadingNumber(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  return value.replace(/^\s*\d+\.\s*/, "").trim() || undefined;
+}
+
+/** YCN Y/N/Unknown -> Societyer yes|no|unknown. */
+export function mapYesNoUnknown(raw: string | undefined): string {
+  const text = (raw ?? "").trim().toLowerCase();
+  if (text.startsWith("y")) return "yes";
+  if (text.startsWith("n")) return "no";
+  return "unknown";
 }
 
 /** A row is "current" when its REVISE_DT_TM is null / the YCN sentinel. */
@@ -254,6 +281,139 @@ function addressPayload(row: YcnRow, addressType: string): BundlePayload {
   };
 }
 
+/** YCN TRANSPARENCY_REG → a controller role holder (significant individual). */
+function transparencyControllerPayload(row: YcnRow): BundlePayload {
+  const ended = pickDate(row, "END_DT");
+  return {
+    roleType: "controller",
+    fullName: stripLeadingNumber(pick(row, "NAME")),
+    status: ended ? "former" : "current",
+    street: pick(row, "ADDRESS"),
+    dateOfBirth: pickDate(row, "BIRTH"),
+    citizenshipResidency: pick(row, "CITIZEN"),
+    taxResidentHomeJurisdiction: mapYesNoUnknown(pick(row, "TAX_RESIDENT_YN")),
+    significanceReason: pick(row, "REASON"),
+    startDate: pickDate(row, "START_DT"),
+    endDate: ended,
+    sourceExternalIds: [`ycn:transparency:${entId(row)}:${dbId(row)}`],
+  };
+}
+
+/** YCN TRANSPARENCY_DUE → a significant-individual diligence step. */
+function transparencyStepPayload(row: YcnRow): BundlePayload {
+  return {
+    individualName: stripLeadingNumber(pick(row, "NAME")),
+    stepsNarrative: pick(row, "STEPS"),
+    stepDate: pickDate(row, "STEP_DT"),
+    sourceExternalIds: [`ycn:transparency-due:${entId(row)}:${dbId(row)}`],
+  };
+}
+
+/** YCN FUNCTION label → serviceProviders.function enum. */
+export function mapServiceFunction(raw: string | undefined): string {
+  const text = (raw ?? "").trim().toLowerCase();
+  if (text.startsWith("auditor")) return "auditor";
+  if (text.startsWith("lawyer") || text.startsWith("legal")) return "lawyer";
+  if (text.startsWith("account")) return "accountant";
+  if (text.startsWith("bank")) return "banker";
+  if (text.startsWith("transfer")) return "transfer_agent";
+  if (text.startsWith("registered") || text.startsWith("agent")) return "registered_agent";
+  return "other";
+}
+
+function serviceProviderPayload(row: YcnRow): BundlePayload {
+  return {
+    function: mapServiceFunction(pick(row, "FUNCTION")),
+    firmName: pick(row, "FIRM_NAME"),
+    contactName: pick(row, "CONTACT_NAME"),
+    firmLocation: pick(row, "FIRM_LOCATION"),
+    appointedOn: pickDate(row, "APPOINT_DT_TM"),
+    removedOn: pickDate(row, "REMOVE_DT_TM"),
+    sourceExternalIds: [`ycn:service-provider:${entId(row)}:${pick(row, "FIRM_ID") ?? dbId(row)}`],
+  };
+}
+
+function dividendPayload(row: YcnRow): BundlePayload {
+  return {
+    declaredOn: pickDate(row, "DECLARE_DT_TM"),
+    shareClass: pick(row, "CLASS"),
+    perShareCents: parseMoneyCents(pick(row, "DIV_PER_SHARE")),
+    sharesOutstanding: toNumber(pick(row, "SHR_TOTAL")),
+    currency: pick(row, "DIV_CURRENCY"),
+    totalCents: parseMoneyCents(pick(row, "DIV_TOTAL")),
+    sourceExternalIds: [`ycn:dividend:${entId(row)}:${dbId(row)}`],
+  };
+}
+
+function nameHistoryPayload(row: YcnRow): BundlePayload {
+  return {
+    name: pick(row, "CORP_NAME"),
+    shortName: pick(row, "SHORT_NAME"),
+    startISO: pickDate(row, "START_DT_TM"),
+    regPosn: toNumber(pick(row, "REG_POSN")),
+    sourceExternalIds: [`ycn:corp-name:${entId(row)}:${dbId(row)}`],
+  };
+}
+
+/** YCN REG_ACTION → constatingEvents.action enum. */
+export function mapConstatingAction(raw: string | undefined): string {
+  const text = (raw ?? "").trim().toLowerCase();
+  for (const action of ["incorporated", "transitioned", "continued", "amalgamated", "restated"]) {
+    if (text.includes(action.slice(0, 6))) return action;
+  }
+  return "other";
+}
+
+function constatingPayload(row: YcnRow): BundlePayload {
+  return {
+    action: mapConstatingAction(pick(row, "REG_ACTION")),
+    jurisdiction: pick(row, "JURISDICTION"),
+    legislation: pick(row, "LEGISLATION"),
+    regNumber: pick(row, "REG_NUMBER"),
+    startISO: pickDate(row, "START_DT_TM"),
+    sourceExternalIds: [`ycn:constating:${entId(row)}:${dbId(row)}`],
+  };
+}
+
+function assetPayload(row: YcnRow): BundlePayload {
+  const disposed = pickDate(row, "DISP_DT_TM");
+  const disposalNote = [
+    disposed ? `Disposed ${disposed}` : null,
+    pick(row, "DISP_PRICE") ? `for ${pick(row, "DISP_PRICE")} ${pick(row, "DISP_CURRENCY") ?? ""}`.trim() : null,
+    pick(row, "DISP_TO") ? `to ${pick(row, "DISP_TO")}` : null,
+    pick(row, "DISP_COMMENTS"),
+    pick(row, "ACQ_COMMENTS"),
+  ].filter(Boolean).join("; ");
+  return {
+    assetTag: pick(row, "ASSET_ID"),
+    name: pick(row, "ASSET_DESC"),
+    category: pick(row, "ASSET_TYPE"),
+    quantityOnHand: toNumber(pick(row, "ASSET_QUANT")),
+    purchaseDate: pickDate(row, "ACQ_DT_TM"),
+    purchaseValueCents: parseMoneyCents(pick(row, "ACQ_COST")),
+    currency: pick(row, "ACQ_CURRENCY"),
+    supplier: pick(row, "ACQ_FROM"),
+    location: pick(row, "ASSET_JUR"),
+    status: disposed ? "disposed" : "in_service",
+    notes: disposalNote || undefined,
+    sourceExternalIds: [`ycn:asset:${entId(row)}:${dbId(row)}`],
+  };
+}
+
+/** YCN SHARE_TRANS rows carrying a certificate number → the certificate register. */
+function shareCertificatePayload(row: YcnRow): BundlePayload {
+  return {
+    certificateNumber: pick(row, "SHR_CERT"),
+    holderName: pick(row, "HLDR_NAME"),
+    shareClass: pick(row, "SHR_CLASS"),
+    shares: toNumber(pick(row, "SHR_NUM")),
+    issuedOn: pickDate(row, "ISS_DT_TM"),
+    replacesCertificateNumber: pick(row, "SHR_CERT_REPL"),
+    cancelledOn: pickDate(row, "CANCEL_DT_TM"),
+    sourceExternalIds: [`ycn:share-cert:${entId(row)}:${dbId(row)}`],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Bundle builder
 // ---------------------------------------------------------------------------
@@ -278,10 +438,16 @@ export function buildBundleFromAccessTables(
     ...current("DB_GLOB_DIRECTOR").map(directorPayload),
     ...current("DB_GLOB_OFFICER").map(officerPayload),
     ...current("DB_GLOB_ENT_PEOPLE").map(entPersonPayload),
+    // The BC transparency register's significant individuals are controller role holders.
+    ...current("DB_GLOB_TRANSPARENCY_REG").map(transparencyControllerPayload),
   ];
 
   const rightsClasses = current("DB_GLOB_SHARE_CAPTL").map(shareClassPayload);
-  const rightsholdingTransfers = current("DB_GLOB_SHARE_TRANS").map(shareTransferPayload);
+  const shareTransRows = current("DB_GLOB_SHARE_TRANS");
+  const rightsholdingTransfers = shareTransRows.map(shareTransferPayload);
+  const shareCertificates = shareTransRows
+    .filter((row) => pick(row, "SHR_CERT"))
+    .map(shareCertificatePayload);
   const organizationRegistrations = current("DB_GLOB_REG_FILING").map(regFilingPayload);
   const organizationAddresses: BundlePayload[] = [
     ...current("DB_GLOB_REG_OFFICE").map((row) => addressPayload(row, "registered")),
@@ -299,6 +465,13 @@ export function buildBundleFromAccessTables(
     rightsholdingTransfers,
     organizationRegistrations,
     organizationAddresses,
+    serviceProviders: current("DB_GLOB_SERVICE_PROVIDERS").map(serviceProviderPayload),
+    dividends: current("DB_GLOB_DIVIDEND").map(dividendPayload),
+    nameHistory: current("DB_GLOB_CORP_NAME").map(nameHistoryPayload),
+    constatingEvents: current("DB_GLOB_CONSTATING").map(constatingPayload),
+    significantIndividualSteps: current("DB_GLOB_TRANSPARENCY_DUE").map(transparencyStepPayload),
+    assets: current("DB_GLOB_CORP_ASSETS").map(assetPayload),
+    shareCertificates,
   };
 }
 
@@ -309,6 +482,13 @@ export function countBundleRecords(bundle: YcnImportBundle): number {
     bundle.rightsClasses.length +
     bundle.rightsholdingTransfers.length +
     bundle.organizationRegistrations.length +
-    bundle.organizationAddresses.length
+    bundle.organizationAddresses.length +
+    bundle.serviceProviders.length +
+    bundle.dividends.length +
+    bundle.nameHistory.length +
+    bundle.constatingEvents.length +
+    bundle.significantIndividualSteps.length +
+    bundle.assets.length +
+    bundle.shareCertificates.length
   );
 }

@@ -135,11 +135,18 @@ async function main() {
 
   const total = countBundleRecords(bundle);
   console.log(`Built bundle with ${total} record(s):`);
-  console.log(`  roleHolders:              ${bundle.roleHolders.length}`);
-  console.log(`  rightsClasses:            ${bundle.rightsClasses.length}`);
-  console.log(`  rightsholdingTransfers:   ${bundle.rightsholdingTransfers.length}`);
-  console.log(`  organizationRegistrations:${bundle.organizationRegistrations.length}`);
-  console.log(`  organizationAddresses:    ${bundle.organizationAddresses.length}`);
+  console.log(`  roleHolders:               ${bundle.roleHolders.length}`);
+  console.log(`  rightsClasses:             ${bundle.rightsClasses.length}`);
+  console.log(`  rightsholdingTransfers:    ${bundle.rightsholdingTransfers.length}`);
+  console.log(`  organizationRegistrations: ${bundle.organizationRegistrations.length}`);
+  console.log(`  organizationAddresses:     ${bundle.organizationAddresses.length}`);
+  console.log(`  serviceProviders:          ${bundle.serviceProviders.length}`);
+  console.log(`  dividends:                 ${bundle.dividends.length}`);
+  console.log(`  nameHistory:               ${bundle.nameHistory.length}`);
+  console.log(`  constatingEvents:          ${bundle.constatingEvents.length}`);
+  console.log(`  significantIndividualSteps:${bundle.significantIndividualSteps.length}`);
+  console.log(`  assets:                    ${bundle.assets.length}`);
+  console.log(`  shareCertificates:         ${bundle.shareCertificates.length}`);
 
   if (args.out) {
     writeFileSync(args.out, JSON.stringify(bundle, null, 2));
