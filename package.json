@@ -65,6 +65,7 @@
     "test:jurisdiction-modules": "tsx scripts/check-jurisdiction-modules.ts",
     "test:post-incorporation-steps": "tsx scripts/check-post-incorporation-steps.ts",
     "test:post-incorporation-checklist-flow": "tsx scripts/check-post-incorporation-checklist-flow.ts",
+    "test:firm-flow": "tsx scripts/check-firm-flow.ts",
     "test:org-details": "tsx scripts/check-org-detail-smoke.ts",
     "test:pdf-ingestion": "tsx scripts/check-pdf-table-normalization.ts",
     "test:exports": "tsx scripts/check-export-coverage.ts",

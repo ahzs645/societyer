@@ -9,6 +9,7 @@ import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../sh
 import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
 import { planShareSplit, validateRatio, type HoldingPosition, type SplitRatio } from "../../shared/shareSplit";
 import { postIncorporationStepsForOrganization } from "../../shared/postIncorporationSteps";
+import { organizationKind, organizationLabel } from "../../shared/organizationDomain";
 import {
   buildTimeline,
   changesBetween as changesBetweenPure,
@@ -2228,6 +2229,48 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     return (store?.listRows("roleHolders", args) ?? [])
       .sort((a, b) => String(a.fullName ?? "").localeCompare(String(b.fullName ?? "")));
   }
+  if (moduleName === "firm" && exportName === "overview") {
+    const today = (args?.todayISO ?? new Date().toISOString()).slice(0, 10);
+    const societies = store?.listRows("societies", {}) ?? [];
+    const entities = societies.map((society: any) => {
+      const deadlines = store?.listRows("deadlines", { societyId: society._id }) ?? [];
+      const open = deadlines.filter((d: any) => (d.status ?? (d.done ? "complete" : "open")) === "open");
+      const overdue = open.filter((d: any) => String(d.dueDate ?? "") < today).length;
+      const runs = store?.listRows("legalPrecedentRuns", { societyId: society._id }) ?? [];
+      const generated = new Set<string>();
+      for (const run of runs) {
+        for (const id of run.sourceExternalIds ?? []) {
+          const m = /-packet-run:(.+)$/.exec(String(id));
+          if (m) generated.add(m[1]);
+        }
+      }
+      const packetSteps = postIncorporationStepsForOrganization(society).filter((s) => s.packetKey);
+      return {
+        _id: society._id,
+        name: organizationLabel(society),
+        kind: organizationKind(society),
+        incorporationNumber: society.incorporationNumber ?? null,
+        status: society.organizationStatus ?? null,
+        overdueDeadlines: overdue,
+        upcomingDeadlines: open.length - overdue,
+        openDeadlines: open.length,
+        postIncorpTotal: packetSteps.length,
+        postIncorpDone: packetSteps.filter((s) => generated.has(s.packetKey as string)).length,
+      };
+    });
+    entities.sort((a, b) => b.overdueDeadlines - a.overdueDeadlines || a.name.localeCompare(b.name));
+    return {
+      today,
+      entities,
+      totals: {
+        entities: entities.length,
+        corporations: entities.filter((e) => e.kind === "corporation").length,
+        societies: entities.filter((e) => e.kind === "society").length,
+        overdueDeadlines: entities.reduce((s, e) => s + e.overdueDeadlines, 0),
+        upcomingDeadlines: entities.reduce((s, e) => s + e.upcomingDeadlines, 0),
+      },
+    };
+  }
   if (moduleName === "postIncorporation" && exportName === "checklist") {
     const society = store?.getRow("societies", args?.societyId);
     if (!society) return { steps: [], generatedPacketKeys: [] };
@@ -2492,6 +2535,39 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
 
   if (name === "legalOperations:generateDocumentFromCatalog") {
     return staticGenerateDocumentFromCatalog(store, args, staticLocalId, staticUniqueStrings);
+  }
+
+  if (name === "firm:batchGeneratePacket") {
+    const wantKind = CORPORATION_DOCUMENT_PACKETS.some((p) => p.key === args?.packetKey)
+      ? "corporation"
+      : SOCIETY_DOCUMENT_PACKETS.some((p) => p.key === args?.packetKey)
+        ? "society"
+        : null;
+    const results: Array<{ societyId: string; ok: boolean; runId?: string; error?: string }> = [];
+    for (const societyId of (args?.societyIds ?? []) as string[]) {
+      const society = store?.getRow("societies", societyId);
+      if (society && wantKind && organizationKind(society) !== wantKind) {
+        results.push({ societyId, ok: false, error: `skipped: ${args?.packetKey} applies to ${wantKind} entities` });
+        continue;
+      }
+      try {
+        const r = staticGenerateDocumentFromCatalog(
+          store,
+          { societyId, packetKey: args?.packetKey, effectiveDate: args?.effectiveDate },
+          staticLocalId,
+          staticUniqueStrings,
+        );
+        results.push({ societyId, ok: true, runId: String(r?.runId) });
+      } catch (err: any) {
+        results.push({ societyId, ok: false, error: err?.message ?? String(err) });
+      }
+    }
+    return {
+      packetKey: args?.packetKey,
+      generated: results.filter((r) => r.ok).length,
+      failed: results.filter((r) => !r.ok).length,
+      results,
+    };
   }
 
   if (name === "legalOperations:stageCorporationDocumentPacket") {

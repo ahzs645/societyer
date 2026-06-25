@@ -557,7 +557,18 @@ export const generateDocumentFromCatalog = mutation({
     effectiveDate: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args) => generatePacketForSociety(ctx, args),
+});
+
+/**
+ * Core of catalog generation, callable directly (e.g. by the firm-wide batch
+ * generator in convex/firm.ts) without going through the mutation wrapper.
+ */
+export async function generatePacketForSociety(
+  ctx: any,
+  args: { societyId: any; packetKey: string; effectiveDate?: string },
+): Promise<any> {
+  {
     const corpPacket = CORPORATION_DOCUMENT_PACKETS.find((p) => p.key === args.packetKey);
     const socPacket = SOCIETY_DOCUMENT_PACKETS.find((p) => p.key === args.packetKey);
     const packet = corpPacket ?? socPacket;
@@ -606,8 +617,8 @@ export const generateDocumentFromCatalog = mutation({
       notes: "Generated from the document catalog.",
     });
     return { runId, packetKey: packet.key, precedentId: precedent._id, ...artifacts };
-  },
-});
+  }
+}
 
 /**
  * Seed the right packet catalog for an entity by its kind: corporations get the

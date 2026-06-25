@@ -38,6 +38,23 @@ bundle parser has a generic fallback and the apply step is a deferred no-op):
 | CORP_ASSETS | asset → assets |
 | SHARE_TRANS (SHR_CERT) | shareCertificate → shareCertificates |
 
+## Firm layer (multi-corporation)
+
+The per-entity views match YCN and switching works (Portfolio = `Entity_Index`),
+but YCN's cross-entity capability was missing. Added:
+
+- **convex/firm.ts** — `overview` rolls up every entity's open/overdue deadlines +
+  post-incorporation progress; `batchGeneratePacket` is the `Multiple_Copy`
+  analogue (generate one packet across many entities, kind-gated so a corp packet
+  skips societies). `generateDocumentFromCatalog`'s core was extracted to a
+  reusable `generatePacketForSociety` helper.
+- **Portfolio page** upgraded into a firm command centre: firm-wide totals, a
+  per-entity status table (deadlines + post-incorp progress), one-click switch,
+  and batch generation across selected entities. Mirrored in staticConvex.
+- check-firm-flow covers the rollup, batch generate, and kind-gating.
+
+---
+
 A later pass closed the last two: `CORP_SETTINGS` (extracted → applied via
 society:updateComplianceSettings by the runner) and the global `PEOPLE_DIRECTORY`
 (extracted → peopleDirectory:upsert). Only `Retain_List` (a UI picklist) is left,
