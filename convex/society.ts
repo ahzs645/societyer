@@ -469,6 +469,27 @@ export const updateModules = mutation({
   },
 });
 
+// YCN-style compliance settings (AGM date + financials-prep waiver). Consumed by
+// shared/corporationSettings.ts to derive AGM / annual-report deadlines.
+export const updateComplianceSettings = mutation({
+  args: {
+    societyId: v.id("societies"),
+    agmMonth: v.optional(v.number()),
+    agmDay: v.optional(v.number()),
+    waivePrepFinancials: v.optional(v.boolean()),
+  },
+  returns: v.id("societies"),
+  handler: async (ctx, { societyId, agmMonth, agmDay, waivePrepFinancials }) => {
+    await ctx.db.patch(societyId, {
+      agmMonth,
+      agmDay,
+      waivePrepFinancials,
+      updatedAt: Date.now(),
+    });
+    return societyId;
+  },
+});
+
 export const updateInventorySettings = mutation({
   args: {
     societyId: v.id("societies"),

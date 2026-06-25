@@ -211,6 +211,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/dividends": { icon: Coins, group: "records", label: "Dividends" },
   "/app/significant-individuals": { icon: ShieldCheck, group: "records", label: "Significant individuals" },
   "/app/service-providers": { icon: Briefcase, group: "records", label: "Service providers" },
+  "/app/compliance-settings": { icon: CalendarClock, group: "records", label: "Compliance settings" },
   "/app/minute-book": { icon: BookOpen, group: "records", label: "Minute book" },
   "/app/bylaw-rules": { icon: BookMarked, group: "records", label: "Bylaw rules" },
   "/app/bylaw-diff": { icon: GitCompare, group: "records", label: "Bylaw redline" },

@@ -2392,6 +2392,19 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
     return args?.societyId ?? existing._id;
   }
 
+  if (name === "society:updateComplianceSettings") {
+    const existing = store?.getRow("societies", args?.societyId) ?? society;
+    store?.upsertRow("societies", {
+      ...existing,
+      _id: args?.societyId ?? existing._id,
+      agmMonth: args?.agmMonth,
+      agmDay: args?.agmDay,
+      waivePrepFinancials: args?.waivePrepFinancials,
+      updatedAtISO: new Date().toISOString(),
+    });
+    return args?.societyId ?? existing._id;
+  }
+
   if (name === "complianceObligations:markReviewed") {
     return staticUpsertComplianceDecision(store, {
       ...args,

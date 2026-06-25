@@ -124,6 +124,7 @@ const SignificantIndividualsPage = React.lazy(() => import("./pages/SignificantI
 const PeopleDirectoryPage = React.lazy(() => import("./pages/PeopleDirectory").then((m) => ({ default: m.PeopleDirectoryPage })));
 const DividendsPage = React.lazy(() => import("./pages/Dividends").then((m) => ({ default: m.DividendsPage })));
 const ServiceProvidersPage = React.lazy(() => import("./pages/ServiceProviders").then((m) => ({ default: m.ServiceProvidersPage })));
+const ComplianceSettingsPage = React.lazy(() => import("./pages/ComplianceSettings").then((m) => ({ default: m.ComplianceSettingsPage })));
 const RightsLedgerPage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.RightsLedgerPage })));
 const TemplateEnginePage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.TemplateEnginePage })));
 const FormationMaintenancePage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.FormationMaintenancePage })));
@@ -304,6 +305,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="people-directory" element={<PeopleDirectoryPage />} />
             <Route path="dividends" element={<DividendsPage />} />
             <Route path="service-providers" element={<ServiceProvidersPage />} />
+            <Route path="compliance-settings" element={<ComplianceSettingsPage />} />
             <Route path="rights-ledger" element={<RightsLedgerPage />} />
             <Route path="template-engine" element={<TemplateEnginePage />} />
             <Route path="formation-maintenance" element={<FormationMaintenancePage />} />
