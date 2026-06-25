@@ -19,6 +19,7 @@ import {
   staticSeedSocietyDocumentPackets,
   staticCreatePacketRunArtifacts,
   staticStageCorporationDocumentPacket,
+  staticGenerateDocumentFromCatalog,
 } from "./staticConvexDocuments";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { DEFAULT_HOME_JURISDICTION_CODE, registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
@@ -2404,6 +2405,10 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
     return kind === "corporation"
       ? { kind, ...staticSeedCorporationDocumentPackets(store, args) }
       : { kind, ...staticSeedSocietyDocumentPackets(store, args) };
+  }
+
+  if (name === "legalOperations:generateDocumentFromCatalog") {
+    return staticGenerateDocumentFromCatalog(store, args, staticLocalId, staticUniqueStrings);
   }
 
   if (name === "legalOperations:stageCorporationDocumentPacket") {

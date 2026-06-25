@@ -1,8 +1,17 @@
-import { useQuery } from "convex/react";
+import { useState } from "react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { FileText } from "lucide-react";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+
+/** Recover the packet key from a seeded template's marker (societyer:<kind>-packet-template:<key>). */
+function packetKeyOf(t: { sourceExternalIds?: string[]; notes?: string }): string | null {
+  const marker = (t.sourceExternalIds ?? []).find((m) => m.includes("-packet-template:"));
+  if (marker) return marker.split(":").pop() ?? null;
+  const m = (t.notes ?? "").match(/Packet key:\s*([^\s\n]+)/);
+  return m ? m[1] : null;
+}
 
 /**
  * Document catalog — the read-only list of documents the current entity can
@@ -26,6 +35,7 @@ type CatalogTemplate = {
   deliverable?: string;
   terms?: string;
   notes?: string;
+  sourceExternalIds?: string[];
 };
 
 type CatalogPrecedent = {
@@ -65,9 +75,25 @@ export function DocumentCatalogPage() {
     api.legalOperations.templateEngine,
     society ? { societyId: society._id } : "skip",
   ) as CatalogData | undefined;
+  const generate = useMutation(api.legalOperations.generateDocumentFromCatalog);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [doneKey, setDoneKey] = useState<string | null>(null);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
+
+  const onGenerate = async (t: CatalogTemplate) => {
+    const key = packetKeyOf(t);
+    if (!key || !society) return;
+    setBusyKey(t._id);
+    try {
+      await generate({ societyId: society._id, packetKey: key, effectiveDate: new Date().toISOString().slice(0, 10) });
+      setDoneKey(t._id);
+      setTimeout(() => setDoneKey(null), 4000);
+    } finally {
+      setBusyKey(null);
+    }
+  };
 
   const templates = data?.templates;
   const precedents = data?.precedents ?? [];
@@ -143,6 +169,22 @@ export function DocumentCatalogPage() {
                           {t.signatureRequired
                             ? "Signature required"
                             : "No signature required"}
+                        </span>
+                        <span style={{ marginLeft: "auto" }}>
+                          {doneKey === t._id ? (
+                            <span style={{ color: "var(--green-11)", fontSize: 13 }}>
+                              Generated ✓ — see Documents
+                            </span>
+                          ) : (
+                            <button
+                              className="btn btn--accent"
+                              disabled={busyKey === t._id || !packetKeyOf(t)}
+                              onClick={() => onGenerate(t)}
+                              title={packetKeyOf(t) ? "Generate a draft document" : "No packet key on this template"}
+                            >
+                              {busyKey === t._id ? "Generating…" : "Generate"}
+                            </button>
+                          )}
                         </span>
                       </div>
                       {desc && (

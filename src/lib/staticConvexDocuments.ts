@@ -374,6 +374,64 @@ export function staticCreatePacketRunArtifacts(
   return { draftDocumentId, draftDocumentVersionId, generatedDocumentId, signerIds, minuteBookItemId, sourceEvidenceId };
 }
 
+/** Entity-agnostic catalog generate (mirror of legalOperations.generateDocumentFromCatalog). */
+export function staticGenerateDocumentFromCatalog(
+  store: DocStoreLike,
+  args: any,
+  staticLocalId: StaticLocalId,
+  staticUniqueStrings: StaticUniqueStrings,
+) {
+  const societyId = args?.societyId ?? SOCIETY_ID;
+  const corpPacket = CORPORATION_DOCUMENT_PACKETS.find((p) => p.key === args?.packetKey);
+  const socPacket = SOCIETY_DOCUMENT_PACKETS.find((p) => p.key === args?.packetKey);
+  const packet = corpPacket ?? socPacket;
+  if (!packet) throw new Error(`No document packet matches key: ${args?.packetKey}`);
+  const markerKind = corpPacket ? "corporation" : "society";
+  if (markerKind === "corporation") staticSeedCorporationDocumentPackets(store, { societyId });
+  else staticSeedSocietyDocumentPackets(store, { societyId });
+
+  const precMarker = `societyer:${markerKind}-packet-precedent:${packet.key}`;
+  const precedent = (store?.listRows("legalPrecedents", { societyId }) ?? [])
+    .find((row: any) => (row.sourceExternalIds ?? []).includes(precMarker));
+  if (!precedent) throw new Error(`Packet precedent was not seeded: ${packet.key}`);
+
+  const now = new Date().toISOString();
+  const runId = staticLocalId("legalPrecedentRuns", packet.key);
+  store?.upsertRow("legalPrecedentRuns", {
+    _id: runId,
+    _creationTime: Date.now(),
+    societyId,
+    name: `${packet.packageName}${args?.effectiveDate ? ` - ${args.effectiveDate}` : ""}`,
+    status: "draft",
+    precedentId: precedent._id,
+    dateTime: args?.effectiveDate,
+    dataJson: JSON.stringify({ packetKey: packet.key }),
+    dataJsonList: [],
+    dataReviewed: false,
+    searchIds: [],
+    registrationIds: [],
+    filingIds: [],
+    generatedDocumentIds: [],
+    signerRoleHolderIds: [],
+    priceItems: [],
+    abstainingDirectorIds: [],
+    abstainingRightsholderIds: [],
+    sourceExternalIds: [`societyer:${markerKind}-packet-run:${packet.key}`],
+    notes: "Generated from the document catalog.",
+    createdAtISO: now,
+    updatedAtISO: now,
+  });
+  const artifacts = staticCreatePacketRunArtifacts(store, {
+    societyId,
+    packet,
+    runId,
+    effectiveDate: args?.effectiveDate,
+    dataJson: JSON.stringify({ packetKey: packet.key }),
+    notes: "Generated from the document catalog.",
+  }, staticLocalId, staticUniqueStrings);
+  return { runId, packetKey: packet.key, precedentId: precedent._id, ...artifacts };
+}
+
 export function staticStageCorporationDocumentPacket(
   store: DocStoreLike,
   args: any,

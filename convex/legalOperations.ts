@@ -442,6 +442,71 @@ export const seedSocietyDocumentPackets = mutation({
 });
 
 /**
+ * Generate a draft document from the catalog for ANY entity kind: resolves the
+ * packet from the corporation OR society catalog by key, ensures it's seeded,
+ * then produces the draft document + version + artifacts via the same
+ * createPacketRunArtifacts path (which binds the grammar-aware render context).
+ */
+export const generateDocumentFromCatalog = mutation({
+  args: {
+    societyId: v.id("societies"),
+    packetKey: v.string(),
+    effectiveDate: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const corpPacket = CORPORATION_DOCUMENT_PACKETS.find((p) => p.key === args.packetKey);
+    const socPacket = SOCIETY_DOCUMENT_PACKETS.find((p) => p.key === args.packetKey);
+    const packet = corpPacket ?? socPacket;
+    if (!packet) throw new Error(`No document packet matches key: ${args.packetKey}`);
+    const markerKind = corpPacket ? "corporation" : "society";
+    if (markerKind === "corporation") await seedCorporationDocumentPacketsForSociety(ctx, args.societyId);
+    else await seedSocietyDocumentPacketsForSociety(ctx, args.societyId);
+
+    const precMarker = `societyer:${markerKind}-packet-precedent:${packet.key}`;
+    const precedent = await ctx.db
+      .query("legalPrecedents")
+      .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))
+      .collect()
+      .then((rows: any[]) => rows.find((r: any) => (r.sourceExternalIds ?? []).includes(precMarker)));
+    if (!precedent) throw new Error(`Packet precedent was not seeded: ${packet.key}`);
+
+    const now = new Date().toISOString();
+    const runId = await ctx.db.insert("legalPrecedentRuns", {
+      societyId: args.societyId,
+      name: `${packet.packageName}${args.effectiveDate ? ` - ${args.effectiveDate}` : ""}`,
+      status: "draft",
+      precedentId: precedent._id,
+      dateTime: args.effectiveDate,
+      dataJson: JSON.stringify({ packetKey: packet.key }),
+      dataJsonList: [],
+      dataReviewed: false,
+      searchIds: [],
+      registrationIds: [],
+      filingIds: [],
+      generatedDocumentIds: [],
+      signerRoleHolderIds: [],
+      priceItems: [],
+      abstainingDirectorIds: [],
+      abstainingRightsholderIds: [],
+      sourceExternalIds: [`societyer:${markerKind}-packet-run:${packet.key}`],
+      notes: "Generated from the document catalog.",
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    const artifacts = await createPacketRunArtifacts(ctx, {
+      societyId: args.societyId,
+      packet,
+      runId,
+      effectiveDate: args.effectiveDate,
+      dataJson: JSON.stringify({ packetKey: packet.key }),
+      notes: "Generated from the document catalog.",
+    });
+    return { runId, packetKey: packet.key, precedentId: precedent._id, ...artifacts };
+  },
+});
+
+/**
  * Seed the right packet catalog for an entity by its kind: corporations get the
  * corporation packets, everything else (societies) gets the society packets.
  * Idempotent — safe to call on entity creation or on demand.
