@@ -239,7 +239,7 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
   roleHolderStatuses: ["current", "proposed", "former", "needs_review"],
   rightsClassTypes: ["membership", "voting", "non_voting", "unit", "share", "other"],
   rightsClassStatuses: ["active", "proposed", "inactive", "needs_review"],
-  rightsholdingTransferTypes: ["issuance", "transfer", "redemption", "cancellation", "adjustment", "other"],
+  rightsholdingTransferTypes: ["issuance", "transfer", "redemption", "cancellation", "subdivision", "consolidation", "adjustment", "other"],
   rightsholdingTransferStatuses: ["draft", "posted", "void", "needs_review"],
   templateTypes: ["document", "policy", "filing", "search", "registration", "purpose", "vertical", "other"],
   templateStatuses: ["active", "draft", "archived", "needs_review"],

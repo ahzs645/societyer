@@ -342,6 +342,8 @@ export const LOCAL_OPTION_SETS = {
     { value: "transfer", label: "Transfer" },
     { value: "redemption", label: "Redemption" },
     { value: "cancellation", label: "Cancellation" },
+    { value: "subdivision", label: "Subdivision (split)" },
+    { value: "consolidation", label: "Consolidation (reverse split)" },
     { value: "adjustment", label: "Adjustment" },
     { value: "other", label: "Other" },
   ],

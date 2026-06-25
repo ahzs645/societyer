@@ -28,6 +28,8 @@ export type RightsholdingTransferType =
   | "redemption"
   | "cancellation"
   | "conversion"
+  | "subdivision"
+  | "consolidation"
   | "adjustment"
   | "other"
   | string;
@@ -273,6 +275,10 @@ function transferMovements(transfer: RightsholdingTransferRecord): HoldingMoveme
       }];
     case "conversion":
     case "adjustment":
+    // A subdivision/consolidation is staged as one signed per-holder adjustment row
+    // (the new share count minus the old), so it reconciles like an adjustment.
+    case "subdivision":
+    case "consolidation":
       return adjustmentMovements(transfer);
     default:
       return [];

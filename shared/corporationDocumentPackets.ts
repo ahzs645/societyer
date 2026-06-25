@@ -328,7 +328,9 @@ export const CORPORATION_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
       {
         heading: "Subdivision or Consolidation",
         body: [
-          "Being {#if dir.isSole}the sole director{/if}{#if dir.isMultiple}all the directors{/if} of {org.shortName}, the director{dir.plural} resolve{dir.verbS} to subdivide or consolidate the issued {ShareClass} shares of {org.shortName} at the stated ratio.",
+          "Being {#if dir.isSole}the sole director{/if}{#if dir.isMultiple}all the directors{/if} of {org.shortName}, the director{dir.plural} resolve{dir.verbS} to {#if split.kind}effect a {split.ratioLabel} of{/if}{#if split.hasLines}{#else} subdivide or consolidate{/if} the issued {ShareClass} shares of {org.shortName}{#if split.totalBefore}, adjusting the total issued count from {split.totalBefore} to {split.totalAfter} shares{/if}.",
+          "{#if split.hasLines}The resulting holdings are:{#each split.lines} {.holderName}: {.before} → {.after} shares.{/each}{/if}",
+          "{#if split.hasDroppedShares}Note: {split.sharesDropped} share(s) are dropped to per-holder rounding under the {FractionalShareTreatment} fractional-share treatment; confirm the treatment of fractional entitlements.{/if}",
           "The securities register and transfer register are adjusted to reflect the resulting holdings effective {date.long}, subject to the {org.legislation} and the articles of {org.shortName}.",
         ],
       },

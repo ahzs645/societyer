@@ -311,12 +311,14 @@ export function RightsLedgerPage() {
   const upsertClass = useMutation(api.legalOperations.upsertRightsClass);
   const upsertTransfer = useMutation(api.legalOperations.upsertRightsholdingTransfer);
   const stageShareIssuancePacket = useMutation(api.legalOperations.stageShareIssuancePacket);
+  const stageShareSplit = useMutation(api.legalOperations.stageShareSplitPacket);
   const removeClass = useMutation(api.legalOperations.removeRightsClass);
   const removeTransfer = useMutation(api.legalOperations.removeRightsholdingTransfer);
   const toast = useToast();
   const confirm = useConfirm();
   const [classDraft, setClassDraft] = useState<any>(null);
   const [transferDraft, setTransferDraft] = useState<any>(null);
+  const [splitDraft, setSplitDraft] = useState<any>(null);
   const currentHoldings = useMemo(() => deriveCurrentHoldings(data?.transfers ?? []), [data?.transfers]);
   const corporationWorkspace = society ? isCorporation(society) : false;
 
@@ -400,6 +402,29 @@ export function RightsLedgerPage() {
     toast.success("Packet staged", "The share issuance packet is ready in Template Engine.");
   };
 
+  const runSplit = async () => {
+    if (!splitDraft) return;
+    const numerator = Number(splitDraft.numerator);
+    const denominator = Number(splitDraft.denominator);
+    try {
+      const result: any = await stageShareSplit({
+        societyId: society._id,
+        rightsClassId: splitDraft.rightsClassId,
+        numerator,
+        denominator,
+      });
+      setSplitDraft(null);
+      toast.success(
+        "Split staged",
+        `${result.ratioLabel}: ${result.totalBefore} → ${result.totalAfter} shares.${
+          result.sharesDropped ? ` ${result.sharesDropped} share(s) dropped to rounding.` : ""
+        } Resolution ready in Template Engine.`,
+      );
+    } catch (err: any) {
+      toast.error("Could not stage split", err?.message ?? String(err));
+    }
+  };
+
   return (
     <div className="page page--wide">
       <PageHeader
@@ -431,7 +456,14 @@ export function RightsLedgerPage() {
                   <td><div>{row.votingRights || "No voting text"}</div><div className="muted">{row.conditionsToHold || row.conditionsToTransfer || "No conditions"}</div></td>
                   <td>{dateLabel(row.startDate)} to {dateLabel(row.endDate)}</td>
                   <td><Badge tone={toneForStatus(row.status)}>{optionLabel("rightsClassStatuses", row.status)}</Badge></td>
-                  <td><RowActions onEdit={() => setClassDraft(editRightsClass(row))} onDelete={() => deleteRow("class", row)} label="rights class" /></td>
+                  <td>
+                    <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
+                      {row.classType === "share" && (
+                        <button className="btn btn--ghost btn--sm" onClick={() => setSplitDraft({ rightsClassId: row._id, className: row.className, numerator: 2, denominator: 1 })}>Split</button>
+                      )}
+                      <RowActions onEdit={() => setClassDraft(editRightsClass(row))} onDelete={() => deleteRow("class", row)} label="rights class" />
+                    </div>
+                  </td>
                 </tr>
               ))}
               {(data?.classes ?? []).length === 0 && <EmptyRow cols={6} label="No rights classes yet." />}
@@ -538,6 +570,27 @@ export function RightsLedgerPage() {
           </table>
         </div>
       </Section>
+
+      <Drawer
+        open={Boolean(splitDraft)}
+        onClose={() => setSplitDraft(null)}
+        title={`Subdivide / consolidate ${splitDraft?.className ?? "shares"}`}
+        footer={<><button className="btn" onClick={() => setSplitDraft(null)}>Cancel</button><button className="btn btn--accent" onClick={runSplit}>Stage split</button></>}
+      >
+        {splitDraft && (
+          <>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Each holder's count becomes <code>shares × numerator ÷ denominator</code> (rounded
+              down). e.g. 2 / 1 = a 2-for-1 subdivision; 1 / 3 = a 1-for-3 consolidation. This posts
+              adjusted holdings and stages an editable resolution with a before/after table.
+            </p>
+            <div className="grid two">
+              <Field label="Numerator (new)"><input className="input" type="number" min={1} value={splitDraft.numerator} onChange={(e) => setSplitDraft({ ...splitDraft, numerator: e.target.value })} /></Field>
+              <Field label="Denominator (old)"><input className="input" type="number" min={1} value={splitDraft.denominator} onChange={(e) => setSplitDraft({ ...splitDraft, denominator: e.target.value })} /></Field>
+            </div>
+          </>
+        )}
+      </Drawer>
 
       <Drawer open={Boolean(classDraft)} onClose={() => setClassDraft(null)} title={classDraft?._id ? "Edit rights class" : "New rights class"} footer={<><button className="btn" onClick={() => setClassDraft(null)}>Cancel</button><button className="btn btn--accent" onClick={saveClass}>Save</button></>}>
         {classDraft && (
