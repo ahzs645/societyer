@@ -1,99 +1,174 @@
 # YCN → Societyer: Deep Re-Audit — What Genuinely Remains
 
-A fresh, field-level pass over the **actual source** (not the prior backlog):
-all 19 Access tables (`DBS_YCN_CRS_Sample_V2xx.accdb`) column-by-column and
-every `Doc -*` generator sheet from `01__Master_V201`, cross-checked against the
-current implementation on `claude/excel-database-analysis-ubftpj`.
+A fresh five-agent pass over the **actual source** — all 19 Access tables
+(`DBS_YCN_CRS_Sample_V2xx.accdb`), every `Doc -*` / `User - Custom N` generator
+sheet, the full VBA dump, and the Excel calc/lookup engine — cross-checked
+column-by-column and clause-by-clause against the current implementation on
+`claude/excel-database-analysis-ubftpj`. 47 findings; the real (non-covered)
+ones are below.
 
-> Method note: this re-audit was run as a 5-agent workflow; the four extraction
-> agents completed (their raw `Doc-*` dumps are preserved) but the synthesis
-> agent died before persisting a report. The synthesis below was completed
-> directly by diffing the recovered Access schema + Doc sheets against the live
-> `convex/tables/*.ts`, `shared/*.ts`, and packet catalogs.
+## 1. Honest summary
 
-## Verdict
+The **data layer is essentially complete** — every register, ledger,
+effective-dating interval, certificate chain, transparency sub-register, and
+settings field in the Access source has a modeled home in Convex, confirmed
+column-by-column. What genuinely remains concentrates in **two places: the
+document renderer and the clone routine.**
 
-**Structurally complete.** Every Access column with product meaning and every
-document sheet now maps to an implemented feature. The residue splits into one
-item with real value, one with modest value, and a tail of correctly-deferred
-mechanics.
+- Our generated DOCX is still a **checklist of packet metadata, not a signable
+  legal instrument** — no adoption clause, no signature page, no WHEREAS
+  recitals, no enumerated resolution tables, no conditional/branching prose. All
+  ~12 corporation packets are prose-thin shells over a rich data model. This one
+  root cause is the largest remaining theme.
+- `cloneSociety` silently **drops six child tables** (equity ledger, transfers,
+  dividends, assets, asset events, SI diligence steps) and does **no
+  cross-reference ID remapping** — a real, latent correctness bug.
+- A small cluster of **derived-state engines** specified in the Excel calc layer
+  (voting-power roll-up, voting-eligibility gating, dividend reconciliation) was
+  never ported.
 
-## Field-level coverage (the part that matters)
+## 2. Prioritized real-gap table
 
-Confirmed *implemented* by direct grep against the live schema:
+(ALREADY_DONE findings dropped — see §5.)
 
-| Access source | Field(s) | Lands in |
-|---|---|---|
-| `CORP_SETTINGS` | AGM_MONTH/DAY, FIN_MONTH/DAY, WAIVE_PREP_FINANCIALS, CONT_PRIM_*, CONT_ALT_*, LOC_MIN_BOOK, LOC_SEAL_ETC, DOC_PREP_LANGUAGE, RESTRICT_PEOPLE_YND, RESP_LWYR | `society.updateComplianceSettings` (primaryContact*/alternateContact*/minuteBookLocation/sealLocation/docPrepLanguage/restrictPeoplePicker/responsibleLawyer) |
-| `CORP_NAME` | CORP_NAME, SHORT_NAME, START_DT_TM | `societyNameHistory` + `societies.shortName` |
-| `CONSTATING` | JURISDICTION, LEGISLATION, REG_ACTION, REG_NUMBER, START_DT_TM | `constatingEvents` |
-| `REG_FILING` | REGN_NAT, REGN_LEG, FILE_YEAR, FILE_DT_TM | `annualFilingLedger` (regnNature/regnLegislation) |
-| `SHARE_TRANS` | SHR_CERT, SHR_CERT_REPL, CANCEL_DT_TM, SHR_CONSID_*, ISS_TYP | `shareCertificates` + `equityLedger` (certificateNumber/replacesCertificateNumber/considerationType) |
-| `SHARE_CAPTL` | SHR_SINGLE, VOTING | `rightsClasses.singularForm` |
-| `DIVIDEND` | DIV_PER_SHARE, DIV_CURRENCY, DIV_TOTAL | `dividends` (per-currency totals) |
-| `ENT_PEOPLE` | SIGN_ORDER, INFO_STR/INFO_END, CORP_SIGN | `entitySigners` (signOrder/validFromISO/validToISO/corpSign) |
-| `PEOPLE_DIRECTORY` | SERVICE_PROVIDER, INDIV_CUR_MAJ, INDIV_CUR_GENDER, CORP_SIGN | `peopleDirectory` (isServiceProvider/atAgeOfMajority/gender/corpSign) |
-| `OFFICER` | PRES, SECR, OTHER | `roleHolders.additionalOfficerTitles` |
-| `CORP_ASSETS` | ASSET_JUR, ACQ_FROM, DISP_TO, ACQ/DISP_CURRENCY, *_COMMENTS | `assets` (acquiredFrom/disposedTo/assetJurisdiction/dual currency/comments) |
-| `BUS_ADDRESS` | ADDRESS_1..8, CONTACT_1/2, START_DT_TM | `organizationAddresses` (business_address type, contacts, freeformLines) |
-| `TRANSPARENCY_REG` | BIRTH, CITIZEN, TAX_RESIDENT_YN, REASON, END_DT | `significantIndividuals` (dateOfBirth/citizenship/taxResidentHomeJurisdiction/reason) |
-| `REG_OFFICE`/`REC_OFFICE` | ADDRESS, START_DT_TM | `organizationAddresses` + `registerHistory.addressesAsOf` |
-| `Retain_List` | CORP_NAME, ENT_ID, CORP_NUM | Portfolio (multi-entity) view |
+| Gap | Source | What it adds | Status | Value | Effort |
+|---|---|---|---|---|---|
+| Execution/signature block (adoption clause + named signature lines + corporate "By:") | All `Doc -*` feet; `entitySigners` table unused by renderer | Turns every generated DOCX from a checklist into a signable instrument | NOT_IMPL | high | M |
+| Annual consent: full 6-clause body + separate directors' consent page | `Doc - Annual` R8–R113 | FS approve/waive, fix next FYE, auditor appoint/waive, ratify acts, director slate, deemed-AGM date, shareholder-vs-director split | PARTIAL | high | M |
+| Share allotment: WHEREAS + allotment table + cert-issuance table + seal/President clause + per-subscriber Subscription Agreement | `Doc - Share Allotment` R8–R202 | Full allotment deliverable incl. auto-generated subscription annex per subscriber | PARTIAL | high | L |
+| Share transfer: WHEREAS + new-cert table ("remaining untransferred") + seal clause + explicit cancellation table | `Doc - Share Transfer` R6–R51 | Four-resolution transfer instrument with partial-transfer handling | PARTIAL | high | M |
+| Dividend declaration: multi-class table w/ Total-Dividends column + "payable on X to holders of record on X" | `Doc - Dividends` R8–R20 | Multi-class declaration in one resolution, computed totals, record+payment dates | PARTIAL | high | M |
+| Asset transfer: 6-category branching (real-estate/equipment/securities/other × acquire/dispose) + register + further-actions clauses | `Doc - Asset Transfer` R6–R115 | Category-aware resolution + execute/register + incidental-expenditure authorizations | PARTIAL | high | M |
+| `cloneSociety` omits 6 child tables (rightsHoldings, rightsholdingTransfers, dividends, assets, assetEvents, significantIndividualSteps) | VBA `Copy_Entity_Common` / `New_Entity_Create` | Clone currently loses entire share/dividend/asset/SI history | PARTIAL | high | M |
+| Clone does no cross-reference ID remapping | VBA per-table `max(DB_ID)` rebasing | Cloned child rows dangle to source society's Ids — latent bug, activates once equity tables are cloned | PARTIAL | high | M |
+| Voting-power roll-up (shares × votes-per-share, summed per holder, voting/non-voting partition, as-of) | `Transaction` JW/JX/BE blocks | Engine to actually enumerate "all voting shareholders" + quorum/majority math | NOT_IMPL | high | M |
+| Director appt/removal: single combined instrument adopted by voting shareholders | `Doc - Appt Directors` | One appoint+remove doc, correct resolving body, corporate-shareholder "By:" | PARTIAL | med | S |
+| Change-of-office: initial-vs-change branch + "from X to Y" clause per office | `Doc - Change Offices` R8–R20 | Renders prior→new address; distinguishes first-set from change | PARTIAL | med | S |
+| Share split: tie to shareholders' Special Resolution + subdivision(allot) vs consolidation(cancel) cert handling | `Doc - Share Split` | Directors' resolution implementing a governing special resolution | PARTIAL | med | M |
+| Share certificate: cancellation-of-replaced-cert resolution + seal/President clause | `Doc - Share Certificate` R72–R135 | Issuing a cert also cancels the one it replaces, under seal | PARTIAL | med | S |
+| Voting-eligibility gating (Individual='Y' AND atMajority='Y') | `People` Z2:Z101 | Excludes minors + corporate holders from eligible-voter set | NOT_IMPL | med | S |
+| Dividend reconciliation (perShare×shares vs entered total, ±1% tolerance flag) | `Record - Dividends` I2:I249 | Data-integrity guard catching mis-keyed dividend totals | NOT_IMPL | med | S |
+| REG_FILING registration-event half (REGN_NAT/LEG/NUM/DT, incl. "XP Registration") not imported | `DB_GLOB_REG_FILING` | Extra-provincial registration event tied to the jurisdiction's filing ledger | PARTIAL | med | S |
+| Bilingual EN/FR packet bodies | `User - Custom 3` French branch; `DOC_PREP_LANGUAGE` | French rendering of resolution prose | NOT_IMPL | med | L |
+| Thousands-separator formatting in rendered numbers | VBA `Num_Comma` | "1,000,000" in allotment/transfer/cert/dividend docs | NOT_IMPL | low | S |
+| OFFICER PRES/SECR structured booleans (vs flat title array) | `DB_GLOB_OFFICER` | Reliable "holds Secretary office" logic without string-matching | PARTIAL | low | S |
+| ISS_TYP 'Subdivision'/'Consolidation' ledger vocabulary | `DB_GLOB_SHARE_TRANS` | Split shows as a transaction in holder history with correct nature label | PARTIAL | low | S |
+| Per-contact effective date on business address | `DB_GLOB_BUS_ADDRESS` | "Who was the contact on date X" point-in-time | PARTIAL | low | S |
+| SHARE_CAPTL structured VOTING boolean (votesPerShare) | `DB_GLOB_SHARE_CAPTL` | Numeric vote weight (prereq for voting-power roll-up) | PARTIAL | low | S |
 
-No product-meaningful column is unmapped.
+## 3. Themes + port sketches
 
-## What actually remains
+### Theme A — The renderer is a checklist, not an instrument (biggest theme)
 
-### Tier 1 — real value, worth doing: the Annual Consent Resolution body
+Eight high/medium gaps share one root cause: `shared/corporationPacketDocx.ts`
+(`corporationPacketDocxBlocks`, L30–52) emits packet *metadata* (title, summary,
+deliverable, required-data lists, a 2-sentence section blurb, a bullet list of
+role **keys**). It never emits legal prose. The data to drive all of it exists.
 
-The `annual-resolutions` packet **exists**, but its body is a two-line stub
-("The corporation records annual approvals…"). The YCN `Doc - Annual` sheet —
-the single most-used document in the system — renders **six grammar-aware
-operative clauses** as a combined instrument, producing *both* a shareholders'
-consent resolution and a directors' consent resolution:
+**A1 — Execution/signature block (do first; unblocks every packet).**
+- *shared:* new `shared/executionBlock.ts` — `executionClause(packet, society, asOf)`
+  (grammar-driven off resolving body: "The undersigned being all the
+  directors/voting shareholders of {shortName} hereby adopt … pursuant to the
+  {act}", reusing `nlg.ts` plurality + `looksLikeOrganization` for the corporate
+  "By: ___" branch) and `signatureBlocks(signers)` from `entitySigners`
+  (signOrder, corpSign).
+- *convex:* extend the render context in `legalOperations.generateDocumentFromCatalog`
+  / `createPacketRunArtifacts` to load `entitySigners` and resolve each signer's
+  printed name + capacity via `peopleDirectory`. The table is already there — it's
+  simply never consumed.
 
-1. Approve the financial statements **OR** waive the requirement to produce them
-   (branches on `WAIVE_PREP_FINANCIALS`), with sole/plural shareholder grammar.
-2. Fix the next fiscal year-end.
-3. Appoint the auditor **OR** waive the auditor appointment.
-4. Ratify all lawful acts of the directors in the preceding 12 months.
-5. Appoint the director slate "until successors are elected or appointed."
-6. Deem the AGM to have been held on the resolution date.
+**A2 — Resolution-body templating (drives Annual, Dividend, Allotment, Transfer,
+Cert, Asset, Split, Change-Office, Director appt/remove).** Replace each packet's
+2-sentence `sections[].body` with a `templateAssembly` body using the existing
+`{token}`/`{#if}`/`{#each}` engine, which already supports the needed conditionals
+and iteration:
+- Annual → `{#if waivePrepFinancials}`waiver`{#else}`approval`{/if}`, fix-next-FYE
+  token, auditor `{#if}` branch, ratification literal, `{#each directors}` slate,
+  deemed-AGM token.
+- Dividend → `{#each declarationRows}` Class/PerShare/**Total** table
+  (`computeDividend` already exists), "payable on {paymentDate} to shareholders of
+  record on {recordDate}".
+- Allotment/Transfer/Cert → `{#each certificates}` issue table + `{#each cancelled}`
+  from `shareCertificates.ts` chains; "remaining untransferred" via `{#if partial}`.
+- Asset → `{#each}` over assets grouped by an `assetCategory` enum
+  (real-estate/equipment/securities/other; `assetJurisdiction` already exists),
+  each with acquire/dispose `{#if}`.
 
-We already have every input (FYE via `corporationSettings`, the director slate,
-`waivePrepFinancials`, the NLG plurality engine). The gap is purely the **clause
-text**: porting these six branches into the packet `sections` so the generated
-annual document is a real consent resolution instead of a placeholder. This is
-the highest value-to-effort item left — small, self-contained, high use.
+**A3 — Subscription Agreement annex (the one L item).** Add `companionDocuments`
+to the allotment packet; `createPacketRunArtifacts` loops subscribers and emits one
+"Subscription for Shares" DOCX each (using the A1 signature block). The only
+renderer item producing N documents from one packet.
 
-### Tier 2 — modest value: annual bundle / action→document dispatcher
+### Theme B — Clone is lossy and unsound
 
-YCN's `Document_Package_Annual` emits the whole annual package as one click, and
-`Document_Package_Transactions` routes a chosen action to the right Doc sheet.
-We have all the individual packets and the `generateDocumentFromCatalog` action;
-what's missing is the orchestration layer (one action that fans out to several
-packets, or an action→packet picker). Genuine convenience, not a capability hole.
+In `convex/society.ts`:
+- Add `rightsHoldings`, `rightsholdingTransfers`, `dividends`, `assets`,
+  `assetEvents`, `significantIndividualSteps` to `CLONE_CHILD_TABLES` (L483–494) —
+  all six have `by_society` indexes.
+- Replace the flat `{...fields, societyId}` insert (L505–528) with a **two-pass
+  idMap**: pass 1 inserts each child and records `oldId → newId`; pass 2 rewrites
+  cross-ref Id fields (`rightsHoldings.rightsClassId/holderRoleHolderId/lastTransactionId`,
+  `rightsholdingTransfers.sourceRoleHolderId/destinationRoleHolderId/rightsClassId`,
+  any `entitySigners → roleHolders` ref). `directoryPersonId` is cross-tenant —
+  leave as-is.
+- Ship B2 *with* B1: without remapping, cloned equity rows point at the source
+  society and produce corrupt data.
 
-### Tier 3 — correctly deferred (confirmed absent, no product value)
+### Theme C — Derived-state engines never ported
 
-Verified still-absent and appropriately skipped:
+- **C1 Voting-power roll-up** (`shared/votingPower.ts`): per holder,
+  Σ(quantity × votesPerShare); partition voting(>0)/non-voting. Requires a
+  **numeric** `votesPerShare?` on `rightsClasses` (today `votingRights` is free
+  text). Combine with `registerHistory.activeAsOf`; expose a
+  `votingShareholdersAsOf` query consumed by the "all voting shareholders" packet.
+- **C2 Voting-eligibility gating** (cheap, inside C1): filter eligible voters by
+  `isIndividual && atAgeOfMajority` (flags already on schema, unused).
+- **C3 Dividend reconciliation** (`shared/dividends.ts`):
+  `reconcileDividend(perShare, shares, enteredTotal) → 'match'|'within_1pct'|'over_1pct'`;
+  surface in `validateDividend` + a warning chip on the Dividends page (add optional
+  `enteredTotalCents` to compare against the computed value).
 
-- **Provenance columns** `ENTRY_BY` / `REVISE_BY` printed in each register
-  (Convex tracks its own audit trail; the per-row author columns are an Access UX
-  detail).
-- **`REG_POSN`** manual register sort position — hand-curated ordering.
-- **`FIRM_ID`** stable service-provider identifier for cross-entity dedup.
-- **`DOC_MGMT_YN` / `DOC_MGMT_DIRECTORY`** — the Windows output folder for written
-  `.docx` files; Societyer's document-storage provider is the web/desktop analog.
-- **BC Land Owner Transparency Report** (User-Custom 19) — niche property-law form.
-- **Annual covering letter** (User-Custom 10) — trivial transmittal template.
-- **Per-class vs consolidated print layouts** (User-Custom 15–20) — Excel layout modes.
-- **Revision-tracking purge** — Access compaction admin.
+## 4. Top 5 worth doing next
 
-## Recommendation
+1. **Execution/signature block (A1)** — highest leverage; converts *every*
+   generated document into a signable instrument and finally consumes the
+   already-built `entitySigners` table. high / M.
+2. **Clone child-table completeness + ID remapping (B1+B2)** — fixes a real
+   data-loss + dangling-reference bug; ship together. high / M.
+3. **Resolution-body templating (A2)** — turns the prose-thin packets into real
+   resolutions using the *existing* `{#if}/{#each}` engine and *existing* data.
+   Do Annual + Dividend first. high / M per packet.
+4. **Voting-power roll-up + eligibility gating (C1+C2)** — the only missing
+   derived engine that blocks a feature ("all voting shareholders" can't enumerate
+   voters today). high / M.
+5. **Subscription Agreement annex (A3)** — completes the allotment deliverable.
+   high / L.
 
-One thing is worth implementing: **flesh out the `annual-resolutions` packet body
-with the six real YCN clauses** (Tier 1). It turns the most important annual
-document from a stub into the actual instrument, reuses the grammar engine and
-data we already have, and is a contained change. Everything else is either
-orchestration sugar (Tier 2) or correctly out of scope (Tier 3).
+## 5. Confirmed covered / correctly deferred (audit was thorough)
+
+**Confirmed already covered:** blank resolution shells (Custom 1/2/3); Custom
+7/12/15-20 register/ISC layouts; `Update_Restrict_Select_PEOPLE` picker scoping;
+`Update_*_Date_Index` (9 procs, pure date sort); `Set_Conditional_Format` /
+`Display_Headings` / `Font_Space_Setting` (cosmetic, mostly dead code);
+`Send_Email`/`Send_Confirmation` (vendor licensing); `Is_Corporation` (our
+`ORGANIZATION_PATTERN` is a superset); `Refresh_DB_ID` resequencing; `Num_Comma`
+core logic; ISS_TYP='Certificate' re-certification; DIV_CURRENCY multi-currency;
+TRANSPARENCY citizen/tax tri-state + step cadence; DIRECTOR/OFFICER revision
+chains; rightsClasses singularForm + endDate(cancel); officer multi-title
+conjunction grammar; days-in-month / month / char-width / cert-numbering lookup
+tables.
+
+**Correctly left deferred (low value):** LOTR (Custom 19), one-click annual
+bundle, transaction-routed dispatcher, batch multi-clone, blank-entity overwrite
+guard, per-class vs consolidated PRINT layouts, per-row provenance display,
+REG_POSN manual ordering, FIRM_ID dedup, revision-purge
+(`Delete_Revision_Tracking_Records`), `Document_Package_Custom`, annual covering
+letter, Excel/PDF pagination + font-metric text-wrap, trial-version lock,
+`DOC_MGMT_DIRECTORY` on-disk path (no web analog).
+
+## Relevant files for follow-up
+
+`shared/corporationPacketDocx.ts` (L30–52), `shared/corporationDocumentPackets.ts`,
+`shared/societyDocumentPackets.ts`, `convex/society.ts` (CLONE_CHILD_TABLES
+L483–494, insert L505–528), `convex/entitySigners.ts`, `shared/equityLedger.ts`,
+`shared/dividends.ts`, `convex/legalOperations.ts`.
