@@ -1,8 +1,20 @@
 // Import-session leaf utilities: text/date cleaning, coercion, and source-system helpers.
 
+import { decodeYcnDate, isYcnNullDate } from "../shared/ycnDate";
+
+// YCN/Access float date: YYYYMMDD optionally followed by a .HHMMSS fraction.
+const YCN_FLOAT_DATE = /^\d{8}(\.\d+)?$/;
+
 function cleanDate(value: unknown) {
   const text = cleanText(value);
   if (!text) return undefined;
+  // Legacy YCN float dates (e.g. "20161213.155505") would otherwise degrade to a
+  // year-only guess; decode them precisely. The <19000101 sentinel means "no value".
+  if (YCN_FLOAT_DATE.test(text)) {
+    if (isYcnNullDate(text)) return undefined;
+    const iso = decodeYcnDate(text);
+    if (iso) return iso.slice(0, 10);
+  }
   const date = text.match(/\d{4}-\d{2}-\d{2}/)?.[0];
   if (date) return date;
   const month = text.match(/\d{4}-\d{2}/)?.[0];
@@ -16,6 +28,12 @@ function cleanDateTime(value: unknown) {
   const text = cleanText(value);
   if (!text) return undefined;
   if (/^\d{4}-\d{2}-\d{2}T/.test(text)) return text;
+  // YCN floats carry a time component — keep it rather than zeroing it out.
+  if (YCN_FLOAT_DATE.test(text)) {
+    if (isYcnNullDate(text)) return undefined;
+    const iso = decodeYcnDate(text);
+    if (iso) return `${iso}.000Z`;
+  }
   const date = cleanDate(text);
   return date ? `${date}T00:00:00.000Z` : undefined;
 }

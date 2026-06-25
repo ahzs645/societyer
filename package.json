@@ -75,6 +75,7 @@
     "test:integration-staging": "tsx scripts/check-integration-staging-bundles.ts",
     "test:nlg-grammar": "tsx scripts/check-nlg-grammar.ts",
     "test:ycn-date-codec": "tsx scripts/check-ycn-date-codec.ts",
+    "test:ycn-access-import": "tsx scripts/check-ycn-access-import.ts",
     "test:versioned-register": "tsx scripts/check-versioned-register.ts",
     "test:reference-field": "tsx scripts/check-reference-field-constraint.ts",
     "test:template-assembly": "tsx scripts/check-template-assembly.ts",
