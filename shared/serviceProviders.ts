@@ -11,7 +11,7 @@
  * pure (no convex/react imports) and take the "as of" instant explicitly.
  */
 
-import { activeAsOf } from "./registerHistory";
+import { activeAsOf, type IntervalRow } from "./registerHistory";
 
 export type ServiceProviderFunction =
   | "lawyer"
@@ -56,7 +56,13 @@ export function activeProvidersAsOf(
   list: ServiceProvider[],
   asOfISO: string,
 ): ServiceProvider[] {
-  return activeAsOf(list, asOfISO, INTERVAL_FIELDS);
+  // ServiceProvider is a closed interface (no index signature), so cast through
+  // IntervalRow for the structural interval filter and back to the public type.
+  return activeAsOf(
+    list as unknown as IntervalRow[],
+    asOfISO,
+    INTERVAL_FIELDS,
+  ) as unknown as ServiceProvider[];
 }
 
 /** All providers (active or not) matching a given function. */
