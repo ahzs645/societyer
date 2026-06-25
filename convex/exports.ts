@@ -11,6 +11,7 @@ export const EXPORTABLE_TABLES = [
   "organizationRegistrations",
   "organizationIdentifiers",
   "roleHolders",
+  "roleHolderRevisions",
   "rightsClasses",
   "rightsholdingTransfers",
   "legalTemplateDataFields",

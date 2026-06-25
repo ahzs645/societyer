@@ -30,6 +30,19 @@ export function RoleHoldersPage() {
   const confirm = useConfirm();
   const toast = useToast();
   const [draft, setDraft] = useState<any>(null);
+  const [historyId, setHistoryId] = useState<string | null>(null);
+  const [auditFrom, setAuditFrom] = useState("");
+  const [auditTo, setAuditTo] = useState("");
+  const history = useQuery(
+    api.roleHolderHistory.revisionHistory,
+    historyId ? { roleHolderId: historyId as any } : "skip",
+  ) as any[] | undefined;
+  const auditDiff = useQuery(
+    api.roleHolderHistory.changesBetween,
+    society && auditFrom && auditTo
+      ? { societyId: society._id, fromISO: `${auditFrom}T00:00:00`, toISO: `${auditTo}T23:59:59` }
+      : "skip",
+  ) as Array<{ op: string; key: string; name: string }> | undefined;
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -82,6 +95,8 @@ export function RoleHoldersPage() {
       nonNaturalPersonType: empty(draft.nonNaturalPersonType),
       nonNaturalJurisdiction: empty(draft.nonNaturalJurisdiction),
       natureOfControl: empty(draft.natureOfControl),
+      gender: empty(draft.gender),
+      pronouns: empty(draft.pronouns),
       authorizedRepresentative: draft.authorizedRepresentative,
       relatedShareholderIds: csv(draft.relatedShareholderIdsText ?? draft.relatedShareholderIds),
       controllingIndividualIds: csv(draft.controllingIndividualIdsText ?? draft.controllingIndividualIds),
@@ -217,6 +232,7 @@ export function RoleHoldersPage() {
                   <td><Badge tone={toneForStatus(row.status)}>{optionLabel("roleHolderStatuses", row.status)}</Badge></td>
                   <td>
                     <div className="row" style={{ justifyContent: "flex-end" }}>
+                      <button className="btn btn--ghost btn--sm" onClick={() => setHistoryId(row._id)}>History</button>
                       <button className="btn btn--ghost btn--sm" onClick={() => setDraft(editRoleHolder(row))}>Edit</button>
                       <button className="btn btn--ghost btn--sm btn--icon" aria-label="Delete role holder" onClick={() => confirmDelete(row)}><Trash2 size={12} /></button>
                     </div>
@@ -228,6 +244,61 @@ export function RoleHoldersPage() {
           </table>
         </div>
       </Section>
+
+      <Section title="Audit trail — changes between two dates" count={(auditDiff ?? []).filter((d) => d.op !== "unchanged").length}>
+        <div className="card__body">
+          <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <Field label="From"><input className="input" type="date" value={auditFrom} onChange={(e) => setAuditFrom(e.target.value)} /></Field>
+            <Field label="To"><input className="input" type="date" value={auditTo} onChange={(e) => setAuditTo(e.target.value)} /></Field>
+          </div>
+          {auditFrom && auditTo && (
+            <ul style={{ marginTop: 12 }}>
+              {(auditDiff ?? []).filter((d) => d.op !== "unchanged").map((d) => (
+                <li key={d.key}>
+                  <Badge tone={d.op === "new" ? "success" : d.op === "delete" ? "danger" : "warn"}>{d.op}</Badge>{" "}
+                  {d.name || d.key}
+                </li>
+              ))}
+              {(auditDiff ?? []).filter((d) => d.op !== "unchanged").length === 0 && (
+                <li className="muted">No changes to the register in this window.</li>
+              )}
+            </ul>
+          )}
+        </div>
+      </Section>
+
+      <Drawer
+        open={Boolean(historyId)}
+        onClose={() => setHistoryId(null)}
+        title="Edit history"
+      >
+        {historyId && (
+          <div>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Every edit appends a version. "Who" is client-asserted (this backend has no
+              auth yet), so treat the actor as advisory until auth is added.
+            </p>
+            {(history ?? []).slice().reverse().map((version, idx) => (
+              <div key={idx} className="card" style={{ marginBottom: 10, padding: 12 }}>
+                <div className="row" style={{ justifyContent: "space-between" }}>
+                  <strong>{formatDate(version.enteredAtISO)}</strong>
+                  {version.isCurrent ? <Badge tone="success">current</Badge> : <Badge tone="neutral">superseded</Badge>}
+                </div>
+                <div className="muted">by {version.enteredByUserId || "unknown"}</div>
+                <ul style={{ marginTop: 8, marginBottom: 0 }}>
+                  {(version.changes ?? []).map((c: any) => (
+                    <li key={c.field}>
+                      <code>{c.field}</code>: {formatChangeValue(c.from)} → {formatChangeValue(c.to)}
+                    </li>
+                  ))}
+                  {(version.changes ?? []).length === 0 && <li className="muted">No tracked field changes.</li>}
+                </ul>
+              </div>
+            ))}
+            {history && history.length === 0 && <p className="muted">No history recorded yet.</p>}
+          </div>
+        )}
+      </Drawer>
 
       <Drawer
         open={Boolean(draft)}
@@ -253,6 +324,17 @@ export function RoleHoldersPage() {
             <div className="grid two">
               <OptionSelect label="Officer title" setName="officerTitles" value={draft.officerTitle ?? ""} emptyLabel="No title" onChange={(value) => setDraft({ ...draft, officerTitle: value })} />
               <OptionSelect label="Director term" setName="directorTerms" value={draft.directorTerm ?? ""} emptyLabel="No term" onChange={(value) => setDraft({ ...draft, directorTerm: value })} />
+            </div>
+            <div className="grid two">
+              <Field label="Gender (for document grammar)">
+                <select className="input" value={draft.gender ?? ""} onChange={(e) => setDraft({ ...draft, gender: e.target.value })}>
+                  <option value="">—</option>
+                  <option value="M">Male (he/his)</option>
+                  <option value="F">Female (she/her)</option>
+                  <option value="X">Neutral (they/their)</option>
+                </select>
+              </Field>
+              <Field label="Stated pronouns (override gender)"><input className="input" placeholder="e.g. they/them, xe/xir" value={draft.pronouns ?? ""} onChange={(e) => setDraft({ ...draft, pronouns: e.target.value })} /></Field>
             </div>
             <div className="grid two">
               <Field label="Start date"><DatePicker value={draft.startDate ?? ""} onChange={(value) => setDraft({ ...draft, startDate: value })} /></Field>
@@ -298,12 +380,14 @@ export function RightsLedgerPage() {
   const upsertClass = useMutation(api.legalOperations.upsertRightsClass);
   const upsertTransfer = useMutation(api.legalOperations.upsertRightsholdingTransfer);
   const stageShareIssuancePacket = useMutation(api.legalOperations.stageShareIssuancePacket);
+  const stageShareSplit = useMutation(api.legalOperations.stageShareSplitPacket);
   const removeClass = useMutation(api.legalOperations.removeRightsClass);
   const removeTransfer = useMutation(api.legalOperations.removeRightsholdingTransfer);
   const toast = useToast();
   const confirm = useConfirm();
   const [classDraft, setClassDraft] = useState<any>(null);
   const [transferDraft, setTransferDraft] = useState<any>(null);
+  const [splitDraft, setSplitDraft] = useState<any>(null);
   const currentHoldings = useMemo(() => deriveCurrentHoldings(data?.transfers ?? []), [data?.transfers]);
   const corporationWorkspace = society ? isCorporation(society) : false;
 
@@ -387,6 +471,29 @@ export function RightsLedgerPage() {
     toast.success("Packet staged", "The share issuance packet is ready in Template Engine.");
   };
 
+  const runSplit = async () => {
+    if (!splitDraft) return;
+    const numerator = Number(splitDraft.numerator);
+    const denominator = Number(splitDraft.denominator);
+    try {
+      const result: any = await stageShareSplit({
+        societyId: society._id,
+        rightsClassId: splitDraft.rightsClassId,
+        numerator,
+        denominator,
+      });
+      setSplitDraft(null);
+      toast.success(
+        "Split staged",
+        `${result.ratioLabel}: ${result.totalBefore} → ${result.totalAfter} shares.${
+          result.sharesDropped ? ` ${result.sharesDropped} share(s) dropped to rounding.` : ""
+        } Resolution ready in Template Engine.`,
+      );
+    } catch (err: any) {
+      toast.error("Could not stage split", err?.message ?? String(err));
+    }
+  };
+
   return (
     <div className="page page--wide">
       <PageHeader
@@ -418,7 +525,14 @@ export function RightsLedgerPage() {
                   <td><div>{row.votingRights || "No voting text"}</div><div className="muted">{row.conditionsToHold || row.conditionsToTransfer || "No conditions"}</div></td>
                   <td>{dateLabel(row.startDate)} to {dateLabel(row.endDate)}</td>
                   <td><Badge tone={toneForStatus(row.status)}>{optionLabel("rightsClassStatuses", row.status)}</Badge></td>
-                  <td><RowActions onEdit={() => setClassDraft(editRightsClass(row))} onDelete={() => deleteRow("class", row)} label="rights class" /></td>
+                  <td>
+                    <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
+                      {row.classType === "share" && (
+                        <button className="btn btn--ghost btn--sm" onClick={() => setSplitDraft({ rightsClassId: row._id, className: row.className, numerator: 2, denominator: 1 })}>Split</button>
+                      )}
+                      <RowActions onEdit={() => setClassDraft(editRightsClass(row))} onDelete={() => deleteRow("class", row)} label="rights class" />
+                    </div>
+                  </td>
                 </tr>
               ))}
               {(data?.classes ?? []).length === 0 && <EmptyRow cols={6} label="No rights classes yet." />}
@@ -525,6 +639,27 @@ export function RightsLedgerPage() {
           </table>
         </div>
       </Section>
+
+      <Drawer
+        open={Boolean(splitDraft)}
+        onClose={() => setSplitDraft(null)}
+        title={`Subdivide / consolidate ${splitDraft?.className ?? "shares"}`}
+        footer={<><button className="btn" onClick={() => setSplitDraft(null)}>Cancel</button><button className="btn btn--accent" onClick={runSplit}>Stage split</button></>}
+      >
+        {splitDraft && (
+          <>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Each holder's count becomes <code>shares × numerator ÷ denominator</code> (rounded
+              down). e.g. 2 / 1 = a 2-for-1 subdivision; 1 / 3 = a 1-for-3 consolidation. This posts
+              adjusted holdings and stages an editable resolution with a before/after table.
+            </p>
+            <div className="grid two">
+              <Field label="Numerator (new)"><input className="input" type="number" min={1} value={splitDraft.numerator} onChange={(e) => setSplitDraft({ ...splitDraft, numerator: e.target.value })} /></Field>
+              <Field label="Denominator (old)"><input className="input" type="number" min={1} value={splitDraft.denominator} onChange={(e) => setSplitDraft({ ...splitDraft, denominator: e.target.value })} /></Field>
+            </div>
+          </>
+        )}
+      </Drawer>
 
       <Drawer open={Boolean(classDraft)} onClose={() => setClassDraft(null)} title={classDraft?._id ? "Edit rights class" : "New rights class"} footer={<><button className="btn" onClick={() => setClassDraft(null)}>Cancel</button><button className="btn btn--accent" onClick={saveClass}>Save</button></>}>
         {classDraft && (
@@ -1223,6 +1358,11 @@ function countCurrentRoles(rows: any[], roleTypes: string[]) {
     row.status !== "former" &&
     row.status !== "inactive",
   ).length;
+}
+
+function formatChangeValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return "—";
+  return String(value);
 }
 
 function editRoleHolder(row: any) {

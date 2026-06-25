@@ -595,6 +595,7 @@ export const updateComplianceSettings = mutation({
     docPrepLanguage: v.optional(v.string()),
     responsibleLawyer: v.optional(v.string()),
     restrictPeoplePicker: v.optional(v.boolean()),
+    includeDocumentIdHeader: v.optional(v.boolean()),
   },
   returns: v.id("societies"),
   handler: async (ctx, { societyId, ...settings }) => {

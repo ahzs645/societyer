@@ -16,6 +16,7 @@ import {
   corporationPacketTemplateMarker,
 } from "../shared/corporationDocumentPackets";
 import {
+  corporationPacketDocumentId,
   corporationPacketDocxDataUrl,
   corporationPacketDocxFileName,
   corporationPacketDocxMimeType,
@@ -25,7 +26,21 @@ import { buildSubscriptionAgreementBlocks } from "../shared/subscriptionAgreemen
 import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../shared/societyDocumentPackets";
 import { isCorporation } from "../shared/organizationDomain";
 import { materializeRightsHoldings, validateLedger } from "../shared/equityLedger";
+import { planShareSplit, validateRatio, type HoldingPosition, type SplitRatio } from "../shared/shareSplit";
 import { buildSocietyRenderContext } from "../shared/societyRenderContext";
+import { normalizeGender } from "../shared/nlg";
+import { resolveLocale } from "../shared/locale";
+import { enforcePersonReference } from "./lib/personReference";
+import { planRoleHolderRevision } from "../shared/roleHolderHistory";
+import {
+  assetTransferView,
+  directorAppointmentView,
+  directorRemovalView,
+  officeChangeView,
+  officerAppointmentView,
+  shareCertificateView,
+  shareTransferView,
+} from "../shared/packetOperativeData";
 import { buildExecutionBlock, resolvingBodyFor, type SignerLine } from "../shared/executionBlock";
 import { activeAsOf, type IntervalRow } from "../shared/registerHistory";
 import { buildAnnualResolutionContext } from "../shared/annualResolution";
@@ -95,6 +110,10 @@ export const upsertRoleHolder = mutation({
     relatedShareholderIds: v.optional(v.array(v.string())),
     controllingIndividualIds: v.optional(v.array(v.string())),
     extraProvincialRegistrationId: v.optional(v.id("organizationRegistrations")),
+    directoryPersonId: v.optional(v.id("peopleDirectory")),
+    gender: v.optional(v.string()),
+    pronouns: v.optional(v.string()),
+    actorUserId: v.optional(v.string()),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     sourceExternalIds: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
@@ -106,6 +125,13 @@ export const upsertRoleHolder = mutation({
     assertAllowedOption("officerTitles", args.officerTitle, "Officer title");
     assertAllowedOption("directorTerms", args.directorTerm, "Director term");
     assertAllowedOption("citizenshipResidencies", args.citizenshipResidency, "Citizenship/residency");
+    // Enforce the society's People Directory constraint (free unless restricted).
+    const directoryPersonId = await enforcePersonReference(
+      ctx,
+      args.societyId,
+      args.fullName,
+      args.directoryPersonId,
+    );
     const now = new Date().toISOString();
     const payload = {
       societyId: args.societyId,
@@ -159,23 +185,47 @@ export const upsertRoleHolder = mutation({
       relatedShareholderIds: cleanList(args.relatedShareholderIds),
       controllingIndividualIds: cleanList(args.controllingIndividualIds),
       extraProvincialRegistrationId: args.extraProvincialRegistrationId,
+      directoryPersonId,
+      gender: normalizeGender(args.gender),
+      pronouns: cleanText(args.pronouns),
       sourceDocumentIds: args.sourceDocumentIds ?? [],
       sourceExternalIds: cleanList(args.sourceExternalIds),
       notes: cleanText(args.notes),
       updatedAtISO: now,
     };
     if (id) {
+      const existing = await ctx.db.get(id);
+      if (existing) {
+        // Append the prior version to the edit history, then patch the live row.
+        const { revision, liveStamps } = planRoleHolderRevision(existing, now, args.actorUserId);
+        await ctx.db.insert("roleHolderRevisions", { societyId: args.societyId, ...revision, createdAtISO: now });
+        await ctx.db.patch(id, { ...payload, ...liveStamps });
+        return id;
+      }
       await ctx.db.patch(id, payload);
       return id;
     }
-    return await ctx.db.insert("roleHolders", { ...payload, createdAtISO: now });
+    return await ctx.db.insert("roleHolders", {
+      ...payload,
+      enteredAtISO: now,
+      enteredByUserId: args.actorUserId,
+      createdAtISO: now,
+    });
   },
 });
 
 export const removeRoleHolder = mutation({
-  args: { id: v.id("roleHolders") },
+  args: { id: v.id("roleHolders"), actorUserId: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
+  handler: async (ctx, { id, actorUserId }) => {
+    // Capture a final closed revision before deleting, so the audit trail records
+    // the removal (and the last known values).
+    const existing = await ctx.db.get(id);
+    if (existing) {
+      const now = new Date().toISOString();
+      const { revision } = planRoleHolderRevision(existing, now, actorUserId);
+      await ctx.db.insert("roleHolderRevisions", { societyId: existing.societyId, ...revision, createdAtISO: now });
+    }
     await ctx.db.delete(id);
   },
 });
@@ -507,7 +557,18 @@ export const generateDocumentFromCatalog = mutation({
     effectiveDate: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args) => generatePacketForSociety(ctx, args),
+});
+
+/**
+ * Core of catalog generation, callable directly (e.g. by the firm-wide batch
+ * generator in convex/firm.ts) without going through the mutation wrapper.
+ */
+export async function generatePacketForSociety(
+  ctx: any,
+  args: { societyId: any; packetKey: string; effectiveDate?: string },
+): Promise<any> {
+  {
     const corpPacket = CORPORATION_DOCUMENT_PACKETS.find((p) => p.key === args.packetKey);
     const socPacket = SOCIETY_DOCUMENT_PACKETS.find((p) => p.key === args.packetKey);
     const packet = corpPacket ?? socPacket;
@@ -556,8 +617,8 @@ export const generateDocumentFromCatalog = mutation({
       notes: "Generated from the document catalog.",
     });
     return { runId, packetKey: packet.key, precedentId: precedent._id, ...artifacts };
-  },
-});
+  }
+}
 
 /**
  * Seed the right packet catalog for an entity by its kind: corporations get the
@@ -765,6 +826,153 @@ export const stageShareIssuancePacket = mutation({
     });
     await syncRightsHoldings(ctx, args.societyId);
     return { runId, packetKey: packet.key, precedentId: precedent._id, transferId: args.transferId, ...artifacts };
+  },
+});
+
+export const stageShareSplitPacket = mutation({
+  args: {
+    societyId: v.id("societies"),
+    rightsClassId: v.id("rightsClasses"),
+    numerator: v.number(),
+    denominator: v.number(),
+    notes: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const rightsClass = await ctx.db.get(args.rightsClassId);
+    if (!rightsClass || rightsClass.societyId !== args.societyId) {
+      throw new Error("Rights class was not found for this workspace.");
+    }
+    const ratio: SplitRatio = { numerator: args.numerator, denominator: args.denominator };
+    const validation = validateRatio(ratio);
+    if (!validation.ok) {
+      throw new Error(`Invalid split ratio: ${validation.errors.join(" ")}`);
+    }
+
+    // Current holdings in this class become the before-state of the split.
+    const holdingRows = await ctx.db
+      .query("rightsHoldings")
+      .withIndex("by_society_class", (q: any) => q.eq("societyId", args.societyId).eq("rightsClassId", args.rightsClassId))
+      .collect();
+    const positions: HoldingPosition[] = [];
+    for (const row of holdingRows) {
+      if (!row.quantity) continue;
+      const roleHolder = row.holderRoleHolderId ? await ctx.db.get(row.holderRoleHolderId) : null;
+      const holderName = roleHolder?.fullName
+        || (String(row.holderKey).startsWith("name:") ? String(row.holderKey).slice("name:".length) : String(row.holderKey));
+      positions.push({
+        holderKey: String(row.holderKey),
+        holderName,
+        holderRoleHolderId: row.holderRoleHolderId ? String(row.holderRoleHolderId) : undefined,
+        shares: Number(row.quantity),
+      });
+    }
+    if (positions.length === 0) {
+      throw new Error("This share class has no current holdings to subdivide or consolidate.");
+    }
+
+    const plan = planShareSplit(positions, ratio);
+    const now = new Date().toISOString();
+    const effectiveDate = now.slice(0, 10);
+    const eventId = `share-split:${args.rightsClassId}:${now}`;
+    const transferType = plan.kind === "subdivision" ? "subdivision" : "consolidation";
+
+    // One signed per-holder adjustment row per holder whose count changes.
+    for (const line of plan.lines) {
+      if (line.delta === 0) continue;
+      const gains = line.delta > 0;
+      await ctx.db.insert("rightsholdingTransfers", {
+        societyId: args.societyId,
+        transferType,
+        status: "posted",
+        transferDate: effectiveDate,
+        eventId,
+        rightsClassId: args.rightsClassId,
+        sourceRoleHolderId: gains ? undefined : line.holderRoleHolderId,
+        sourceHolderName: gains ? undefined : line.holderName,
+        destinationRoleHolderId: gains ? line.holderRoleHolderId : undefined,
+        destinationHolderName: gains ? line.holderName : undefined,
+        quantity: Math.abs(line.delta),
+        considerationType: "share-split",
+        considerationDescription: plan.label,
+        sourceDocumentIds: [],
+        sourceExternalIds: [`societyer:share-split:${eventId}`],
+        notes: `${plan.label} of ${rightsClass.className}: ${line.before} → ${line.after} shares.`,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    }
+
+    const packet = CORPORATION_DOCUMENT_PACKETS.find((candidate) => candidate.key === "share-split");
+    if (!packet) throw new Error("Share split packet is not configured.");
+    await seedCorporationDocumentPacketsForSociety(ctx, args.societyId);
+    const precedent = await corporationPacketPrecedentForSociety(ctx, args.societyId, packet);
+    const splitData = {
+      packetKey: packet.key,
+      rightsClassId: String(args.rightsClassId),
+      shareClassName: rightsClass.className,
+      ratioLabel: plan.label,
+      kind: plan.kind,
+      totalBefore: plan.totalBefore,
+      totalAfter: plan.totalAfter,
+      sharesDropped: plan.sharesDropped,
+      effectiveDate,
+      lines: plan.lines.map((line) => ({
+        holderName: line.holderName,
+        before: line.before,
+        after: line.after,
+      })),
+    };
+    const signerRoleHolderIds = await defaultPacketSignerRoleHolderIds(ctx, args.societyId);
+    const runId = await ctx.db.insert("legalPrecedentRuns", {
+      societyId: args.societyId,
+      name: `${packet.packageName} - ${rightsClass.className} (${plan.label})`,
+      status: "draft",
+      precedentId: precedent._id,
+      eventId,
+      dateTime: effectiveDate,
+      dataJson: JSON.stringify(splitData),
+      dataJsonList: [],
+      dataReviewed: false,
+      externalNotes: "Share subdivision/consolidation packet staged from the share register.",
+      searchIds: [],
+      registrationIds: [],
+      filingIds: [],
+      generatedDocumentIds: [],
+      signerRoleHolderIds,
+      priceItems: [],
+      abstainingDirectorIds: [],
+      abstainingRightsholderIds: [],
+      sourceExternalIds: [
+        `societyer:share-split:${eventId}`,
+        `societyer:corporation-packet-run:${packet.key}`,
+      ],
+      notes: args.notes ?? `Staged ${plan.label} of ${rightsClass.className}.`,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    const artifacts = await createPacketRunArtifacts(ctx, {
+      societyId: args.societyId,
+      packet,
+      runId,
+      eventId,
+      effectiveDate,
+      signerRoleHolderIds,
+      dataJson: JSON.stringify(splitData),
+      notes: args.notes ?? `Editable ${plan.label} resolution for ${rightsClass.className}.`,
+    });
+    await syncRightsHoldings(ctx, args.societyId);
+    return {
+      runId,
+      packetKey: packet.key,
+      precedentId: precedent._id,
+      ratioLabel: plan.label,
+      kind: plan.kind,
+      totalBefore: plan.totalBefore,
+      totalAfter: plan.totalAfter,
+      sharesDropped: plan.sharesDropped,
+      ...artifacts,
+    };
   },
 });
 
@@ -1799,14 +2007,26 @@ async function createPacketRunArtifacts(ctx: any, args: {
       resolutionsPlural,
       signers,
       dateLong: renderCtx.date.long,
+      locale: resolveLocale(society?.docPrepLanguage),
     });
     // Packet-specific operative data so the resolution body renders real clauses
     // (YCN Doc - Annual / Doc - Dividends), not a generic blurb.
-    const dataContext = await buildPacketDataContext(ctx, args.packet, args.societyId, society, renderCtx);
+    let runData: Record<string, unknown> | undefined;
+    try {
+      runData = args.dataJson ? JSON.parse(args.dataJson) : undefined;
+    } catch {
+      runData = undefined;
+    }
+    const dataContext = await buildPacketDataContext(ctx, args.packet, args.societyId, society, renderCtx, runData);
     context = { ...renderCtx, execution, ...dataContext };
   }
+  // Deterministic file name (YCN ENT-DOCTYPE-DATE) + optional doc-ID header.
+  const fileOpts = { shortName: society?.shortName, effectiveDate: args.effectiveDate ?? now };
+  if (society?.includeDocumentIdHeader) {
+    context = { ...(context ?? {}), documentId: corporationPacketDocumentId(args.packet, fileOpts) };
+  }
   const docxDataUrl = corporationPacketDocxDataUrl(args.packet, context);
-  const docxFileName = corporationPacketDocxFileName(args.packet);
+  const docxFileName = corporationPacketDocxFileName(args.packet, fileOpts);
   const docxMimeType = corporationPacketDocxMimeType();
   const draftDocumentId = await ctx.db.insert("documents", {
     societyId: args.societyId,
@@ -2043,8 +2263,74 @@ async function buildPacketDataContext(
   packet: (typeof CORPORATION_DOCUMENT_PACKETS)[number],
   societyId: any,
   society: any,
-  renderCtx: { dir: { list: Array<{ name: string }> } },
+  renderCtx: { dir: { list: Array<{ name: string }> }; date?: { long?: string } },
+  runData?: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  if (packet.key === "share-split" && runData) {
+    const lines = Array.isArray(runData.lines) ? (runData.lines as Array<Record<string, unknown>>) : [];
+    return {
+      ShareClass: String(runData.shareClassName ?? ""),
+      SplitRatio: String(runData.ratioLabel ?? ""),
+      EffectiveDate: renderCtx.date?.long ?? String(runData.effectiveDate ?? ""),
+      PreSplitCount: Number(runData.totalBefore ?? 0),
+      PostSplitCount: Number(runData.totalAfter ?? 0),
+      ConsolidationFlag: runData.kind === "consolidation" ? "Yes" : "No",
+      FractionalShareTreatment: "rounded down (no fractional shares issued)",
+      split: {
+        ratioLabel: String(runData.ratioLabel ?? ""),
+        kind: String(runData.kind ?? ""),
+        totalBefore: Number(runData.totalBefore ?? 0),
+        totalAfter: Number(runData.totalAfter ?? 0),
+        sharesDropped: Number(runData.sharesDropped ?? 0),
+        hasLines: lines.length > 0,
+        hasDroppedShares: Number(runData.sharesDropped ?? 0) > 0,
+        lines: lines.map((line) => ({
+          holderName: String(line.holderName ?? ""),
+          before: Number(line.before ?? 0),
+          after: Number(line.after ?? 0),
+        })),
+      },
+    };
+  }
+  if (packet.key === "appoint-officer" || packet.key === "appoint-director" || packet.key === "director-removal") {
+    const roleHolders = await ctx.db
+      .query("roleHolders")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .collect();
+    if (packet.key === "appoint-officer") return officerAppointmentView(roleHolders);
+    if (packet.key === "appoint-director") return directorAppointmentView(roleHolders);
+    return directorRemovalView(roleHolders);
+  }
+  if (packet.key === "share-transfer") {
+    const [transfers, classes] = await Promise.all([
+      ctx.db.query("rightsholdingTransfers").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("rightsClasses").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
+    ]);
+    const classNameById: Record<string, string> = {};
+    for (const c of classes) classNameById[String(c._id)] = String(c.className ?? "");
+    return shareTransferView(transfers, classNameById);
+  }
+  if (packet.key === "share-certificate") {
+    const certs = await ctx.db
+      .query("shareCertificates")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .collect();
+    return shareCertificateView(certs);
+  }
+  if (packet.key === "change-of-offices") {
+    const addresses = await ctx.db
+      .query("organizationAddresses")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .collect();
+    return officeChangeView(addresses);
+  }
+  if (packet.key === "asset-transfer") {
+    const assets = await ctx.db
+      .query("assets")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .collect();
+    return assetTransferView(assets);
+  }
   if (packet.key === "annual-resolutions") {
     return {
       annual: buildAnnualResolutionContext({

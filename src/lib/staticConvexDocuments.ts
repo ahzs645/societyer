@@ -207,8 +207,10 @@ export function staticCreatePacketRunArtifacts(
     `societyer:corporation-packet-run:${args.packet.key}`,
     `societyer:legal-precedent-run:${args.runId}`,
   ]);
+  const society = store?.getRow("societies", args.societyId);
+  const fileOpts = { shortName: society?.shortName, effectiveDate: args.effectiveDate };
   const docxDataUrl = corporationPacketDocxDataUrl(args.packet);
-  const docxFileName = corporationPacketDocxFileName(args.packet);
+  const docxFileName = corporationPacketDocxFileName(args.packet, fileOpts);
   const docxMimeType = corporationPacketDocxMimeType();
   const draftDocumentId = staticLocalId("document", `${args.packet.key}_editable_docx`);
   const draftDocumentVersionId = staticLocalId("documentVersion", `${args.packet.key}_editable_docx`);

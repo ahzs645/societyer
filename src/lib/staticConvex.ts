@@ -7,6 +7,18 @@ import {
 } from "../../shared/corporationDocumentPackets";
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
 import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
+import { planShareSplit, validateRatio, type HoldingPosition, type SplitRatio } from "../../shared/shareSplit";
+import { postIncorporationStepsForOrganization } from "../../shared/postIncorporationSteps";
+import { organizationKind, organizationLabel } from "../../shared/organizationDomain";
+import {
+  buildTimeline,
+  changesBetween as changesBetweenPure,
+  fieldChanges,
+  planRoleHolderRevision,
+  registerAsOf as registerAsOfPure,
+  type LiveRoleHolder,
+  type StoredRevision,
+} from "../../shared/roleHolderHistory";
 import { computeVotingPower } from "../../shared/votingPower";
 import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../../shared/societyDocumentPackets";
 import {
@@ -2217,6 +2229,88 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     return (store?.listRows("roleHolders", args) ?? [])
       .sort((a, b) => String(a.fullName ?? "").localeCompare(String(b.fullName ?? "")));
   }
+  if (moduleName === "firm" && exportName === "overview") {
+    const today = (args?.todayISO ?? new Date().toISOString()).slice(0, 10);
+    const societies = store?.listRows("societies", {}) ?? [];
+    const entities = societies.map((society: any) => {
+      const deadlines = store?.listRows("deadlines", { societyId: society._id }) ?? [];
+      const open = deadlines.filter((d: any) => (d.status ?? (d.done ? "complete" : "open")) === "open");
+      const overdue = open.filter((d: any) => String(d.dueDate ?? "") < today).length;
+      const runs = store?.listRows("legalPrecedentRuns", { societyId: society._id }) ?? [];
+      const generated = new Set<string>();
+      for (const run of runs) {
+        for (const id of run.sourceExternalIds ?? []) {
+          const m = /-packet-run:(.+)$/.exec(String(id));
+          if (m) generated.add(m[1]);
+        }
+      }
+      const packetSteps = postIncorporationStepsForOrganization(society).filter((s) => s.packetKey);
+      return {
+        _id: society._id,
+        name: organizationLabel(society),
+        kind: organizationKind(society),
+        incorporationNumber: society.incorporationNumber ?? null,
+        status: society.organizationStatus ?? null,
+        overdueDeadlines: overdue,
+        upcomingDeadlines: open.length - overdue,
+        openDeadlines: open.length,
+        postIncorpTotal: packetSteps.length,
+        postIncorpDone: packetSteps.filter((s) => generated.has(s.packetKey as string)).length,
+      };
+    });
+    entities.sort((a, b) => b.overdueDeadlines - a.overdueDeadlines || a.name.localeCompare(b.name));
+    return {
+      today,
+      entities,
+      totals: {
+        entities: entities.length,
+        corporations: entities.filter((e) => e.kind === "corporation").length,
+        societies: entities.filter((e) => e.kind === "society").length,
+        overdueDeadlines: entities.reduce((s, e) => s + e.overdueDeadlines, 0),
+        upcomingDeadlines: entities.reduce((s, e) => s + e.upcomingDeadlines, 0),
+      },
+    };
+  }
+  if (moduleName === "postIncorporation" && exportName === "checklist") {
+    const society = store?.getRow("societies", args?.societyId);
+    if (!society) return { steps: [], generatedPacketKeys: [] };
+    const steps = postIncorporationStepsForOrganization(society as any);
+    const generated = new Set<string>();
+    for (const run of store?.listRows("legalPrecedentRuns", { societyId: args?.societyId }) ?? []) {
+      for (const id of run.sourceExternalIds ?? []) {
+        const match = /^societyer:corporation-packet-run:(.+)$/.exec(String(id));
+        if (match) generated.add(match[1]);
+      }
+    }
+    return { steps, generatedPacketKeys: Array.from(generated) };
+  }
+  if (moduleName === "roleHolderHistory" && exportName === "revisionHistory") {
+    const revisions = staticStoredRoleHolderRevisions(store, { roleHolderId: args?.roleHolderId });
+    const liveRow = store?.getRow("roleHolders", args?.roleHolderId);
+    const timeline = buildTimeline(revisions, liveRow ? ({ ...liveRow, _id: String(liveRow._id) } as LiveRoleHolder) : undefined);
+    return timeline.map((version, index) => ({
+      enteredAtISO: version.enteredAtISO,
+      enteredByUserId: version.enteredByUserId ?? null,
+      supersededAtISO: version.supersededAtISO ?? null,
+      supersededByUserId: version.supersededByUserId ?? null,
+      isCurrent: version.supersededAtISO == null,
+      fullName: version.fullName ?? null,
+      changes: fieldChanges(index === 0 ? undefined : timeline[index - 1], version),
+    }));
+  }
+  if (moduleName === "roleHolderHistory" && exportName === "registerAsOf") {
+    const revisions = staticStoredRoleHolderRevisions(store, { societyId: args?.societyId });
+    const liveRows = (store?.listRows("roleHolders", { societyId: args?.societyId }) ?? [])
+      .map((row: any) => ({ ...row, _id: String(row._id) })) as LiveRoleHolder[];
+    return registerAsOfPure(revisions, liveRows, String(args?.asOfISO ?? ""));
+  }
+  if (moduleName === "roleHolderHistory" && exportName === "changesBetween") {
+    const revisions = staticStoredRoleHolderRevisions(store, { societyId: args?.societyId });
+    const liveRows = (store?.listRows("roleHolders", { societyId: args?.societyId }) ?? [])
+      .map((row: any) => ({ ...row, _id: String(row._id) })) as LiveRoleHolder[];
+    return changesBetweenPure(revisions, liveRows, String(args?.fromISO ?? ""), String(args?.toISO ?? ""))
+      .map((row) => ({ op: row.op, key: row.key, name: String((row.desired ?? row.current)?.fullName ?? "") }));
+  }
   {
     const ycn = ycnQueryResult(moduleName, exportName, args, store as any);
     if (ycn !== YCN_NOT_HANDLED) return ycn;
@@ -2443,12 +2537,49 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
     return staticGenerateDocumentFromCatalog(store, args, staticLocalId, staticUniqueStrings);
   }
 
+  if (name === "firm:batchGeneratePacket") {
+    const wantKind = CORPORATION_DOCUMENT_PACKETS.some((p) => p.key === args?.packetKey)
+      ? "corporation"
+      : SOCIETY_DOCUMENT_PACKETS.some((p) => p.key === args?.packetKey)
+        ? "society"
+        : null;
+    const results: Array<{ societyId: string; ok: boolean; runId?: string; error?: string }> = [];
+    for (const societyId of (args?.societyIds ?? []) as string[]) {
+      const society = store?.getRow("societies", societyId);
+      if (society && wantKind && organizationKind(society) !== wantKind) {
+        results.push({ societyId, ok: false, error: `skipped: ${args?.packetKey} applies to ${wantKind} entities` });
+        continue;
+      }
+      try {
+        const r = staticGenerateDocumentFromCatalog(
+          store,
+          { societyId, packetKey: args?.packetKey, effectiveDate: args?.effectiveDate },
+          staticLocalId,
+          staticUniqueStrings,
+        );
+        results.push({ societyId, ok: true, runId: String(r?.runId) });
+      } catch (err: any) {
+        results.push({ societyId, ok: false, error: err?.message ?? String(err) });
+      }
+    }
+    return {
+      packetKey: args?.packetKey,
+      generated: results.filter((r) => r.ok).length,
+      failed: results.filter((r) => !r.ok).length,
+      results,
+    };
+  }
+
   if (name === "legalOperations:stageCorporationDocumentPacket") {
     return staticStageCorporationDocumentPacket(store, args, staticLocalId, staticUniqueStrings);
   }
 
   if (name === "legalOperations:stageShareIssuancePacket") {
     return staticStageShareIssuancePacket(store, args);
+  }
+
+  if (name === "legalOperations:stageShareSplitPacket") {
+    return staticStageShareSplitPacket(store, args);
   }
 
   if (name === "importSessions:createFromBundle") {
@@ -4413,6 +4544,9 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     const tableName = staticMutationTableName(moduleName, exportName);
     if (exportName.startsWith("remove")) {
       const existing = store?.getRow(tableName, args?.id);
+      if (tableName === "roleHolders" && existing) {
+        staticSnapshotRoleHolderRevision(store, existing, args?.actorUserId);
+      }
       store?.removeRow(tableName, args?.id);
       if (tableName === "rightsholdingTransfers" && existing?.societyId) {
         staticSyncRightsHoldings(store, existing.societyId);
@@ -4433,6 +4567,19 @@ function mutationResult(name: string, args: StaticArgs, store?: StaticDemoDexieS
     };
     delete row.id;
     delete row.patch;
+    if (tableName === "roleHolders") {
+      const now = new Date().toISOString();
+      if (existing && existing._id) {
+        // Edit: append the prior version to the history before patching.
+        staticSnapshotRoleHolderRevision(store, existing, args?.actorUserId, now);
+        row.enteredAtISO = now;
+        row.enteredByUserId = args?.actorUserId;
+      } else {
+        row.enteredAtISO = row.enteredAtISO ?? now;
+        row.enteredByUserId = args?.actorUserId ?? row.enteredByUserId;
+      }
+      delete row.actorUserId;
+    }
     if (tableName === "rightsholdingTransfers") {
       const proposedTransfers = (store?.listRows("rightsholdingTransfers", { societyId: row.societyId }) ?? [])
         .filter((transfer) => String(transfer._id) !== String(id))
@@ -4740,6 +4887,172 @@ function staticStageShareIssuancePacket(store: StaticDemoDexieStore | null | und
     signerIds,
     minuteBookItemId: minuteBookItem?._id,
     sourceEvidenceId: sourceEvidence?._id,
+  };
+}
+
+function staticSnapshotRoleHolderRevision(
+  store: StaticDemoDexieStore | null | undefined,
+  existing: any,
+  actorUserId?: string,
+  nowISO: string = new Date().toISOString(),
+) {
+  if (!store || !existing?._id) return;
+  const { revision } = planRoleHolderRevision(existing, nowISO, actorUserId);
+  store.upsertRow("roleHolderRevisions", {
+    _id: staticLocalId("roleHolderRevisions", String(existing._id)),
+    _creationTime: Date.now(),
+    societyId: existing.societyId,
+    ...revision,
+    createdAtISO: nowISO,
+  });
+}
+
+function staticStoredRoleHolderRevisions(store: StaticDemoDexieStore | null | undefined, where: Record<string, unknown>): StoredRevision[] {
+  return (store?.listRows("roleHolderRevisions", where) ?? []).map((row: any) => ({
+    roleHolderId: String(row.roleHolderId),
+    dataJson: String(row.dataJson ?? "{}"),
+    enteredAtISO: String(row.enteredAtISO ?? row.createdAtISO ?? ""),
+    enteredByUserId: row.enteredByUserId,
+    supersededAtISO: String(row.supersededAtISO ?? ""),
+    supersededByUserId: row.supersededByUserId,
+  }));
+}
+
+function staticStageShareSplitPacket(store: StaticDemoDexieStore | null | undefined, args: StaticArgs) {
+  const societyId = args?.societyId ?? SOCIETY_ID;
+  const rightsClass = store?.getRow("rightsClasses", args?.rightsClassId);
+  if (!rightsClass || rightsClass.societyId !== societyId) {
+    throw new Error("Rights class was not found for this workspace.");
+  }
+  const ratio: SplitRatio = { numerator: Number(args?.numerator), denominator: Number(args?.denominator) };
+  const validation = validateRatio(ratio);
+  if (!validation.ok) throw new Error(`Invalid split ratio: ${validation.errors.join(" ")}`);
+
+  const holdingRows = (store?.listRows("rightsHoldings", { societyId }) ?? [])
+    .filter((row: any) => row.rightsClassId === args?.rightsClassId && row.quantity);
+  const positions: HoldingPosition[] = holdingRows.map((row: any) => {
+    const roleHolder = row.holderRoleHolderId ? store?.getRow("roleHolders", row.holderRoleHolderId) : null;
+    const holderName = roleHolder?.fullName
+      || (String(row.holderKey).startsWith("name:") ? String(row.holderKey).slice("name:".length) : String(row.holderKey));
+    return {
+      holderKey: String(row.holderKey),
+      holderName,
+      holderRoleHolderId: row.holderRoleHolderId ? String(row.holderRoleHolderId) : undefined,
+      shares: Number(row.quantity),
+    };
+  });
+  if (positions.length === 0) {
+    throw new Error("This share class has no current holdings to subdivide or consolidate.");
+  }
+
+  const plan = planShareSplit(positions, ratio);
+  staticSeedCorporationDocumentPackets(store, { societyId });
+  const packet = CORPORATION_DOCUMENT_PACKETS.find((candidate) => candidate.key === "share-split");
+  if (!packet) throw new Error("Share split packet is not configured.");
+  const marker = corporationPacketPrecedentMarker(packet);
+  const precedent = (store?.listRows("legalPrecedents", { societyId }) ?? [])
+    .find((row: any) => (row.sourceExternalIds ?? []).includes(marker));
+  if (!precedent) throw new Error(`Corporation document packet precedent was not seeded: ${packet.key}`);
+
+  const now = new Date().toISOString();
+  const effectiveDate = now.slice(0, 10);
+  const eventId = `share-split:${args?.rightsClassId}:${now}`;
+  const transferType = plan.kind === "subdivision" ? "subdivision" : "consolidation";
+  const splitData = {
+    packetKey: packet.key,
+    rightsClassId: String(args?.rightsClassId),
+    shareClassName: rightsClass.className,
+    ratioLabel: plan.label,
+    kind: plan.kind,
+    totalBefore: plan.totalBefore,
+    totalAfter: plan.totalAfter,
+    sharesDropped: plan.sharesDropped,
+    effectiveDate,
+    lines: plan.lines.map((line) => ({ holderName: line.holderName, before: line.before, after: line.after })),
+  };
+  const runId = staticLocalId("legalPrecedentRuns", packet.key);
+  const signerRoleHolderIds = (store?.listRows("roleHolders", { societyId }) ?? [])
+    .filter((row: any) => row.status === "current" && ["director", "officer", "authorized_representative"].includes(row.roleType))
+    .map((row: any) => row._id);
+
+  store?.transaction(() => {
+    for (const line of plan.lines) {
+      if (line.delta === 0) continue;
+      const gains = line.delta > 0;
+      store.upsertRow("rightsholdingTransfers", {
+        _id: staticLocalId("rightsholdingTransfers", "split"),
+        _creationTime: Date.now(),
+        societyId,
+        transferType,
+        status: "posted",
+        transferDate: effectiveDate,
+        eventId,
+        rightsClassId: args?.rightsClassId,
+        sourceRoleHolderId: gains ? undefined : line.holderRoleHolderId,
+        sourceHolderName: gains ? undefined : line.holderName,
+        destinationRoleHolderId: gains ? line.holderRoleHolderId : undefined,
+        destinationHolderName: gains ? line.holderName : undefined,
+        quantity: Math.abs(line.delta),
+        considerationType: "share-split",
+        considerationDescription: plan.label,
+        sourceDocumentIds: [],
+        sourceExternalIds: [`societyer:share-split:${eventId}`],
+        notes: `${plan.label} of ${rightsClass.className}: ${line.before} → ${line.after} shares.`,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    }
+    store.upsertRow("legalPrecedentRuns", {
+      _id: runId,
+      _creationTime: Date.now(),
+      societyId,
+      name: `${packet.packageName} - ${rightsClass.className} (${plan.label})`,
+      status: "draft",
+      precedentId: precedent._id,
+      eventId,
+      dateTime: effectiveDate,
+      dataJson: JSON.stringify(splitData),
+      dataJsonList: [],
+      dataReviewed: false,
+      externalNotes: "Share subdivision/consolidation packet staged from the share register.",
+      searchIds: [],
+      registrationIds: [],
+      filingIds: [],
+      generatedDocumentIds: [],
+      signerRoleHolderIds,
+      priceItems: [],
+      abstainingDirectorIds: [],
+      abstainingRightsholderIds: [],
+      sourceExternalIds: [
+        `societyer:share-split:${eventId}`,
+        `societyer:corporation-packet-run:${packet.key}`,
+      ],
+      notes: args?.notes ?? `Staged ${plan.label} of ${rightsClass.className}.`,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    staticCreatePacketRunArtifacts(store, {
+      societyId,
+      packet,
+      runId,
+      eventId,
+      effectiveDate,
+      signerRoleHolderIds,
+      dataJson: JSON.stringify(splitData),
+      notes: args?.notes ?? `Editable ${plan.label} resolution for ${rightsClass.className}.`,
+    }, staticLocalId, staticUniqueStrings);
+    staticSyncRightsHoldings(store, societyId);
+  });
+
+  return {
+    runId,
+    packetKey: packet.key,
+    precedentId: precedent._id,
+    ratioLabel: plan.label,
+    kind: plan.kind,
+    totalBefore: plan.totalBefore,
+    totalAfter: plan.totalAfter,
+    sharesDropped: plan.sharesDropped,
   };
 }
 

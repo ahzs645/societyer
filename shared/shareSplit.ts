@@ -86,3 +86,76 @@ export function validateRatio(
 function isPositiveInteger(value: number): boolean {
   return Number.isInteger(value) && value > 0;
 }
+
+// ---------------------------------------------------------------------------
+// Split planning over real ledger holdings
+// ---------------------------------------------------------------------------
+
+/** A current holding position in the class being split. */
+export interface HoldingPosition {
+  /** Ledger holder key (e.g. "roleHolder:<id>" or "name:<name>"). */
+  holderKey: string;
+  /** Display name for the resolution's before/after table. */
+  holderName: string;
+  /** Linked role-holder id, when the holder resolves to one. */
+  holderRoleHolderId?: string;
+  shares: number;
+}
+
+/** A holder's before/after position and the signed change implied by the ratio. */
+export interface SplitLine extends HoldingPosition {
+  before: number;
+  after: number;
+  /** after - before (positive for a subdivision, negative for a consolidation). */
+  delta: number;
+}
+
+export type SplitKind = "subdivision" | "consolidation" | "no change";
+
+export interface ShareSplitPlan {
+  ratio: SplitRatio;
+  label: string;
+  kind: SplitKind;
+  lines: SplitLine[];
+  totalBefore: number;
+  totalAfter: number;
+  /**
+   * Whole/fractional shares lost to per-holder Math.floor rounding (consolidations
+   * only) — the exact ratio-applied total minus the floored per-holder total.
+   */
+  sharesDropped: number;
+}
+
+function splitKind(ratio: SplitRatio): SplitKind {
+  if (ratio.numerator === ratio.denominator) return "no change";
+  return ratio.numerator > ratio.denominator ? "subdivision" : "consolidation";
+}
+
+/**
+ * Plan a class-wide split over the given holdings: compute each holder's
+ * before/after count (via {@link applyRatio}) and the signed delta, plus the
+ * shares dropped to per-holder rounding. Pure — the caller persists the result.
+ */
+export function planShareSplit(
+  holdings: HoldingPosition[],
+  ratio: SplitRatio,
+): ShareSplitPlan {
+  const lines: SplitLine[] = holdings.map((holding) => {
+    const after = applyRatio(holding.shares, ratio);
+    return { ...holding, before: holding.shares, after, delta: after - holding.shares };
+  });
+  const totalBefore = lines.reduce((sum, line) => sum + line.before, 0);
+  const totalAfter = lines.reduce((sum, line) => sum + line.after, 0);
+  const exactTotal = (totalBefore * ratio.numerator) / ratio.denominator;
+  // Round away binary-float noise; rounding loss is only meaningful for whole shares.
+  const sharesDropped = Math.round((exactTotal - totalAfter) * 1e6) / 1e6;
+  return {
+    ratio,
+    label: describeRatio(ratio),
+    kind: splitKind(ratio),
+    lines,
+    totalBefore,
+    totalAfter,
+    sharesDropped,
+  };
+}

@@ -1,6 +1,7 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { activeAsOf, type IntervalRow } from "../shared/registerHistory";
+import { enforcePersonReference } from "./lib/personReference";
 
 /**
  * Thin persistence/query wrapper for the `entitySigners` table.
@@ -74,9 +75,16 @@ export const upsert = mutation({
       corpSign,
       nowISO,
     } = args;
+    // Enforce the society's People Directory constraint (free unless restricted).
+    const resolvedDirectoryPersonId = await enforcePersonReference(
+      ctx,
+      societyId,
+      name,
+      directoryPersonId,
+    );
     const fields = {
       societyId,
-      directoryPersonId,
+      directoryPersonId: resolvedDirectoryPersonId,
       name,
       signOrder,
       validFromISO,

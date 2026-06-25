@@ -84,7 +84,7 @@ import {
   Hourglass,
   Construction,
   FolderKanban,
-  
+  ListChecks,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import type { ModuleKey } from "./modules";
@@ -208,6 +208,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/commitments": { icon: ClipboardList, group: "work", label: "Commitments" },
   "/app/documents": { icon: FolderOpen, group: "work", label: "Documents" },
   "/app/document-catalog": { icon: FileText, group: "work", label: "Document catalog" },
+  "/app/post-incorporation": { icon: ListChecks, group: "work", label: "Post-incorporation" },
   "/app/library": { icon: BookOpen, group: "work", label: "Library" },
   "/app/communications": { icon: Mail, group: "work", label: "Communications", module: "communications" },
   "/app/outbox": { icon: Inbox, group: "work", label: "Outbox" },

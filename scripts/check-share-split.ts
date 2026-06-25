@@ -3,6 +3,7 @@ import {
   applyRatio,
   applyRatioToHoldings,
   describeRatio,
+  planShareSplit,
   validateRatio,
   type SplitRatio,
 } from "../shared/shareSplit";
@@ -96,6 +97,42 @@ import {
 {
   assert.equal(validateRatio({ numerator: 1, denominator: 1 }).ok, false);
   assert.equal(validateRatio({ numerator: 1, denominator: 1 }, { allowOneToOne: true }).ok, true);
+}
+
+// planShareSplit: 2-for-1 subdivision doubles every holder; no shares dropped.
+{
+  const plan = planShareSplit(
+    [
+      { holderKey: "roleHolder:a", holderName: "Alice", holderRoleHolderId: "a", shares: 100 },
+      { holderKey: "name:Bob", holderName: "Bob", shares: 50 },
+    ],
+    { numerator: 2, denominator: 1 },
+  );
+  assert.equal(plan.kind, "subdivision");
+  assert.equal(plan.label, "2-for-1 subdivision");
+  assert.equal(plan.totalBefore, 150);
+  assert.equal(plan.totalAfter, 300);
+  assert.equal(plan.sharesDropped, 0);
+  assert.deepEqual(plan.lines[0], { holderKey: "roleHolder:a", holderName: "Alice", holderRoleHolderId: "a", shares: 100, before: 100, after: 200, delta: 100 });
+  assert.equal(plan.lines[1].delta, 50);
+}
+
+// planShareSplit: 1-for-3 consolidation floors per holder and surfaces dropped shares.
+{
+  const plan = planShareSplit(
+    [
+      { holderKey: "name:Alice", holderName: "Alice", shares: 101 }, // 101/3 -> 33 (0.66 dropped)
+      { holderKey: "name:Bob", holderName: "Bob", shares: 100 }, // 100/3 -> 33 (0.33 dropped)
+    ],
+    { numerator: 1, denominator: 3 },
+  );
+  assert.equal(plan.kind, "consolidation");
+  assert.equal(plan.totalBefore, 201);
+  assert.equal(plan.totalAfter, 66);
+  // exact total 201/3 = 67; floored total 66 -> 1 share dropped to rounding.
+  assert.equal(plan.sharesDropped, 1);
+  assert.equal(plan.lines[0].delta, -68);
+  assert.equal(plan.lines[1].delta, -67);
 }
 
 console.log("OK share-split");

@@ -91,4 +91,33 @@ assert.ok(
 const plain = Buffer.from(corporationPacketDocxBytes(packet)).toString("latin1");
 assert.ok(!plain.includes("hereby adopt"), "no execution block when none supplied");
 
+// --- French locale: sole + plural adoption clause + Daté le ------------------
+const frSole = buildExecutionBlock({
+  shortName: "Acme",
+  legislation: "Business Corporations Act",
+  noun: "director",
+  resolutionsPlural: false,
+  signers: [{ name: "Dana Wells", capacity: "Director" }],
+  dateLong: "25 juin 2026",
+  locale: "fr",
+});
+assert.equal(
+  frSole.adoptionClause,
+  "Le soussigné, étant le seul administrateur de Acme, adopte par les présentes la résolution qui précède conformément aux dispositions de la Business Corporations Act.",
+);
+assert.equal(frSole.lines[0], "Daté le: 25 juin 2026");
+
+const frBoard = buildExecutionBlock({
+  shortName: "Acme",
+  legislation: "Business Corporations Act",
+  noun: "director",
+  resolutionsPlural: true,
+  signers: [{ name: "A" }, { name: "B" }],
+  locale: "fr",
+});
+assert.equal(
+  frBoard.adoptionClause,
+  "Les soussignés, étant tous les administrateurs de Acme, adoptent par les présentes les résolutions qui précèdent conformément aux dispositions de la Business Corporations Act.",
+);
+
 console.log("OK execution-block");

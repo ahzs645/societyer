@@ -110,6 +110,25 @@ expectEqual("current holdings", deriveCurrentHoldings(transfers), [
 const materialized = materializeRightsHoldings(transfers.map((transfer, index) => ({ ...transfer, _id: `transfer-${index}` })));
 expectEqual("materialized holding source links", materialized[0].sourceExternalIds.includes("societyer:rightsholding-transfer:transfer-0"), true);
 
+// Subdivision / consolidation are staged as signed single-sided rows (the new
+// count minus the old) and reconcile through the ledger like adjustments.
+const splitTransfers: RightsholdingTransferRecord[] = [
+  { ...baseTransfer, transferType: "issuance", transferDate: "2026-02-01", destinationRoleHolderId: "holder-alice", quantity: 100 },
+  // 2-for-1 subdivision: Alice gains 100 (100 -> 200).
+  { ...baseTransfer, transferType: "subdivision", transferDate: "2026-02-02", destinationRoleHolderId: "holder-alice", quantity: 100 },
+  // 1-for-2 consolidation: Alice loses 100 (200 -> 100).
+  { ...baseTransfer, transferType: "consolidation", transferDate: "2026-02-03", sourceRoleHolderId: "holder-alice", quantity: 100 },
+];
+validateLedger(splitTransfers);
+expectEqual("holdings after subdivision then consolidation", deriveCurrentHoldings(splitTransfers), [
+  { rightsClassId: "rights-class-a", holderKey: "roleHolder:holder-alice", quantity: 100 },
+]);
+expectEqual(
+  "subdivision-only holding doubles",
+  deriveCurrentHoldings(splitTransfers.slice(0, 2)),
+  [{ rightsClassId: "rights-class-a", holderKey: "roleHolder:holder-alice", quantity: 200 }],
+);
+
 expectEqual(
   "alice holding quantity",
   holdingQuantity(transfers, "rights-class-a", "roleHolder:holder-alice"),

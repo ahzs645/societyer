@@ -2,11 +2,16 @@ import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
   computeDividend,
+  reconcileDividend,
   validateDividend,
   totalDeclaredByClass,
   totalDeclaredByCurrency,
   type DividendDeclaration,
 } from "../shared/dividends";
+
+function centsToAmount(cents: number): string {
+  return (cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 export const list = query({
   args: { societyId: v.id("societies") },
@@ -28,6 +33,9 @@ export const create = mutation({
     perShareCents: v.number(),
     sharesOutstanding: v.number(),
     currency: v.string(),
+    // An independently keyed/imported total to cross-check against
+    // perShareCents * sharesOutstanding (YCN "Record - Dividends" reconciliation).
+    expectedTotalCents: v.optional(v.number()),
     notes: v.optional(v.string()),
     nowISO: v.string(),
   },
@@ -48,6 +56,16 @@ export const create = mutation({
 
     const { totalCents } = computeDividend(declaration);
 
+    // Surface a reconciliation warning (never block) when a keyed total disagrees.
+    let notes = args.notes;
+    if (typeof args.expectedTotalCents === "number") {
+      const recon = reconcileDividend({ ...declaration, totalCents: args.expectedTotalCents });
+      if (!recon.reconciled) {
+        const warning = `⚠ Dividend total mismatch: entered ${args.currency} ${centsToAmount(recon.enteredCents)} vs computed ${args.currency} ${centsToAmount(recon.expectedCents)} (per-share × shares). Verify the rate, share count, or total.`;
+        notes = [warning, notes].filter(Boolean).join("\n\n");
+      }
+    }
+
     return ctx.db.insert("dividends", {
       societyId: args.societyId,
       declaredOn: args.declaredOn,
@@ -56,7 +74,7 @@ export const create = mutation({
       sharesOutstanding: args.sharesOutstanding,
       currency: args.currency,
       totalCents,
-      notes: args.notes,
+      notes,
       createdAtISO: args.nowISO,
     });
   },

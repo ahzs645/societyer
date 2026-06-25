@@ -61,6 +61,13 @@ function titleForRecord(recordKind: string, payload: any) {
   if (recordKind === "roleHolder") return cleanText(payload?.fullName) || cleanText(payload?.name) || [payload?.firstName, payload?.lastName].map(cleanText).filter(Boolean).join(" ") || "Role holder";
   if (recordKind === "rightsClass") return cleanText(payload?.className) || cleanText(payload?.rightsClassName) || cleanText(payload?.name) || "Rights class";
   if (recordKind === "rightsholdingTransfer") return cleanText(payload?.title) || cleanText(payload?.transferType) || "Rightsholding transfer";
+  if (recordKind === "serviceProvider") return cleanText(payload?.firmName) || cleanText(payload?.function) || "Service provider";
+  if (recordKind === "dividend") return [cleanText(payload?.shareClass), cleanText(payload?.declaredOn)].filter(Boolean).join(" ") || "Dividend";
+  if (recordKind === "nameHistory") return cleanText(payload?.name) || cleanText(payload?.corpName) || "Name history";
+  if (recordKind === "constatingEvent") return [cleanText(payload?.action), cleanText(payload?.jurisdiction)].filter(Boolean).join(" ") || "Constating event";
+  if (recordKind === "significantIndividualStep") return cleanText(payload?.individualName) || cleanText(payload?.name) || "Diligence step";
+  if (recordKind === "asset") return cleanText(payload?.name) || cleanText(payload?.assetTag) || "Asset";
+  if (recordKind === "shareCertificate") return cleanText(payload?.certificateNumber) || cleanText(payload?.holderName) || "Share certificate";
   if (recordKind === "legalTemplateDataField") return cleanText(payload?.name) || cleanText(payload?.fieldName) || "Template data field";
   if (recordKind === "legalTemplate") return cleanText(payload?.name) || cleanText(payload?.templateName) || "Legal template";
   if (recordKind === "legalPrecedent") return cleanText(payload?.packageName) || cleanText(payload?.name) || "Legal precedent";
