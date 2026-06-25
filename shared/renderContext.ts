@@ -7,6 +7,7 @@
  */
 
 import { actorGrammar, type Actor, type ActorGrammar } from "./nlg";
+import { formatLongDate, type DocLocale } from "./locale";
 import {
   organizationKind,
   organizationLabel,
@@ -55,22 +56,9 @@ export interface BuildRenderContextInput {
   officers?: Actor[];
   asOf: string /* ISO */;
   registrationNumber?: string;
+  /** Document locale for date/prose rendering (default "en"). */
+  locale?: DocLocale;
 }
-
-const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
 
 function buildGroup(list: Actor[]): GroupContext {
   const grammar = actorGrammar(list);
@@ -102,26 +90,6 @@ function resolveLegislation(kind: string, actFormedUnder?: string | null): strin
   }
 }
 
-/**
- * Format an ISO YYYY-MM-DD date as a long human date (e.g. "June 25, 2026").
- * Parses the date parts directly to avoid timezone drift and any date library
- * dependency in shared/. Non-parseable input passes through unchanged.
- */
-function formatLongDate(iso: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
-  if (!match) {
-    return iso ?? "";
-  }
-  const year = Number(match[1]);
-  const monthIndex = Number(match[2]) - 1;
-  const day = Number(match[3]);
-  const monthName = MONTH_NAMES[monthIndex];
-  if (!monthName) {
-    return iso;
-  }
-  return `${monthName} ${day}, ${year}`;
-}
-
 export function buildRenderContext(input: BuildRenderContextInput): RenderContext {
   const { org } = input;
   const kind = organizationKind(org);
@@ -143,7 +111,7 @@ export function buildRenderContext(input: BuildRenderContextInput): RenderContex
     officers: buildGroup(input.officers ?? []),
     date: {
       iso: input.asOf,
-      long: formatLongDate(input.asOf),
+      long: formatLongDate(input.asOf, input.locale ?? "en"),
     },
   };
 }

@@ -18,6 +18,7 @@
  */
 
 import { actorGrammar, type Actor } from "./nlg";
+import type { DocLocale } from "./locale";
 
 export interface SignerLine {
   name: string;
@@ -41,6 +42,8 @@ export interface ExecutionBlockInput {
   signers: SignerLine[];
   /** Long-form date for the "Dated:" line (e.g. "June 25, 2026"). Optional. */
   dateLong?: string;
+  /** Document locale (default "en"); "fr" renders the French adoption clause. */
+  locale?: DocLocale;
 }
 
 export interface ExecutionBlockResult {
@@ -96,10 +99,14 @@ export function resolvingBodyFor(requiredSigners: readonly string[]): ResolvingB
  * block per signatory (a blank rule + printed name, or a corporate "By:" block).
  * Shared by the resolution execution block and the subscription-agreement annex.
  */
-export function signatureLines(signers: readonly SignerLine[], dateLong?: string): string[] {
+export function signatureLines(
+  signers: readonly SignerLine[],
+  dateLong?: string,
+  locale: DocLocale = "en",
+): string[] {
   const lines: string[] = [];
   if (dateLong) {
-    lines.push(`Dated: ${dateLong}`);
+    lines.push(`${locale === "fr" ? "Daté le" : "Dated"}: ${dateLong}`);
   }
   for (const signer of signers) {
     lines.push(""); // spacer between signatories
@@ -116,17 +123,41 @@ export function signatureLines(signers: readonly SignerLine[], dateLong?: string
   return lines;
 }
 
+/** English resolving-body noun → French {singular, plural}. */
+const NOUN_FR: Record<string, { one: string; many: string }> = {
+  director: { one: "administrateur", many: "administrateurs" },
+  shareholder: { one: "actionnaire", many: "actionnaires" },
+  "voting shareholder": { one: "actionnaire votant", many: "actionnaires votants" },
+  member: { one: "membre", many: "membres" },
+  officer: { one: "dirigeant", many: "dirigeants" },
+};
+
+function frenchAdoptionClause(input: ExecutionBlockInput, count: number): string {
+  const sole = count === 1;
+  const noun = NOUN_FR[input.noun] ?? { one: input.noun, many: `${input.noun}s` };
+  const subject = sole
+    ? `Le soussigné, étant le seul ${noun.one}`
+    : `Les soussignés, étant tous les ${noun.many}`;
+  const verb = sole ? "adopte" : "adoptent";
+  const resolution = input.resolutionsPlural
+    ? "les résolutions qui précèdent"
+    : "la résolution qui précède";
+  return `${subject} de ${input.shortName}, ${verb} par les présentes ${resolution} conformément aux dispositions de la ${input.legislation}.`;
+}
+
 export function buildExecutionBlock(input: ExecutionBlockInput): ExecutionBlockResult {
+  const locale = input.locale ?? "en";
   const actors: Actor[] = input.signers.map((s) => ({
     name: s.name,
     isOrganization: Boolean(s.corpSign),
   }));
   const grammar = actorGrammar(actors);
-  const nounPhrase = `${input.noun}${grammar.plural}`;
   const adoptionClause =
-    `The undersigned, being ${grammar.allTheSole} ${nounPhrase} of ${input.shortName}, ` +
-    `hereby adopt${grammar.verbS} the foregoing resolution${input.resolutionsPlural ? "s" : ""} ` +
-    `pursuant to the provisions of the ${input.legislation}.`;
+    locale === "fr"
+      ? frenchAdoptionClause(input, grammar.count)
+      : `The undersigned, being ${grammar.allTheSole} ${input.noun}${grammar.plural} of ${input.shortName}, ` +
+        `hereby adopt${grammar.verbS} the foregoing resolution${input.resolutionsPlural ? "s" : ""} ` +
+        `pursuant to the provisions of the ${input.legislation}.`;
 
-  return { adoptionClause, lines: signatureLines(input.signers, input.dateLong) };
+  return { adoptionClause, lines: signatureLines(input.signers, input.dateLong, locale) };
 }

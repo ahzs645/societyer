@@ -29,6 +29,7 @@ import { materializeRightsHoldings, validateLedger } from "../shared/equityLedge
 import { planShareSplit, validateRatio, type HoldingPosition, type SplitRatio } from "../shared/shareSplit";
 import { buildSocietyRenderContext } from "../shared/societyRenderContext";
 import { normalizeGender } from "../shared/nlg";
+import { resolveLocale } from "../shared/locale";
 import { enforcePersonReference } from "./lib/personReference";
 import { planRoleHolderRevision } from "../shared/roleHolderHistory";
 import {
@@ -1995,6 +1996,7 @@ async function createPacketRunArtifacts(ctx: any, args: {
       resolutionsPlural,
       signers,
       dateLong: renderCtx.date.long,
+      locale: resolveLocale(society?.docPrepLanguage),
     });
     // Packet-specific operative data so the resolution body renders real clauses
     // (YCN Doc - Annual / Doc - Dividends), not a generic blurb.

@@ -37,6 +37,7 @@ export function ComplianceSettingsPage() {
   const [waive, setWaive] = useState<boolean>(Boolean(society?.waivePrepFinancials));
   const [restrictPeople, setRestrictPeople] = useState<boolean>(Boolean(society?.restrictPeoplePicker));
   const [docIdHeader, setDocIdHeader] = useState<boolean>(Boolean(society?.includeDocumentIdHeader));
+  const [docLanguage, setDocLanguage] = useState<string>(society?.docPrepLanguage ?? "");
   const [contacts, setContacts] = useState({
     shortName: society?.shortName ?? "",
     primaryContactName: society?.primaryContactName ?? "",
@@ -76,6 +77,7 @@ export function ComplianceSettingsPage() {
       responsibleLawyer: contacts.responsibleLawyer || undefined,
       restrictPeoplePicker: restrictPeople,
       includeDocumentIdHeader: docIdHeader,
+      docPrepLanguage: docLanguage || undefined,
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -137,6 +139,12 @@ export function ComplianceSettingsPage() {
           <input type="checkbox" checked={docIdHeader} onChange={(e) => setDocIdHeader(e.target.checked)} />
           {" "}Stamp a document ID at the top of generated documents
         </label>
+        <Field label="Document language">
+          <select className="input" value={docLanguage} onChange={(e) => setDocLanguage(e.target.value)}>
+            <option value="">English (default)</option>
+            <option value="French">French — résolutions in French (execution block + dates)</option>
+          </select>
+        </Field>
       </div>
 
       <div className="card" style={{ maxWidth: 520, marginBottom: 16 }}>

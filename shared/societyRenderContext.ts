@@ -6,6 +6,7 @@
 
 import { buildRenderContext, type RenderContext, type RenderContextOrg } from "./renderContext";
 import { normalizeGender, parsePronouns, type Actor } from "./nlg";
+import { resolveLocale } from "./locale";
 
 /** Minimal society shape this needs (a Convex societies row satisfies it). */
 export interface SocietyLike {
@@ -16,6 +17,8 @@ export interface SocietyLike {
   actFormedUnder?: string;
   jurisdictionCode?: string;
   incorporationNumber?: string;
+  /** YCN DOC_PREP_LANGUAGE — drives document locale (date/execution prose). */
+  docPrepLanguage?: string;
 }
 
 /** Minimal role-holder shape (a Convex roleHolders row satisfies it). */
@@ -61,5 +64,6 @@ export function buildSocietyRenderContext(
     members: actorsOfType(roleHolders, "member"),
     officers: actorsOfType(roleHolders, "officer"),
     asOf: asOfISO,
+    locale: resolveLocale(society.docPrepLanguage),
   });
 }

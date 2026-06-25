@@ -83,6 +83,7 @@
     "test:person-reference": "tsx scripts/check-person-reference.ts",
     "test:template-assembly": "tsx scripts/check-template-assembly.ts",
     "test:render-context": "tsx scripts/check-render-context.ts",
+    "test:locale": "tsx scripts/check-locale.ts",
     "test:document-binding": "tsx scripts/check-document-binding.ts",
     "test:register-history": "tsx scripts/check-register-history.ts",
     "test:significant-individuals": "tsx scripts/check-significant-individuals.ts",

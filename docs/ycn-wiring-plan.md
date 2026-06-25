@@ -38,9 +38,27 @@ bundle parser has a generic fallback and the apply step is a deferred no-op):
 | CORP_ASSETS | asset → assets |
 | SHARE_TRANS (SHR_CERT) | shareCertificate → shareCertificates |
 
-Still deferred (documented, not data records): `CORP_SETTINGS` (settings, applied via
-society:updateComplianceSettings, not the staged pipeline), the global
-`PEOPLE_DIRECTORY` (cross-tenant), and `Retain_List` (a UI picklist).
+A later pass closed the last two: `CORP_SETTINGS` (extracted → applied via
+society:updateComplianceSettings by the runner) and the global `PEOPLE_DIRECTORY`
+(extracted → peopleDirectory:upsert). Only `Retain_List` (a UI picklist) is left,
+by design. **Every `DB_GLOB_*` table in the sample `.accdb` now imports.**
+
+## Excel follow-ons (document-generation depth)
+
+The `.xlsm` review found all 10 document *types*, all settings, and the NLG layer
+already ported. The remaining gaps were generation *depth*, now closed:
+
+- **Operative data in 6 packets** — appoint-officer/director, director-removal,
+  share-transfer, share-certificate, change-of-offices, asset-transfer now bind
+  their real register tables (shared/packetOperativeData.ts + buildPacketDataContext),
+  with graceful English-prose fallback when empty.
+- **Dividend reconciliation guard** — flags entered total ≠ per-share × shares.
+- **Polish** — deterministic `short-name-doc-type-DATE.docx` naming, an opt-in
+  document-ID header (FMT_Page_DOC_ID), and thousands separators (Num_Comma).
+- **Bilingual (partial, honest)** — `docPrepLanguage` now drives a French
+  execution/signature block (correct sole/plural agreement) and French long dates
+  on generated resolutions (shared/locale.ts). Clause bodies remain English
+  (fallback) pending proper legal-French authoring — no fabricated legal French.
 
 ## Dormant modules (tested, zero production consumers)
 
