@@ -172,3 +172,27 @@ letter, Excel/PDF pagination + font-metric text-wrap, trial-version lock,
 `shared/societyDocumentPackets.ts`, `convex/society.ts` (CLONE_CHILD_TABLES
 L483–494, insert L505–528), `convex/entitySigners.ts`, `shared/equityLedger.ts`,
 `shared/dividends.ts`, `convex/legalOperations.ts`.
+
+---
+
+# CLOSURE STATUS — Top 5 worked through (see commits)
+
+All five highest-value items are implemented, each its own commit, every gate
+green (`convex:typecheck` + app `tsc` + `static-parity` + corp regressions).
+
+| # | Item | How it was closed | Test |
+|---|---|---|---|
+| 1 | Execution/signature block | `shared/executionBlock.ts` (adoption clause + signature page, corporate "By:"); `createPacketRunArtifacts` builds it from `entitySigners` (as-of) or the resolving body's role holders and attaches it to the render context; the DOCX renderer prints it (opt-in, back-compat). Finally consumes the dormant `entitySigners` table. | `check-execution-block` |
+| 2 | Clone completeness + ID remapping | `cloneSociety` now copies the equity ledger / dividends / assets / asset-events / SI-steps (6 added tables) and does a two-pass old→new Id remap so cloned rows reference cloned rows; cross-tenant Ids pass through. Mirrored in the static client. | `check-clone-society` |
+| 3 | Resolution-body templating (Annual + Dividend) | `shared/annualResolution.ts` + `shared/dividendResolution.ts` (pure); the `annual-resolutions` packet renders the six real consent clauses (FS approve/waive, fix FYE, auditor appoint/waive, ratify acts, director slate, deemed-AGM), the `dividend-declaration` packet a multi-class currency table; data merged into the render context per packet key. | `check-annual-resolution`, `check-dividend-resolution` |
+| 4 | Voting-power + eligibility engine | `shared/votingPower.ts` (Σ shares × votes-per-share, voting/non-voting partition, eligible-signatory gate); `rightsClasses.votesPerShare` field; `legalOperations.votingPower` query + static mirror + a Voting-power section on the rights-ledger page. | `check-voting-power` |
+| 5 | Subscription Agreement annex | `shared/subscriptionAgreement.ts` (per-subscriber "Subscription for Shares") + generic `documentDocxBytes` export; `createPacketRunArtifacts` emits one annex per subscriber of the latest issuance for the `issue-shares` packet, linked into the minute book + run. | `check-subscription-agreement` |
+
+## Still open (next tier, from the table above)
+
+Director appt/removal as one voting-shareholder instrument; change-of-office
+from→to clause; share-split tie to the special resolution + cert handling;
+share-certificate cancellation/seal clause; dividend reconciliation (±1%);
+REG_FILING registration-event import; bilingual EN/FR bodies; thousands-separator
+formatting; OFFICER structured booleans; ISS_TYP split vocabulary; per-contact
+business-address dates. (All medium/low value.)
