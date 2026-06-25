@@ -3,10 +3,15 @@ import assert from "node:assert/strict";
 import { renderTemplate } from "../shared/templateAssembly";
 import { CORPORATION_DOCUMENT_PACKETS } from "../shared/corporationDocumentPackets";
 import {
+  corporationPacketDocumentId,
+  corporationPacketDocxFileName,
+} from "../shared/corporationPacketDocx";
+import {
   assetTransferView,
   directorAppointmentView,
   directorRemovalView,
   formatAddress,
+  formatCount,
   officeChangeView,
   officerAppointmentView,
   shareCertificateView,
@@ -52,7 +57,7 @@ import {
   );
   assert.equal(v.transfer.hasTransfers, true);
   assert.equal(v.transfer.transfers.length, 1);
-  assert.deepEqual(v.transfer.transfers[0], { date: "2024-02-02", className: "Common", from: "Alice", to: "Bob", quantity: 10 });
+  assert.deepEqual(v.transfer.transfers[0], { date: "2024-02-02", className: "Common", from: "Alice", to: "Bob", quantity: 10, quantityLabel: "10" });
 }
 
 {
@@ -127,5 +132,28 @@ function renderPacket(key: string, ctx: Record<string, unknown>): string {
   assert.ok(out.includes("transferor to the transferee"), `transfer fallback: ${out}`);
   assert.ok(!out.includes("{#"), "no leftover block markup");
 }
+
+// --- thousands separators + deterministic file naming / doc id ---------------
+
+assert.equal(formatCount(1234567), (1234567).toLocaleString());
+assert.equal(formatCount(undefined), "");
+
+const splitPacket = CORPORATION_DOCUMENT_PACKETS.find((p) => p.key === "share-split")!;
+assert.equal(
+  corporationPacketDocxFileName(splitPacket, { shortName: "Acme Inc.", effectiveDate: "2026-06-25" }),
+  "acme-inc-share-split-2026-06-25.docx",
+);
+assert.equal(
+  corporationPacketDocxFileName(splitPacket, { shortName: "Acme Inc." }),
+  "acme-inc-share-split-NODATE.docx",
+  "missing date -> NODATE",
+);
+// No shortName falls back to the legacy packageName slug.
+assert.ok(corporationPacketDocxFileName(splitPacket).endsWith(".docx"));
+assert.ok(!corporationPacketDocxFileName(splitPacket).startsWith("acme"));
+assert.equal(
+  corporationPacketDocumentId(splitPacket, { shortName: "Acme Inc.", effectiveDate: "2026-06-25" }),
+  "acme-inc-share-split-2026-06-25",
+);
 
 console.log("OK packet-operative-data");

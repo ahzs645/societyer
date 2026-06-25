@@ -276,7 +276,7 @@ export const CORPORATION_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
         heading: "Share Transfer",
         body: [
           "Being {#if dir.isSole}the sole director{/if}{#if dir.isMultiple}all the directors{/if} of {org.shortName}, the director{dir.plural} approve{dir.verbS} the following share transfer{#if transfer.hasTransfers}s{/if}.",
-          "{#if transfer.hasTransfers}{#each transfer.transfers}{.quantity} {.className} share(s) from {.from} to {.to}{#if .date} on {.date}{/if}. {/each}{#else}The stated number of shares are transferred from the transferor to the transferee.{/if}",
+          "{#if transfer.hasTransfers}{#each transfer.transfers}{.quantityLabel} {.className} share(s) from {.from} to {.to}{#if .date} on {.date}{/if}. {/each}{#else}The stated number of shares are transferred from the transferor to the transferee.{/if}",
           "The certificate previously issued to the transferor is cancelled and a new certificate is issued to the transferee for the transferred shares.",
           "The securities register and transfer register of {org.shortName} are updated to record the transfer effective {date.long}.",
         ],
@@ -304,7 +304,7 @@ export const CORPORATION_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
         heading: "Certificate Issuance",
         body: [
           "Being {#if dir.isSole}the sole director{/if}{#if dir.isMultiple}all the directors{/if} of {org.shortName}, the director{dir.plural} authorize{dir.verbS} the issuance of share certificate(s) evidencing the issued shares held by the shareholder(s).",
-          "{#if certificate.hasCertificates}Certificates of record:{#each certificate.certificates} No. {.number} — {.shares} {.className} share(s) to {.holder}{#if .issuedOn} issued {.issuedOn}{/if};{/each}{/if}",
+          "{#if certificate.hasCertificates}Certificates of record:{#each certificate.certificates} No. {.number} — {.sharesLabel} {.className} share(s) to {.holder}{#if .issuedOn} issued {.issuedOn}{/if};{/each}{/if}",
           "The certificate is issued under the stated certificate number and recorded against the securities register of {org.shortName} effective {date.long}.",
         ],
       },

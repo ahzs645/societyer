@@ -20,8 +20,41 @@ export function corporationPacketDocxDataUrl(packet: CorporationDocumentPacket, 
   return `data:${DOCX_MIME_TYPE};base64,${base64FromBytes(bytes)}`;
 }
 
-export function corporationPacketDocxFileName(packet: CorporationDocumentPacket) {
-  return `${slugifyForFile(packet.packageName)}.docx`;
+export interface PacketFileNameOptions {
+  /** Entity short name to prefix (YCN ENT_ID); omitted → packageName slug only. */
+  shortName?: string | null;
+  /** Effective date (any parseable date); rendered YYYY-MM-DD, else "NODATE". */
+  effectiveDate?: string | null;
+}
+
+/**
+ * Deterministic file name. With a shortName, mirrors YCN's
+ * `ENT-DOCTYPE-YYYY-MM-DD.docx` (NODATE fallback); without, the legacy
+ * packageName slug.
+ */
+export function corporationPacketDocxFileName(
+  packet: CorporationDocumentPacket,
+  options: PacketFileNameOptions = {},
+) {
+  if (!options.shortName) {
+    return `${slugifyForFile(packet.packageName)}.docx`;
+  }
+  const date = packetFileDatePart(options.effectiveDate);
+  return `${slugifyForFile(options.shortName)}-${slugifyForFile(packet.key)}-${date}.docx`;
+}
+
+/** The deterministic document id used for the optional doc-ID header line. */
+export function corporationPacketDocumentId(
+  packet: CorporationDocumentPacket,
+  options: PacketFileNameOptions = {},
+) {
+  const base = options.shortName ? slugifyForFile(options.shortName) : slugifyForFile(packet.packageName);
+  return `${base}-${slugifyForFile(packet.key)}-${packetFileDatePart(options.effectiveDate)}`;
+}
+
+function packetFileDatePart(effectiveDate?: string | null): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(effectiveDate ?? "").trim());
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : "NODATE";
 }
 
 export function corporationPacketDocxMimeType() {
@@ -47,7 +80,11 @@ function corporationPacketDocxBlocks(packet: CorporationDocumentPacket, context?
   // and attaches an `execution` block to the context (shared/executionBlock.ts).
   // Token-free / execution-free contexts stay byte-identical to before.
   const execution = (context as { execution?: ExecutionBlockResult } | undefined)?.execution;
+  // Optional YCN FMT_Page_DOC_ID: stamp a document id at the very top when the
+  // caller supplies one (driven by the per-society includeDocumentIdHeader flag).
+  const documentId = (context as { documentId?: string } | undefined)?.documentId;
   return [
+    ...(documentId ? [{ kind: "docId", text: `Document ID: ${documentId}` }] : []),
     { kind: "title", text: packet.packageName },
     { kind: "paragraph", text: renderText(packet.summary, context) },
     { kind: "heading", text: "Deliverable" },

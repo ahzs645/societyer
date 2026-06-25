@@ -12,6 +12,11 @@
 
 const MAX_ROWS = 25;
 
+/** Format an integer count with thousands separators (YCN Num_Comma). */
+export function formatCount(n: number | undefined): string {
+  return typeof n === "number" ? n.toLocaleString() : "";
+}
+
 export interface NamedRow {
   fullName?: string;
   roleType?: string;
@@ -76,6 +81,7 @@ export function shareTransferView(
       from: String(t.sourceHolderName ?? ""),
       to: String(t.destinationHolderName ?? ""),
       quantity: Number(t.quantity ?? 0),
+      quantityLabel: formatCount(Number(t.quantity ?? 0)),
     }));
   return { transfer: { hasTransfers: rows.length > 0, transfers: rows } };
 }
@@ -99,6 +105,7 @@ export function shareCertificateView(certs: CertificateRow[]) {
       holder: String(c.holderName ?? ""),
       className: String(c.shareClass ?? ""),
       shares: Number(c.shares ?? 0),
+      sharesLabel: formatCount(Number(c.shares ?? 0)),
       issuedOn: String(c.issuedOn ?? ""),
     }));
   return { certificate: { hasCertificates: rows.length > 0, certificates: rows } };

@@ -113,6 +113,8 @@ export default defineSchema({
     docPrepLanguage: v.optional(v.string()),
     responsibleLawyer: v.optional(v.string()),
     restrictPeoplePicker: v.optional(v.boolean()),
+    // YCN FMT_Page_DOC_ID: stamp a deterministic document id atop generated docs.
+    includeDocumentIdHeader: v.optional(v.boolean()),
     updatedAt: v.number(),
   }).index("by_public_slug", ["publicSlug"]),
 

@@ -36,6 +36,7 @@ export function ComplianceSettingsPage() {
   const [agmDay, setAgmDay] = useState<number | "">(society?.agmDay ?? "");
   const [waive, setWaive] = useState<boolean>(Boolean(society?.waivePrepFinancials));
   const [restrictPeople, setRestrictPeople] = useState<boolean>(Boolean(society?.restrictPeoplePicker));
+  const [docIdHeader, setDocIdHeader] = useState<boolean>(Boolean(society?.includeDocumentIdHeader));
   const [contacts, setContacts] = useState({
     shortName: society?.shortName ?? "",
     primaryContactName: society?.primaryContactName ?? "",
@@ -74,6 +75,7 @@ export function ComplianceSettingsPage() {
       sealLocation: contacts.sealLocation || undefined,
       responsibleLawyer: contacts.responsibleLawyer || undefined,
       restrictPeoplePicker: restrictPeople,
+      includeDocumentIdHeader: docIdHeader,
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -130,6 +132,10 @@ export function ComplianceSettingsPage() {
           <input type="checkbox" checked={restrictPeople} onChange={(e) => setRestrictPeople(e.target.checked)} />
           {" "}Restrict people to the directory (directors, officers, and signers must
           resolve to a People Directory record — no free-text entry)
+        </label>
+        <label className="checkbox">
+          <input type="checkbox" checked={docIdHeader} onChange={(e) => setDocIdHeader(e.target.checked)} />
+          {" "}Stamp a document ID at the top of generated documents
         </label>
       </div>
 

@@ -16,6 +16,7 @@ import {
   corporationPacketTemplateMarker,
 } from "../shared/corporationDocumentPackets";
 import {
+  corporationPacketDocumentId,
   corporationPacketDocxDataUrl,
   corporationPacketDocxFileName,
   corporationPacketDocxMimeType,
@@ -2006,8 +2007,13 @@ async function createPacketRunArtifacts(ctx: any, args: {
     const dataContext = await buildPacketDataContext(ctx, args.packet, args.societyId, society, renderCtx, runData);
     context = { ...renderCtx, execution, ...dataContext };
   }
+  // Deterministic file name (YCN ENT-DOCTYPE-DATE) + optional doc-ID header.
+  const fileOpts = { shortName: society?.shortName, effectiveDate: args.effectiveDate ?? now };
+  if (society?.includeDocumentIdHeader) {
+    context = { ...(context ?? {}), documentId: corporationPacketDocumentId(args.packet, fileOpts) };
+  }
   const docxDataUrl = corporationPacketDocxDataUrl(args.packet, context);
-  const docxFileName = corporationPacketDocxFileName(args.packet);
+  const docxFileName = corporationPacketDocxFileName(args.packet, fileOpts);
   const docxMimeType = corporationPacketDocxMimeType();
   const draftDocumentId = await ctx.db.insert("documents", {
     societyId: args.societyId,
