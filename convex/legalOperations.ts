@@ -19,7 +19,9 @@ import {
   corporationPacketDocxDataUrl,
   corporationPacketDocxFileName,
   corporationPacketDocxMimeType,
+  documentDocxDataUrl,
 } from "../shared/corporationPacketDocx";
+import { buildSubscriptionAgreementBlocks } from "../shared/subscriptionAgreement";
 import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../shared/societyDocumentPackets";
 import { isCorporation } from "../shared/organizationDomain";
 import { materializeRightsHoldings, validateLedger } from "../shared/equityLedger";
@@ -1888,13 +1890,27 @@ async function createPacketRunArtifacts(ctx: any, args: {
     notes: args.notes,
     createdAtISO: now,
   });
+  // Per-subscriber "Subscription for Shares" annexes for the allotment packet
+  // (YCN Doc - Share Allotment): one companion document per subscriber of the
+  // latest issuance. Logic in the tested shared/subscriptionAgreement.ts.
+  const companionDocumentIds =
+    args.packet.key === "issue-shares"
+      ? await createSubscriptionAnnexes(ctx, {
+          societyId: args.societyId,
+          society,
+          renderCtx,
+          effectiveDate: args.effectiveDate ?? now,
+          now,
+          sourceExternalIds,
+        })
+      : [];
   const minuteBookItemId = await ctx.db.insert("minuteBookItems", {
     societyId: args.societyId,
     title: args.packet.packageName,
     recordType: args.packet.requiresAnnualMaintenanceRecord ? "filing" : "package",
     effectiveDate: args.effectiveDate,
     status: "Draft",
-    documentIds: [draftDocumentId],
+    documentIds: [draftDocumentId, ...companionDocumentIds],
     filingId: args.filingId,
     signatureIds: [],
     sourceEvidenceIds: [sourceEvidenceId],
@@ -1912,6 +1928,7 @@ async function createPacketRunArtifacts(ctx: any, args: {
       `societyer:generated-legal-document:${generatedDocumentId}`,
       `societyer:minute-book-item:${minuteBookItemId}`,
       `societyer:source-evidence:${sourceEvidenceId}`,
+      ...companionDocumentIds.map((id: string) => `societyer:subscription-annex:${id}`),
       ...signerIds.map((signerId: string) => `societyer:legal-signer:${signerId}`),
     ]),
     updatedAtISO: now,
@@ -1923,7 +1940,97 @@ async function createPacketRunArtifacts(ctx: any, args: {
       updatedAtISO: now,
     });
   }
-  return { draftDocumentId, draftDocumentVersionId, generatedDocumentId, signerIds, minuteBookItemId, sourceEvidenceId };
+  return { draftDocumentId, draftDocumentVersionId, generatedDocumentId, signerIds, minuteBookItemId, sourceEvidenceId, companionDocumentIds };
+}
+
+/**
+ * Create one "Subscription for Shares" document per subscriber of the latest
+ * posted issuance, returning the created document ids. Each is a standalone DOCX
+ * (shared/subscriptionAgreement.ts) stored as a documents row + version.
+ */
+async function createSubscriptionAnnexes(
+  ctx: any,
+  args: {
+    societyId: any;
+    society: any;
+    renderCtx: { org: { name: string; shortName: string; legislation: string }; date: { long: string } } | undefined;
+    effectiveDate: string;
+    now: string;
+    sourceExternalIds: string[];
+  },
+): Promise<string[]> {
+  if (!args.renderCtx) return [];
+  const [transfers, classes, roleHolders] = await Promise.all([
+    ctx.db.query("rightsholdingTransfers").withIndex("by_society", (q: any) => q.eq("societyId", args.societyId)).collect(),
+    ctx.db.query("rightsClasses").withIndex("by_society", (q: any) => q.eq("societyId", args.societyId)).collect(),
+    ctx.db.query("roleHolders").withIndex("by_society", (q: any) => q.eq("societyId", args.societyId)).collect(),
+  ]);
+  const issuances = transfers.filter(
+    (t: any) => String(t.transferType) === "issuance" && String(t.status) === "posted",
+  );
+  if (issuances.length === 0) return [];
+  // Use the latest issuance date's subscribers (one declaration of allotment).
+  let latest = "";
+  for (const t of issuances) {
+    const date = String(t.transferDate ?? t.createdAtISO ?? "");
+    if (date > latest) latest = date;
+  }
+  const subscribers = issuances.filter((t: any) => String(t.transferDate ?? t.createdAtISO ?? "") === latest);
+  const classById = new Map<string, any>(classes.map((c: any) => [String(c._id), c]));
+  const roleById = new Map<string, any>(roleHolders.map((r: any) => [String(r._id), r]));
+  const created: string[] = [];
+  for (const t of subscribers) {
+    const cls = t.rightsClassId ? classById.get(String(t.rightsClassId)) : undefined;
+    const role = t.destinationRoleHolderId ? roleById.get(String(t.destinationRoleHolderId)) : undefined;
+    const subscriberName = String(role?.fullName ?? t.destinationHolderName ?? "Subscriber");
+    const consideration =
+      cleanText(t.considerationDescription) ?? cleanText(t.considerationType) ?? undefined;
+    const blocks = buildSubscriptionAgreementBlocks({
+      corporationName: args.renderCtx.org.name,
+      shortName: args.renderCtx.org.shortName,
+      legislation: args.renderCtx.org.legislation,
+      subscriberName,
+      shareClass: String(cls?.className ?? ""),
+      quantity: Number(t.quantity ?? 0),
+      consideration,
+      dateLong: args.renderCtx.date.long,
+    });
+    const dataUrl = documentDocxDataUrl("Subscription for Shares", blocks);
+    const fileName = `subscription-for-shares-${created.length + 1}.docx`;
+    const docId = await ctx.db.insert("documents", {
+      societyId: args.societyId,
+      title: `Subscription for Shares — ${subscriberName}`,
+      category: "governance",
+      fileName,
+      mimeType: corporationPacketDocxMimeType(),
+      content: `Subscription for Shares for ${subscriberName}.`,
+      url: dataUrl,
+      fileSizeBytes: dataUrl.length,
+      retentionYears: 7,
+      createdAtISO: args.now,
+      reviewStatus: "needs_signature",
+      librarySection: "governance",
+      flaggedForDeletion: false,
+      sourceExternalIds: [...args.sourceExternalIds, "societyer:subscription-annex"],
+      tags: ["corporation-packet", "subscription-agreement", "editable-docx"],
+    });
+    await ctx.db.insert("documentVersions", {
+      societyId: args.societyId,
+      documentId: docId,
+      version: 1,
+      storageProvider: "generated-inline",
+      storageKey: dataUrl,
+      fileName,
+      mimeType: corporationPacketDocxMimeType(),
+      fileSizeBytes: dataUrl.length,
+      uploadedByName: "Societyer packet generator",
+      uploadedAtISO: args.now,
+      changeNote: `Generated Subscription for Shares for ${subscriberName}.`,
+      isCurrent: true,
+    });
+    created.push(docId as unknown as string);
+  }
+  return created;
 }
 
 /**

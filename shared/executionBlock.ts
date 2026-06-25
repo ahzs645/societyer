@@ -91,6 +91,31 @@ export function resolvingBodyFor(requiredSigners: readonly string[]): ResolvingB
  * one-director corporation reads "the sole director … adopts" while a board
  * reads "all the directors … adopt". Corporate signatories are non-gendered.
  */
+/**
+ * The signature stack: an optional "Dated:" line followed by one signature
+ * block per signatory (a blank rule + printed name, or a corporate "By:" block).
+ * Shared by the resolution execution block and the subscription-agreement annex.
+ */
+export function signatureLines(signers: readonly SignerLine[], dateLong?: string): string[] {
+  const lines: string[] = [];
+  if (dateLong) {
+    lines.push(`Dated: ${dateLong}`);
+  }
+  for (const signer of signers) {
+    lines.push(""); // spacer between signatories
+    const capacitySuffix = signer.capacity ? `, ${signer.capacity}` : "";
+    if (signer.corpSign) {
+      lines.push(signer.corpSign);
+      lines.push(`By: ${SIGNATURE_RULE}`);
+      lines.push(`    ${signer.name}${capacitySuffix}`);
+    } else {
+      lines.push(SIGNATURE_RULE);
+      lines.push(`${signer.name}${capacitySuffix}`);
+    }
+  }
+  return lines;
+}
+
 export function buildExecutionBlock(input: ExecutionBlockInput): ExecutionBlockResult {
   const actors: Actor[] = input.signers.map((s) => ({
     name: s.name,
@@ -103,21 +128,5 @@ export function buildExecutionBlock(input: ExecutionBlockInput): ExecutionBlockR
     `hereby adopt${grammar.verbS} the foregoing resolution${input.resolutionsPlural ? "s" : ""} ` +
     `pursuant to the provisions of the ${input.legislation}.`;
 
-  const lines: string[] = [];
-  if (input.dateLong) {
-    lines.push(`Dated: ${input.dateLong}`);
-  }
-  for (const signer of input.signers) {
-    lines.push(""); // spacer between signatories
-    const capacitySuffix = signer.capacity ? `, ${signer.capacity}` : "";
-    if (signer.corpSign) {
-      lines.push(signer.corpSign);
-      lines.push(`By: ${SIGNATURE_RULE}`);
-      lines.push(`    ${signer.name}${capacitySuffix}`);
-    } else {
-      lines.push(SIGNATURE_RULE);
-      lines.push(`${signer.name}${capacitySuffix}`);
-    }
-  }
-  return { adoptionClause, lines };
+  return { adoptionClause, lines: signatureLines(input.signers, input.dateLong) };
 }

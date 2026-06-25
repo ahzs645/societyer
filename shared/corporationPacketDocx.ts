@@ -28,6 +28,19 @@ export function corporationPacketDocxMimeType() {
   return DOCX_MIME_TYPE;
 }
 
+/**
+ * Generic single-document DOCX from a block list (title/heading/paragraph/
+ * listItem) — used for companion documents like the per-subscriber Subscription
+ * for Shares annex, which are not packet-shaped.
+ */
+export function documentDocxBytes(title: string, blocks: Array<{ kind: string; text: string }>) {
+  return buildDocxPackage(title, blocks);
+}
+
+export function documentDocxDataUrl(title: string, blocks: Array<{ kind: string; text: string }>) {
+  return `data:${DOCX_MIME_TYPE};base64,${base64FromBytes(documentDocxBytes(title, blocks))}`;
+}
+
 function corporationPacketDocxBlocks(packet: CorporationDocumentPacket, context?: TemplateValues) {
   const sections = renderSections(packet.sections, context);
   // Opt-in execution/signature page: rendered only when the caller precomputes
