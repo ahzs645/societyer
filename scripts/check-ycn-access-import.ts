@@ -4,12 +4,16 @@ import {
   buildBundleFromAccessTables,
   countBundleRecords,
   decodeYcnCell,
+  extractCorpSettings,
+  extractDirectoryPeople,
   isCurrentRow,
   mapConstatingAction,
   mapServiceFunction,
   mapShareTransferType,
   mapYesNoUnknown,
+  monthToNumber,
   normalizeGender,
+  parseAccessDate,
   parseMoneyCents,
   pick,
   pickDate,
@@ -72,6 +76,15 @@ assert.equal(parseMoneyCents(""), undefined);
 assert.equal(stripLeadingNumber("2. Avery Ward"), "Avery Ward");
 assert.equal(stripLeadingNumber("Jane Smith"), "Jane Smith");
 
+assert.equal(monthToNumber("April"), 4);
+assert.equal(monthToNumber("feb"), 2);
+assert.equal(monthToNumber("12"), 12);
+assert.equal(monthToNumber(""), undefined);
+
+assert.equal(parseAccessDate("11/05/20 00:00:00"), "2020-11-05");
+assert.equal(parseAccessDate("04/26/94 00:00:00"), "1994-04-26");
+assert.equal(parseAccessDate(""), undefined);
+
 // --- CSV parsing (mdb-export shape) -----------------------------------------
 
 const csv = parseCsv(
@@ -131,6 +144,13 @@ const tables: YcnTables = {
   DB_GLOB_CORP_ASSETS: [
     { ENT_ID: "BC0604404", DB_ID: "2", REVISE_DT_TM: "", ASSET_TYPE: "Equipment", ASSET_DESC: "2017 Tesla Model S", ASSET_ID: "XXX-111", ASSET_JUR: "BC", ASSET_QUANT: "1", ACQ_DT_TM: "20190331", ACQ_COST: "$52,500", ACQ_CURRENCY: "US$", ACQ_FROM: "T. Nikola" },
   ],
+  DB_GLOB_CORP_SETTINGS: [
+    { ENT_ID: "BC0604404", DB_ID: "1", REVISE_DT_TM: "20210628.162047", AGM_MONTH: "April", AGM_DAY: "30", WAIVE_PREP_FINANCIALS: "Y", RESTRICT_PEOPLE_YND: "D", CONT_PRIM_NAME: "Old Contact" },
+    { ENT_ID: "BC0604404", DB_ID: "2", REVISE_DT_TM: "", AGM_MONTH: "April", AGM_DAY: "30", WAIVE_PREP_FINANCIALS: "Y", RESTRICT_PEOPLE_YND: "Y", CONT_PRIM_NAME: "Jane Smith", CONT_PRIM_EMAIL: "jane@example.com", LOC_MIN_BOOK: "123 Main Street" },
+  ],
+  DB_GLOB_PEOPLE_DIRECTORY: [
+    { GLOB_ID: "MAS00008", SEARCH_NAME: "Masters, Robin", FULL_NAME: "Robin Masters", LAST_NAME: "Masters", FIRST_NAME: "Robin", ADDRESS: "Oahu, HI", INDIVIDUAL: "Y", INDIV_DOB: "11/05/20 00:00:00", INDIV_CUR_MAJ: "Y", INDIV_CUR_GENDER: "M" },
+  ],
 };
 
 const bundle = buildBundleFromAccessTables(tables, { name: "Sample" });
@@ -187,6 +207,27 @@ assert.ok(controller, "transparency controller present");
 assert.equal(controller?.fullName, "Avery Ward", "leading index stripped");
 assert.equal(controller?.taxResidentHomeJurisdiction, "no");
 assert.equal(controller?.significanceReason, "Has the right to elect all directors");
+
+// Corporation settings: only the current row, mapped to the settings arg shape.
+assert.ok(bundle.societySettings, "settings extracted");
+assert.equal(bundle.societySettings?.agmMonth, 4);
+assert.equal(bundle.societySettings?.agmDay, 30);
+assert.equal(bundle.societySettings?.waivePrepFinancials, true);
+assert.equal(bundle.societySettings?.restrictPeoplePicker, true, "current row RESTRICT=Y");
+assert.equal(bundle.societySettings?.primaryContactName, "Jane Smith");
+assert.equal(bundle.societySettings?.minuteBookLocation, "123 Main Street");
+
+// Directory people (cross-tenant) extracted with parsed dob + gender.
+assert.equal(bundle.directoryPeople.length, 1);
+assert.equal(bundle.directoryPeople[0].fullName, "Robin Masters");
+assert.equal(bundle.directoryPeople[0].dob, "2020-11-05");
+assert.equal(bundle.directoryPeople[0].gender, "M");
+assert.equal(bundle.directoryPeople[0].atAgeOfMajority, true);
+
+// extractCorpSettings standalone honours the current-row filter.
+const settings = extractCorpSettings(tables);
+assert.equal(settings?.primaryContactName, "Jane Smith", "superseded settings row ignored");
+assert.equal(extractDirectoryPeople(tables).length, 1);
 
 // includeSuperseded brings the historical director back.
 const full = buildBundleFromAccessTables(tables, { includeSuperseded: true });

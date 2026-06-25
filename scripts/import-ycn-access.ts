@@ -147,6 +147,8 @@ async function main() {
   console.log(`  significantIndividualSteps:${bundle.significantIndividualSteps.length}`);
   console.log(`  assets:                    ${bundle.assets.length}`);
   console.log(`  shareCertificates:         ${bundle.shareCertificates.length}`);
+  console.log(`  directoryPeople:           ${bundle.directoryPeople.length} (applied directly, not staged)`);
+  console.log(`  societySettings:           ${bundle.societySettings ? "present" : "none"} (applied directly, not staged)`);
 
   if (args.out) {
     writeFileSync(args.out, JSON.stringify(bundle, null, 2));
@@ -178,6 +180,24 @@ async function main() {
     bundle,
   });
   console.log(`\nCreated import session ${sessionId} — review and promote in the app.`);
+
+  // Settings + the cross-tenant directory aren't staged records — apply directly.
+  if (bundle.societySettings) {
+    await client.mutation(anyApi.society.updateComplianceSettings, {
+      societyId: args.society,
+      ...bundle.societySettings,
+    });
+    console.log("Applied YCN Corporation_Settings (AGM/fiscal/contacts/locations/people-picker).");
+  }
+  if (bundle.directoryPeople.length) {
+    const nowISO = new Date().toISOString();
+    let upserted = 0;
+    for (const person of bundle.directoryPeople) {
+      await client.mutation(anyApi.peopleDirectory.upsert, { ...person, nowISO });
+      upserted += 1;
+    }
+    console.log(`Upserted ${upserted} People Directory record(s).`);
+  }
 }
 
 // Only run when invoked directly (not when imported by the check script).

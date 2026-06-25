@@ -54,6 +54,9 @@ export interface YcnImportBundle {
   significantIndividualSteps: BundlePayload[];
   assets: BundlePayload[];
   shareCertificates: BundlePayload[];
+  // Not staged records — applied directly by the runner:
+  societySettings: BundlePayload | null; // → society:updateComplianceSettings
+  directoryPeople: BundlePayload[]; // → peopleDirectory:upsert (cross-tenant)
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +133,88 @@ export function mapYesNoUnknown(raw: string | undefined): string {
   if (text.startsWith("y")) return "yes";
   if (text.startsWith("n")) return "no";
   return "unknown";
+}
+
+const MONTH_NAMES = [
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december",
+];
+
+/** Month name or number -> 1-12, or undefined. */
+export function monthToNumber(raw: string | undefined): number | undefined {
+  const text = (raw ?? "").trim().toLowerCase();
+  if (text === "") return undefined;
+  const idx = MONTH_NAMES.findIndex((m) => m.startsWith(text.slice(0, 3)));
+  if (idx >= 0) return idx + 1;
+  const n = Number(text);
+  return Number.isInteger(n) && n >= 1 && n <= 12 ? n : undefined;
+}
+
+/** Parse an mdb-export Access date ("MM/DD/YY [HH:MM:SS]") to ISO YYYY-MM-DD. */
+export function parseAccessDate(raw: string | undefined): string | undefined {
+  const text = (raw ?? "").trim();
+  const m = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (!m) return undefined;
+  const month = m[1].padStart(2, "0");
+  const day = m[2].padStart(2, "0");
+  let year = Number(m[3]);
+  if (m[3].length <= 2) year += year < 50 ? 2000 : 1900;
+  return `${year}-${month}-${day}`;
+}
+
+/** YCN Y/N/D flag -> boolean (Y true; N/D/empty false). */
+function ynToBool(raw: string | undefined): boolean {
+  return (raw ?? "").trim().toUpperCase().startsWith("Y");
+}
+
+/**
+ * Extract DB_GLOB_CORP_SETTINGS (current row) into the arg shape of
+ * society:updateComplianceSettings. Applied by the runner, not the staged
+ * pipeline (settings patch the society directly).
+ */
+export function extractCorpSettings(tables: YcnTables): BundlePayload | null {
+  const rows = rowsOf(tables, "DB_GLOB_CORP_SETTINGS").filter(isCurrentRow);
+  const row = rows[0];
+  if (!row) return null;
+  const out: BundlePayload = {
+    agmMonth: monthToNumber(pick(row, "AGM_MONTH")),
+    agmDay: toNumber(pick(row, "AGM_DAY")),
+    waivePrepFinancials: ynToBool(pick(row, "WAIVE_PREP_FINANCIALS")),
+    restrictPeoplePicker: ynToBool(pick(row, "RESTRICT_PEOPLE_YND")),
+    docPrepLanguage: pick(row, "DOC_PREP_LANGUAGE"),
+    primaryContactName: pick(row, "CONT_PRIM_NAME"),
+    primaryContactPhone: pick(row, "CONT_PRIM_PHONE"),
+    primaryContactEmail: pick(row, "CONT_PRIM_EMAIL"),
+    altContactName: pick(row, "CONT_ALT_NAME"),
+    altContactPhone: pick(row, "CONT_ALT_PHONE"),
+    altContactEmail: pick(row, "CONT_ALT_EMAIL"),
+    minuteBookLocation: pick(row, "LOC_MIN_BOOK"),
+    sealLocation: pick(row, "LOC_SEAL_ETC"),
+  };
+  // Drop undefined keys so the mutation only patches what's present.
+  for (const key of Object.keys(out)) {
+    if (out[key] === undefined) delete out[key];
+  }
+  return out;
+}
+
+/**
+ * Extract DB_GLOB_PEOPLE_DIRECTORY into the arg shape of peopleDirectory:upsert
+ * (cross-tenant; applied directly by the runner, deduped by the upsert).
+ */
+export function extractDirectoryPeople(tables: YcnTables): BundlePayload[] {
+  return rowsOf(tables, "DB_GLOB_PEOPLE_DIRECTORY").map((row) => ({
+    fullName: pick(row, "FULL_NAME") ?? pick(row, "SEARCH_NAME") ?? "Imported person",
+    firstName: pick(row, "FIRST_NAME"),
+    lastName: pick(row, "LAST_NAME"),
+    dob: parseAccessDate(pick(row, "INDIV_DOB")),
+    isIndividual: ynToBool(pick(row, "INDIVIDUAL")),
+    gender: normalizeGender(pick(row, "INDIV_CUR_GENDER")),
+    defaultAddress: pick(row, "ADDRESS"),
+    isServiceProvider: Boolean(pick(row, "SERVICE_PROVIDER")),
+    atAgeOfMajority: ynToBool(pick(row, "INDIV_CUR_MAJ")),
+    corpSign: pick(row, "CORP_SIGN"),
+  }));
 }
 
 /** A row is "current" when its REVISE_DT_TM is null / the YCN sentinel. */
@@ -472,6 +557,8 @@ export function buildBundleFromAccessTables(
     significantIndividualSteps: current("DB_GLOB_TRANSPARENCY_DUE").map(transparencyStepPayload),
     assets: current("DB_GLOB_CORP_ASSETS").map(assetPayload),
     shareCertificates,
+    societySettings: extractCorpSettings(tables),
+    directoryPeople: extractDirectoryPeople(tables),
   };
 }
 
