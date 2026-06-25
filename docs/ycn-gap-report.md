@@ -111,3 +111,44 @@ The biggest genuinely-missing capabilities cluster in four areas. First, **share
 - **Licensing/email:** Send_Email, Send_Confirmation, trial-lock / grammar-engine trial mechanics — out of scope for the product.
 - **Demo seeders:** Init_Register_Transparency canned sample rows.
 - **Custom arbitrary-sheet doc render (Document_Package_Custom):** Excel power-user escape hatch, low priority.
+---
+
+# CLOSURE STATUS (worked through — see commits)
+
+After this report, the gaps were implemented in waves (each committed green:
+`convex:typecheck` + app `tsc` + `static-parity` + corporation regressions).
+
+## Closed
+
+| Theme / Gap | How it was closed |
+|---|---|
+| **C — Document instruments** | `shared/corporationDocumentPackets.ts` +10 grammar-aware packets: dividend declaration, share transfer/certificate/split, change-of-offices, director removal, asset transfer, + blank all-directors/all-shareholders/all-voting-shareholders shells. Bound through the live DOCX generator. |
+| **B — Share certificate lifecycle** | `shared/shareCertificates.ts` + `convex/shareCertificates.ts` + `src/pages/CertificateRegister.tsx` (issue/replace/cancel, active/chain/outstanding-by-class, as-of). `shareCertificates` table. |
+| **B — Share split/consolidation** | `shared/shareSplit.ts` ratio engine + `share-split` resolution packet. |
+| **B — Share-class singular form** | `rightsClasses.singularForm` schema field. |
+| **A — Corporate name history + point-in-time + short name** | `shared/nameHistory.ts` + `convex/nameHistory.ts` + `src/pages/CorporateHistory.tsx`; `societyNameHistory` table; `societies.shortName`. |
+| **A — Constating timeline** | `shared/constating.ts` + `convex/constating.ts` + Corporate History page; `constatingEvents` table. |
+| **A — Office address as-of** | `convex/registerHistory.addressesAsOf` over existing `organizationAddresses` intervals. |
+| **H — Per-year/per-jurisdiction annual-filing ledger** | `shared/annualFilings.ts` + `convex/annualFilings.ts` + `src/pages/AnnualFilings.tsx`; `annualFilingLedger` table. |
+| **H — Corp contacts / record locations / responsible lawyer / short name** | `societies` fields + `society.updateComplianceSettings` + Compliance Settings page. |
+| **F — Directory → entity person link** | `convex/peopleDirectory.addToSociety` + "Add to society as…" action on the People Directory page; `roleHolders.directoryPersonId`. |
+| **F — People-directory grammar/signature flags** | `peopleDirectory` gender / isServiceProvider / atAgeOfMajority / corpSign + gender selector in the form. |
+| **F — Per-entity signer roster** | `entitySigners` table + `convex/entitySigners.ts` (as-of, sign order). |
+| **F — Officer multi-title** | `roleHolders.additionalOfficerTitles` schema field. |
+| **E — Asset acquire/dispose detail** | `assets` + `assetPatch`: acquiredFrom/disposedTo/assetJurisdiction/acquisition+disposition currency/comments. |
+| **D — Business-address contacts + freeform lines** | `organizationAddresses.contacts` + `freeformLines` (+ `business_address` type, free string). |
+| **G — Entity cloning** | `convex/society.cloneSociety` deep-copy + "Clone this entity" action on Compliance Settings. |
+
+## Intentionally deferred (low value / niche — report-rated low)
+
+- BC Land Owner Transparency Report (LOTR) — niche property-law instrument.
+- One-click annual document bundle + transaction-routed dispatcher — orchestration sugar over the now-existing packets.
+- Batch multi-clone loop; blank-entity overwrite guard — thin wrappers over `cloneSociety`/create.
+- Per-class vs consolidated register print layouts (User-Custom 15-20) — Excel layout modes.
+- Per-row provenance columns, REG_POSN manual ordering, FIRM_ID dedup, revision-purge admin — Access/Excel persistence mechanics.
+- Annual covering letter (transmittal) — trivial template, addable as another packet when wanted.
+
+## Verification
+25 YCN test suites green (`test:nlg-grammar` … `test:annual-filings`) plus
+`static-parity`, `corporation-packets`, `corporation-mvp`; `convex:typecheck` and
+app `tsc` clean.
