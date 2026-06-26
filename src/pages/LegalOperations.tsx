@@ -373,8 +373,12 @@ export function RoleHoldersPage() {
 
 export function RightsLedgerPage() {
   const society = useSociety();
-  const data = useQuery(api.legalOperations.rightsLedger, society ? { societyId: society._id } : "skip");
-  const voting = useQuery(api.legalOperations.votingPower, society ? { societyId: society._id } : "skip") as
+  // As-of date (YYYY-MM-DD); "" = live. Reconstructs the cap table at a past date.
+  const [asOf, setAsOf] = useState<string>("");
+  const [holderDrill, setHolderDrill] = useState<string | null>(null);
+  const ledgerArgs = society ? { societyId: society._id, ...(asOf ? { asOf } : {}) } : "skip";
+  const data = useQuery(api.legalOperations.rightsLedger, ledgerArgs);
+  const voting = useQuery(api.legalOperations.votingPower, ledgerArgs) as
     | { voting: any[]; nonVoting: any[]; eligibleSigners: any[]; totalVotes: number }
     | undefined;
   const upsertClass = useMutation(api.legalOperations.upsertRightsClass);
@@ -506,12 +510,22 @@ export function RightsLedgerPage() {
             : "Membership/right classes plus current holdings, issuance, transfer, redemption, cancellation, and adjustment history."
         }
         actions={
-          <div className="row">
+          <div className="row" style={{ alignItems: "center", gap: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6 }} title="Reconstruct the register at a past date">
+              <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>As of</span>
+              <input type="date" className="input" value={asOf} onChange={(e) => setAsOf(e.target.value)} style={{ width: 150 }} />
+              {asOf && <button className="btn btn--ghost btn--sm" onClick={() => setAsOf("")} title="Back to live">Live</button>}
+            </label>
             <button className="btn-action" onClick={() => setTransferDraft({ transferType: corporationWorkspace ? "issuance" : "transfer", status: "draft", priceToOrganizationCurrency: "cad", priceToVendorCurrency: "cad" })}><Plus size={12} /> {corporationWorkspace ? "Issuance" : "Transfer"}</button>
             <button className="btn-action btn-action--primary" onClick={() => setClassDraft({ classType: corporationWorkspace ? "share" : "membership", status: "active" })}><Plus size={12} /> {corporationWorkspace ? "Share class" : "Class"}</button>
           </div>
         }
       />
+      {asOf && (
+        <div className="muted" style={{ marginBottom: 12 }}>
+          Showing the register as it stood on <strong>{asOf}</strong>. Issuance, transfers, and holdings reflect that date.
+        </div>
+      )}
 
       <Section title={corporationWorkspace ? "Share classes" : "Rights and membership classes"} count={data?.classes?.length ?? 0}>
         <div className="table-wrap">
@@ -551,7 +565,12 @@ export function RightsLedgerPage() {
                 const holder = roleHolderForHolding(data?.roleHolders ?? [], holding.holderKey);
                 return (
                   <tr key={`${holding.rightsClassId}:${holding.holderKey}`}>
-                    <td><strong>{holder?.fullName || holding.holderKey}</strong><div className="muted">{holder?.roleType ? optionLabel("representativeTypes", holder.roleType) : "Unlinked holder"}</div></td>
+                    <td>
+                      <button className="btn-link" onClick={() => setHolderDrill(holding.holderKey)} style={{ font: "inherit" }}>
+                        <strong>{holder?.fullName || holding.holderKey}</strong>
+                      </button>
+                      <div className="muted">{holder?.roleType ? optionLabel("representativeTypes", holder.roleType) : "Unlinked holder"}</div>
+                    </td>
                     <td>{rightsClass?.className || holding.rightsClassId}<div className="muted">{rightsClass?.classType ? optionLabel("rightsClassTypes", rightsClass.classType) : "No class record"}</div></td>
                     <td>{holding.quantity}</td>
                     <td><Badge tone="success">Posted ledger</Badge></td>
@@ -575,7 +594,11 @@ export function RightsLedgerPage() {
               <tbody>
                 {(voting?.voting ?? []).map((h: any) => (
                   <tr key={h.holderKey}>
-                    <td><strong>{h.holderName}</strong></td>
+                    <td>
+                      <button className="btn-link" onClick={() => setHolderDrill(h.holderKey)} style={{ font: "inherit" }}>
+                        <strong>{h.holderName}</strong>
+                      </button>
+                    </td>
                     <td>{h.totalShares}</td>
                     <td>{(h.percentOfShares ?? 0).toFixed(1)}%</td>
                     <td>{h.totalVotes}</td>
@@ -711,6 +734,89 @@ export function RightsLedgerPage() {
             <Field label="Consideration description"><MarkdownEditor rows={4} value={transferDraft.considerationDescription ?? ""} onChange={(markdown) => setTransferDraft({ ...transferDraft, considerationDescription: markdown })} /></Field>
           </>
         )}
+      </Drawer>
+
+      <Drawer
+        open={Boolean(holderDrill)}
+        onClose={() => setHolderDrill(null)}
+        title="Shareholder"
+        footer={<button className="btn" onClick={() => setHolderDrill(null)}>Close</button>}
+      >
+        {holderDrill && (() => {
+          const holder = roleHolderForHolding(data?.roleHolders ?? [], holderDrill);
+          const holderName = holder?.fullName || holderDrill;
+          const holdings = currentHoldings.filter((h: any) => h.holderKey === holderDrill);
+          const votingRow = [...(voting?.voting ?? []), ...(voting?.nonVoting ?? [])]
+            .find((h: any) => h.holderKey === holderDrill);
+          const totalAll = currentHoldings.reduce((sum: number, h: any) => sum + (Number(h.quantity) || 0), 0);
+          const holderShares = holdings.reduce((sum: number, h: any) => sum + (Number(h.quantity) || 0), 0);
+          const pctShares = votingRow?.percentOfShares ?? (totalAll > 0 ? (holderShares / totalAll) * 100 : 0);
+          const roleHolderId = holderDrill.startsWith("roleHolder:") ? holderDrill.slice("roleHolder:".length) : null;
+          const holderTransfers = (data?.transfers ?? []).filter((t: any) =>
+            (roleHolderId && (t.sourceRoleHolderId === roleHolderId || t.destinationRoleHolderId === roleHolderId)) ||
+            t.sourceHolderName === holderName || t.destinationHolderName === holderName,
+          );
+          return (
+            <div className="col" style={{ gap: 16 }}>
+              <div>
+                <h3 style={{ margin: 0 }}>{holderName}</h3>
+                <div className="muted">
+                  {holder?.roleType ? optionLabel("representativeTypes", holder.roleType) : "Unlinked holder"}
+                  {asOf ? ` · as of ${asOf}` : ""}
+                </div>
+              </div>
+
+              <div className="row" style={{ gap: 16, flexWrap: "wrap" }}>
+                <div><div className="muted" style={{ fontSize: "var(--fs-sm)" }}>Shares</div><strong style={{ fontSize: "var(--fs-lg)" }}>{holderShares}</strong></div>
+                <div><div className="muted" style={{ fontSize: "var(--fs-sm)" }}>% shares</div><strong style={{ fontSize: "var(--fs-lg)" }}>{pctShares.toFixed(1)}%</strong></div>
+                {votingRow && (
+                  <>
+                    <div><div className="muted" style={{ fontSize: "var(--fs-sm)" }}>Votes</div><strong style={{ fontSize: "var(--fs-lg)" }}>{votingRow.totalVotes}</strong></div>
+                    <div><div className="muted" style={{ fontSize: "var(--fs-sm)" }}>% votes</div><strong style={{ fontSize: "var(--fs-lg)" }}>{(votingRow.percentOfVotes ?? 0).toFixed(1)}%</strong></div>
+                  </>
+                )}
+              </div>
+
+              <div>
+                <h4 style={{ margin: "0 0 6px" }}>Holdings by class</h4>
+                <table className="table">
+                  <thead><tr><th>Class</th><th>Quantity</th></tr></thead>
+                  <tbody>
+                    {holdings.map((h: any) => {
+                      const rc = data?.classes?.find((c: any) => c._id === h.rightsClassId);
+                      return <tr key={h.rightsClassId}><td>{rc?.className || h.rightsClassId}</td><td>{h.quantity}</td></tr>;
+                    })}
+                    {holdings.length === 0 && <EmptyRow cols={2} label="No holdings on this date." />}
+                  </tbody>
+                </table>
+              </div>
+
+              <div>
+                <h4 style={{ margin: "0 0 6px" }}>Transfer history</h4>
+                <table className="table">
+                  <thead><tr><th>Date</th><th>Type</th><th>Class</th><th>From → To</th><th>Qty</th></tr></thead>
+                  <tbody>
+                    {holderTransfers.map((t: any) => {
+                      const rc = data?.classes?.find((c: any) => c._id === t.rightsClassId);
+                      const src = data?.roleHolders?.find((r: any) => r._id === t.sourceRoleHolderId);
+                      const dst = data?.roleHolders?.find((r: any) => r._id === t.destinationRoleHolderId);
+                      return (
+                        <tr key={t._id}>
+                          <td>{dateLabel(t.transferDate)}</td>
+                          <td>{optionLabel("rightsholdingTransferTypes", t.transferType)}</td>
+                          <td>{rc?.className || "—"}</td>
+                          <td>{(src?.fullName || t.sourceHolderName || "Treasury")} → {(dst?.fullName || t.destinationHolderName || "—")}</td>
+                          <td>{t.quantity ?? "—"}</td>
+                        </tr>
+                      );
+                    })}
+                    {holderTransfers.length === 0 && <EmptyRow cols={5} label="No transfers recorded for this holder." />}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
       </Drawer>
     </div>
   );

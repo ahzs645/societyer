@@ -2340,9 +2340,15 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
   if (moduleName === "legalOperations" && exportName === "rightsLedger") {
     const classes = (store?.listRows("rightsClasses", args) ?? [])
       .sort((a, b) => String(a.className ?? "").localeCompare(String(b.className ?? "")));
-    const holdings = (store?.listRows("rightsHoldings", args) ?? [])
-      .sort((a, b) => String(a.rightsClassId ?? "").localeCompare(String(b.rightsClassId ?? "")) || String(a.holderKey ?? "").localeCompare(String(b.holderKey ?? "")));
-    const transfers = (store?.listRows("rightsholdingTransfers", args) ?? [])
+    const allTransfers = store?.listRows("rightsholdingTransfers", args) ?? [];
+    const scoped = args?.asOf
+      ? allTransfers.filter((t: any) => String(t.transferDate ?? t.createdAtISO ?? "").slice(0, 10) <= args.asOf)
+      : allTransfers;
+    const holdings = args?.asOf
+      ? materializeRightsHoldings(scoped as any)
+      : (store?.listRows("rightsHoldings", args) ?? [])
+          .sort((a, b) => String(a.rightsClassId ?? "").localeCompare(String(b.rightsClassId ?? "")) || String(a.holderKey ?? "").localeCompare(String(b.holderKey ?? "")));
+    const transfers = [...scoped]
       .sort((a, b) => String(b.transferDate ?? b.createdAtISO ?? "").localeCompare(String(a.transferDate ?? a.createdAtISO ?? "")));
     const roleHolders = (store?.listRows("roleHolders", args) ?? [])
       .sort((a, b) => String(a.fullName ?? "").localeCompare(String(b.fullName ?? "")));
@@ -2350,7 +2356,12 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
   }
   if (moduleName === "legalOperations" && exportName === "votingPower") {
     const classes = store?.listRows("rightsClasses", args) ?? [];
-    const holdings = store?.listRows("rightsHoldings", args) ?? [];
+    const holdings = args?.asOf
+      ? materializeRightsHoldings(
+          (store?.listRows("rightsholdingTransfers", args) ?? [])
+            .filter((t: any) => String(t.transferDate ?? t.createdAtISO ?? "").slice(0, 10) <= args.asOf) as any,
+        )
+      : store?.listRows("rightsHoldings", args) ?? [];
     const roleHolders = store?.listRows("roleHolders", args) ?? [];
     const directory = store?.listRows("peopleDirectory", {}) ?? [];
     const roleById = new Map(roleHolders.map((r: any) => [String(r._id), r]));

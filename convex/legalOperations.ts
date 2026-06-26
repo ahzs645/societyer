@@ -47,6 +47,12 @@ import { buildAnnualResolutionContext } from "../shared/annualResolution";
 import { buildDividendResolutionContext } from "../shared/dividendResolution";
 import { computeVotingPower } from "../shared/votingPower";
 
+/** Keep transfers on/before an as-of date (date-only compare, inclusive). */
+function transfersAsOf(transfers: any[], asOf?: string): any[] {
+  if (!asOf) return transfers;
+  return transfers.filter((t) => String(t.transferDate ?? t.createdAtISO ?? "").slice(0, 10) <= asOf);
+}
+
 export const listRoleHolders = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
@@ -231,18 +237,25 @@ export const removeRoleHolder = mutation({
 });
 
 export const rightsLedger = query({
-  args: { societyId: v.id("societies") },
+  // `asOf` (YYYY-MM-DD) reconstructs the cap table at a past date: transfers are
+  // truncated to that day and holdings re-derived from them, for a point-in-time
+  // register. Omitted = live state from the stored holdings.
+  args: { societyId: v.id("societies"), asOf: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
+  handler: async (ctx, { societyId, asOf }) => {
     const [classes, transfers, roleHolders] = await Promise.all([
       ctx.db.query("rightsClasses").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
       ctx.db.query("rightsholdingTransfers").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
       ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ]);
+    const scopedTransfers = transfersAsOf(transfers, asOf);
+    const holdings = asOf
+      ? materializeRightsHoldings(scopedTransfers as any)
+      : await ctx.db.query("rightsHoldings").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
     return {
       classes: classes.sort((a, b) => String(a.className).localeCompare(String(b.className))),
-      holdings: await ctx.db.query("rightsHoldings").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
-      transfers: transfers.sort((a, b) => String(b.transferDate ?? b.createdAtISO).localeCompare(String(a.transferDate ?? a.createdAtISO))),
+      holdings,
+      transfers: scopedTransfers.sort((a, b) => String(b.transferDate ?? b.createdAtISO).localeCompare(String(a.transferDate ?? a.createdAtISO))),
       roleHolders: roleHolders.sort((a, b) => String(a.fullName).localeCompare(String(b.fullName))),
     };
   },
@@ -255,15 +268,23 @@ export const rightsLedger = query({
  * tested shared/votingPower.ts.
  */
 export const votingPower = query({
-  args: { societyId: v.id("societies") },
+  // `asOf` (YYYY-MM-DD) computes the roll-up from the cap table as it stood on a
+  // past date (holdings re-derived from transfers ≤ asOf). Omitted = live state.
+  args: { societyId: v.id("societies"), asOf: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const [classes, holdings, roleHolders, directory] = await Promise.all([
+  handler: async (ctx, { societyId, asOf }) => {
+    const [classes, storedHoldings, roleHolders, directory, transfers] = await Promise.all([
       ctx.db.query("rightsClasses").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
       ctx.db.query("rightsHoldings").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
       ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
       ctx.db.query("peopleDirectory").collect(),
+      asOf
+        ? ctx.db.query("rightsholdingTransfers").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect()
+        : Promise.resolve([] as any[]),
     ]);
+    // As-of: re-materialize holdings from truncated transfers (same shape as the
+    // stored rows, so the meta-resolution below is unchanged).
+    const holdings = asOf ? materializeRightsHoldings(transfersAsOf(transfers, asOf) as any) : storedHoldings;
     const roleById = new Map<string, any>(roleHolders.map((r: any) => [String(r._id), r]));
     const dirById = new Map<string, any>(directory.map((d: any) => [String(d._id), d]));
     const meta: Record<string, { isIndividual?: boolean; atAgeOfMajority?: boolean }> = {};
