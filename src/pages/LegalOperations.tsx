@@ -571,22 +571,26 @@ export function RightsLedgerPage() {
         >
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Shareholder</th><th>Shares</th><th>Votes</th><th>Eligible to sign</th></tr></thead>
+              <thead><tr><th>Shareholder</th><th>Shares</th><th>% shares</th><th>Votes</th><th>% votes</th><th>Eligible to sign</th></tr></thead>
               <tbody>
                 {(voting?.voting ?? []).map((h: any) => (
                   <tr key={h.holderKey}>
                     <td><strong>{h.holderName}</strong></td>
                     <td>{h.totalShares}</td>
+                    <td>{(h.percentOfShares ?? 0).toFixed(1)}%</td>
                     <td>{h.totalVotes}</td>
+                    <td>{(h.percentOfVotes ?? 0).toFixed(1)}%</td>
                     <td>{h.isEligibleSignatory ? <Badge tone="success">Eligible</Badge> : <Badge tone="warn">Not eligible</Badge>}</td>
                   </tr>
                 ))}
-                {(voting?.voting ?? []).length === 0 && <EmptyRow cols={4} label="No voting shareholders yet." />}
+                {(voting?.voting ?? []).length === 0 && <EmptyRow cols={6} label="No voting shareholders yet." />}
                 {(voting?.nonVoting ?? []).map((h: any) => (
                   <tr key={h.holderKey} className="muted">
                     <td>{h.holderName}</td>
                     <td>{h.totalShares}</td>
+                    <td>{(h.percentOfShares ?? 0).toFixed(1)}%</td>
                     <td>0 (non-voting)</td>
+                    <td>—</td>
                     <td>—</td>
                   </tr>
                 ))}

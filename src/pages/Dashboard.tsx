@@ -66,7 +66,7 @@ export function Dashboard() {
   if (society === null) return <SeedPrompt />;
   if (!data) return <PageLoading />;
 
-  const { counts, upcomingMeetings, upcomingFilings, overdueFilings, goals, complianceFlags, openTasks, evidenceChains } = data;
+  const { counts, board, upcomingMeetings, upcomingFilings, overdueFilings, goals, complianceFlags, openTasks, evidenceChains } = data;
   const onboardingSteps = getOnboardingSteps({ society, counts, upcomingMeetings, upcomingFilings, overdueFilings });
   const completedOnboardingSteps = onboardingSteps.filter((step) => step.complete).length;
   const nextOnboardingStep = onboardingSteps.find((step) => !step.complete) ?? onboardingSteps[onboardingSteps.length - 1];
@@ -477,6 +477,41 @@ export function Dashboard() {
                 {society.isMemberFunded && <Badge tone="info">Member-funded</Badge>}
                 {society.boardCadence && <Badge>Board meets {society.boardCadence.toLowerCase()}</Badge>}
               </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card__head">
+              <h2 className="card__title">Board of directors</h2>
+              <Link to="/app/directors" className="card__subtitle row" style={{ marginLeft: "auto" }}>
+                View all <ArrowRight size={12} />
+              </Link>
+            </div>
+            <div className="card__body col">
+              {board.length === 0 && (
+                <div className="muted">No active directors on record.</div>
+              )}
+              {board.map((d: any) => (
+                <div
+                  key={d._id}
+                  className="row"
+                  style={{ padding: 10, border: "1px solid var(--border)", borderRadius: 6, gap: 8, alignItems: "center" }}
+                >
+                  <span className="activity-item__avatar">
+                    {d.name.split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase()}
+                  </span>
+                  <div className="col" style={{ gap: 2, flex: 1 }}>
+                    <strong>{d.name}</strong>
+                    <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{d.position}</div>
+                  </div>
+                  {d.isBCResident && <Badge tone="info">BC</Badge>}
+                </div>
+              ))}
+              {counts.directors > board.length && (
+                <Link to="/app/directors" className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  +{counts.directors - board.length} more
+                </Link>
+              )}
             </div>
           </div>
 

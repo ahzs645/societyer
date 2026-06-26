@@ -115,7 +115,9 @@
     "addWorkspace": "Ajouter un espace",
     "viewAllEntities": "Toutes les entités",
     "viewAllEntitiesHint": "Portefeuille du cabinet, toutes entités confondues",
-    "noSocieties": "Aucune société disponible pour le moment."
+    "noSocieties": "Aucune société disponible pour le moment.",
+    "filterEntities": "Filtrer les entités…",
+    "noMatchingEntities": "Aucune entité correspondante."
   },
   "settings": {
     "title": "Paramètres",

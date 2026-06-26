@@ -194,6 +194,9 @@ export function Layout() {
     width: number;
     maxHeight: number;
   } | null>(null);
+  // Free-text filter for the entity switcher — shown once the list is long
+  // enough to be worth narrowing (Corporify's "find any entity instantly").
+  const [workspaceFilter, setWorkspaceFilter] = useState("");
   const [navContextMenu, setNavContextMenu] = useState<SidebarContextMenu | null>(null);
   const { hidden: operationsDeskHidden, setHidden: setOperationsDeskHidden } =
     useOperationsDeskVisibility();
@@ -461,6 +464,7 @@ export function Layout() {
 
   useEffect(() => {
     if (!workspaceOpen) return;
+    setWorkspaceFilter("");
     const place = () => {
       const rect = workspaceButtonRef.current?.getBoundingClientRect();
       if (!rect) return;
@@ -1183,6 +1187,27 @@ export function Layout() {
             <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
               <strong style={{ fontSize: "var(--fs-md)" }}>{t("sidebar.workspaces")}</strong>
             </div>
+            {societies.length > 7 && (
+              <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+                <input
+                  type="text"
+                  autoFocus
+                  value={workspaceFilter}
+                  onChange={(e) => setWorkspaceFilter(e.target.value)}
+                  placeholder={t("sidebar.filterEntities")}
+                  aria-label={t("sidebar.filterEntities")}
+                  style={{
+                    width: "100%",
+                    padding: "6px 8px",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--r-sm)",
+                    background: "var(--bg-input, var(--bg-subtle))",
+                    color: "inherit",
+                    fontSize: "var(--fs-sm)",
+                  }}
+                />
+              </div>
+            )}
             {societies.length > 1 && (
               <button
                 type="button"
@@ -1215,7 +1240,23 @@ export function Layout() {
               </button>
             )}
             <div style={{ overflowY: "auto", minHeight: 0 }}>
-              {societies.map((s: any) => {
+              {(() => {
+                const wf = workspaceFilter.trim().toLowerCase();
+                const list = wf
+                  ? societies.filter(
+                      (s: any) =>
+                        String(s.name ?? "").toLowerCase().includes(wf) ||
+                        String(s.incorporationNumber ?? "").toLowerCase().includes(wf),
+                    )
+                  : societies;
+                if (societies.length > 0 && list.length === 0) {
+                  return (
+                    <div className="empty-state empty-state--sm empty-state--start">
+                      {t("sidebar.noMatchingEntities")}
+                    </div>
+                  );
+                }
+                return list.map((s: any) => {
                 const active = s._id === society?._id;
                 return (
                   <button
@@ -1252,7 +1293,8 @@ export function Layout() {
                     )}
                   </button>
                 );
-              })}
+                });
+              })()}
               {(!societies || societies.length === 0) && (
                 <div className="empty-state empty-state--sm empty-state--start">
                   {t("sidebar.noSocieties")}

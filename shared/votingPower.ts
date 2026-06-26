@@ -37,6 +37,10 @@ export interface VotingHolderResult {
   holderName: string;
   totalShares: number;
   totalVotes: number;
+  /** Holder's share of total outstanding shares, 0–100 (0 when none issued). */
+  percentOfShares: number;
+  /** Holder's share of total votes, 0–100 (0 when no class carries votes). */
+  percentOfVotes: number;
   isVoting: boolean;
   /** Eligible to be enumerated / sign as a voting shareholder. */
   isEligibleSignatory: boolean;
@@ -87,6 +91,15 @@ export function computeVotingPower(
     byHolder.set(h.holderKey, entry);
   }
 
+  // Denominators for ownership %: total shares issued and total votes across
+  // every holder. Computed up front so each holder row can carry its own share.
+  let totalSharesAll = 0;
+  let totalVotesAll = 0;
+  for (const entry of byHolder.values()) {
+    totalSharesAll += entry.shares;
+    totalVotesAll += entry.votes;
+  }
+
   const holders: VotingHolderResult[] = [];
   for (const [holderKey, entry] of byHolder) {
     const m = meta?.[holderKey] ?? {};
@@ -98,6 +111,8 @@ export function computeVotingPower(
       holderName: entry.name,
       totalShares: entry.shares,
       totalVotes: entry.votes,
+      percentOfShares: totalSharesAll > 0 ? (entry.shares / totalSharesAll) * 100 : 0,
+      percentOfVotes: totalVotesAll > 0 ? (entry.votes / totalVotesAll) * 100 : 0,
       isVoting,
       isEligibleSignatory: isVoting && individual && major,
     });

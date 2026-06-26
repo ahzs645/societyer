@@ -49,7 +49,8 @@ import {
   Pin,
 } from "lucide-react";
 import { api } from "../lib/convexApi";
-import { useSociety } from "../hooks/useSociety";
+import { useSociety, useSocieties, setStoredSocietyId } from "../hooks/useSociety";
+import { organizationLabel } from "../../shared/organizationDomain";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { useUIStore } from "../lib/store";
 import { useRegisteredCommands } from "../lib/commands";
@@ -59,6 +60,7 @@ import type { CSSProperties } from "react";
 
 type CommandCategory =
   | "Recent"
+  | "Entities"
   | "Navigation"
   | "Governance"
   | "Finance"
@@ -149,6 +151,7 @@ const NAV_ITEMS: CommandItem[] = Object.entries(ROUTE_IDENTITY).map(([path, iden
 
 const CATEGORY_ORDER: CommandCategory[] = [
   "Recent",
+  "Entities",
   "Actions",
   "Navigation",
   "Governance",
@@ -428,6 +431,7 @@ export function CommandPalette() {
   const navigate = useNavigate();
   const location = useLocation();
   const society = useSociety();
+  const societies = useSocieties();
   const staticCommands = useStaticCommands();
 
   const actions = useMemo<CommandItem[]>(
@@ -557,8 +561,25 @@ export function CommandPalette() {
       category: "Recent" as const,
       to: r.to,
     }));
+    // One jump-to row per entity (Corporify's "find any entity instantly").
+    // Keyed by incorporation number too, so typing a number lands the company.
+    // Search-only (not folded into `all`) so the idle palette isn't a wall of
+    // entities; the current entity is dropped since switching to it is a no-op.
+    const entityItems: CommandItem[] = (societies ?? [])
+      .filter((s: any) => s._id !== society?._id)
+      .map((s: any) => ({
+        id: `entity:${s._id}`,
+        label: organizationLabel(s) || s.name || "Untitled entity",
+        icon: Building2,
+        category: "Entities" as const,
+        keywords: [s.incorporationNumber, s.name].filter((k): k is string => Boolean(k)),
+        run: () => {
+          setStoredSocietyId(s._id);
+          navigate("/app");
+        },
+      }));
     const ql = q.trim().toLowerCase();
-    const searchable = [...all, ...recordItems];
+    const searchable = [...all, ...entityItems, ...recordItems];
     let matches: CommandItem[];
     if (ql) {
       const scored: Array<{ item: CommandItem; score: number; order: number }> = [];
@@ -604,7 +625,7 @@ export function CommandPalette() {
       flat.push(...items);
     }
     return { flat, groups };
-  }, [q, society, actions, recents, recentRecords, registeredCommands, metadataCommands, navigate]);
+  }, [q, society, societies, actions, recents, recentRecords, registeredCommands, metadataCommands, navigate]);
 
   if (!open) return null;
 

@@ -133,6 +133,18 @@ export const summary = query({
     const openConflicts = conflicts.filter((conflict) => !conflict.resolvedAt);
     const policiesDue = policies.filter((policy) => policy.status !== "Ceased" && policy.reviewDate && policy.reviewDate <= addDays(today, 45));
     const currentDirectorAttestations = directorAttestations.filter((row) => row.year === cycleYear);
+    // Mandates that lapse on/before the AGM (or cycle end when no AGM is set yet)
+    // must be re-elected at that meeting — surface them in director readiness.
+    const directorTermDeadline = selectedAgm ? dateOnly(selectedAgm.scheduledAt) : endISO;
+    const directorsTermExpiring = activeDirectors.filter(
+      (director) => director.termEnd && director.termEnd <= directorTermDeadline,
+    );
+    const directorAttestationsComplete =
+      activeDirectors.length > 0 && currentDirectorAttestations.length >= activeDirectors.length;
+    const directorReadinessStatus: ItemStatus =
+      directorsTermExpiring.length > 0
+        ? (today > directorTermDeadline ? "blocked" : "attention")
+        : directorAttestationsComplete ? "complete" : "attention";
     const pipaTrainingThisYear = pipaTrainings.filter((row) => inYear(row.completedAtISO, cycleYear));
     const directorElection = selectedAgm
       ? elections.find((row) => String(row.meetingId) === String(selectedAgm._id)) ?? null
@@ -199,8 +211,8 @@ export const summary = query({
         id: "director-readiness",
         phase: "before",
         title: "Check directors and terms",
-        detail: `${activeDirectors.length} active director${activeDirectors.length === 1 ? "" : "s"}; ${currentDirectorAttestations.length} annual attestation${currentDirectorAttestations.length === 1 ? "" : "s"} for ${cycleYear}.`,
-        status: activeDirectors.length > 0 && currentDirectorAttestations.length >= activeDirectors.length ? "complete" : "attention",
+        detail: `${activeDirectors.length} active director${activeDirectors.length === 1 ? "" : "s"}; ${currentDirectorAttestations.length} annual attestation${currentDirectorAttestations.length === 1 ? "" : "s"} for ${cycleYear}${directorsTermExpiring.length > 0 ? `; ${directorsTermExpiring.length} term${directorsTermExpiring.length === 1 ? "" : "s"} expire on/before the AGM` : ""}.`,
+        status: directorReadinessStatus,
         evidence: ["Director register", "Consents and annual eligibility attestations", "Term and vacancy review"],
         to: "/directors",
         actionLabel: "Review directors",

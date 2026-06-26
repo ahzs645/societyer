@@ -82,6 +82,15 @@ const dashboardMeetingValidator = validator.object({
   status: validator.string(),
 });
 
+const dashboardDirectorValidator = validator.object({
+  _id: validator.id("directors"),
+  name: validator.string(),
+  position: validator.string(),
+  termStart: validator.string(),
+  termEnd: validator.optional(validator.string()),
+  isBCResident: validator.boolean(),
+});
+
 const dashboardTaskValidator = validator.object({
   _id: validator.id("tasks"),
   title: validator.string(),
@@ -113,6 +122,7 @@ const dashboardSummaryValidator = validator.object({
     openGoals: validator.number(),
     openTasks: validator.number(),
   }),
+  board: validator.array(dashboardDirectorValidator),
   upcomingMeetings: validator.array(dashboardMeetingValidator),
   upcomingFilings: validator.array(dashboardFilingValidator),
   overdueFilings: validator.array(dashboardFilingValidator),
@@ -159,6 +169,15 @@ type DashboardMeeting = {
   status: string;
 };
 
+type DashboardBoardMember = {
+  _id: DashboardId;
+  name: string;
+  position: string;
+  termStart: string;
+  termEnd?: string;
+  isBCResident: boolean;
+};
+
 type DashboardTask = {
   _id: DashboardId;
   title: string;
@@ -190,6 +209,7 @@ type DashboardSummary = {
     openGoals: number;
     openTasks: number;
   };
+  board: DashboardBoardMember[];
   upcomingMeetings: DashboardMeeting[];
   upcomingFilings: DashboardFiling[];
   overdueFilings: DashboardFiling[];
@@ -213,6 +233,12 @@ type MemberRecord = {
 };
 
 type DirectorRecord = {
+  _id: DashboardId;
+  firstName: string;
+  lastName: string;
+  position: string;
+  termStart: string;
+  termEnd?: string;
   status: string;
   isBCResident: boolean;
   consentOnFile: boolean;
@@ -394,6 +420,26 @@ const summaryDefinition = {
     ]);
 
     const bcResidents = activeDirectors.filter((d) => d.isBCResident).length;
+    // Board roster for the overview card — officers (chair/president/etc.) first,
+    // then the rest alphabetically, capped so the card stays glanceable.
+    const officerRank = (position: string): number =>
+      /chair|president/i.test(position) ? 0
+      : /vice|treasurer|secretary/i.test(position) ? 1
+      : 2;
+    const board: DashboardBoardMember[] = [...activeDirectors]
+      .sort((a, b) =>
+        officerRank(a.position) - officerRank(b.position) ||
+        `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`),
+      )
+      .slice(0, 6)
+      .map((d) => ({
+        _id: d._id,
+        name: `${d.firstName} ${d.lastName}`.trim(),
+        position: d.position,
+        termStart: d.termStart,
+        termEnd: d.termEnd,
+        isBCResident: d.isBCResident,
+      }));
     const upcomingMeetings = upcomingMeetingCandidates
       .filter((m) => m.status === "Scheduled")
       .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
@@ -456,6 +502,7 @@ const summaryDefinition = {
         openGoals: goals.length,
         openTasks: tasks.length,
       },
+      board,
       upcomingMeetings: upcomingMeetings.slice(0, 3).map(toDashboardMeeting),
       upcomingFilings: upcomingFilings.slice(0, 5).map(toDashboardFiling),
       overdueFilings: overdueFilings.slice(0, 12).map(toDashboardFiling),

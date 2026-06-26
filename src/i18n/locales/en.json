@@ -115,7 +115,9 @@
     "addWorkspace": "Add workspace",
     "viewAllEntities": "All entities",
     "viewAllEntitiesHint": "Firm-wide portfolio across every entity",
-    "noSocieties": "No societies available yet."
+    "noSocieties": "No societies available yet.",
+    "filterEntities": "Filter entities…",
+    "noMatchingEntities": "No matching entities."
   },
   "settings": {
     "title": "Settings",

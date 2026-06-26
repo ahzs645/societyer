@@ -258,11 +258,14 @@ export const scanUpcoming = internalMutation({
 
     const now = Date.now();
     const cutoff = now + 14 * 24 * 60 * 60 * 1000;
+    // Board mandates get a longer runway than ordinary deadlines — re-election
+    // has to be planned into the AGM agenda.
+    const TERM_EXPIRY_LEAD_DAYS = 60;
 
     for (const s of societies) {
       if (!s) continue;
 
-      const [deadlines, filings, grantReports, screenings, commitments, recent] = await Promise.all([
+      const [deadlines, filings, grantReports, screenings, commitments, activeDirectors, recent] = await Promise.all([
         ctx.db
           .query("deadlines")
           .withIndex("by_society", (q) => q.eq("societyId", s._id))
@@ -282,6 +285,10 @@ export const scanUpcoming = internalMutation({
         ctx.db
           .query("commitments")
           .withIndex("by_society", (q) => q.eq("societyId", s._id))
+          .collect(),
+        ctx.db
+          .query("directors")
+          .withIndex("by_society_status", (q) => q.eq("societyId", s._id).eq("status", "Active"))
           .collect(),
         ctx.db
           .query("notifications")
@@ -398,6 +405,34 @@ export const scanUpcoming = internalMutation({
             ? `Commitment deadline passed on ${commitment.nextDueDate}.`
             : `Commitment deadline is ${commitment.nextDueDate}${commitment.noticeLeadDays ? `; lead time is ${commitment.noticeLeadDays} days.` : "."}`,
           linkHref: "/app/commitments",
+          createdAtISO: new Date().toISOString(),
+        });
+      }
+
+      // Director mandates: a board term needs more runway than a 14-day filing,
+      // so flag terms ending within ~60 days (Corporify's "be prepared for the
+      // AGM"). Re-election planning lives on /app/directors.
+      const termCutoff = now + TERM_EXPIRY_LEAD_DAYS * 24 * 60 * 60 * 1000;
+      for (const director of activeDirectors) {
+        if (!director.termEnd) continue;
+        const due = new Date(director.termEnd).getTime();
+        if (Number.isNaN(due) || due > termCutoff) continue;
+        const overdue = due < now;
+        const name = `${director.firstName} ${director.lastName}`.trim();
+        const title = overdue
+          ? `Director term expired: ${name}`
+          : `Director term expiring soon: ${name}`;
+        const key = `governance:/app/directors:${title}`;
+        if (alreadyNotified.has(key)) continue;
+        await ctx.db.insert("notifications", {
+          societyId: s._id,
+          kind: "governance",
+          severity: overdue ? "err" : "warn",
+          title,
+          body: overdue
+            ? `${director.position} term ended ${director.termEnd}. Re-elect or update the register before the AGM.`
+            : `${director.position} term ends ${director.termEnd}. Plan the re-election for the AGM.`,
+          linkHref: "/app/directors",
           createdAtISO: new Date().toISOString(),
         });
       }

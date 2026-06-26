@@ -494,6 +494,17 @@ function dashboardSummary() {
       openGoals: goals.filter((goal) => goal.status !== "Completed").length,
       openTasks: tasks.filter((task) => task.status !== "Done").length,
     },
+    board: [...activeDirectors]
+      .sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`))
+      .slice(0, 6)
+      .map((director: any) => ({
+        _id: director._id,
+        name: `${director.firstName} ${director.lastName}`.trim(),
+        position: director.position,
+        termStart: director.termStart ?? "",
+        termEnd: director.termEnd,
+        isBCResident: director.isBCResident,
+      })),
     upcomingMeetings: meetings.filter((meeting) => meeting.status === "Scheduled").slice(0, 3),
     upcomingFilings,
     overdueFilings: overdueFilings.slice(0, 12),
@@ -595,6 +606,17 @@ function dashboardSummaryFromStore(store: StaticDemoDexieStore | null | undefine
       openGoals: goalsRows.filter((goal: any) => goal.status !== "Completed").length,
       openTasks: tasksRows.filter((task: any) => task.status !== "Done").length,
     },
+    board: [...activeDirectors]
+      .sort((a: any, b: any) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`))
+      .slice(0, 6)
+      .map((director: any) => ({
+        _id: director._id,
+        name: `${director.firstName} ${director.lastName}`.trim(),
+        position: director.position,
+        termStart: director.termStart ?? "",
+        termEnd: director.termEnd,
+        isBCResident: director.isBCResident,
+      })),
     upcomingMeetings: meetingsRows.filter((meeting: any) => meeting.status === "Scheduled").slice(0, 3),
     upcomingFilings,
     overdueFilings: overdueFilings.slice(0, 12),
