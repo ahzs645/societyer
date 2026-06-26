@@ -2397,6 +2397,10 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     const soc = store?.getRow("societies", args?.societyId) ?? society;
     return soc?.calendarFeedToken ?? null;
   }
+  if (moduleName === "orgChartAssignments" && exportName === "listAsOf") {
+    // Offline demo has no revision history, so as-of falls back to current.
+    return store?.listRows("orgChartAssignments", { societyId: args?.societyId }) ?? [];
+  }
   if (moduleName === "society" && exportName === "list") return store?.listRows("societies", args) ?? [society];
   if (exportName === "list") return store?.listRows(tableName, args) ?? scopedRows(tables[tableName] ?? [], args);
   if (exportName === "get") return store?.getRow(tableName, args?.id) ?? byId(tables[tableName] ?? [], args?.id);

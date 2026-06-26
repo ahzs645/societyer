@@ -1,12 +1,24 @@
-import { useMemo } from "react";
-import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import {
+  Background,
+  Controls,
+  Handle,
+  Position,
+  ReactFlow,
+  useEdgesState,
+  useNodesState,
+  type Edge,
+  type Node,
+  type NodeProps,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge } from "../components/ui";
-import { Briefcase, HandHeart, Network, UserCog, UsersRound, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Network, UsersRound, X } from "lucide-react";
 
 type OrgPerson = {
   type: "director" | "employee" | "volunteer";
@@ -18,70 +30,186 @@ type OrgPerson = {
   note?: string;
 };
 
+const TYPE_TONE: Record<string, { bg: string; border: string; label: string }> = {
+  root: { bg: "var(--bg-subtle)", border: "var(--accent)", label: "Entity" },
+  director: { bg: "color-mix(in srgb, var(--accent) 12%, var(--bg-panel))", border: "var(--accent)", label: "Director" },
+  employee: { bg: "color-mix(in srgb, var(--success) 12%, var(--bg-panel))", border: "var(--success)", label: "Employee" },
+  volunteer: { bg: "color-mix(in srgb, var(--warn) 14%, var(--bg-panel))", border: "var(--warn)", label: "Volunteer" },
+};
+
+function OrgNode({ data }: NodeProps) {
+  const d = data as any;
+  const tone = TYPE_TONE[d.type] ?? TYPE_TONE.root;
+  return (
+    <div
+      style={{
+        background: tone.bg,
+        border: `1px solid ${tone.border}`,
+        borderLeft: `4px solid ${tone.border}`,
+        borderRadius: 8,
+        padding: "8px 12px",
+        minWidth: 150,
+        maxWidth: 220,
+        boxShadow: d.selected ? "0 0 0 2px var(--accent)" : "var(--shadow-sm)",
+        color: "var(--text-primary)",
+      }}
+    >
+      <Handle type="target" position={Position.Top} style={{ opacity: d.type === "root" ? 0 : undefined }} />
+      <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.4 }}>
+        {tone.label}
+      </div>
+      <div style={{ fontWeight: 600, fontSize: "var(--fs-md)" }}>{d.label}</div>
+      {d.role && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{d.role}</div>}
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  );
+}
+
+const nodeTypes = { orgPerson: OrgNode };
+
+const ROW_GAP = 170;
+const COL_GAP = 240;
+
+function directorActiveOn(d: any, dateISO: string): boolean {
+  const status = String(d?.status ?? "").toLowerCase();
+  if (status && !["active", "current", "verified"].includes(status)) return false;
+  const start = d?.termStart ? String(d.termStart).slice(0, 10) : "";
+  const end = (d?.termEnd || d?.resignedAt) ? String(d.termEnd || d.resignedAt).slice(0, 10) : "";
+  if (start && start > dateISO) return false;
+  if (end && end < dateISO) return false;
+  return true;
+}
+
+function employeeActiveOn(e: any, dateISO: string): boolean {
+  const start = e?.startDate ? String(e.startDate).slice(0, 10) : "";
+  const end = e?.endDate ? String(e.endDate).slice(0, 10) : "";
+  if (start && start > dateISO) return false;
+  if (end && end < dateISO) return false;
+  return true;
+}
+
+function isCurrentDirector(d: any): boolean {
+  return directorActiveOn(d, new Date().toISOString().slice(0, 10));
+}
+
 export function OrgChartPage() {
   const society = useSociety();
+  // As-of date (YYYY-MM-DD); "" = live. Time-travel to a past org structure.
+  const [asOf, setAsOf] = useState<string>("");
+  const [selected, setSelected] = useState<string | null>(null);
+
   const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
   const employees = useQuery(api.employees.list, society ? { societyId: society._id } : "skip");
   const volunteers = useQuery(api.volunteers.list, society ? { societyId: society._id } : "skip");
-  const assignments = useQuery(api.orgChartAssignments.list, society ? { societyId: society._id } : "skip");
+  const liveAssignments = useQuery(api.orgChartAssignments.list, society ? { societyId: society._id } : "skip");
+  const asOfAssignments = useQuery(
+    api.orgChartAssignments.listAsOf,
+    society && asOf ? { societyId: society._id, asOf } : "skip",
+  );
   const upsertAssignment = useMutation(api.orgChartAssignments.upsert);
   const removeAssignment = useMutation(api.orgChartAssignments.remove);
 
-  const currentDirectors = useMemo(
-    () => ((directors ?? []) as any[]).filter(isCurrentDirector),
-    [directors],
+  const dateForFilter = asOf || new Date().toISOString().slice(0, 10);
+
+  const allPeople = useMemo<OrgPerson[]>(() => {
+    const directorPeople: OrgPerson[] = ((directors ?? []) as any[])
+      .filter((d) => (asOf ? directorActiveOn(d, dateForFilter) : isCurrentDirector(d)))
+      .map((director) => ({
+        type: "director",
+        id: String(director._id),
+        name: `${director.firstName} ${director.lastName}`.trim(),
+        role: director.position || "Director",
+        status: director.status,
+        href: "/app/directors",
+      }));
+    const employeePeople: OrgPerson[] = ((employees ?? []) as any[])
+      .filter((e) => (asOf ? employeeActiveOn(e, dateForFilter) : !e.endDate))
+      .map((employee) => ({
+        type: "employee",
+        id: String(employee._id),
+        name: `${employee.firstName} ${employee.lastName}`.trim(),
+        role: employee.role || employee.employmentType,
+        status: employee.employmentType,
+        href: "/app/employees",
+        note: employee.notes,
+      }));
+    const volunteerPeople: OrgPerson[] = ((volunteers ?? []) as any[])
+      .filter((v) => ["Active", "Applied", "NeedsReview"].includes(v.status))
+      .map((volunteer) => ({
+        type: "volunteer",
+        id: String(volunteer._id),
+        name: `${volunteer.firstName} ${volunteer.lastName}`.trim(),
+        role: volunteer.roleWanted || "Volunteer",
+        status: volunteer.status,
+        href: "/app/volunteers",
+        note: volunteer.notes,
+      }));
+    return [...directorPeople, ...employeePeople, ...volunteerPeople];
+  }, [directors, employees, volunteers, asOf, dateForFilter]);
+
+  const assignments = (asOf ? asOfAssignments : liveAssignments) ?? [];
+  const assignmentBySubject = useMemo(
+    () => new Map(((assignments ?? []) as any[]).map((a) => [`${a.subjectType}:${a.subjectId}`, a])),
+    [assignments],
   );
-  const activeEmployees = useMemo(
-    () => ((employees ?? []) as any[]).filter((employee) => !employee.endDate),
-    [employees],
+
+  const managerOptions = useMemo(
+    () =>
+      allPeople.map((person) => ({
+        value: `${person.type}:${person.id}`,
+        label: `${person.name || "Unnamed"} — ${person.role || person.type}`,
+        person,
+      })),
+    [allPeople],
   );
-  const activeVolunteers = useMemo(
-    () => ((volunteers ?? []) as any[]).filter((volunteer) => ["Active", "Applied", "NeedsReview"].includes(volunteer.status)),
-    [volunteers],
-  );
-  const directorPeople: OrgPerson[] = currentDirectors.map((director) => ({
-    type: "director",
-    id: String(director._id),
-    name: `${director.firstName} ${director.lastName}`.trim(),
-    role: director.position || "Director",
-    status: director.status,
-    href: "/app/directors",
-  }));
-  const employeePeople: OrgPerson[] = activeEmployees.map((employee) => ({
-    type: "employee",
-    id: String(employee._id),
-    name: `${employee.firstName} ${employee.lastName}`.trim(),
-    role: employee.role || employee.employmentType,
-    status: employee.employmentType,
-    href: "/app/employees",
-    note: employee.notes,
-  }));
-  const volunteerPeople: OrgPerson[] = activeVolunteers.map((volunteer) => ({
-    type: "volunteer",
-    id: String(volunteer._id),
-    name: `${volunteer.firstName} ${volunteer.lastName}`.trim(),
-    role: volunteer.roleWanted || "Volunteer",
-    status: volunteer.status,
-    href: "/app/volunteers",
-    note: volunteer.notes,
-  }));
-  const allPeople = [...directorPeople, ...employeePeople, ...volunteerPeople];
-  const assignmentBySubject = new Map(
-    ((assignments ?? []) as any[]).map((assignment) => [`${assignment.subjectType}:${assignment.subjectId}`, assignment]),
-  );
-  const managerOptions = allPeople.map((person) => ({
-    value: `${person.type}:${person.id}`,
-    label: `${person.name || "Unnamed person"} - ${person.role || person.type}`,
-    person,
-  }));
+
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+  // Recompute the graph whenever the structure (people / assignments / date)
+  // changes. Drag positions are kept by ReactFlow between recomputes of the
+  // same structure since the dependency refs stay stable.
+  useEffect(() => {
+    const rootId = "root";
+    const tiers: Record<string, number> = { director: 0, employee: 1, volunteer: 2 };
+    const perTierCount: Record<string, number> = {};
+    const builtNodes: Node[] = [
+      {
+        id: rootId,
+        type: "orgPerson",
+        position: { x: 0, y: -ROW_GAP },
+        data: { label: society?.name ?? "Entity", role: "", type: "root" },
+      },
+    ];
+    for (const person of allPeople) {
+      const tier = tiers[person.type] ?? 1;
+      const col = perTierCount[person.type] = (perTierCount[person.type] ?? 0) + 1;
+      builtNodes.push({
+        id: `${person.type}:${person.id}`,
+        type: "orgPerson",
+        position: { x: (col - 1) * COL_GAP, y: tier * ROW_GAP },
+        data: { label: person.name || "Unnamed", role: person.role, type: person.type, href: person.href },
+      });
+    }
+    const builtEdges: Edge[] = allPeople.map((person) => {
+      const a = assignmentBySubject.get(`${person.type}:${person.id}`);
+      const source = a?.managerId && a?.managerType ? `${a.managerType}:${a.managerId}` : rootId;
+      return {
+        id: `${source}->${person.type}:${person.id}`,
+        source,
+        target: `${person.type}:${person.id}`,
+        type: "smoothstep",
+        style: { stroke: "var(--border-strong)", strokeWidth: 1.5 },
+      };
+    });
+    setNodes(builtNodes);
+    setEdges(builtEdges);
+  }, [allPeople, assignmentBySubject, society?.name, setNodes, setEdges]);
+
   const saveManager = async (person: OrgPerson, value: string) => {
     if (!society) return;
     if (!value) {
-      await removeAssignment({
-        societyId: society._id,
-        subjectType: person.type,
-        subjectId: person.id,
-      });
+      await removeAssignment({ societyId: society._id, subjectType: person.type, subjectId: person.id });
       return;
     }
     const manager = managerOptions.find((option) => option.value === value)?.person;
@@ -100,165 +228,109 @@ export function OrgChartPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
+  const selectedPerson = allPeople.find((p) => `${p.type}:${p.id}` === selected) ?? null;
+  const selectedAssignment = selected ? assignmentBySubject.get(selected) : undefined;
+  const selectedManagerValue =
+    selectedAssignment?.managerType && selectedAssignment?.managerId
+      ? `${selectedAssignment.managerType}:${selectedAssignment.managerId}`
+      : "";
+
   return (
     <div className="page page--wide">
       <PageHeader
         title="Org chart"
         icon={<Network size={16} />}
         iconColor="pink"
-        subtitle="A derived people map from current directors, active employees, and volunteer records."
+        subtitle="A live, draggable map of directors, employees, and volunteers and their reporting lines. Drag to rearrange, zoom to explore, and use “As of” to see a past structure."
+        actions={
+          <label style={{ display: "flex", alignItems: "center", gap: 6 }} title="Reconstruct the org chart at a past date">
+            <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>As of</span>
+            <input type="date" className="input" value={asOf} onChange={(e) => setAsOf(e.target.value)} style={{ width: 150 }} />
+            {asOf && <button className="btn btn--ghost btn--sm" onClick={() => setAsOf("")}>Live</button>}
+          </label>
+        }
       />
 
-      <div className="org-chart">
-        <div className="org-chart__root">
-          <div className="org-card org-card--root">
-            <UsersRound size={18} />
-            <div>
-              <strong>{society.name}</strong>
-              <span>{currentDirectors.length} current director{currentDirectors.length === 1 ? "" : "s"}</span>
+      {asOf && (
+        <div className="muted" style={{ marginBottom: 12 }}>
+          Showing the structure as it stood on <strong>{asOf}</strong> (reporting lines from the saved history; people active on that date).
+          Editing is disabled while time-travelling.
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 16, alignItems: "stretch" }}>
+        <div style={{ flex: 1, height: 620, border: "1px solid var(--border)", borderRadius: "var(--r-md)", overflow: "hidden" }}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            nodeTypes={nodeTypes}
+            onNodeClick={(_, node) => setSelected(node.id === "root" ? null : node.id)}
+            fitView
+            proOptions={{ hideAttribution: true }}
+          >
+            <Background />
+            <Controls />
+          </ReactFlow>
+        </div>
+
+        <aside style={{ width: 280, flexShrink: 0 }}>
+          <div className="card">
+            <div className="card__head"><h2 className="card__title">{selectedPerson ? "Reporting line" : "Select a person"}</h2></div>
+            <div className="card__body col" style={{ gap: 12 }}>
+              {!selectedPerson ? (
+                <div className="muted">Click a node to set who they report to. The chart redraws automatically.</div>
+              ) : (
+                <>
+                  <div>
+                    <Link to={selectedPerson.href}><strong>{selectedPerson.name || "Unnamed person"}</strong></Link>
+                    <div className="muted">{selectedPerson.role}</div>
+                    {selectedPerson.status && (
+                      <Badge tone={selectedPerson.status === "Active" ? "success" : "neutral"}>{selectedPerson.status}</Badge>
+                    )}
+                  </div>
+                  <label style={{ display: "block" }}>
+                    <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>Reports to</span>
+                    <select
+                      className="input"
+                      value={selectedManagerValue}
+                      disabled={Boolean(asOf)}
+                      onChange={(e) => saveManager(selectedPerson, e.target.value)}
+                    >
+                      <option value="">No manager (reports to the entity)</option>
+                      {managerOptions
+                        .filter((o) => o.value !== `${selectedPerson.type}:${selectedPerson.id}`)
+                        .map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                    </select>
+                  </label>
+                  {selectedManagerValue && !asOf && (
+                    <button className="btn btn--ghost btn--sm" onClick={() => saveManager(selectedPerson, "")}>
+                      <X size={12} /> Clear manager
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
-        </div>
 
-        <div className="org-chart__lanes">
-          <OrgLane
-            title="Board"
-            icon={<UserCog size={14} />}
-            count={currentDirectors.length}
-            empty="No active directors recorded."
-          >
-            {directorPeople.map((person) => (
-              <OrgPersonCard
-                key={person.id}
-                person={person}
-                assignment={assignmentBySubject.get(`${person.type}:${person.id}`)}
-                managerOptions={managerOptions.filter((option) => option.value !== `${person.type}:${person.id}`)}
-                onSaveManager={saveManager}
-              />
-            ))}
-          </OrgLane>
-
-          <OrgLane
-            title="Employees"
-            icon={<Briefcase size={14} />}
-            count={activeEmployees.length}
-            empty="No active employees recorded."
-          >
-            {employeePeople.map((person) => (
-              <OrgPersonCard
-                key={person.id}
-                person={person}
-                assignment={assignmentBySubject.get(`${person.type}:${person.id}`)}
-                managerOptions={managerOptions.filter((option) => option.value !== `${person.type}:${person.id}`)}
-                onSaveManager={saveManager}
-              />
-            ))}
-          </OrgLane>
-
-          <OrgLane
-            title="Volunteers"
-            icon={<HandHeart size={14} />}
-            count={activeVolunteers.length}
-            empty="No active volunteers recorded."
-          >
-            {volunteerPeople.map((person) => (
-              <OrgPersonCard
-                key={person.id}
-                person={person}
-                assignment={assignmentBySubject.get(`${person.type}:${person.id}`)}
-                managerOptions={managerOptions.filter((option) => option.value !== `${person.type}:${person.id}`)}
-                onSaveManager={saveManager}
-              />
-            ))}
-          </OrgLane>
-        </div>
-
-        <div className="org-chart__note">
-          <strong>Manager assignments</strong>
-          <p>
-            Assign a reports-to relationship on any active person. Assignments are stored separately from the source director, employee, and volunteer records.
-          </p>
-        </div>
+          <div className="card" style={{ marginTop: 12 }}>
+            <div className="card__body col" style={{ gap: 6 }}>
+              <div className="row" style={{ gap: 8, alignItems: "center" }}>
+                <UsersRound size={16} />
+                <strong>{allPeople.length}</strong>
+                <span className="muted">people on the chart</span>
+              </div>
+              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                {TYPE_TONE.director.label}s, {TYPE_TONE.employee.label.toLowerCase()}s, and {TYPE_TONE.volunteer.label.toLowerCase()}s. Assignments are
+                stored separately from the source records and versioned so the chart can be rewound.
+              </div>
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   );
-}
-
-function OrgLane({
-  title,
-  icon,
-  count,
-  empty,
-  children,
-}: {
-  title: string;
-  icon: ReactNode;
-  count: number;
-  empty: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="org-lane">
-      <div className="org-lane__head">
-        <span>{icon}{title}</span>
-        <Badge tone="neutral">{count}</Badge>
-      </div>
-      <div className="org-lane__body">
-        {count ? children : <div className="org-lane__empty">{empty}</div>}
-      </div>
-    </section>
-  );
-}
-
-function OrgPersonCard({
-  person,
-  assignment,
-  managerOptions,
-  onSaveManager,
-}: {
-  person: OrgPerson;
-  assignment?: any;
-  managerOptions: Array<{ value: string; label: string; person: OrgPerson }>;
-  onSaveManager: (person: OrgPerson, value: string) => void | Promise<void>;
-}) {
-  const selected = assignment?.managerType && assignment?.managerId
-    ? `${assignment.managerType}:${assignment.managerId}`
-    : "";
-  return (
-    <div className="org-card" title={person.note || undefined}>
-      <div className="org-card__main">
-        <Link to={person.href}>
-          <strong>{person.name.trim() || "Unnamed person"}</strong>
-          <span>{person.role || "Unassigned role"}</span>
-        </Link>
-        <div className="org-card__manager">
-          <select
-            className="input"
-            value={selected}
-            aria-label={`Manager for ${person.name}`}
-            onChange={(event) => onSaveManager(person, event.target.value)}
-          >
-            <option value="">No manager assigned</option>
-            {managerOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-          {selected && (
-            <button className="btn-action btn-action--icon" type="button" aria-label={`Clear manager for ${person.name}`} onClick={() => onSaveManager(person, "")}>
-              <X size={12} />
-            </button>
-          )}
-        </div>
-        {assignment?.managerName && <span className="org-card__reports">Reports to {assignment.managerName}</span>}
-      </div>
-      {person.status && <Badge tone={person.status === "Active" ? "success" : "neutral"}>{person.status}</Badge>}
-    </div>
-  );
-}
-
-function isCurrentDirector(director: any) {
-  const status = String(director?.status ?? "").toLowerCase();
-  if (status && !["active", "current", "verified"].includes(status)) return false;
-  const end = director?.termEnd || director?.resignedAt;
-  return !end || String(end).slice(0, 10) >= new Date().toISOString().slice(0, 10);
 }

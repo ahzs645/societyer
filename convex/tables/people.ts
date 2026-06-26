@@ -151,4 +151,23 @@ export const peopleTables = {
   })
     .index("by_society", ["societyId"])
     .index("by_subject", ["societyId", "subjectType", "subjectId"]),
+
+  // Append-only bitemporal history of org-chart assignments (mirrors
+  // roleHolderRevisions): each edit closes the open revision and opens a new one,
+  // so the chart can be reconstructed as of any past date. History starts from
+  // the first edit after this table existed.
+  orgChartAssignmentRevisions: defineTable({
+    societyId: v.id("societies"),
+    subjectType: v.string(),
+    subjectId: v.string(),
+    subjectName: v.string(),
+    managerType: v.optional(v.string()),
+    managerId: v.optional(v.string()),
+    managerName: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    enteredAtISO: v.string(),
+    supersededAtISO: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_subject", ["societyId", "subjectType", "subjectId"]),
 };
