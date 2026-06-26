@@ -21,6 +21,16 @@ crons.daily(
   {},
 );
 
+// Daily 1pm UTC (~6am Pacific) — bundle each member's unread items into a
+// digest email (and opt-in SMS) so people get a morning summary without living
+// in the bell. Honors per-user notification prefs; snoozed items are excluded.
+crons.daily(
+  "daily notification digest",
+  { hourUTC: 13, minuteUTC: 0 },
+  internal.notifications.sendDailyDigests,
+  {},
+);
+
 // Weekly retention review — flag documents past their retention period so a
 // human can decide whether to purge (CRA 7y for financial, 10y for most other
 // records; bylaws/constitution kept indefinitely).

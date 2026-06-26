@@ -19,6 +19,9 @@ export const communicationsTables = {
     // bell + unread count immediately, but kept visible on the Notifications
     // page until the daily purge removes it after the retention window.
     dismissedAt: v.optional(v.string()),
+    // Hidden from the bell + unread count + digest until this ISO time passes.
+    // Unlike dismiss, the row resurfaces on its own when the snooze elapses.
+    snoozedUntilISO: v.optional(v.string()),
     createdAtISO: v.string(),
   })
     .index("by_society", ["societyId"])
@@ -26,7 +29,7 @@ export const communicationsTables = {
 
   notificationPrefs: defineTable({
     userId: v.id("users"),
-    channel: v.string(), // email | inApp | slack
+    channel: v.string(), // email | sms | inApp | slack
     kind: v.string(), // deadline | filing | minutes | billing | bot | general | all
     enabled: v.boolean(),
   }).index("by_user", ["userId"]),

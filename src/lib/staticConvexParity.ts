@@ -104,6 +104,7 @@ export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "notifications:dismissAll",
   "notifications:markAllRead",
   "notifications:markRead",
+  "notifications:snooze",
   "organizationHistory:bulkImport",
   "organizationHistory:extractBudgetSourceDetails",
   "organizationHistory:saveItem",

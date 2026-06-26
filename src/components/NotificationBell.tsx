@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
-import { Bell, CheckCircle2, AlertTriangle, Info, XCircle, X } from "lucide-react";
+import { Bell, CheckCircle2, AlertTriangle, Info, XCircle, X, Clock } from "lucide-react";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { Link } from "react-router-dom";
 import { formatDateTime } from "../lib/format";
@@ -23,6 +23,7 @@ export function NotificationBell() {
   const markAllRead = useMutation(api.notifications.markAllRead);
   const dismiss = useMutation(api.notifications.dismiss);
   const dismissAll = useMutation(api.notifications.dismissAll);
+  const snooze = useMutation(api.notifications.snooze);
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
@@ -244,6 +245,38 @@ export function NotificationBell() {
                   <X size={13} />
                 </button>
               );
+              const snoozeButton = (
+                <button
+                  className="notif-clear"
+                  aria-label="Snooze for 1 day"
+                  title="Snooze for 1 day"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const until = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+                    void snooze({ id: n._id, untilISO: until });
+                  }}
+                  style={{
+                    position: "absolute",
+                    top: 8,
+                    right: 28,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 20,
+                    height: 20,
+                    padding: 0,
+                    border: 0,
+                    borderRadius: "var(--r-sm)",
+                    background: "transparent",
+                    color: "var(--text-tertiary)",
+                    cursor: "pointer",
+                    zIndex: 1,
+                  }}
+                >
+                  <Clock size={13} />
+                </button>
+              );
               return (
                 <div key={n._id} style={{ position: "relative" }}>
                   {n.linkHref ? (
@@ -253,6 +286,7 @@ export function NotificationBell() {
                   ) : (
                     body
                   )}
+                  {snoozeButton}
                   {clearButton}
                 </div>
               );

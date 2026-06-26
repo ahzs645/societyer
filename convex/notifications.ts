@@ -1,8 +1,9 @@
 import { v } from "convex/values";
-import { query, mutation, action, internalMutation } from "./_generated/server";
+import { query, mutation, action, internalMutation, internalAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { sendEmail } from "./providers/email";
+import { sendSms } from "./providers/sms";
 
 /**
  * Notifications historically stored app-relative links as bare paths
@@ -31,6 +32,7 @@ export const list = query({
   },
   returns: v.any(),
   handler: async (ctx, { societyId, userId, limit, unreadOnly, includeDismissed }) => {
+    const nowISO = new Date().toISOString();
     const rows = await ctx.db
       .query("notifications")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -41,6 +43,9 @@ export const list = query({
         if (userId && r.userId && r.userId !== userId) return false;
         if (unreadOnly && r.readAt) return false;
         if (!includeDismissed && r.dismissedAt) return false;
+        // Snoozed rows leave the bell until their time passes; the full page
+        // (includeDismissed) still shows them so the user can un-snooze.
+        if (!includeDismissed && r.snoozedUntilISO && r.snoozedUntilISO > nowISO) return false;
         return true;
       })
       .map((r) => ({ ...r, linkHref: normalizeNotificationLink(r.linkHref) }));
@@ -51,6 +56,7 @@ export const unreadCount = query({
   args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, { societyId, userId }) => {
+    const nowISO = new Date().toISOString();
     const rows = await ctx.db
       .query("notifications")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -59,6 +65,7 @@ export const unreadCount = query({
     return rows.filter((r) => {
       if (r.readAt) return false;
       if (r.dismissedAt) return false;
+      if (r.snoozedUntilISO && r.snoozedUntilISO > nowISO) return false;
       if (userId && r.userId && r.userId !== userId) return false;
       return true;
     }).length;
@@ -122,6 +129,16 @@ export const dismiss = mutation({
       dismissedAt: now,
       readAt: existing?.readAt ?? now,
     });
+  },
+});
+
+/** Hide a notification from the bell until `untilISO` (null un-snoozes it). The
+ *  row resurfaces automatically once the time passes — no purge needed. */
+export const snooze = mutation({
+  args: { id: v.id("notifications"), untilISO: v.union(v.string(), v.null()) },
+  returns: v.any(),
+  handler: async (ctx, { id, untilISO }) => {
+    await ctx.db.patch(id, { snoozedUntilISO: untilISO ?? undefined });
   },
 });
 
@@ -440,42 +457,87 @@ export const scanUpcoming = internalMutation({
   },
 });
 
-// Action: bundle digest emails for anyone who wants them.
+/**
+ * Does a (channel, kind) pair pass a user's notification prefs? An exact
+ * (channel, kind) row wins; otherwise a (channel, "all") row; otherwise the
+ * channel's default. Email defaults ON (opt-out per kind); SMS defaults OFF
+ * (opt-in) so the daily cron never texts someone who never asked.
+ */
+function digestAllows(
+  prefs: Array<{ channel: string; kind: string; enabled: boolean }>,
+  channel: string,
+  kind: string,
+): boolean {
+  const exact = prefs.find((p) => p.channel === channel && p.kind === kind);
+  if (exact) return exact.enabled;
+  const wildcard = prefs.find((p) => p.channel === channel && p.kind === "all");
+  if (wildcard) return wildcard.enabled;
+  return channel === "email";
+}
+
+// Action: bundle digest email + SMS for anyone who wants them. Per-user, the
+// open items are filtered by that user's per-kind prefs for each channel.
 export const sendDigest = action({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, { societyId }) => {
-    const users = await ctx.runQuery(api.users.list, { societyId });
-    const notifications = await ctx.runQuery(api.notifications.list, {
-      societyId,
-      limit: 50,
-      unreadOnly: true,
-    });
-    if (notifications.length === 0) return { sent: 0 };
+    const [users, notifications] = await Promise.all([
+      ctx.runQuery(api.users.list, { societyId }),
+      ctx.runQuery(api.notifications.list, { societyId, limit: 50, unreadOnly: true }),
+    ]);
+    if (notifications.length === 0) return { emailsSent: 0, smsSent: 0 };
 
-    const lines = notifications
-      .slice(0, 10)
-      .map((n: any) => `• [${n.severity.toUpperCase()}] ${n.title}`)
-      .join("\n");
-
-    let sent = 0;
+    let emailsSent = 0;
+    let smsSent = 0;
     for (const u of users) {
       if (u.status !== "Active") continue;
-      const prefs = await ctx.runQuery(api.notifications.listPrefs, {
-        userId: u._id,
-      });
-      const allowEmail = prefs.length === 0
-        ? true
-        : prefs.some((p: any) => p.channel === "email" && p.enabled);
-      if (!allowEmail) continue;
-      await sendEmail({
-        to: u.email,
-        subject: `Societyer digest — ${notifications.length} open item${notifications.length === 1 ? "" : "s"}`,
-        text: `Hi ${u.displayName},\n\n${lines}\n\nOpen Societyer to review.`,
-        tag: "digest",
-      });
-      sent += 1;
+      const prefs = await ctx.runQuery(api.notifications.listPrefs, { userId: u._id });
+
+      const emailItems = notifications.filter((n: any) => digestAllows(prefs, "email", n.kind));
+      if (emailItems.length > 0 && u.email) {
+        const lines = emailItems
+          .slice(0, 10)
+          .map((n: any) => `• [${n.severity.toUpperCase()}] ${n.title}`)
+          .join("\n");
+        await sendEmail({
+          to: u.email,
+          subject: `Societyer digest — ${emailItems.length} open item${emailItems.length === 1 ? "" : "s"}`,
+          text: `Hi ${u.displayName},\n\n${lines}\n\nOpen Societyer to review.`,
+          tag: "digest",
+        });
+        emailsSent += 1;
+      }
+
+      // SMS is opt-in: needs a phone AND an explicitly-enabled sms pref.
+      const smsOptedIn = prefs.some((p: any) => p.channel === "sms" && p.enabled);
+      const smsItems = notifications.filter((n: any) => digestAllows(prefs, "sms", n.kind));
+      if (smsOptedIn && u.phone && smsItems.length > 0) {
+        const top = smsItems.slice(0, 3).map((n: any) => n.title).join("; ");
+        await sendSms({
+          to: u.phone,
+          body: `Societyer: ${smsItems.length} open item${smsItems.length === 1 ? "" : "s"}. ${top}`,
+          tag: "digest",
+        });
+        smsSent += 1;
+      }
     }
-    return { sent };
+    return { emailsSent, smsSent };
+  },
+});
+
+// Cron entry: run the digest for every society (the public action is per-entity).
+export const sendDailyDigests = internalAction({
+  args: {},
+  returns: v.any(),
+  handler: async (ctx) => {
+    const societies = await ctx.runQuery(api.society.list, {});
+    let emailsSent = 0;
+    let smsSent = 0;
+    for (const s of societies) {
+      const r = await ctx.runAction(api.notifications.sendDigest, { societyId: s._id });
+      emailsSent += r.emailsSent ?? 0;
+      smsSent += r.smsSent ?? 0;
+    }
+    return { societies: societies.length, emailsSent, smsSent };
   },
 });

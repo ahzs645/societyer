@@ -62,11 +62,13 @@ export function NotificationsPage() {
                 if (!ok) return;
                 setBusy(true);
                 try {
-                  const { sent } = await sendDigest({ societyId: society._id });
+                  const { emailsSent, smsSent } = await sendDigest({ societyId: society._id });
+                  const total = (emailsSent ?? 0) + (smsSent ?? 0);
                   toast.success(
-                    sent === 0
-                      ? "No recipients opted in — sent 0 digest emails."
-                      : `Queued digest to ${sent} recipient${sent === 1 ? "" : "s"}.`,
+                    total === 0
+                      ? "No recipients opted in — sent 0 digests."
+                      : `Queued ${emailsSent} email${emailsSent === 1 ? "" : "s"}` +
+                        (smsSent > 0 ? ` and ${smsSent} SMS` : "") + ".",
                   );
                 } catch (err: any) {
                   toast.error(err?.message ?? "Digest failed");

@@ -9,6 +9,7 @@ export const platformTables = {
   users: defineTable({
     societyId: v.id("societies"),
     email: v.string(),
+    phone: v.optional(v.string()), // E.164, for opt-in SMS digests
     displayName: v.string(),
     role: v.string(), // Owner | Admin | Director | Member | Viewer
     authProvider: v.optional(v.string()),
