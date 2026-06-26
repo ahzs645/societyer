@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
-import { CalendarClock, UploadCloud } from "lucide-react";
+import { convexSiteUrl } from "../lib/convexSite";
+import { CalendarClock, UploadCloud, Rss, Copy, RefreshCw } from "lucide-react";
 
 type ParsedEvent = { summary: string; start?: string; end?: string; location?: string; iCalUID?: string; description?: string };
 
@@ -49,10 +50,13 @@ export function CalendarSyncPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const stage = useMutation(api.calendarSync.stageCalendarEvents);
+  const setFeedToken = useMutation(api.calendarFeed.setFeedToken);
+  const feedToken = useQuery(api.calendarFeed.getFeedToken, society ? { societyId: society._id } : "skip");
   const [provider, setProvider] = useState("ics");
   const [calendarName, setCalendarName] = useState("");
   const [icsText, setIcsText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [feedBusy, setFeedBusy] = useState(false);
 
   const parsed = useMemo(() => (icsText.trim() ? parseIcs(icsText) : []), [icsText]);
 
@@ -62,6 +66,46 @@ export function CalendarSyncPage() {
   const onFile = async (file?: File) => {
     if (!file) return;
     setIcsText(await file.text());
+  };
+
+  const feedUrl = feedToken ? `${convexSiteUrl()}/calendar/feed?token=${feedToken}` : null;
+  const webcalUrl = feedUrl ? feedUrl.replace(/^https?:\/\//, "webcal://") : null;
+
+  const enableFeed = async () => {
+    setFeedBusy(true);
+    try {
+      // Token is generated client-side (128 bits) and stored by the mutation,
+      // mirroring apiPlatform's client-hash model. Regenerating rotates it.
+      const token = (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
+      await setFeedToken({ societyId: society._id, token });
+      toast.success(feedToken ? "Calendar feed link rotated" : "Calendar feed enabled");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not enable the feed");
+    } finally {
+      setFeedBusy(false);
+    }
+  };
+
+  const disableFeed = async () => {
+    setFeedBusy(true);
+    try {
+      await setFeedToken({ societyId: society._id, token: null });
+      toast.success("Calendar feed disabled");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not disable the feed");
+    } finally {
+      setFeedBusy(false);
+    }
+  };
+
+  const copyFeed = async () => {
+    if (!feedUrl) return;
+    try {
+      await navigator.clipboard.writeText(feedUrl);
+      toast.success("Feed URL copied");
+    } catch {
+      toast.error("Could not copy the URL");
+    }
   };
 
   const submit = async () => {
@@ -108,6 +152,59 @@ export function CalendarSyncPage() {
           </button>
         }
       />
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">
+            <Rss size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />
+            Subscribe (outbound feed)
+          </h2>
+          {feedToken ? <Badge tone="success">On</Badge> : <Badge tone="neutral">Off</Badge>}
+        </div>
+        <div className="card__body col" style={{ gap: 12 }}>
+          <div className="muted">
+            A read-only iCalendar feed of this entity's deadlines, filings, and meetings. Add the URL to
+            Google Calendar, Outlook, or Apple Calendar to keep governance dates in your everyday calendar —
+            it refreshes automatically.
+          </div>
+          {feedToken === undefined ? (
+            <div className="muted">Loading…</div>
+          ) : feedToken ? (
+            <>
+              <Field label="Subscribe URL">
+                <div className="row" style={{ gap: 8 }}>
+                  <input
+                    className="input mono"
+                    readOnly
+                    value={feedUrl ?? ""}
+                    style={{ flex: 1, fontSize: 12 }}
+                    onFocus={(e) => e.currentTarget.select()}
+                  />
+                  <button className="btn" onClick={copyFeed}><Copy size={12} /> Copy</button>
+                  <a className="btn" href={webcalUrl ?? "#"}><CalendarClock size={12} /> Subscribe</a>
+                </div>
+              </Field>
+              <div className="row" style={{ gap: 8 }}>
+                <button className="btn btn--ghost btn--sm" disabled={feedBusy} onClick={enableFeed}>
+                  <RefreshCw size={12} /> Regenerate link
+                </button>
+                <button className="btn btn--ghost btn--sm" disabled={feedBusy} onClick={disableFeed}>
+                  Disable feed
+                </button>
+              </div>
+              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                Anyone with this URL can read these dates. Regenerate to revoke the old link.
+              </div>
+            </>
+          ) : (
+            <div>
+              <button className="btn-action btn-action--primary" disabled={feedBusy} onClick={enableFeed}>
+                <Rss size={12} /> Enable calendar feed
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head"><h2 className="card__title">Source</h2></div>

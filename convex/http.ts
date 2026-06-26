@@ -3,6 +3,7 @@ import { httpAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, streamText } from "ai";
+import { buildICalendar } from "../shared/icalendar";
 
 const http = httpRouter();
 const WEBHOOK_TOLERANCE_MS = 5 * 60 * 1000;
@@ -578,6 +579,36 @@ http.route({
     }
 
     return new Response("ok", { status: 200 });
+  }),
+});
+
+// Read-only iCalendar feed: subscribe URL is /calendar/feed?token=<bearer>.
+// The token alone identifies the society (it's the credential), so external
+// calendar clients can poll without an Authorization header.
+http.route({
+  path: "/calendar/feed",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const token = new URL(request.url).searchParams.get("token") ?? "";
+    if (!token) {
+      return new Response("Missing token", { status: 400 });
+    }
+    const feed = await ctx.runQuery(internal.calendarFeed.feedByToken, { token });
+    if (!feed) {
+      return new Response("Unknown feed token", { status: 404 });
+    }
+    const body = buildICalendar(feed.events, {
+      calendarName: feed.calendarName,
+      dtstamp: new Date().toISOString(),
+    });
+    return new Response(body, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/calendar; charset=utf-8",
+        "Content-Disposition": 'inline; filename="societyer.ics"',
+        "Cache-Control": "no-cache",
+      },
+    });
   }),
 });
 

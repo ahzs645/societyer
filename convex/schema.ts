@@ -78,6 +78,9 @@ export default defineSchema({
     logoInvertInDarkMode: v.optional(v.boolean()),
     letterheadStorageId: v.optional(v.id("_storage")),
     publicSlug: v.optional(v.string()),
+    // Opaque token for the read-only outbound iCalendar feed (export_ics).
+    // Present once the user enables the subscribe URL; the token is the bearer.
+    calendarFeedToken: v.optional(v.string()),
     publicSummary: v.optional(v.string()),
     publicContactEmail: v.optional(v.string()),
     publicTransparencyEnabled: v.optional(v.boolean()),
@@ -116,7 +119,9 @@ export default defineSchema({
     // YCN FMT_Page_DOC_ID: stamp a deterministic document id atop generated docs.
     includeDocumentIdHeader: v.optional(v.boolean()),
     updatedAt: v.number(),
-  }).index("by_public_slug", ["publicSlug"]),
+  })
+    .index("by_public_slug", ["publicSlug"])
+    .index("by_calendar_feed_token", ["calendarFeedToken"]),
 
   organizationAddresses: defineTable({
     societyId: v.id("societies"),

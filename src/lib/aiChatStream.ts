@@ -1,3 +1,5 @@
+import { convexSiteUrl } from "./convexSite";
+
 export async function streamChatMessage({
   societyId,
   threadId,
@@ -57,9 +59,3 @@ function parseSseEvent(chunk: string) {
   return { event, data: JSON.parse(data) };
 }
 
-function convexSiteUrl() {
-  const apiUrl = String(import.meta.env.VITE_CONVEX_URL ?? "");
-  if (apiUrl.includes(":3220")) return apiUrl.replace(":3220", ":3221");
-  if (apiUrl.includes(":3210")) return apiUrl.replace(":3210", ":3211");
-  return apiUrl.replace(/\/+$/, "");
-}

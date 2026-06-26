@@ -2382,6 +2382,10 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
   if (moduleName === "legalOperations" && exportName === "templateEngine") {
     return staticTemplateEngine(store, args);
   }
+  if (moduleName === "calendarFeed" && exportName === "getFeedToken") {
+    const soc = store?.getRow("societies", args?.societyId) ?? society;
+    return soc?.calendarFeedToken ?? null;
+  }
   if (moduleName === "society" && exportName === "list") return store?.listRows("societies", args) ?? [society];
   if (exportName === "list") return store?.listRows(tableName, args) ?? scopedRows(tables[tableName] ?? [], args);
   if (exportName === "get") return store?.getRow(tableName, args?.id) ?? byId(tables[tableName] ?? [], args?.id);
