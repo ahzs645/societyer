@@ -18,7 +18,8 @@ export const complianceTables = {
     .index("by_society", ["societyId"])
     .index("by_society_due", ["societyId", "dueDate"])
     .index("by_society_status", ["societyId", "status"])
-    .index("by_society_done", ["societyId", "done"]),
+    .index("by_society_done", ["societyId", "done"])
+    .searchIndex("search_title", { searchField: "title", filterFields: ["societyId"] }),
 
   commitments: defineTable({
     societyId: v.id("societies"),

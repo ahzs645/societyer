@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { useConvex } from "convex/react";
+import { useConvex, useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -60,6 +60,7 @@ import type { CSSProperties } from "react";
 
 type CommandCategory =
   | "Recent"
+  | "Across entities"
   | "Entities"
   | "Navigation"
   | "Governance"
@@ -433,6 +434,13 @@ export function CommandPalette() {
   const society = useSociety();
   const societies = useSocieties();
   const staticCommands = useStaticCommands();
+  const searchTerm = q.trim();
+  // Cross-entity full-text search (deadlines/documents/people across every
+  // entity). Reactive: streams in as the user types; skipped under 2 chars.
+  const crossEntityResults = useQuery(
+    api.firm.search,
+    searchTerm.length >= 2 ? { query: searchTerm } : "skip",
+  ) as Array<{ kind: string; id: string; title: string; societyId: string | null; societyName: string | null; to: string }> | undefined;
 
   const actions = useMemo<CommandItem[]>(
     () =>
@@ -616,8 +624,25 @@ export function CommandPalette() {
       buckets.get(item.category)?.push(item);
     }
 
+    // Cross-entity search hits come pre-matched by the server, so they bypass
+    // the local scoreMatch and lead the list as their own group while searching.
+    const crossEntityItems: CommandItem[] = (crossEntityResults ?? []).map((r) => ({
+      id: `search:${r.kind}:${r.id}`,
+      label: r.societyName ? `${r.title} · ${r.societyName}` : r.title,
+      icon: r.kind === "document" ? FileText : r.kind === "person" ? Users : CalendarClock,
+      category: "Across entities" as const,
+      run: () => {
+        if (r.societyId) setStoredSocietyId(r.societyId as any);
+        navigate(r.to);
+      },
+    }));
+
     const flat: CommandItem[] = [];
     const groups: Array<{ category: CommandCategory; items: CommandItem[] }> = [];
+    if (ql && crossEntityItems.length > 0) {
+      groups.push({ category: "Across entities", items: crossEntityItems });
+      flat.push(...crossEntityItems);
+    }
     for (const cat of CATEGORY_ORDER) {
       const items = buckets.get(cat) ?? [];
       if (items.length === 0) continue;
@@ -625,7 +650,7 @@ export function CommandPalette() {
       flat.push(...items);
     }
     return { flat, groups };
-  }, [q, society, societies, actions, recents, recentRecords, registeredCommands, metadataCommands, navigate]);
+  }, [q, society, societies, crossEntityResults, actions, recents, recentRecords, registeredCommands, metadataCommands, navigate]);
 
   if (!open) return null;
 

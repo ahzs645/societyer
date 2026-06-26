@@ -39,7 +39,8 @@ export const documentTables = {
     .index("by_committee", ["committeeId"])
     .index("by_meeting", ["meetingId"])
     .index("by_library_section", ["societyId", "librarySection"])
-    .index("by_last_opened", ["societyId", "lastOpenedAtISO"]),
+    .index("by_last_opened", ["societyId", "lastOpenedAtISO"])
+    .searchIndex("search_title", { searchField: "title", filterFields: ["societyId"] }),
 
   meetingMaterials: defineTable({
     societyId: v.id("societies"),

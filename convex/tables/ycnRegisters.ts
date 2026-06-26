@@ -35,7 +35,8 @@ export const sharedRegisterTables = {
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })
-    .index("by_search_name", ["searchName"]),
+    .index("by_search_name", ["searchName"])
+    .searchIndex("search_full_name", { searchField: "fullName" }),
 
   // External service-provider register. Logic: shared/serviceProviders.ts.
   serviceProviders: defineTable({

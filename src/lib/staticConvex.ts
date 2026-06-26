@@ -2401,6 +2401,29 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     // Offline demo has no revision history, so as-of falls back to current.
     return store?.listRows("orgChartAssignments", { societyId: args?.societyId }) ?? [];
   }
+  if (moduleName === "firm" && exportName === "search") {
+    const q = String(args?.query ?? "").trim().toLowerCase();
+    if (q.length < 2) return [];
+    const socs = store?.listRows("societies", {}) ?? [society];
+    const nameById = new Map(socs.map((s: any) => [String(s._id), s.name]));
+    const results: any[] = [];
+    for (const d of store?.listRows("deadlines", {}) ?? []) {
+      if (String(d.title ?? "").toLowerCase().includes(q)) {
+        results.push({ kind: "deadline", id: String(d._id), title: d.title, societyId: String(d.societyId), societyName: nameById.get(String(d.societyId)) ?? "Entity", to: "/app/deadlines" });
+      }
+    }
+    for (const d of store?.listRows("documents", {}) ?? []) {
+      if (String(d.title ?? "").toLowerCase().includes(q)) {
+        results.push({ kind: "document", id: String(d._id), title: d.title, societyId: String(d.societyId), societyName: nameById.get(String(d.societyId)) ?? "Entity", to: "/app/documents" });
+      }
+    }
+    for (const p of store?.listRows("peopleDirectory", {}) ?? []) {
+      if (String(p.fullName ?? "").toLowerCase().includes(q)) {
+        results.push({ kind: "person", id: String(p._id), title: p.fullName, societyId: null, societyName: null, to: "/app/people-directory" });
+      }
+    }
+    return results.slice(0, 30);
+  }
   if (moduleName === "society" && exportName === "list") return store?.listRows("societies", args) ?? [society];
   if (exportName === "list") return store?.listRows(tableName, args) ?? scopedRows(tables[tableName] ?? [], args);
   if (exportName === "get") return store?.getRow(tableName, args?.id) ?? byId(tables[tableName] ?? [], args?.id);

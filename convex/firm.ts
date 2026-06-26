@@ -87,6 +87,48 @@ export const overview = query({
   },
 });
 
+/**
+ * Cross-entity full-text search over deadlines, documents, and people. Fans out
+ * the per-table search indexes globally (no society filter) so one query spans
+ * every entity, then resolves each hit's entity name. Powers the command
+ * palette's "Across entities" group.
+ */
+export const search = query({
+  args: { query: v.string() },
+  returns: v.any(),
+  handler: async (ctx, { query: term }) => {
+    const q = String(term ?? "").trim();
+    if (q.length < 2) return [];
+    const [deadlines, documents, people] = await Promise.all([
+      ctx.db.query("deadlines").withSearchIndex("search_title", (s: any) => s.search("title", q)).take(12),
+      ctx.db.query("documents").withSearchIndex("search_title", (s: any) => s.search("title", q)).take(12),
+      ctx.db.query("peopleDirectory").withSearchIndex("search_full_name", (s: any) => s.search("fullName", q)).take(12),
+    ]);
+
+    const societyById = new Map<string, any>();
+    for (const id of new Set<string>([...deadlines, ...documents].map((r: any) => String(r.societyId)))) {
+      const s = await ctx.db.get(id as any);
+      if (s) societyById.set(id, s);
+    }
+    const nameOf = (id: string) => {
+      const s = societyById.get(id);
+      return s ? organizationLabel(s as any) : "Unknown entity";
+    };
+
+    const results: any[] = [];
+    for (const d of deadlines) {
+      results.push({ kind: "deadline", id: String(d._id), title: d.title, societyId: String(d.societyId), societyName: nameOf(String(d.societyId)), to: "/app/deadlines" });
+    }
+    for (const d of documents) {
+      results.push({ kind: "document", id: String(d._id), title: d.title, societyId: String(d.societyId), societyName: nameOf(String(d.societyId)), to: "/app/documents" });
+    }
+    for (const p of people) {
+      results.push({ kind: "person", id: String(p._id), title: p.fullName, societyId: null, societyName: null, to: "/app/people-directory" });
+    }
+    return results;
+  },
+});
+
 export const batchGeneratePacket = mutation({
   args: {
     societyIds: v.array(v.id("societies")),
