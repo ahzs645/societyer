@@ -2401,6 +2401,11 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     // Offline demo has no revision history, so as-of falls back to current.
     return store?.listRows("orgChartAssignments", { societyId: args?.societyId }) ?? [];
   }
+  if (moduleName === "partyPortals" && exportName === "list") {
+    return (store?.listRows("partyPortals", { societyId: args?.societyId }) ?? [])
+      .sort((a: any, b: any) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
+  }
+  if (moduleName === "partyPortals" && exportName === "center") return null;
   if (moduleName === "firm" && exportName === "search") {
     const q = String(args?.query ?? "").trim().toLowerCase();
     if (q.length < 2) return [];

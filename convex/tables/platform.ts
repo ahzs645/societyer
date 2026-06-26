@@ -136,4 +136,21 @@ export const platformTables = {
     .index("by_society_provider_resource", ["societyId", "provider", "resourceType"])
     .index("by_webhook_channel", ["webhookChannelId"])
     .index("by_webhook_subscription", ["webhookSubscriptionId"]),
+
+  // Token-scoped read-only portals for external parties (auditors, lawyers,
+  // bankers). The token is the bearer (no app account); `scopes` controls which
+  // sections they can read and `allowDownload` whether they can pull files.
+  partyPortals: defineTable({
+    societyId: v.id("societies"),
+    token: v.string(),
+    label: v.string(), // party / auditor name
+    partyEmail: v.optional(v.string()),
+    scopes: v.array(v.string()), // board | publications | documents
+    allowDownload: v.boolean(),
+    createdAtISO: v.string(),
+    expiresAtISO: v.optional(v.string()),
+    revokedAtISO: v.optional(v.string()),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_token", ["token"]),
 };

@@ -4,7 +4,9 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
-import { Plus, Calculator, Trash2 } from "lucide-react";
+import { useToast } from "../components/Toast";
+import { Plus, Calculator, Trash2, Share2, Copy } from "lucide-react";
+import type { Id as ConvexId } from "../../convex/_generated/dataModel";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
@@ -124,6 +126,9 @@ export function AuditorsPage() {
         </div>
       )}
 
+      <div className="spacer-6" />
+      <StakeholderPortalSection societyId={society._id} />
+
       <Drawer
         open={open}
         onClose={() => setOpen(false)}
@@ -159,6 +164,123 @@ export function AuditorsPage() {
           </div>
         )}
       </Drawer>
+    </div>
+  );
+}
+
+const PORTAL_SCOPES: Array<{ key: string; label: string }> = [
+  { key: "board", label: "Board of directors" },
+  { key: "publications", label: "Publications" },
+  { key: "documents", label: "Documents" },
+];
+
+/**
+ * Token-scoped read-only portals for external parties (auditors, lawyers). The
+ * grantor picks which sections the party can read and whether files download;
+ * the token lives in the share URL and can be revoked at any time.
+ */
+function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societies"> }) {
+  const toast = useToast();
+  const portals = useQuery(api.partyPortals.list, { societyId });
+  const create = useMutation(api.partyPortals.create);
+  const revoke = useMutation(api.partyPortals.revoke);
+  const [label, setLabel] = useState("");
+  const [email, setEmail] = useState("");
+  const [scopes, setScopes] = useState<string[]>(["board", "publications"]);
+  const [allowDownload, setAllowDownload] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const portalUrl = (token: string) => `${window.location.origin}/portal/${token}`;
+  const nowISO = new Date().toISOString();
+
+  const toggleScope = (key: string) =>
+    setScopes((prev) => (prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key]));
+
+  const onCreate = async () => {
+    if (!label.trim() || scopes.length === 0) {
+      toast.warn("Add a party name and at least one section to share.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const token = (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
+      await create({ societyId, token, label: label.trim(), partyEmail: email.trim() || undefined, scopes, allowDownload });
+      await navigator.clipboard.writeText(portalUrl(token)).catch(() => {});
+      toast.success("Portal created", "The share link is copied to your clipboard.");
+      setLabel("");
+      setEmail("");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not create the portal");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyLink = async (token: string) => {
+    try {
+      await navigator.clipboard.writeText(portalUrl(token));
+      toast.success("Share link copied");
+    } catch {
+      toast.error("Could not copy the link");
+    }
+  };
+
+  const statusOf = (p: any): string =>
+    p.revokedAtISO ? "Revoked" : p.expiresAtISO && p.expiresAtISO < nowISO ? "Expired" : "Active";
+
+  return (
+    <div className="card">
+      <div className="card__head">
+        <h2 className="card__title"><Share2 size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />Stakeholder portals</h2>
+        <span className="card__subtitle">Read-only rooms for auditors and other outside parties — no account needed</span>
+      </div>
+      <div className="card__body col" style={{ gap: 14 }}>
+        <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <Field label="Party name"><input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Smith & Co. (auditor)" /></Field>
+          <Field label="Email (optional)"><input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="auditor@firm.com" /></Field>
+        </div>
+        <div className="row" style={{ gap: 16, flexWrap: "wrap", alignItems: "center" }}>
+          <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>Can read:</span>
+          {PORTAL_SCOPES.map((s) => (
+            <label key={s.key} className="checkbox" style={{ margin: 0 }}>
+              <input type="checkbox" checked={scopes.includes(s.key)} onChange={() => toggleScope(s.key)} /> {s.label}
+            </label>
+          ))}
+          <label className="checkbox" style={{ margin: 0 }}>
+            <input type="checkbox" checked={allowDownload} onChange={(e) => setAllowDownload(e.target.checked)} /> Allow downloads
+          </label>
+          <button className="btn btn--accent btn--sm" disabled={busy} onClick={onCreate}><Plus size={12} /> Create portal</button>
+        </div>
+
+        <div className="table-wrap">
+          <table className="table">
+            <thead><tr><th>Party</th><th>Shares</th><th>Downloads</th><th>Status</th><th /></tr></thead>
+            <tbody>
+              {(portals ?? []).map((p: any) => (
+                <tr key={p._id}>
+                  <td><strong>{p.label}</strong>{p.partyEmail && <div className="muted">{p.partyEmail}</div>}</td>
+                  <td>{(p.scopes ?? []).map((s: string) => PORTAL_SCOPES.find((x) => x.key === s)?.label ?? s).join(", ") || "—"}</td>
+                  <td>{p.allowDownload ? "Yes" : "View-only"}</td>
+                  <td>{statusOf(p)}</td>
+                  <td>
+                    <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
+                      {statusOf(p) === "Active" && (
+                        <>
+                          <button className="btn btn--ghost btn--sm" onClick={() => copyLink(p.token)}><Copy size={12} /> Link</button>
+                          <button className="btn btn--ghost btn--sm" onClick={() => revoke({ id: p._id })}><Trash2 size={12} /> Revoke</button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {(portals ?? []).length === 0 && (
+                <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 20 }}>No portals yet. Create one to share a read-only room.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

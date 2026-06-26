@@ -104,6 +104,7 @@ const BylawRulesPage = React.lazy(() => import("./pages/BylawRules").then((m) =>
 const ElectionsPage = React.lazy(() => import("./pages/Elections").then((m) => ({ default: m.ElectionsPage })));
 const ElectionDetailPage = React.lazy(() => import("./pages/ElectionDetail").then((m) => ({ default: m.ElectionDetailPage })));
 const PortalPage = React.lazy(() => import("./pages/Portal").then((m) => ({ default: m.PortalPage })));
+const PartyPortalPage = React.lazy(() => import("./pages/PartyPortal").then((m) => ({ default: m.PartyPortalPage })));
 const CommunicationsPage = React.lazy(() => import("./pages/Communications").then((m) => ({ default: m.CommunicationsPage })));
 const VolunteersPage = React.lazy(() => import("./pages/Volunteers").then((m) => ({ default: m.VolunteersPage })));
 const GrantsPage = React.lazy(() => import("./pages/Grants").then((m) => ({ default: m.GrantsPage })));
@@ -269,6 +270,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="/login" element={<LoginPage />} />
             <Route path="/public" element={<PublicTransparencyPage />} />
             <Route path="/public/:slug" element={<PublicTransparencyPage />} />
+            {/* External stakeholder portal — token-gated, no app account. */}
+            <Route path="/portal/:token" element={<PartyPortalPage />} />
             <Route
               path="/public/:slug/volunteer-apply"
               element={<VolunteerApplyPage />}
