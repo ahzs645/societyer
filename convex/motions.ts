@@ -73,6 +73,104 @@ export async function patchMotion(ctx: any, motionId: any, patch: Record<string,
   return motionId;
 }
 
+// ----- dual-write: mirror embedded minutes.motions[] into the table ---------
+
+const KNOWN_EMBEDDED_OUTCOMES = new Set([
+  "",
+  "pending",
+  "carried",
+  "defeated",
+  "tabled",
+  "deferred",
+  "withdrawn",
+]);
+
+/** Map a legacy embedded `outcome` string to the explicit (status, outcome)
+ *  split. See the backfill map in docs/motions-first-class-object-design.md. */
+export function statusFromEmbeddedOutcome(raw?: string): { status: string; outcome?: string } {
+  const value = String(raw ?? "").trim().toLowerCase();
+  if (!value || value === "pending") return { status: "Moved" };
+  if (value === "carried") return { status: "Voted", outcome: "Carried" };
+  if (value === "defeated") return { status: "Voted", outcome: "Defeated" };
+  if (value === "tabled") return { status: "Tabled" };
+  if (value === "deferred") return { status: "Deferred" };
+  if (value === "withdrawn") return { status: "Withdrawn" };
+  return { status: "Moved" }; // unknown → caller preserves the raw value in `note`
+}
+
+/** Mirror one minutes doc's embedded `motions[]` into the motions table.
+ *  Delete-and-reinsert keeps the mirror consistent during the dual-write phase:
+ *  reads still come from the embedded array, so motion ids are not yet relied
+ *  upon. Reconcile-by-identity replaces this when reads are flipped. */
+export async function syncMotionsForMinutes(
+  ctx: any,
+  args: { societyId: any; minutesId: any; meetingId?: any; motions?: any[] },
+) {
+  // Best-effort: a mirror failure must never roll back the minutes save that
+  // triggered it. A stale mirror is corrected by the step-2 backfill or the
+  // next edit; a broken minutes save is a user-facing regression.
+  try {
+    const existing = await ctx.db
+      .query("motions")
+      .withIndex("by_minutes", (q: any) => q.eq("minutesId", args.minutesId))
+      .collect();
+    for (const row of existing) await ctx.db.delete(row._id);
+
+    const now = new Date().toISOString();
+    for (const m of args.motions ?? []) {
+      const { status, outcome } = statusFromEmbeddedOutcome(m.outcome);
+      const note = KNOWN_EMBEDDED_OUTCOMES.has(String(m.outcome ?? "").trim().toLowerCase())
+        ? undefined
+        : `legacy outcome: ${m.outcome}`;
+      await ctx.db.insert(
+        "motions",
+        stripUndefined({
+          societyId: args.societyId,
+          minutesId: args.minutesId,
+          primaryMeetingId: args.meetingId,
+          title: m.name,
+          text: m.text ?? "",
+          movedBy: m.movedBy,
+          movedByMemberId: m.movedByMemberId,
+          movedByDirectorId: m.movedByDirectorId,
+          secondedBy: m.secondedBy,
+          secondedByMemberId: m.secondedByMemberId,
+          secondedByDirectorId: m.secondedByDirectorId,
+          resolutionTypeLabel: m.resolutionType,
+          status,
+          outcome,
+          votesFor: m.votesFor,
+          votesAgainst: m.votesAgainst,
+          abstentions: m.abstentions,
+          sectionIndex: m.sectionIndex,
+          sectionTitle: m.sectionTitle,
+          motionTemplateId: m.motionTemplateId,
+          source: "minutes",
+          history: [
+            stripUndefined({
+              at: now,
+              minutesId: args.minutesId,
+              meetingId: args.meetingId,
+              status,
+              outcome,
+              votesFor: m.votesFor,
+              votesAgainst: m.votesAgainst,
+              abstentions: m.abstentions,
+              note,
+            }),
+          ],
+          createdAtISO: now,
+          updatedAtISO: now,
+        }),
+      );
+    }
+  } catch (err) {
+    console.warn(
+      `[motions] dual-write sync failed for minutes ${String(args.minutesId)}: ${String(err)}`,
+    );
+  }
+}
+
 // ----- queries --------------------------------------------------------------
 
 export const list = query({

@@ -4,6 +4,7 @@ import { api } from "./_generated/api";
 import { summarizeMinutes } from "./providers/llm";
 import { buildQuorumSnapshot, QuorumSnapshot } from "./lib/bylawRules";
 import { Doc } from "./_generated/dataModel";
+import { syncMotionsForMinutes } from "./motions";
 
 const motion = v.object({
   name: v.optional(v.string()),
@@ -180,6 +181,14 @@ export const create = mutation({
       ...minutesSnapshotFields(args, snapshot),
     });
     await ctx.db.patch(args.meetingId, { minutesId: id });
+    // Dual-write: mirror into the standalone motions table (reads still use the
+    // embedded array; see docs/motions-first-class-object-design.md).
+    await syncMotionsForMinutes(ctx, {
+      societyId: args.societyId,
+      minutesId: id,
+      meetingId: args.meetingId,
+      motions: args.motions,
+    });
     return id;
   },
 });
@@ -222,6 +231,15 @@ export const update = mutation({
       await assertMotionPersonLinksBelongToSociety(ctx, minutes.societyId, patch.motions);
     }
     await ctx.db.patch(id, patch);
+    // Dual-write: re-mirror only when the motions array was part of this patch.
+    if (patch.motions) {
+      await syncMotionsForMinutes(ctx, {
+        societyId: minutes.societyId,
+        minutesId: id,
+        meetingId: minutes.meetingId,
+        motions: patch.motions,
+      });
+    }
   },
 });
 
@@ -275,10 +293,22 @@ export const upsertFromDraft = mutation({
       .collect();
     if (existing[0]) {
       await ctx.db.patch(existing[0]._id, payload);
+      await syncMotionsForMinutes(ctx, {
+        societyId: args.societyId,
+        minutesId: existing[0]._id,
+        meetingId: args.meetingId,
+        motions: args.motions,
+      });
       return existing[0]._id;
     }
     const id = await ctx.db.insert("minutes", payload);
     await ctx.db.patch(args.meetingId, { minutesId: id });
+    await syncMotionsForMinutes(ctx, {
+      societyId: args.societyId,
+      minutesId: id,
+      meetingId: args.meetingId,
+      motions: args.motions,
+    });
     return id;
   },
 });
