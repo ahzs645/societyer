@@ -20,6 +20,7 @@ import { useToast } from "../components/Toast";
 import { Badge, Drawer, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Modal } from "../components/Modal";
+import { Select } from "../components/Select";
 import { SeedPrompt } from "./_helpers";
 import {
   ArrowLeft,
@@ -122,30 +123,25 @@ export function AccessPersonPicker({
   return (
     <div className="person-ref-picker">
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-        <select
-          className="input"
+        <Select
           value={selectedCategory}
-          onChange={(event) => updateCategory(event.target.value)}
-        >
-          {categoryOptions.map((category) => (
-            <option key={category} value={category}>
-              {labelForCategory(category)}
-            </option>
-          ))}
-        </select>
-        <select
-          className="input"
+          onChange={(next) => updateCategory(next)}
+          options={categoryOptions.map((category) => ({
+            value: category,
+            label: labelForCategory(category),
+          }))}
+        />
+        <Select
           value={selectedId}
-          onChange={(event) => updatePerson(event.target.value)}
-        >
-          <option value="">Pick individual</option>
-          {people.map((person: any) => (
-            <option key={person._id} value={person._id}>
-              {displayName(person)}
-              {person.email ? ` · ${person.email}` : ""}
-            </option>
-          ))}
-        </select>
+          onChange={(next) => updatePerson(next)}
+          options={[
+            { value: "", label: "Pick individual" },
+            ...people.map((person: any) => ({
+              value: person._id,
+              label: `${displayName(person)}${person.email ? ` · ${person.email}` : ""}`,
+            })),
+          ]}
+        />
       </div>
       {selectedCategory && people.length === 0 && (
         <div className="muted" style={{ fontSize: "var(--fs-xs)" }}>

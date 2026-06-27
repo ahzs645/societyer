@@ -4,6 +4,7 @@ import { api } from "@/lib/convexApi";
 import { History } from "lucide-react";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { DatePicker } from "../components/DatePicker";
 
 /**
  * Point-in-Time Register — reconstructs who held each role on a chosen date,
@@ -78,11 +79,9 @@ export function PointInTimeRegisterPage() {
         actions={
           <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>As of</span>
-            <input
-              type="date"
-              className="input"
+            <DatePicker
               value={asOf}
-              onChange={(e) => setAsOf(e.target.value)}
+              onChange={(value) => setAsOf(value)}
             />
           </label>
         }

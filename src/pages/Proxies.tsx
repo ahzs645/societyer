@@ -4,10 +4,12 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field, InspectorNote } from "../components/ui";
+import { Select } from "../components/Select";
 import { Plus, UserCheck, Trash2 } from "lucide-react";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { DatePicker } from "../components/DatePicker";
 import {
   RecordTable,
   RecordTableScope,
@@ -178,56 +180,50 @@ export function ProxiesPage() {
               record should match the signed proxy form kept with meeting materials.
             </InspectorNote>
             <Field label="Meeting">
-              <select className="input" value={form.meetingId ?? ""} onChange={(e) => setForm({ ...form, meetingId: e.target.value })}>
-                {(meetings ?? []).map((m: any) => <option key={m._id} value={m._id}>{m.title}</option>)}
-              </select>
+              <Select
+                value={form.meetingId ?? ""}
+                onChange={(value) => setForm({ ...form, meetingId: value })}
+                options={(meetings ?? []).map((m: any) => ({ value: m._id, label: m.title }))}
+              />
             </Field>
             <Field label="Grantor member (optional)">
-              <select
-                className="input"
+              <Select
                 value={form.grantorMemberId ?? ""}
-                onChange={(e) => {
-                  const member = (members ?? []).find((row: any) => row._id === e.target.value);
+                onChange={(value) => {
+                  const member = (members ?? []).find((row: any) => row._id === value);
                   setForm({
                     ...form,
-                    grantorMemberId: e.target.value || undefined,
+                    grantorMemberId: value || undefined,
                     grantorName: member ? `${member.firstName} ${member.lastName}` : form.grantorName,
                   });
                 }}
-              >
-                <option value="">— none —</option>
-                {(members ?? []).map((member: any) => (
-                  <option key={member._id} value={member._id}>
-                    {member.firstName} {member.lastName}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: "", label: "— none —" },
+                  ...(members ?? []).map((member: any) => ({ value: member._id, label: `${member.firstName} ${member.lastName}` })),
+                ]}
+              />
             </Field>
             <Field label="Grantor (voting member)"><input className="input" value={form.grantorName} onChange={(e) => setForm({ ...form, grantorName: e.target.value })} /></Field>
             <Field label={`Proxy holder${rules?.proxyHolderMustBeMember ? " member" : " member (optional)"}`}>
-              <select
-                className="input"
+              <Select
                 value={form.proxyHolderMemberId ?? ""}
-                onChange={(e) => {
-                  const member = (members ?? []).find((row: any) => row._id === e.target.value);
+                onChange={(value) => {
+                  const member = (members ?? []).find((row: any) => row._id === value);
                   setForm({
                     ...form,
-                    proxyHolderMemberId: e.target.value || undefined,
+                    proxyHolderMemberId: value || undefined,
                     proxyHolderName: member ? `${member.firstName} ${member.lastName}` : form.proxyHolderName,
                   });
                 }}
-              >
-                <option value="">— none —</option>
-                {(members ?? []).map((member: any) => (
-                  <option key={member._id} value={member._id}>
-                    {member.firstName} {member.lastName}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: "", label: "— none —" },
+                  ...(members ?? []).map((member: any) => ({ value: member._id, label: `${member.firstName} ${member.lastName}` })),
+                ]}
+              />
             </Field>
             <Field label="Proxy holder"><input className="input" value={form.proxyHolderName} onChange={(e) => setForm({ ...form, proxyHolderName: e.target.value })} /></Field>
             <Field label="Instructions (optional)"><MarkdownEditor rows={4} value={form.instructions ?? ""} onChange={(markdown) => setForm({ ...form, instructions: markdown })} /></Field>
-            <Field label="Signed on"><input className="input" type="date" value={form.signedAtISO} onChange={(e) => setForm({ ...form, signedAtISO: e.target.value })} /></Field>
+            <Field label="Signed on"><DatePicker value={form.signedAtISO} onChange={(value) => setForm({ ...form, signedAtISO: value })} /></Field>
           </div>
         )}
       </Drawer>

@@ -4,6 +4,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
+import { DatePicker } from "../components/DatePicker";
 import { Plus, CalendarCheck, Trash2 } from "lucide-react";
 
 /**
@@ -231,11 +232,9 @@ export function AnnualFilingsPage() {
               </label>
             </Field>
             <Field label="Filed on">
-              <input
-                className="input"
-                type="date"
+              <DatePicker
                 value={form.filedOn}
-                onChange={(e) => setForm({ ...form, filedOn: e.target.value })}
+                onChange={(value) => setForm({ ...form, filedOn: value })}
               />
             </Field>
             <Field label="Registration nature">

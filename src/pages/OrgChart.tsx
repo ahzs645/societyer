@@ -19,6 +19,8 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge } from "../components/ui";
 import { Link } from "react-router-dom";
 import { Network, UsersRound, X } from "lucide-react";
+import { DatePicker } from "../components/DatePicker";
+import { Select } from "../components/Select";
 
 type OrgPerson = {
   type: "director" | "employee" | "volunteer";
@@ -245,7 +247,7 @@ export function OrgChartPage() {
         actions={
           <label style={{ display: "flex", alignItems: "center", gap: 6 }} title="Reconstruct the org chart at a past date">
             <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>As of</span>
-            <input type="date" className="input" value={asOf} onChange={(e) => setAsOf(e.target.value)} style={{ width: 150 }} />
+            <DatePicker value={asOf} onChange={(value) => setAsOf(value)} style={{ width: 150 }} />
             {asOf && <button className="btn btn--ghost btn--sm" onClick={() => setAsOf("")}>Live</button>}
           </label>
         }
@@ -292,19 +294,17 @@ export function OrgChartPage() {
                   </div>
                   <label style={{ display: "block" }}>
                     <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>Reports to</span>
-                    <select
-                      className="input"
+                    <Select
                       value={selectedManagerValue}
                       disabled={Boolean(asOf)}
-                      onChange={(e) => saveManager(selectedPerson, e.target.value)}
-                    >
-                      <option value="">No manager (reports to the entity)</option>
-                      {managerOptions
-                        .filter((o) => o.value !== `${selectedPerson.type}:${selectedPerson.id}`)
-                        .map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                    </select>
+                      onChange={(value) => saveManager(selectedPerson, value)}
+                      options={[
+                        { value: "", label: "No manager (reports to the entity)" },
+                        ...managerOptions
+                          .filter((o) => o.value !== `${selectedPerson.type}:${selectedPerson.id}`)
+                          .map((o) => ({ value: o.value, label: o.label })),
+                      ]}
+                    />
                   </label>
                   {selectedManagerValue && !asOf && (
                     <button className="btn btn--ghost btn--sm" onClick={() => saveManager(selectedPerson, "")}>

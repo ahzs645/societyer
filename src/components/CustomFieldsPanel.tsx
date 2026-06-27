@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Field } from "./ui";
+import { DatePicker } from "./DatePicker";
 
 type Props = {
   societyId: any;
@@ -113,12 +114,12 @@ function CustomFieldInput({
   if (def.kind === "date") {
     return (
       <Field label={label}>
-        <input
-          className="input"
-          type="date"
+        <DatePicker
           value={typeof draft === "string" ? draft : ""}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => onSave(draft)}
+          onChange={(value) => {
+            setDraft(value);
+            onSave(value);
+          }}
         />
         {def.description && (
           <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 2 }}>

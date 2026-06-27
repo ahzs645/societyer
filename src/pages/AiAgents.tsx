@@ -6,6 +6,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field, SettingsShell } from "../components/ui";
+import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { streamChatMessage } from "../lib/aiChatStream";
 
@@ -387,17 +388,20 @@ export function AiAgentsPage() {
             </div>
             <div className="settings-pair">
               <Field label="Scope">
-                <select className="input" value={aiSetup.scope} onChange={(event) => setAiSetup((draft) => ({ ...draft, scope: event.target.value }))}>
-                  <option value="personal">Personal</option>
-                  <option value="workspace">Workspace</option>
-                </select>
+                <Select
+                  value={aiSetup.scope}
+                  onChange={(value) => setAiSetup((draft) => ({ ...draft, scope: value }))}
+                  options={[
+                    { value: "personal", label: "Personal" },
+                    { value: "workspace", label: "Workspace" },
+                  ]}
+                />
               </Field>
               <Field label="Provider">
-                <select
-                  className="input"
+                <Select
                   value={aiSetup.provider}
-                  onChange={(event) => {
-                    const provider = event.target.value;
+                  onChange={(value) => {
+                    const provider = value;
                     setAiSetup((draft) => ({
                       ...draft,
                       provider,
@@ -409,11 +413,12 @@ export function AiAgentsPage() {
                     setModelTab("recommended");
                     setValidation(null);
                   }}
-                >
-                  <option value="openai">OpenAI</option>
-                  <option value="openrouter">OpenRouter</option>
-                  <option value="openai-compatible">OpenAI-compatible</option>
-                </select>
+                  options={[
+                    { value: "openai", label: "OpenAI" },
+                    { value: "openrouter", label: "OpenRouter" },
+                    { value: "openai-compatible", label: "OpenAI-compatible" },
+                  ]}
+                />
               </Field>
             </div>
             {aiSetup.provider === "openai-compatible" && (

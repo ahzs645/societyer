@@ -55,6 +55,8 @@ import { SignaturePanel } from "../components/SignaturePanel";
 import { MeetingConflictsCard } from "../features/meetings/components/MeetingConflictsCard";
 import { MeetingProxiesCard } from "../features/meetings/components/MeetingProxiesCard";
 import { Modal, useConfirm } from "../components/Modal";
+import { DateTimeInput } from "../components/DateTimeInput";
+import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import {
@@ -2267,11 +2269,9 @@ export function MeetingDetailPage() {
               approved and, if you like, which meeting adopted them.
             </p>
             <Field label="Approved on">
-              <input
-                className="input"
-                type="date"
+              <DatePicker
                 value={approvalEdit.approvedAt}
-                onChange={(event) => setApprovalEdit({ ...approvalEdit, approvedAt: event.target.value })}
+                onChange={(value) => setApprovalEdit({ ...approvalEdit, approvedAt: value })}
               />
             </Field>
             <Field label="Approved at meeting">
@@ -2333,11 +2333,9 @@ export function MeetingDetailPage() {
                 />
               </Field>
               <Field label="Date & time">
-                <input
-                  className="input"
-                  type="datetime-local"
+                <DateTimeInput
                   value={nextMeetingDraft.scheduledAt}
-                  onChange={(event) => setNextMeetingDraft({ ...nextMeetingDraft, scheduledAt: event.target.value })}
+                  onChange={(value) => setNextMeetingDraft({ ...nextMeetingDraft, scheduledAt: value })}
                 />
               </Field>
             </div>

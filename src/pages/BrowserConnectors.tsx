@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, ClipboardPaste, ExternalLink, MonitorPlay, Play, RefreshCw, ShieldCheck, Square, Upload, XCircle } from "lucide-react";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Button, Field, SettingsShell } from "../components/ui";
+import { DatePicker } from "../components/DatePicker";
 import { LiveBrowserView } from "../components/LiveBrowserView";
 import { useSociety } from "../hooks/useSociety";
 import { useToast } from "../components/Toast";
@@ -1041,10 +1042,10 @@ export function BrowserConnectorsPage() {
           </Field>
           <div className="grid two">
             <Field label="Start date (optional)">
-              <input className="input" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+              <DatePicker value={startDate} onChange={(value) => setStartDate(value)} />
             </Field>
             <Field label="End date (optional)">
-              <input className="input" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+              <DatePicker value={endDate} onChange={(value) => setEndDate(value)} />
             </Field>
           </div>
           <div className="muted">

@@ -4,6 +4,8 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
+import { Select } from "../components/Select";
+import { DatePicker } from "../components/DatePicker";
 import { Plus, Gavel, Trash2 } from "lucide-react";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
@@ -136,19 +138,16 @@ export function CourtOrdersPage() {
             <div className="row" style={{ gap: 12 }}>
               <Field label="Court"><input className="input" value={form.court} onChange={(e) => setForm({ ...form, court: e.target.value })} /></Field>
               <Field label="File #"><input className="input" value={form.fileNumber ?? ""} onChange={(e) => setForm({ ...form, fileNumber: e.target.value })} /></Field>
-              <Field label="Order date"><input className="input" type="date" value={form.orderDate} onChange={(e) => setForm({ ...form, orderDate: e.target.value })} /></Field>
+              <Field label="Order date"><DatePicker value={form.orderDate} onChange={(value) => setForm({ ...form, orderDate: value })} /></Field>
             </div>
             <Field label="Description"><MarkdownEditor rows={4} value={form.description} onChange={(markdown) => setForm({ ...form, description: markdown })} /></Field>
             <Field label="Document (optional)">
-              <select className="input" value={form.documentId ?? ""} onChange={(e) => setForm({ ...form, documentId: e.target.value || undefined })}>
-                <option value="">— none —</option>
-                {(documents ?? []).map((d: any) => <option key={d._id} value={d._id}>{d.title}</option>)}
-              </select>
+              <Select value={form.documentId ?? ""} onChange={(value) => setForm({ ...form, documentId: value || undefined })}
+                options={[{ value: "", label: "— none —" }, ...(documents ?? []).map((d: any) => ({ value: d._id, label: d.title }))]} />
             </Field>
             <Field label="Status">
-              <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                <option>Active</option><option>Satisfied</option><option>Vacated</option>
-              </select>
+              <Select value={form.status} onChange={(value) => setForm({ ...form, status: value })}
+                options={[{ value: "Active", label: "Active" }, { value: "Satisfied", label: "Satisfied" }, { value: "Vacated", label: "Vacated" }]} />
             </Field>
           </div>
         )}

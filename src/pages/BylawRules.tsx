@@ -4,6 +4,8 @@ import { api } from "@/lib/convexApi";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
+import { DatePicker } from "../components/DatePicker";
+import { Select } from "../components/Select";
 import { Toggle } from "../components/Controls";
 import { Info, RefreshCw, Save, Scale } from "lucide-react";
 import { useToast } from "../components/Toast";
@@ -175,15 +177,13 @@ export function BylawRulesPage() {
         <div className="card__body bylaw-rules__body">
           <div className="bylaw-rules__field-grid">
             <Field label="Effective from">
-              <input
-                className="input"
-                type="date"
+              <DatePicker
                 value={toDateInputValue(form.effectiveFromISO)}
-                onChange={(event) =>
+                onChange={(value) =>
                   setForm({
                     ...form,
-                    effectiveFromISO: event.target.value
-                      ? `${event.target.value}T00:00:00.000Z`
+                    effectiveFromISO: value
+                      ? `${value}T00:00:00.000Z`
                       : "",
                   })
                 }
@@ -267,18 +267,16 @@ export function BylawRulesPage() {
                   />
                 </Field>
                 <Field label="Quorum model">
-                  <select
-                    className="input"
+                  <Select
                     value={form.quorumType}
-                    onChange={(e) =>
-                      setForm({ ...form, quorumType: e.target.value })
+                    onChange={(value) =>
+                      setForm({ ...form, quorumType: value })
                     }
-                  >
-                    <option value="fixed">Fixed count</option>
-                    <option value="percentage">
-                      Percentage of eligible voters
-                    </option>
-                  </select>
+                    options={[
+                      { value: "fixed", label: "Fixed count" },
+                      { value: "percentage", label: "Percentage of eligible voters" },
+                    ]}
+                  />
                 </Field>
                 <Field
                   label={

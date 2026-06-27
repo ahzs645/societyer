@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
+import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
@@ -97,19 +98,19 @@ export function GovernanceRegistersPage() {
               <>
                 <Field label="Change type"><input className="input" value={addForm.changeType ?? ""} onChange={(e) => setAddForm({ ...addForm, changeType: e.target.value })} placeholder="appointment / removal / vacancy" /></Field>
                 <Field label="Role title"><input className="input" value={addForm.roleTitle ?? ""} onChange={(e) => setAddForm({ ...addForm, roleTitle: e.target.value })} /></Field>
-                <Field label="Effective date"><input className="input" type="date" value={addForm.effectiveDate ?? ""} onChange={(e) => setAddForm({ ...addForm, effectiveDate: e.target.value })} /></Field>
+                <Field label="Effective date"><DatePicker value={addForm.effectiveDate ?? ""} onChange={(value) => setAddForm({ ...addForm, effectiveDate: value })} /></Field>
               </>
             ) : addForm.kind === "signingAuthority" ? (
               <>
                 <Field label="Institution"><input className="input" value={addForm.institutionName ?? ""} onChange={(e) => setAddForm({ ...addForm, institutionName: e.target.value })} /></Field>
                 <Field label="Authority type"><input className="input" value={addForm.authorityType ?? ""} onChange={(e) => setAddForm({ ...addForm, authorityType: e.target.value })} placeholder="signing / co-signing" /></Field>
-                <Field label="Effective date"><input className="input" type="date" value={addForm.effectiveDate ?? ""} onChange={(e) => setAddForm({ ...addForm, effectiveDate: e.target.value })} /></Field>
+                <Field label="Effective date"><DatePicker value={addForm.effectiveDate ?? ""} onChange={(value) => setAddForm({ ...addForm, effectiveDate: value })} /></Field>
               </>
             ) : (
               <>
                 <Field label="Role title"><input className="input" value={addForm.roleTitle ?? ""} onChange={(e) => setAddForm({ ...addForm, roleTitle: e.target.value })} /></Field>
                 <Field label="Role group"><input className="input" value={addForm.roleGroup ?? ""} onChange={(e) => setAddForm({ ...addForm, roleGroup: e.target.value })} placeholder="Board / Officers / Committee" /></Field>
-                <Field label="Start date"><input className="input" type="date" value={addForm.startDate ?? ""} onChange={(e) => setAddForm({ ...addForm, startDate: e.target.value })} /></Field>
+                <Field label="Start date"><DatePicker value={addForm.startDate ?? ""} onChange={(value) => setAddForm({ ...addForm, startDate: value })} /></Field>
               </>
             )}
             <Field label="Notes"><input className="input" value={addForm.notes ?? ""} onChange={(e) => setAddForm({ ...addForm, notes: e.target.value })} /></Field>

@@ -5,6 +5,7 @@ import { CalendarClock } from "lucide-react";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Field } from "../components/ui";
+import { Select } from "../components/Select";
 import {
   deriveComplianceDeadlines,
   type ComplianceSettings,
@@ -113,10 +114,8 @@ export function ComplianceSettingsPage() {
       <div className="card" style={{ maxWidth: 520, marginBottom: 16 }}>
         <div className="row" style={{ gap: 12 }}>
           <Field label="AGM month">
-            <select className="input" value={agmMonth} onChange={(e) => setAgmMonth(e.target.value === "" ? "" : Number(e.target.value))}>
-              <option value="">—</option>
-              {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-            </select>
+            <Select value={String(agmMonth)} onChange={(value) => setAgmMonth(value === "" ? "" : Number(value))}
+              options={[{ value: "", label: "—" }, ...MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))]} />
           </Field>
           <Field label="AGM day">
             <input className="input" type="number" min={1} max={31} value={agmDay}
@@ -140,10 +139,8 @@ export function ComplianceSettingsPage() {
           {" "}Stamp a document ID at the top of generated documents
         </label>
         <Field label="Document language">
-          <select className="input" value={docLanguage} onChange={(e) => setDocLanguage(e.target.value)}>
-            <option value="">English (default)</option>
-            <option value="French">French — résolutions in French (execution block + dates)</option>
-          </select>
+          <Select value={docLanguage} onChange={(value) => setDocLanguage(value)}
+            options={[{ value: "", label: "English (default)" }, { value: "French", label: "French — résolutions in French (execution block + dates)" }]} />
         </Field>
       </div>
 

@@ -5,6 +5,7 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { ShieldCheck, Plus, Trash2 } from "lucide-react";
+import { DatePicker } from "../components/DatePicker";
 
 /**
  * BC Transparency Register of Significant Individuals + a diligence-steps
@@ -96,11 +97,9 @@ export function SignificantIndividualsPage() {
 
       <div className="card" style={{ marginBottom: 16 }}>
         <Field label="As of">
-          <input
-            className="input"
-            type="date"
+          <DatePicker
             value={asOf}
-            onChange={(e) => setAsOf(e.target.value)}
+            onChange={(value) => setAsOf(value)}
           />
         </Field>
       </div>
@@ -198,11 +197,9 @@ export function SignificantIndividualsPage() {
               />
             </Field>
             <Field label="Step date">
-              <input
-                className="input"
-                type="date"
+              <DatePicker
                 value={form.stepDate}
-                onChange={(e) => setForm({ ...form, stepDate: e.target.value })}
+                onChange={(value) => setForm({ ...form, stepDate: value })}
               />
             </Field>
             <Field label="Steps narrative">
@@ -213,11 +210,9 @@ export function SignificantIndividualsPage() {
               />
             </Field>
             <Field label="Next review date">
-              <input
-                className="input"
-                type="date"
+              <DatePicker
                 value={form.nextReviewDate}
-                onChange={(e) => setForm({ ...form, nextReviewDate: e.target.value })}
+                onChange={(value) => setForm({ ...form, nextReviewDate: value })}
               />
             </Field>
           </div>

@@ -1,5 +1,6 @@
 import { Eye, EyeOff, FileDown, FileText, Printer } from "lucide-react";
 import { Badge, Field } from "../../../components/ui";
+import { Select } from "../../../components/Select";
 import { Checkbox } from "../../../components/Controls";
 import { LegalGuideInline, LegalGuideTrackList } from "../../../components/LegalGuide";
 import {
@@ -166,17 +167,14 @@ export function MeetingSidebarColumn({
                 {!exportControlsReadOnly && (
                   <>
                     <Field label="Style">
-                      <select
-                        className="input"
+                      <Select
                         value={minutesExportStyle}
-                        onChange={(event) => setMinutesExportStyle(event.target.value as MinutesExportStyleId)}
-                      >
-                        {MINUTES_EXPORT_STYLES.map((style) => (
-                          <option key={style.id} value={style.id}>
-                            {style.label}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(value) => setMinutesExportStyle(value as MinutesExportStyleId)}
+                        options={MINUTES_EXPORT_STYLES.map((style) => ({
+                          value: style.id,
+                          label: style.label,
+                        }))}
+                      />
                     </Field>
                     <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>
                       {selectedMinutesExportStyle.tone}

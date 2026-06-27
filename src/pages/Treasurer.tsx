@@ -13,6 +13,7 @@ import { useToast } from "../components/Toast";
 import { centsToDollarInput, dollarInputToCents, formatDate } from "../lib/format";
 import { StudentLevyIntakeDrawer } from "../components/StudentLevyIntakeDrawer";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { DatePicker } from "../components/DatePicker";
 
 function cents(value: number): string {
   const abs = Math.abs(value);
@@ -353,11 +354,11 @@ export function TreasurerPage() {
           <div className="card__body treasurer-period-card__body">
             <label className="treasurer-period-field">
               <span className="muted">From</span>
-              <input type="date" className="input" value={from} onChange={(e) => setFrom(e.target.value)} />
+              <DatePicker value={from} onChange={(value) => setFrom(value)} />
             </label>
             <label className="treasurer-period-field">
               <span className="muted">To</span>
-              <input type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} />
+              <DatePicker value={to} onChange={(value) => setTo(value)} />
             </label>
             <label className="treasurer-period-field treasurer-period-field--fy">
               <span className="muted">FY</span>
@@ -883,11 +884,9 @@ export function TreasurerPage() {
                 <Select value={sourceDraft.collectionFrequency} onChange={(v) => setSourceDraft({ ...sourceDraft, collectionFrequency: v })} options={COLLECTION_FREQUENCIES} />
               </Field>
               <Field label="Next expected collection">
-                <input
-                  className="input"
-                  type="date"
+                <DatePicker
                   value={sourceDraft.nextExpectedCollectionDate ?? ""}
-                  onChange={(e) => setSourceDraft({ ...sourceDraft, nextExpectedCollectionDate: e.target.value })}
+                  onChange={(value) => setSourceDraft({ ...sourceDraft, nextExpectedCollectionDate: value })}
                 />
               </Field>
             </div>
@@ -925,10 +924,10 @@ export function TreasurerPage() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Field label="Start date">
-                <input className="input" type="date" value={sourceDraft.startDate ?? ""} onChange={(e) => setSourceDraft({ ...sourceDraft, startDate: e.target.value })} />
+                <DatePicker value={sourceDraft.startDate ?? ""} onChange={(value) => setSourceDraft({ ...sourceDraft, startDate: value })} />
               </Field>
               <Field label="End date">
-                <input className="input" type="date" value={sourceDraft.endDate ?? ""} onChange={(e) => setSourceDraft({ ...sourceDraft, endDate: e.target.value })} />
+                <DatePicker value={sourceDraft.endDate ?? ""} onChange={(value) => setSourceDraft({ ...sourceDraft, endDate: value })} />
               </Field>
             </div>
             <Field label="Restricted purpose">
@@ -979,16 +978,12 @@ export function TreasurerPage() {
         {eventDraft && (
           <div>
             <Field label="Funding source">
-              <select className="input" value={eventDraft.sourceId ?? ""} onChange={(e) => setEventDraft({ ...eventDraft, sourceId: e.target.value })}>
-                <option value="">Select source</option>
-                {(fundingSources ?? []).map((source: any) => (
-                  <option key={source._id} value={source._id}>{source.name}</option>
-                ))}
-              </select>
+              <Select value={eventDraft.sourceId ?? ""} onChange={(value) => setEventDraft({ ...eventDraft, sourceId: value })}
+                options={[{ value: "", label: "Select source" }, ...(fundingSources ?? []).map((source: any) => ({ value: source._id, label: source.name }))]} />
             </Field>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Field label="Date">
-                <input className="input" type="date" value={eventDraft.eventDate} onChange={(e) => setEventDraft({ ...eventDraft, eventDate: e.target.value })} />
+                <DatePicker value={eventDraft.eventDate} onChange={(value) => setEventDraft({ ...eventDraft, eventDate: value })} />
               </Field>
               <Field label="Kind">
                 <Select value={eventDraft.kind} onChange={(v) => setEventDraft({ ...eventDraft, kind: v })} options={FUNDING_EVENT_KINDS} />
@@ -1007,10 +1002,10 @@ export function TreasurerPage() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Field label="Period start">
-                <input className="input" type="date" value={eventDraft.periodStart ?? ""} onChange={(e) => setEventDraft({ ...eventDraft, periodStart: e.target.value })} />
+                <DatePicker value={eventDraft.periodStart ?? ""} onChange={(value) => setEventDraft({ ...eventDraft, periodStart: value })} />
               </Field>
               <Field label="Period end">
-                <input className="input" type="date" value={eventDraft.periodEnd ?? ""} onChange={(e) => setEventDraft({ ...eventDraft, periodEnd: e.target.value })} />
+                <DatePicker value={eventDraft.periodEnd ?? ""} onChange={(value) => setEventDraft({ ...eventDraft, periodEnd: value })} />
               </Field>
             </div>
             <Field label="Attribution">
@@ -1070,23 +1065,18 @@ export function TreasurerPage() {
                 <input className="input" value={expenseDraft.claimantName} onChange={(e) => setExpenseDraft({ ...expenseDraft, claimantName: e.target.value })} />
               </Field>
               <Field label="Linked user">
-                <select
-                  className="input"
+                <Select
                   value={expenseDraft.claimantUserId ?? ""}
-                  onChange={(e) => {
-                    const selected = (users ?? []).find((user: any) => user._id === e.target.value);
+                  onChange={(value) => {
+                    const selected = (users ?? []).find((user: any) => user._id === value);
                     setExpenseDraft({
                       ...expenseDraft,
-                      claimantUserId: e.target.value,
+                      claimantUserId: value,
                       claimantName: selected?.displayName || expenseDraft.claimantName,
                     });
                   }}
-                >
-                  <option value="">No linked user</option>
-                  {(users ?? []).map((user: any) => (
-                    <option key={user._id} value={user._id}>{user.displayName}</option>
-                  ))}
-                </select>
+                  options={[{ value: "", label: "No linked user" }, ...(users ?? []).map((user: any) => ({ value: user._id, label: user.displayName }))]}
+                />
               </Field>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -1102,20 +1092,16 @@ export function TreasurerPage() {
                 <input className="input" type="number" min="0" step="0.01" value={expenseDraft.amountDollars} onChange={(e) => setExpenseDraft({ ...expenseDraft, amountDollars: e.target.value })} />
               </Field>
               <Field label="Incurred date">
-                <input className="input" type="date" value={expenseDraft.incurredAtISO} onChange={(e) => setExpenseDraft({ ...expenseDraft, incurredAtISO: e.target.value })} />
+                <DatePicker value={expenseDraft.incurredAtISO} onChange={(value) => setExpenseDraft({ ...expenseDraft, incurredAtISO: value })} />
               </Field>
             </div>
             <Field label="Receipt document" hint="Upload receipts in Documents, then link them here.">
-              <select className="input" value={expenseDraft.receiptDocumentId ?? ""} onChange={(e) => setExpenseDraft({ ...expenseDraft, receiptDocumentId: e.target.value })}>
-                <option value="">No receipt linked</option>
-                {(documents ?? []).map((document: any) => (
-                  <option key={document._id} value={document._id}>{document.title}</option>
-                ))}
-              </select>
+              <Select value={expenseDraft.receiptDocumentId ?? ""} onChange={(value) => setExpenseDraft({ ...expenseDraft, receiptDocumentId: value })}
+                options={[{ value: "", label: "No receipt linked" }, ...(documents ?? []).map((document: any) => ({ value: document._id, label: document.title }))]} />
             </Field>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Field label="Submitted date">
-                <input className="input" type="date" value={expenseDraft.submittedAtISO ?? ""} onChange={(e) => setExpenseDraft({ ...expenseDraft, submittedAtISO: e.target.value })} />
+                <DatePicker value={expenseDraft.submittedAtISO ?? ""} onChange={(value) => setExpenseDraft({ ...expenseDraft, submittedAtISO: value })} />
               </Field>
               <Field label="Payment reference">
                 <input className="input" value={expenseDraft.paymentReference ?? ""} onChange={(e) => setExpenseDraft({ ...expenseDraft, paymentReference: e.target.value })} />

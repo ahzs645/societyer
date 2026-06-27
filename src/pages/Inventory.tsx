@@ -20,6 +20,8 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
+import { DatePicker } from "../components/DatePicker";
+import { Select } from "../components/Select";
 import { ImageUploadField } from "../components/ImageUploadField";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { useToast } from "../components/Toast";
@@ -644,44 +646,35 @@ export function InventoryPage() {
       >
         <div className="form-grid">
           <Field label="Movement type">
-            <select className="input" value={movementForm.movementType} onChange={(e) => setMovementForm({ ...movementForm, movementType: e.target.value })}>
-              {MOVEMENT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
-            </select>
+            <Select value={movementForm.movementType} onChange={(value) => setMovementForm({ ...movementForm, movementType: value })}
+              options={MOVEMENT_TYPES.map((type) => ({ value: type, label: type }))} />
           </Field>
           <Field label="Date">
-            <input className="input" type="date" value={movementForm.movementDate} onChange={(e) => setMovementForm({ ...movementForm, movementDate: e.target.value })} />
+            <DatePicker value={movementForm.movementDate} onChange={(value) => setMovementForm({ ...movementForm, movementDate: value })} />
           </Field>
           <Field label="Item">
-            <select className="input" value={movementForm.inventoryItemId} onChange={(e) => {
-              const item = itemById.get(e.target.value);
-              setMovementForm({ ...movementForm, inventoryItemId: e.target.value, inventoryLotId: "", reference: item?.sku ?? movementForm.reference });
-            }}>
-              <option value="">Select item</option>
-              {((items ?? []) as any[]).map((item) => <option key={item._id} value={item._id}>{item.name} {item.sku ? `(${item.sku})` : ""}</option>)}
-            </select>
+            <Select value={movementForm.inventoryItemId} onChange={(value) => {
+              const item = itemById.get(value);
+              setMovementForm({ ...movementForm, inventoryItemId: value, inventoryLotId: "", reference: item?.sku ?? movementForm.reference });
+            }}
+              options={[{ value: "", label: "Select item" }, ...((items ?? []) as any[]).map((item) => ({ value: item._id, label: `${item.name} ${item.sku ? `(${item.sku})` : ""}` }))]} />
           </Field>
           {movementItemLots.length > 0 && (
             <Field label="Lot / serial" hint="Optional — pick the specific batch or unit.">
-              <select className="input" value={movementForm.inventoryLotId} onChange={(e) => setMovementForm({ ...movementForm, inventoryLotId: e.target.value })}>
-                <option value="">No specific lot</option>
-                {movementItemLots.map((lot: any) => <option key={lot._id} value={lot._id}>{lot.lotNumber || lot.serialNumber}{lot.expiresAt ? ` · exp ${lot.expiresAt}` : ""}</option>)}
-              </select>
+              <Select value={movementForm.inventoryLotId} onChange={(value) => setMovementForm({ ...movementForm, inventoryLotId: value })}
+                options={[{ value: "", label: "No specific lot" }, ...movementItemLots.map((lot: any) => ({ value: lot._id, label: `${lot.lotNumber || lot.serialNumber}${lot.expiresAt ? ` · exp ${lot.expiresAt}` : ""}` }))]} />
             </Field>
           )}
           <Field label="Quantity">
             <input className="input" inputMode="decimal" value={movementForm.quantity} onChange={(e) => setMovementForm({ ...movementForm, quantity: e.target.value })} />
           </Field>
           <Field label="From location" hint="Where stock leaves (consume / transfer / adjust down).">
-            <select className="input" value={movementForm.fromLocationId} onChange={(e) => setMovementForm({ ...movementForm, fromLocationId: e.target.value })}>
-              <option value="">External / not applicable</option>
-              {((locations ?? []) as any[]).map((location) => <option key={location._id} value={location._id}>{location.name}{location.code ? ` (${location.code})` : ""}</option>)}
-            </select>
+            <Select value={movementForm.fromLocationId} onChange={(value) => setMovementForm({ ...movementForm, fromLocationId: value })}
+              options={[{ value: "", label: "External / not applicable" }, ...((locations ?? []) as any[]).map((location) => ({ value: location._id, label: `${location.name}${location.code ? ` (${location.code})` : ""}` }))]} />
           </Field>
           <Field label="To location" hint="Where stock lands (receive / transfer / adjust up).">
-            <select className="input" value={movementForm.toLocationId} onChange={(e) => setMovementForm({ ...movementForm, toLocationId: e.target.value })}>
-              <option value="">External / not applicable</option>
-              {((locations ?? []) as any[]).map((location) => <option key={location._id} value={location._id}>{location.name}{location.code ? ` (${location.code})` : ""}</option>)}
-            </select>
+            <Select value={movementForm.toLocationId} onChange={(value) => setMovementForm({ ...movementForm, toLocationId: value })}
+              options={[{ value: "", label: "External / not applicable" }, ...((locations ?? []) as any[]).map((location) => ({ value: location._id, label: `${location.name}${location.code ? ` (${location.code})` : ""}` }))]} />
           </Field>
           <Field label="Reference">
             <input className="input" value={movementForm.reference} onChange={(e) => setMovementForm({ ...movementForm, reference: e.target.value })} />
@@ -733,9 +726,8 @@ export function InventoryPage() {
             <input className="input" value={itemForm.category} onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })} />
           </Field>
           <Field label="Item type">
-            <select className="input" value={itemForm.itemType} onChange={(e) => setItemForm({ ...itemForm, itemType: e.target.value })}>
-              {ITEM_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
-            </select>
+            <Select value={itemForm.itemType} onChange={(value) => setItemForm({ ...itemForm, itemType: value })}
+              options={ITEM_TYPES.map((type) => ({ value: type, label: type }))} />
           </Field>
           <Field label="Unit of measure">
             <input className="input" value={itemForm.unitOfMeasure} onChange={(e) => setItemForm({ ...itemForm, unitOfMeasure: e.target.value })} />
@@ -773,15 +765,12 @@ export function InventoryPage() {
             <input className="input" value={locationForm.code} onChange={(e) => setLocationForm({ ...locationForm, code: e.target.value })} placeholder="BIN-A3" />
           </Field>
           <Field label="Type">
-            <select className="input" value={locationForm.locationType} onChange={(e) => setLocationForm({ ...locationForm, locationType: e.target.value })}>
-              {LOCATION_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
-            </select>
+            <Select value={locationForm.locationType} onChange={(value) => setLocationForm({ ...locationForm, locationType: value })}
+              options={LOCATION_TYPES.map((type) => ({ value: type, label: type }))} />
           </Field>
           <Field label="Inside (parent location)" hint="Nest a bin inside a room or facility.">
-            <select className="input" value={locationForm.parentLocationId} onChange={(e) => setLocationForm({ ...locationForm, parentLocationId: e.target.value })}>
-              <option value="">Top level</option>
-              {((locations ?? []) as any[]).filter((l) => l._id !== editingLocationId).map((location) => <option key={location._id} value={location._id}>{location.name}{location.code ? ` (${location.code})` : ""}</option>)}
-            </select>
+            <Select value={locationForm.parentLocationId} onChange={(value) => setLocationForm({ ...locationForm, parentLocationId: value })}
+              options={[{ value: "", label: "Top level" }, ...((locations ?? []) as any[]).filter((l) => l._id !== editingLocationId).map((location) => ({ value: location._id, label: `${location.name}${location.code ? ` (${location.code})` : ""}` }))]} />
           </Field>
           <Field label="Address">
             <input className="input" value={locationForm.address} onChange={(e) => setLocationForm({ ...locationForm, address: e.target.value })} />
@@ -838,10 +827,8 @@ export function InventoryPage() {
       >
         <div className="form-grid">
           <Field label="Item" required>
-            <select className="input" value={lotForm.inventoryItemId} onChange={(e) => setLotForm({ ...lotForm, inventoryItemId: e.target.value })}>
-              <option value="">Select item</option>
-              {((items ?? []) as any[]).map((item) => <option key={item._id} value={item._id}>{item.name} {item.sku ? `(${item.sku})` : ""}</option>)}
-            </select>
+            <Select value={lotForm.inventoryItemId} onChange={(value) => setLotForm({ ...lotForm, inventoryItemId: value })}
+              options={[{ value: "", label: "Select item" }, ...((items ?? []) as any[]).map((item) => ({ value: item._id, label: `${item.name} ${item.sku ? `(${item.sku})` : ""}` }))]} />
           </Field>
           <Field label="Lot / batch number">
             <input className="input" value={lotForm.lotNumber} onChange={(e) => setLotForm({ ...lotForm, lotNumber: e.target.value })} />
@@ -850,21 +837,20 @@ export function InventoryPage() {
             <input className="input" value={lotForm.serialNumber} onChange={(e) => setLotForm({ ...lotForm, serialNumber: e.target.value })} />
           </Field>
           <Field label="Expires">
-            <input className="input" type="date" value={lotForm.expiresAt} onChange={(e) => setLotForm({ ...lotForm, expiresAt: e.target.value })} />
+            <DatePicker value={lotForm.expiresAt} onChange={(value) => setLotForm({ ...lotForm, expiresAt: value })} />
           </Field>
           <Field label="Manufacturer">
             <input className="input" value={lotForm.manufacturer} onChange={(e) => setLotForm({ ...lotForm, manufacturer: e.target.value })} />
           </Field>
           <Field label="Manufactured">
-            <input className="input" type="date" value={lotForm.manufacturedAt} onChange={(e) => setLotForm({ ...lotForm, manufacturedAt: e.target.value })} />
+            <DatePicker value={lotForm.manufacturedAt} onChange={(value) => setLotForm({ ...lotForm, manufacturedAt: value })} />
           </Field>
           <Field label="Condition">
             <input className="input" value={lotForm.condition} onChange={(e) => setLotForm({ ...lotForm, condition: e.target.value })} />
           </Field>
           <Field label="Status">
-            <select className="input" value={lotForm.status} onChange={(e) => setLotForm({ ...lotForm, status: e.target.value })}>
-              {LOT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <Select value={lotForm.status} onChange={(value) => setLotForm({ ...lotForm, status: value })}
+              options={LOT_STATUSES.map((s) => ({ value: s, label: s }))} />
           </Field>
         </div>
       </Drawer>
@@ -880,26 +866,19 @@ export function InventoryPage() {
             <input className="input" value={countForm.title} onChange={(e) => setCountForm({ ...countForm, title: e.target.value })} placeholder="Q2 supply cabinet count" />
           </Field>
           <Field label="Scope" hint="Seeds count lines from current balances so you can record what's actually there.">
-            <select className="input" value={countForm.scopeType} onChange={(e) => setCountForm({ ...countForm, scopeType: e.target.value })}>
-              <option value="all">Everything on hand</option>
-              <option value="location">A single location / bin</option>
-              <option value="itemType">One item type</option>
-            </select>
+            <Select value={countForm.scopeType} onChange={(value) => setCountForm({ ...countForm, scopeType: value })}
+              options={[{ value: "all", label: "Everything on hand" }, { value: "location", label: "A single location / bin" }, { value: "itemType", label: "One item type" }]} />
           </Field>
           {countForm.scopeType === "location" && (
             <Field label="Location">
-              <select className="input" value={countForm.locationId} onChange={(e) => setCountForm({ ...countForm, locationId: e.target.value })}>
-                <option value="">Select location</option>
-                {((locations ?? []) as any[]).map((location) => <option key={location._id} value={location._id}>{location.name}{location.code ? ` (${location.code})` : ""}</option>)}
-              </select>
+              <Select value={countForm.locationId} onChange={(value) => setCountForm({ ...countForm, locationId: value })}
+                options={[{ value: "", label: "Select location" }, ...((locations ?? []) as any[]).map((location) => ({ value: location._id, label: `${location.name}${location.code ? ` (${location.code})` : ""}` }))]} />
             </Field>
           )}
           {countForm.scopeType === "itemType" && (
             <Field label="Item type">
-              <select className="input" value={countForm.itemType} onChange={(e) => setCountForm({ ...countForm, itemType: e.target.value })}>
-                <option value="">Select type</option>
-                {ITEM_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
-              </select>
+              <Select value={countForm.itemType} onChange={(value) => setCountForm({ ...countForm, itemType: value })}
+                options={[{ value: "", label: "Select type" }, ...ITEM_TYPES.map((type) => ({ value: type, label: type }))]} />
             </Field>
           )}
           <Field label="Reviewer">
@@ -982,20 +961,12 @@ export function InventoryPage() {
             )}
             <div className="form-grid">
               <Field label="Purchase transaction" hint="Pick the financial transaction this item was bought on.">
-                <select className="input" value={linkForm.financialTransactionId} onChange={(e) => setLinkForm({ ...linkForm, financialTransactionId: e.target.value })}>
-                  <option value="">No transaction</option>
-                  {((transactions ?? []) as any[]).filter((t) => t.amountCents < 0).map((t) => (
-                    <option key={t._id} value={t._id}>{t.date} · {t.description} · {money(Math.abs(t.amountCents))}</option>
-                  ))}
-                </select>
+                <Select value={linkForm.financialTransactionId} onChange={(value) => setLinkForm({ ...linkForm, financialTransactionId: value })}
+                  options={[{ value: "", label: "No transaction" }, ...((transactions ?? []) as any[]).filter((t) => t.amountCents < 0).map((t) => ({ value: t._id, label: `${t.date} · ${t.description} · ${money(Math.abs(t.amountCents))}` }))]} />
               </Field>
               <Field label="Receipt document">
-                <select className="input" value={linkForm.receiptDocumentId} onChange={(e) => setLinkForm({ ...linkForm, receiptDocumentId: e.target.value })}>
-                  <option value="">No receipt document</option>
-                  {((documents ?? []) as any[]).filter((d) => d.category === "Receipt" || d.category === "FinancialStatement" || (d.tags ?? []).some((tag: string) => /receipt|invoice|finance/i.test(tag))).map((d) => (
-                    <option key={d._id} value={d._id}>{d.title}</option>
-                  ))}
-                </select>
+                <Select value={linkForm.receiptDocumentId} onChange={(value) => setLinkForm({ ...linkForm, receiptDocumentId: value })}
+                  options={[{ value: "", label: "No receipt document" }, ...((documents ?? []) as any[]).filter((d) => d.category === "Receipt" || d.category === "FinancialStatement" || (d.tags ?? []).some((tag: string) => /receipt|invoice|finance/i.test(tag))).map((d) => ({ value: d._id, label: d.title }))]} />
               </Field>
               <Field label="Receipt line label">
                 <input className="input" value={linkForm.receiptLineLabel} onChange={(e) => setLinkForm({ ...linkForm, receiptLineLabel: e.target.value })} />

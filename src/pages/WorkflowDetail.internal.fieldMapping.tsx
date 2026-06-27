@@ -20,6 +20,7 @@ import { useToast } from "../components/Toast";
 import { Badge, Drawer, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Modal } from "../components/Modal";
+import { Select } from "../components/Select";
 import { SeedPrompt } from "./_helpers";
 import {
   ArrowLeft,
@@ -475,46 +476,34 @@ export function FieldMappingWizardModal({
                   />
                 )}
                 {current.kind === "dynamic" && (
-                  <select
-                    className="input"
+                  <Select
                     value={current.source ?? ""}
-                    onChange={(e) => updateMapping({ source: e.target.value })}
-                  >
-                    <option value="">— Pick token —</option>
-                    {DYNAMIC_SOURCES.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(value) => updateMapping({ source: value })}
+                    options={[
+                      { value: "", label: "— Pick token —" },
+                      ...DYNAMIC_SOURCES.map((opt) => ({ value: opt.value, label: opt.label })),
+                    ]}
+                  />
                 )}
                 {current.kind === "intake" && (
-                  <select
-                    className="input"
+                  <Select
                     value={current.source ?? ""}
-                    onChange={(e) => updateMapping({ source: e.target.value })}
-                  >
-                    <option value="">— Pick intake field —</option>
-                    {intakeFields.map((field) => (
-                      <option key={field.key} value={field.key}>
-                        {field.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(value) => updateMapping({ source: value })}
+                    options={[
+                      { value: "", label: "— Pick intake field —" },
+                      ...intakeFields.map((field) => ({ value: field.key, label: field.label })),
+                    ]}
+                  />
                 )}
                 {current.kind === "person" && (
-                  <select
-                    className="input"
+                  <Select
                     value={current.source ?? ""}
-                    onChange={(e) => updateMapping({ source: e.target.value })}
-                  >
-                    <option value="">— Pick person field —</option>
-                    {PERSON_SOURCES.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(value) => updateMapping({ source: value })}
+                    options={[
+                      { value: "", label: "— Pick person field —" },
+                      ...PERSON_SOURCES.map((opt) => ({ value: opt.value, label: opt.label })),
+                    ]}
+                  />
                 )}
                 {current.kind === "personRef" && (
                   <PersonRefPicker
@@ -525,18 +514,14 @@ export function FieldMappingWizardModal({
                   />
                 )}
                 {current.kind === "manager" && (
-                  <select
-                    className="input"
+                  <Select
                     value={current.source ?? ""}
-                    onChange={(e) => updateMapping({ source: e.target.value })}
-                  >
-                    <option value="">— Pick manager field —</option>
-                    {MANAGER_SOURCES.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(value) => updateMapping({ source: value })}
+                    options={[
+                      { value: "", label: "— Pick manager field —" },
+                      ...MANAGER_SOURCES.map((opt) => ({ value: opt.value, label: opt.label })),
+                    ]}
+                  />
                 )}
                 {current.kind === "empty" && (
                   <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
@@ -628,40 +613,34 @@ export function PersonRefPicker({
   return (
     <div className="person-ref-picker">
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-        <select
-          className="input"
+        <Select
           value={category ?? ""}
-          onChange={(e) =>
+          onChange={(value) =>
             onChange({
-              category: (e.target.value || undefined) as PersonCategory | undefined,
+              category: (value || undefined) as PersonCategory | undefined,
               personId: undefined,
               source: undefined,
             })
           }
-        >
-          <option value="">— Pick category —</option>
-          {PERSON_CATEGORIES.map((c) => (
-            <option key={c.value} value={c.value}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-        <select
-          className="input"
+          options={[
+            { value: "", label: "— Pick category —" },
+            ...PERSON_CATEGORIES.map((c) => ({ value: c.value, label: c.label })),
+          ]}
+        />
+        <Select
           value={personId ?? ""}
           disabled={!category}
-          onChange={(e) =>
-            onChange({ personId: e.target.value || undefined, source: undefined })
+          onChange={(value) =>
+            onChange({ personId: value || undefined, source: undefined })
           }
-        >
-          <option value="">— Pick person —</option>
-          {peopleRaw.map((p: any) => (
-            <option key={p._id} value={p._id}>
-              {displayName(p)}
-              {p.email ? ` · ${p.email}` : ""}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: "", label: "— Pick person —" },
+            ...peopleRaw.map((p: any) => ({
+              value: p._id,
+              label: `${displayName(p)}${p.email ? ` · ${p.email}` : ""}`,
+            })),
+          ]}
+        />
       </div>
       <select
         className="input"
@@ -752,23 +731,24 @@ export function FieldMappingEditor({
           return (
             <div key={field} className="field-mapping__row">
               <div className="field-mapping__name mono">{field}</div>
-              <select
-                className="input field-mapping__kind"
+              <Select
+                className="field-mapping__kind"
                 value={mapping.kind}
-                onChange={(e) =>
+                onChange={(value) =>
                   updateMapping(field, {
-                    kind: e.target.value as MappingKind,
+                    kind: value as MappingKind,
                     value: undefined,
                     source: undefined,
                   })
                 }
-              >
-                <option value="empty">— Empty —</option>
-                <option value="literal">Literal / default</option>
-                <option value="dynamic">Dynamic token</option>
-                <option value="person">Person field</option>
-                <option value="manager">Manager field</option>
-              </select>
+                options={[
+                  { value: "empty", label: "— Empty —" },
+                  { value: "literal", label: "Literal / default" },
+                  { value: "dynamic", label: "Dynamic token" },
+                  { value: "person", label: "Person field" },
+                  { value: "manager", label: "Manager field" },
+                ]}
+              />
               <div className="field-mapping__value">
                 {mapping.kind === "literal" && (
                   <input
@@ -779,46 +759,34 @@ export function FieldMappingEditor({
                   />
                 )}
                 {mapping.kind === "dynamic" && (
-                  <select
-                    className="input"
+                  <Select
                     value={mapping.source ?? ""}
-                    onChange={(e) => updateMapping(field, { source: e.target.value })}
-                  >
-                    <option value="">— Pick token —</option>
-                    {DYNAMIC_SOURCES.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(value) => updateMapping(field, { source: value })}
+                    options={[
+                      { value: "", label: "— Pick token —" },
+                      ...DYNAMIC_SOURCES.map((opt) => ({ value: opt.value, label: opt.label })),
+                    ]}
+                  />
                 )}
                 {mapping.kind === "person" && (
-                  <select
-                    className="input"
+                  <Select
                     value={mapping.source ?? ""}
-                    onChange={(e) => updateMapping(field, { source: e.target.value })}
-                  >
-                    <option value="">— Pick person field —</option>
-                    {PERSON_SOURCES.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(value) => updateMapping(field, { source: value })}
+                    options={[
+                      { value: "", label: "— Pick person field —" },
+                      ...PERSON_SOURCES.map((opt) => ({ value: opt.value, label: opt.label })),
+                    ]}
+                  />
                 )}
                 {mapping.kind === "manager" && (
-                  <select
-                    className="input"
+                  <Select
                     value={mapping.source ?? ""}
-                    onChange={(e) => updateMapping(field, { source: e.target.value })}
-                  >
-                    <option value="">— Pick manager field —</option>
-                    {MANAGER_SOURCES.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(value) => updateMapping(field, { source: value })}
+                    options={[
+                      { value: "", label: "— Pick manager field —" },
+                      ...MANAGER_SOURCES.map((opt) => ({ value: opt.value, label: opt.label })),
+                    ]}
+                  />
                 )}
                 {mapping.kind === "empty" && (
                   <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>

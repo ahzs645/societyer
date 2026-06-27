@@ -4,6 +4,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Field, Badge } from "../components/ui";
+import { Select } from "../components/Select";
 import { FileCog, Copy, FileDown } from "lucide-react";
 import { exportWordDocx } from "../lib/docx";
 import { escapeHtml } from "../lib/html";
@@ -79,19 +80,16 @@ export function FilingPreFillPage() {
         <div className="card__body">
           <div className="row" style={{ gap: 12 }}>
             <Field label="Provider">
-              <select className="input" value={provider} onChange={(e) => {
-                const p = e.target.value as "societies" | "cra";
+              <Select value={provider} onChange={(value) => {
+                const p = value as "societies" | "cra";
                 setProvider(p);
                 setKind((p === "societies" ? SOCIETIES_KINDS : CRA_KINDS)[0].id);
-              }}>
-                <option value="societies">BC Societies Online</option>
-                <option value="cra">CRA</option>
-              </select>
+              }}
+                options={[{ value: "societies", label: "BC Societies Online" }, { value: "cra", label: "CRA" }]} />
             </Field>
             <Field label="Form">
-              <select className="input" value={kind} onChange={(e) => setKind(e.target.value)}>
-                {kinds.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
-              </select>
+              <Select value={kind} onChange={(value) => setKind(value)}
+                options={kinds.map((k) => ({ value: k.id, label: k.label }))} />
             </Field>
             {provider === "cra" && (
               <Field label="Fiscal year">

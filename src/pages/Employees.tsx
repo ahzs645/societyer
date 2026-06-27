@@ -4,6 +4,8 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, InspectorNote, RecordChip } from "../components/ui";
+import { Select } from "../components/Select";
+import { DatePicker } from "../components/DatePicker";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
@@ -122,7 +124,7 @@ export function EmployeesPage() {
             <Field label="Email"><input className="input" value={form.email ?? ""} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Phone"><input className="input" inputMode="tel" value={form.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
-              <Field label="Birth date"><input className="input" type="date" value={form.birthDate ?? ""} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} /></Field>
+              <Field label="Birth date"><DatePicker value={form.birthDate ?? ""} onChange={(value) => setForm({ ...form, birthDate: value })} /></Field>
             </div>
             <StructuredAddressFields
               value={{
@@ -146,12 +148,19 @@ export function EmployeesPage() {
             <Field label="Role"><input className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Type">
-                <select className="input" value={form.employmentType} onChange={(e) => setForm({ ...form, employmentType: e.target.value })}>
-                  <option>FullTime</option><option>PartTime</option><option>Casual</option><option>Contractor</option>
-                </select>
+                <Select
+                  value={form.employmentType}
+                  onChange={(value) => setForm({ ...form, employmentType: value })}
+                  options={[
+                    { value: "FullTime", label: "FullTime" },
+                    { value: "PartTime", label: "PartTime" },
+                    { value: "Casual", label: "Casual" },
+                    { value: "Contractor", label: "Contractor" },
+                  ]}
+                />
               </Field>
-              <Field label="Start"><input className="input" type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></Field>
-              <Field label="End"><input className="input" type="date" value={form.endDate ?? ""} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></Field>
+              <Field label="Start"><DatePicker value={form.startDate} onChange={(value) => setForm({ ...form, startDate: value })} /></Field>
+              <Field label="End"><DatePicker value={form.endDate ?? ""} onChange={(value) => setForm({ ...form, endDate: value })} /></Field>
             </div>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Annual salary" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.annualSalaryDollars ?? ""} onChange={(e) => setForm({ ...form, annualSalaryDollars: e.target.value })} /></Field>

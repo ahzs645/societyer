@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Button, Drawer, Field } from "../components/ui";
+import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
@@ -427,10 +428,14 @@ function LinkedList({ title, rows, getTitle, getMeta }: any) {
 function RecordSelect({ label, value, rows, onChange, getLabel }: any) {
   return (
     <Field label={label}>
-      <select className="input" value={value ?? ""} onChange={(e) => onChange(e.target.value || undefined)}>
-        <option value="">No {label.toLowerCase()}</option>
-        {rows.map((row: any) => <option key={row._id} value={row._id}>{getLabel(row)}</option>)}
-      </select>
+      <Select
+        value={value ?? ""}
+        onChange={(value) => onChange(value || undefined)}
+        options={[
+          { value: "", label: `No ${label.toLowerCase()}` },
+          ...rows.map((row: any) => ({ value: row._id, label: getLabel(row) })),
+        ]}
+      />
     </Field>
   );
 }

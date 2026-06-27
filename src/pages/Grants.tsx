@@ -6,7 +6,9 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
+import { DatePicker } from "../components/DatePicker";
 import { DataTable } from "../components/DataTable";
+import { Select } from "../components/Select";
 import { ArrowLeft, BadgeDollarSign, ExternalLink, FileText, Pencil, Plus, Save, Trash2, Inbox, Upload } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { centsToDollarInput, formatDate, money } from "../lib/format";
@@ -709,28 +711,26 @@ export function GrantsPage() {
         {txnDraft && (
           <div>
             <Field label="Grant">
-              <select className="input" value={txnDraft.grantId ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, grantId: e.target.value })}>
-                {(grants ?? []).map((grant) => <option key={grant._id} value={grant._id}>{grant.title}</option>)}
-              </select>
+              <Select value={txnDraft.grantId ?? ""} onChange={(value) => setTxnDraft({ ...txnDraft, grantId: value })}
+                options={(grants ?? []).map((grant) => ({ value: grant._id, label: grant.title }))} />
             </Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Date"><input className="input" type="date" value={txnDraft.date ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, date: e.target.value })} /></Field>
+              <Field label="Date"><DatePicker value={txnDraft.date ?? ""} onChange={(value) => setTxnDraft({ ...txnDraft, date: value })} /></Field>
               <Field label="Direction">
-                <select className="input" value={txnDraft.direction} onChange={(e) => setTxnDraft({ ...txnDraft, direction: e.target.value })}>
-                  <option>inflow</option>
-                  <option>outflow</option>
-                  <option>commitment</option>
-                  <option>adjustment</option>
-                </select>
+                <Select value={txnDraft.direction} onChange={(value) => setTxnDraft({ ...txnDraft, direction: value })}
+                  options={[
+                    { value: "inflow", label: "inflow" },
+                    { value: "outflow", label: "outflow" },
+                    { value: "commitment", label: "commitment" },
+                    { value: "adjustment", label: "adjustment" },
+                  ]} />
               </Field>
             </div>
             <Field label="Amount" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={txnDraft.amountDollars ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, amountDollars: e.target.value })} /></Field>
             <Field label="Description"><input className="input" value={txnDraft.description ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, description: e.target.value })} /></Field>
             <Field label="Evidence document">
-              <select className="input" value={txnDraft.documentId ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, documentId: e.target.value })}>
-                <option value="">None</option>
-                {(documents ?? []).map((document) => <option key={document._id} value={document._id}>{document.title}</option>)}
-              </select>
+              <Select value={txnDraft.documentId ?? ""} onChange={(value) => setTxnDraft({ ...txnDraft, documentId: value })}
+                options={[{ value: "", label: "None" }, ...(documents ?? []).map((document) => ({ value: document._id, label: document.title }))]} />
             </Field>
             <Field label="Notes"><MarkdownEditor rows={4} value={txnDraft.notes ?? ""} onChange={(markdown) => setTxnDraft({ ...txnDraft, notes: markdown })} /></Field>
           </div>
@@ -760,30 +760,28 @@ export function GrantsPage() {
         {reportDraft && (
           <div>
             <Field label="Grant">
-              <select className="input" value={reportDraft.grantId ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, grantId: e.target.value })}>
-                {(grants ?? []).map((grant) => <option key={grant._id} value={grant._id}>{grant.title}</option>)}
-              </select>
+              <Select value={reportDraft.grantId ?? ""} onChange={(value) => setReportDraft({ ...reportDraft, grantId: value })}
+                options={(grants ?? []).map((grant) => ({ value: grant._id, label: grant.title }))} />
             </Field>
             <Field label="Title"><input className="input" value={reportDraft.title} onChange={(e) => setReportDraft({ ...reportDraft, title: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Status">
-                <select className="input" value={reportDraft.status} onChange={(e) => setReportDraft({ ...reportDraft, status: e.target.value })}>
-                  <option>Upcoming</option>
-                  <option>Due</option>
-                  <option>Submitted</option>
-                  <option>Overdue</option>
-                </select>
+                <Select value={reportDraft.status} onChange={(value) => setReportDraft({ ...reportDraft, status: value })}
+                  options={[
+                    { value: "Upcoming", label: "Upcoming" },
+                    { value: "Due", label: "Due" },
+                    { value: "Submitted", label: "Submitted" },
+                    { value: "Overdue", label: "Overdue" },
+                  ]} />
               </Field>
-              <Field label="Due"><input className="input" type="date" value={reportDraft.dueAtISO ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, dueAtISO: e.target.value })} /></Field>
+              <Field label="Due"><DatePicker value={reportDraft.dueAtISO ?? ""} onChange={(value) => setReportDraft({ ...reportDraft, dueAtISO: value })} /></Field>
             </div>
-            <Field label="Submitted"><input className="input" type="date" value={reportDraft.submittedAtISO ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, submittedAtISO: e.target.value })} /></Field>
+            <Field label="Submitted"><DatePicker value={reportDraft.submittedAtISO ?? ""} onChange={(value) => setReportDraft({ ...reportDraft, submittedAtISO: value })} /></Field>
             <Field label="Spending to date" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={reportDraft.spendingToDateDollars ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, spendingToDateDollars: e.target.value })} /></Field>
             <Field label="Outcome summary"><MarkdownEditor rows={4} value={reportDraft.outcomeSummary ?? ""} onChange={(markdown) => setReportDraft({ ...reportDraft, outcomeSummary: markdown })} /></Field>
             <Field label="Report document">
-              <select className="input" value={reportDraft.documentId ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, documentId: e.target.value })}>
-                <option value="">None</option>
-                {(documents ?? []).map((document) => <option key={document._id} value={document._id}>{document.title}</option>)}
-              </select>
+              <Select value={reportDraft.documentId ?? ""} onChange={(value) => setReportDraft({ ...reportDraft, documentId: value })}
+                options={[{ value: "", label: "None" }, ...(documents ?? []).map((document) => ({ value: document._id, label: document.title }))]} />
             </Field>
             <Field label="Notes"><MarkdownEditor rows={4} value={reportDraft.notes ?? ""} onChange={(markdown) => setReportDraft({ ...reportDraft, notes: markdown })} /></Field>
           </div>

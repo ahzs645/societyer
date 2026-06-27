@@ -6,6 +6,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
+import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
@@ -144,18 +145,12 @@ export function MotionBacklogPage() {
                   </Field>
                   <div className="two-col" style={{ gap: 12 }}>
                     <Field label="Category">
-                      <select className="input" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>
-                        {["privacy", "governance", "finance", "membership", "operations", "bylaws", "other"].map((category) => (
-                          <option key={category} value={category}>{formatLabel(category)}</option>
-                        ))}
-                      </select>
+                      <Select value={form.category} onChange={(value) => setForm({ ...form, category: value })}
+                        options={["privacy", "governance", "finance", "membership", "operations", "bylaws", "other"].map((category) => ({ value: category, label: formatLabel(category) }))} />
                     </Field>
                     <Field label="Priority">
-                      <select className="input" value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>
-                        <option value="high">High</option>
-                        <option value="normal">Normal</option>
-                        <option value="low">Low</option>
-                      </select>
+                      <Select value={form.priority} onChange={(value) => setForm({ ...form, priority: value })}
+                        options={[{ value: "high", label: "High" }, { value: "normal", label: "Normal" }, { value: "low", label: "Low" }]} />
                     </Field>
                   </div>
                   <Field label="Notes">
@@ -216,21 +211,14 @@ export function MotionBacklogPage() {
                         </div>
                       )}
                       <div className="motion-backlog__actions">
-                        <select
-                          className="input"
+                        <Select
                           value={agendaTargets[String(item._id)] ?? ""}
-                          onChange={(event) => setAgendaTargets({ ...agendaTargets, [String(item._id)]: event.target.value })}
-                        >
-                          <option value="">Choose agenda...</option>
-                          {(agendas ?? []).map((agenda: any) => {
+                          onChange={(value) => setAgendaTargets({ ...agendaTargets, [String(item._id)]: value })}
+                          options={[{ value: "", label: "Choose agenda..." }, ...(agendas ?? []).map((agenda: any) => {
                             const meeting = meetingById.get(String(agenda.meetingId));
-                            return (
-                              <option key={agenda._id} value={agenda._id}>
-                                {agenda.title}{meeting ? ` - ${formatDate(meeting.scheduledAt)}` : ""}
-                              </option>
-                            );
-                          })}
-                        </select>
+                            return { value: agenda._id, label: `${agenda.title}${meeting ? ` - ${formatDate(meeting.scheduledAt)}` : ""}` };
+                          })]}
+                        />
                         <button className="btn" onClick={() => addBacklogItemToAgenda(item)}>
                           <CalendarPlus size={12} /> Add to agenda
                         </button>
@@ -253,14 +241,8 @@ export function MotionBacklogPage() {
                 After an agenda has backlog motions and minutes exist for the meeting, seed those agenda motions into the minutes as pending motions.
               </p>
               <Field label="Meeting">
-                <select className="input" value={minutesMeetingId} onChange={(event) => setMinutesMeetingId(event.target.value)}>
-                  <option value="">Choose meeting...</option>
-                  {(meetings ?? []).map((meeting: any) => (
-                    <option key={meeting._id} value={meeting._id}>
-                      {meeting.title} - {formatDate(meeting.scheduledAt)}
-                    </option>
-                  ))}
-                </select>
+                <Select value={minutesMeetingId} onChange={(value) => setMinutesMeetingId(value)}
+                  options={[{ value: "", label: "Choose meeting..." }, ...(meetings ?? []).map((meeting: any) => ({ value: meeting._id, label: `${meeting.title} - ${formatDate(meeting.scheduledAt)}` }))]} />
               </Field>
               <button className="btn btn--accent" onClick={seedAgendaMotionsToMinutes}>
                 <FileText size={12} /> Seed agenda motions into minutes

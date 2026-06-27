@@ -16,6 +16,7 @@ import {
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { Badge } from "../components/ui";
+import { Select } from "../components/Select";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { formatDate, relative } from "../lib/format";
 
@@ -100,11 +101,11 @@ export function AnnualCyclePage() {
         iconColor="orange"
         subtitle="A guided compliance view that pulls AGM, filings, financials, records, and ongoing governance into one workflow."
         actions={
-          <select className="input" value={year} onChange={(event) => setYear(Number(event.target.value))}>
-            {years.map((option) => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
+          <Select
+            value={String(year)}
+            onChange={(value) => setYear(Number(value))}
+            options={years.map((option) => ({ value: String(option), label: String(option) }))}
+          />
         }
       />
 

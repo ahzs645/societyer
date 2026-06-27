@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { FileText, Image as ImageIcon, MapPin, Package, Plus, Tag } from "lucide-react";
 import { Badge } from "../../components/ui";
+import { Select } from "../../components/Select";
 import { formatQuantity } from "./helpers";
 
 export function TabButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: ReactNode; label: string }) {
@@ -146,15 +147,11 @@ export function CountEntry({
         <div className="row" style={{ gap: 8, alignItems: "flex-end", flexWrap: "wrap", marginTop: 8 }}>
           <div className="stack stack--xs" style={{ minWidth: 180 }}>
             <span className="field__label">Add found item</span>
-            <select className="input" value={add.inventoryItemId} onChange={(e) => setAdd({ ...add, inventoryItemId: e.target.value })}>
-              <option value="">Select item</option>
-              {items.map((item) => <option key={item._id} value={item._id}>{item.name}{item.sku ? ` (${item.sku})` : ""}</option>)}
-            </select>
+            <Select value={add.inventoryItemId} onChange={(value) => setAdd({ ...add, inventoryItemId: value })}
+              options={[{ value: "", label: "Select item" }, ...items.map((item) => ({ value: item._id, label: `${item.name}${item.sku ? ` (${item.sku})` : ""}` }))]} />
           </div>
-          <select className="input" style={{ minWidth: 150 }} value={add.locationId} onChange={(e) => setAdd({ ...add, locationId: e.target.value })}>
-            <option value="">Location</option>
-            {locations.map((location) => <option key={location._id} value={location._id}>{location.name}{location.code ? ` (${location.code})` : ""}</option>)}
-          </select>
+          <Select style={{ minWidth: 150 }} value={add.locationId} onChange={(value) => setAdd({ ...add, locationId: value })}
+            options={[{ value: "", label: "Location" }, ...locations.map((location) => ({ value: location._id, label: `${location.name}${location.code ? ` (${location.code})` : ""}` }))]} />
           <input className="input mono" style={{ width: 90 }} inputMode="decimal" placeholder="Qty" value={add.quantity} onChange={(e) => setAdd({ ...add, quantity: e.target.value })} />
           <button
             className="btn btn--sm"

@@ -4,6 +4,8 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
+import { DatePicker } from "../components/DatePicker";
+import { Select } from "../components/Select";
 import { History, Plus, Trash2 } from "lucide-react";
 
 /**
@@ -234,11 +236,9 @@ export function CorporateHistoryPage() {
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Effective from">
-                <input
-                  className="input"
-                  type="date"
+                <DatePicker
                   value={nameForm.startISO}
-                  onChange={(e) => setNameForm({ ...nameForm, startISO: e.target.value })}
+                  onChange={(value) => setNameForm({ ...nameForm, startISO: value })}
                 />
               </Field>
               <Field label="Register position">
@@ -272,18 +272,18 @@ export function CorporateHistoryPage() {
         {eventForm && (
           <div>
             <Field label="Action">
-              <select
-                className="input"
+              <Select
                 value={eventForm.action}
-                onChange={(e) => setEventForm({ ...eventForm, action: e.target.value })}
-              >
-                <option value="incorporated">incorporated</option>
-                <option value="transitioned">transitioned</option>
-                <option value="continued">continued</option>
-                <option value="amalgamated">amalgamated</option>
-                <option value="restated">restated</option>
-                <option value="other">other</option>
-              </select>
+                onChange={(value) => setEventForm({ ...eventForm, action: value })}
+                options={[
+                  { value: "incorporated", label: "incorporated" },
+                  { value: "transitioned", label: "transitioned" },
+                  { value: "continued", label: "continued" },
+                  { value: "amalgamated", label: "amalgamated" },
+                  { value: "restated", label: "restated" },
+                  { value: "other", label: "other" },
+                ]}
+              />
             </Field>
             <Field label="Jurisdiction">
               <input
@@ -308,11 +308,9 @@ export function CorporateHistoryPage() {
                 />
               </Field>
               <Field label="Effective from">
-                <input
-                  className="input"
-                  type="date"
+                <DatePicker
                   value={eventForm.startISO}
-                  onChange={(e) => setEventForm({ ...eventForm, startISO: e.target.value })}
+                  onChange={(value) => setEventForm({ ...eventForm, startISO: value })}
                 />
               </Field>
             </div>

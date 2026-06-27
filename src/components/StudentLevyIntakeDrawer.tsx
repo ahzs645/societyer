@@ -7,6 +7,7 @@ import { useToast } from "./Toast";
 import { Drawer, Field } from "./ui";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { Select } from "./Select";
+import { DatePicker } from "./DatePicker";
 
 const COLLECTION_MODELS = [
   { value: "direct", label: "Direct" },
@@ -302,11 +303,9 @@ export function StudentLevyIntakeDrawer({
             />
           </Field>
           <Field label="Next expected collection">
-            <input
-              className="input"
-              type="date"
+            <DatePicker
               value={draft.nextExpectedCollectionDate}
-              onChange={(event) => setDraft({ ...draft, nextExpectedCollectionDate: event.target.value })}
+              onChange={(value) => setDraft({ ...draft, nextExpectedCollectionDate: value })}
             />
           </Field>
         </div>
@@ -385,19 +384,15 @@ export function StudentLevyIntakeDrawer({
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <Field label="Start date">
-            <input
-              className="input"
-              type="date"
+            <DatePicker
               value={draft.startDate}
-              onChange={(event) => setDraft({ ...draft, startDate: event.target.value })}
+              onChange={(value) => setDraft({ ...draft, startDate: value })}
             />
           </Field>
           <Field label="End date">
-            <input
-              className="input"
-              type="date"
+            <DatePicker
               value={draft.endDate}
-              onChange={(event) => setDraft({ ...draft, endDate: event.target.value })}
+              onChange={(value) => setDraft({ ...draft, endDate: value })}
             />
           </Field>
         </div>
@@ -474,19 +469,15 @@ export function StudentLevyIntakeDrawer({
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   <Field label="Effective from">
-                    <input
-                      className="input"
-                      type="date"
+                    <DatePicker
                       value={row.effectiveFrom}
-                      onChange={(event) => updateFee(index, { effectiveFrom: event.target.value })}
+                      onChange={(value) => updateFee(index, { effectiveFrom: value })}
                     />
                   </Field>
                   <Field label="Effective to">
-                    <input
-                      className="input"
-                      type="date"
+                    <DatePicker
                       value={row.effectiveTo}
-                      onChange={(event) => updateFee(index, { effectiveTo: event.target.value })}
+                      onChange={(value) => updateFee(index, { effectiveTo: value })}
                     />
                   </Field>
                 </div>

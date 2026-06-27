@@ -7,6 +7,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Button, Drawer, Field, SettingsShell } from "../components/ui";
+import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import {
   CalendarDays,
@@ -308,14 +309,17 @@ export function IntegrationMarketplacePage() {
                     <Badge tone="success">uses existing workflow packages</Badge>
                   </div>
                   <Field label="Meeting">
-                    <select className="input" value={meetingId} onChange={(event) => setMeetingId(event.target.value)}>
-                      <option value="">Select meeting</option>
-                      {meetingOptions.map((meeting) => (
-                        <option key={meeting._id} value={meeting._id}>
-                          {meeting.title} - {String(meeting.scheduledAt).slice(0, 10)}
-                        </option>
-                      ))}
-                    </select>
+                    <Select
+                      value={meetingId}
+                      onChange={(value) => setMeetingId(value)}
+                      options={[
+                        { value: "", label: "Select meeting" },
+                        ...meetingOptions.map((meeting) => ({
+                          value: meeting._id,
+                          label: `${meeting.title} - ${String(meeting.scheduledAt).slice(0, 10)}`,
+                        })),
+                      ]}
+                    />
                   </Field>
                   <Button variant="accent" disabled={!meetingId || busySlug === selected.slug} onClick={startBoardPack}>
                     <PackageCheck size={12} /> Create board pack

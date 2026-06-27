@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Modal } from "./Modal";
+import { Select } from "./Select";
 import { Button, Banner, EmptyState } from "./ui";
 import { Upload, FileText, CheckCircle2 } from "lucide-react";
 import { cleanCsvCell, parseCsv } from "../lib/csv";
@@ -216,20 +217,19 @@ export function ImportWizard({
                     <td><strong>{h}</strong></td>
                     <td className="muted">{rows[0]?.[i] ?? ""}</td>
                     <td>
-                      <select
-                        className="input"
+                      <Select
                         value={mapping[i] ?? ""}
-                        onChange={(e) =>
-                          setMapping((m) => ({ ...m, [i]: e.target.value }))
+                        onChange={(value) =>
+                          setMapping((m) => ({ ...m, [i]: value }))
                         }
-                      >
-                        <option value="">— Ignore —</option>
-                        {target.fields.map((f) => (
-                          <option key={f.id} value={f.id}>
-                            {f.label}{f.required ? " *" : ""}
-                          </option>
-                        ))}
-                      </select>
+                        options={[
+                          { value: "", label: "— Ignore —" },
+                          ...target.fields.map((f) => ({
+                            value: f.id,
+                            label: `${f.label}${f.required ? " *" : ""}`,
+                          })),
+                        ]}
+                      />
                       {mappingSuggestions[i]?.length > 1 && (
                         <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>
                           Alternatives:{" "}

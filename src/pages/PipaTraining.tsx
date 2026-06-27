@@ -4,10 +4,12 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field, Badge } from "../components/ui";
+import { Select } from "../components/Select";
 import { Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { DatePicker } from "../components/DatePicker";
 import {
   RecordTable,
   RecordTableScope,
@@ -153,19 +155,17 @@ export function PipaTrainingPage() {
             <Field label="Email"><input className="input" value={form.participantEmail ?? ""} onChange={(e) => setForm({ ...form, participantEmail: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Role">
-                <select className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                  <option>Director</option><option>Staff</option><option>Volunteer</option>
-                </select>
+                <Select value={form.role} onChange={(value) => setForm({ ...form, role: value })}
+                  options={[{ value: "Director", label: "Director" }, { value: "Staff", label: "Staff" }, { value: "Volunteer", label: "Volunteer" }]} />
               </Field>
               <Field label="Topic">
-                <select className="input" value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })}>
-                  <option>PIPA</option><option>CASL</option><option>Privacy-refresh</option>
-                </select>
+                <Select value={form.topic} onChange={(value) => setForm({ ...form, topic: value })}
+                  options={[{ value: "PIPA", label: "PIPA" }, { value: "CASL", label: "CASL" }, { value: "Privacy-refresh", label: "Privacy-refresh" }]} />
               </Field>
             </div>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Completed"><input className="input" type="date" value={form.completedAtISO} onChange={(e) => setForm({ ...form, completedAtISO: e.target.value })} /></Field>
-              <Field label="Next due"><input className="input" type="date" value={form.nextDueAtISO ?? ""} onChange={(e) => setForm({ ...form, nextDueAtISO: e.target.value })} /></Field>
+              <Field label="Completed"><DatePicker value={form.completedAtISO} onChange={(value) => setForm({ ...form, completedAtISO: value })} /></Field>
+              <Field label="Next due"><DatePicker value={form.nextDueAtISO ?? ""} onChange={(value) => setForm({ ...form, nextDueAtISO: value })} /></Field>
             </div>
             <Field label="Trainer"><input className="input" value={form.trainer ?? ""} onChange={(e) => setForm({ ...form, trainer: e.target.value })} /></Field>
             <Field label="Notes"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>

@@ -5,7 +5,9 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
+import { Select } from "../components/Select";
 import { DataTable } from "../components/DataTable";
+import { DatePicker } from "../components/DatePicker";
 import { FilterField } from "../components/FilterBar";
 import { ArrowLeft, FileSearch, Pencil, Plus, Shield, ShieldAlert, Tag, Trash2 } from "lucide-react";
 import { centsToDollarInput, dollarInputToCents, formatDate, money } from "../lib/format";
@@ -241,14 +243,12 @@ export function InsurancePage() {
           <div>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Kind">
-                <select className="input" value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
-                  {KINDS.map((k) => <option key={k} value={k}>{kindLabel(k)}</option>)}
-                </select>
+                <Select value={form.kind} onChange={(value) => setForm({ ...form, kind: value })}
+                  options={KINDS.map((k) => ({ value: k, label: kindLabel(k) }))} />
               </Field>
               <Field label="Status">
-                <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                  {STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
-                </select>
+                <Select value={form.status} onChange={(value) => setForm({ ...form, status: value })}
+                  options={STATUSES.map((status) => ({ value: status, label: status }))} />
               </Field>
             </div>
             <Field label="Insurer"><input className="input" value={form.insurer} onChange={(e) => setForm({ ...form, insurer: e.target.value })} /></Field>
@@ -301,25 +301,27 @@ export function InsurancePage() {
               <textarea className="textarea" value={form.complianceChecksInput ?? ""} onChange={(e) => setForm({ ...form, complianceChecksInput: e.target.value })} />
             </Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Start"><input className="input" type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></Field>
-              <Field label="End"><input className="input" type="date" value={form.endDate ?? ""} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></Field>
-              <Field label="Renewal"><input className="input" type="date" value={form.renewalDate} onChange={(e) => setForm({ ...form, renewalDate: e.target.value })} /></Field>
+              <Field label="Start"><DatePicker value={form.startDate} onChange={(value) => setForm({ ...form, startDate: value })} /></Field>
+              <Field label="End"><DatePicker value={form.endDate ?? ""} onChange={(value) => setForm({ ...form, endDate: value })} /></Field>
+              <Field label="Renewal"><DatePicker value={form.renewalDate} onChange={(value) => setForm({ ...form, renewalDate: value })} /></Field>
             </div>
             <Field label="Source external IDs" hint="Comma-separated Paperless or external IDs"><input className="input" value={form.sourceExternalIdsInput ?? ""} onChange={(e) => setForm({ ...form, sourceExternalIdsInput: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Sensitivity">
-                <select className="input" value={form.sensitivity ?? ""} onChange={(e) => setForm({ ...form, sensitivity: e.target.value })}>
-                  <option value="">Standard</option>
-                  <option value="restricted">Restricted</option>
-                </select>
+                <Select value={form.sensitivity ?? ""} onChange={(value) => setForm({ ...form, sensitivity: value })}
+                  options={[
+                    { value: "", label: "Standard" },
+                    { value: "restricted", label: "Restricted" },
+                  ]} />
               </Field>
               <Field label="Confidence">
-                <select className="input" value={form.confidence ?? ""} onChange={(e) => setForm({ ...form, confidence: e.target.value })}>
-                  <option value="">Unspecified</option>
-                  <option>High</option>
-                  <option>Medium</option>
-                  <option>Review</option>
-                </select>
+                <Select value={form.confidence ?? ""} onChange={(value) => setForm({ ...form, confidence: value })}
+                  options={[
+                    { value: "", label: "Unspecified" },
+                    { value: "High", label: "High" },
+                    { value: "Medium", label: "Medium" },
+                    { value: "Review", label: "Review" },
+                  ]} />
               </Field>
             </div>
             <Field label="Risk flags" hint="Comma-separated"><input className="input" value={form.riskFlagsInput ?? ""} onChange={(e) => setForm({ ...form, riskFlagsInput: e.target.value })} /></Field>

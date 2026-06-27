@@ -4,6 +4,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
+import { DatePicker } from "../components/DatePicker";
 import { ScrollText, Plus, Trash2 } from "lucide-react";
 
 type Certificate = {
@@ -99,11 +100,9 @@ export function CertificateRegisterPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>As of</span>
-              <input
-                type="date"
-                className="input"
+              <DatePicker
                 value={asOf}
-                onChange={(e) => setAsOf(e.target.value)}
+                onChange={(value) => setAsOf(value)}
               />
             </label>
             <button className="btn-action btn-action--primary" onClick={openNew}>
@@ -224,11 +223,9 @@ export function CertificateRegisterPage() {
               </Field>
             </div>
             <Field label="Issued on">
-              <input
-                className="input"
-                type="date"
+              <DatePicker
                 value={form.issuedOn}
-                onChange={(e) => setForm({ ...form, issuedOn: e.target.value })}
+                onChange={(value) => setForm({ ...form, issuedOn: value })}
               />
             </Field>
             <Field label="Replaces certificate number (optional)">

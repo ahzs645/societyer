@@ -7,6 +7,7 @@ import { Badge, Drawer, Field, Flag } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { formatDateTime, money } from "../lib/format";
 import { isDemoMode } from "../lib/demoMode";
@@ -742,11 +743,9 @@ export function FinancialsPage() {
               </Field>
             </div>
             <Field label="Next renewal">
-              <input
-                className="input"
-                type="date"
+              <DatePicker
                 value={subscriptionForm.nextRenewalDate ?? ""}
-                onChange={(e) => setSubscriptionForm({ ...subscriptionForm, nextRenewalDate: e.target.value })}
+                onChange={(value) => setSubscriptionForm({ ...subscriptionForm, nextRenewalDate: value })}
               />
             </Field>
             <Field label="Notes">
