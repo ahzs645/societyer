@@ -49,12 +49,70 @@ export function normalizeMotionOutcome(outcome: string | undefined | null): stri
   return match ? match.id : value;
 }
 
-/** Required threshold (fraction of votes cast) for a resolution type per the
- *  Societies Act: ordinary = simple majority, special = 2/3, unanimous = all. */
-export function thresholdFor(kind?: string): number {
-  if (kind === "Special") return 2 / 3;
-  if (kind === "Unanimous") return 1;
-  return 0.5;
+/** The vote fractions (0–1 of votes cast) a society requires for each
+ *  resolution type. Stored on the bylaw rule set as percentages; this is the
+ *  runtime fractional view the governance helpers compare ratios against.
+ *  Kept as fractions (not percentages) so the canonical two-thirds is the
+ *  exact `2 / 3` float rather than a `pct / 100` round-trip that loses a ULP. */
+export interface ResolutionThresholds {
+  /** Fraction of votes cast required for an ordinary resolution (simple majority). */
+  ordinary: number;
+  /** Fraction required for a special resolution (statutory default: two-thirds). */
+  special: number;
+  /** Fraction required for a unanimous resolution (1 = everyone). */
+  unanimous: number;
+}
+
+/** BC Societies Act baselines, used whenever a society has no configured rule
+ *  set. `special` is the *exact* two-thirds, not the rounded 66.67 we display. */
+export const STATUTORY_RESOLUTION_THRESHOLDS: ResolutionThresholds = {
+  ordinary: 0.5,
+  special: 2 / 3,
+  unanimous: 1,
+};
+
+/** Map a society's stored bylaw rule set (threshold percentages) to runtime
+ *  fractions. Takes a structural subset so this module stays free of
+ *  Convex/`Doc` types and can be unit-tested in plain Node. Missing fields fall
+ *  back to the statutory value. */
+export function bylawRulesToThresholds(
+  rules?: {
+    ordinaryResolutionThresholdPct?: number;
+    specialResolutionThresholdPct?: number;
+  } | null,
+): ResolutionThresholds {
+  if (!rules) return STATUTORY_RESOLUTION_THRESHOLDS;
+  return {
+    ordinary:
+      rules.ordinaryResolutionThresholdPct != null
+        ? rules.ordinaryResolutionThresholdPct / 100
+        : STATUTORY_RESOLUTION_THRESHOLDS.ordinary,
+    special: normalizeSpecialFraction(rules.specialResolutionThresholdPct),
+    unanimous: STATUTORY_RESOLUTION_THRESHOLDS.unanimous,
+  };
+}
+
+/** The bylaw table stores the special-resolution threshold as a rounded
+ *  percentage (66.67). Taken literally that is *stricter* than two-thirds, so
+ *  an exact two-thirds vote (0.6666…) would fail. Snap any value within 0.1%
+ *  of two-thirds back to the exact `2 / 3` fraction. */
+function normalizeSpecialFraction(pct?: number): number {
+  if (pct == null) return STATUTORY_RESOLUTION_THRESHOLDS.special;
+  const fraction = pct / 100;
+  return Math.abs(fraction - 2 / 3) < 0.001 ? 2 / 3 : fraction;
+}
+
+/** Required threshold (fraction of votes cast) for a resolution type. Defaults
+ *  to the BC Societies Act baselines; pass a society's configured thresholds to
+ *  honour its bylaws (ordinary = simple majority, special = 2/3, unanimous =
+ *  all, unless the society set different percentages). */
+export function thresholdFor(
+  kind?: string,
+  thresholds: ResolutionThresholds = STATUTORY_RESOLUTION_THRESHOLDS,
+): number {
+  if (kind === "Special") return thresholds.special;
+  if (kind === "Unanimous") return thresholds.unanimous;
+  return thresholds.ordinary;
 }
 
 /** Whether a motion's vote counts meet its resolution threshold. Abstentions
@@ -64,17 +122,22 @@ export function thresholdFor(kind?: string): number {
  *  An ordinary motion needs a *simple majority* — strictly more than half of
  *  the votes cast — so a tie is lost. Super-majorities (Special = 2/3,
  *  Unanimous) carry when the threshold is met exactly. */
-export function motionMeetsThreshold(m: {
-  votesFor?: number;
-  votesAgainst?: number;
-  resolutionType?: string;
-}): boolean | null {
+export function motionMeetsThreshold(
+  m: {
+    votesFor?: number;
+    votesAgainst?: number;
+    resolutionType?: string;
+  },
+  thresholds: ResolutionThresholds = STATUTORY_RESOLUTION_THRESHOLDS,
+): boolean | null {
   const votesFor = m.votesFor ?? 0;
   const votesAgainst = m.votesAgainst ?? 0;
   const cast = votesFor + votesAgainst; // abstentions don't count toward "votes cast"
   if (cast === 0) return null;
   const ratio = votesFor / cast;
-  const threshold = thresholdFor(m.resolutionType);
+  const threshold = thresholdFor(m.resolutionType, thresholds);
+  // A simple majority needs *more* than half (a tie loses); any super-majority
+  // carries when the threshold is met exactly.
   return threshold === 0.5 ? ratio > 0.5 : ratio >= threshold;
 }
 

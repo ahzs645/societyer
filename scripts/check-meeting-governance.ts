@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import {
   thresholdFor,
   motionMeetsThreshold,
+  bylawRulesToThresholds,
+  STATUTORY_RESOLUTION_THRESHOLDS,
   isAdjournmentMotion,
   isPostponedOutcome,
   normalizeMotionOutcome,
@@ -68,6 +70,45 @@ assert.equal(
   motionMeetsThreshold({ votesFor: 4, votesAgainst: 1, resolutionType: "Unanimous" }),
   false,
   "unanimous: any opposition fails",
+);
+
+// ---------------------------------------------------------------------------
+// Configured (per-society) thresholds — bylawRulesToThresholds + overrides
+// ---------------------------------------------------------------------------
+// No rule set → statutory baselines.
+assert.deepEqual(
+  bylawRulesToThresholds(undefined),
+  STATUTORY_RESOLUTION_THRESHOLDS,
+  "missing rules fall back to statutory thresholds",
+);
+// The stored 66.67 is snapped to an exact two-thirds so a 2-of-3 vote passes.
+assert.equal(
+  bylawRulesToThresholds({ specialResolutionThresholdPct: 66.67 }).special,
+  2 / 3,
+  "rounded 66.67 snaps back to exact two-thirds",
+);
+assert.equal(
+  motionMeetsThreshold(
+    { votesFor: 2, votesAgainst: 1, resolutionType: "Special" },
+    bylawRulesToThresholds({ specialResolutionThresholdPct: 66.67 }),
+  ),
+  true,
+  "configured special (66.67) still carries an exact two-thirds vote",
+);
+// A society can raise the ordinary bar above a simple majority. Any threshold
+// other than an exact 50% is treated as "at least N%" (met exactly carries),
+// matching how the statutory super-majorities behave.
+const strictOrdinary = bylawRulesToThresholds({ ordinaryResolutionThresholdPct: 60 });
+assert.equal(thresholdFor("Ordinary", strictOrdinary), 0.6, "configured ordinary = 60%");
+assert.equal(
+  motionMeetsThreshold({ votesFor: 3, votesAgainst: 2 }, strictOrdinary),
+  true,
+  "3 of 5 (60%) meets a configured 60% ordinary threshold exactly",
+);
+assert.equal(
+  motionMeetsThreshold({ votesFor: 5, votesAgainst: 4 }, strictOrdinary),
+  false,
+  "5 of 9 (~56%) falls short of a configured 60% ordinary threshold",
 );
 
 // ---------------------------------------------------------------------------

@@ -6,7 +6,9 @@ import {
   isAdjournmentMotion,
   thresholdFor,
   motionMeetsThreshold,
+  bylawRulesToThresholds,
 } from "../lib/motionGovernance";
+import { useBylawRules } from "../hooks/useBylawRules";
 // Re-export the pure governance helpers so existing importers can keep pulling
 // them from MotionEditor; the implementations now live in lib/motionGovernance.
 export { isAdjournmentMotion, thresholdFor, motionMeetsThreshold };
@@ -146,11 +148,19 @@ function OutcomePicker({
 }
 
 function VoteProgress({ motion }: { motion: Motion }) {
+  const { rules } = useBylawRules();
   const f = motion.votesFor ?? 0;
   const a = motion.votesAgainst ?? 0;
   const s = motion.abstentions ?? 0;
   const total = f + a + s;
   const pct = (n: number) => (total === 0 ? 0 : (n / total) * 100);
+  // Whether the motion currently meets its resolution threshold, per the
+  // society's configured bylaw rules (falls back to statutory defaults).
+  // Procedural motions don't carry a vote, so we don't show a verdict for them.
+  const isProcedural = (motion.resolutionType ?? "") === "Procedural";
+  const carries = isProcedural
+    ? null
+    : motionMeetsThreshold(motion, bylawRulesToThresholds(rules));
   return (
     <div style={{ marginTop: 6 }}>
       <div
@@ -171,6 +181,17 @@ function VoteProgress({ motion }: { motion: Motion }) {
         {total === 0
           ? "No votes recorded yet"
           : `For ${f} · Against ${a} · Abstain ${s} · (${total} voting)`}
+        {carries !== null && (
+          <span
+            style={{
+              marginLeft: 6,
+              fontWeight: 600,
+              color: carries ? "var(--success)" : "var(--danger)",
+            }}
+          >
+            · {carries ? "Carries" : "Would not carry"}
+          </span>
+        )}
       </div>
     </div>
   );
