@@ -141,6 +141,118 @@ export function motionMeetsThreshold(
   return threshold === 0.5 ? ratio > 0.5 : ratio >= threshold;
 }
 
+// ============================================================================
+// Resolution-type catalogue — the society-editable list of resolution types a
+// motion can be classified under. The three statutory built-ins (Ordinary /
+// Special / Unanimous) are always *derived* from the bylaw threshold
+// percentages so they can't drift; only custom types are stored on
+// bylawRuleSet.resolutionTypes. This is what the Bylaw Rules editor edits and
+// what the motion type dropdown is driven from.
+// ============================================================================
+
+export type ResolutionBase = "votesCast" | "eligibleMembers" | "quorum";
+
+export interface ResolutionType {
+  id: string;
+  label: string;
+  builtIn?: boolean;
+  /** The denominator the threshold applies to ("number of total people"). */
+  base: ResolutionBase;
+  thresholdPct: number;
+  /** Named consent required regardless of the vote ("specific person"). */
+  requiredApprovers?: string[];
+  tieBreak?: "fails" | "chairCasts";
+  order?: number;
+}
+
+/** Structural subset of a bylaw rule set this module reads. Avoids a dependency
+ *  on Convex `Doc` types so the logic stays unit-testable in plain Node. */
+export type ResolutionRulesLike = {
+  ordinaryResolutionThresholdPct?: number;
+  specialResolutionThresholdPct?: number;
+  resolutionTypes?: ResolutionType[];
+};
+
+/** Selectable bases for the editor. */
+export const RESOLUTION_BASES: { value: ResolutionBase; label: string }[] = [
+  { value: "votesCast", label: "% of votes cast" },
+  { value: "eligibleMembers", label: "% of all eligible members" },
+  { value: "quorum", label: "% of the quorum present" },
+];
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Convert a stored threshold percentage to a comparison fraction, snapping any
+ *  value within 0.1% of two-thirds to the exact 2/3 (the 66.67 we display would
+ *  otherwise reject an exact two-thirds vote). */
+function pctToThresholdFraction(pct: number): number {
+  const fraction = pct / 100;
+  return Math.abs(fraction - 2 / 3) < 0.001 ? 2 / 3 : fraction;
+}
+
+/** The three statutory built-ins, derived fresh from the bylaw thresholds so
+ *  editing the Ordinary/Special percentages keeps them in lockstep. */
+export function builtInResolutionTypes(rules?: ResolutionRulesLike | null): ResolutionType[] {
+  const t = bylawRulesToThresholds(rules);
+  return [
+    { id: "ordinary", label: "Ordinary", builtIn: true, base: "votesCast", thresholdPct: round2(t.ordinary * 100), order: 0 },
+    { id: "special", label: "Special", builtIn: true, base: "votesCast", thresholdPct: round2(t.special * 100), order: 1 },
+    { id: "unanimous", label: "Unanimous", builtIn: true, base: "votesCast", thresholdPct: round2(t.unanimous * 100), order: 2 },
+  ];
+}
+
+/** Custom (non-built-in) resolution types stored on the rule set. */
+export function customResolutionTypes(rules?: ResolutionRulesLike | null): ResolutionType[] {
+  return (rules?.resolutionTypes ?? []).filter((type) => !type.builtIn);
+}
+
+/** The full effective catalogue: built-ins first, then custom types by order. */
+export function resolveResolutionTypes(rules?: ResolutionRulesLike | null): ResolutionType[] {
+  const custom = [...customResolutionTypes(rules)].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  return [...builtInResolutionTypes(rules), ...custom];
+}
+
+/** Look up a motion's resolution type from the catalogue by id or label
+ *  (case-insensitive), so both new (id) and legacy (label) values resolve.
+ *  Falls back to Ordinary when unset/unknown. */
+export function findResolutionType(types: ResolutionType[], value?: string): ResolutionType | undefined {
+  const fallback = types.find((t) => t.id === "ordinary") ?? types[0];
+  if (!value) return fallback;
+  const needle = value.trim().toLowerCase();
+  return (
+    types.find((t) => t.id.toLowerCase() === needle) ??
+    types.find((t) => t.label.toLowerCase() === needle) ??
+    fallback
+  );
+}
+
+/** Whether a motion's votes meet a given resolution type's threshold (votes-cast
+ *  base). Bases other than votesCast need member/quorum context the inline
+ *  indicator lacks and are approximated here as votes-cast. */
+export function motionCarriesByType(
+  m: { votesFor?: number; votesAgainst?: number },
+  type?: ResolutionType,
+): boolean | null {
+  const votesFor = m.votesFor ?? 0;
+  const votesAgainst = m.votesAgainst ?? 0;
+  const cast = votesFor + votesAgainst;
+  if (cast === 0) return null;
+  const ratio = votesFor / cast;
+  const threshold = pctToThresholdFraction(type?.thresholdPct ?? 50);
+  return threshold === 0.5 ? ratio > 0.5 : ratio >= threshold;
+}
+
+/** Resolve a motion's configured type from the society's rules and report
+ *  whether it currently carries. Procedural motions don't carry a vote. */
+export function motionCarriesForRules(
+  m: { votesFor?: number; votesAgainst?: number; resolutionType?: string },
+  rules?: ResolutionRulesLike | null,
+): boolean | null {
+  if ((m.resolutionType ?? "") === "Procedural") return null;
+  const type = findResolutionType(resolveResolutionTypes(rules), m.resolutionType);
+  return motionCarriesByType(m, type);
+}
+
 /** Heuristic: does this motion represent adjourning the meeting? Adjournment
  *  is recorded as a procedural motion and handled separately in the UI. */
 export function isAdjournmentMotion(motion: {

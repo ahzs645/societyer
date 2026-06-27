@@ -7,7 +7,8 @@ import { Badge, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { Toggle } from "../components/Controls";
-import { Info, RefreshCw, Save, Scale } from "lucide-react";
+import { Info, Plus, RefreshCw, Save, Scale, Trash2 } from "lucide-react";
+import { builtInResolutionTypes, RESOLUTION_BASES } from "../lib/motionGovernance";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
 import { LegalGuideTrackList } from "../components/LegalGuide";
@@ -109,9 +110,39 @@ export function BylawRulesPage() {
       specialResolutionThresholdPct: Number(form.specialResolutionThresholdPct),
       unanimousWrittenSpecialResolution:
         !!form.unanimousWrittenSpecialResolution,
+      // Persist custom resolution types only (built-ins are derived). Drop
+      // blank rows and normalize id/order/defaults.
+      resolutionTypes: (form.resolutionTypes ?? [])
+        .filter((t: any) => String(t?.label ?? "").trim())
+        .map((t: any, i: number) => ({
+          id: slugifyResolutionType(t.label, i),
+          label: String(t.label).trim(),
+          builtIn: false,
+          base: t.base || "votesCast",
+          thresholdPct: Number(t.thresholdPct) || 50,
+          requiredApprovers: (t.requiredApprovers ?? []).filter(Boolean),
+          tieBreak: t.tieBreak || "fails",
+          order: i,
+        })),
     });
     setForm(null);
     toast.success("Bylaw rule set saved");
+  };
+
+  const updateCustomType = (index: number, patch: Record<string, unknown>) => {
+    const next = [...(form.resolutionTypes ?? [])];
+    next[index] = { ...next[index], ...patch };
+    setForm({ ...form, resolutionTypes: next });
+  };
+  const removeCustomType = (index: number) => {
+    const next = [...(form.resolutionTypes ?? [])];
+    next.splice(index, 1);
+    setForm({ ...form, resolutionTypes: next });
+  };
+  const addCustomType = () => {
+    const next = [...(form.resolutionTypes ?? [])];
+    next.push({ label: "", base: "votesCast", thresholdPct: 66.67, order: next.length });
+    setForm({ ...form, resolutionTypes: next });
   };
 
   return (
@@ -571,8 +602,122 @@ export function BylawRulesPage() {
           </div>
         </div>
       </div>
+
+      <div className="card bylaw-rules__card" style={{ marginTop: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">Resolution types</h2>
+          <span className="card__subtitle">
+            How a motion passes. Ordinary, Special, and Unanimous are built in
+            (their thresholds come from the percentages above). Add your own for
+            cases like a required founder consent or a higher bar.
+          </span>
+        </div>
+        <div className="card__body bylaw-rules__body">
+          <div className="col" style={{ gap: 4 }}>
+            {builtInResolutionTypes(form).map((t) => (
+              <div
+                key={t.id}
+                className="row"
+                style={{
+                  justifyContent: "space-between",
+                  gap: 10,
+                  padding: "8px 0",
+                  borderTop: "1px solid var(--border)",
+                }}
+              >
+                <div className="row" style={{ gap: 8 }}>
+                  <Badge tone="info">Built-in</Badge>
+                  <strong>{t.label}</strong>
+                </div>
+                <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  ≥ {t.thresholdPct}% of votes cast
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {(form.resolutionTypes ?? []).map((t: any, i: number) => (
+            <div
+              key={i}
+              className="bylaw-rules__field-grid"
+              style={{ borderTop: "1px solid var(--border)", paddingTop: 12, marginTop: 12 }}
+            >
+              <Field label="Name">
+                <input
+                  className="input"
+                  value={t.label ?? ""}
+                  placeholder="e.g. Founder consent"
+                  onChange={(e) => updateCustomType(i, { label: e.target.value })}
+                />
+              </Field>
+              <Field label="Requirement base">
+                <Select
+                  value={t.base ?? "votesCast"}
+                  onChange={(value) => updateCustomType(i, { base: value })}
+                  options={RESOLUTION_BASES}
+                />
+              </Field>
+              <Field label="Threshold (%)">
+                <input
+                  className="input"
+                  type="number"
+                  value={t.thresholdPct ?? 50}
+                  onChange={(e) => updateCustomType(i, { thresholdPct: Number(e.target.value) })}
+                />
+              </Field>
+              <Field label="Required approver(s)">
+                <input
+                  className="input"
+                  placeholder="comma-separated names (optional)"
+                  value={(t.requiredApprovers ?? []).join(", ")}
+                  onChange={(e) =>
+                    updateCustomType(i, {
+                      requiredApprovers: e.target.value
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean),
+                    })
+                  }
+                />
+              </Field>
+              <Field label="On a tie">
+                <Select
+                  value={t.tieBreak ?? "fails"}
+                  onChange={(value) => updateCustomType(i, { tieBreak: value })}
+                  options={[
+                    { value: "fails", label: "Motion fails" },
+                    { value: "chairCasts", label: "Chair casts deciding vote" },
+                  ]}
+                />
+              </Field>
+              <div className="row" style={{ alignItems: "flex-end" }}>
+                <button
+                  className="btn-action btn-action--danger"
+                  onClick={() => removeCustomType(i)}
+                >
+                  <Trash2 size={12} /> Remove
+                </button>
+              </div>
+            </div>
+          ))}
+
+          <div style={{ marginTop: 12 }}>
+            <button className="btn-action" onClick={addCustomType}>
+              <Plus size={12} /> Add resolution type
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
+}
+
+function slugifyResolutionType(label: string, index: number): string {
+  const slug = String(label ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || `custom-${index + 1}`;
 }
 
 function toDateInputValue(value: unknown) {

@@ -81,6 +81,22 @@ export const upsertActive = mutation({
     ordinaryResolutionThresholdPct: v.number(),
     specialResolutionThresholdPct: v.number(),
     unanimousWrittenSpecialResolution: v.boolean(),
+    // Custom resolution types only — built-ins (Ordinary/Special/Unanimous) are
+    // derived from the threshold percentages above (src/lib/motionGovernance.ts).
+    resolutionTypes: v.optional(
+      v.array(
+        v.object({
+          id: v.string(),
+          label: v.string(),
+          builtIn: v.optional(v.boolean()),
+          base: v.string(),
+          thresholdPct: v.number(),
+          requiredApprovers: v.optional(v.array(v.string())),
+          tieBreak: v.optional(v.string()),
+          order: v.optional(v.number()),
+        }),
+      ),
+    ),
   },
   returns: v.any(),
   handler: async (ctx, args) => {
