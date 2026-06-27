@@ -91,7 +91,6 @@ export const upsertActive = mutation({
           builtIn: v.optional(v.boolean()),
           base: v.string(),
           thresholdPct: v.number(),
-          requiredApprovers: v.optional(v.array(v.string())),
           tieBreak: v.optional(v.string()),
           order: v.optional(v.number()),
         }),

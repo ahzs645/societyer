@@ -159,8 +159,6 @@ export interface ResolutionType {
   /** The denominator the threshold applies to ("number of total people"). */
   base: ResolutionBase;
   thresholdPct: number;
-  /** Named consent required regardless of the vote ("specific person"). */
-  requiredApprovers?: string[];
   tieBreak?: "fails" | "chairCasts";
   order?: number;
 }

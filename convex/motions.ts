@@ -24,7 +24,6 @@ const motionContent = {
   votesFor: v.optional(v.number()),
   votesAgainst: v.optional(v.number()),
   abstentions: v.optional(v.number()),
-  recordedApprovers: v.optional(v.array(v.string())),
   backlogPriority: v.optional(v.string()),
   source: v.optional(v.string()),
   seededKey: v.optional(v.string()),

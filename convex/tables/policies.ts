@@ -104,8 +104,8 @@ export const policyTables = {
     // Society-editable resolution-type catalogue. When absent, the three
     // statutory built-ins (Majority/Special/Unanimous) are derived from the
     // *ResolutionThresholdPct fields above (see src/lib/motionGovernance.ts).
-    // `base` selects the denominator ("number of total people"); requiredApprovers
-    // is named-consent ("specific person"). builtIn rows cannot be deleted.
+    // `base` selects the denominator ("number of total people"). builtIn rows
+    // cannot be deleted.
     resolutionTypes: v.optional(
       v.array(
         v.object({
@@ -114,7 +114,6 @@ export const policyTables = {
           builtIn: v.optional(v.boolean()),
           base: v.string(), // votesCast | eligibleMembers | quorum
           thresholdPct: v.number(),
-          requiredApprovers: v.optional(v.array(v.string())),
           tieBreak: v.optional(v.string()), // fails | chairCasts
           order: v.optional(v.number()),
         }),

@@ -74,7 +74,6 @@ motions: defineTable({
   votesFor: v.optional(v.number()),
   votesAgainst: v.optional(v.number()),
   abstentions: v.optional(v.number()),
-  recordedApprovers: v.optional(v.array(v.string())), // for resolution types needing named consent
 
   // Placement / provenance (references, not copies)
   primaryMeetingId: v.optional(v.id("meetings")),   // meeting where it was last considered
@@ -125,7 +124,6 @@ resolutionTypes: v.optional(v.array(v.object({
   builtIn: v.optional(v.boolean()),    // ordinary/special/unanimous → cannot be deleted
   base: v.string(),             // votesCast | eligibleMembers | quorum  ("number of total people")
   thresholdPct: v.number(),     // the %
-  requiredApprovers: v.optional(v.array(v.string())), // named consent ("specific person")
   tieBreak: v.optional(v.string()),    // fails | chairCasts
   order: v.optional(v.number()),
 }))),
@@ -140,11 +138,11 @@ The pure helpers added in the in-flight phase 1 (`ResolutionThresholds`, `thresh
 ```ts
 evaluateResolution(motion, resolutionType, { eligibleMemberCount, quorum }): {
   carries: boolean | null;     // null = no votes / not yet voted
-  reason: string;              // "needs ≥66.7% of votes cast", "missing required approver: Founder", …
+  reason: string;              // "needs ≥66.7% of votes cast", …
 }
 ```
 
-`base = votesCast` is today's logic; `base = eligibleMembers | quorum` divides by a different denominator (needs the member/quorum context — already computed in `convex/lib/bylawRules.ts:computeRequiredQuorum`). `requiredApprovers` checks `motion.recordedApprovers`.
+`base = votesCast` is today's logic; `base = eligibleMembers | quorum` divides by a different denominator (needs the member/quorum context — already computed in `convex/lib/bylawRules.ts:computeRequiredQuorum`). (Named-approver consent was considered and dropped — resolution types are threshold-based only.)
 
 ## Votes Model A + History (the chosen design)
 

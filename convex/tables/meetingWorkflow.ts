@@ -114,7 +114,6 @@ export const meetingWorkflowTables = {
     votesFor: v.optional(v.number()),
     votesAgainst: v.optional(v.number()),
     abstentions: v.optional(v.number()),
-    recordedApprovers: v.optional(v.array(v.string())), // for resolution types needing named consent
 
     // Backlog columns (folded in from motionBacklog — no separate table)
     backlogPriority: v.optional(v.string()), // high | normal | low
