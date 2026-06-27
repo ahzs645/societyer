@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useBylawRules } from "../hooks/useBylawRules";
@@ -7,7 +7,8 @@ import { Badge, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { Toggle } from "../components/Controls";
-import { Info, Plus, RefreshCw, Save, Scale, Trash2 } from "lucide-react";
+import { NameAutocomplete } from "../components/NameAutocomplete";
+import { Info, Plus, RefreshCw, Save, Scale, Trash2, X } from "lucide-react";
 import { builtInResolutionTypes, RESOLUTION_BASES } from "../lib/motionGovernance";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
@@ -26,6 +27,24 @@ export function BylawRulesPage() {
   );
   const upsert = useMutation(api.bylawRules.upsertActive);
   const reset = useMutation(api.bylawRules.resetToDefault);
+  const directors = useQuery(
+    api.directors.list,
+    society ? { societyId: society._id } : "skip",
+  );
+  const directorNames = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (directors ?? [])
+            .flatMap((d: any) => [
+              `${d.firstName ?? ""} ${d.lastName ?? ""}`.trim(),
+              ...(Array.isArray(d.aliases) ? d.aliases : []),
+            ])
+            .filter(Boolean),
+        ),
+      ).sort() as string[],
+    [directors],
+  );
   const toast = useToast();
   const [form, setForm] = useState<any>(null);
 
@@ -666,18 +685,10 @@ export function BylawRulesPage() {
                 />
               </Field>
               <Field label="Required approver(s)">
-                <input
-                  className="input"
-                  placeholder="comma-separated names (optional)"
-                  value={(t.requiredApprovers ?? []).join(", ")}
-                  onChange={(e) =>
-                    updateCustomType(i, {
-                      requiredApprovers: e.target.value
-                        .split(",")
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                    })
-                  }
+                <ApproverPicker
+                  value={t.requiredApprovers ?? []}
+                  onChange={(next) => updateCustomType(i, { requiredApprovers: next })}
+                  options={directorNames}
                 />
               </Field>
               <Field label="On a tie">
@@ -718,6 +729,81 @@ function slugifyResolutionType(label: string, index: number): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return slug || `custom-${index + 1}`;
+}
+
+/** Multi-value approver entry: chips for chosen names + a director-aware
+ *  autocomplete. Suggests the society's directors but still accepts a free-typed
+ *  name (e.g. a non-director officer) on Enter. */
+function ApproverPicker({
+  value,
+  onChange,
+  options,
+}: {
+  value: string[];
+  onChange: (next: string[]) => void;
+  options: string[];
+}) {
+  const [draft, setDraft] = useState("");
+  const taken = useMemo(() => new Set(value.map((name) => name.toLowerCase())), [value]);
+  const add = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed || taken.has(trimmed.toLowerCase())) {
+      setDraft("");
+      return;
+    }
+    onChange([...value, trimmed]);
+    setDraft("");
+  };
+  return (
+    <div className="col" style={{ gap: 6 }}>
+      {value.length > 0 && (
+        <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
+          {value.map((name) => (
+            <span
+              key={name}
+              className="row"
+              style={{
+                gap: 4,
+                alignItems: "center",
+                padding: "2px 4px 2px 8px",
+                borderRadius: 6,
+                border: "1px solid var(--border)",
+                background: "var(--bg-subtle)",
+                fontSize: "var(--fs-sm)",
+              }}
+            >
+              {name}
+              <button
+                type="button"
+                aria-label={`Remove ${name}`}
+                onClick={() => onChange(value.filter((n) => n !== name))}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  border: "none",
+                  background: "transparent",
+                  cursor: "pointer",
+                  padding: 2,
+                  color: "inherit",
+                }}
+              >
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <NameAutocomplete
+        value={draft}
+        onChange={setDraft}
+        onCommit={add}
+        options={options}
+        excludeOptions={taken}
+        placeholder={options.length ? "Add a director…" : "Add a name…"}
+        ariaLabel="Required approver"
+      />
+    </div>
+  );
 }
 
 function toDateInputValue(value: unknown) {
